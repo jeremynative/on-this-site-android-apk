@@ -1,1 +1,56 @@
-# on-this-site-android-apk
+# On This Site Android APK
+
+This repo builds a debug Android APK for the On This Site / Native Long Island mobile app.
+
+The APK is a small Android WebView wrapper around the live mobile site:
+
+`https://nativelongisland.com/archive-test/native-long-island-staging-site-20260516-100502/mobile-app-live.html`
+
+Because it opens the hosted live mobile app, site content stays synced with Directus/live data without rebuilding the APK for every content update.
+
+## GitHub APK Artifact
+
+GitHub Actions builds the APK on every push and manual workflow run.
+
+Artifact name:
+
+`on-this-site-debug-apk`
+
+The artifact includes:
+
+- `on-this-site-latest-debug.apk`
+- `on-this-site-debug-<run>-<commit>.apk`
+
+## Google Drive Archive
+
+Target Drive folder:
+
+`Art Project Documents and Images > On This Site > App APK`
+
+Folder IDs:
+
+- Latest APK folder: `1sfAI_MWpH91EVnAo2Q_bWUR-wQG8Gw1M`
+- OLD folder: `12NPUpGl044BtywC0FWV9igPsCFHTDuDZ`
+
+The workflow is ready to archive APKs to Google Drive when this GitHub secret exists:
+
+`GDRIVE_SERVICE_ACCOUNT_JSON`
+
+That secret should contain a Google Cloud service account JSON key. The service account email must be shared into the `App APK` and `OLD` Drive folders with Editor access.
+
+When configured, each build will:
+
+1. Move the previous `on-this-site-latest-debug.apk` into `OLD` with a run-specific name.
+2. Upload the new build as `on-this-site-latest-debug.apk` in `App APK`.
+
+## Local Build
+
+After Android Studio/JDK/Gradle are installed:
+
+```powershell
+.\build-debug-apk.ps1
+```
+
+Local APK path:
+
+`app/build/outputs/apk/debug/app-debug.apk`
