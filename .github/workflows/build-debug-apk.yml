@@ -6,6 +6,9 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   DRIVE_LATEST_FOLDER_ID: "1sfAI_MWpH91EVnAo2Q_bWUR-wQG8Gw1M"
   DRIVE_OLD_FOLDER_ID: "12NPUpGl044BtywC0FWV9igPsCFHTDuDZ"
@@ -51,6 +54,20 @@ jobs:
         with:
           name: on-this-site-debug-apk
           path: release/*.apk
+
+      - name: Publish latest APK release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: latest-debug
+          name: Latest debug APK
+          body: |
+            Latest installable debug APK for the On This Site Android wrapper.
+
+            Most map, content, UI, and data updates load from the live mobile site and do not require reinstalling the APK. Reinstall this only after native Android wrapper changes such as permissions, WebView behavior, or app packaging.
+          artifacts: "release/*.apk"
+          allowUpdates: true
+          replacesArtifacts: true
+          makeLatest: true
 
       - name: Install rclone for Google Drive archive
         if: env.GDRIVE_SERVICE_ACCOUNT_JSON != ''
