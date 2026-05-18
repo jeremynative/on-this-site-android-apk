@@ -18,13 +18,17 @@ import android.webkit.WebViewClient;
 public class MainActivity extends Activity {
     private static final int LOCATION_REQUEST = 41;
     private static final int CAMERA_REQUEST = 42;
-    private static final String APP_URL =
+    private static final long RESUME_REFRESH_COOLDOWN_MS = 1500;
+    private static final String APP_VERSION = "20260518-resume-refresh";
+    private static final String APP_BASE_URL =
         "https://nativelongisland.com/archive-test/native-long-island-staging-site-20260516-100502/mobile-app-live.html";
 
     private WebView webView;
     private GeolocationPermissions.Callback pendingLocationCallback;
     private String pendingLocationOrigin;
     private PermissionRequest pendingCameraRequest;
+    private boolean created;
+    private long lastRefreshAt;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,9 +43,11 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setGeolocationEnabled(true);
+        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
+        webView.clearCache(true);
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -87,11 +93,36 @@ public class MainActivity extends Activity {
             }
         });
 
-        if (savedInstanceState == null) {
-            webView.loadUrl(APP_URL);
-        } else {
-            webView.restoreState(savedInstanceState);
+        refreshApp();
+        created = true;
+    }
+
+    private String freshAppUrl() {
+        return APP_BASE_URL + "?app-version=" + APP_VERSION + "&refresh=" + System.currentTimeMillis();
+    }
+
+    private void refreshApp() {
+        if (webView == null) return;
+        lastRefreshAt = System.currentTimeMillis();
+        webView.clearCache(true);
+        webView.loadUrl(freshAppUrl());
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (!created) return;
+        long now = System.currentTimeMillis();
+        if (now - lastRefreshAt > RESUME_REFRESH_COOLDOWN_MS) {
+            refreshApp();
         }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        refreshApp();
     }
 
     private boolean openExternallyWhenNeeded(Uri uri) {
