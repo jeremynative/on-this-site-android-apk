@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         String path = uri.getPath();
         boolean isArchiveApp = "nativelongisland.com".equalsIgnoreCase(host)
             && path != null
-            && path.startsWith("/archive-test/native-long-island-staging-site-20260516-100502/");
+            && "/archive-test/native-long-island-staging-site-20260516-100502/mobile-app-live.html".equals(path);
         if (isArchiveApp) return false;
 
         Intent intent = new Intent(Intent.ACTION_VIEW, uri);
