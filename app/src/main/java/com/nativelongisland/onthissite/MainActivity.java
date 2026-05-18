@@ -8,6 +8,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.webkit.GeolocationPermissions;
+import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -16,12 +17,14 @@ import android.webkit.WebViewClient;
 
 public class MainActivity extends Activity {
     private static final int LOCATION_REQUEST = 41;
+    private static final int CAMERA_REQUEST = 42;
     private static final String APP_URL =
         "https://nativelongisland.com/archive-test/native-long-island-staging-site-20260516-100502/mobile-app-live.html";
 
     private WebView webView;
     private GeolocationPermissions.Callback pendingLocationCallback;
     private String pendingLocationOrigin;
+    private PermissionRequest pendingCameraRequest;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,6 +56,22 @@ public class MainActivity extends Activity {
                     Manifest.permission.ACCESS_FINE_LOCATION,
                     Manifest.permission.ACCESS_COARSE_LOCATION
                 }, LOCATION_REQUEST);
+            }
+
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                for (String resource : request.getResources()) {
+                    if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) {
+                        if (hasCameraPermission()) {
+                            request.grant(new String[] { PermissionRequest.RESOURCE_VIDEO_CAPTURE });
+                            return;
+                        }
+                        pendingCameraRequest = request;
+                        requestPermissions(new String[] { Manifest.permission.CAMERA }, CAMERA_REQUEST);
+                        return;
+                    }
+                }
+                request.deny();
             }
         });
 
@@ -93,11 +112,13 @@ public class MainActivity extends Activity {
             || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
+    private boolean hasCameraPermission() {
+        return checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode != LOCATION_REQUEST || pendingLocationCallback == null) return;
-
         boolean granted = false;
         for (int result : grantResults) {
             if (result == PackageManager.PERMISSION_GRANTED) {
@@ -105,9 +126,22 @@ public class MainActivity extends Activity {
                 break;
             }
         }
-        pendingLocationCallback.invoke(pendingLocationOrigin, granted, false);
-        pendingLocationCallback = null;
-        pendingLocationOrigin = null;
+
+        if (requestCode == LOCATION_REQUEST && pendingLocationCallback != null) {
+            pendingLocationCallback.invoke(pendingLocationOrigin, granted, false);
+            pendingLocationCallback = null;
+            pendingLocationOrigin = null;
+            return;
+        }
+
+        if (requestCode == CAMERA_REQUEST && pendingCameraRequest != null) {
+            if (granted) {
+                pendingCameraRequest.grant(new String[] { PermissionRequest.RESOURCE_VIDEO_CAPTURE });
+            } else {
+                pendingCameraRequest.deny();
+            }
+            pendingCameraRequest = null;
+        }
     }
 
     @Override
