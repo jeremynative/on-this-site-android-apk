@@ -14,10 +14,15 @@ android {
         versionName System.getenv("VERSION_NAME") ?: "0.1.0"
     }
 
+    def keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+    def hasReleaseSigning = keystorePath
+        && System.getenv("ANDROID_KEYSTORE_PASSWORD")
+        && System.getenv("ANDROID_KEY_ALIAS")
+        && System.getenv("ANDROID_KEY_PASSWORD")
+
     signingConfigs {
         release {
-            def keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
-            if (keystorePath) {
+            if (hasReleaseSigning) {
                 storeFile file(keystorePath)
                 storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
                 keyAlias System.getenv("ANDROID_KEY_ALIAS")
@@ -30,7 +35,7 @@ android {
         release {
             minifyEnabled false
             shrinkResources false
-            if (System.getenv("ANDROID_KEYSTORE_PATH")) {
+            if (hasReleaseSigning) {
                 signingConfig signingConfigs.release
             }
         }
