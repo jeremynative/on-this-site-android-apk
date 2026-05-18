@@ -8,6 +8,18 @@ The APK is a small Android WebView wrapper around the live mobile site:
 
 Because it opens the hosted live mobile app, site content stays synced with Directus/live data without rebuilding the APK for every content update.
 
+## Phone Updates
+
+Most fixes do not require reinstalling the APK. UI, map, timeline, content, and data changes load from the live mobile page the next time the app refreshes.
+
+Only reinstall the APK after native Android wrapper changes such as permissions, WebView behavior, or app packaging.
+
+Stable latest APK link:
+
+`https://github.com/jeremynative/on-this-site-android-apk/releases/latest/download/on-this-site-latest-debug.apk`
+
+That link stays the same after future APK builds, so it can be bookmarked on your phone.
+
 ## GitHub APK Artifact
 
 GitHub Actions builds the APK on every push and manual workflow run.
@@ -20,6 +32,8 @@ The artifact includes:
 
 - `on-this-site-latest-debug.apk`
 - `on-this-site-debug-<run>-<commit>.apk`
+
+The workflow also publishes the same APK files to the `Latest debug APK` GitHub release.
 
 ## Google Drive Archive
 
