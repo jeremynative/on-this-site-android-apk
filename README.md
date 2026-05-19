@@ -4,7 +4,7 @@ This repo builds a debug Android APK for the On This Site / Native Long Island m
 
 The APK is a small Android WebView wrapper around the live mobile site:
 
-`https://nativelongisland.com/archive-test/native-long-island-staging-site-20260516-100502/mobile-app-live.html`
+`https://nativelongisland.com/archive-test/mobile-app-live.html`
 
 Because it opens the hosted live mobile app, site content stays synced with Directus/live data without rebuilding the APK for every content update.
 
