@@ -2,25 +2,31 @@ package com.nativelongisland.onthissite;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
+import android.provider.MediaStore;
+import android.util.Base64;
 import android.view.View;
 import android.view.WindowInsets;
 import android.webkit.GeolocationPermissions;
+import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import java.io.OutputStream;
 
 public class MainActivity extends Activity {
     private static final int LOCATION_REQUEST = 41;
     private static final int CAMERA_REQUEST = 42;
     private static final long RESUME_REFRESH_COOLDOWN_MS = 1500;
-    private static final String APP_VERSION = "20260519-ar-story-safe-area";
+    private static final String APP_VERSION = "20260519-ar-story-native-share";
     private static final String APP_BASE_URL =
         "https://nativelongisland.com/archive-test/mobile-app-live.html";
 
@@ -30,6 +36,8 @@ public class MainActivity extends Activity {
     private PermissionRequest pendingCameraRequest;
     private boolean created;
     private long lastRefreshAt;
+    private Uri lastStoryVideoUri;
+    private String lastStoryVideoMimeType = "video/webm";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,6 +60,7 @@ public class MainActivity extends Activity {
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
+        webView.addJavascriptInterface(new StoryBridge(), "AndroidStory");
         webView.clearCache(true);
 
         webView.setWebChromeClient(new WebChromeClient() {
@@ -100,6 +109,108 @@ public class MainActivity extends Activity {
 
         refreshApp();
         created = true;
+    }
+
+    private class StoryBridge {
+        @JavascriptInterface
+        public void saveVideo(String base64Video, String filename, String mimeType) {
+            runOnUiThread(() -> {
+                try {
+                    lastStoryVideoMimeType = safeMimeType(mimeType);
+                    String safeName = safeStoryFilename(filename);
+                    byte[] bytes = Base64.decode(base64Video, Base64.DEFAULT);
+                    lastStoryVideoUri = saveStoryVideo(bytes, safeName, lastStoryVideoMimeType);
+                    notifyStorySaved(true, "Saved to Movies/On This Site.", lastStoryVideoUri.toString());
+                } catch (Exception error) {
+                    notifyStorySaved(false, error.getMessage(), "");
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void openLastVideo() {
+            runOnUiThread(() -> {
+                if (lastStoryVideoUri == null) {
+                    notifyStorySaved(false, "No story video has been saved yet.", "");
+                    return;
+                }
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setDataAndType(lastStoryVideoUri, lastStoryVideoMimeType);
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                startActivity(Intent.createChooser(intent, "Open story video"));
+            });
+        }
+
+        @JavascriptInterface
+        public void shareLastVideo() {
+            runOnUiThread(() -> {
+                if (lastStoryVideoUri == null) {
+                    notifyStorySaved(false, "No story video has been saved yet.", "");
+                    return;
+                }
+                Intent intent = new Intent(Intent.ACTION_SEND);
+                intent.setType(lastStoryVideoMimeType);
+                intent.putExtra(Intent.EXTRA_STREAM, lastStoryVideoUri);
+                intent.putExtra(Intent.EXTRA_TEXT, "Recorded with On This Site.");
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                startActivity(Intent.createChooser(intent, "Share story video"));
+            });
+        }
+    }
+
+    private Uri saveStoryVideo(byte[] bytes, String filename, String mimeType) throws Exception {
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Video.Media.DISPLAY_NAME, filename);
+        values.put(MediaStore.Video.Media.MIME_TYPE, mimeType);
+        values.put(MediaStore.Video.Media.DATE_ADDED, System.currentTimeMillis() / 1000);
+        values.put(MediaStore.Video.Media.DATE_TAKEN, System.currentTimeMillis());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            values.put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/On This Site");
+            values.put(MediaStore.Video.Media.IS_PENDING, 1);
+        }
+
+        Uri uri = getContentResolver().insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
+        if (uri == null) throw new Exception("Could not create local video file.");
+        try (OutputStream output = getContentResolver().openOutputStream(uri)) {
+            if (output == null) throw new Exception("Could not write local video file.");
+            output.write(bytes);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ContentValues ready = new ContentValues();
+            ready.put(MediaStore.Video.Media.IS_PENDING, 0);
+            getContentResolver().update(uri, ready, null, null);
+        }
+        return uri;
+    }
+
+    private String safeStoryFilename(String filename) {
+        String value = filename == null ? "" : filename.replaceAll("[^A-Za-z0-9._-]+", "-");
+        if (value.length() < 5) value = "on-this-site-ar-story.webm";
+        if (!value.toLowerCase().endsWith(".webm")) value = value + ".webm";
+        return value;
+    }
+
+    private String safeMimeType(String mimeType) {
+        if (mimeType != null && mimeType.startsWith("video/")) return mimeType;
+        return "video/webm";
+    }
+
+    private void notifyStorySaved(boolean ok, String message, String uri) {
+        if (webView == null) return;
+        String safeMessage = jsString(message == null ? "" : message);
+        String safeUri = jsString(uri == null ? "" : uri);
+        webView.evaluateJavascript(
+            "window.onAndroidStorySaved && window.onAndroidStorySaved(" + ok + "," + safeMessage + "," + safeUri + ")",
+            null
+        );
+    }
+
+    private String jsString(String value) {
+        return "\"" + value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r") + "\"";
     }
 
     private String freshAppUrl() {
