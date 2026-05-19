@@ -28,7 +28,8 @@ public class MainActivity extends Activity {
     private static final int LOCATION_REQUEST = 41;
     private static final int CAMERA_REQUEST = 42;
     private static final long RESUME_REFRESH_COOLDOWN_MS = 1500;
-    private static final String APP_VERSION = "20260519-auto-refresh-update-check";
+    private static final long PERMISSION_RESUME_GRACE_MS = 45000;
+    private static final String APP_VERSION = "20260519-permission-state-preserve";
     private static final String APP_BASE_URL =
         "https://nativelongisland.com/archive-test/mobile-app-live.html";
 
@@ -38,6 +39,7 @@ public class MainActivity extends Activity {
     private PermissionRequest pendingCameraRequest;
     private boolean created;
     private long lastRefreshAt;
+    private long suppressResumeRefreshUntil;
     private Uri lastStoryVideoUri;
     private String lastStoryVideoMimeType = "video/webm";
 
@@ -75,6 +77,7 @@ public class MainActivity extends Activity {
                 }
                 pendingLocationOrigin = origin;
                 pendingLocationCallback = callback;
+                suppressResumeRefreshAfterPermissionPrompt();
                 requestPermissions(new String[] {
                     Manifest.permission.ACCESS_FINE_LOCATION,
                     Manifest.permission.ACCESS_COARSE_LOCATION
@@ -90,6 +93,7 @@ public class MainActivity extends Activity {
                             return;
                         }
                         pendingCameraRequest = request;
+                        suppressResumeRefreshAfterPermissionPrompt();
                         requestPermissions(new String[] { Manifest.permission.CAMERA }, CAMERA_REQUEST);
                         return;
                     }
@@ -256,6 +260,10 @@ public class MainActivity extends Activity {
         webView.loadUrl(freshAppUrl(), headers);
     }
 
+    private void suppressResumeRefreshAfterPermissionPrompt() {
+        suppressResumeRefreshUntil = System.currentTimeMillis() + PERMISSION_RESUME_GRACE_MS;
+    }
+
     private String packageVersionName() {
         try {
             return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
@@ -280,6 +288,7 @@ public class MainActivity extends Activity {
         super.onResume();
         if (!created) return;
         long now = System.currentTimeMillis();
+        if (now < suppressResumeRefreshUntil) return;
         if (now - lastRefreshAt > RESUME_REFRESH_COOLDOWN_MS) {
             refreshApp();
         }
@@ -327,6 +336,7 @@ public class MainActivity extends Activity {
         }
 
         if (requestCode == LOCATION_REQUEST && pendingLocationCallback != null) {
+            suppressResumeRefreshAfterPermissionPrompt();
             pendingLocationCallback.invoke(pendingLocationOrigin, granted, false);
             pendingLocationCallback = null;
             pendingLocationOrigin = null;
@@ -334,6 +344,7 @@ public class MainActivity extends Activity {
         }
 
         if (requestCode == CAMERA_REQUEST && pendingCameraRequest != null) {
+            suppressResumeRefreshAfterPermissionPrompt();
             if (granted) {
                 pendingCameraRequest.grant(new String[] { PermissionRequest.RESOURCE_VIDEO_CAPTURE });
             } else {
