@@ -7,6 +7,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
+import android.view.WindowInsets;
 import android.webkit.GeolocationPermissions;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
@@ -19,7 +20,7 @@ public class MainActivity extends Activity {
     private static final int LOCATION_REQUEST = 41;
     private static final int CAMERA_REQUEST = 42;
     private static final long RESUME_REFRESH_COOLDOWN_MS = 1500;
-    private static final String APP_VERSION = "20260519-menu-live-sync";
+    private static final String APP_VERSION = "20260519-system-bar-safe-area";
     private static final String APP_BASE_URL =
         "https://nativelongisland.com/archive-test/mobile-app-live.html";
 
@@ -36,6 +37,10 @@ public class MainActivity extends Activity {
 
         webView = new WebView(this);
         webView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        webView.setOnApplyWindowInsetsListener((view, insets) -> {
+            view.setPadding(0, 0, 0, insets.getSystemWindowInsetBottom());
+            return insets;
+        });
         setContentView(webView);
 
         WebSettings settings = webView.getSettings();
