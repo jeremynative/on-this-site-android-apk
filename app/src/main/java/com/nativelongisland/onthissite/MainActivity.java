@@ -12,21 +12,23 @@ import android.provider.MediaStore;
 import android.util.Base64;
 import android.view.View;
 import android.view.WindowInsets;
-import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
+import android.webkit.GeolocationPermissions;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import java.util.HashMap;
+import java.util.Map;
 import java.io.OutputStream;
 
 public class MainActivity extends Activity {
     private static final int LOCATION_REQUEST = 41;
     private static final int CAMERA_REQUEST = 42;
     private static final long RESUME_REFRESH_COOLDOWN_MS = 1500;
-    private static final String APP_VERSION = "20260519-ar-story-native-share";
+    private static final String APP_VERSION = "20260519-auto-refresh-update-check";
     private static final String APP_BASE_URL =
         "https://nativelongisland.com/archive-test/mobile-app-live.html";
 
@@ -60,6 +62,7 @@ public class MainActivity extends Activity {
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
+        webView.addJavascriptInterface(new AppBridge(), "AndroidApp");
         webView.addJavascriptInterface(new StoryBridge(), "AndroidStory");
         webView.clearCache(true);
 
@@ -109,6 +112,28 @@ public class MainActivity extends Activity {
 
         refreshApp();
         created = true;
+    }
+
+    private class AppBridge {
+        @JavascriptInterface
+        public String getBuildId() {
+            return APP_VERSION;
+        }
+
+        @JavascriptInterface
+        public String getVersionName() {
+            return packageVersionName();
+        }
+
+        @JavascriptInterface
+        public long getVersionCode() {
+            return packageVersionCode();
+        }
+
+        @JavascriptInterface
+        public void refreshNow() {
+            runOnUiThread(() -> refreshApp());
+        }
     }
 
     private class StoryBridge {
@@ -214,14 +239,40 @@ public class MainActivity extends Activity {
     }
 
     private String freshAppUrl() {
-        return APP_BASE_URL + "?app-version=" + APP_VERSION + "&refresh=" + System.currentTimeMillis();
+        return APP_BASE_URL
+            + "?app-version=" + APP_VERSION
+            + "&apk-version=" + Uri.encode(packageVersionName())
+            + "&apk-code=" + packageVersionCode()
+            + "&refresh=" + System.currentTimeMillis();
     }
 
     private void refreshApp() {
         if (webView == null) return;
         lastRefreshAt = System.currentTimeMillis();
         webView.clearCache(true);
-        webView.loadUrl(freshAppUrl());
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Cache-Control", "no-cache, no-store, max-age=0");
+        headers.put("Pragma", "no-cache");
+        webView.loadUrl(freshAppUrl(), headers);
+    }
+
+    private String packageVersionName() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception error) {
+            return "0.0.0";
+        }
+    }
+
+    private long packageVersionCode() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                return getPackageManager().getPackageInfo(getPackageName(), 0).getLongVersionCode();
+            }
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
+        } catch (Exception error) {
+            return 0;
+        }
     }
 
     @Override
