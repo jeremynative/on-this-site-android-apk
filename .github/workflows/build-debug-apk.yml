@@ -44,6 +44,9 @@ jobs:
 
       - name: Build debug APK
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 0.1.${{ github.run_number }}
         run: gradle assembleDebug --no-daemon
 
       - name: Prepare debug APK files
@@ -100,8 +103,9 @@ jobs:
             Latest installable APK for testing the On This Site Android wrapper through Obtainium.
 
             Most map, content, UI, and data updates load from the live mobile site and do not require reinstalling the APK. Reinstall this only after native Android wrapper changes such as permissions, WebView behavior, or app packaging.
-          artifacts: "release/*.apk"
+          artifacts: "release/on-this-site-latest.apk"
           allowUpdates: true
+          removeArtifacts: true
           replacesArtifacts: true
           prerelease: false
           makeLatest: true
