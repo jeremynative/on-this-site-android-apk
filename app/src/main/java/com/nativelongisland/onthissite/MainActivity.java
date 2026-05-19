@@ -19,11 +19,9 @@ public class MainActivity extends Activity {
     private static final int LOCATION_REQUEST = 41;
     private static final int CAMERA_REQUEST = 42;
     private static final long RESUME_REFRESH_COOLDOWN_MS = 1500;
-    private static final String APP_VERSION = "20260518-barrier-beach-hotfix";
+    private static final String APP_VERSION = "20260519-menu-live-sync";
     private static final String APP_BASE_URL =
-        "https://nativelongisland.com/archive-test/native-long-island-staging-site-20260516-100502/mobile-app-live.html";
-    private static final String APP_INTERNAL_PATH_PREFIX =
-        "/archive-test/native-long-island-staging-site-20260516-100502/";
+        "https://nativelongisland.com/archive-test/mobile-app-live.html";
 
     private WebView webView;
     private GeolocationPermissions.Callback pendingLocationCallback;
@@ -132,7 +130,8 @@ public class MainActivity extends Activity {
         String path = uri.getPath();
         boolean isArchiveApp = "nativelongisland.com".equalsIgnoreCase(host)
             && path != null
-            && path.startsWith(APP_INTERNAL_PATH_PREFIX);
+            && ("/archive-test/mobile-app-live.html".equals(path)
+                || "/archive-test/native-long-island-staging-site-20260516-100502/mobile-app-live.html".equals(path));
         if (isArchiveApp) return false;
 
         Intent intent = new Intent(Intent.ACTION_VIEW, uri);
