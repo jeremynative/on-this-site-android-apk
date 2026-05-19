@@ -28,8 +28,9 @@ public class MainActivity extends Activity {
     private static final int LOCATION_REQUEST = 41;
     private static final int CAMERA_REQUEST = 42;
     private static final long RESUME_REFRESH_COOLDOWN_MS = 1500;
+    private static final long BACKGROUND_REFRESH_DELAY_MS = 300000;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    private static final String APP_VERSION = "20260519-android-back-closes-panel";
+    private static final String APP_VERSION = "20260519-focus-safe-exhibit-icon";
     private static final String APP_BASE_URL =
         "https://nativelongisland.com/archive-test/mobile-app-live.html";
 
@@ -39,6 +40,8 @@ public class MainActivity extends Activity {
     private PermissionRequest pendingCameraRequest;
     private boolean created;
     private long lastRefreshAt;
+    private long stoppedAt;
+    private boolean wasStopped;
     private long suppressResumeRefreshUntil;
     private Uri lastStoryVideoUri;
     private String lastStoryVideoMimeType = "video/webm";
@@ -286,12 +289,26 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
         if (!created) return;
         long now = System.currentTimeMillis();
+        boolean returnedFromBackground = wasStopped && stoppedAt > 0 && now - stoppedAt > BACKGROUND_REFRESH_DELAY_MS;
+        wasStopped = false;
         if (now < suppressResumeRefreshUntil) return;
-        if (now - lastRefreshAt > RESUME_REFRESH_COOLDOWN_MS) {
+        if (returnedFromBackground && now - lastRefreshAt > RESUME_REFRESH_COOLDOWN_MS) {
             refreshApp();
         }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        wasStopped = true;
+        stoppedAt = System.currentTimeMillis();
     }
 
     @Override
