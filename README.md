@@ -14,7 +14,7 @@ Most fixes do not require reinstalling the APK. UI, map, timeline, content, and 
 
 Only reinstall the APK after native Android wrapper changes such as permissions, WebView behavior, or app packaging.
 
-Best phone setup:
+Best phone setup for this testing APK:
 
 1. Install Obtainium from F-Droid or GitHub.
 2. Add this GitHub repo as the app source:
@@ -22,13 +22,18 @@ Best phone setup:
 `https://github.com/jeremynative/on-this-site-android-apk`
 
 3. In Obtainium, let it watch GitHub Releases for APK updates.
-4. Allow Obtainium to install unknown apps when Android asks.
+4. Set the APK filter to `on-this-site-latest.apk` if Obtainium asks which file to use.
+5. Allow Obtainium to install unknown apps when Android asks.
 
 Stable latest release APK link:
 
 `https://github.com/jeremynative/on-this-site-android-apk/releases/latest/download/on-this-site-latest.apk`
 
 That link stays the same after future APK builds, so it can be bookmarked on your phone.
+
+Current debug-build fallback link:
+
+`https://github.com/jeremynative/on-this-site-android-apk/releases/download/latest-debug/on-this-site-latest-debug.apk`
 
 Android will still usually ask you to approve each sideloaded update. Obtainium makes the checking/downloading easy; it does not bypass normal Android install approval.
 
@@ -42,10 +47,11 @@ Artifact name:
 
 The artifact includes:
 
+- `on-this-site-latest.apk`
 - `on-this-site-latest-debug.apk`
 - `on-this-site-debug-<run>-<commit>.apk`
 
-The workflow also publishes debug APK files to a `Latest debug APK` prerelease for quick testing, but Obtainium should use the signed versioned releases.
+The workflow also publishes debug APK files to a `Latest APK for phone testing` release so Obtainium can track the same latest-release URL during active testing.
 
 ## Signed Releases
 
@@ -86,8 +92,8 @@ That secret should contain a Google Cloud service account JSON key. The service 
 
 When configured, each build will:
 
-1. Move the previous latest APK into `OLD` with a run-specific name.
-2. Upload the new build as the latest APK in `App APK`.
+1. Move the previous `on-this-site-latest-debug.apk` into `OLD` with a run-specific name.
+2. Upload the new build as `on-this-site-latest-debug.apk` in `App APK`.
 
 ## Local Build
 
