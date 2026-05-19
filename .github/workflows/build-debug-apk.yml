@@ -51,6 +51,7 @@ jobs:
         run: |
           mkdir -p release
           cp app/build/outputs/apk/debug/app-debug.apk release/on-this-site-latest-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk release/on-this-site-latest.apk
           cp app/build/outputs/apk/debug/app-debug.apk "release/on-this-site-debug-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}.apk"
 
       - name: Decode release signing key
@@ -94,16 +95,16 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: latest-debug
-          name: Latest debug APK
+          name: Latest APK for phone testing
           body: |
-            Latest installable debug APK for the On This Site Android wrapper.
+            Latest installable APK for testing the On This Site Android wrapper through Obtainium.
 
             Most map, content, UI, and data updates load from the live mobile site and do not require reinstalling the APK. Reinstall this only after native Android wrapper changes such as permissions, WebView behavior, or app packaging.
           artifacts: "release/*.apk"
           allowUpdates: true
           replacesArtifacts: true
-          prerelease: true
-          makeLatest: false
+          prerelease: false
+          makeLatest: true
 
       - name: Publish Obtainium release APK
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
