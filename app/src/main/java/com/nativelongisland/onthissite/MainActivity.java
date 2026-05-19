@@ -29,7 +29,7 @@ public class MainActivity extends Activity {
     private static final int CAMERA_REQUEST = 42;
     private static final long RESUME_REFRESH_COOLDOWN_MS = 1500;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    private static final String APP_VERSION = "20260519-permission-state-preserve";
+    private static final String APP_VERSION = "20260519-android-back-closes-panel";
     private static final String APP_BASE_URL =
         "https://nativelongisland.com/archive-test/mobile-app-live.html";
 
@@ -356,11 +356,21 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
+        if (webView == null) {
+            super.onBackPressed();
             return;
         }
-        super.onBackPressed();
+        webView.evaluateJavascript(
+            "(function(){try{return !!(window.onAndroidBackPressed && window.onAndroidBackPressed());}catch(error){return false;}})();",
+            handled -> {
+                if ("true".equals(handled)) return;
+                if (webView.canGoBack()) {
+                    webView.goBack();
+                    return;
+                }
+                MainActivity.super.onBackPressed();
+            }
+        );
     }
 
     @Override
