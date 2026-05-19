@@ -8,6 +8,14 @@ The APK is a small Android WebView wrapper around the live mobile site:
 
 Because it opens the hosted live mobile app, site content stays synced with Directus/live data without rebuilding the APK for every content update.
 
+## Versioning Before Public Release
+
+Until the app is truly public, APK releases should stay below version `1.0`.
+
+GitHub Actions bumps each testing build slightly as `0.1.<run number>` and publishes it as a GitHub Release, such as `apk-22`. That gives Obtainium a new version signal after every APK repo update without calling the app public-ready.
+
+Use `1.0.0` only for the first real public release.
+
 ## Phone Updates With Obtainium
 
 Most fixes do not require reinstalling the APK. UI, map, timeline, content, and data changes load from the live mobile page the next time the app refreshes.
@@ -51,7 +59,7 @@ The artifact includes:
 - `on-this-site-latest-debug.apk`
 - `on-this-site-debug-<run>-<commit>.apk`
 
-The workflow also publishes debug APK files to a `Latest APK for phone testing` release so Obtainium can track the same latest-release URL during active testing.
+The workflow also publishes debug APK files to the latest GitHub Release so Obtainium can track the same latest-release URL during active testing.
 
 ## Signed Releases
 
