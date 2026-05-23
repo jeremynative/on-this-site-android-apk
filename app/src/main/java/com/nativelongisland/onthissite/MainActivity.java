@@ -2,6 +2,7 @@ package com.nativelongisland.onthissite;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -15,6 +16,7 @@ import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
 import android.webkit.GeolocationPermissions;
 import android.webkit.PermissionRequest;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -27,10 +29,11 @@ import java.io.OutputStream;
 public class MainActivity extends Activity {
     private static final int LOCATION_REQUEST = 41;
     private static final int CAMERA_REQUEST = 42;
+    private static final int FILE_CHOOSER_REQUEST = 43;
     private static final long RESUME_REFRESH_COOLDOWN_MS = 1500;
     private static final long BACKGROUND_REFRESH_DELAY_MS = 300000;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    private static final String APP_VERSION = "20260519-focus-safe-exhibit-icon";
+    private static final String APP_VERSION = "20260523-file-chooser-1";
     private static final String APP_BASE_URL =
         "https://nativelongisland.com/archive-test/mobile-app-live.html";
 
@@ -38,6 +41,7 @@ public class MainActivity extends Activity {
     private GeolocationPermissions.Callback pendingLocationCallback;
     private String pendingLocationOrigin;
     private PermissionRequest pendingCameraRequest;
+    private ValueCallback<Uri[]> pendingFileChooserCallback;
     private boolean created;
     private long lastRefreshAt;
     private long stoppedAt;
@@ -102,6 +106,33 @@ public class MainActivity extends Activity {
                     }
                 }
                 request.deny();
+            }
+
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                if (pendingFileChooserCallback != null) {
+                    pendingFileChooserCallback.onReceiveValue(null);
+                }
+                pendingFileChooserCallback = filePathCallback;
+                suppressResumeRefreshAfterPermissionPrompt();
+
+                Intent intent;
+                try {
+                    intent = fileChooserParams.createIntent();
+                } catch (Exception error) {
+                    intent = new Intent(Intent.ACTION_GET_CONTENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("image/*");
+                }
+
+                try {
+                    startActivityForResult(intent, FILE_CHOOSER_REQUEST);
+                    return true;
+                } catch (ActivityNotFoundException error) {
+                    pendingFileChooserCallback = null;
+                    filePathCallback.onReceiveValue(null);
+                    return false;
+                }
             }
         });
 
@@ -369,6 +400,20 @@ public class MainActivity extends Activity {
             }
             pendingCameraRequest = null;
         }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != FILE_CHOOSER_REQUEST || pendingFileChooserCallback == null) return;
+
+        Uri[] results = null;
+        if (resultCode == RESULT_OK) {
+            results = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+        }
+        pendingFileChooserCallback.onReceiveValue(results);
+        pendingFileChooserCallback = null;
+        suppressResumeRefreshAfterPermissionPrompt();
     }
 
     @Override
