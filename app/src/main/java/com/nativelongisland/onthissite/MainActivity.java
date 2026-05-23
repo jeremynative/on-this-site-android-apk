@@ -30,10 +30,11 @@ public class MainActivity extends Activity {
     private static final int LOCATION_REQUEST = 41;
     private static final int CAMERA_REQUEST = 42;
     private static final int FILE_CHOOSER_REQUEST = 43;
+    private static final int PHOTO_CAMERA_REQUEST = 44;
     private static final long RESUME_REFRESH_COOLDOWN_MS = 1500;
     private static final long BACKGROUND_REFRESH_DELAY_MS = 300000;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    private static final String APP_VERSION = "20260523-plant-camera-analysis-1";
+    private static final String APP_VERSION = "20260523-plant-camera-analysis-2";
     private static final String APP_BASE_URL =
         "https://nativelongisland.com/archive-test/mobile-app-live.html";
 
@@ -43,6 +44,7 @@ public class MainActivity extends Activity {
     private PermissionRequest pendingCameraRequest;
     private ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraCaptureUri;
+    private boolean pendingPhotoCaptureAfterPermission;
     private boolean created;
     private long lastRefreshAt;
     private long stoppedAt;
@@ -117,31 +119,16 @@ public class MainActivity extends Activity {
                 pendingFileChooserCallback = filePathCallback;
                 suppressResumeRefreshAfterPermissionPrompt();
 
-                Intent intent;
-                try {
-                    if (fileChooserParams != null && fileChooserParams.isCaptureEnabled()) {
-                        pendingCameraCaptureUri = createPlantPhotoUri();
-                        intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-                        intent.putExtra(MediaStore.EXTRA_OUTPUT, pendingCameraCaptureUri);
-                        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    } else {
-                        intent = fileChooserParams.createIntent();
+                if (wantsImageCapture(fileChooserParams)) {
+                    if (!hasCameraPermission()) {
+                        pendingPhotoCaptureAfterPermission = true;
+                        requestPermissions(new String[] { Manifest.permission.CAMERA }, PHOTO_CAMERA_REQUEST);
+                        return true;
                     }
-                } catch (Exception error) {
-                    pendingCameraCaptureUri = null;
-                    intent = new Intent(Intent.ACTION_GET_CONTENT);
-                    intent.addCategory(Intent.CATEGORY_OPENABLE);
-                    intent.setType("image/*");
+                    return launchImageCaptureOrPicker(filePathCallback);
                 }
 
-                try {
-                    startActivityForResult(intent, FILE_CHOOSER_REQUEST);
-                    return true;
-                } catch (ActivityNotFoundException error) {
-                    pendingFileChooserCallback = null;
-                    filePathCallback.onReceiveValue(null);
-                    return false;
-                }
+                return launchFileChooserIntent(filePathCallback, fileChooserParams);
             }
         });
 
@@ -159,6 +146,78 @@ public class MainActivity extends Activity {
 
         refreshApp();
         created = true;
+    }
+
+    private boolean wantsImageCapture(WebChromeClient.FileChooserParams params) {
+        if (params == null || !params.isCaptureEnabled()) return false;
+        String[] acceptTypes = params.getAcceptTypes();
+        if (acceptTypes == null || acceptTypes.length == 0) return true;
+        for (String type : acceptTypes) {
+            if (type == null || type.trim().isEmpty() || type.toLowerCase().startsWith("image/")) return true;
+        }
+        return false;
+    }
+
+    private boolean launchFileChooserIntent(ValueCallback<Uri[]> callback, WebChromeClient.FileChooserParams params) {
+        Intent intent;
+        try {
+            intent = params == null ? imagePickerIntent() : params.createIntent();
+        } catch (Exception error) {
+            intent = imagePickerIntent();
+        }
+
+        try {
+            startActivityForResult(intent, FILE_CHOOSER_REQUEST);
+            return true;
+        } catch (ActivityNotFoundException error) {
+            return launchImagePickerFallback(callback);
+        }
+    }
+
+    private boolean launchImageCaptureOrPicker(ValueCallback<Uri[]> callback) {
+        pendingCameraCaptureUri = null;
+        try {
+            pendingCameraCaptureUri = createPlantPhotoUri();
+            if (pendingCameraCaptureUri == null) return launchImagePickerFallback(callback);
+
+            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, pendingCameraCaptureUri);
+            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                for (android.content.pm.ResolveInfo activity : getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)) {
+                    grantUriPermission(activity.activityInfo.packageName, pendingCameraCaptureUri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                }
+            }
+
+            startActivityForResult(intent, FILE_CHOOSER_REQUEST);
+            return true;
+        } catch (Exception error) {
+            if (pendingCameraCaptureUri != null) {
+                getContentResolver().delete(pendingCameraCaptureUri, null, null);
+                pendingCameraCaptureUri = null;
+            }
+            return launchImagePickerFallback(callback);
+        }
+    }
+
+    private boolean launchImagePickerFallback(ValueCallback<Uri[]> callback) {
+        try {
+            startActivityForResult(imagePickerIntent(), FILE_CHOOSER_REQUEST);
+            return true;
+        } catch (ActivityNotFoundException error) {
+            pendingFileChooserCallback = null;
+            pendingCameraCaptureUri = null;
+            callback.onReceiveValue(null);
+            return false;
+        }
+    }
+
+    private Intent imagePickerIntent() {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/*");
+        return intent;
     }
 
     private class AppBridge {
@@ -428,6 +487,18 @@ public class MainActivity extends Activity {
                 pendingCameraRequest.deny();
             }
             pendingCameraRequest = null;
+            return;
+        }
+
+        if (requestCode == PHOTO_CAMERA_REQUEST && pendingFileChooserCallback != null) {
+            suppressResumeRefreshAfterPermissionPrompt();
+            ValueCallback<Uri[]> callback = pendingFileChooserCallback;
+            pendingPhotoCaptureAfterPermission = false;
+            if (granted) {
+                launchImageCaptureOrPicker(callback);
+            } else {
+                launchImagePickerFallback(callback);
+            }
         }
     }
 
