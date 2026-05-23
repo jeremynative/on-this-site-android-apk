@@ -6,6 +6,8 @@ import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Build;
@@ -24,6 +26,8 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import java.util.HashMap;
 import java.util.Map;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 
 public class MainActivity extends Activity {
@@ -31,10 +35,10 @@ public class MainActivity extends Activity {
     private static final int CAMERA_REQUEST = 42;
     private static final int FILE_CHOOSER_REQUEST = 43;
     private static final int PHOTO_CAMERA_REQUEST = 44;
-    private static final long RESUME_REFRESH_COOLDOWN_MS = 1500;
-    private static final long BACKGROUND_REFRESH_DELAY_MS = 300000;
+    private static final int PLANT_BRIDGE_CAMERA_REQUEST = 45;
+    private static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    private static final String APP_VERSION = "20260523-plant-camera-analysis-3";
+    private static final String APP_VERSION = "20260523-plant-camera-analysis-4";
     private static final String APP_BASE_URL =
         "https://nativelongisland.com/archive-test/mobile-app-live.html";
 
@@ -44,6 +48,7 @@ public class MainActivity extends Activity {
     private PermissionRequest pendingCameraRequest;
     private ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraCaptureUri;
+    private Uri pendingPlantBridgeCameraUri;
     private boolean pendingPhotoCaptureAfterPermission;
     private boolean created;
     private long lastRefreshAt;
@@ -246,6 +251,18 @@ public class MainActivity extends Activity {
         public void refreshNow() {
             runOnUiThread(() -> refreshApp());
         }
+
+        @JavascriptInterface
+        public void takePlantPhoto() {
+            runOnUiThread(() -> {
+                suppressResumeRefreshAfterPermissionPrompt();
+                if (!hasCameraPermission()) {
+                    requestPermissions(new String[] { Manifest.permission.CAMERA }, PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST);
+                    return;
+                }
+                launchPlantBridgeCamera();
+            });
+        }
     }
 
     private class StoryBridge {
@@ -419,14 +436,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onStart() {
         super.onStart();
-        if (!created) return;
-        long now = System.currentTimeMillis();
-        boolean returnedFromBackground = wasStopped && stoppedAt > 0 && now - stoppedAt > BACKGROUND_REFRESH_DELAY_MS;
         wasStopped = false;
-        if (now < suppressResumeRefreshUntil) return;
-        if (returnedFromBackground && now - lastRefreshAt > RESUME_REFRESH_COOLDOWN_MS) {
-            refreshApp();
-        }
     }
 
     @Override
@@ -440,7 +450,85 @@ public class MainActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        refreshApp();
+    }
+
+    private void launchPlantBridgeCamera() {
+        try {
+            pendingPlantBridgeCameraUri = createPlantPhotoUri();
+            if (pendingPlantBridgeCameraUri == null) {
+                notifyPlantPhoto(false, "Could not create a local photo file.", "", "", "");
+                return;
+            }
+            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, pendingPlantBridgeCameraUri);
+            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                for (android.content.pm.ResolveInfo activity : getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)) {
+                    grantUriPermission(activity.activityInfo.packageName, pendingPlantBridgeCameraUri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                }
+            }
+            startActivityForResult(intent, PLANT_BRIDGE_CAMERA_REQUEST);
+        } catch (Exception error) {
+            if (pendingPlantBridgeCameraUri != null) {
+                getContentResolver().delete(pendingPlantBridgeCameraUri, null, null);
+                pendingPlantBridgeCameraUri = null;
+            }
+            notifyPlantPhoto(false, "Could not open the camera.", "", "", "");
+        }
+    }
+
+    private void deliverPlantBridgePhoto(Uri uri) {
+        try {
+            markPlantPhotoReady(uri);
+            byte[] bytes = compressedJpegBytes(uri);
+            String base64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+            notifyPlantPhoto(true, "", base64, "image/jpeg", "plant-observation-" + System.currentTimeMillis() + ".jpg");
+        } catch (Exception error) {
+            notifyPlantPhoto(false, error.getMessage(), "", "", "");
+        }
+    }
+
+    private byte[] compressedJpegBytes(Uri uri) throws Exception {
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        try (InputStream input = getContentResolver().openInputStream(uri)) {
+            BitmapFactory.decodeStream(input, null, bounds);
+        }
+        int sample = 1;
+        int largest = Math.max(bounds.outWidth, bounds.outHeight);
+        while (largest / sample > 1024) sample *= 2;
+
+        BitmapFactory.Options decode = new BitmapFactory.Options();
+        decode.inSampleSize = sample;
+        Bitmap bitmap;
+        try (InputStream input = getContentResolver().openInputStream(uri)) {
+            bitmap = BitmapFactory.decodeStream(input, null, decode);
+        }
+        if (bitmap == null) throw new Exception("Could not read the photo.");
+
+        int quality = 78;
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        do {
+            output.reset();
+            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, output);
+            quality -= 10;
+        } while (output.size() > 900 * 1024 && quality >= 38);
+        bitmap.recycle();
+        if (output.size() > 900 * 1024) throw new Exception("Photo is too large. Try a closer crop.");
+        return output.toByteArray();
+    }
+
+    private void notifyPlantPhoto(boolean ok, String message, String base64, String mimeType, String filename) {
+        if (webView == null) return;
+        webView.evaluateJavascript(
+            "window.onAndroidPlantPhoto && window.onAndroidPlantPhoto("
+                + ok + ","
+                + jsString(message == null ? "" : message) + ","
+                + jsString(base64 == null ? "" : base64) + ","
+                + jsString(mimeType == null ? "" : mimeType) + ","
+                + jsString(filename == null ? "" : filename) + ")",
+            null
+        );
     }
 
     private boolean openExternallyWhenNeeded(Uri uri) {
@@ -505,11 +593,29 @@ public class MainActivity extends Activity {
             } else {
                 launchImagePickerFallback(callback);
             }
+            return;
+        }
+
+        if (requestCode == PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST) {
+            suppressResumeRefreshAfterPermissionPrompt();
+            if (granted) launchPlantBridgeCamera();
+            else notifyPlantPhoto(false, "Camera permission is needed to take a plant photo.", "", "", "");
         }
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == PLANT_BRIDGE_CAMERA_REQUEST) {
+            suppressResumeRefreshAfterPermissionPrompt();
+            if (resultCode == RESULT_OK && pendingPlantBridgeCameraUri != null) {
+                deliverPlantBridgePhoto(pendingPlantBridgeCameraUri);
+            } else {
+                if (pendingPlantBridgeCameraUri != null) getContentResolver().delete(pendingPlantBridgeCameraUri, null, null);
+                notifyPlantPhoto(false, "Plant photo was cancelled.", "", "", "");
+            }
+            pendingPlantBridgeCameraUri = null;
+            return;
+        }
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != FILE_CHOOSER_REQUEST || pendingFileChooserCallback == null) return;
 
