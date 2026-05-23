@@ -38,7 +38,7 @@ public class MainActivity extends Activity {
     private static final int PLANT_BRIDGE_CAMERA_REQUEST = 45;
     private static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    private static final String APP_VERSION = "20260523-plant-camera-analysis-4";
+    private static final String APP_VERSION = "20260523-plant-camera-analysis-5";
     private static final String APP_BASE_URL =
         "https://nativelongisland.com/archive-test/mobile-app-live.html";
 
@@ -49,6 +49,12 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraCaptureUri;
     private Uri pendingPlantBridgeCameraUri;
+    private boolean pendingPlantPhotoOk;
+    private String pendingPlantPhotoMessage;
+    private String pendingPlantPhotoBase64;
+    private String pendingPlantPhotoMimeType;
+    private String pendingPlantPhotoFilename;
+    private boolean hasPendingPlantPhotoDelivery;
     private boolean pendingPhotoCaptureAfterPermission;
     private boolean created;
     private long lastRefreshAt;
@@ -146,6 +152,12 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 return openExternallyWhenNeeded(Uri.parse(url));
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                dispatchPendingPlantPhoto();
             }
         });
 
@@ -456,7 +468,7 @@ public class MainActivity extends Activity {
         try {
             pendingPlantBridgeCameraUri = createPlantPhotoUri();
             if (pendingPlantBridgeCameraUri == null) {
-                notifyPlantPhoto(false, "Could not create a local photo file.", "", "", "");
+                queuePlantPhoto(false, "Could not create a local photo file.", "", "", "");
                 return;
             }
             Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
@@ -473,7 +485,7 @@ public class MainActivity extends Activity {
                 getContentResolver().delete(pendingPlantBridgeCameraUri, null, null);
                 pendingPlantBridgeCameraUri = null;
             }
-            notifyPlantPhoto(false, "Could not open the camera.", "", "", "");
+            queuePlantPhoto(false, "Could not open the camera.", "", "", "");
         }
     }
 
@@ -482,9 +494,9 @@ public class MainActivity extends Activity {
             markPlantPhotoReady(uri);
             byte[] bytes = compressedJpegBytes(uri);
             String base64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
-            notifyPlantPhoto(true, "", base64, "image/jpeg", "plant-observation-" + System.currentTimeMillis() + ".jpg");
+            queuePlantPhoto(true, "", base64, "image/jpeg", "plant-observation-" + System.currentTimeMillis() + ".jpg");
         } catch (Exception error) {
-            notifyPlantPhoto(false, error.getMessage(), "", "", "");
+            queuePlantPhoto(false, error.getMessage(), "", "", "");
         }
     }
 
@@ -518,6 +530,32 @@ public class MainActivity extends Activity {
         return output.toByteArray();
     }
 
+    private void queuePlantPhoto(boolean ok, String message, String base64, String mimeType, String filename) {
+        pendingPlantPhotoOk = ok;
+        pendingPlantPhotoMessage = message == null ? "" : message;
+        pendingPlantPhotoBase64 = base64 == null ? "" : base64;
+        pendingPlantPhotoMimeType = mimeType == null ? "" : mimeType;
+        pendingPlantPhotoFilename = filename == null ? "" : filename;
+        hasPendingPlantPhotoDelivery = true;
+        dispatchPendingPlantPhoto();
+        if (webView != null) {
+            webView.postDelayed(this::dispatchPendingPlantPhoto, 500);
+            webView.postDelayed(this::dispatchPendingPlantPhoto, 1500);
+            webView.postDelayed(this::dispatchPendingPlantPhoto, 3000);
+        }
+    }
+
+    private void dispatchPendingPlantPhoto() {
+        if (!hasPendingPlantPhotoDelivery || webView == null) return;
+        notifyPlantPhoto(
+            pendingPlantPhotoOk,
+            pendingPlantPhotoMessage,
+            pendingPlantPhotoBase64,
+            pendingPlantPhotoMimeType,
+            pendingPlantPhotoFilename
+        );
+    }
+
     private void notifyPlantPhoto(boolean ok, String message, String base64, String mimeType, String filename) {
         if (webView == null) return;
         webView.evaluateJavascript(
@@ -527,7 +565,12 @@ public class MainActivity extends Activity {
                 + jsString(base64 == null ? "" : base64) + ","
                 + jsString(mimeType == null ? "" : mimeType) + ","
                 + jsString(filename == null ? "" : filename) + ")",
-            null
+            value -> {
+                if ("true".equals(value)) {
+                    hasPendingPlantPhotoDelivery = false;
+                    pendingPlantPhotoBase64 = "";
+                }
+            }
         );
     }
 
@@ -599,7 +642,7 @@ public class MainActivity extends Activity {
         if (requestCode == PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST) {
             suppressResumeRefreshAfterPermissionPrompt();
             if (granted) launchPlantBridgeCamera();
-            else notifyPlantPhoto(false, "Camera permission is needed to take a plant photo.", "", "", "");
+            else queuePlantPhoto(false, "Camera permission is needed to take a plant photo.", "", "", "");
         }
     }
 
@@ -611,7 +654,7 @@ public class MainActivity extends Activity {
                 deliverPlantBridgePhoto(pendingPlantBridgeCameraUri);
             } else {
                 if (pendingPlantBridgeCameraUri != null) getContentResolver().delete(pendingPlantBridgeCameraUri, null, null);
-                notifyPlantPhoto(false, "Plant photo was cancelled.", "", "", "");
+                queuePlantPhoto(false, "Plant photo was cancelled.", "", "", "");
             }
             pendingPlantBridgeCameraUri = null;
             return;
