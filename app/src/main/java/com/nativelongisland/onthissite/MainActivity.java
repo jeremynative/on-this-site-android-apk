@@ -34,7 +34,7 @@ public class MainActivity extends Activity {
     private static final long RESUME_REFRESH_COOLDOWN_MS = 1500;
     private static final long BACKGROUND_REFRESH_DELAY_MS = 300000;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    private static final String APP_VERSION = "20260523-plant-camera-analysis-2";
+    private static final String APP_VERSION = "20260523-plant-camera-analysis-3";
     private static final String APP_BASE_URL =
         "https://nativelongisland.com/archive-test/mobile-app-live.html";
 
@@ -144,7 +144,13 @@ public class MainActivity extends Activity {
             }
         });
 
-        refreshApp();
+        if (savedInstanceState != null) {
+            webView.restoreState(savedInstanceState);
+            lastRefreshAt = System.currentTimeMillis();
+            suppressResumeRefreshAfterPermissionPrompt();
+        } else {
+            refreshApp();
+        }
         created = true;
     }
 
