@@ -10,8 +10,8 @@ android {
         applicationId = "com.nativelongisland.onthissite"
         minSdk = 23
         targetSdk = 35
-        versionCode = Integer.parseInt((System.getenv("VERSION_CODE") ?: "9").toString())
-        versionName = (System.getenv("VERSION_NAME") ?: "0.1.8").toString()
+        versionCode = Integer.parseInt((System.getenv("VERSION_CODE") ?: "10").toString())
+        versionName = (System.getenv("VERSION_NAME") ?: "0.1.9").toString()
     }
 
     def keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
