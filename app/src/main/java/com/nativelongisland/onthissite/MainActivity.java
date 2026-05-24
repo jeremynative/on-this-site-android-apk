@@ -38,7 +38,9 @@ public class MainActivity extends Activity {
     private static final int PLANT_BRIDGE_CAMERA_REQUEST = 45;
     private static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    private static final String APP_VERSION = "20260523-plant-camera-analysis-5";
+    private static final String APP_VERSION = "20260524-plant-camera-analysis-6";
+    private static final String PREFS_NAME = "on_this_site_native_state";
+    private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
         "https://nativelongisland.com/archive-test/mobile-app-live.html";
 
@@ -162,10 +164,12 @@ public class MainActivity extends Activity {
         });
 
         if (savedInstanceState != null) {
+            restorePendingPlantCameraUri();
             webView.restoreState(savedInstanceState);
             lastRefreshAt = System.currentTimeMillis();
             suppressResumeRefreshAfterPermissionPrompt();
         } else {
+            restorePendingPlantCameraUri();
             refreshApp();
         }
         created = true;
@@ -471,6 +475,7 @@ public class MainActivity extends Activity {
                 queuePlantPhoto(false, "Could not create a local photo file.", "", "", "");
                 return;
             }
+            savePendingPlantCameraUri(pendingPlantBridgeCameraUri);
             Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
             intent.putExtra(MediaStore.EXTRA_OUTPUT, pendingPlantBridgeCameraUri);
             intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -485,6 +490,7 @@ public class MainActivity extends Activity {
                 getContentResolver().delete(pendingPlantBridgeCameraUri, null, null);
                 pendingPlantBridgeCameraUri = null;
             }
+            clearPendingPlantCameraUri();
             queuePlantPhoto(false, "Could not open the camera.", "", "", "");
         }
     }
@@ -494,10 +500,31 @@ public class MainActivity extends Activity {
             markPlantPhotoReady(uri);
             byte[] bytes = compressedJpegBytes(uri);
             String base64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+            clearPendingPlantCameraUri();
             queuePlantPhoto(true, "", base64, "image/jpeg", "plant-observation-" + System.currentTimeMillis() + ".jpg");
         } catch (Exception error) {
+            clearPendingPlantCameraUri();
             queuePlantPhoto(false, error.getMessage(), "", "", "");
         }
+    }
+
+    private void savePendingPlantCameraUri(Uri uri) {
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putString(PREF_PENDING_PLANT_URI, uri == null ? "" : uri.toString())
+            .apply();
+    }
+
+    private void restorePendingPlantCameraUri() {
+        String uri = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(PREF_PENDING_PLANT_URI, "");
+        if (uri != null && !uri.isEmpty()) pendingPlantBridgeCameraUri = Uri.parse(uri);
+    }
+
+    private void clearPendingPlantCameraUri() {
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .remove(PREF_PENDING_PLANT_URI)
+            .apply();
     }
 
     private byte[] compressedJpegBytes(Uri uri) throws Exception {
@@ -650,10 +677,12 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == PLANT_BRIDGE_CAMERA_REQUEST) {
             suppressResumeRefreshAfterPermissionPrompt();
+            if (pendingPlantBridgeCameraUri == null) restorePendingPlantCameraUri();
             if (resultCode == RESULT_OK && pendingPlantBridgeCameraUri != null) {
                 deliverPlantBridgePhoto(pendingPlantBridgeCameraUri);
             } else {
                 if (pendingPlantBridgeCameraUri != null) getContentResolver().delete(pendingPlantBridgeCameraUri, null, null);
+                clearPendingPlantCameraUri();
                 queuePlantPhoto(false, "Plant photo was cancelled.", "", "", "");
             }
             pendingPlantBridgeCameraUri = null;
