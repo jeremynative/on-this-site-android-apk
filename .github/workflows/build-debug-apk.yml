@@ -25,6 +25,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Verify Android app shell
+        run: node verify-app-shell.js
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
