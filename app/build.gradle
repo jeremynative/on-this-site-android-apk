@@ -2,6 +2,12 @@ plugins {
     id "com.android.application"
 }
 
+def releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+def hasReleaseSigning = releaseKeystorePath
+    && System.getenv("ANDROID_KEYSTORE_PASSWORD")
+    && System.getenv("ANDROID_KEY_ALIAS")
+    && System.getenv("ANDROID_KEY_PASSWORD")
+
 android {
     namespace = "com.nativelongisland.onthissite"
     compileSdk = 35
@@ -14,16 +20,10 @@ android {
         versionName = (System.getenv("VERSION_NAME") ?: "0.1.16").toString()
     }
 
-    def keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
-    def hasReleaseSigning = keystorePath
-        && System.getenv("ANDROID_KEYSTORE_PASSWORD")
-        && System.getenv("ANDROID_KEY_ALIAS")
-        && System.getenv("ANDROID_KEY_PASSWORD")
-
     signingConfigs {
         release {
             if (hasReleaseSigning) {
-                storeFile = file(keystorePath)
+                storeFile = file(releaseKeystorePath)
                 storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("ANDROID_KEY_ALIAS")
                 keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
@@ -42,4 +42,9 @@ android {
     }
 }
 
+gradle.taskGraph.whenReady { graph ->
+    if (graph.hasTask(":app:assembleRelease") && !hasReleaseSigning) {
+        throw new GradleException("Release APK builds require ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD so Obtainium updates keep the same signing certificate.")
+    }
+}
 

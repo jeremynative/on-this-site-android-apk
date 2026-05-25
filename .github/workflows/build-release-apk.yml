@@ -1,4 +1,4 @@
-name: Build Android Debug APK
+name: Build Android Release APK
 
 on:
   push:
@@ -45,23 +45,7 @@ jobs:
         with:
           gradle-version: "8.10.2"
 
-      - name: Build debug APK
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        env:
-          VERSION_CODE: ${{ github.run_number }}
-          VERSION_NAME: 0.1.${{ github.run_number }}
-        run: gradle assembleDebug --no-daemon
-
-      - name: Prepare debug APK files
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        run: |
-          mkdir -p release
-          cp app/build/outputs/apk/debug/app-debug.apk release/on-this-site-latest-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk release/on-this-site-latest.apk
-          cp app/build/outputs/apk/debug/app-debug.apk "release/on-this-site-debug-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}.apk"
-
       - name: Decode release signing key
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
@@ -69,14 +53,13 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/on-this-site-release.jks"
 
       - name: Build signed release APK
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         env:
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/on-this-site-release.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           VERSION_CODE: ${{ github.run_number }}
-          VERSION_NAME: ${{ github.ref_name }}
+          VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('0.1.{0}', github.run_number) }}
         run: |
           test -n "$ANDROID_KEYSTORE_PASSWORD"
           test -n "$ANDROID_KEY_ALIAS"
@@ -84,29 +67,27 @@ jobs:
           gradle assembleRelease --no-daemon
 
       - name: Prepare release APK files
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
           mkdir -p release
-          cp app/build/outputs/apk/release/app-release.apk release/on-this-site-latest.apk
-          cp app/build/outputs/apk/release/app-release.apk "release/on-this-site-${GITHUB_REF_NAME}.apk"
+          cp app/build/outputs/apk/release/app-release.apk release/on-this-site-release.apk
 
       - name: Upload APK to GitHub artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ startsWith(github.ref, 'refs/tags/v') && 'on-this-site-release-apk' || 'on-this-site-debug-apk' }}
+          name: on-this-site-release-apk
           path: release/*.apk
 
-      - name: Publish latest debug APK release
+      - name: Publish Obtainium testing release APK
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: ncipollo/release-action@v1
         with:
           tag: apk-${{ github.run_number }}
           name: On This Site Android 0.1.${{ github.run_number }}
           body: |
-            Latest installable APK for testing the On This Site Android wrapper through Obtainium.
+            Signed release APK for testing the On This Site Android wrapper through Obtainium.
 
             Most map, content, UI, and data updates load from the live mobile site and do not require reinstalling the APK. Reinstall this only after native Android wrapper changes such as permissions, WebView behavior, or app packaging.
-          artifacts: "release/on-this-site-latest.apk"
+          artifacts: "release/on-this-site-release.apk"
           allowUpdates: true
           removeArtifacts: true
           replacesArtifacts: true
@@ -124,8 +105,9 @@ jobs:
 
             Add this repository to Obtainium to receive APK update notices from GitHub Releases:
             https://github.com/jeremynative/on-this-site-android-apk
-          artifacts: "release/*.apk"
+          artifacts: "release/on-this-site-release.apk"
           allowUpdates: true
+          removeArtifacts: true
           replacesArtifacts: true
           makeLatest: true
 
@@ -142,10 +124,9 @@ jobs:
           printf '%s' "$GDRIVE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/gdrive-service-account.json"
           rclone config create gdrive_latest drive service_account_file "$RUNNER_TEMP/gdrive-service-account.json" root_folder_id "$DRIVE_LATEST_FOLDER_ID" >/dev/null
           rclone config create gdrive_old drive service_account_file "$RUNNER_TEMP/gdrive-service-account.json" root_folder_id "$DRIVE_OLD_FOLDER_ID" >/dev/null
-          latest_name="on-this-site-latest-debug.apk"
-          archive_name="on-this-site-debug-previous-before-run-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}.apk"
+          latest_name="on-this-site-release.apk"
+          archive_name="on-this-site-previous-before-run-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}.apk"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            latest_name="on-this-site-latest.apk"
             archive_name="on-this-site-previous-before-${GITHUB_REF_NAME}.apk"
           fi
           rclone copyto "gdrive_latest:${latest_name}" "gdrive_old:${archive_name}" || true
