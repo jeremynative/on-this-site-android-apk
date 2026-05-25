@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260525-search-territory-18";
+const expectedBuild = "20260525-plant-reference-19";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 
@@ -20,4 +20,5 @@ requireText("&refresh=", "Android shell must use a refresh token when loading th
 requireText("Cache-Control", "Android shell must request a fresh copy of the mobile web app.");
 
 console.log(`Android shell verifier passed: ${expectedBuild}`);
+
 
