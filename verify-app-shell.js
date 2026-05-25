@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260525-plant-review-clean-11";
+const expectedBuild = "20260525-plant-review-clean-12";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 
