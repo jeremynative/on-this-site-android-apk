@@ -36,7 +36,7 @@ Fix:
 
 ## Signing Notes
 
-Debug APKs are signed with a debug key. They are useful only for active phone testing and should not be treated as a public release.
+Debug APKs are signed with a temporary debug key. Do not publish them to GitHub Releases for Obtainium because Android will reject future updates signed by a different key.
 
 Published Obtainium releases should use only one asset name:
 
