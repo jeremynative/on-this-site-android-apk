@@ -64,9 +64,11 @@ For install-over-existing-app updates to work, every published APK must have:
 - The same signing certificate
 - A higher `versionCode`
 
-GitHub Actions now publishes only the signed release APK asset:
+GitHub Actions publishes the APK assets used by Obtainium:
 
 `on-this-site-release.apk`
+
+If the release signing secrets are configured, this is signed with the stable release key. If those secrets are missing, the workflow publishes a debug-signed testing APK so phone testing can continue, but that APK is not for public distribution.
 
 GitHub Actions needs these repository secrets:
 
