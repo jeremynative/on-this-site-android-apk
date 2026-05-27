@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260527-android-captcha-webview-27";
+const expectedBuild = "20260527-android-polygon-dispatch-28";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 
@@ -18,7 +18,7 @@ requireText("?app-version=", "Android shell must pass the app build id to the mo
 requireText("&apk-version=", "Android shell must pass the APK version to the mobile web app.");
 requireText("&refresh=", "Android shell must use a refresh token when loading the mobile web app.");
 requireText("Cache-Control", "Android shell must request a fresh copy of the mobile web app.");
-requireText("setOnTouchListener", "Android shell must forward WebView taps into the mobile map.");
+requireText("dispatchTouchEvent", "Android shell must forward app taps into the mobile map.");
 requireText("window.onAndroidMapTap", "Android shell must call the mobile map tap bridge.");
 requireText("MotionEvent.ACTION_UP", "Android shell must only forward completed taps.");
 requireText("path.startsWith(\"/.well-known/sgcaptcha/\")", "Android shell must keep SiteGround CAPTCHA inside the APK WebView.");
