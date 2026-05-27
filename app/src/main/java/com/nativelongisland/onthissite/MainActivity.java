@@ -13,6 +13,7 @@ import android.os.Bundle;
 import android.os.Build;
 import android.provider.MediaStore;
 import android.util.Base64;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
@@ -38,7 +39,7 @@ public class MainActivity extends Activity {
     private static final int PLANT_BRIDGE_CAMERA_REQUEST = 45;
     private static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    private static final String APP_VERSION = "20260527-nearby-animation-25";
+    private static final String APP_VERSION = "20260527-android-polygon-taps-26";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
@@ -61,6 +62,9 @@ public class MainActivity extends Activity {
     private boolean created;
     private long lastRefreshAt;
     private long stoppedAt;
+    private float webTouchStartX;
+    private float webTouchStartY;
+    private long webTouchStartedAt;
     private boolean wasStopped;
     private long suppressResumeRefreshUntil;
     private Uri lastStoryVideoUri;
@@ -72,6 +76,10 @@ public class MainActivity extends Activity {
 
         webView = new WebView(this);
         webView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        webView.setOnTouchListener((view, event) -> {
+            handleWebViewTap(event);
+            return false;
+        });
         webView.setOnApplyWindowInsetsListener((view, insets) -> {
             view.setPadding(0, insets.getSystemWindowInsetTop(), 0, insets.getSystemWindowInsetBottom());
             return insets;
@@ -173,6 +181,27 @@ public class MainActivity extends Activity {
             refreshApp();
         }
         created = true;
+    }
+
+    private void handleWebViewTap(MotionEvent event) {
+        if (webView == null || event == null) return;
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            webTouchStartX = event.getX();
+            webTouchStartY = event.getY();
+            webTouchStartedAt = System.currentTimeMillis();
+            return;
+        }
+        if (event.getActionMasked() != MotionEvent.ACTION_UP) return;
+        float dx = event.getX() - webTouchStartX;
+        float dy = event.getY() - webTouchStartY;
+        if ((dx * dx + dy * dy) > 144f) return;
+        if (System.currentTimeMillis() - webTouchStartedAt > 700) return;
+        String script = "window.onAndroidMapTap && window.onAndroidMapTap("
+            + event.getX() + ","
+            + event.getY() + ","
+            + webView.getWidth() + ","
+            + webView.getHeight() + ")";
+        webView.evaluateJavascript(script, null);
     }
 
     private boolean wantsImageCapture(WebChromeClient.FileChooserParams params) {

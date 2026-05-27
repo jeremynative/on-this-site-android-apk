@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260527-nearby-animation-25";
+const expectedBuild = "20260527-android-polygon-taps-26";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 
@@ -18,6 +18,9 @@ requireText("?app-version=", "Android shell must pass the app build id to the mo
 requireText("&apk-version=", "Android shell must pass the APK version to the mobile web app.");
 requireText("&refresh=", "Android shell must use a refresh token when loading the mobile web app.");
 requireText("Cache-Control", "Android shell must request a fresh copy of the mobile web app.");
+requireText("setOnTouchListener", "Android shell must forward WebView taps into the mobile map.");
+requireText("window.onAndroidMapTap", "Android shell must call the mobile map tap bridge.");
+requireText("MotionEvent.ACTION_UP", "Android shell must only forward completed taps.");
 
 console.log(`Android shell verifier passed: ${expectedBuild}`);
 
