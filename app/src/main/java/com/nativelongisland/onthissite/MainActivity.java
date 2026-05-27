@@ -19,6 +19,7 @@ import android.view.View;
 import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
 import android.webkit.GeolocationPermissions;
+import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -41,7 +42,7 @@ public class MainActivity extends Activity {
     private static final int PLANT_BRIDGE_CAMERA_REQUEST = 45;
     private static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    private static final String APP_VERSION = "20260527-exact-marker-tap-release-36";
+    private static final String APP_VERSION = "20260527-webview-cookie-polygon-tap-release-37";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
@@ -93,9 +94,11 @@ public class MainActivity extends Activity {
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.setAcceptCookie(true);
+        cookieManager.setAcceptThirdPartyCookies(webView, true);
         webView.addJavascriptInterface(new AppBridge(), "AndroidApp");
         webView.addJavascriptInterface(new StoryBridge(), "AndroidStory");
-        webView.clearCache(true);
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -432,7 +435,6 @@ public class MainActivity extends Activity {
     private void refreshApp() {
         if (webView == null) return;
         lastRefreshAt = System.currentTimeMillis();
-        webView.clearCache(true);
         Map<String, String> headers = new HashMap<>();
         headers.put("Cache-Control", "no-cache, no-store, max-age=0");
         headers.put("Pragma", "no-cache");
