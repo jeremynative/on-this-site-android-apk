@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260527-android-archive-internal-30";
+const expectedBuild = "20260527-android-site-internal-31";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -24,8 +24,7 @@ requireText("dispatchTouchEvent", "Android shell must forward app taps into the 
 requireText("window.onAndroidMapTap", "Android shell must call the mobile map tap bridge.");
 requireText("missing-map-tap-bridge", "Android shell must log when the mobile map tap bridge is missing.");
 requireText("MotionEvent.ACTION_UP", "Android shell must only forward completed taps.");
-requireText("path.startsWith(\"/archive-test/\")", "Android shell must keep archive-test navigation inside the APK WebView.");
-requireText("path.startsWith(\"/.well-known/sgcaptcha/\")", "Android shell must keep SiteGround CAPTCHA inside the APK WebView.");
+requireText("boolean isArchiveApp = \"nativelongisland.com\".equalsIgnoreCase(host);", "Android shell must keep nativelongisland.com navigation inside the APK WebView.");
 
 if (!releaseWorkflow.includes("GITHUB_RUN_NUMBER") || !releaseWorkflow.includes("latest_apk") || !releaseWorkflow.includes("version_code=\"$run_number\"")) {
   throw new Error("Android release workflow must keep versionCode monotonic across testing and tagged releases.");

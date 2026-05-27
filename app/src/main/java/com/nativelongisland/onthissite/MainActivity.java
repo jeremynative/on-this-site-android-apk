@@ -41,7 +41,7 @@ public class MainActivity extends Activity {
     private static final int PLANT_BRIDGE_CAMERA_REQUEST = 45;
     private static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    private static final String APP_VERSION = "20260527-android-archive-internal-30";
+    private static final String APP_VERSION = "20260527-android-site-internal-31";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
@@ -642,11 +642,7 @@ public class MainActivity extends Activity {
     private boolean openExternallyWhenNeeded(Uri uri) {
         String host = uri.getHost();
         String path = uri.getPath();
-        boolean isArchiveApp = "nativelongisland.com".equalsIgnoreCase(host)
-            && path != null
-            && (path.startsWith("/archive-test/")
-                || "/archive-test/native-long-island-staging-site-20260516-100502/mobile-app-live.html".equals(path)
-                || path.startsWith("/.well-known/sgcaptcha/"));
+        boolean isArchiveApp = "nativelongisland.com".equalsIgnoreCase(host);
         if (isArchiveApp) return false;
 
         Intent intent = new Intent(Intent.ACTION_VIEW, uri);
