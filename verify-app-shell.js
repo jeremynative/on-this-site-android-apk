@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260527-mobile-tap-fix-24";
+const expectedBuild = "20260527-nearby-animation-25";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 
