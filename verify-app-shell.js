@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260527-polygon-tap-priority-32";
+const expectedBuild = "20260527-polygon-label-taps-33";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
