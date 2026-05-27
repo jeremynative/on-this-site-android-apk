@@ -98,17 +98,15 @@ jobs:
         run: |
           mkdir -p release
           if [ -f app/build/outputs/apk/release/app-release.apk ]; then
-            cp app/build/outputs/apk/release/app-release.apk release/on-this-site-release.apk
             cp app/build/outputs/apk/release/app-release.apk release/on-this-site-latest.apk
           else
-            cp app/build/outputs/apk/debug/app-debug.apk release/on-this-site-release.apk
             cp app/build/outputs/apk/debug/app-debug.apk release/on-this-site-latest.apk
           fi
 
       - name: Upload APK to GitHub artifact
         uses: actions/upload-artifact@v4
         with:
-          name: on-this-site-release-apk
+          name: on-this-site-latest-apk
           path: release/*.apk
 
       - name: Publish Obtainium testing release APK
@@ -118,10 +116,10 @@ jobs:
           tag: ${{ steps.apk_version.outputs.release_tag }}
           name: On This Site Android ${{ steps.apk_version.outputs.version_name }}
           body: |
-            Signed release APK for testing the On This Site Android wrapper through Obtainium.
+            APK for testing the On This Site Android wrapper through Obtainium.
 
             Most map, content, UI, and data updates load from the live mobile site and do not require reinstalling the APK. Reinstall this only after native Android wrapper changes such as permissions, WebView behavior, or app packaging.
-          artifacts: "release/on-this-site-release.apk,release/on-this-site-latest.apk"
+          artifacts: "release/on-this-site-latest.apk"
           allowUpdates: true
           removeArtifacts: true
           replacesArtifacts: true
@@ -139,7 +137,7 @@ jobs:
 
             Add this repository to Obtainium to receive APK update notices from GitHub Releases:
             https://github.com/jeremynative/on-this-site-android-apk
-          artifacts: "release/on-this-site-release.apk,release/on-this-site-latest.apk"
+          artifacts: "release/on-this-site-latest.apk"
           allowUpdates: true
           removeArtifacts: true
           replacesArtifacts: true
@@ -158,7 +156,7 @@ jobs:
           printf '%s' "$GDRIVE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/gdrive-service-account.json"
           rclone config create gdrive_latest drive service_account_file "$RUNNER_TEMP/gdrive-service-account.json" root_folder_id "$DRIVE_LATEST_FOLDER_ID" >/dev/null
           rclone config create gdrive_old drive service_account_file "$RUNNER_TEMP/gdrive-service-account.json" root_folder_id "$DRIVE_OLD_FOLDER_ID" >/dev/null
-          latest_name="on-this-site-release.apk"
+          latest_name="on-this-site-latest.apk"
           archive_name="on-this-site-previous-before-run-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}.apk"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             archive_name="on-this-site-previous-before-${GITHUB_REF_NAME}.apk"

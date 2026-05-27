@@ -46,13 +46,13 @@ Best phone setup for this testing APK:
 3. In Obtainium, let it watch GitHub Releases for APK updates.
 4. Set the APK filter to:
 
-`on-this-site-release.apk`
+`on-this-site-latest.apk`
 
 5. Allow Obtainium to install unknown apps when Android asks.
 
 Stable latest release APK link:
 
-`https://github.com/jeremynative/on-this-site-android-apk/releases/latest/download/on-this-site-release.apk`
+`https://github.com/jeremynative/on-this-site-android-apk/releases/latest/download/on-this-site-latest.apk`
 
 Android will still ask you to approve each sideloaded update. Obtainium makes checking and downloading easier; it does not bypass Android install approval.
 
@@ -66,7 +66,7 @@ For install-over-existing-app updates to work, every published APK must have:
 
 GitHub Actions publishes the APK assets used by Obtainium:
 
-`on-this-site-release.apk`
+`on-this-site-latest.apk`
 
 If the release signing secrets are configured, this is signed with the stable release key. If those secrets are missing, the workflow publishes a debug-signed testing APK so phone testing can continue, but that APK is not for public distribution.
 
