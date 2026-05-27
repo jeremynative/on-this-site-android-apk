@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260527-android-polygon-taps-26";
+const expectedBuild = "20260527-android-captcha-webview-27";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 
@@ -21,6 +21,7 @@ requireText("Cache-Control", "Android shell must request a fresh copy of the mob
 requireText("setOnTouchListener", "Android shell must forward WebView taps into the mobile map.");
 requireText("window.onAndroidMapTap", "Android shell must call the mobile map tap bridge.");
 requireText("MotionEvent.ACTION_UP", "Android shell must only forward completed taps.");
+requireText("path.startsWith(\"/.well-known/sgcaptcha/\")", "Android shell must keep SiteGround CAPTCHA inside the APK WebView.");
 
 console.log(`Android shell verifier passed: ${expectedBuild}`);
 
