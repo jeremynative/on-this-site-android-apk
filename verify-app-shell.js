@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260527-qa-polish-marker-taps-35";
+const expectedBuild = "20260527-exact-marker-tap-release-36";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
