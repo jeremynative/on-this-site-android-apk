@@ -56,11 +56,10 @@ jobs:
         run: |
           set -euo pipefail
           latest_apk="$(gh release list --limit 100 --json tagName --jq '[.[].tagName | select(test("^apk-[0-9]+$")) | sub("^apk-";"") | tonumber] | max // 102')"
-          next_apk=$((latest_apk + 1))
           run_number="${GITHUB_RUN_NUMBER:-0}"
-          version_code="$next_apk"
-          if [[ "$run_number" =~ ^[0-9]+$ && "$run_number" -gt "$version_code" ]]; then
-            version_code="$run_number"
+          version_code="$run_number"
+          if ! [[ "$version_code" =~ ^[0-9]+$ ]] || [[ "$version_code" -le "$latest_apk" ]]; then
+            version_code=$((latest_apk + 1))
           fi
           echo "version_code=${version_code}" >> "$GITHUB_OUTPUT"
           echo "version_name=0.1.${version_code}" >> "$GITHUB_OUTPUT"
