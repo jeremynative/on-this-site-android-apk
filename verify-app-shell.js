@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260528-feedback-screenshot-release-41";
+const expectedBuild = "20260528-combined-add-flow-release-42";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
