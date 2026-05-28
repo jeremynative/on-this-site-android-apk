@@ -6,8 +6,6 @@ import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Build;
@@ -17,7 +15,6 @@ import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
-import android.webkit.JavascriptInterface;
 import android.webkit.GeolocationPermissions;
 import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
@@ -29,8 +26,6 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import java.util.HashMap;
 import java.util.Map;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
 import java.io.OutputStream;
 
 public class MainActivity extends Activity {
@@ -40,9 +35,9 @@ public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 43;
     private static final int PHOTO_CAMERA_REQUEST = 44;
     private static final int PLANT_BRIDGE_CAMERA_REQUEST = 45;
-    private static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
+    static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    private static final String APP_VERSION = "20260527-webview-cookie-polygon-tap-release-37";
+    static final String APP_VERSION = "20260528-frontend-editor-save-release-38";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
@@ -70,8 +65,8 @@ public class MainActivity extends Activity {
     private long webTouchStartedAt;
     private boolean wasStopped;
     private long suppressResumeRefreshUntil;
-    private Uri lastStoryVideoUri;
-    private String lastStoryVideoMimeType = "video/webm";
+    Uri lastStoryVideoUri;
+    String lastStoryVideoMimeType = "video/webm";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -97,8 +92,8 @@ public class MainActivity extends Activity {
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
-        webView.addJavascriptInterface(new AppBridge(), "AndroidApp");
-        webView.addJavascriptInterface(new StoryBridge(), "AndroidStory");
+        webView.addJavascriptInterface(new AppBridge(this), "AndroidApp");
+        webView.addJavascriptInterface(new StoryBridge(this), "AndroidStory");
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -245,7 +240,7 @@ public class MainActivity extends Activity {
     private boolean launchImageCaptureOrPicker(ValueCallback<Uri[]> callback) {
         pendingCameraCaptureUri = null;
         try {
-            pendingCameraCaptureUri = createPlantPhotoUri();
+            pendingCameraCaptureUri = MediaStorePhotoHelper.createPlantPhotoUri(this);
             if (pendingCameraCaptureUri == null) return launchImagePickerFallback(callback);
 
             Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
@@ -288,88 +283,7 @@ public class MainActivity extends Activity {
         return intent;
     }
 
-    private class AppBridge {
-        @JavascriptInterface
-        public String getBuildId() {
-            return APP_VERSION;
-        }
-
-        @JavascriptInterface
-        public String getVersionName() {
-            return packageVersionName();
-        }
-
-        @JavascriptInterface
-        public long getVersionCode() {
-            return packageVersionCode();
-        }
-
-        @JavascriptInterface
-        public void refreshNow() {
-            runOnUiThread(() -> refreshApp());
-        }
-
-        @JavascriptInterface
-        public void takePlantPhoto() {
-            runOnUiThread(() -> {
-                suppressResumeRefreshAfterPermissionPrompt();
-                if (!hasCameraPermission()) {
-                    requestPermissions(new String[] { Manifest.permission.CAMERA }, PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST);
-                    return;
-                }
-                launchPlantBridgeCamera();
-            });
-        }
-    }
-
-    private class StoryBridge {
-        @JavascriptInterface
-        public void saveVideo(String base64Video, String filename, String mimeType) {
-            runOnUiThread(() -> {
-                try {
-                    lastStoryVideoMimeType = safeMimeType(mimeType);
-                    String safeName = safeStoryFilename(filename);
-                    byte[] bytes = Base64.decode(base64Video, Base64.DEFAULT);
-                    lastStoryVideoUri = saveStoryVideo(bytes, safeName, lastStoryVideoMimeType);
-                    notifyStorySaved(true, "Saved to Movies/On This Site.", lastStoryVideoUri.toString());
-                } catch (Exception error) {
-                    notifyStorySaved(false, error.getMessage(), "");
-                }
-            });
-        }
-
-        @JavascriptInterface
-        public void openLastVideo() {
-            runOnUiThread(() -> {
-                if (lastStoryVideoUri == null) {
-                    notifyStorySaved(false, "No story video has been saved yet.", "");
-                    return;
-                }
-                Intent intent = new Intent(Intent.ACTION_VIEW);
-                intent.setDataAndType(lastStoryVideoUri, lastStoryVideoMimeType);
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                startActivity(Intent.createChooser(intent, "Open story video"));
-            });
-        }
-
-        @JavascriptInterface
-        public void shareLastVideo() {
-            runOnUiThread(() -> {
-                if (lastStoryVideoUri == null) {
-                    notifyStorySaved(false, "No story video has been saved yet.", "");
-                    return;
-                }
-                Intent intent = new Intent(Intent.ACTION_SEND);
-                intent.setType(lastStoryVideoMimeType);
-                intent.putExtra(Intent.EXTRA_STREAM, lastStoryVideoUri);
-                intent.putExtra(Intent.EXTRA_TEXT, "Recorded with On This Site.");
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                startActivity(Intent.createChooser(intent, "Share story video"));
-            });
-        }
-    }
-
-    private Uri saveStoryVideo(byte[] bytes, String filename, String mimeType) throws Exception {
+    Uri saveStoryVideo(byte[] bytes, String filename, String mimeType) throws Exception {
         ContentValues values = new ContentValues();
         values.put(MediaStore.Video.Media.DISPLAY_NAME, filename);
         values.put(MediaStore.Video.Media.MIME_TYPE, mimeType);
@@ -394,19 +308,19 @@ public class MainActivity extends Activity {
         return uri;
     }
 
-    private String safeStoryFilename(String filename) {
+    String safeStoryFilename(String filename) {
         String value = filename == null ? "" : filename.replaceAll("[^A-Za-z0-9._-]+", "-");
         if (value.length() < 5) value = "on-this-site-ar-story.webm";
         if (!value.toLowerCase().endsWith(".webm")) value = value + ".webm";
         return value;
     }
 
-    private String safeMimeType(String mimeType) {
+    String safeMimeType(String mimeType) {
         if (mimeType != null && mimeType.startsWith("video/")) return mimeType;
         return "video/webm";
     }
 
-    private void notifyStorySaved(boolean ok, String message, String uri) {
+    void notifyStorySaved(boolean ok, String message, String uri) {
         if (webView == null) return;
         String safeMessage = jsString(message == null ? "" : message);
         String safeUri = jsString(uri == null ? "" : uri);
@@ -416,7 +330,7 @@ public class MainActivity extends Activity {
         );
     }
 
-    private String jsString(String value) {
+    String jsString(String value) {
         return "\"" + value
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
@@ -432,7 +346,7 @@ public class MainActivity extends Activity {
             + "&refresh=" + System.currentTimeMillis();
     }
 
-    private void refreshApp() {
+    void refreshApp() {
         if (webView == null) return;
         lastRefreshAt = System.currentTimeMillis();
         Map<String, String> headers = new HashMap<>();
@@ -441,31 +355,11 @@ public class MainActivity extends Activity {
         webView.loadUrl(freshAppUrl(), headers);
     }
 
-    private Uri createPlantPhotoUri() {
-        ContentValues values = new ContentValues();
-        values.put(MediaStore.Images.Media.DISPLAY_NAME, "on-this-site-plant-" + System.currentTimeMillis() + ".jpg");
-        values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-        values.put(MediaStore.Images.Media.DATE_ADDED, System.currentTimeMillis() / 1000);
-        values.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/On This Site");
-            values.put(MediaStore.Images.Media.IS_PENDING, 1);
-        }
-        return getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-    }
-
-    private void markPlantPhotoReady(Uri uri) {
-        if (uri == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
-        ContentValues ready = new ContentValues();
-        ready.put(MediaStore.Images.Media.IS_PENDING, 0);
-        getContentResolver().update(uri, ready, null, null);
-    }
-
-    private void suppressResumeRefreshAfterPermissionPrompt() {
+    void suppressResumeRefreshAfterPermissionPrompt() {
         suppressResumeRefreshUntil = System.currentTimeMillis() + PERMISSION_RESUME_GRACE_MS;
     }
 
-    private String packageVersionName() {
+    String packageVersionName() {
         try {
             return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
         } catch (Exception error) {
@@ -473,7 +367,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private long packageVersionCode() {
+    long packageVersionCode() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 return getPackageManager().getPackageInfo(getPackageName(), 0).getLongVersionCode();
@@ -508,9 +402,9 @@ public class MainActivity extends Activity {
         setIntent(intent);
     }
 
-    private void launchPlantBridgeCamera() {
+    void launchPlantBridgeCamera() {
         try {
-            pendingPlantBridgeCameraUri = createPlantPhotoUri();
+            pendingPlantBridgeCameraUri = MediaStorePhotoHelper.createPlantPhotoUri(this);
             if (pendingPlantBridgeCameraUri == null) {
                 queuePlantPhoto(false, "Could not create a local photo file.", "", "", "");
                 return;
@@ -537,8 +431,8 @@ public class MainActivity extends Activity {
 
     private void deliverPlantBridgePhoto(Uri uri) {
         try {
-            markPlantPhotoReady(uri);
-            byte[] bytes = compressedJpegBytes(uri);
+            MediaStorePhotoHelper.markPlantPhotoReady(this, uri);
+            byte[] bytes = MediaStorePhotoHelper.compressedJpegBytes(this, uri);
             String base64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
             clearPendingPlantCameraUri();
             queuePlantPhoto(true, "", base64, "image/jpeg", "plant-observation-" + System.currentTimeMillis() + ".jpg");
@@ -565,36 +459,6 @@ public class MainActivity extends Activity {
             .edit()
             .remove(PREF_PENDING_PLANT_URI)
             .apply();
-    }
-
-    private byte[] compressedJpegBytes(Uri uri) throws Exception {
-        BitmapFactory.Options bounds = new BitmapFactory.Options();
-        bounds.inJustDecodeBounds = true;
-        try (InputStream input = getContentResolver().openInputStream(uri)) {
-            BitmapFactory.decodeStream(input, null, bounds);
-        }
-        int sample = 1;
-        int largest = Math.max(bounds.outWidth, bounds.outHeight);
-        while (largest / sample > 1024) sample *= 2;
-
-        BitmapFactory.Options decode = new BitmapFactory.Options();
-        decode.inSampleSize = sample;
-        Bitmap bitmap;
-        try (InputStream input = getContentResolver().openInputStream(uri)) {
-            bitmap = BitmapFactory.decodeStream(input, null, decode);
-        }
-        if (bitmap == null) throw new Exception("Could not read the photo.");
-
-        int quality = 78;
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        do {
-            output.reset();
-            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, output);
-            quality -= 10;
-        } while (output.size() > 900 * 1024 && quality >= 38);
-        bitmap.recycle();
-        if (output.size() > 900 * 1024) throw new Exception("Photo is too large. Try a closer crop.");
-        return output.toByteArray();
     }
 
     private void queuePlantPhoto(boolean ok, String message, String base64, String mimeType, String filename) {
@@ -657,7 +521,7 @@ public class MainActivity extends Activity {
             || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
-    private boolean hasCameraPermission() {
+    boolean hasCameraPermission() {
         return checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
     }
 
@@ -732,7 +596,7 @@ public class MainActivity extends Activity {
         if (resultCode == RESULT_OK) {
             results = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
             if ((results == null || results.length == 0) && pendingCameraCaptureUri != null) {
-                markPlantPhotoReady(pendingCameraCaptureUri);
+                MediaStorePhotoHelper.markPlantPhotoReady(this, pendingCameraCaptureUri);
                 results = new Uri[] { pendingCameraCaptureUri };
             }
         } else if (pendingCameraCaptureUri != null) {

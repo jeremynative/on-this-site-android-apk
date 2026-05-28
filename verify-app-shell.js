@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260527-webview-cookie-polygon-tap-release-37";
+const expectedBuild = "20260528-frontend-editor-save-release-38";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";

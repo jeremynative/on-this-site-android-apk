@@ -1,15 +1,34 @@
 $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$workspaceRoot = Split-Path -Parent $projectRoot
+$localJava = Join-Path $workspaceRoot ".tools\jdk-17"
+$localGradle = Join-Path $workspaceRoot ".tools\gradle-8.10.2\bin\gradle.bat"
+$localSdk = Join-Path $workspaceRoot "android-sdk-local"
 $apk = Join-Path $projectRoot "app\build\outputs\apk\debug\app-debug.apk"
 
-if (-not (Get-Command gradle -ErrorAction SilentlyContinue)) {
-    throw "Gradle was not found. Open android-live-app in Android Studio first, or install Gradle/JDK and run this again."
+if (Test-Path (Join-Path $localJava "bin\java.exe")) {
+    $env:JAVA_HOME = $localJava
+    $env:Path = "$env:JAVA_HOME\bin;$env:Path"
+}
+
+if (Test-Path $localSdk) {
+    $env:ANDROID_HOME = $localSdk
+    $env:ANDROID_SDK_ROOT = $localSdk
+    $env:Path = "$localSdk\cmdline-tools\latest\bin;$localSdk\platform-tools;$env:Path"
+}
+
+$gradleCommand = if (Test-Path $localGradle) { $localGradle } else { "gradle" }
+if ($gradleCommand -eq "gradle" -and -not (Get-Command gradle -ErrorAction SilentlyContinue)) {
+    throw "Gradle was not found. Run the local APK environment setup first, or open the project in Android Studio."
 }
 
 Push-Location $projectRoot
 try {
-    gradle assembleDebug --no-daemon
+    & $gradleCommand assembleDebug --no-daemon
+    if ($LASTEXITCODE -ne 0) {
+        throw "Gradle assembleDebug failed with exit code $LASTEXITCODE."
+    }
 } finally {
     Pop-Location
 }
