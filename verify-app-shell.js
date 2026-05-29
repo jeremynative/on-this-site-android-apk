@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260528-long-island-loader-release-43";
+const expectedBuild = "20260528-map-touch-title-fix-release-44";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
