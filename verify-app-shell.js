@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260528-feedback-directus-fallback-release-50";
+const expectedBuild = "20260528-feedback-directus-direct-release-51";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
