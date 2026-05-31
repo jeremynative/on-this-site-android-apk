@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260528-feedback-helper-refactor-release-53";
+const expectedBuild = "20260530-apk-timeline-tray-fix";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -30,6 +30,9 @@ requireText("window.onAndroidMapTap", "Android shell must call the mobile map ta
 requireText("missing-map-tap-bridge", "Android shell must log when the mobile map tap bridge is missing.");
 requireText("MotionEvent.ACTION_UP", "Android shell must only forward completed taps.");
 requireText("boolean isArchiveApp = \"nativelongisland.com\".equalsIgnoreCase(host);", "Android shell must keep nativelongisland.com navigation inside the APK WebView.");
+requireText("applyApkTimelineTrayFix", "Android shell must apply the APK timeline tray override after the live app loads.");
+requireText("android-apk-timeline-tray-fix", "Android shell must inject the APK timeline tray CSS override.");
+requireText("Full article", "Android shell must shorten the timeline action label inside the APK WebView.");
 
 if (!releaseWorkflow.includes("GITHUB_RUN_NUMBER") || !releaseWorkflow.includes("latest_apk") || !releaseWorkflow.includes("version_code=\"$run_number\"")) {
   throw new Error("Android release workflow must keep versionCode monotonic across testing and tagged releases.");

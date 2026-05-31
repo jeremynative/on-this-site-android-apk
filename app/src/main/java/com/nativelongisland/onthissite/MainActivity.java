@@ -37,7 +37,7 @@ public class MainActivity extends Activity {
     private static final int PLANT_BRIDGE_CAMERA_REQUEST = 45;
     static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    static final String APP_VERSION = "20260528-feedback-helper-refactor-release-53";
+    static final String APP_VERSION = "20260530-apk-timeline-tray-fix";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
@@ -163,6 +163,7 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+                applyApkTimelineTrayFix();
                 dispatchPendingPlantPhoto();
             }
         });
@@ -353,6 +354,75 @@ public class MainActivity extends Activity {
         headers.put("Cache-Control", "no-cache, no-store, max-age=0");
         headers.put("Pragma", "no-cache");
         webView.loadUrl(freshAppUrl(), headers);
+    }
+
+    private void applyApkTimelineTrayFix() {
+        if (webView == null) return;
+        String css =
+            "html.android-apk-timeline-fix .mobile-timeline{"
+                + "grid-template-columns:34px minmax(0,1fr) 34px!important;"
+                + "gap:6px!important;align-items:stretch!important;"
+                + "padding:7px 10px calc(7px + min(env(safe-area-inset-bottom),8px))!important;"
+                + "min-height:0!important;max-height:clamp(92px,17dvh,132px)!important;"
+                + "overflow:visible!important;box-sizing:border-box!important;"
+            + "}"
+            + "html.android-apk-timeline-fix .timeline-step{"
+                + "align-self:stretch!important;width:34px!important;min-height:0!important;"
+                + "max-height:76px!important;font-size:20px!important;"
+            + "}"
+            + "html.android-apk-timeline-fix .timeline-current{"
+                + "position:relative!important;grid-template-rows:auto auto minmax(0,1fr) auto!important;"
+                + "gap:3px!important;min-height:0!important;max-height:100%!important;"
+                + "overflow:hidden!important;padding:7px 8px!important;box-sizing:border-box!important;"
+            + "}"
+            + "html.android-apk-timeline-fix .timeline-current strong{"
+                + "display:-webkit-box!important;white-space:normal!important;line-height:1.15!important;"
+                + "-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;overflow:hidden!important;"
+            + "}"
+            + "html.android-apk-timeline-fix .timeline-source-row{min-height:22px!important;}"
+            + "html.android-apk-timeline-fix .timeline-source-row .source{display:none!important;}"
+            + "html.android-apk-timeline-fix .timeline-source-popover{"
+                + "right:8px!important;bottom:34px!important;z-index:6!important;"
+                + "width:min(260px,calc(100vw - 40px))!important;max-width:calc(100% - 16px)!important;"
+            + "}"
+            + "html.android-apk-timeline-fix .timeline-current .teaser{display:none!important;}"
+            + "html.android-apk-timeline-fix .timeline-actions{"
+                + "display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;"
+                + "gap:5px!important;"
+            + "}"
+            + "html.android-apk-timeline-fix .timeline-actions button{"
+                + "min-width:0!important;min-height:34px!important;padding:0 8px!important;"
+            + "}"
+            + "html.android-apk-timeline-fix .timeline-actions [data-timeline-hide],"
+            + "html.android-apk-timeline-fix .timeline-toggle{display:none!important;}"
+            + "html.android-apk-timeline-fix.panel-timeline .mobile-timeline,"
+            + "html.android-apk-timeline-fix .app.panel-timeline .mobile-timeline{"
+                + "grid-template-columns:36px minmax(0,1fr) 36px!important;max-height:none!important;overflow:auto!important;"
+            + "}"
+            + "html.android-apk-timeline-fix.panel-timeline .timeline-current,"
+            + "html.android-apk-timeline-fix .app.panel-timeline .timeline-current{overflow:auto!important;}"
+            + "html.android-apk-timeline-fix.panel-timeline .timeline-source-row .source,"
+            + "html.android-apk-timeline-fix .app.panel-timeline .timeline-source-row .source{display:block!important;}"
+            + "html.android-apk-timeline-fix.panel-timeline .timeline-current .teaser,"
+            + "html.android-apk-timeline-fix .app.panel-timeline .timeline-current .teaser{"
+                + "display:-webkit-box!important;-webkit-line-clamp:3!important;"
+            + "}";
+        String script = "(function(){try{"
+            + "document.documentElement.classList.add('android-apk-timeline-fix');"
+            + "var style=document.getElementById('android-apk-timeline-tray-fix');"
+            + "if(!style){style=document.createElement('style');style.id='android-apk-timeline-tray-fix';document.head.appendChild(style);}"
+            + "style.textContent=" + jsString(css) + ";"
+            + "function shortenTimelineButtons(){document.querySelectorAll('[data-timeline-open]').forEach(function(button){"
+                + "if(button.textContent&&button.textContent.trim()==='Full article')button.textContent='Read';"
+            + "});}"
+            + "shortenTimelineButtons();"
+            + "if(!window.__androidApkTimelineTrayObserver&&document.body){"
+                + "window.__androidApkTimelineTrayObserver=new MutationObserver(shortenTimelineButtons);"
+                + "window.__androidApkTimelineTrayObserver.observe(document.body,{childList:true,subtree:true});"
+            + "}"
+            + "return true;"
+            + "}catch(error){return false;}})();";
+        webView.evaluateJavascript(script, null);
     }
 
     void suppressResumeRefreshAfterPermissionPrompt() {
