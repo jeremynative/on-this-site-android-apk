@@ -97,25 +97,25 @@ jobs:
             previous_apk="$(find "$previous_dir" -name 'on-this-site-latest.apk' -print -quit)"
             if [[ -n "$previous_apk" && -f "$previous_apk" ]]; then
               MAPBOX_TOKEN="$(APK_PATH="$previous_apk" python3 - <<'PY'
-import os
-import re
-import zipfile
+          import os
+          import re
+          import zipfile
 
-apk_path = os.environ.get("APK_PATH", "")
-pattern = re.compile(rb"pk\.ey[A-Za-z0-9._-]+")
-try:
-    with zipfile.ZipFile(apk_path) as archive:
-        for name in archive.namelist():
-            if not (name.endswith(".dex") or name.endswith(".html") or name.endswith(".js")):
-                continue
-            match = pattern.search(archive.read(name))
-            if match:
-                print(match.group(0).decode("ascii"))
-                break
-except Exception:
-    pass
-PY
-)"
+          apk_path = os.environ.get("APK_PATH", "")
+          pattern = re.compile(rb"pk\.ey[A-Za-z0-9._-]+")
+          try:
+              with zipfile.ZipFile(apk_path) as archive:
+                  for name in archive.namelist():
+                      if not (name.endswith(".dex") or name.endswith(".html") or name.endswith(".js")):
+                          continue
+                      match = pattern.search(archive.read(name))
+                      if match:
+                          print(match.group(0).decode("ascii"))
+                          break
+          except Exception:
+              pass
+          PY
+          )"
               export MAPBOX_TOKEN
             fi
           fi
