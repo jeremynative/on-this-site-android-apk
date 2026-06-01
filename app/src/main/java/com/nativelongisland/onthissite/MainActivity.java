@@ -43,7 +43,7 @@ public class MainActivity extends Activity {
     private static final int PLANT_BRIDGE_CAMERA_REQUEST = 45;
     static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    static final String APP_VERSION = "20260601-bundled-mobile-fallback";
+    static final String APP_VERSION = "20260601-bundled-mobile-geo-gate";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
@@ -77,6 +77,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        if (BuildConfig.DEBUG) {
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
 
         webView = new WebView(this);
         webView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
@@ -233,7 +237,34 @@ public class MainActivity extends Activity {
         if (BuildConfig.MAPBOX_TOKEN != null && !BuildConfig.MAPBOX_TOKEN.isEmpty()) {
             html = html.replace("__NLI_MAPBOX_TOKEN__", BuildConfig.MAPBOX_TOKEN);
         }
+        html = html.replace("</head>", androidApkStartupScript() + "</head>");
         return new ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String androidApkStartupScript() {
+        String script = "(function(){"
+            + "if(window.__nliAndroidGeoGateInstalled)return;"
+            + "window.__nliAndroidGeoGateInstalled=true;"
+            + "window.__nliAllowGeoUntil=0;"
+            + "function allowGeo(){window.__nliAllowGeoUntil=Date.now()+30000;}"
+            + "document.addEventListener('click',function(event){"
+                + "var target=event.target&&event.target.closest&&event.target.closest('#locate,#suggest-use-location,[data-allow-geolocation]');"
+                + "if(target)allowGeo();"
+            + "},true);"
+            + "if(!navigator.geolocation)return;"
+            + "var originalGet=navigator.geolocation.getCurrentPosition.bind(navigator.geolocation);"
+            + "var originalWatch=navigator.geolocation.watchPosition.bind(navigator.geolocation);"
+            + "function blocked(error){setTimeout(function(){if(error)error({code:1,message:'Location is available after tapping Near me.'});},0);}"
+            + "navigator.geolocation.getCurrentPosition=function(success,error,options){"
+                + "if(Date.now()>window.__nliAllowGeoUntil)return blocked(error);"
+                + "return originalGet(success,error,options);"
+            + "};"
+            + "navigator.geolocation.watchPosition=function(success,error,options){"
+                + "if(Date.now()>window.__nliAllowGeoUntil){blocked(error);return 0;}"
+                + "return originalWatch(success,error,options);"
+            + "};"
+        + "})();";
+        return "<script>" + script + "</script>";
     }
 
     private void handleWebViewTap(MotionEvent event) {

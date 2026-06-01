@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260601-bundled-mobile-fallback";
+const expectedBuild = "20260601-bundled-mobile-geo-gate";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -24,6 +24,8 @@ requireText("shouldInterceptRequest", "Android shell must be able to serve the b
 requireText("mobile-app.html", "Android shell must include the bundled mobile app fallback asset.");
 requireText("long-island-land-mask.geojson", "Android shell must include the bundled land mask fallback asset.");
 requireText("BuildConfig.MAPBOX_TOKEN", "Android shell must inject the Mapbox token from build configuration.");
+requireText("androidApkStartupScript", "Android shell must inject APK startup guards before the bundled app runs.");
+requireText("__nliAndroidGeoGateInstalled", "Android shell must suppress automatic startup geolocation prompts.");
 requireText("CookieManager.getInstance()", "Android shell must explicitly enable WebView cookies for SiteGround and app sessions.");
 requireText("setAcceptThirdPartyCookies(webView, true)", "Android shell must allow SiteGround/Directus session cookies inside the APK WebView.");
 if (source.includes("webView.clearCache(true)")) {
