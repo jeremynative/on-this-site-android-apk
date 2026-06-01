@@ -21,9 +21,15 @@ import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.io.OutputStream;
@@ -37,7 +43,7 @@ public class MainActivity extends Activity {
     private static final int PLANT_BRIDGE_CAMERA_REQUEST = 45;
     static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    static final String APP_VERSION = "20260530-apk-timeline-tray-fix";
+    static final String APP_VERSION = "20260601-bundled-mobile-fallback";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
@@ -161,6 +167,12 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                WebResourceResponse bundled = bundledAppResponse(request == null ? null : request.getUrl());
+                return bundled != null ? bundled : super.shouldInterceptRequest(view, request);
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 applyApkTimelineTrayFix();
@@ -178,6 +190,50 @@ public class MainActivity extends Activity {
             refreshApp();
         }
         created = true;
+    }
+
+    private WebResourceResponse bundledAppResponse(Uri uri) {
+        if (uri == null) return null;
+        if (!"nativelongisland.com".equalsIgnoreCase(uri.getHost())) return null;
+        String path = uri.getPath();
+        String assetName;
+        String mimeType;
+        if ("/archive-test/mobile-app-live.html".equals(path) || "/archive-test/mobile-app.html".equals(path)) {
+            assetName = "mobile-app.html";
+            mimeType = "text/html";
+        } else if ("/archive-test/long-island-land-mask.geojson".equals(path) || "/long-island-land-mask.geojson".equals(path)) {
+            assetName = "long-island-land-mask.geojson";
+            mimeType = "application/geo+json";
+        } else {
+            return null;
+        }
+        try {
+            InputStream stream = bundledAssetStream(assetName);
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+            WebResourceResponse response = new WebResourceResponse(mimeType, "UTF-8", stream);
+            response.setResponseHeaders(headers);
+            return response;
+        } catch (IOException error) {
+            Log.w(LOG_TAG, "Bundled mobile archive could not be opened.", error);
+            return null;
+        }
+    }
+
+    private InputStream bundledAssetStream(String assetName) throws IOException {
+        InputStream stream = getAssets().open(assetName);
+        if (!"mobile-app.html".equals(assetName)) return stream;
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int read;
+        while ((read = stream.read(buffer)) != -1) {
+            output.write(buffer, 0, read);
+        }
+        String html = new String(output.toByteArray(), StandardCharsets.UTF_8);
+        if (BuildConfig.MAPBOX_TOKEN != null && !BuildConfig.MAPBOX_TOKEN.isEmpty()) {
+            html = html.replace("__NLI_MAPBOX_TOKEN__", BuildConfig.MAPBOX_TOKEN);
+        }
+        return new ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8));
     }
 
     private void handleWebViewTap(MotionEvent event) {

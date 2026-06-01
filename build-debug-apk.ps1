@@ -6,6 +6,7 @@ $localJava = Join-Path $workspaceRoot ".tools\jdk-17"
 $localGradle = Join-Path $workspaceRoot ".tools\gradle-8.10.2\bin\gradle.bat"
 $localSdk = Join-Path $workspaceRoot "android-sdk-local"
 $apk = Join-Path $projectRoot "app\build\outputs\apk\debug\app-debug.apk"
+$localMapboxToken = Join-Path $projectRoot "mapbox-token.local.txt"
 
 if (Test-Path (Join-Path $localJava "bin\java.exe")) {
     $env:JAVA_HOME = $localJava
@@ -16,6 +17,10 @@ if (Test-Path $localSdk) {
     $env:ANDROID_HOME = $localSdk
     $env:ANDROID_SDK_ROOT = $localSdk
     $env:Path = "$localSdk\cmdline-tools\latest\bin;$localSdk\platform-tools;$env:Path"
+}
+
+if (-not $env:MAPBOX_TOKEN -and (Test-Path $localMapboxToken)) {
+    $env:MAPBOX_TOKEN = (Get-Content -LiteralPath $localMapboxToken -Raw).Trim()
 }
 
 $gradleCommand = if (Test-Path $localGradle) { $localGradle } else { "gradle" }

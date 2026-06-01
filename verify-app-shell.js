@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260530-apk-timeline-tray-fix";
+const expectedBuild = "20260601-bundled-mobile-fallback";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -20,6 +20,10 @@ requireText("?app-version=", "Android shell must pass the app build id to the mo
 requireText("&apk-version=", "Android shell must pass the APK version to the mobile web app.");
 requireText("&refresh=", "Android shell must use a refresh token when loading the mobile web app.");
 requireText("Cache-Control", "Android shell must request a fresh copy of the mobile web app.");
+requireText("shouldInterceptRequest", "Android shell must be able to serve the bundled app fallback inside the APK WebView.");
+requireText("mobile-app.html", "Android shell must include the bundled mobile app fallback asset.");
+requireText("long-island-land-mask.geojson", "Android shell must include the bundled land mask fallback asset.");
+requireText("BuildConfig.MAPBOX_TOKEN", "Android shell must inject the Mapbox token from build configuration.");
 requireText("CookieManager.getInstance()", "Android shell must explicitly enable WebView cookies for SiteGround and app sessions.");
 requireText("setAcceptThirdPartyCookies(webView, true)", "Android shell must allow SiteGround/Directus session cookies inside the APK WebView.");
 if (source.includes("webView.clearCache(true)")) {

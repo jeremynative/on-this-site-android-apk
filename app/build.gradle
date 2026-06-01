@@ -13,12 +13,17 @@ android {
     compileSdk = 35
     buildToolsVersion = "35.0.0"
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "com.nativelongisland.onthissite"
         minSdk = 23
         targetSdk = 35
         versionCode = Integer.parseInt((System.getenv("VERSION_CODE") ?: "17").toString())
         versionName = (System.getenv("VERSION_NAME") ?: "0.1.16").toString()
+        buildConfigField "String", "MAPBOX_TOKEN", "\"${(System.getenv("MAPBOX_TOKEN") ?: "").replace("\\", "\\\\").replace("\"", "\\\"")}\""
     }
 
     signingConfigs {
