@@ -4,9 +4,12 @@ const expectedBuild = "20260601-bundled-mobile-geo-gate";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
+const bundledAppPath = "app/src/main/assets/mobile-app.html";
 
+const bundledAppBytes = fs.readFileSync(bundledAppPath);
 const source = fs.readFileSync(mainActivityPath, "utf8");
 const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
+const bundledApp = bundledAppBytes.toString("utf8");
 
 function requireText(text, message) {
   if (!source.includes(text)) {
@@ -42,6 +45,32 @@ requireText("Full article", "Android shell must shorten the timeline action labe
 
 if (!releaseWorkflow.includes("GITHUB_RUN_NUMBER") || !releaseWorkflow.includes("latest_apk") || !releaseWorkflow.includes("version_code=\"$run_number\"")) {
   throw new Error("Android release workflow must keep versionCode monotonic across testing and tagged releases.");
+}
+
+if ((bundledApp.match(/(?:^|[^A-Za-z0-9_-])[ps]k\.[A-Za-z0-9._-]+/g) || []).length) {
+  throw new Error("Bundled Android app must keep Mapbox tokens as build-time placeholders.");
+}
+
+if (bundledAppBytes[0] === 0xff || bundledAppBytes[0] === 0xfe || bundledAppBytes.includes(0)) {
+  throw new Error("Bundled Android app must be UTF-8 HTML, not UTF-16 or binary data.");
+}
+
+if (!/^<!doctype html>/i.test(bundledApp.trimStart())) {
+  throw new Error("Bundled Android app must start with an HTML doctype.");
+}
+
+if (!bundledApp.includes("window.NLI_MOBILE_DATA")) {
+  throw new Error("Bundled Android app is missing embedded mobile data.");
+}
+
+for (const forbidden of ["DIRECTUS_PASSWORD", "DIRECTUS_EMAIL", "NotebookLM", "notebooklm"]) {
+  if (bundledApp.includes(forbidden)) {
+    throw new Error(`Bundled Android app must not expose ${forbidden}.`);
+  }
+}
+
+if (!bundledApp.includes("__NLI_MAPBOX_TOKEN__")) {
+  throw new Error("Bundled Android app is missing the Mapbox token placeholder.");
 }
 
 console.log(`Android shell verifier passed: ${expectedBuild}`);
