@@ -85,6 +85,14 @@ jobs:
           test -n "$ANDROID_KEYSTORE_PASSWORD"
           test -n "$ANDROID_KEY_ALIAS"
           test -n "$ANDROID_KEY_PASSWORD"
+          if [[ -z "${MAPBOX_TOKEN:-}" ]]; then
+            live_html="$(curl -fsSL 'https://nativelongisland.com/archive-test/mobile-app-live.html' || true)"
+            MAPBOX_TOKEN="$(printf '%s' "$live_html" | grep -oE '(pk|sk)\.ey[A-Za-z0-9._-]+' | head -n 1 || true)"
+            export MAPBOX_TOKEN
+          fi
+          if [[ -n "${MAPBOX_TOKEN:-}" ]]; then
+            echo "::add-mask::$MAPBOX_TOKEN"
+          fi
           test -n "$MAPBOX_TOKEN"
           gradle assembleRelease --no-daemon
 
