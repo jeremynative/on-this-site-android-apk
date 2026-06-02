@@ -12070,7 +12070,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         created_at: new Date().toISOString()
       };
       try {
-        const created = await postDirectusItem("mobile_map_story_votes", vote, { timeout: 10000 });
+        const created = await postDirectusItem("mobile_map_story_votes", vote, { requireAuth: true, timeout: 10000 });
         mergeMapStoryVoteRecords([{ id: created.data?.id || `local-${Date.now()}`, ...vote, ...(created.data || {}) }]);
         const counts = mapStoryVoteCounts(story);
         const patch = {
