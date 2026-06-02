@@ -95,8 +95,9 @@ if (!bundledApp.includes("__NLI_MAPBOX_TOKEN__")) {
   throw new Error("Bundled Android app is missing the Mapbox token placeholder.");
 }
 
-requireBundledText('const SITE_LABEL_MIN_ZOOM = 4.75;', "Bundled Android app must show site labels at the current mobile zoom threshold.");
-requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 4.75;', "Bundled Android app must show point labels at the current mobile zoom threshold.");
+requireBundledText('const SITE_LABEL_MIN_ZOOM = 10.4;', "Bundled Android app must show site labels at the current mobile zoom threshold.");
+requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 10.8;', "Bundled Android app must show point labels at the current mobile zoom threshold.");
+requireBundledText('"text-allow-overlap": true', "Bundled Android app must keep close-zoom point labels visible instead of hiding them behind symbol collision.");
 requireBundledText('function shouldShowCustomMapIcons() {\n      return true;\n    }', "Bundled Android app must keep site icons visible independently of point-label zoom.");
 requireBundledPattern(/"location_label"\s*:\s*"[^"]+"/, "Bundled Android app must include historic moment location labels.");
 requireBundledText('window.NLI_FEEDBACK_UTILS', "Bundled Android app must include shared feedback utilities.");
