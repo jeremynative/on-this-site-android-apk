@@ -7170,15 +7170,17 @@
       return response.data?.[0] || null;
     }
 
-    async function uploadFile(file, title) {
+    async function uploadFile(file, title, requestOptions = {}) {
       const body = new FormData();
       body.append("file", file);
       body.append("title", title || file.name);
       const headers = {};
       const token = tokenProvider();
+      const requireAuth = requestOptions.requireAuth === true;
+      if (requireAuth && !token) throw new Error("Login required to upload images.");
       if (token) headers.authorization = `Bearer ${token}`;
       let response = await fetch(`${baseUrl}/files`, { method: "POST", headers, body });
-      if ((response.status === 401 || response.status === 403) && headers.authorization) {
+      if ((response.status === 401 || response.status === 403) && headers.authorization && !requireAuth) {
         response = await fetch(`${baseUrl}/files`, { method: "POST", body });
       }
       if (!response.ok) {
@@ -9626,8 +9628,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       });
     }
 
-    async function uploadDirectusFile(file, title) {
-      return directusClient.uploadFile(file, title);
+    async function uploadDirectusFile(file, title, options = {}) {
+      return directusClient.uploadFile(file, title, options);
     }
 
     function fileExtensionForType(type) {
@@ -9671,7 +9673,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         : file;
       if (uploadFile.size > 6 * 1024 * 1024) throw new Error("Screenshot is too large. Use an image under 6 MB.");
       const safeTitle = `${title || "Feedback screenshot"}.${fileExtensionForType(uploadFile.type)}`;
-      const uploaded = await uploadDirectusFile(uploadFile, safeTitle);
+      const uploaded = await uploadDirectusFile(uploadFile, safeTitle, { requireAuth: true });
       return uploaded?.data?.id || uploaded?.id || null;
     }
 
@@ -14085,7 +14087,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
       let imageId = null;
       try {
-        imageId = image ? await uploadDirectusFile(image, `Comment image - ${section.dataset.discussionTitle}`) : null;
+        imageId = image ? await uploadDirectusFile(image, `Comment image - ${section.dataset.discussionTitle}`, { requireAuth: true }) : null;
         if (submitButton) submitButton.textContent = "Posting...";
       } catch (error) {
         imageId = null;
@@ -14208,10 +14210,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
       let imageId = null;
       try {
-        imageId = await uploadDirectusFile(image, `Plant observation - ${site?.title || "On This Site"}`);
+        imageId = await uploadDirectusFile(image, `Plant observation - ${site?.title || "On This Site"}`, { requireAuth: true });
         if (button) button.textContent = "Submitting...";
         const observationPayload = plantObservationPayload({ site, discussion, profile, analysis: section._plantAnalysis, guess, notes, imageId });
-        const createdObservation = await postDirectusItem("mobile_plant_observations", observationPayload);
+        const createdObservation = await postDirectusItem("mobile_plant_observations", observationPayload, { requireAuth: true });
         mergePlantObservationRecords([{
           id: createdObservation.data?.id || `plant-${Date.now()}`,
           ...observationPayload,
@@ -15512,7 +15514,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         return;
       }
       try {
-        await patchDirectusItem("mobile_member_profiles", linkedProfile.id, payload);
+        await patchDirectusItem("mobile_member_profiles", linkedProfile.id, payload, { requireAuth: true });
         Object.assign(linkedProfile, payload);
         saveProfile({ ...state.profile, display_name: payload.display_name, headline: payload.headline, location_label: payload.location_label, website_url: payload.website_url, bio: payload.bio });
         renderProfiles();
