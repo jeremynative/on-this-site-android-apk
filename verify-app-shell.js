@@ -17,6 +17,18 @@ function requireText(text, message) {
   }
 }
 
+function requireBundledText(text, message) {
+  if (!bundledApp.includes(text)) {
+    throw new Error(message);
+  }
+}
+
+function requireBundledPattern(pattern, message) {
+  if (!pattern.test(bundledApp)) {
+    throw new Error(message);
+  }
+}
+
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
 requireText(expectedUrl, `Android shell must load ${expectedUrl}.`);
 requireText("?app-version=", "Android shell must pass the app build id to the mobile web app.");
@@ -50,6 +62,12 @@ requireText("Full article", "Android shell must shorten the timeline action labe
 if (!releaseWorkflow.includes("GITHUB_RUN_NUMBER") || !releaseWorkflow.includes("latest_apk") || !releaseWorkflow.includes("version_code=\"$run_number\"")) {
   throw new Error("Android release workflow must keep versionCode monotonic across testing and tagged releases.");
 }
+if (releaseWorkflow.includes("(pk|sk)") || releaseWorkflow.includes("grep -oE '(pk|sk)")) {
+  throw new Error("Android release workflow must never discover or package secret sk Mapbox tokens.");
+}
+if (!releaseWorkflow.includes("grep -oE 'pk\\.ey") || !releaseWorkflow.includes('[[ ! "$MAPBOX_TOKEN" =~ ^pk\\.ey ]]')) {
+  throw new Error("Android release workflow must only allow public pk Mapbox tokens.");
+}
 
 if ((bundledApp.match(/(?:^|[^A-Za-z0-9_-])[ps]k\.[A-Za-z0-9._-]+/g) || []).length) {
   throw new Error("Bundled Android app must keep Mapbox tokens as build-time placeholders.");
@@ -76,6 +94,25 @@ for (const forbidden of ["DIRECTUS_PASSWORD", "DIRECTUS_EMAIL", "NotebookLM", "n
 if (!bundledApp.includes("__NLI_MAPBOX_TOKEN__")) {
   throw new Error("Bundled Android app is missing the Mapbox token placeholder.");
 }
+
+requireBundledText('const SITE_LABEL_MIN_ZOOM = 5.05;', "Bundled Android app must show site labels at the current mobile zoom threshold.");
+requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 6.45;', "Bundled Android app must show point labels at the current mobile zoom threshold.");
+requireBundledPattern(/"location_label"\s*:\s*"[^"]+"/, "Bundled Android app must include historic moment location labels.");
+requireBundledText('window.NLI_FEEDBACK_UTILS', "Bundled Android app must include shared feedback utilities.");
+requireBundledText('const feedbackPayload = FEEDBACK_UTILS.buildFeedbackCommentPayload', "Bundled Android app must save feedback through the shared Directus payload.");
+requireBundledText('source_type: "feedback"', "Bundled Android app feedback must use the feedback source type.");
+requireBundledText('feedbackSheetEl.style.visibility = "hidden"', "Bundled Android app must hide the feedback sheet before screenshot capture.");
+requireBundledText('sendFeedbackReviewEmail', "Bundled Android app must notify review email after feedback saves.");
+requireBundledText('data-take-comment-photo', "Bundled Android app must expose comment camera capture controls.");
+requireBundledText('compressCommentImage', "Bundled Android app must compress oversized comment photos before upload.");
+requireBundledText('Search sites, towns, histories', "Bundled Android app must include mobile search.");
+requireBundledText('sorted by proximity', "Bundled Android app must label nearby results as proximity sorted.");
+requireBundledText('mobileProfileStats', "Bundled Android app must render Directus-backed profile stats.");
+requireBundledText('ensureProfileActivitySynced', "Bundled Android app must sync profile activity from Directus.");
+requireBundledText('languageRemoteAttemptExists', "Bundled Android app must check Directus before saving language attempts.");
+requireBundledText('syncLanguageAttempt', "Bundled Android app must save language attempts through the shared sync path.");
+requireBundledText('Content editing needs the editor password.', "Bundled Android app must keep admin editing behind authenticated Directus login.");
+requireBundledText('frontendEditorPayload', "Bundled Android app must include the current mobile admin editor payload path.");
 
 console.log(`Android shell verifier passed: ${expectedBuild}`);
 

@@ -88,7 +88,7 @@ jobs:
           test -n "$ANDROID_KEY_PASSWORD"
           if [[ -z "${MAPBOX_TOKEN:-}" ]]; then
             live_html="$(curl -fsSL 'https://nativelongisland.com/archive-test/mobile-app-live.html' || true)"
-            MAPBOX_TOKEN="$(printf '%s' "$live_html" | grep -oE '(pk|sk)\.ey[A-Za-z0-9._-]+' | head -n 1 || true)"
+            MAPBOX_TOKEN="$(printf '%s' "$live_html" | grep -oE 'pk\.ey[A-Za-z0-9._-]+' | head -n 1 || true)"
             export MAPBOX_TOKEN
           fi
           if [[ -z "${MAPBOX_TOKEN:-}" ]]; then
@@ -124,6 +124,10 @@ jobs:
             echo "::add-mask::$MAPBOX_TOKEN"
           fi
           test -n "$MAPBOX_TOKEN"
+          if [[ ! "$MAPBOX_TOKEN" =~ ^pk\.ey ]]; then
+            echo "MAPBOX_TOKEN must be a public pk token for APK builds."
+            exit 1
+          fi
           gradle assembleRelease --no-daemon
 
       - name: Prepare release APK files
