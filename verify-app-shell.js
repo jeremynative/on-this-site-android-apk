@@ -5,11 +5,14 @@ const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.h
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
 const bundledAppPath = "app/src/main/assets/mobile-app.html";
+const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
 
 const bundledAppBytes = fs.readFileSync(bundledAppPath);
+const bundledLiveAppBytes = fs.readFileSync(bundledLiveAppPath);
 const source = fs.readFileSync(mainActivityPath, "utf8");
 const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
 const bundledApp = bundledAppBytes.toString("utf8");
+const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
 
 function requireText(text, message) {
   if (!source.includes(text)) {
@@ -36,7 +39,12 @@ requireText("&apk-version=", "Android shell must pass the APK version to the mob
 requireText("&refresh=", "Android shell must use a refresh token when loading the mobile web app.");
 requireText("Cache-Control", "Android shell must request a fresh copy of the mobile web app.");
 requireText("shouldInterceptRequest", "Android shell must be able to serve the bundled app fallback inside the APK WebView.");
+requireText("loadBundledFallback", "Android shell must keep the bundled archive as a fallback path.");
+requireText("onReceivedHttpError", "Android shell must fall back when the live mobile archive returns an HTTP error.");
+requireText("isSiteGroundChallengeUrl", "Android shell must detect SiteGround challenge redirects and use the bundled fallback.");
+requireText("loadingBundledFallback && (\"/archive-test/mobile-app-live.html\"", "Android shell must not intercept the live mobile archive unless the fallback is active.");
 requireText("mobile-app.html", "Android shell must include the bundled mobile app fallback asset.");
+requireText("mobile-app-live.html", "Android shell must include the lightweight Directus-backed mobile app fallback asset.");
 requireText("long-island-land-mask.geojson", "Android shell must include the bundled land mask fallback asset.");
 requireText("BuildConfig.MAPBOX_TOKEN", "Android shell must inject the Mapbox token from build configuration.");
 requireText("androidApkStartupScript", "Android shell must inject APK startup guards before the bundled app runs.");
@@ -49,6 +57,13 @@ if (source.includes("settings.setCacheMode(WebSettings.LOAD_NO_CACHE)")) {
 }
 if (source.includes("webView.clearCache(true)")) {
   throw new Error("Android shell must not clear WebView cache/cookies on every startup.");
+}
+const refreshAppMatch = source.match(/void refreshApp\(\) \{[\s\S]*?\n    \}/);
+if (!refreshAppMatch || !refreshAppMatch[0].includes("webView.loadUrl(url, headers);")) {
+  throw new Error("Android shell must load the live mobile archive first on startup.");
+}
+if (refreshAppMatch[0].includes("loadDataWithBaseURL")) {
+  throw new Error("Android shell must not load the large bundled archive as the normal startup document.");
 }
 requireText("dispatchTouchEvent", "Android shell must forward app taps into the mobile map.");
 requireText("window.onAndroidMapTap", "Android shell must call the mobile map tap bridge.");
@@ -69,30 +84,35 @@ if (!releaseWorkflow.includes("grep -oE 'pk\\.ey") || !releaseWorkflow.includes(
   throw new Error("Android release workflow must only allow public pk Mapbox tokens.");
 }
 
-if ((bundledApp.match(/(?:^|[^A-Za-z0-9_-])[ps]k\.[A-Za-z0-9._-]+/g) || []).length) {
-  throw new Error("Bundled Android app must keep Mapbox tokens as build-time placeholders.");
-}
-
-if (bundledAppBytes[0] === 0xff || bundledAppBytes[0] === 0xfe || bundledAppBytes.includes(0)) {
-  throw new Error("Bundled Android app must be UTF-8 HTML, not UTF-16 or binary data.");
-}
-
-if (!/^<!doctype html>/i.test(bundledApp.trimStart())) {
-  throw new Error("Bundled Android app must start with an HTML doctype.");
+for (const [label, bytes, html] of [
+  ["embedded fallback", bundledAppBytes, bundledApp],
+  ["live fallback", bundledLiveAppBytes, bundledLiveApp],
+]) {
+  if ((html.match(/(?:^|[^A-Za-z0-9_-])[ps]k\.[A-Za-z0-9._-]+/g) || []).length) {
+    throw new Error(`Bundled Android ${label} must keep Mapbox tokens as build-time placeholders.`);
+  }
+  if (bytes[0] === 0xff || bytes[0] === 0xfe || bytes[0] === 0xef || bytes.includes(0)) {
+    throw new Error(`Bundled Android ${label} must be UTF-8 HTML without a BOM, not UTF-16 or binary data.`);
+  }
+  if (!/^<!doctype html>/i.test(html.trimStart())) {
+    throw new Error(`Bundled Android ${label} must start with an HTML doctype.`);
+  }
+  if (!html.includes("__NLI_MAPBOX_TOKEN__")) {
+    throw new Error(`Bundled Android ${label} is missing the Mapbox token placeholder.`);
+  }
 }
 
 if (!bundledApp.includes("window.NLI_MOBILE_DATA")) {
   throw new Error("Bundled Android app is missing embedded mobile data.");
 }
-
-for (const forbidden of ["DIRECTUS_PASSWORD", "DIRECTUS_EMAIL", "NotebookLM", "notebooklm"]) {
-  if (bundledApp.includes(forbidden)) {
-    throw new Error(`Bundled Android app must not expose ${forbidden}.`);
-  }
+if (bundledLiveAppBytes.length > 1500000 || /window\.NLI_MOBILE_DATA\s*=/.test(bundledLiveApp)) {
+  throw new Error("Bundled Android live fallback should stay lightweight and Directus-backed, not embed the full data payload.");
 }
 
-if (!bundledApp.includes("__NLI_MAPBOX_TOKEN__")) {
-  throw new Error("Bundled Android app is missing the Mapbox token placeholder.");
+for (const forbidden of ["DIRECTUS_PASSWORD", "DIRECTUS_EMAIL", "NotebookLM", "notebooklm"]) {
+  if (bundledApp.includes(forbidden) || bundledLiveApp.includes(forbidden)) {
+    throw new Error(`Bundled Android app must not expose ${forbidden}.`);
+  }
 }
 
 requireBundledText('const SITE_LABEL_MIN_ZOOM = 10.4;', "Bundled Android app must show site labels at the current mobile zoom threshold.");

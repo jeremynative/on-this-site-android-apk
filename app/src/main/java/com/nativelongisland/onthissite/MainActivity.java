@@ -73,6 +73,7 @@ public class MainActivity extends Activity {
     private long webTouchStartedAt;
     private boolean wasStopped;
     private long suppressResumeRefreshUntil;
+    private boolean loadingBundledFallback;
     Uri lastStoryVideoUri;
     String lastStoryVideoMimeType = "video/webm";
 
@@ -200,6 +201,18 @@ public class MainActivity extends Activity {
                 super.onReceivedError(view, request, error);
                 if (request != null && request.isForMainFrame()) {
                     Log.e(LOG_TAG, "Main WebView load error: " + error.getErrorCode() + " " + error.getDescription());
+                    loadBundledFallback("main-frame-error");
+                }
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
+                super.onReceivedHttpError(view, request, errorResponse);
+                if (request == null || !request.isForMainFrame() || errorResponse == null) return;
+                int status = errorResponse.getStatusCode();
+                if (status >= 400) {
+                    Log.e(LOG_TAG, "Main WebView HTTP error: " + status);
+                    loadBundledFallback("main-frame-http-" + status);
                 }
             }
 
@@ -207,6 +220,10 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 Log.d(LOG_TAG, "WebView page finished: " + url);
+                if (isSiteGroundChallengeUrl(url)) {
+                    loadBundledFallback("siteground-challenge");
+                    return;
+                }
                 if (BuildConfig.DEBUG) logLoadedAppState();
                 applyApkTimelineTrayFix();
                 dispatchPendingPlantPhoto();
@@ -231,8 +248,8 @@ public class MainActivity extends Activity {
         String path = uri.getPath();
         String assetName;
         String mimeType;
-        if ("/archive-test/mobile-app-live.html".equals(path) || "/archive-test/mobile-app.html".equals(path)) {
-            assetName = "mobile-app.html";
+        if (loadingBundledFallback && ("/archive-test/mobile-app-live.html".equals(path) || "/archive-test/mobile-app.html".equals(path))) {
+            assetName = "mobile-app-live.html";
             mimeType = "text/html";
         } else if ("/archive-test/long-island-land-mask.geojson".equals(path) || "/long-island-land-mask.geojson".equals(path)) {
             assetName = "long-island-land-mask.geojson";
@@ -254,12 +271,16 @@ public class MainActivity extends Activity {
     }
 
     private InputStream bundledAssetStream(String assetName) throws IOException {
-        if (!"mobile-app.html".equals(assetName)) return getAssets().open(assetName);
-        return new ByteArrayInputStream(bundledMobileHtml().getBytes(StandardCharsets.UTF_8));
+        if (!"mobile-app.html".equals(assetName) && !"mobile-app-live.html".equals(assetName)) return getAssets().open(assetName);
+        return new ByteArrayInputStream(bundledMobileHtml(assetName).getBytes(StandardCharsets.UTF_8));
     }
 
     private String bundledMobileHtml() throws IOException {
-        InputStream stream = getAssets().open("mobile-app.html");
+        return bundledMobileHtml("mobile-app-live.html");
+    }
+
+    private String bundledMobileHtml(String assetName) throws IOException {
+        InputStream stream = getAssets().open(assetName);
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         byte[] buffer = new byte[8192];
         int read;
@@ -276,6 +297,14 @@ public class MainActivity extends Activity {
         }
         html = html.replace("</head>", androidApkStartupScript() + "</head>");
         return html;
+    }
+
+    private boolean isSiteGroundChallengeUrl(String url) {
+        if (url == null || loadingBundledFallback) return false;
+        Uri uri = Uri.parse(url);
+        return "nativelongisland.com".equalsIgnoreCase(uri.getHost())
+            && uri.getPath() != null
+            && uri.getPath().startsWith("/.well-known/sgcaptcha/");
     }
 
     private void logLoadedAppState() {
@@ -483,14 +512,21 @@ public class MainActivity extends Activity {
         if (webView == null) return;
         lastRefreshAt = System.currentTimeMillis();
         String url = freshAppUrl();
+        loadingBundledFallback = false;
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Cache-Control", "no-cache, no-store, max-age=0");
+        headers.put("Pragma", "no-cache");
+        webView.loadUrl(url, headers);
+    }
+
+    private void loadBundledFallback(String reason) {
+        if (webView == null || loadingBundledFallback) return;
+        loadingBundledFallback = true;
+        Log.w(LOG_TAG, "Loading bundled mobile archive fallback: " + reason);
         try {
-            webView.loadDataWithBaseURL(APP_BASE_URL, bundledMobileHtml(), "text/html", "UTF-8", url);
+            webView.loadDataWithBaseURL(APP_BASE_URL, bundledMobileHtml(), "text/html", "UTF-8", APP_BASE_URL);
         } catch (IOException error) {
             Log.w(LOG_TAG, "Bundled mobile archive could not be opened.", error);
-            Map<String, String> headers = new HashMap<>();
-            headers.put("Cache-Control", "no-cache, no-store, max-age=0");
-            headers.put("Pragma", "no-cache");
-            webView.loadUrl(url, headers);
         }
     }
 
