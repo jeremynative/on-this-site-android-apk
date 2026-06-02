@@ -145,6 +145,11 @@ requireBundledText('const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 24;', "Bundled And
 requireBundledText('data-nearby-show-more', "Bundled Android app must let users reveal more nearby places after the startup cap.");
 requireBundledText('const nativeAndroid = isNativeAndroidApp();', "Bundled Android app must cache native Android startup state.");
 requireBundledText('if (nativeAndroid) {\n          hideLoadingScreen();\n          await new Promise(resolve => window.requestAnimationFrame(resolve));\n        }\n        await openInitialRouteFromUrl();', "Bundled Android app must reveal the shell before slower route and map startup work.");
+requireBundledText('function stabilizeAndroidMapPaint()', "Bundled Android app must include the Android map paint stabilizer.");
+requireBundledText('state.map.resize();', "Bundled Android app must resize the map after Android WebView startup.");
+requireBundledText('refreshMobileMapSources();', "Bundled Android app must refresh map sources after Android WebView startup.");
+requireBundledText('state.map.jumpTo({ center, zoom: zoom + 0.001 });', "Bundled Android app must nudge the Mapbox canvas after Android WebView startup.");
+requireBundledText('stabilizeAndroidMapPaint();', "Bundled Android app must trigger map paint stabilization after layers and markers are attached.");
 requireBundledText('mobileProfileStats', "Bundled Android app must render Directus-backed profile stats.");
 requireBundledText('ensureProfileActivitySynced', "Bundled Android app must sync profile activity from Directus.");
 requireBundledText('languageRemoteAttemptExists', "Bundled Android app must check Directus before saving language attempts.");

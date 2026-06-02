@@ -15485,6 +15485,34 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.map.on("mouseleave", "mobile-site-point-hit", () => state.map.getCanvas().style.cursor = "");
     }
 
+    function refreshMobileMapSources() {
+      if (!state.map) return;
+      state.map.getSource("mobile-sites")?.setData(siteFeatureCollection());
+      state.map.getSource("mobile-territory-labels")?.setData(polygonLabelCollection("territory"));
+      state.map.getSource("mobile-detail-labels")?.setData(polygonLabelCollection("detail"));
+    }
+
+    function stabilizeAndroidMapPaint() {
+      if (!isNativeAndroidApp() || !state.map) return;
+      const repaint = () => {
+        if (!state.map) return;
+        try {
+          const center = state.map.getCenter?.();
+          const zoom = state.map.getZoom?.();
+          state.map.resize();
+          refreshMobileMapSources();
+          state.map.triggerRepaint?.();
+          if (center && Number.isFinite(zoom)) {
+            state.map.jumpTo({ center, zoom: zoom + 0.001 });
+            state.map.jumpTo({ center, zoom });
+          }
+        } catch {}
+      };
+      window.requestAnimationFrame(repaint);
+      window.setTimeout(repaint, 450);
+      window.setTimeout(repaint, 1600);
+    }
+
     function renderProfile() {
       if (!profileCardEl) return;
       loginSheetEl?.classList.toggle("has-profile", !!state.profile);
@@ -16930,6 +16958,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           addPolygonLayers();
           syncMarkers();
           syncUserLocationMarker({ centerMap: false });
+          stabilizeAndroidMapPaint();
           state.map.on("zoomend", syncMarkers);
           state.map.on("zoom", syncMapStoryMarkers);
           window.setTimeout(() => resolve(true), 160);
@@ -18012,7 +18041,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             if (!mask) return;
             prepareSites();
             renderList();
-            if (state.map?.getSource("mobile-sites")) state.map.getSource("mobile-sites").setData(siteFeatureCollection());
+            refreshMobileMapSources();
+            stabilizeAndroidMapPaint();
           })
           .catch(() => null));
         idleTask(() => awardDailyLoginReward({ silent: true })
