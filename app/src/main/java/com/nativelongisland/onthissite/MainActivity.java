@@ -178,6 +178,9 @@ public class MainActivity extends Activity {
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
                 Log.d(LOG_TAG, "WebView page started: " + url);
+                if (isSiteGroundChallengeUrl(url)) {
+                    loadBundledFallback("siteground-challenge-start");
+                }
             }
 
             @Override
@@ -511,12 +514,8 @@ public class MainActivity extends Activity {
     void refreshApp() {
         if (webView == null) return;
         lastRefreshAt = System.currentTimeMillis();
-        String url = freshAppUrl();
         loadingBundledFallback = false;
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Cache-Control", "no-cache, no-store, max-age=0");
-        headers.put("Pragma", "no-cache");
-        webView.loadUrl(url, headers);
+        loadBundledFallback("startup-live-shell");
     }
 
     private void loadBundledFallback(String reason) {

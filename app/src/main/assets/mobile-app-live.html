@@ -220,6 +220,22 @@
       pointer-events: none;
     }
 
+    .selected-site-map-label {
+      max-width: min(220px, 54vw);
+      padding: 5px 8px;
+      border: 1px solid rgba(23, 70, 49, 0.28);
+      border-radius: 6px;
+      background: rgba(248, 251, 246, 0.94);
+      color: #163225;
+      box-shadow: 0 2px 8px rgba(20, 34, 25, 0.2);
+      font-size: 13px;
+      font-weight: 850;
+      line-height: 1.12;
+      text-align: center;
+      text-wrap: balance;
+      pointer-events: none;
+    }
+
     .mobile-marker-focus {
       animation: mobile-marker-focus 620ms cubic-bezier(.2, .8, .24, 1);
     }
@@ -7511,8 +7527,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     };
     const STARTUP_LOCATION_ZOOM = 9.55;
     const NEAR_ME_ZOOM = 10.5;
-    const SITE_LABEL_MIN_ZOOM = 10.4;
-    const SITE_POINT_LABEL_MIN_ZOOM = 10.8;
+    const SITE_LABEL_MIN_ZOOM = 9.8;
+    const SITE_POINT_LABEL_MIN_ZOOM = 10.2;
     const MOBILE_APP_BUILD_ID = "20260526-story-pin-priority";
     const MIN_ANDROID_APP_BUILD_ID = "20260524-plant-camera-analysis-7";
     const ANDROID_APK_UPDATE_URL = "https://github.com/jeremynative/on-this-site-android-apk/releases/latest/download/on-this-site-latest.apk";
@@ -7614,6 +7630,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       storyMarkers: new Map(),
       siteSourceListCache: new Map(),
       suggestionPublicMarkers: new Map(),
+      activeSiteLabelMarker: null,
       mapStoryRefreshTimer: null,
       passwordResetToken: passwordResetTokenFromUrl(),
       plantMarkers: new Map(),
@@ -7785,7 +7802,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       try {
         const saved = JSON.parse(localStorage.getItem("nli-mobile-settings") || "{}");
         if (!saved.basemapUserSet && saved.basemap === "streets") saved.basemap = "outdoors";
-        return {
+        const settings = {
           historyAlerts: false,
           proximityAlerts: false,
           newContentAlerts: false,
@@ -7797,6 +7814,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           showShapes: true,
           ...saved
         };
+        settings.showPins = true;
+        return settings;
       } catch {
         return { historyAlerts: false, proximityAlerts: false, newContentAlerts: false, exhibits: true, locationEnabled: true, locationPrompted: false, basemap: "outdoors", showPins: true, showShapes: true };
       }
@@ -10817,6 +10836,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (event.source_slug) {
         const site = state.sites.find(item => item.slug === event.source_slug);
         if (site) {
+          state.selectedSlug = site.slug;
+          state.selectedSite = site;
+          syncActiveSiteMapLabel(site);
           focusSite(site, { timeline: true });
           window.setTimeout(() => animateMobileSiteMarker(site), 2400);
           showBanner(event.source_title || site.title || "Site located on the map.");
@@ -10998,6 +11020,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!site) return;
       window.clearTimeout(state.nearbySiteOpenTimer);
       const token = ++state.nearbySiteOpenToken;
+      state.selectedSlug = site.slug;
+      state.selectedSite = site;
+      syncActiveSiteMapLabel(site);
+      renderList();
       collapseNearbyPanelForSiteOpen();
       if (!state.map || !site.center) {
         openSite(slug);
@@ -14345,6 +14371,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         </div>
       `;
       state.selectedSite = exhibit;
+      syncActiveSiteMapLabel(exhibit);
       detailEl.classList.add("open");
       syncMobilePanelAccessibility();
       if (exhibit.center && state.map) {
@@ -14361,6 +14388,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       let article = state.wikiBySlug.get(slug) || (typeof articleOrSlug === "object" ? articleOrSlug : null);
       state.selectedSlug = "";
       state.selectedSite = null;
+      clearActiveSiteMapLabel();
       detailTitleEl.innerHTML = `
         <h2>${escapeHtml(article?.title || options.timelineEvent?.source_title || "Knowledgebase article")}</h2>
         <p class="detail-meta">Knowledgebase</p>
@@ -14416,6 +14444,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       detailBodyEl.innerHTML = bodyHtml;
       state.selectedSlug = "";
       state.selectedSite = null;
+      clearActiveSiteMapLabel();
       document.querySelectorAll(".sheet.open").forEach(item => item.classList.remove("open"));
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
       detailEl.classList.remove("plant-browse-mode");
@@ -14825,6 +14854,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!site) return;
       state.selectedSlug = slug;
       state.selectedSite = site;
+      syncActiveSiteMapLabel(site);
       renderList();
       if (options.focus !== false) focusSite(site);
       detailTitleEl.innerHTML = mobileSiteTitleHtml(site);
@@ -14835,6 +14865,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       site = await fetchSiteDetail(site);
       if (state.selectedSlug !== slug) return;
       state.selectedSite = site;
+      syncActiveSiteMapLabel(site);
       const image = listingImage(site);
       const imageFallback = listingImageFallback(site);
       const moments = timelineEventsForSource("site", site.id, site.slug);
@@ -14885,6 +14916,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       detailEl.style.transform = "";
       state.selectedSlug = "";
       state.selectedSite = null;
+      clearActiveSiteMapLabel();
       syncSitePlantMarkers(null);
       renderList();
       if (!options.skipRoute) window.history.replaceState(null, "", window.location.pathname);
@@ -15292,7 +15324,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           "text-radial-offset": 0.55,
           "text-justify": "auto",
           "text-offset": ["literal", [0, -1.45]],
-          "text-allow-overlap": true,
+          "text-allow-overlap": false,
           "text-ignore-placement": false,
           "text-max-width": 9,
           "text-optional": true
@@ -15482,6 +15514,23 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       } catch (error) {
         showBanner(error.message || "Could not save profile to Directus.");
       }
+    }
+
+    function clearActiveSiteMapLabel() {
+      if (state.activeSiteLabelMarker?.remove) state.activeSiteLabelMarker.remove();
+      state.activeSiteLabelMarker = null;
+    }
+
+    function syncActiveSiteMapLabel(site = state.selectedSite) {
+      clearActiveSiteMapLabel();
+      if (!state.map || !site?.center || typeof mapboxgl === "undefined") return;
+      const element = document.createElement("div");
+      element.className = "selected-site-map-label";
+      element.textContent = site.title || "Selected site";
+      element.setAttribute("aria-hidden", "true");
+      state.activeSiteLabelMarker = new mapboxgl.Marker({ element, anchor: "bottom", offset: [0, -22] })
+        .setLngLat(site.center)
+        .addTo(state.map);
     }
 
     function renderRewards() {
@@ -16776,12 +16825,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function syncMobileLayerButtons() {
       if (mobileLayerExhibitsInput) mobileLayerExhibitsInput.checked = state.settings.exhibits !== false;
-      if (mobileLayerPinsInput) mobileLayerPinsInput.checked = state.settings.showPins !== false;
+      state.settings.showPins = true;
+      if (mobileLayerPinsInput) {
+        mobileLayerPinsInput.checked = true;
+        mobileLayerPinsInput.disabled = true;
+      }
       if (mobileLayerShapesInput) mobileLayerShapesInput.checked = state.settings.showShapes !== false;
       if (mobileLayerMenu) {
         const count = [
           state.settings.exhibits !== false,
-          state.settings.showPins !== false,
+          true,
           state.settings.showShapes !== false
         ].filter(Boolean).length;
         mobileLayerMenu.querySelector("summary").textContent = count === 3 ? "Layers" : `Layers ${count}/3`;
@@ -16791,8 +16844,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         exhibitsToggleBtn.setAttribute("aria-pressed", String(state.settings.exhibits !== false));
       }
       if (mobilePinsToggleBtn) {
-        mobilePinsToggleBtn.textContent = state.settings.showPins === false ? "Sites off" : "Sites";
-        mobilePinsToggleBtn.setAttribute("aria-pressed", String(state.settings.showPins !== false));
+        mobilePinsToggleBtn.textContent = "Sites";
+        mobilePinsToggleBtn.setAttribute("aria-pressed", "true");
+        mobilePinsToggleBtn.disabled = true;
       }
       if (mobileShapesToggleBtn) {
         mobileShapesToggleBtn.textContent = state.settings.showShapes === false ? "Boundaries off" : "Boundaries";
@@ -16802,7 +16856,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function setMobileLayerVisibility(kind, visible) {
       if (kind === "exhibits") state.settings.exhibits = visible;
-      if (kind === "pins") state.settings.showPins = visible;
+      if (kind === "pins") state.settings.showPins = true;
       if (kind === "shapes") state.settings.showShapes = visible;
       saveSettings();
       syncMobileLayerButtons();

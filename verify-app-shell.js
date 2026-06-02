@@ -42,6 +42,7 @@ requireText("shouldInterceptRequest", "Android shell must be able to serve the b
 requireText("loadBundledFallback", "Android shell must keep the bundled archive as a fallback path.");
 requireText("onReceivedHttpError", "Android shell must fall back when the live mobile archive returns an HTTP error.");
 requireText("isSiteGroundChallengeUrl", "Android shell must detect SiteGround challenge redirects and use the bundled fallback.");
+requireText("loadBundledFallback(\"siteground-challenge-start\")", "Android shell must switch to the bundled fallback as soon as SiteGround challenge navigation starts.");
 requireText("loadingBundledFallback && (\"/archive-test/mobile-app-live.html\"", "Android shell must not intercept the live mobile archive unless the fallback is active.");
 requireText("mobile-app.html", "Android shell must include the bundled mobile app fallback asset.");
 requireText("mobile-app-live.html", "Android shell must include the lightweight Directus-backed mobile app fallback asset.");
@@ -59,11 +60,11 @@ if (source.includes("webView.clearCache(true)")) {
   throw new Error("Android shell must not clear WebView cache/cookies on every startup.");
 }
 const refreshAppMatch = source.match(/void refreshApp\(\) \{[\s\S]*?\n    \}/);
-if (!refreshAppMatch || !refreshAppMatch[0].includes("webView.loadUrl(url, headers);")) {
-  throw new Error("Android shell must load the live mobile archive first on startup.");
+if (!refreshAppMatch || !refreshAppMatch[0].includes('loadBundledFallback("startup-live-shell");')) {
+  throw new Error("Android shell must start from the bundled Directus-backed live shell to avoid SiteGround challenge screens.");
 }
-if (refreshAppMatch[0].includes("loadDataWithBaseURL")) {
-  throw new Error("Android shell must not load the large bundled archive as the normal startup document.");
+if (refreshAppMatch[0].includes("webView.loadUrl(url, headers);")) {
+  throw new Error("Android shell must not show the SiteGround-challenged live URL during normal startup.");
 }
 requireText("dispatchTouchEvent", "Android shell must forward app taps into the mobile map.");
 requireText("window.onAndroidMapTap", "Android shell must call the mobile map tap bridge.");
@@ -115,9 +116,11 @@ for (const forbidden of ["DIRECTUS_PASSWORD", "DIRECTUS_EMAIL", "NotebookLM", "n
   }
 }
 
-requireBundledText('const SITE_LABEL_MIN_ZOOM = 10.4;', "Bundled Android app must show site labels at the current mobile zoom threshold.");
-requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 10.8;', "Bundled Android app must show point labels at the current mobile zoom threshold.");
-requireBundledText('"text-allow-overlap": true', "Bundled Android app must keep close-zoom point labels visible instead of hiding them behind symbol collision.");
+requireBundledText('const SITE_LABEL_MIN_ZOOM = 9.8;', "Bundled Android app must show site labels at the current mobile zoom threshold.");
+requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 10.2;', "Bundled Android app must show point labels at the current mobile zoom threshold.");
+requireBundledText('"text-allow-overlap": false', "Bundled Android app must keep close-zoom point labels readable with collision handling.");
+requireBundledText('settings.showPins = true;', "Bundled Android app must recover from saved Sites-off settings so site icons stay visible.");
+requireBundledText('selected-site-map-label', "Bundled Android app must show a dedicated title label for the selected site marker.");
 requireBundledText('function shouldShowCustomMapIcons() {\n      return true;\n    }', "Bundled Android app must keep site icons visible independently of point-label zoom.");
 requireBundledPattern(/"location_label"\s*:\s*"[^"]+"/, "Bundled Android app must include historic moment location labels.");
 requireBundledText('window.NLI_FEEDBACK_UTILS', "Bundled Android app must include shared feedback utilities.");
