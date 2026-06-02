@@ -15503,14 +15503,25 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           refreshMobileMapSources();
           state.map.triggerRepaint?.();
           if (center && Number.isFinite(zoom)) {
-            state.map.jumpTo({ center, zoom: zoom + 0.001 });
-            state.map.jumpTo({ center, zoom });
+            const minZoom = Number.isFinite(state.map.getMinZoom?.()) ? state.map.getMinZoom() : 0;
+            const maxZoom = Number.isFinite(state.map.getMaxZoom?.()) ? state.map.getMaxZoom() : 24;
+            const nudgeZoom = zoom + 0.18 <= maxZoom ? zoom + 0.18 : Math.max(minZoom, zoom - 0.18);
+            state.map.zoomTo(nudgeZoom, { duration: 0, animate: false });
+            window.setTimeout(() => {
+              if (!state.map) return;
+              state.map.jumpTo({ center, zoom });
+              state.map.triggerRepaint?.();
+            }, 40);
           }
         } catch {}
       };
       window.requestAnimationFrame(repaint);
       window.setTimeout(repaint, 450);
       window.setTimeout(repaint, 1600);
+      window.setTimeout(repaint, 4200);
+      window.setTimeout(repaint, 9000);
+      window.setTimeout(repaint, 18000);
+      window.setTimeout(repaint, 32000);
     }
 
     function renderProfile() {

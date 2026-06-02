@@ -148,7 +148,8 @@ requireBundledText('if (nativeAndroid) {\n          hideLoadingScreen();\n      
 requireBundledText('function stabilizeAndroidMapPaint()', "Bundled Android app must include the Android map paint stabilizer.");
 requireBundledText('state.map.resize();', "Bundled Android app must resize the map after Android WebView startup.");
 requireBundledText('refreshMobileMapSources();', "Bundled Android app must refresh map sources after Android WebView startup.");
-requireBundledText('state.map.jumpTo({ center, zoom: zoom + 0.001 });', "Bundled Android app must nudge the Mapbox canvas after Android WebView startup.");
+requireBundledText('state.map.zoomTo(nudgeZoom, { duration: 0, animate: false });', "Bundled Android app must force a zero-duration Mapbox zoom nudge after Android WebView startup.");
+requireBundledText('window.setTimeout(repaint, 32000);', "Bundled Android app must keep retrying map paint after slower Android WebView startup.");
 requireBundledText('stabilizeAndroidMapPaint();', "Bundled Android app must trigger map paint stabilization after layers and markers are attached.");
 requireBundledText('mobileProfileStats', "Bundled Android app must render Directus-backed profile stats.");
 requireBundledText('ensureProfileActivitySynced', "Bundled Android app must sync profile activity from Directus.");
