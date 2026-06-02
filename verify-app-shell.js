@@ -125,8 +125,8 @@ for (const forbidden of ["DIRECTUS_PASSWORD", "DIRECTUS_EMAIL", "NotebookLM", "n
   }
 }
 
-requireBundledText('const SITE_LABEL_MIN_ZOOM = 5.35;', "Bundled Android app must show site labels before close zoom.");
-requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 5.45;', "Bundled Android app must show point labels before close zoom.");
+requireBundledText('const SITE_LABEL_MIN_ZOOM = 5.0;', "Bundled Android app must show site labels before close zoom.");
+requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 5.1;', "Bundled Android app must show point labels before close zoom.");
 requireBundledText('"text-allow-overlap": false', "Bundled Android app must keep close-zoom point labels readable with collision handling.");
 requireBundledText('settings.showPins = true;', "Bundled Android app must recover from saved Sites-off settings so site icons stay visible.");
 requireBundledText('selected-site-map-label', "Bundled Android app must show a dedicated title label for the selected site marker.");
@@ -140,6 +140,12 @@ requireBundledText('sendFeedbackReviewEmail', "Bundled Android app must notify r
 requireBundledText('data-take-comment-photo', "Bundled Android app must expose comment camera capture controls.");
 requireBundledText('compressCommentImage', "Bundled Android app must compress oversized comment photos before upload.");
 requireBundledText('Search sites, towns, histories', "Bundled Android app must include mobile search.");
+requireBundledText('normalizedSearchText: normalizeText', "Bundled Android app must include normalized mobile search text.");
+requireBundledText('function scheduleSearchSync()', "Bundled Android app must watch mobile search value changes.");
+requireBundledText('searchEl.addEventListener("keyup", scheduleSearchSync);', "Bundled Android app must filter search after Android keyboard events.");
+requireBundledText('searchEl.addEventListener("focus", startSearchValueWatch);', "Bundled Android app must poll focused search values for WebView text changes.");
+requireBundledText('function installNativeAndroidSearchWatch()', "Bundled Android app must keep polling native Android search values.");
+requireBundledText('state.nativeAndroidSearchWatchTimer = window.setInterval(scheduleSearchSync, 350);', "Bundled Android app must persistently sync native Android search input.");
 requireBundledText('sorted by proximity', "Bundled Android app must label nearby results as proximity sorted.");
 requireBundledText('const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 24;', "Bundled Android app must keep the first nearby tray render small.");
 requireBundledText('data-nearby-show-more', "Bundled Android app must let users reveal more nearby places after the startup cap.");

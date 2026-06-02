@@ -7597,8 +7597,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     };
     const STARTUP_LOCATION_ZOOM = 9.55;
     const NEAR_ME_ZOOM = 10.5;
-    const SITE_LABEL_MIN_ZOOM = 5.35;
-    const SITE_POINT_LABEL_MIN_ZOOM = 5.45;
+    const SITE_LABEL_MIN_ZOOM = 5.0;
+    const SITE_POINT_LABEL_MIN_ZOOM = 5.1;
     const NEARBY_LIST_DESKTOP_LIMIT = 80;
     const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 24;
     const NEARBY_LIST_ANDROID_DEFAULT_LIMIT = 40;
@@ -10110,7 +10110,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
               site.summary,
               stripHtml(site.introduction_content || ""),
               stripHtml(site.history_content || "")
-            ].join(" ").toLowerCase()
+            ].join(" ").toLowerCase(),
+            normalizedSearchText: normalizeText([
+              site.title,
+              site.slug,
+              site.address_label,
+              site.site_type,
+              site.summary,
+              stripHtml(site.introduction_content || ""),
+              stripHtml(site.history_content || "")
+            ].join(" "))
           };
         })
         .filter(site => site.title);
@@ -10195,7 +10204,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function filterSites() {
-      const query = searchEl.value.trim().toLowerCase();
+      const rawQuery = searchEl.value.trim();
+      const query = rawQuery.toLowerCase();
+      const normalizedQuery = normalizeText(rawQuery);
       if (!query) {
         clearAddressSearch();
         state.filtered = visitableSites();
@@ -10206,7 +10217,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         return;
       }
       const source = state.sites;
-      const matches = source.filter(site => String(site.searchText || "").includes(query));
+      const matches = source.filter(site => String(site.searchText || "").includes(query) || String(site.normalizedSearchText || "").includes(normalizedQuery));
       const placeSearch = isPlaceSearchCandidate(query, matches);
       if (placeSearch && !matches.length) {
         state.addressSearchMode = true;
@@ -10230,6 +10241,34 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function scheduleFilterSites() {
       window.clearTimeout(state.searchTimer);
       state.searchTimer = window.setTimeout(filterSites, 140);
+    }
+
+    function scheduleSearchSync() {
+      if (!searchEl) return;
+      const value = searchEl.value || "";
+      if (value === state.lastSearchValue) return;
+      state.lastSearchValue = value;
+      scheduleFilterSites();
+    }
+
+    function startSearchValueWatch() {
+      if (!searchEl || state.searchValueWatchTimer) return;
+      state.lastSearchValue = searchEl.value || "";
+      state.searchValueWatchTimer = window.setInterval(scheduleSearchSync, 180);
+      window.setTimeout(stopSearchValueWatch, 5000);
+    }
+
+    function stopSearchValueWatch() {
+      if (!state.searchValueWatchTimer) return;
+      window.clearInterval(state.searchValueWatchTimer);
+      state.searchValueWatchTimer = null;
+      scheduleSearchSync();
+    }
+
+    function installNativeAndroidSearchWatch() {
+      if (!isNativeAndroidApp() || state.nativeAndroidSearchWatchTimer || !searchEl) return;
+      state.lastSearchValue = searchEl.value || "";
+      state.nativeAndroidSearchWatchTimer = window.setInterval(scheduleSearchSync, 350);
     }
 
     function isPlaceSearchCandidate(query, matches = []) {
@@ -17476,7 +17515,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         languageQuizModalEl.hidden = true;
       }
     });
-    searchEl.addEventListener("input", scheduleFilterSites);
+    searchEl.addEventListener("input", scheduleSearchSync);
+    searchEl.addEventListener("keyup", scheduleSearchSync);
+    searchEl.addEventListener("change", scheduleSearchSync);
+    searchEl.addEventListener("search", scheduleSearchSync);
+    searchEl.addEventListener("compositionend", scheduleSearchSync);
+    searchEl.addEventListener("focus", startSearchValueWatch);
+    searchEl.addEventListener("blur", stopSearchValueWatch);
     const refreshMobileViewportLayout = () => {
       syncSystemSafeArea();
       restoreNearbyPanelHeight();
@@ -18047,6 +18092,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         checkDailyHistoryMoment();
         checkNewContentAlerts();
         requestStartupLocation();
+        installNativeAndroidSearchWatch();
         idleTask(() => ensureLandMask()
           .then(mask => {
             if (!mask) return;
