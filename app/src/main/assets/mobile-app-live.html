@@ -7598,7 +7598,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const STARTUP_LOCATION_ZOOM = 9.55;
     const NEAR_ME_ZOOM = 10.5;
     const SITE_LABEL_MIN_ZOOM = 1.15;
-    const SITE_POINT_LABEL_MIN_ZOOM = 10.2;
+    const SITE_POINT_LABEL_MIN_ZOOM = 8.85;
     const NEARBY_LIST_DESKTOP_LIMIT = 80;
     const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 24;
     const NEARBY_LIST_ANDROID_DEFAULT_LIMIT = 40;
@@ -7959,16 +7959,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       renderProfile();
     }
 
-    function saveLanguageAttempt(contentKey, word, correct) {
+    async function saveLanguageAttempt(contentKey, word, correct) {
       const profile = state.profile || currentContributorProfile();
-      if (!profile) return;
-      syncLanguageAttempt(contentKey, word, correct)
-        .then(saved => {
-          if (!saved) return;
-          renderProfile();
-          renderRewards();
-        })
-        .catch(() => showBanner("Could not save language progress to Directus. Please try again."));
+      if (!profile) throw new Error("Login required.");
+      const saved = await syncLanguageAttempt(contentKey, word, correct);
+      if (saved) {
+        renderProfile();
+        renderRewards();
+      }
+      return saved || null;
     }
 
     const localDateKey = SHARED_UTILS.localDateKey;
@@ -8576,7 +8575,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       languageQuizModalEl.hidden = false;
     }
 
-    function answerLanguageQuiz(button) {
+    async function answerLanguageQuiz(button) {
       const word = LANGUAGE_QUIZ_WORDS.find(item => item.id === button.dataset.languageWord);
       if (!word || button.dataset.answered) return;
       const card = button.closest(".language-quiz-card");
@@ -8605,11 +8604,26 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const result = card.querySelector("[data-language-result]");
       if (result) {
         result.hidden = false;
-        result.textContent = correct ? "+1 point. Word added to your Language profile." : `Not this time. The answer is ${word.algonquian}.`;
+        result.textContent = "Saving language progress...";
       }
-      saveLanguageAttempt(contentKey, word, correct);
-      detailBodyEl.querySelector(`.language-quiz-marker[data-language-quiz-id="${CSS.escape(word.id)}"]`)?.remove();
-      showBanner(correct ? "Language point added." : "Language quiz saved for today.");
+      try {
+        const saved = await saveLanguageAttempt(contentKey, word, correct);
+        if (result) {
+          result.textContent = correct
+            ? (saved ? "+1 point. Word added to your Language profile." : "You already saved this language word today.")
+            : `Not this time. The answer is ${word.algonquian}.`;
+        }
+        detailBodyEl.querySelector(`.language-quiz-marker[data-language-quiz-id="${CSS.escape(word.id)}"]`)?.remove();
+        showBanner(correct ? "Language point added." : "Language quiz saved for today.");
+      } catch (error) {
+        buttons.forEach(item => {
+          delete item.dataset.answered;
+          item.disabled = false;
+          item.classList.remove("correct", "wrong");
+        });
+        if (result) result.textContent = "Could not save language progress to Directus. Please log in again and try once more.";
+        showBanner("Could not save language progress to Directus. Please log in again and try once more.");
+      }
     }
 
     const profileWebsiteUrl = PROFILE_UTILS.profileWebsiteUrl;
