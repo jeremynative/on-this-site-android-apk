@@ -7701,6 +7701,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileStartupRendering: false,
       mobileTimelineRendered: false,
       nearbyRenderLimit: 0,
+      searchMapSyncTimer: null,
+      searchRenderSettledTimer: null,
       layers: [],
       markers: new Map(),
       exhibitMarkers: new Map(),
@@ -10221,7 +10223,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function defaultNearbyRenderLimit() {
       const query = searchEl.value.trim();
       if (state.addressSearchMode) return 20;
-      if (query) return NEARBY_LIST_SEARCH_LIMIT;
+      if (query) return isNativeAndroidApp() ? Math.min(18, NEARBY_LIST_SEARCH_LIMIT) : NEARBY_LIST_SEARCH_LIMIT;
       if (isNativeAndroidApp()) {
         return state.mobileStartupRendering ? NEARBY_LIST_ANDROID_INITIAL_LIMIT : NEARBY_LIST_ANDROID_DEFAULT_LIMIT;
       }
@@ -10230,6 +10232,27 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function resetNearbyRenderLimit() {
       state.nearbyRenderLimit = defaultNearbyRenderLimit();
+    }
+
+    function scheduleSearchMapSync() {
+      window.clearTimeout(state.searchMapSyncTimer);
+      const delay = isNativeAndroidApp() ? 620 : 0;
+      state.searchMapSyncTimer = window.setTimeout(() => {
+        state.searchMapSyncTimer = null;
+        syncMarkers();
+      }, delay);
+    }
+
+    function scheduleSearchRenderSettle() {
+      if (!isNativeAndroidApp()) return;
+      window.clearTimeout(state.searchRenderSettledTimer);
+      state.searchRenderSettledTimer = window.setTimeout(() => {
+        state.searchRenderSettledTimer = null;
+        const query = searchEl.value.trim();
+        if (!query || state.nearbyRenderLimit >= Math.min(NEARBY_LIST_SEARCH_LIMIT, 36)) return;
+        state.nearbyRenderLimit = Math.min(NEARBY_LIST_SEARCH_LIMIT, 36, state.filtered.length || 36);
+        renderList();
+      }, 900);
     }
 
     function filterSites() {
@@ -10254,7 +10277,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         state.filtered = [];
         resetNearbyRenderLimit();
         renderList();
-        syncMarkers();
+        scheduleSearchMapSync();
         updateAddressSearch(query);
         return;
       }
@@ -10263,13 +10286,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       resetNearbyRenderLimit();
       renderList();
       clearAddressSearch();
-      syncMarkers();
+      scheduleSearchRenderSettle();
+      scheduleSearchMapSync();
       if (placeSearch && matches.length < 3) updateAddressSearch(query);
     }
 
     function scheduleFilterSites() {
       window.clearTimeout(state.searchTimer);
-      state.searchTimer = window.setTimeout(filterSites, 140);
+      state.searchTimer = window.setTimeout(filterSites, isNativeAndroidApp() ? 260 : 140);
     }
 
     function scheduleSearchSync() {
@@ -10307,8 +10331,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const queryTerms = normalizeText(query).split(" ").filter(term => term.length >= 3);
       return /\d/.test(query)
         || /\b(street|st|road|rd|avenue|ave|lane|ln|drive|dr|court|ct|boulevard|blvd|highway|hwy|route|ny-|zip|new york|long island|university|college|school|hospital|museum|library|park|station|airport|restaurant|cafe|store|market|church|cemetery|beach|marina|hotel|center|centre|campus)\b/i.test(query)
-        || queryTerms.length >= 2
-        || !matches.length;
+        || queryTerms.length >= 2;
     }
 
     function clearAddressSearch() {
@@ -15474,7 +15497,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
           "text-anchor": "center",
           "text-allow-overlap": false,
-          "text-ignore-placement": false,
+          "text-ignore-placement": true,
           "text-max-width": 9
         },
         paint: {
@@ -15520,7 +15543,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           "text-justify": "auto",
           "text-offset": ["literal", [0, -1.45]],
           "text-allow-overlap": false,
-          "text-ignore-placement": false,
+          "text-ignore-placement": true,
           "text-max-width": 9,
           "text-optional": true
         },
