@@ -43,7 +43,9 @@ requireText("loadBundledFallback", "Android shell must keep the bundled archive 
 requireText("onReceivedHttpError", "Android shell must fall back when the live mobile archive returns an HTTP error.");
 requireText("isSiteGroundChallengeUrl", "Android shell must detect SiteGround challenge redirects and use the bundled fallback.");
 requireText("loadBundledFallback(\"siteground-challenge-start\")", "Android shell must switch to the bundled fallback as soon as SiteGround challenge navigation starts.");
-requireText("loadingBundledFallback && (\"/archive-test/mobile-app-live.html\"", "Android shell must not intercept the live mobile archive unless the fallback is active.");
+requireText("loadingBundledFallback && \"/archive-test/mobile-app-live.html\".equals(path)", "Android shell must not intercept the live mobile archive unless the fallback is active.");
+requireText("loadingBundledFallback && \"/archive-test/mobile-app.html\".equals(path)", "Android shell must serve the full bundled archive when live Directus startup falls back.");
+requireText('assetName = "mobile-app.html";', "Android shell must serve embedded mobile data for the full archive fallback.");
 requireText("mobile-app.html", "Android shell must include the bundled mobile app fallback asset.");
 requireText("mobile-app-live.html", "Android shell must include the lightweight Directus-backed mobile app fallback asset.");
 requireText("long-island-land-mask.geojson", "Android shell must include the bundled land mask fallback asset.");
@@ -123,8 +125,8 @@ for (const forbidden of ["DIRECTUS_PASSWORD", "DIRECTUS_EMAIL", "NotebookLM", "n
   }
 }
 
-requireBundledText('const SITE_LABEL_MIN_ZOOM = 6.15;', "Bundled Android app must show site labels before close zoom.");
-requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 6.3;', "Bundled Android app must show point labels before close zoom.");
+requireBundledText('const SITE_LABEL_MIN_ZOOM = 5.85;', "Bundled Android app must show site labels before close zoom.");
+requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 5.95;', "Bundled Android app must show point labels before close zoom.");
 requireBundledText('"text-allow-overlap": false', "Bundled Android app must keep close-zoom point labels readable with collision handling.");
 requireBundledText('settings.showPins = true;', "Bundled Android app must recover from saved Sites-off settings so site icons stay visible.");
 requireBundledText('selected-site-map-label', "Bundled Android app must show a dedicated title label for the selected site marker.");
@@ -141,6 +143,8 @@ requireBundledText('Search sites, towns, histories', "Bundled Android app must i
 requireBundledText('sorted by proximity', "Bundled Android app must label nearby results as proximity sorted.");
 requireBundledText('const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 24;', "Bundled Android app must keep the first nearby tray render small.");
 requireBundledText('data-nearby-show-more', "Bundled Android app must let users reveal more nearby places after the startup cap.");
+requireBundledText('const nativeAndroid = isNativeAndroidApp();', "Bundled Android app must cache native Android startup state.");
+requireBundledText('if (nativeAndroid) {\n          hideLoadingScreen();\n          await new Promise(resolve => window.requestAnimationFrame(resolve));\n        }\n        await openInitialRouteFromUrl();', "Bundled Android app must reveal the shell before slower route and map startup work.");
 requireBundledText('mobileProfileStats', "Bundled Android app must render Directus-backed profile stats.");
 requireBundledText('ensureProfileActivitySynced', "Bundled Android app must sync profile activity from Directus.");
 requireBundledText('languageRemoteAttemptExists', "Bundled Android app must check Directus before saving language attempts.");

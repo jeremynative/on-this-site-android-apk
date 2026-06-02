@@ -7597,8 +7597,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     };
     const STARTUP_LOCATION_ZOOM = 9.55;
     const NEAR_ME_ZOOM = 10.5;
-    const SITE_LABEL_MIN_ZOOM = 6.15;
-    const SITE_POINT_LABEL_MIN_ZOOM = 6.3;
+    const SITE_LABEL_MIN_ZOOM = 5.85;
+    const SITE_POINT_LABEL_MIN_ZOOM = 5.95;
     const NEARBY_LIST_DESKTOP_LIMIT = 80;
     const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 24;
     const NEARBY_LIST_ANDROID_DEFAULT_LIMIT = 40;
@@ -9777,11 +9777,24 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       updateMobileNotificationUnreadBadge();
       return;
       }
-      const [sitesResponse, layersResponse, supportResponse] = await Promise.all([
-        fetchJson(`/items/sites?limit=-1&filter[publication_status][_eq]=published&sort=title&fields=${SITE_INDEX_FIELDS}`, { cacheKey: "mobile-sites", ttl: 60000 }),
-        fetchJson("/items/map_layers?limit=-1", { cacheKey: "mobile-layers", ttl: 60000, fresh: false }),
-        fetchJson(`/items/project_support_settings?limit=1&filter[key][_eq]=native-long-island&fields=${SUPPORT_FIELDS}`, { cacheKey: "mobile-support", ttl: 300000, fresh: false }).catch(() => ({ data: [] }))
-      ]);
+      let sitesResponse;
+      let layersResponse;
+      let supportResponse;
+      try {
+        [sitesResponse, layersResponse, supportResponse] = await Promise.all([
+          fetchJson(`/items/sites?limit=-1&filter[publication_status][_eq]=published&sort=title&fields=${SITE_INDEX_FIELDS}`, { cacheKey: "mobile-sites", ttl: 60000 }),
+          fetchJson("/items/map_layers?limit=-1", { cacheKey: "mobile-layers", ttl: 60000, fresh: false }),
+          fetchJson(`/items/project_support_settings?limit=1&filter[key][_eq]=native-long-island&fields=${SUPPORT_FIELDS}`, { cacheKey: "mobile-support", ttl: 300000, fresh: false }).catch(() => ({ data: [] }))
+        ]);
+      } catch (error) {
+        if (isNativeAndroidApp() && !/\/mobile-app\.html$/i.test(location.pathname || "")) {
+          setLoadingMessage("Loading the bundled archive.");
+          const fallbackUrl = `${PUBLIC_ARCHIVE_BASE}mobile-app.html?apk-fallback=${Date.now()}`;
+          location.replace(fallbackUrl);
+          await new Promise(resolve => window.setTimeout(resolve, 3000));
+        }
+        throw error;
+      }
       state.sites = repairSiteTitles(sitesResponse.data || []);
       state.layers = layersResponse.data || [];
       state.supportSettings = supportResponse.data?.[0] || null;
@@ -17949,13 +17962,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     async function start() {
       try {
         checkAndroidAppCompatibility();
+        const nativeAndroid = isNativeAndroidApp();
         state.mobileStartupRendering = true;
         setLoadingMessage("Loading sites and nearby tools.");
         await loadData();
         setLoadingMessage("Preparing the mobile interface.");
         prepareSites();
         renderProfile();
-        if (isNativeAndroidApp()) idleTask(renderRewards);
+        if (nativeAndroid) idleTask(renderRewards);
         else renderRewards();
         renderSupportGoal();
         renderPasswordResetPanelMode();
@@ -17977,9 +17991,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         } catch {}
         installNearbyPanelDrag();
         installDetailPanelDrag();
+        if (nativeAndroid) {
+          hideLoadingScreen();
+          await new Promise(resolve => window.requestAnimationFrame(resolve));
+        }
         await openInitialRouteFromUrl();
         if (state.passwordResetToken) openSheet(loginSheetEl);
-        hideLoadingScreen();
+        if (!nativeAndroid) hideLoadingScreen();
         await initMap().catch(error => {
           console.warn("Map did not initialize yet.", error);
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;

@@ -247,8 +247,11 @@ public class MainActivity extends Activity {
         String path = uri.getPath();
         String assetName;
         String mimeType;
-        if (loadingBundledFallback && ("/archive-test/mobile-app-live.html".equals(path) || "/archive-test/mobile-app.html".equals(path))) {
+        if (loadingBundledFallback && "/archive-test/mobile-app-live.html".equals(path)) {
             assetName = "mobile-app-live.html";
+            mimeType = "text/html";
+        } else if (loadingBundledFallback && "/archive-test/mobile-app.html".equals(path)) {
+            assetName = "mobile-app.html";
             mimeType = "text/html";
         } else if ("/archive-test/long-island-land-mask.geojson".equals(path) || "/long-island-land-mask.geojson".equals(path)) {
             assetName = "long-island-land-mask.geojson";
