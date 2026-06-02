@@ -15,11 +15,13 @@ import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
+import android.webkit.ConsoleMessage;
 import android.webkit.GeolocationPermissions;
 import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -107,6 +109,17 @@ public class MainActivity extends Activity {
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
+            public boolean onConsoleMessage(ConsoleMessage message) {
+                if (message != null && (BuildConfig.DEBUG
+                    || message.messageLevel() == ConsoleMessage.MessageLevel.ERROR
+                    || message.messageLevel() == ConsoleMessage.MessageLevel.WARNING)) {
+                    Log.d(LOG_TAG, "Web console: " + message.messageLevel() + " " + message.message()
+                        + " at " + message.sourceId() + ":" + message.lineNumber());
+                }
+                return super.onConsoleMessage(message);
+            }
+
+            @Override
             public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
                 if (hasLocationPermission()) {
                     callback.invoke(origin, true, false);
@@ -161,6 +174,12 @@ public class MainActivity extends Activity {
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                Log.d(LOG_TAG, "WebView page started: " + url);
+            }
+
+            @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return openExternallyWhenNeeded(request.getUrl());
             }
@@ -177,8 +196,18 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                if (request != null && request.isForMainFrame()) {
+                    Log.e(LOG_TAG, "Main WebView load error: " + error.getErrorCode() + " " + error.getDescription());
+                }
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+                Log.d(LOG_TAG, "WebView page finished: " + url);
+                if (BuildConfig.DEBUG) logLoadedAppState();
                 applyApkTimelineTrayFix();
                 dispatchPendingPlantPhoto();
             }
@@ -227,18 +256,35 @@ public class MainActivity extends Activity {
     private InputStream bundledAssetStream(String assetName) throws IOException {
         InputStream stream = getAssets().open(assetName);
         if (!"mobile-app.html".equals(assetName)) return stream;
+        return new ByteArrayInputStream(bundledMobileHtml().getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String bundledMobileHtml() throws IOException {
+        InputStream stream = getAssets().open("mobile-app.html");
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         byte[] buffer = new byte[8192];
         int read;
-        while ((read = stream.read(buffer)) != -1) {
-            output.write(buffer, 0, read);
+        try {
+            while ((read = stream.read(buffer)) != -1) {
+                output.write(buffer, 0, read);
+            }
+        } finally {
+            stream.close();
         }
         String html = new String(output.toByteArray(), StandardCharsets.UTF_8);
         if (BuildConfig.MAPBOX_TOKEN != null && !BuildConfig.MAPBOX_TOKEN.isEmpty()) {
             html = html.replace("__NLI_MAPBOX_TOKEN__", BuildConfig.MAPBOX_TOKEN);
         }
         html = html.replace("</head>", androidApkStartupScript() + "</head>");
-        return new ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8));
+        return html;
+    }
+
+    private void logLoadedAppState() {
+        if (webView == null) return;
+        webView.evaluateJavascript(
+            "(function(){try{return JSON.stringify({readyState:document.readyState,title:document.title,bodyText:(document.body&&document.body.innerText||'').slice(0,120),hasApp:!!document.querySelector('.app'),hasMap:!!document.getElementById('map'),url:location.href});}catch(error){return 'probe-error:'+String(error&&error.message||error);}})();",
+            value -> Log.d(LOG_TAG, "WebView app probe: " + value)
+        );
     }
 
     private String androidApkStartupScript() {
@@ -437,10 +483,16 @@ public class MainActivity extends Activity {
     void refreshApp() {
         if (webView == null) return;
         lastRefreshAt = System.currentTimeMillis();
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Cache-Control", "no-cache, no-store, max-age=0");
-        headers.put("Pragma", "no-cache");
-        webView.loadUrl(freshAppUrl(), headers);
+        String url = freshAppUrl();
+        try {
+            webView.loadDataWithBaseURL(APP_BASE_URL, bundledMobileHtml(), "text/html", "UTF-8", url);
+        } catch (IOException error) {
+            Log.w(LOG_TAG, "Bundled mobile archive could not be opened.", error);
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Cache-Control", "no-cache, no-store, max-age=0");
+            headers.put("Pragma", "no-cache");
+            webView.loadUrl(url, headers);
+        }
     }
 
     private void applyApkTimelineTrayFix() {
