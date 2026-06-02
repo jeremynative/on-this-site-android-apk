@@ -12,9 +12,14 @@ import android.os.Build;
 import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.Log;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
+import android.widget.FrameLayout;
+import android.widget.TextView;
 import android.webkit.ConsoleMessage;
 import android.webkit.GeolocationPermissions;
 import android.webkit.CookieManager;
@@ -45,13 +50,14 @@ public class MainActivity extends Activity {
     private static final int PLANT_BRIDGE_CAMERA_REQUEST = 45;
     static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    static final String APP_VERSION = "20260601-bundled-mobile-geo-gate";
+    static final String APP_VERSION = "20260602-native-startup-cover";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
         "https://nativelongisland.com/archive-test/mobile-app-live.html";
 
     private WebView webView;
+    private View loadingCover;
     private GeolocationPermissions.Callback pendingLocationCallback;
     private String pendingLocationOrigin;
     private PermissionRequest pendingCameraRequest;
@@ -81,13 +87,24 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        FrameLayout root = new FrameLayout(this);
         webView = new WebView(this);
+        webView.setBackgroundColor(Color.rgb(238, 243, 237));
         webView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         webView.setOnApplyWindowInsetsListener((view, insets) -> {
             view.setPadding(0, insets.getSystemWindowInsetTop(), 0, insets.getSystemWindowInsetBottom());
             return insets;
         });
-        setContentView(webView);
+        root.addView(webView, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+        loadingCover = createLoadingCover();
+        root.addView(loadingCover, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+        setContentView(root);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -226,6 +243,7 @@ public class MainActivity extends Activity {
                 if (BuildConfig.DEBUG) logLoadedAppState();
                 applyApkTimelineTrayFix();
                 dispatchPendingPlantPhoto();
+                hideLoadingCover();
             }
         });
 
@@ -239,6 +257,27 @@ public class MainActivity extends Activity {
             refreshApp();
         }
         created = true;
+    }
+
+    private View createLoadingCover() {
+        TextView cover = new TextView(this);
+        cover.setText("On This Site");
+        cover.setTextColor(Color.rgb(18, 34, 25));
+        cover.setTextSize(28);
+        cover.setTypeface(Typeface.DEFAULT_BOLD);
+        cover.setGravity(Gravity.CENTER);
+        cover.setBackgroundColor(Color.rgb(238, 243, 237));
+        cover.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        return cover;
+    }
+
+    private void hideLoadingCover() {
+        if (loadingCover == null || loadingCover.getVisibility() != View.VISIBLE) return;
+        loadingCover.animate()
+            .alpha(0f)
+            .setDuration(180)
+            .withEndAction(() -> loadingCover.setVisibility(View.GONE))
+            .start();
     }
 
     private WebResourceResponse bundledAppResponse(Uri uri) {

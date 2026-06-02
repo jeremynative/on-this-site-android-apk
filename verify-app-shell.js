@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260601-bundled-mobile-geo-gate";
+const expectedBuild = "20260602-native-startup-cover";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -61,6 +61,11 @@ requireText("__nliAndroidGeoGateInstalled", "Android shell must suppress automat
 requireText("CookieManager.getInstance()", "Android shell must explicitly enable WebView cookies for SiteGround and app sessions.");
 requireText("setAcceptThirdPartyCookies(webView, true)", "Android shell must allow SiteGround/Directus session cookies inside the APK WebView.");
 requireText("settings.setCacheMode(WebSettings.LOAD_DEFAULT)", "Android shell must allow WebView to cache remote Mapbox/static resources between launches.");
+requireText("FrameLayout root = new FrameLayout(this);", "Android shell must layer a native startup cover over slow cold WebView startup.");
+requireText("webView.setBackgroundColor(Color.rgb(238, 243, 237));", "Android shell must use the app theme color behind the WebView during startup.");
+requireText("createLoadingCover", "Android shell must create a visible native loading cover before WebView content is ready.");
+requireText("hideLoadingCover", "Android shell must hide the native loading cover after the app page finishes.");
+requireText('cover.setText("On This Site");', "Android shell must show branded loading text instead of a blank white screen.");
 if (!styles.includes('<item name="android:windowBackground">@drawable/launch_background</item>')) {
   throw new Error("Android theme must show a branded launch background while WebView starts.");
 }
