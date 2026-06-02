@@ -125,8 +125,8 @@ for (const forbidden of ["DIRECTUS_PASSWORD", "DIRECTUS_EMAIL", "NotebookLM", "n
   }
 }
 
-requireBundledText('const SITE_LABEL_MIN_ZOOM = 5.85;', "Bundled Android app must show site labels before close zoom.");
-requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 5.95;', "Bundled Android app must show point labels before close zoom.");
+requireBundledText('const SITE_LABEL_MIN_ZOOM = 5.35;', "Bundled Android app must show site labels before close zoom.");
+requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 5.45;', "Bundled Android app must show point labels before close zoom.");
 requireBundledText('"text-allow-overlap": false', "Bundled Android app must keep close-zoom point labels readable with collision handling.");
 requireBundledText('settings.showPins = true;', "Bundled Android app must recover from saved Sites-off settings so site icons stay visible.");
 requireBundledText('selected-site-map-label', "Bundled Android app must show a dedicated title label for the selected site marker.");
