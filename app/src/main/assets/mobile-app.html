@@ -7565,6 +7565,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       deferredDataLoading: false,
       profileActivitySynced: false,
       profileActivitySyncPromise: null,
+      mobileStartupRendering: false,
       layers: [],
       markers: new Map(),
       exhibitMarkers: new Map(),
@@ -15201,7 +15202,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         return;
       }
       const profileSyncing = !state.profileActivitySynced;
-      if (profileSyncing) ensureProfileActivitySynced().then(() => renderProfile());
+      if (profileSyncing && !state.mobileStartupRendering) ensureProfileActivitySynced().then(() => renderProfile());
       loginOpenBtn.textContent = state.profile.pending ? "Login" : "Profile";
       loginSubmitBtn.hidden = true;
       registerToggleBtn.hidden = true;
@@ -17627,6 +17628,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     async function start() {
       try {
         checkAndroidAppCompatibility();
+        state.mobileStartupRendering = true;
         setLoadingMessage("Loading sites and nearby tools.");
         await loadData();
         setLoadingMessage("Preparing the mobile interface.");
@@ -17660,6 +17662,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           console.warn("Map did not initialize yet.", error);
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
         });
+        state.mobileStartupRendering = false;
         if (state.selectedSite) focusSite(state.selectedSite);
         checkDailyHistoryMoment();
         checkNewContentAlerts();
@@ -17680,6 +17683,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             }
           })
           .catch(() => null));
+        idleTask(() => state.profile ? ensureProfileActivitySynced()
+          .then(() => {
+            renderProfile();
+            renderRewards();
+          })
+          .catch(() => null) : null);
         idleTask(() => loadDeferredData()
           .then(() => {
             checkDailyHistoryMoment();
@@ -17688,6 +17697,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           })
           .catch(error => console.warn("Deferred archive data did not load yet.", error)));
       } catch (error) {
+        state.mobileStartupRendering = false;
         statusEl.textContent = "Could not load archive";
         setLoadingMessage("The mobile archive could not finish loading.");
         window.setTimeout(hideLoadingScreen, 1200);
