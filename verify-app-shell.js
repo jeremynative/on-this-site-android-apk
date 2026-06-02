@@ -66,6 +66,13 @@ if (!refreshAppMatch || !refreshAppMatch[0].includes('loadBundledFallback("start
 if (refreshAppMatch[0].includes("webView.loadUrl(url, headers);")) {
   throw new Error("Android shell must not show the SiteGround-challenged live URL during normal startup.");
 }
+const fallbackMatch = source.match(/private void loadBundledFallback\(String reason\) \{[\s\S]*?\n    \}/);
+if (!fallbackMatch || !fallbackMatch[0].includes("webView.loadUrl(freshAppUrl());")) {
+  throw new Error("Android shell must load the bundled startup shell through WebView URL interception, not UI-thread HTML injection.");
+}
+if (fallbackMatch[0].includes("loadDataWithBaseURL")) {
+  throw new Error("Android shell must not build and inject the bundled startup HTML on the UI thread.");
+}
 requireText("dispatchTouchEvent", "Android shell must forward app taps into the mobile map.");
 requireText("window.onAndroidMapTap", "Android shell must call the mobile map tap bridge.");
 requireText("missing-map-tap-bridge", "Android shell must log when the mobile map tap bridge is missing.");

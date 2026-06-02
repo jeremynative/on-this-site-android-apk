@@ -81,10 +81,6 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        if (BuildConfig.DEBUG) {
-            WebView.setWebContentsDebuggingEnabled(true);
-        }
-
         webView = new WebView(this);
         webView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         webView.setOnApplyWindowInsetsListener((view, insets) -> {
@@ -522,11 +518,7 @@ public class MainActivity extends Activity {
         if (webView == null || loadingBundledFallback) return;
         loadingBundledFallback = true;
         Log.w(LOG_TAG, "Loading bundled mobile archive fallback: " + reason);
-        try {
-            webView.loadDataWithBaseURL(APP_BASE_URL, bundledMobileHtml(), "text/html", "UTF-8", APP_BASE_URL);
-        } catch (IOException error) {
-            Log.w(LOG_TAG, "Bundled mobile archive could not be opened.", error);
-        }
+        webView.loadUrl(freshAppUrl());
     }
 
     private void applyApkTimelineTrayFix() {
