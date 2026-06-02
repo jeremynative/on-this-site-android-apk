@@ -25,7 +25,9 @@ function requireText(text, message) {
 }
 
 function requireBundledText(text, message) {
-  if (!bundledApp.includes(text)) {
+  const haystack = bundledApp.replace(/\r\n/g, "\n");
+  const needle = text.replace(/\r\n/g, "\n");
+  if (!haystack.includes(needle)) {
     throw new Error(message);
   }
 }
@@ -135,12 +137,12 @@ for (const forbidden of ["DIRECTUS_PASSWORD", "DIRECTUS_EMAIL", "NotebookLM", "n
   }
 }
 
-requireBundledText('const SITE_LABEL_MIN_ZOOM = 3.05;', "Bundled Android app must show site labels earlier before close zoom.");
-requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 3.15;', "Bundled Android app must show point labels earlier before close zoom.");
+requireBundledText('const SITE_LABEL_MIN_ZOOM = 2.65;', "Bundled Android app must show site labels earlier before close zoom.");
+requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 2.8;', "Bundled Android app must show point labels earlier before close zoom.");
 requireBundledText('"text-allow-overlap": false', "Bundled Android app must keep close-zoom point labels readable with collision handling.");
 requireBundledText('settings.showPins = true;', "Bundled Android app must recover from saved Sites-off settings so site icons stay visible.");
 requireBundledText('selected-site-map-label', "Bundled Android app must show a dedicated title label for the selected site marker.");
-requireBundledText('function shouldShowCustomMapIcons() {\n      return true;\n    }', "Bundled Android app must keep site icons visible independently of point-label zoom.");
+requireBundledPattern(/function shouldShowCustomMapIcons\(\)\s*\{\s*return true;\s*\}/, "Bundled Android app must keep site icons visible independently of point-label zoom.");
 requireBundledPattern(/"location_label"\s*:\s*"[^"]+"/, "Bundled Android app must include historic moment location labels.");
 requireBundledText('window.NLI_FEEDBACK_UTILS', "Bundled Android app must include shared feedback utilities.");
 requireBundledText('const feedbackPayload = FEEDBACK_UTILS.buildFeedbackCommentPayload', "Bundled Android app must save feedback through the shared Directus payload.");
