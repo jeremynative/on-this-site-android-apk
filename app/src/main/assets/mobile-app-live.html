@@ -9673,7 +9673,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         : file;
       if (uploadFile.size > 6 * 1024 * 1024) throw new Error("Screenshot is too large. Use an image under 6 MB.");
       const safeTitle = `${title || "Feedback screenshot"}.${fileExtensionForType(uploadFile.type)}`;
-      const uploaded = await uploadDirectusFile(uploadFile, safeTitle, { requireAuth: true });
+      const uploaded = await uploadDirectusFile(uploadFile, safeTitle);
       return uploaded?.data?.id || uploaded?.id || null;
     }
 
@@ -13295,7 +13295,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         : image;
       const imageError = validateJpegImage(uploadFile);
       if (imageError) throw new Error(imageError);
-      const uploaded = await uploadDirectusFile(uploadFile, `Site header - ${form.dataset.editorSlug || "On This Site"}`);
+      const uploaded = await uploadDirectusFile(uploadFile, `Site header - ${form.dataset.editorSlug || "On This Site"}`, { requireAuth: true });
       const fileId = uploaded?.data?.id || uploaded?.id || null;
       if (!fileId) throw new Error("Header image upload did not return a file id.");
       return { listing_image_file: fileId };
@@ -13337,7 +13337,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         };
         if (!state.profile?.token) throw new Error("Content editing needs the editor password.");
         const targetCollection = kind === "wiki" ? "wiki_articles" : kind === "timeline" ? "timeline_events" : "sites";
-        const saved = await patchDirectusItem(targetCollection, id, contentPayload);
+        const saved = await patchDirectusItem(targetCollection, id, contentPayload, { requireAuth: true });
         const updated = { ...activeEditableContent(kind, slug), ...contentPayload, ...(saved?.data || {}) };
         mergeUpdatedContent(kind, slug, updated);
         status.textContent = "Saved.";
