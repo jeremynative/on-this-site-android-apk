@@ -10267,7 +10267,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function installNativeAndroidSearchWatch() {
       if (!isNativeAndroidApp() || state.nativeAndroidSearchWatchTimer || !searchEl) return;
-      state.lastSearchValue = searchEl.value || "";
+      state.lastSearchValue = "";
+      scheduleSearchSync();
       state.nativeAndroidSearchWatchTimer = window.setInterval(scheduleSearchSync, 350);
     }
 
@@ -18076,6 +18077,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         } catch {}
         installNearbyPanelDrag();
         installDetailPanelDrag();
+        installNativeAndroidSearchWatch();
         if (nativeAndroid) {
           hideLoadingScreen();
           await new Promise(resolve => window.requestAnimationFrame(resolve));
@@ -18092,7 +18094,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         checkDailyHistoryMoment();
         checkNewContentAlerts();
         requestStartupLocation();
-        installNativeAndroidSearchWatch();
         idleTask(() => ensureLandMask()
           .then(mask => {
             if (!mask) return;

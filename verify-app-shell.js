@@ -145,6 +145,7 @@ requireBundledText('function scheduleSearchSync()', "Bundled Android app must wa
 requireBundledText('searchEl.addEventListener("keyup", scheduleSearchSync);', "Bundled Android app must filter search after Android keyboard events.");
 requireBundledText('searchEl.addEventListener("focus", startSearchValueWatch);', "Bundled Android app must poll focused search values for WebView text changes.");
 requireBundledText('function installNativeAndroidSearchWatch()', "Bundled Android app must keep polling native Android search values.");
+requireBundledText('state.lastSearchValue = "";\n      scheduleSearchSync();\n      state.nativeAndroidSearchWatchTimer = window.setInterval(scheduleSearchSync, 350);', "Bundled Android app must process search text typed before native polling starts.");
 requireBundledText('state.nativeAndroidSearchWatchTimer = window.setInterval(scheduleSearchSync, 350);', "Bundled Android app must persistently sync native Android search input.");
 requireBundledText('Profile activity sync will retry later.', "Bundled Android app must keep profile activity sync retry logging.");
 requireBundledText('state.profileActivitySynced = false;\n          return false;', "Bundled Android app must leave failed profile sync retryable.");
