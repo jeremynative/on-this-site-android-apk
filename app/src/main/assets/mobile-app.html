@@ -7411,6 +7411,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const LAND_MASK_VERSION = "2026-05-18";
     const LONG_ISLAND_BOUNDS = [[-75.15, 39.75], [-70.65, 42.05]];
     const LONG_ISLAND_VIEW_BOUNDS = [[-74.35, 40.32], [-71.48, 41.36]];
+    const STARTUP_LOCATION_CENTER_BOUNDS = [[-74.25, 40.45], [-71.65, 41.25]];
     const FALLBACK_CENTER = [-72.95, 40.86];
     const FALLBACK_STYLE = "mapbox://styles/mapbox/outdoors-v12";
     const KNOWLEDGEBASE_CATEGORIES = [
@@ -7469,7 +7470,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const STARTUP_LOCATION_ZOOM = 9.55;
     const NEAR_ME_ZOOM = 10.5;
     const SITE_LABEL_MIN_ZOOM = 6.45;
-    const SITE_POINT_LABEL_MIN_ZOOM = 3.35;
+    const SITE_POINT_LABEL_MIN_ZOOM = 8.25;
     const MOBILE_APP_BUILD_ID = "20260526-story-pin-priority";
     const MIN_ANDROID_APP_BUILD_ID = "20260524-plant-camera-analysis-7";
     const ANDROID_APK_UPDATE_URL = "https://github.com/jeremynative/on-this-site-android-apk/releases/latest/download/on-this-site-latest.apk";
@@ -11114,6 +11115,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             fillcolor: siteTerritoryFillColor(site, isBroadTerritory(site) ? "#496f5d" : "#7b9b68"),
             opacity: mobilePolygonOpacity(site),
             label_size: polygonLabelSize(site),
+            has_icon: !!siteMapIconUrl(site),
             broad: isBroadTerritory(site),
             bounds_area: geometryBoundsArea(siteDisplayGeometry(site))
           }
@@ -11589,10 +11591,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return element;
     }
 
+    function shouldShowCustomMapIcons() {
+      return !state.map || state.map.getZoom() >= SITE_POINT_LABEL_MIN_ZOOM;
+    }
+
     function syncMarkers() {
       if (!state.map) return;
       const sites = activeMapSites();
-      const markerSites = state.settings.showPins === false ? [] : sites;
+      const markerSites = state.settings.showPins === false || !shouldShowCustomMapIcons()
+        ? []
+        : sites.filter(site => siteDisplayGeometry(site)?.type === "Point" && siteMapIconUrl(site));
       const visible = new Set(markerSites.map(site => site.slug));
       for (const [slug, marker] of state.markers) {
         if (!visible.has(slug)) {
@@ -14817,7 +14825,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return Number.isFinite(miles) && miles >= 0.006;
     }
 
-    function applyUserLocation(position, { centerMap = false, mapZoom = NEAR_ME_ZOOM } = {}) {
+    function applyUserLocation(position, { centerMap = false, mapZoom = NEAR_ME_ZOOM, centerBounds = null } = {}) {
       const nextLocation = [position.coords.longitude, position.coords.latitude];
       const moved = locationMovedEnough(nextLocation);
       state.userLocation = nextLocation;
@@ -14830,12 +14838,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         sortSites();
         renderList();
       }
-      syncUserLocationMarker({ centerMap, zoom: mapZoom });
+      const mayCenter = !centerMap || !centerBounds || pointWithinBounds(nextLocation, centerBounds);
+      syncUserLocationMarker({ centerMap: centerMap && mayCenter, zoom: mapZoom });
       state.lastLocationMarkerUpdateAt = Date.now();
       startLocationWatch();
     }
 
-    async function requestUserLocation({ centerMap = false, silent = false, mapZoom = NEAR_ME_ZOOM } = {}) {
+    async function requestUserLocation({ centerMap = false, silent = false, mapZoom = NEAR_ME_ZOOM, centerBounds = null } = {}) {
       if (!navigator.geolocation) {
         if (!silent) showBanner("Location is not available on this device.");
         return false;
@@ -14843,7 +14852,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       locateBtn.textContent = "Finding...";
       return new Promise(resolve => {
         navigator.geolocation.getCurrentPosition(position => {
-          applyUserLocation(position, { centerMap, mapZoom });
+          applyUserLocation(position, { centerMap, mapZoom, centerBounds });
           resolve(true);
       }, () => {
         state.settings.locationEnabled = false;
@@ -14870,7 +14879,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (isNativeAndroidApp()) {
         setMobilePanelMode("nearby");
         setNearbyPanelState("default");
-        requestUserLocation({ centerMap: true, silent: true, mapZoom: STARTUP_LOCATION_ZOOM });
+        requestUserLocation({ centerMap: true, silent: true, mapZoom: STARTUP_LOCATION_ZOOM, centerBounds: STARTUP_LOCATION_CENTER_BOUNDS });
         return;
       }
       if (state.settings.proximityAlerts) locateUser();
@@ -15068,6 +15077,20 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           "circle-color": "#245f43",
           "circle-opacity": 0.01,
           "circle-stroke-opacity": 0
+        }
+      });
+      state.map.addLayer({
+        id: "mobile-site-point-dots",
+        type: "circle",
+        source: "mobile-sites",
+        filter: ["all", ["==", ["geometry-type"], "Point"], ["!=", ["get", "has_icon"], true]],
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 4.6, 10, 5.6, 14, 7.2],
+          "circle-color": "#326fe3",
+          "circle-opacity": 0.96,
+          "circle-stroke-color": "rgba(255,255,255,0.94)",
+          "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 6, 1.2, 12, 1.8],
+          "circle-stroke-opacity": 0.95
         }
       });
       state.map.addSource("mobile-territory-labels", { type: "geojson", data: polygonLabelCollection("territory") });
