@@ -15208,6 +15208,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
       const mayCenter = !centerMap || !centerBounds || pointWithinBounds(nextLocation, centerBounds);
       syncUserLocationMarker({ centerMap: centerMap && mayCenter, zoom: mapZoom });
+      if (centerMap && mayCenter) refreshAndroidMapAfterSettle("android-location-center");
       state.lastLocationMarkerUpdateAt = Date.now();
       startLocationWatch();
     }
@@ -15561,6 +15562,25 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.map.getSource("mobile-sites")?.setData(siteFeatureCollection());
       state.map.getSource("mobile-territory-labels")?.setData(polygonLabelCollection("territory"));
       state.map.getSource("mobile-detail-labels")?.setData(polygonLabelCollection("detail"));
+    }
+
+    function refreshAndroidMapAfterSettle(reason = "android-map-settle") {
+      if (!isNativeAndroidApp() || !state.map) return;
+      const refresh = () => {
+        if (!state.map) return;
+        try {
+          syncMarkers();
+          refreshMobileMapSources();
+          state.map.resize();
+          state.map.triggerRepaint?.();
+        } catch (error) {
+          console.warn(`${reason} map refresh will retry later.`, error);
+        }
+      };
+      window.requestAnimationFrame(refresh);
+      window.setTimeout(refresh, 350);
+      window.setTimeout(refresh, 1400);
+      window.setTimeout(refresh, 3600);
     }
 
     function stabilizeAndroidMapPaint() {
@@ -17045,6 +17065,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           syncMarkers();
           syncUserLocationMarker({ centerMap: false });
           stabilizeAndroidMapPaint();
+          state.map.once?.("idle", () => refreshAndroidMapAfterSettle("android-map-idle"));
           state.map.on("zoomend", syncMarkers);
           state.map.on("zoom", syncMapStoryMarkers);
           window.setTimeout(() => resolve(true), 160);
