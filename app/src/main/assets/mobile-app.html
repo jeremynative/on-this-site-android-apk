@@ -9975,7 +9975,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.profileActivitySyncPromise = refreshProfileActivityData()
         .catch(error => {
           console.warn("Profile activity sync will retry later.", error);
-          state.profileActivitySynced = true;
+          state.profileActivitySynced = false;
           return false;
         })
         .finally(() => {
