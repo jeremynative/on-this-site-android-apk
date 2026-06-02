@@ -254,8 +254,7 @@ public class MainActivity extends Activity {
     }
 
     private InputStream bundledAssetStream(String assetName) throws IOException {
-        InputStream stream = getAssets().open(assetName);
-        if (!"mobile-app.html".equals(assetName)) return stream;
+        if (!"mobile-app.html".equals(assetName)) return getAssets().open(assetName);
         return new ByteArrayInputStream(bundledMobileHtml().getBytes(StandardCharsets.UTF_8));
     }
 

@@ -17608,7 +17608,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         await loadData();
         setLoadingMessage("Preparing the mobile interface.");
         prepareSites();
-        await awardDailyLoginReward({ silent: true });
         renderProfile();
         renderRewards();
         renderSupportGoal();
@@ -17648,6 +17647,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             prepareSites();
             renderList();
             if (state.map?.getSource("mobile-sites")) state.map.getSource("mobile-sites").setData(siteFeatureCollection());
+          })
+          .catch(() => null));
+        idleTask(() => awardDailyLoginReward({ silent: true })
+          .then(result => {
+            if (result?.earned) {
+              renderProfile();
+              renderRewards();
+            }
           })
           .catch(() => null));
         idleTask(() => loadDeferredData()
