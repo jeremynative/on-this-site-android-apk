@@ -31,6 +31,10 @@ requireText("androidApkStartupScript", "Android shell must inject APK startup gu
 requireText("__nliAndroidGeoGateInstalled", "Android shell must suppress automatic startup geolocation prompts.");
 requireText("CookieManager.getInstance()", "Android shell must explicitly enable WebView cookies for SiteGround and app sessions.");
 requireText("setAcceptThirdPartyCookies(webView, true)", "Android shell must allow SiteGround/Directus session cookies inside the APK WebView.");
+requireText("settings.setCacheMode(WebSettings.LOAD_DEFAULT)", "Android shell must allow WebView to cache remote Mapbox/static resources between launches.");
+if (source.includes("settings.setCacheMode(WebSettings.LOAD_NO_CACHE)")) {
+  throw new Error("Android shell must not disable the whole WebView cache; only the bundled archive document should be refreshed.");
+}
 if (source.includes("webView.clearCache(true)")) {
   throw new Error("Android shell must not clear WebView cache/cookies on every startup.");
 }
