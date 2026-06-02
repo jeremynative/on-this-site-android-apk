@@ -7699,6 +7699,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       profileActivitySynced: false,
       profileActivitySyncPromise: null,
       mobileStartupRendering: false,
+      mobileTimelineRendered: false,
       nearbyRenderLimit: 0,
       layers: [],
       markers: new Map(),
@@ -10956,6 +10957,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function renderMobileTimeline() {
+      state.mobileTimelineRendered = true;
       const events = sortedTimelineEvents();
       if (!events.length) {
         const loading = state.deferredDataLoading || !state.deferredDataLoaded;
@@ -11088,6 +11090,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileTabNearbyBtn?.setAttribute("aria-pressed", String(next === "nearby"));
       mobileTimelineEl?.setAttribute("aria-hidden", next === "nearby" ? "true" : "false");
       listPanelEl?.setAttribute("aria-hidden", next === "timeline" ? "true" : "false");
+      if (next === "timeline" && !state.mobileTimelineRendered) renderMobileTimeline();
       try {
         localStorage.setItem("nli-mobile-panel-mode", next);
       } catch {}
@@ -18062,7 +18065,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         syncMobileLayerButtons();
         syncMobilePanelAccessibility();
         renderCurrentTerritoryStatus();
-        renderMobileTimeline();
+        if (nativeAndroid) {
+          idleTask(() => {
+            if (!state.mobileTimelineRendered) renderMobileTimeline();
+          });
+        } else {
+          renderMobileTimeline();
+        }
         renderList();
         setMobilePanelMode("nearby");
         try {
