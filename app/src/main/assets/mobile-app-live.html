@@ -7130,9 +7130,11 @@
       }
     }
 
-    async function patchItem(collection, id, payload) {
+    async function patchItem(collection, id, payload, requestOptions = {}) {
       const headers = { "content-type": "application/json" };
       const token = tokenProvider();
+      const requireAuth = requestOptions.requireAuth === true;
+      if (requireAuth && !token) throw new Error(`Login required to update ${collection}.`);
       if (token) headers.authorization = `Bearer ${token}`;
       const response = await fetch(`${baseUrl}/items/${collection}/${id}`, {
         method: "PATCH",
@@ -7143,9 +7145,11 @@
       return response.json();
     }
 
-    async function deleteItem(collection, id) {
+    async function deleteItem(collection, id, requestOptions = {}) {
       const headers = {};
       const token = tokenProvider();
+      const requireAuth = requestOptions.requireAuth === true;
+      if (requireAuth && !token) throw new Error(`Login required to delete ${collection}.`);
       if (token) headers.authorization = `Bearer ${token}`;
       const response = await fetch(`${baseUrl}/items/${collection}/${id}`, {
         method: "DELETE",
@@ -9438,12 +9442,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       });
     }
 
-    async function patchDirectusItem(collection, id, payload) {
-      return directusClient.patchItem(collection, id, payload);
+    async function patchDirectusItem(collection, id, payload, options = {}) {
+      return directusClient.patchItem(collection, id, payload, options);
     }
 
-    async function deleteDirectusItem(collection, id) {
-      return directusClient.deleteItem(collection, id);
+    async function deleteDirectusItem(collection, id, options = {}) {
+      return directusClient.deleteItem(collection, id, options);
     }
 
     function mergePointEventRecords(records = []) {
@@ -13899,7 +13903,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!window.confirm("Delete this comment from the public archive?")) return;
       if (!id.startsWith("pending-")) {
         try {
-          await patchDirectusItem("mobile_comments", id, { status: "deleted" });
+          await patchDirectusItem("mobile_comments", id, { status: "deleted" }, { requireAuth: true });
         } catch (error) {
           showBanner("Could not delete the comment in Directus yet. Please try again.");
           return;
@@ -14114,7 +14118,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       };
       let created = null;
       try {
-        created = await postDirectusItem("mobile_comments", payload);
+        created = await postDirectusItem("mobile_comments", payload, { requireAuth: true });
         const visibleComment = {
           id: created?.data?.id || `pending-${Date.now()}`,
           ...payload,
