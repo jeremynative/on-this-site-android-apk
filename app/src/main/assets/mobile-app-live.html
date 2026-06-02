@@ -7700,7 +7700,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       profileActivitySyncPromise: null,
       mobileStartupRendering: false,
       mobileTimelineRendered: false,
-      mobileMapLabelsRevealed: false,
       nearbyRenderLimit: 0,
       layers: [],
       markers: new Map(),
@@ -15376,22 +15375,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function addPolygonLayers() {
       if (!state.map || state.map.getSource("mobile-sites")) return;
-      state.mobileMapLabelsRevealed = !isNativeAndroidApp();
-      const labelLayerIds = ["mobile-territory-labels", "mobile-detail-labels", "mobile-site-point-labels"];
-      const mobileLabelLayout = layout => state.mobileMapLabelsRevealed ? layout : { ...layout, visibility: "none" };
-      const revealMobileMapLabels = () => {
-        if (!state.map || state.mobileMapLabelsRevealed) return;
-        state.mobileMapLabelsRevealed = true;
-        for (const layerId of labelLayerIds) {
-          if (state.map.getLayer(layerId)) state.map.setLayoutProperty(layerId, "visibility", "visible");
-        }
-        state.map.triggerRepaint?.();
-      };
-      const scheduleMobileMapLabels = () => {
-        if (state.mobileMapLabelsRevealed) return;
-        state.map.once?.("idle", () => window.setTimeout(revealMobileMapLabels, 450));
-        window.setTimeout(revealMobileMapLabels, 3600);
-      };
       state.map.addSource("mobile-sites", { type: "geojson", data: siteFeatureCollection() });
       state.map.addLayer({
         id: "mobile-territory-polygons",
@@ -15456,7 +15439,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         type: "symbol",
         source: "mobile-territory-labels",
         minzoom: 6,
-        layout: mobileLabelLayout({
+        layout: {
           "text-field": ["get", "title"],
           "text-size": ["interpolate", ["linear"], ["zoom"], 6, 9, 9, 12, 12, 15],
           "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
@@ -15464,7 +15447,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           "text-allow-overlap": false,
           "text-ignore-placement": false,
           "text-max-width": 9
-        }),
+        },
         paint: {
           "text-color": "#20251f",
           "text-halo-color": "rgba(255,255,255,0.92)",
@@ -15477,7 +15460,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         type: "symbol",
         source: "mobile-detail-labels",
         minzoom: SITE_LABEL_MIN_ZOOM,
-        layout: mobileLabelLayout({
+        layout: {
           "text-field": ["get", "title"],
           "text-size": ["interpolate", ["linear"], ["zoom"], SITE_LABEL_MIN_ZOOM, ["*", ["get", "label_size"], 0.84], 16, ["*", ["get", "label_size"], 1.25]],
           "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
@@ -15485,7 +15468,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           "text-allow-overlap": false,
           "text-ignore-placement": false,
           "text-max-width": 8
-        }),
+        },
         paint: {
           "text-color": "#2d352f",
           "text-halo-color": "rgba(255,255,255,0.88)",
@@ -15498,7 +15481,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         source: "mobile-sites",
         filter: ["==", ["geometry-type"], "Point"],
         minzoom: SITE_POINT_LABEL_MIN_ZOOM,
-        layout: mobileLabelLayout({
+        layout: {
           "text-field": ["get", "title"],
           "text-size": ["interpolate", ["linear"], ["zoom"], SITE_POINT_LABEL_MIN_ZOOM, 10.25, 17, 14],
           "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
@@ -15511,7 +15494,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           "text-ignore-placement": false,
           "text-max-width": 9,
           "text-optional": true
-        }),
+        },
         paint: {
           "text-color": "#183528",
           "text-halo-color": "rgba(255,255,255,0.92)",
@@ -15543,7 +15526,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       });
       state.map.on("mouseenter", "mobile-site-point-hit", () => state.map.getCanvas().style.cursor = "pointer");
       state.map.on("mouseleave", "mobile-site-point-hit", () => state.map.getCanvas().style.cursor = "");
-      scheduleMobileMapLabels();
     }
 
     function refreshMobileMapSources() {
