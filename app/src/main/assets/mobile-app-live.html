@@ -9412,7 +9412,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     async function postDirectusItem(collection, payload, options = {}) {
-      return directusClient.postItem(collection, payload, { timeout: Number(options.timeout || 15000) });
+      return directusClient.postItem(collection, payload, {
+        ...options,
+        timeout: Number(options.timeout || 15000)
+      });
     }
 
     async function triggerAdminNotificationAction(action, payload) {
