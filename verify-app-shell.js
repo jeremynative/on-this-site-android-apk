@@ -96,7 +96,8 @@ if (!bundledApp.includes("__NLI_MAPBOX_TOKEN__")) {
 }
 
 requireBundledText('const SITE_LABEL_MIN_ZOOM = 5.05;', "Bundled Android app must show site labels at the current mobile zoom threshold.");
-requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 6.45;', "Bundled Android app must show point labels at the current mobile zoom threshold.");
+requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 5.55;', "Bundled Android app must show point labels at the current mobile zoom threshold.");
+requireBundledText('function shouldShowCustomMapIcons() {\n      return true;\n    }', "Bundled Android app must keep site icons visible independently of point-label zoom.");
 requireBundledPattern(/"location_label"\s*:\s*"[^"]+"/, "Bundled Android app must include historic moment location labels.");
 requireBundledText('window.NLI_FEEDBACK_UTILS', "Bundled Android app must include shared feedback utilities.");
 requireBundledText('const feedbackPayload = FEEDBACK_UTILS.buildFeedbackCommentPayload', "Bundled Android app must save feedback through the shared Directus payload.");
