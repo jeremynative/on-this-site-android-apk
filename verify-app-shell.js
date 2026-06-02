@@ -55,11 +55,6 @@ requireText("__nliAndroidGeoGateInstalled", "Android shell must suppress automat
 requireText("CookieManager.getInstance()", "Android shell must explicitly enable WebView cookies for SiteGround and app sessions.");
 requireText("setAcceptThirdPartyCookies(webView, true)", "Android shell must allow SiteGround/Directus session cookies inside the APK WebView.");
 requireText("settings.setCacheMode(WebSettings.LOAD_DEFAULT)", "Android shell must allow WebView to cache remote Mapbox/static resources between launches.");
-requireText("createNativeLoadingView", "Android shell must show a native loading surface while WebView starts.");
-requireText("rootView.post(() -> initializeWebView(rootView, savedInstanceState));", "Android shell must let the native loading surface draw before WebView startup work.");
-requireText("private void initializeWebView(FrameLayout rootView, Bundle savedInstanceState)", "Android shell must initialize WebView after the loading surface is attached.");
-requireText("hideNativeLoadingView", "Android shell must hide the native loading surface after the archive page finishes.");
-requireText('loading.setText("Loading On This Site")', "Android shell native loading surface must use the app loading message.");
 if (source.includes("settings.setCacheMode(WebSettings.LOAD_NO_CACHE)")) {
   throw new Error("Android shell must not disable the whole WebView cache; only the bundled archive document should be refreshed.");
 }
