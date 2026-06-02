@@ -12,9 +12,14 @@ import android.os.Build;
 import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.Log;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
+import android.widget.FrameLayout;
+import android.widget.TextView;
 import android.webkit.ConsoleMessage;
 import android.webkit.GeolocationPermissions;
 import android.webkit.CookieManager;
@@ -52,6 +57,7 @@ public class MainActivity extends Activity {
         "https://nativelongisland.com/archive-test/mobile-app-live.html";
 
     private WebView webView;
+    private View nativeLoadingView;
     private GeolocationPermissions.Callback pendingLocationCallback;
     private String pendingLocationOrigin;
     private PermissionRequest pendingCameraRequest;
@@ -81,13 +87,32 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        FrameLayout rootView = new FrameLayout(this);
+        rootView.setBackgroundColor(Color.rgb(247, 250, 248));
+
+        nativeLoadingView = createNativeLoadingView();
+        rootView.addView(nativeLoadingView, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+        setContentView(rootView);
+        rootView.post(() -> initializeWebView(rootView, savedInstanceState));
+    }
+
+    private void initializeWebView(FrameLayout rootView, Bundle savedInstanceState) {
+        if (webView != null) return;
+
         webView = new WebView(this);
+        webView.setBackgroundColor(Color.rgb(247, 250, 248));
         webView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         webView.setOnApplyWindowInsetsListener((view, insets) -> {
             view.setPadding(0, insets.getSystemWindowInsetTop(), 0, insets.getSystemWindowInsetBottom());
             return insets;
         });
-        setContentView(webView);
+        rootView.addView(webView, 0, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ));
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -226,6 +251,7 @@ public class MainActivity extends Activity {
                 if (BuildConfig.DEBUG) logLoadedAppState();
                 applyApkTimelineTrayFix();
                 dispatchPendingPlantPhoto();
+                hideNativeLoadingView();
             }
         });
 
@@ -239,6 +265,31 @@ public class MainActivity extends Activity {
             refreshApp();
         }
         created = true;
+    }
+
+    private View createNativeLoadingView() {
+        TextView loading = new TextView(this);
+        loading.setText("Loading On This Site");
+        loading.setTextColor(Color.rgb(22, 41, 29));
+        loading.setTextSize(22);
+        loading.setTypeface(Typeface.DEFAULT_BOLD);
+        loading.setGravity(Gravity.CENTER);
+        loading.setBackgroundColor(Color.rgb(247, 250, 248));
+        loading.setClickable(false);
+        loading.setFocusable(false);
+        return loading;
+    }
+
+    private void hideNativeLoadingView() {
+        if (nativeLoadingView == null || nativeLoadingView.getVisibility() != View.VISIBLE) return;
+        nativeLoadingView.animate()
+            .alpha(0f)
+            .setDuration(180)
+            .withEndAction(() -> {
+                nativeLoadingView.setVisibility(View.GONE);
+                nativeLoadingView.setAlpha(1f);
+            })
+            .start();
     }
 
     private WebResourceResponse bundledAppResponse(Uri uri) {
