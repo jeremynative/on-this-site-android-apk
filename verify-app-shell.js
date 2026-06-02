@@ -6,6 +6,8 @@ const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/Main
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
 const bundledAppPath = "app/src/main/assets/mobile-app.html";
 const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
+const stylesPath = "app/src/main/res/values/styles.xml";
+const launchBackgroundPath = "app/src/main/res/drawable/launch_background.xml";
 
 const bundledAppBytes = fs.readFileSync(bundledAppPath);
 const bundledLiveAppBytes = fs.readFileSync(bundledLiveAppPath);
@@ -13,6 +15,8 @@ const source = fs.readFileSync(mainActivityPath, "utf8");
 const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
 const bundledApp = bundledAppBytes.toString("utf8");
 const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
+const styles = fs.readFileSync(stylesPath, "utf8");
+const launchBackground = fs.readFileSync(launchBackgroundPath, "utf8");
 
 function requireText(text, message) {
   if (!source.includes(text)) {
@@ -55,6 +59,12 @@ requireText("__nliAndroidGeoGateInstalled", "Android shell must suppress automat
 requireText("CookieManager.getInstance()", "Android shell must explicitly enable WebView cookies for SiteGround and app sessions.");
 requireText("setAcceptThirdPartyCookies(webView, true)", "Android shell must allow SiteGround/Directus session cookies inside the APK WebView.");
 requireText("settings.setCacheMode(WebSettings.LOAD_DEFAULT)", "Android shell must allow WebView to cache remote Mapbox/static resources between launches.");
+if (!styles.includes('<item name="android:windowBackground">@drawable/launch_background</item>')) {
+  throw new Error("Android theme must show a branded launch background while WebView starts.");
+}
+if (!launchBackground.includes('android:color="#EEF3ED"') || !launchBackground.includes('@drawable/ic_launcher_foreground')) {
+  throw new Error("Android launch background must use the app theme color and centered app icon.");
+}
 if (source.includes("settings.setCacheMode(WebSettings.LOAD_NO_CACHE)")) {
   throw new Error("Android shell must not disable the whole WebView cache; only the bundled archive document should be refreshed.");
 }
