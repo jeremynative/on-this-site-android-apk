@@ -123,8 +123,8 @@ for (const forbidden of ["DIRECTUS_PASSWORD", "DIRECTUS_EMAIL", "NotebookLM", "n
   }
 }
 
-requireBundledText('const SITE_LABEL_MIN_ZOOM = 6.6;', "Bundled Android app must show site labels before close zoom.");
-requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 6.85;', "Bundled Android app must show point labels before close zoom.");
+requireBundledText('const SITE_LABEL_MIN_ZOOM = 6.15;', "Bundled Android app must show site labels before close zoom.");
+requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 6.3;', "Bundled Android app must show point labels before close zoom.");
 requireBundledText('"text-allow-overlap": false', "Bundled Android app must keep close-zoom point labels readable with collision handling.");
 requireBundledText('settings.showPins = true;', "Bundled Android app must recover from saved Sites-off settings so site icons stay visible.");
 requireBundledText('selected-site-map-label', "Bundled Android app must show a dedicated title label for the selected site marker.");
@@ -139,6 +139,8 @@ requireBundledText('data-take-comment-photo', "Bundled Android app must expose c
 requireBundledText('compressCommentImage', "Bundled Android app must compress oversized comment photos before upload.");
 requireBundledText('Search sites, towns, histories', "Bundled Android app must include mobile search.");
 requireBundledText('sorted by proximity', "Bundled Android app must label nearby results as proximity sorted.");
+requireBundledText('const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 24;', "Bundled Android app must keep the first nearby tray render small.");
+requireBundledText('data-nearby-show-more', "Bundled Android app must let users reveal more nearby places after the startup cap.");
 requireBundledText('mobileProfileStats', "Bundled Android app must render Directus-backed profile stats.");
 requireBundledText('ensureProfileActivitySynced', "Bundled Android app must sync profile activity from Directus.");
 requireBundledText('languageRemoteAttemptExists', "Bundled Android app must check Directus before saving language attempts.");
