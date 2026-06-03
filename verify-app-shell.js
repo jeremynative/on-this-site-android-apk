@@ -1,4 +1,4 @@
-const fs = require("fs");
+﻿const fs = require("fs");
 
 const expectedBuild = "20260603-label-threshold-panel-tap";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
@@ -143,7 +143,7 @@ for (const forbidden of ["DIRECTUS_PASSWORD", "DIRECTUS_EMAIL", "NotebookLM", "n
 }
 
 requireBundledText('const SITE_LABEL_MIN_ZOOM = 1.15;', "Bundled Android app must show site labels well before close zoom.");
-requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 7.75;', "Bundled Android app must show point labels sooner at local-area zoom.");
+requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 8.6;', "Bundled Android app must wait until closer zoom before showing point labels.");
 requireBundledText('"text-opacity": ["interpolate", ["linear"], ["zoom"], SITE_POINT_LABEL_MIN_ZOOM, 0, SITE_POINT_LABEL_MIN_ZOOM + 0.35, 1]', "Bundled Android point labels must fade in around the local-area zoom threshold.");
 requireBundledPattern(/state\.map\.on\("zoomend",\s*\(\)\s*=>\s*\{[\s\S]*?syncMarkers\(\{\s*auxiliary:\s*false\s*\}\);[\s\S]*?syncMapStoryMarkers\(\);[\s\S]*?\}\);/, "Bundled Android zoom should refresh marker offsets once on zoomend without full auxiliary marker work.");
 if (/state\.map\.on\("zoom",\s*syncMapStoryMarkers\)/.test(bundledApp) || /state\.map\.on\("zoom",\s*syncMapStoryMarkers\)/.test(bundledLiveApp)) {

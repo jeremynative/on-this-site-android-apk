@@ -7611,7 +7611,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const STARTUP_LOCATION_ZOOM = 9.55;
     const NEAR_ME_ZOOM = 10.5;
     const SITE_LABEL_MIN_ZOOM = 1.15;
-    const SITE_POINT_LABEL_MIN_ZOOM = 7.75;
+    const SITE_POINT_LABEL_MIN_ZOOM = 8.6;
     const NEARBY_LIST_DESKTOP_LIMIT = 80;
     const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 24;
     const NEARBY_LIST_ANDROID_DEFAULT_LIMIT = 40;
@@ -8697,14 +8697,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function decodeImportedText(value) {
       const textarea = document.createElement("textarea");
       textarea.innerHTML = String(value || "")
-        .replace(/Ã‚Â /g, " ")
-        .replace(/Ã‚/g, "")
-        .replace(/Ã¢â‚¬â„¢|&#8217;|&rsquo;/g, "'")
-        .replace(/Ã¢â‚¬Ëœ|&#8216;|&lsquo;/g, "'")
-        .replace(/Ã¢â‚¬Å“|&#8220;|&ldquo;/g, "\"")
-        .replace(/Ã¢â‚¬Â|&#8221;|&rdquo;/g, "\"")
-        .replace(/Ã¢â‚¬â€œ|&#8211;/g, "-")
-        .replace(/Ã¢â‚¬â€|&#8212;/g, "-")
+        .replace(/Ãƒâ€šÃ‚Â /g, " ")
+        .replace(/Ãƒâ€š/g, "")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢|&#8217;|&rsquo;/g, "'")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“|&#8216;|&lsquo;/g, "'")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8220;|&ldquo;/g, "\"")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8221;|&rdquo;/g, "\"")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“|&#8211;/g, "-")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â|&#8212;/g, "-")
         .replace(/&nbsp;/gi, " ");
       return textarea.value.replace(/\s+/g, " ").trim();
     }
@@ -13194,7 +13194,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             const confidence = Number(match?.confidence || 0);
             const score = confidence ? `${Math.round(confidence * 100)}%` : "score unavailable";
             const source = match?.source || "Pl@ntNet";
-            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} · ${escapeHtml(source)}</em></div>`;
+            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} Â· ${escapeHtml(source)}</em></div>`;
           }).join("")}</div>`
         : "";
       const exactWarning = analysis?.safetyWarning || "Automated plant identification can be wrong. Verify with a field guide or expert before touching, eating, or using any plant.";
@@ -13908,14 +13908,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         return plantSpeciesKey(`${fields.identification || ""} ${fields.name || ""}`);
       }).filter(Boolean);
       const uniqueObserved = new Set(observedKeys);
-      const base = `${observations.length} observation${observations.length === 1 ? "" : "s"} · ${uniqueObserved.size} unique species`;
-      if (!knownSpecies.length) return `${base} · Known species list not yet added.`;
+      const base = `${observations.length} observation${observations.length === 1 ? "" : "s"} Â· ${uniqueObserved.size} unique species`;
+      if (!knownSpecies.length) return `${base} Â· Known species list not yet added.`;
       const documented = knownSpecies.filter(species => {
         const knownKey = plantSpeciesKey(species);
         return observedKeys.some(observed => observed.includes(knownKey) || knownKey.includes(observed));
       }).length;
       const percent = Math.round((documented / knownSpecies.length) * 100);
-      return `${base} · ${documented}/${knownSpecies.length} known species documented (${percent}%).`;
+      return `${base} Â· ${documented}/${knownSpecies.length} known species documented (${percent}%).`;
     }
 
     function publicPlantText(value, fallback = "") {
@@ -16628,7 +16628,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             </div>
             ${profile.headline ? `<p class="summary">${escapeHtml(profile.headline)}</p>` : ""}
             ${profile.bio ? `<p>${escapeHtml(profile.bio)}</p>` : ""}
-            <p class="detail-meta">${activity.comments.length} comments · ${activity.visits.length} visits · ${languageWords.length} language words · ${stats.loginStreak} day streak · ${totalPoints}</p>
+            <p class="detail-meta">${activity.comments.length} comments Â· ${activity.visits.length} visits Â· ${languageWords.length} language words Â· ${stats.loginStreak} day streak Â· ${totalPoints}</p>
             <p class="detail-meta">${escapeHtml(milestoneText(profile))}</p>
             ${supporterLine(profile) ? `<p class="detail-meta">${escapeHtml(supporterLine(profile))}</p>` : ""}
             ${mobileProfileBadgesHtml(profile)}
