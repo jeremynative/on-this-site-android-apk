@@ -3759,6 +3759,65 @@
       margin: 0 0 7px;
     }
 
+    .mobile-biography-path-section {
+      border-color: rgba(168, 79, 42, 0.28);
+      background: linear-gradient(180deg, rgba(255, 250, 244, 0.96), rgba(249, 244, 236, 0.94));
+    }
+
+    .mobile-biography-path-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .mobile-biography-path-place {
+      appearance: none;
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      gap: 9px;
+      width: 100%;
+      padding: 9px 10px;
+      border: 1px solid rgba(96, 74, 52, 0.14);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.74);
+      color: inherit;
+      font: inherit;
+      text-align: left;
+    }
+
+    .mobile-biography-path-number {
+      display: inline-grid;
+      place-items: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #a84f2a;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 850;
+      line-height: 1;
+    }
+
+    .mobile-biography-path-place strong,
+    .mobile-biography-path-place em,
+    .mobile-biography-path-place small {
+      display: block;
+    }
+
+    .mobile-biography-path-place em {
+      margin-top: 2px;
+      color: #695640;
+      font-style: normal;
+      font-size: 12.5px;
+    }
+
+    .mobile-biography-path-place small {
+      margin-top: 5px;
+      color: #514b43;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
     .timeline-body img,
     .timeline-body iframe {
       max-width: 100%;
@@ -7687,6 +7746,39 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       { label: "Natural Resources", slugs: ["native-plants", "beach-plum", "spring", "summer", "fall", "winter", "food", "fishing", "whaling", "indigenous-whaling-and-maritime-labor", "shell-midden", "ecology-and-flexible-sedentism"] },
       { label: "Maps and Reference", slugs: ["13-tribes-of-long-island-david-martine", "history-and-place-names", "algonquian-language-and-place-names", "western-long-island-native-communities", "central-long-island-native-communities", "eastern-long-island-native-communities"] }
     ];
+    const BIOGRAPHY_WIKI_SLUGS = new Set((KNOWLEDGEBASE_CATEGORIES.find(category => category.label === "Biography")?.slugs || []));
+    const BIOGRAPHY_PLACE_PATHS = {
+      "wyandanch": {
+        title: "Wyandanch associated places",
+        note: "This map path is a public-safe, approximate sequence of places named in the biography. It shows associated places in the story, not a precise travel route.",
+        places: [
+          {
+            label: "Montaukett homeland",
+            place: "Montauk, East Hampton",
+            coordinates: [-71.944, 41.036],
+            reason: "Wyandanch is remembered as a Montaukett sachem."
+          },
+          {
+            label: "Fort Saybrook",
+            place: "Old Saybrook, Connecticut",
+            coordinates: [-72.351, 41.284],
+            reason: "The biography describes Wyandanch negotiating an English alliance at Fort Saybrook after the Pequot War."
+          },
+          {
+            label: "Pequot War region",
+            place: "Mystic River area, Connecticut",
+            coordinates: [-71.966, 41.355],
+            reason: "The biography connects his diplomacy to the 1637 Pequot War and its aftermath."
+          },
+          {
+            label: "Shinnecock diplomacy",
+            place: "Southampton / Shinnecock area",
+            coordinates: [-72.436, 40.884],
+            reason: "The biography links Wyandanch to 1649 negotiations involving Mandush of Shinnecock."
+          }
+        ]
+      }
+    };
     const MOBILE_BASEMAPS = {
       streets: "mapbox://styles/mapbox/streets-v12",
       satellite: "mapbox://styles/mapbox/satellite-streets-v12",
@@ -14807,7 +14899,135 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
     }
 
+    function mobileBiographyPathData(article) {
+      if (!article?.slug || !BIOGRAPHY_WIKI_SLUGS.has(article.slug)) return null;
+      const path = BIOGRAPHY_PLACE_PATHS[article.slug];
+      if (!path?.places?.length) return null;
+      const places = path.places.filter(place => Array.isArray(place.coordinates) && place.coordinates.every(Number.isFinite));
+      if (places.length < 2) return null;
+      return { ...path, places };
+    }
+
+    function mobileBiographyPathHtml(article) {
+      const path = mobileBiographyPathData(article);
+      if (!path) return "";
+      return `
+        <section class="section mobile-biography-path-section">
+          <h3>Places connected to this life</h3>
+          <p class="detail-meta">${escapeHtml(path.note)}</p>
+          <div class="mobile-biography-path-list">
+            ${path.places.map((place, index) => `
+              <button class="mobile-biography-path-place" type="button" data-mobile-biography-path-index="${index}" aria-label="Show ${escapeHtml(place.label)} on the map">
+                <span class="mobile-biography-path-number">${index + 1}</span>
+                <span>
+                  <strong>${escapeHtml(place.label)}</strong>
+                  <em>${escapeHtml(place.place)}</em>
+                  <small>${escapeHtml(place.reason)}</small>
+                </span>
+              </button>
+            `).join("")}
+          </div>
+        </section>
+      `;
+    }
+
+    function mobileBiographyPathFeatureCollection(path) {
+      if (!path?.places?.length) return { type: "FeatureCollection", features: [] };
+      return {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: { type: "LineString", coordinates: path.places.map(place => place.coordinates) },
+            properties: { kind: "path", title: path.title || "Biography path" }
+          },
+          ...path.places.map((place, index) => ({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: place.coordinates },
+            properties: { kind: "point", order: index + 1, title: place.label }
+          }))
+        ]
+      };
+    }
+
+    function clearMobileBiographyPathOverlay() {
+      if (!state.map) return;
+      for (const id of ["mobile-biography-place-labels", "mobile-biography-place-points", "mobile-biography-place-path"]) {
+        if (state.map.getLayer(id)) state.map.removeLayer(id);
+      }
+      if (state.map.getSource("mobile-biography-place-path")) state.map.removeSource("mobile-biography-place-path");
+    }
+
+    function focusMobileBiographyPathPlace(pathOrArticle, index = 0, options = {}) {
+      const path = pathOrArticle?.places ? pathOrArticle : mobileBiographyPathData(pathOrArticle);
+      if (!path?.places?.length || !state.map) return false;
+      const place = path.places[Math.max(0, Math.min(path.places.length - 1, Number(index) || 0))];
+      if (!place?.coordinates?.every(Number.isFinite)) return false;
+      state.map.flyTo?.({
+        center: place.coordinates,
+        zoom: Number.isFinite(Number(options.zoom)) ? Number(options.zoom) : 12,
+        duration: Number.isFinite(Number(options.duration)) ? Number(options.duration) : 720,
+        essential: true
+      });
+      return true;
+    }
+
+    function showMobileBiographyPathOverlay(article, options = {}) {
+      const path = mobileBiographyPathData(article);
+      clearMobileBiographyPathOverlay();
+      if (!path || !state.map) return;
+      state.map.addSource("mobile-biography-place-path", { type: "geojson", data: mobileBiographyPathFeatureCollection(path) });
+      const beforeLayer = state.map.getLayer("mobile-site-icons") ? "mobile-site-icons" : undefined;
+      state.map.addLayer({
+        id: "mobile-biography-place-path",
+        type: "line",
+        source: "mobile-biography-place-path",
+        filter: ["==", ["get", "kind"], "path"],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#a84f2a",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 6, 2.5, 12, 4.5],
+          "line-opacity": 0.88,
+          "line-dasharray": ["literal", [1.2, 1.1]]
+        }
+      }, beforeLayer);
+      state.map.addLayer({
+        id: "mobile-biography-place-points",
+        type: "circle",
+        source: "mobile-biography-place-path",
+        filter: ["==", ["get", "kind"], "point"],
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 6, 12, 10],
+          "circle-color": "#a84f2a",
+          "circle-stroke-color": "#fff",
+          "circle-stroke-width": 2,
+          "circle-opacity": 0.96
+        }
+      }, beforeLayer);
+      state.map.addLayer({
+        id: "mobile-biography-place-labels",
+        type: "symbol",
+        source: "mobile-biography-place-path",
+        filter: ["==", ["get", "kind"], "point"],
+        layout: {
+          "text-field": ["to-string", ["get", "order"]],
+          "text-size": 10,
+          "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+          "text-anchor": "center",
+          "text-allow-overlap": true,
+          "text-ignore-placement": true
+        },
+        paint: {
+          "text-color": "#fff",
+          "text-halo-color": "rgba(80, 38, 20, 0.75)",
+          "text-halo-width": 0.7
+        }
+      }, beforeLayer);
+      if (options.focus !== false) focusMobileBiographyPathPlace(path, 0, { zoom: 9.7, duration: 760 });
+    }
+
     async function openWikiArticle(articleOrSlug, options = {}) {
+      clearMobileBiographyPathOverlay();
       const slug = typeof articleOrSlug === "string" ? articleOrSlug : articleOrSlug?.slug;
       if (!slug) {
         showBanner("This knowledgebase article is not available yet.");
@@ -14835,6 +15055,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const articleTimelineHtml = article.content ? sectionTimelineHtml(cleanHtml(article.content)) : "";
       const articleContentHtml = article.content ? removeFootnoteReferenceMarkers(articleTimelineHtml || cleanHtml(article.content)) : "";
       const wikiMoments = timelineEventsForSource("wiki", article.id, article.slug);
+      const biographyPath = mobileBiographyPathData(article);
       detailTitleEl.innerHTML = `
         <h2>${escapeHtml(article.title)}</h2>
         <p class="detail-meta">${article.lastmod ? "Imported knowledgebase article" : "Knowledgebase"}</p>
@@ -14842,6 +15063,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       detailBodyEl.innerHTML = `
         ${publicCleanText(article.summary) ? `<p class="summary">${escapeHtml(publicCleanText(article.summary))}</p>` : ""}
         ${whyThisMattersHtml(article)}
+        ${mobileBiographyPathHtml(article)}
         ${historicMomentsHtml(wikiMoments)}
         ${articleContentHtml ? `<section class="section"><h3>Article</h3><div class="section-content">${articleContentHtml}</div></section>` : ""}
         ${sourcesEvidenceSection(article)}
@@ -14856,6 +15078,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       syncMobilePanelAccessibility();
       decorateCurrentDetailForLanguageQuiz("wiki", article);
       setMobileContentRoute({ wiki: article.slug }, options);
+      if (biographyPath) showMobileBiographyPathOverlay(article, { focus: options.focus !== false });
       if (event?.id) {
         window.setTimeout(() => detailBodyEl.querySelector(`#timeline-moment-${CSS.escape(String(event.id))}`)?.scrollIntoView({ block: "start" }), 80);
       }
@@ -14865,6 +15088,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function openInfoPanel(title, meta, bodyHtml, quizContext = null) {
+      clearMobileBiographyPathOverlay();
       detailTitleEl.innerHTML = `
         <h2>${escapeHtml(title)}</h2>
         <p class="detail-meta">${escapeHtml(meta || "On This Site")}</p>
@@ -15264,6 +15488,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     async function openSite(slug, options = {}) {
+      clearMobileBiographyPathOverlay();
       if (slug === "address-result") {
         const address = state.filtered.find(item => item.slug === "address-result");
         if (address) {
@@ -15346,6 +15571,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.selectedSlug = "";
       state.selectedSite = null;
       clearActiveSiteMapLabel();
+      clearMobileBiographyPathOverlay();
       syncSitePlantMarkers(null);
       renderList();
       if (!options.skipRoute) window.history.replaceState(null, "", window.location.pathname);
@@ -17573,6 +17799,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const section = relatedMore.closest(".related-sites-section");
         section?.querySelectorAll(".related-site-extra[hidden]").forEach(item => { item.hidden = false; });
         relatedMore.hidden = true;
+        return;
+      }
+      const biographyPathPlace = event.target.closest("[data-mobile-biography-path-index]");
+      if (biographyPathPlace) {
+        const slug = new URL(window.location.href).searchParams.get("wiki") || "";
+        const article = slug ? state.wikiBySlug.get(slug) : null;
+        if (focusMobileBiographyPathPlace(article, biographyPathPlace.dataset.mobileBiographyPathIndex, { zoom: 12.2, duration: 720 })) {
+          biographyPathPlace.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
         return;
       }
       const appPageButton = event.target.closest("[data-app-page]");

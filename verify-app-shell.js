@@ -146,6 +146,14 @@ for (const [label, bytes, html] of [
 if (!bundledApp.includes("window.NLI_MOBILE_DATA")) {
   throw new Error("Bundled Android app is missing embedded mobile data.");
 }
+for (const [label, html] of [
+  ["embedded fallback", bundledApp],
+  ["live fallback", bundledLiveApp],
+]) {
+  if (!html.includes('"wyandanch": {') || !html.includes("mobile-biography-place-path") || !html.includes("data-mobile-biography-path-index")) {
+    throw new Error(`Bundled Android ${label} is missing the mobile Wyandanch biography path.`);
+  }
+}
 if (bundledLiveAppBytes.length > 1500000 || /window\.NLI_MOBILE_DATA\s*=/.test(bundledLiveApp)) {
   throw new Error("Bundled Android live fallback should stay lightweight and Directus-backed, not embed the full data payload.");
 }
