@@ -10051,6 +10051,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return state.profileActivitySyncPromise;
     }
 
+    async function ensureProfileStatsSynced() {
+      if (!state.profile) return false;
+      const activitySynced = await ensureProfileActivitySynced();
+      const pointEventsSynced = await ensureCanonicalProfilePointEvents(currentContributorProfile());
+      return Boolean(activitySynced || pointEventsSynced);
+    }
+
     async function ensureDeferredDataLoaded() {
       if (state.deferredDataLoaded) return true;
       try {
@@ -15714,7 +15721,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
       const profileSyncing = !state.profileActivitySynced;
       if (profileSyncing && !state.mobileStartupRendering) {
-        ensureProfileActivitySynced().then(updated => {
+        ensureProfileStatsSynced().then(updated => {
           if (updated) renderProfile();
         });
       }
@@ -16715,7 +16722,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         syncMobilePanelAccessibility();
       }
       if (state.profile) {
-        ensureProfileActivitySynced()
+        ensureProfileStatsSynced()
           .then(() => renderProfile())
           .catch(error => console.warn("Profile sync will retry later.", error));
       }
@@ -17726,13 +17733,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     rewardsOpenBtn.addEventListener("click", async () => {
       renderRewards();
       openSheet(rewardsSheetEl);
-      await ensureProfileActivitySynced();
+      await ensureProfileStatsSynced();
       renderRewards();
     });
     profilesOpenBtn.addEventListener("click", async () => {
       renderProfiles();
       openSheet(profilesSheetEl);
-      await ensureProfileActivitySynced();
+      await ensureProfileStatsSynced();
       renderProfiles();
     });
     followingOpenBtn.addEventListener("click", () => openSheet(followingSheetEl));
@@ -18030,7 +18037,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const localProfile = await loginRegistrationStatus(loginEmailEl.value.trim(), loginPasswordEl.value);
         if (localProfile) {
           saveProfile(localProfile);
-          await ensureProfileActivitySynced();
+          await ensureProfileStatsSynced();
           if (!localProfile.approved) {
             showLoginStatus("Account found. Your account is still waiting for review.", "error");
             showBanner("Account still waiting for review.");
@@ -18081,7 +18088,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           tokenExpires: data.data?.expires || null,
           profileId: profile?.id || null
         });
-        await ensureProfileActivitySynced();
+        await ensureProfileStatsSynced();
         await awardDailyLoginReward();
         showLoginStatus("Logged in.", "success");
         showBanner("Logged in.");

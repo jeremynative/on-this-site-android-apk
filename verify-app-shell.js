@@ -190,6 +190,8 @@ requireBundledText('window.setTimeout(repaint, 32000);', "Bundled Android app mu
 requireBundledText('stabilizeAndroidMapPaint();', "Bundled Android app must trigger map paint stabilization after layers and markers are attached.");
 requireBundledText('mobileProfileStats', "Bundled Android app must render Directus-backed profile stats.");
 requireBundledText('ensureProfileActivitySynced', "Bundled Android app must sync profile activity from Directus.");
+requireBundledText('async function ensureProfileStatsSynced()', "Bundled Android app must sync profile activity and canonical point events before rendering account stats.");
+requireBundledText('ensureCanonicalProfilePointEvents(currentContributorProfile())', "Bundled Android app must read canonical point events for the active profile.");
 requireBundledText('languageRemoteAttemptExists', "Bundled Android app must check Directus before saving language attempts.");
 requireBundledText('syncLanguageAttempt', "Bundled Android app must save language attempts through the shared sync path.");
 requireBundledText('Content editing needs the editor password.', "Bundled Android app must keep admin editing behind authenticated Directus login.");
