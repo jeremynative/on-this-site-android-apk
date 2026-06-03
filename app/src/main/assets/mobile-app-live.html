@@ -16747,7 +16747,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         return String(a.profile.display_name || a.profile.username || "").localeCompare(String(b.profile.display_name || b.profile.username || ""));
       });
       profilesListEl.innerHTML = rows.length ? rows.map(({ profile, activity, languageWords, stats }) => {
-        const totalPoints = stats.pointsSyncing ? "syncing points" : `${stats.points} points`;
+        const totalPoints = `${stats.points} points`;
         const avatar = directusAssetUrl(profile.avatar);
         const profileKey = String(profile.id || profile.slug || profile.display_name || "");
         const profileAnchor = `mobile-profile-${profileKey.replace(/[^a-z0-9_-]/gi, "-")}`;
