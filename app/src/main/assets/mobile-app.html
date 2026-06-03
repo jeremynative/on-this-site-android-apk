@@ -7718,6 +7718,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       searchRenderSettledTimer: null,
       layers: [],
       markers: new Map(),
+      mapSourceCache: null,
       exhibitMarkers: new Map(),
       storyMarkers: new Map(),
       siteSourceListCache: new Map(),
@@ -8987,6 +8988,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return state.mapSites;
     }
 
+    function invalidateMapSourceCache() {
+      state.mapSourceCache = null;
+    }
+
     function polygonLabelCollection(kind = "all", sites = state.mapSites) {
       const labelAnchors = {
         "shinnecock-ancestral-land": [-72.615, 40.878]
@@ -10187,6 +10192,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         .filter(site => site.title);
       state.siteBySlug = new Map(state.sites.map(site => [site.slug || "", site]));
       state.mapSites = state.sites.filter(site => site.center);
+      invalidateMapSourceCache();
       prepareExhibits();
       state.filtered = visitableSites().filter(site => site.center);
       clearRelatedSiteCaches();
@@ -11531,6 +11537,17 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           }
         }))
       };
+    }
+
+    function cachedMobileMapSourceData() {
+      if (!state.mapSourceCache) {
+        state.mapSourceCache = {
+          sites: siteFeatureCollection(),
+          territoryLabels: polygonLabelCollection("territory"),
+          detailLabels: polygonLabelCollection("detail")
+        };
+      }
+      return state.mapSourceCache;
     }
 
     function bestClickableFeature(features = []) {
@@ -15632,9 +15649,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function refreshMobileMapSources() {
       if (!state.map) return;
-      state.map.getSource("mobile-sites")?.setData(siteFeatureCollection());
-      state.map.getSource("mobile-territory-labels")?.setData(polygonLabelCollection("territory"));
-      state.map.getSource("mobile-detail-labels")?.setData(polygonLabelCollection("detail"));
+      const data = cachedMobileMapSourceData();
+      state.map.getSource("mobile-sites")?.setData(data.sites);
+      state.map.getSource("mobile-territory-labels")?.setData(data.territoryLabels);
+      state.map.getSource("mobile-detail-labels")?.setData(data.detailLabels);
     }
 
     function refreshAndroidMapAfterSettle(reason = "android-map-settle") {
