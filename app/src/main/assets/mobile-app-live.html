@@ -1636,6 +1636,37 @@
       background: white;
     }
 
+    .profile-sort-controls {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      padding: 10px;
+      border: 1px solid #e0e7de;
+      border-radius: 8px;
+      background: #f8faf7;
+    }
+
+    .profile-sort-controls label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .profile-sort-controls select {
+      width: 100%;
+      min-height: 40px;
+      padding: 8px 34px 8px 10px;
+      border: 1px solid #cbd9cf;
+      border-radius: 8px;
+      background: white;
+      color: var(--ink);
+      font: inherit;
+      font-weight: 800;
+    }
+
     .account-sheet.has-profile .login-hero,
     .account-sheet.has-profile .login-intro,
     .account-sheet.has-profile .login-field,
@@ -2018,6 +2049,82 @@
       margin: 0;
       padding: 0;
       background: transparent;
+    }
+
+    .contributor-card {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0;
+      padding: 0;
+      border: 1px solid #e0e7de;
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .contributor-card.is-expanded {
+      gap: 10px;
+      padding-bottom: 10px;
+    }
+
+    .contributor-summary {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px;
+      border: 0;
+      background: #fff;
+      color: inherit;
+      text-align: left;
+    }
+
+    .contributor-summary .thumb,
+    .contributor-summary .thumb.empty {
+      width: 44px;
+      height: 44px;
+    }
+
+    .contributor-summary-text {
+      display: grid;
+      min-width: 0;
+      gap: 2px;
+      line-height: 1.25;
+    }
+
+    .contributor-summary-text strong,
+    .contributor-summary-text span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .contributor-summary-text span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .contributor-chevron {
+      padding: 5px 8px;
+      border: 1px solid rgba(73, 111, 93, 0.2);
+      border-radius: 999px;
+      color: var(--accent-strong);
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .contributor-body {
+      display: grid;
+      gap: 10px;
+      padding: 0 10px;
+    }
+
+    .contributor-body[hidden] {
+      display: none;
     }
 
     .comment.reply {
@@ -3949,6 +4056,13 @@
       <button class="close" data-close-sheet type="button" aria-label="Close contributors">x</button>
     </div>
     <div class="sheet-body">
+      <div class="profile-sort-controls">
+        <label for="profiles-sort">Sort</label>
+        <select id="profiles-sort">
+          <option value="alpha">Alphabetical</option>
+          <option value="points">Leadership points</option>
+        </select>
+      </div>
       <div class="profile-card" id="profiles-list"></div>
     </div>
   </section>
@@ -7736,6 +7850,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       nearbySiteOpenTimer: null,
       nearbySiteOpenToken: 0,
       feedbackScreenshotFile: null,
+      contributorSortMode: "alpha",
+      expandedMobileProfileKey: "",
       settings: loadSettings(),
       profile: loadProfile()
     };
@@ -7857,6 +7973,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const supportGoalEl = document.getElementById("support-goal");
     const visitSummaryEl = document.getElementById("visit-summary");
     const badgeGridEl = document.getElementById("badge-grid");
+    const profilesSortEl = document.getElementById("profiles-sort");
     const profilesListEl = document.getElementById("profiles-list");
     const followingListEl = document.getElementById("following-list");
     const eventsListEl = document.getElementById("events-list");
@@ -16608,43 +16725,58 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function renderProfiles() {
       if (!profilesListEl) return;
-      const profiles = publicContributorProfiles()
-        .sort((a, b) => String(a.display_name || "").localeCompare(String(b.display_name || "")));
-      profilesListEl.innerHTML = profiles.length ? profiles.map(profile => {
+      if (profilesSortEl) profilesSortEl.value = state.contributorSortMode || "alpha";
+      const rows = publicContributorProfiles().map(profile => {
         const activity = profileActivity(profile);
         const languageWords = learnedLanguageWords(profile);
         const stats = mobileProfileStats(profile);
+        return { profile, activity, languageWords, stats };
+      }).sort((a, b) => {
+        if (state.contributorSortMode === "points") {
+          return Number(b.stats.points || 0) - Number(a.stats.points || 0)
+            || String(a.profile.display_name || a.profile.username || "").localeCompare(String(b.profile.display_name || b.profile.username || ""));
+        }
+        return String(a.profile.display_name || a.profile.username || "").localeCompare(String(b.profile.display_name || b.profile.username || ""));
+      });
+      profilesListEl.innerHTML = rows.length ? rows.map(({ profile, activity, languageWords, stats }) => {
         const totalPoints = stats.pointsSyncing ? "syncing points" : `${stats.points} points`;
         const avatar = directusAssetUrl(profile.avatar);
-        const profileAnchor = `mobile-profile-${String(profile.id || profile.slug || profile.display_name || "").replace(/[^a-z0-9_-]/gi, "-")}`;
+        const profileKey = String(profile.id || profile.slug || profile.display_name || "");
+        const profileAnchor = `mobile-profile-${profileKey.replace(/[^a-z0-9_-]/gi, "-")}`;
         const userSinceLine = profileUserSinceLine(profile);
+        const expanded = state.expandedMobileProfileKey === profileKey;
+        const name = profile.display_name || profile.username || "Contributor";
         return `
-          <article class="comment" id="${escapeHtml(profileAnchor)}" data-mobile-profile-card="${escapeHtml(profile.id || profile.slug || profile.display_name || "")}">
-            <div style="display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:center;">
-              ${avatar ? `<img class="thumb" src="${escapeHtml(avatar)}" alt="">` : `<span class="thumb empty">${escapeHtml((profile.display_name || "?").slice(0, 1))}</span>`}
-              <span>
-                <strong>${escapeHtml(profile.display_name || profile.username || "Contributor")}</strong>
-                <p class="detail-meta">${escapeHtml(profile.role_label || "Contributor")}${profile.location_label ? ` - ${escapeHtml(profile.location_label)}` : ""}</p>
-                ${userSinceLine ? `<p class="detail-meta">${escapeHtml(userSinceLine)}</p>` : ""}
+          <article class="comment contributor-card${expanded ? " is-expanded" : ""}" id="${escapeHtml(profileAnchor)}" data-mobile-profile-card="${escapeHtml(profileKey)}">
+            <button class="contributor-summary" type="button" data-toggle-mobile-profile="${escapeHtml(profileKey)}" aria-expanded="${expanded ? "true" : "false"}">
+              ${avatar ? `<img class="thumb" src="${escapeHtml(avatar)}" alt="">` : `<span class="thumb empty">${escapeHtml(name.slice(0, 1) || "?")}</span>`}
+              <span class="contributor-summary-text">
+                <strong>${escapeHtml(name)}</strong>
+                <span>${escapeHtml(profile.role_label || "Contributor")}${profile.location_label ? ` - ${escapeHtml(profile.location_label)}` : ""}</span>
+                <span>${escapeHtml(totalPoints)} - ${activity.comments.length} comments - ${activity.visits.length} visits</span>
               </span>
+              <span class="contributor-chevron" aria-hidden="true">${expanded ? "Hide" : "Open"}</span>
+            </button>
+            <div class="contributor-body" ${expanded ? "" : "hidden"}>
+              ${userSinceLine ? `<p class="detail-meta">${escapeHtml(userSinceLine)}</p>` : ""}
+              ${profile.headline ? `<p class="summary">${escapeHtml(profile.headline)}</p>` : ""}
+              ${profile.bio ? `<p>${escapeHtml(profile.bio)}</p>` : ""}
+              <p class="detail-meta">${activity.comments.length} comments - ${activity.visits.length} visits - ${languageWords.length} language words - ${stats.loginStreak} day streak - ${totalPoints}</p>
+              <p class="detail-meta">${escapeHtml(milestoneText(profile))}</p>
+              ${supporterLine(profile) ? `<p class="detail-meta">${escapeHtml(supporterLine(profile))}</p>` : ""}
+              ${mobileProfileBadgesHtml(profile)}
+              ${mobileProfileActivityFeedHtml(profile, 6)}
+              ${mobileProfileLanguageHtml(profile, true)}
+              ${currentProfileId() && Number(currentProfileId()) !== Number(profile.id) ? `<button class="action secondary" type="button" data-follow-profile="${escapeHtml(profile.id)}">${isFriend(profile.id) ? "Friend" : isFollowing(profile.id) ? "Following" : "Follow"}</button>` : ""}
+              ${activity.comments.length ? `<section class="section"><h3>Comments</h3>${activity.comments.map(comment => `
+                <button class="action secondary" type="button" data-profile-site="${escapeHtml(comment.site_slug || "")}">${escapeHtml(comment.site_title || "Site")}</button>
+                <p>${escapeHtml(comment.comment || "")}</p>
+                ${directusAssetUrl(comment.comment_image) ? `<img class="hero" src="${escapeHtml(directusAssetUrl(comment.comment_image))}" alt="" loading="lazy" decoding="async">` : ""}
+              `).join("")}</section>` : ""}
+              ${activity.visits.length ? `<section class="section"><h3>Visited</h3>${activity.visits.map(visit => `
+                <button class="action secondary" type="button" data-profile-site="${escapeHtml(visit.site_slug || "")}">${escapeHtml(visit.site_title || "Visited site")}</button>
+              `).join("")}</section>` : ""}
             </div>
-            ${profile.headline ? `<p class="summary">${escapeHtml(profile.headline)}</p>` : ""}
-            ${profile.bio ? `<p>${escapeHtml(profile.bio)}</p>` : ""}
-            <p class="detail-meta">${activity.comments.length} comments Â· ${activity.visits.length} visits Â· ${languageWords.length} language words Â· ${stats.loginStreak} day streak Â· ${totalPoints}</p>
-            <p class="detail-meta">${escapeHtml(milestoneText(profile))}</p>
-            ${supporterLine(profile) ? `<p class="detail-meta">${escapeHtml(supporterLine(profile))}</p>` : ""}
-            ${mobileProfileBadgesHtml(profile)}
-            ${mobileProfileActivityFeedHtml(profile, 6)}
-            ${mobileProfileLanguageHtml(profile, true)}
-            ${currentProfileId() && Number(currentProfileId()) !== Number(profile.id) ? `<button class="action secondary" type="button" data-follow-profile="${escapeHtml(profile.id)}">${isFriend(profile.id) ? "Friend" : isFollowing(profile.id) ? "Following" : "Follow"}</button>` : ""}
-            ${activity.comments.length ? `<section class="section"><h3>Comments</h3>${activity.comments.map(comment => `
-              <button class="action secondary" type="button" data-profile-site="${escapeHtml(comment.site_slug || "")}">${escapeHtml(comment.site_title || "Site")}</button>
-              <p>${escapeHtml(comment.comment || "")}</p>
-              ${directusAssetUrl(comment.comment_image) ? `<img class="hero" src="${escapeHtml(directusAssetUrl(comment.comment_image))}" alt="" loading="lazy" decoding="async">` : ""}
-            `).join("")}</section>` : ""}
-            ${activity.visits.length ? `<section class="section"><h3>Visited</h3>${activity.visits.map(visit => `
-              <button class="action secondary" type="button" data-profile-site="${escapeHtml(visit.site_slug || "")}">${escapeHtml(visit.site_title || "Visited site")}</button>
-            `).join("")}</section>` : ""}
           </article>
         `;
       }).join("") : `<p class="summary">No public contributor profiles are published yet.</p>`;
@@ -16662,6 +16794,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         showBanner("Contributor profile is not public yet.");
         return;
       }
+      state.expandedMobileProfileKey = String(profile.id || profile.slug || profile.display_name || "");
       openSheet(profilesSheetEl);
       window.setTimeout(() => {
         const selector = `[data-mobile-profile-card="${CSS.escape(String(profile.id || profile.slug || profile.display_name || ""))}"]`;
@@ -17301,6 +17434,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
     });
     profilesListEl.addEventListener("click", event => {
+      const toggle = event.target.closest("[data-toggle-mobile-profile]");
+      if (toggle?.dataset.toggleMobileProfile) {
+        const key = toggle.dataset.toggleMobileProfile;
+        state.expandedMobileProfileKey = state.expandedMobileProfileKey === key ? "" : key;
+        renderProfiles();
+        if (state.expandedMobileProfileKey) {
+          profilesListEl.querySelector(`[data-mobile-profile-card="${CSS.escape(key)}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+        return;
+      }
       const languageToggle = event.target.closest("[data-show-profile-language]");
       if (languageToggle) {
         const scope = languageToggle.closest("[data-mobile-profile-card], #profile-card") || profilesListEl;
@@ -17325,6 +17468,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         openSite(link.dataset.profileSite);
         profilesSheetEl.classList.remove("open");
       }
+    });
+    profilesSortEl?.addEventListener("change", () => {
+      state.contributorSortMode = profilesSortEl.value === "points" ? "points" : "alpha";
+      state.expandedMobileProfileKey = "";
+      renderProfiles();
     });
     followingListEl.addEventListener("click", event => {
       const link = event.target.closest("[data-profile-site]");
