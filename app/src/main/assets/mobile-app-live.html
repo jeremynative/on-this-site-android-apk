@@ -5124,7 +5124,7 @@
       profile.bio
     ].filter(Boolean).join(" ").toLowerCase();
     const qaTool = "co" + "dex";
-    return new RegExp(`\\b${qaTool}\\b|${qaTool}qa|${qaTool}-|${qaTool}_|point sync qa|nativelongisland\\.test`).test(text);
+    return new RegExp(`\\b${qaTool}\\b|${qaTool}qa|${qaTool}-|${qaTool}_|point sync qa|nativelongisland\\.test|\\b(test|testing|sample|demo|john doe|jane doe|bob dylan|robert paulsen)\\b`).test(text);
   }
 
   function isAdminContributor(profile = {}, options = {}) {
