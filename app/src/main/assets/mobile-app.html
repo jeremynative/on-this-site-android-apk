@@ -1336,6 +1336,8 @@
     .detail.open {
       transform: translate3d(0, 0, 0) !important;
       box-shadow: 0 -18px 45px rgba(20, 30, 23, 0.28);
+      pointer-events: auto;
+      isolation: isolate;
     }
 
     .detail.drawer-collapsed {
@@ -3312,6 +3314,8 @@
     .detail.open {
       transform: translate3d(0, 0, 0) !important;
       box-shadow: 0 -18px 45px rgba(20, 30, 23, 0.28);
+      pointer-events: auto;
+      isolation: isolate;
     }
 
     .detail.open.plant-browse-mode {
@@ -3338,6 +3342,15 @@
       padding: 8px 14px 10px;
       border-bottom: 1px solid var(--line);
       touch-action: none;
+      pointer-events: auto;
+    }
+
+    .detail .close,
+    .sheet .close {
+      touch-action: manipulation;
+      pointer-events: auto;
+      position: relative;
+      z-index: 2;
     }
 
     .detail-drawer-handle {
@@ -7598,13 +7611,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const STARTUP_LOCATION_ZOOM = 9.55;
     const NEAR_ME_ZOOM = 10.5;
     const SITE_LABEL_MIN_ZOOM = 1.15;
-    const SITE_POINT_LABEL_MIN_ZOOM = 8.05;
+    const SITE_POINT_LABEL_MIN_ZOOM = 8.55;
     const NEARBY_LIST_DESKTOP_LIMIT = 80;
     const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 24;
     const NEARBY_LIST_ANDROID_DEFAULT_LIMIT = 40;
     const NEARBY_LIST_SEARCH_LIMIT = 60;
     const NEARBY_LIST_INCREMENT = 40;
-    const MOBILE_APP_BUILD_ID = "20260526-story-pin-priority";
+    const MOBILE_APP_BUILD_ID = "20260603-label-threshold-panel-tap";
     const MIN_ANDROID_APP_BUILD_ID = "20260524-plant-camera-analysis-7";
     const ANDROID_APK_UPDATE_URL = "https://github.com/jeremynative/on-this-site-android-apk/releases/latest/download/on-this-site-latest.apk";
     const LANGUAGE_QUIZ_WORDS = window.NLI_LANGUAGE_QUIZ_WORDS || [];
@@ -7715,6 +7728,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       plantMarkers: new Map(),
       lastMobileMapTapAt: 0,
       lastMobileMapTapKey: "",
+      mobilePanelTapBlockUntil: 0,
       mobileMapTouchTap: null,
       nearbySiteOpenTimer: null,
       nearbySiteOpenToken: 0,
@@ -11842,6 +11856,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         if (Math.hypot(dx, dy) > 12) state.mobileMapTouchTap.moved = true;
       }, { passive: true });
       target.addEventListener("touchend", event => {
+        if (isMobileMapTapBlocked()) return;
         const tap = state.mobileMapTouchTap;
         const touch = event.changedTouches?.[0];
         if (!tap || !touch || tap.moved || performance.now() - tap.startedAt > 700) return;
@@ -11858,6 +11873,22 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           event.stopPropagation();
         }
       }, { passive: false, capture: true });
+    }
+
+    function blockMobileMapTaps(durationMs = 550) {
+      const now = performance.now();
+      state.mobilePanelTapBlockUntil = Math.max(state.mobilePanelTapBlockUntil || 0, now + durationMs);
+    }
+
+    function isMobileMapTapBlocked() {
+      return performance.now() < (state.mobilePanelTapBlockUntil || 0);
+    }
+
+    function consumePanelCloseEvent(event) {
+      blockMobileMapTaps();
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+      event?.stopImmediatePropagation?.();
     }
 
     function isAndroidMapCanvasTap(clientX, clientY, canvas) {
@@ -11909,6 +11940,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     window.onAndroidMapTap = function onAndroidMapTap(viewX, viewY, viewWidth, viewHeight) {
       if (!state.map?.getCanvas) return false;
+      if (isMobileMapTapBlocked()) return false;
       const canvas = state.map.getCanvas();
       const rect = canvas.getBoundingClientRect();
       const candidates = androidTapCandidates(viewX, viewY, viewWidth, viewHeight, canvas);
@@ -15140,6 +15172,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function closeDetail(options = {}) {
+      if (options.blockMapTap !== false) blockMobileMapTaps();
       detailEl.classList.remove("open");
       detailEl.classList.remove("plant-browse-mode");
       detailEl.classList.remove("drawer-collapsed", "drawer-half", "drawer-expanded", "dragging");
@@ -17625,7 +17658,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     window.addEventListener("orientationchange", () => window.setTimeout(refreshMobileViewportLayout, 280));
     window.visualViewport?.addEventListener("resize", refreshMobileViewportLayout);
     locateBtn.addEventListener("click", locateUser);
-    closeBtn.addEventListener("click", closeDetail);
+    closeBtn.addEventListener("pointerdown", event => {
+      blockMobileMapTaps();
+      event.stopPropagation();
+    }, { capture: true });
+    closeBtn.addEventListener("touchstart", event => {
+      blockMobileMapTaps();
+      event.stopPropagation();
+    }, { capture: true, passive: true });
+    closeBtn.addEventListener("click", event => {
+      consumePanelCloseEvent(event);
+      closeDetail({ blockMapTap: false });
+    });
     mobileTimelinePrevBtn.addEventListener("click", () => stepMobileTimeline(-1, { focusMap: true }));
     mobileTimelineNextBtn.addEventListener("click", () => stepMobileTimeline(1, { focusMap: true }));
     mobileTimelineToggleBtn?.addEventListener("click", () => setMobilePanelMode("nearby"));
