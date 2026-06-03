@@ -7272,9 +7272,10 @@
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ refresh_token: refreshToken, mode: "json" })
-      });
+      }).catch(() => null);
+      if (!response) return "";
       if (!response.ok) {
-        onAuthExpired();
+        if (isAuthFailure(response)) onAuthExpired();
         return "";
       }
       const data = await response.json();
