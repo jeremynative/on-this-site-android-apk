@@ -10031,7 +10031,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     async function ensureProfileActivitySynced() {
       if (state.profileActivitySynced) return true;
       if (state.profileActivitySyncPromise) return state.profileActivitySyncPromise;
-      state.profileActivitySyncPromise = refreshProfileActivityData()
+      const syncPromise = state.deferredDataLoading && state.deferredDataPromise
+        ? state.deferredDataPromise.then(() => state.profileActivitySynced || refreshProfileActivityData())
+        : refreshProfileActivityData();
+      state.profileActivitySyncPromise = syncPromise
         .catch(error => {
           console.warn("Profile activity sync will retry later.", error);
           state.profileActivitySynced = false;
@@ -18254,14 +18257,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             }
           })
           .catch(() => null));
-        idleTask(() => state.profile ? ensureProfileActivitySynced()
-          .then(() => {
-            renderProfile();
-            renderRewards();
-          })
-          .catch(() => null) : null);
         idleTask(() => loadDeferredData()
+          .then(() => state.profile && !state.profileActivitySynced ? ensureProfileActivitySynced() : true)
           .then(() => {
+            if (state.profile) {
+              renderProfile();
+              renderRewards();
+            }
             checkDailyHistoryMoment();
             checkNewContentAlerts();
             startMapStoryRefresh();
