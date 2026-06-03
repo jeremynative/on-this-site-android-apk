@@ -144,6 +144,7 @@ for (const forbidden of ["DIRECTUS_PASSWORD", "DIRECTUS_EMAIL", "NotebookLM", "n
 
 requireBundledText('const SITE_LABEL_MIN_ZOOM = 1.15;', "Bundled Android app must show site labels well before close zoom.");
 requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 7.75;', "Bundled Android app must show point labels sooner at local-area zoom.");
+requireBundledText('"text-opacity": ["interpolate", ["linear"], ["zoom"], SITE_POINT_LABEL_MIN_ZOOM, 0, SITE_POINT_LABEL_MIN_ZOOM + 0.35, 1]', "Bundled Android point labels must fade in around the local-area zoom threshold.");
 requireBundledText('mobilePanelTapBlockUntil: 0', "Bundled Android app must track the panel close tap shield.");
 requireBundledText('function blockMobileMapTaps(durationMs = 550)', "Bundled Android app must block map taps briefly after panel dismissal.");
 requireBundledText('if (isMobileMapTapBlocked()) return false;', "Bundled Android map bridge must ignore taps after panel dismissal.");

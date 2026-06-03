@@ -15619,6 +15619,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         },
         paint: {
           "text-color": "#183528",
+          "text-opacity": ["interpolate", ["linear"], ["zoom"], SITE_POINT_LABEL_MIN_ZOOM, 0, SITE_POINT_LABEL_MIN_ZOOM + 0.35, 1],
           "text-halo-color": "rgba(255,255,255,0.92)",
           "text-halo-width": 1.5
         }
