@@ -17161,8 +17161,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           syncUserLocationMarker({ centerMap: false });
           stabilizeAndroidMapPaint();
           state.map.once?.("idle", () => refreshAndroidMapAfterSettle("android-map-idle"));
-          state.map.on("zoomend", syncMarkers);
-          state.map.on("zoom", syncMapStoryMarkers);
+          state.map.on("zoomend", () => {
+            syncMarkers({ auxiliary: false });
+            syncMapStoryMarkers();
+          });
           window.setTimeout(() => resolve(true), 160);
         });
         state.map.on("error", () => window.setTimeout(() => resolve(false), 800));
