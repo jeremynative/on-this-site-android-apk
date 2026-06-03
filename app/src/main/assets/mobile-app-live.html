@@ -16056,7 +16056,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       });
     }
 
-    function mobileProfileStats(profile) {
+    function mobileProfileStats(profile, options = {}) {
       const activity = profileActivity(profile || {});
       const ids = canonicalPointProfileIds(profile);
       const pointsSyncing = Boolean(ids.length && !profilePointEventsAreCanonical(profile));
@@ -16068,7 +16068,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         supporterPoints: profile?.is_monthly_supporter ? supportMonths(profile) * 100 : 0,
         emptyMilestone: "New Learner"
       });
-      if (pointsSyncing) {
+      if (pointsSyncing && options.syncRemote !== false) {
         ensureCanonicalProfilePointEvents(profile).then(updated => {
           if (!updated) return;
           renderProfile();
@@ -16737,7 +16737,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const rows = publicContributorProfiles().map(profile => {
         const activity = profileActivity(profile);
         const languageWords = learnedLanguageWords(profile);
-        const stats = mobileProfileStats(profile);
+        const stats = mobileProfileStats(profile, { syncRemote: false });
         return { profile, activity, languageWords, stats };
       }).sort((a, b) => {
         if (state.contributorSortMode === "points") {
