@@ -8,11 +8,15 @@ const bundledAppPath = "app/src/main/assets/mobile-app.html";
 const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
 const stylesPath = "app/src/main/res/values/styles.xml";
 const launchBackgroundPath = "app/src/main/res/drawable/launch_background.xml";
+const manifestPath = "app/src/main/AndroidManifest.xml";
+const appBridgePath = "app/src/main/java/com/nativelongisland/onthissite/AppBridge.java";
 
 const bundledAppBytes = fs.readFileSync(bundledAppPath);
 const bundledLiveAppBytes = fs.readFileSync(bundledLiveAppPath);
 const source = fs.readFileSync(mainActivityPath, "utf8");
 const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
+const manifest = fs.readFileSync(manifestPath, "utf8");
+const appBridge = fs.readFileSync(appBridgePath, "utf8");
 const bundledApp = bundledAppBytes.toString("utf8");
 const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
 const styles = fs.readFileSync(stylesPath, "utf8");
@@ -58,6 +62,15 @@ requireText("long-island-land-mask.geojson", "Android shell must include the bun
 requireText("BuildConfig.MAPBOX_TOKEN", "Android shell must inject the Mapbox token from build configuration.");
 requireText("androidApkStartupScript", "Android shell must inject APK startup guards before the bundled app runs.");
 requireText("__nliAndroidGeoGateInstalled", "Android shell must suppress automatic startup geolocation prompts.");
+if (!manifest.includes("android.permission.POST_NOTIFICATIONS")) {
+  throw new Error("Android shell must request notification permission for nearby site alerts.");
+}
+requireText("NEARBY_NOTIFICATION_CHANNEL_ID", "Android shell must define a nearby site notification channel.");
+requireText("createNotificationChannel();", "Android shell must create the nearby notification channel during startup.");
+requireText("showNearbyNotification", "Android shell must expose native nearby notifications.");
+if (!appBridge.includes("showNotification") || !appBridge.includes("showNearbyNotification")) {
+  throw new Error("Android app bridge must expose native notifications to the mobile web app.");
+}
 requireText("CookieManager.getInstance()", "Android shell must explicitly enable WebView cookies for SiteGround and app sessions.");
 requireText("setAcceptThirdPartyCookies(webView, true)", "Android shell must allow SiteGround/Directus session cookies inside the APK WebView.");
 requireText("settings.setCacheMode(WebSettings.LOAD_DEFAULT)", "Android shell must allow WebView to cache remote Mapbox/static resources between launches.");
@@ -175,6 +188,10 @@ requireBundledText('state.nativeAndroidSearchWatchTimer = window.setInterval(sch
 requireBundledText('Profile activity sync will retry later.', "Bundled Android app must keep profile activity sync retry logging.");
 requireBundledText('state.profileActivitySynced = false;\n          return false;', "Bundled Android app must leave failed profile sync retryable.");
 requireBundledText('sorted by proximity', "Bundled Android app must label nearby results as proximity sorted.");
+requireBundledText('const SITE_CHECKIN_RADIUS_MILES = 0.25;', "Bundled Android app must require check-ins within a quarter mile.");
+requireBundledText('const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;', "Bundled Android app must alert within half a mile of a site.");
+requireBundledText('window.AndroidApp.showNotification', "Bundled Android app must use the native notification bridge.");
+requireBundledText('localStorage.getItem("nli-proximity-alert-date") === todayKey', "Bundled Android app must limit nearby site notifications to once per day.");
 requireBundledText('const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 24;', "Bundled Android app must keep the first nearby tray render small.");
 requireBundledText('data-nearby-show-more', "Bundled Android app must let users reveal more nearby places after the startup cap.");
 requireBundledText('const nativeAndroid = isNativeAndroidApp();', "Bundled Android app must cache native Android startup state.");

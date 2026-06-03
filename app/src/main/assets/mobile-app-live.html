@@ -7610,6 +7610,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     };
     const STARTUP_LOCATION_ZOOM = 9.55;
     const NEAR_ME_ZOOM = 10.5;
+    const SITE_CHECKIN_RADIUS_MILES = 0.25;
+    const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;
     const SITE_LABEL_MIN_ZOOM = 1.15;
     const SITE_POINT_LABEL_MIN_ZOOM = 8.6;
     const NEARBY_LIST_DESKTOP_LIMIT = 80;
@@ -7898,7 +7900,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         if (!saved.basemapUserSet && saved.basemap === "streets") saved.basemap = "outdoors";
         const settings = {
           historyAlerts: false,
-          proximityAlerts: false,
+          proximityAlerts: saved.proximityAlerts !== false,
           newContentAlerts: false,
           exhibits: true,
           locationEnabled: true,
@@ -7911,7 +7913,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         settings.showPins = true;
         return settings;
       } catch {
-        return { historyAlerts: false, proximityAlerts: false, newContentAlerts: false, exhibits: true, locationEnabled: true, locationPrompted: false, basemap: "outdoors", showPins: true, showShapes: true };
+        return { historyAlerts: false, proximityAlerts: true, newContentAlerts: false, exhibits: true, locationEnabled: true, locationPrompted: false, basemap: "outdoors", showPins: true, showShapes: true };
       }
     }
 
@@ -8187,6 +8189,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!profile?.id || !isApprovedContributor() || !site?.slug) return null;
       const distanceMiles = Number(options.distanceMiles);
       const wantsCheckin = Number.isFinite(distanceMiles);
+      if (wantsCheckin && distanceMiles > SITE_CHECKIN_RADIUS_MILES) {
+        throw new Error(`Check-ins unlock within ${SITE_CHECKIN_RADIUS_MILES.toFixed(2)} mi of a public learning point.`);
+      }
       let existing = siteVisitRecord(profile, site);
       if (!existing || (wantsCheckin && !siteHasCheckin(profile, site))) {
         await refreshRemoteSiteVisitsForProfileSite(profile, site).catch(() => []);
@@ -9478,6 +9483,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     async function notifyUser(title, body) {
+      if (window.AndroidApp?.showNotification) {
+        try {
+          if (window.AndroidApp.showNotification(String(title || ""), String(body || ""))) return true;
+        } catch {}
+      }
       if (!("Notification" in window)) {
         showBanner(body || title);
         return false;
@@ -12702,7 +12712,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           showBanner("Could not compare your location with this site.");
           return;
         }
-        if (miles > 0.5) {
+        if (miles > SITE_CHECKIN_RADIUS_MILES) {
           showBanner(`Check-in not saved. You are about ${miles.toFixed(1)} mi from this public learning point.`);
           return;
         }
@@ -15380,19 +15390,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!state.settings.proximityAlerts || !state.userLocation) return;
       const hour = new Date().getHours();
       if (hour < 9 || hour > 17) return;
-      const log = JSON.parse(localStorage.getItem("nli-proximity-log") || "{}");
-      const now = Date.now();
+      const todayKey = localDateKey();
+      if (localStorage.getItem("nli-proximity-alert-date") === todayKey) return;
       const nearby = visitableSites()
         .filter(site => !isBroadTerritory(site))
         .map(site => ({ site, miles: milesBetween(state.userLocation, site.center) }))
-        .filter(item => Number.isFinite(item.miles) && item.miles <= 0.15)
+        .filter(item => Number.isFinite(item.miles) && item.miles <= SITE_VISIT_ALERT_RADIUS_MILES)
         .sort((a, b) => a.miles - b.miles)[0];
       if (!nearby) return;
-      const last = Number(log[nearby.site.slug] || 0);
-      if (now - last < 24 * 60 * 60 * 1000) return;
-      log[nearby.site.slug] = now;
-      localStorage.setItem("nli-proximity-log", JSON.stringify(log));
-      notifyUser("On This Site nearby", `${nearby.site.title} is near your current location.`);
+      notifyUser("On This Site nearby", `You are within ${nearby.miles.toFixed(1)} mi of ${nearby.site.title}.`)
+        .then(sent => {
+          if (sent) localStorage.setItem("nli-proximity-alert-date", todayKey);
+        });
     }
 
     function checkDailyHistoryMoment() {

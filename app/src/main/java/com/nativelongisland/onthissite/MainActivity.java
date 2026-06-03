@@ -2,8 +2,13 @@ package com.nativelongisland.onthissite;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -49,7 +54,9 @@ public class MainActivity extends Activity {
     private static final int PHOTO_CAMERA_REQUEST = 44;
     private static final int PLANT_BRIDGE_CAMERA_REQUEST = 45;
     static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
+    private static final int NOTIFICATION_REQUEST = 47;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
+    private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
     static final String APP_VERSION = "20260603-label-threshold-panel-tap";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
@@ -105,6 +112,7 @@ public class MainActivity extends Activity {
             FrameLayout.LayoutParams.MATCH_PARENT
         ));
         setContentView(root);
+        createNotificationChannel();
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -800,6 +808,56 @@ public class MainActivity extends Activity {
 
     boolean hasCameraPermission() {
         return checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean hasNotificationPermission() {
+        return Build.VERSION.SDK_INT < 33
+            || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT < 26) return;
+        NotificationChannel channel = new NotificationChannel(
+            NEARBY_NOTIFICATION_CHANNEL_ID,
+            "Nearby sites",
+            NotificationManager.IMPORTANCE_DEFAULT
+        );
+        channel.setDescription("Nearby On This Site visit reminders");
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) manager.createNotificationChannel(channel);
+    }
+
+    boolean showNearbyNotification(String title, String body) {
+        if (!hasNotificationPermission()) {
+            if (Build.VERSION.SDK_INT >= 33) {
+                suppressResumeRefreshAfterPermissionPrompt();
+                requestPermissions(new String[] { Manifest.permission.POST_NOTIFICATIONS }, NOTIFICATION_REQUEST);
+            }
+            return false;
+        }
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+            this,
+            1001,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+            ? new Notification.Builder(this, NEARBY_NOTIFICATION_CHANNEL_ID)
+            : new Notification.Builder(this);
+        Notification notification = builder
+            .setSmallIcon(android.R.drawable.ic_dialog_map)
+            .setContentTitle(title == null || title.isEmpty() ? "On This Site nearby" : title)
+            .setContentText(body == null ? "" : body)
+            .setStyle(new Notification.BigTextStyle().bigText(body == null ? "" : body))
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build();
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) return false;
+        manager.notify(1001, notification);
+        return true;
     }
 
     @Override

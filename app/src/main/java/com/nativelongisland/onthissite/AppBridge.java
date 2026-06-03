@@ -1,7 +1,11 @@
 package com.nativelongisland.onthissite;
 
 import android.Manifest;
+import android.os.Looper;
 import android.webkit.JavascriptInterface;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 class AppBridge {
     private final MainActivity activity;
@@ -28,6 +32,25 @@ class AppBridge {
     @JavascriptInterface
     public void refreshNow() {
         activity.runOnUiThread(activity::refreshApp);
+    }
+
+    @JavascriptInterface
+    public boolean showNotification(String title, String body) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return activity.showNearbyNotification(title, body);
+        }
+        AtomicBoolean sent = new AtomicBoolean(false);
+        CountDownLatch latch = new CountDownLatch(1);
+        activity.runOnUiThread(() -> {
+            sent.set(activity.showNearbyNotification(title, body));
+            latch.countDown();
+        });
+        try {
+            latch.await(1500, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+        }
+        return sent.get();
     }
 
     @JavascriptInterface
