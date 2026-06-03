@@ -5122,13 +5122,16 @@
     const ids = new Set();
     const directId = Number(relationId(profile?.id || profile?.profileId || options.fallbackProfileId));
     if (directId) ids.add(directId);
+    if (directId) return ids;
     const identityEmail = String(profile?.username || profile?.email || options.fallbackEmail || "").trim().toLowerCase();
     const identitySlug = String(profile?.slug || "").trim().toLowerCase();
     if (identitySlug === "jeremy-dennis" || identityEmail === "jeremynative@gmail.com" || identityEmail === "jeremydennis") {
       ids.add(1);
     }
     (candidates || []).forEach(candidate => {
-      if (!isProfileBanned(candidate) && profilesShareIdentity(candidate, profile, options)) {
+      const candidateEmail = profileIdentityEmail(candidate);
+      const emailMatches = identityEmail && candidateEmail && identityEmail === candidateEmail;
+      if (!isProfileBanned(candidate) && emailMatches) {
         const id = Number(relationId(candidate.id));
         if (id) ids.add(id);
       }
@@ -7328,6 +7331,12 @@
         const fallbackSeparator = fallbackPath.includes("?") ? "&" : "?";
         const fallbackUrl = fresh ? `${baseUrl}${fallbackPath}${fallbackSeparator}_=${Date.now()}` : `${baseUrl}${fallbackPath}`;
         response = await fetch(fallbackUrl, { headers, cache: fresh ? "no-store" : "default" });
+      }
+      if ((response.status === 401 || response.status === 403) && token) {
+        const refreshed = await refreshAuthToken();
+        if (refreshed) {
+          response = await fetch(url, { headers: authHeaders(refreshed), cache: fresh ? "no-store" : "default" });
+        }
       }
       if ((response.status === 401 || response.status === 403) && token) {
         response = await fetch(url, { cache: fresh ? "no-store" : "default" });
@@ -13689,27 +13698,21 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function profileForLogin(email = "") {
       const normalized = email.toLowerCase();
-      if (normalized.includes("jeremy")) return state.contributorProfiles.find(profile => profile.slug === "jeremy-dennis" && !isProfileBanned(profile));
+      if (normalized === "jeremynative@gmail.com" || normalized === "jeremydennis") return state.contributorProfiles.find(profile => profile.slug === "jeremy-dennis" && !isProfileBanned(profile));
       return bestContributorProfile(state.contributorProfiles.filter(profile => String(profile.username || "").toLowerCase() === normalized && !isProfileBanned(profile)))
-        || bestContributorProfile(state.contributorProfiles.filter(profile => Number(profile.id) === Number(state.profile?.profileId) && !isProfileBanned(profile)))
         || null;
     }
 
     function currentContributorProfile() {
       if (!state.profile) return null;
       const linked = bestContributorProfile(state.contributorProfiles.filter(profile => Number(profile.id) === Number(state.profile.profileId)));
-      const byEmail = profileForLogin(state.profile.email || "");
-      const preferred = bestContributorProfile([linked, byEmail].filter(profile =>
-        profile && !isProfileBanned(profile) && (profile.account_enabled !== false || PROFILE_UTILS.isAdminContributor(profile, { email: state.profile?.email }))
-      ));
-      if (preferred) return preferred;
-      const displayName = String(state.profile.display_name || state.profile.displayName || state.profile.name || "").trim().toLowerCase();
-      if (displayName) {
-        const byName = bestContributorProfile(state.contributorProfiles.filter(profile =>
-          String(profile.display_name || "").trim().toLowerCase() === displayName && !isProfileBanned(profile)
-        ));
-        if (byName) return byName;
+      if (linked) {
+        return !isProfileBanned(linked) && (linked.account_enabled !== false || PROFILE_UTILS.isAdminContributor(linked, { email: state.profile?.email }))
+          ? linked
+          : null;
       }
+      const byEmail = profileForLogin(state.profile.email || "");
+      if (byEmail && (byEmail.account_enabled !== false || PROFILE_UTILS.isAdminContributor(byEmail, { email: state.profile?.email }))) return byEmail;
       return {
         id: null,
         slug: "",
