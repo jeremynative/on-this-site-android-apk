@@ -13730,9 +13730,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       };
       const linked = bestContributorProfile(state.contributorProfiles.filter(profile => Number(profile.id) === Number(state.profile.profileId)));
       if (linked) {
-        return profileMatchesSessionEmail(linked) && !isProfileBanned(linked) && (linked.account_enabled !== false || PROFILE_UTILS.isAdminContributor(linked, { email: state.profile?.email }))
-          ? linked
-          : null;
+        if (profileMatchesSessionEmail(linked) && !isProfileBanned(linked) && (linked.account_enabled !== false || PROFILE_UTILS.isAdminContributor(linked, { email: state.profile?.email }))) return linked;
+        saveProfile({ ...state.profile, profileId: null });
       }
       const byEmail = profileForLogin(state.profile.email || "");
       if (byEmail && (byEmail.account_enabled !== false || PROFILE_UTILS.isAdminContributor(byEmail, { email: state.profile?.email }))) return byEmail;
