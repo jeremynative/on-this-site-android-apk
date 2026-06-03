@@ -16111,7 +16111,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const loginRewards = approved ? loginRewardStats(activeProfile) : { totalDays: 0, currentStreak: 0, bestStreak: 0, lastLoginDate: "" };
       const publicSiteCount = PROFILE_UTILS.publicSiteTotal(state.sites);
       const visitProgress = PROFILE_UTILS.visitProgressLabel(visits.length, publicSiteCount);
-      const totalPoints = Number(stats.points) || 0;
+      const totalPoints = mobileProfilePointTotal(stats);
       const recentVisits = visits.slice(0, 3);
       profileCardEl.innerHTML = `
         <strong>${escapeHtml(displayName || "Contributor")}</strong>
@@ -16393,6 +16393,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       `;
     }
 
+    function mobileProfilePointTotal(stats = {}) {
+      const points = Number(stats.points);
+      return Number.isFinite(points) ? points : 0;
+    }
+
     function mobileProfilePointsBreakdownHtml(stats = {}) {
       const rows = [
         ["Daily opens", stats.loginPoints],
@@ -16408,7 +16413,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         <section class="visit-preview profile-points-detail">
           <strong>Points</strong>
           ${rows.length ? rows.map(([label, value]) => `<div class="points-breakdown-row"><span>${escapeHtml(label)}</span><strong>${Number(value) || 0}</strong></div>`).join("") : `<p class="detail-meta">Points appear after daily opens, visits, check-ins, language quizzes, and community activity.</p>`}
-          <div class="points-breakdown-row"><span>Total</span><strong>${Number(stats.points) || 0}</strong></div>
+          <div class="points-breakdown-row"><span>Total</span><strong>${mobileProfilePointTotal(stats)}</strong></div>
         </section>
       `;
     }
@@ -16974,7 +16979,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         return String(a.profile.display_name || a.profile.username || "").localeCompare(String(b.profile.display_name || b.profile.username || ""));
       });
       profilesListEl.innerHTML = rows.length ? rows.map(({ profile, activity, languageWords, stats }) => {
-        const totalPoints = `${stats.points} points`;
+        const totalPoints = `${mobileProfilePointTotal(stats)} points`;
         const avatar = directusAssetUrl(profile.avatar);
         const profileKey = String(profile.id || profile.slug || profile.display_name || "");
         const profileAnchor = `mobile-profile-${profileKey.replace(/[^a-z0-9_-]/gi, "-")}`;
