@@ -7608,8 +7608,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       voteHourMs: MAP_STORY_VOTE_HOUR_MS,
       permanentScore: MAP_STORY_PERMANENT_SCORE
     };
-    const STARTUP_LOCATION_ZOOM = 9.55;
     const NEAR_ME_ZOOM = 10.5;
+    const STARTUP_LOCATION_ZOOM = NEAR_ME_ZOOM;
     const SITE_CHECKIN_RADIUS_MILES = 0.25;
     const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;
     const SITE_LABEL_MIN_ZOOM = 1.15;
@@ -15354,14 +15354,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return requestUserLocation({ centerMap: true, silent: false, mapZoom: NEAR_ME_ZOOM });
     }
 
-    function requestStartupLocation() {
+    async function requestStartupLocation() {
       if (isNativeAndroidApp()) {
         setMobilePanelMode("nearby");
         setNearbyPanelState("default");
-        requestUserLocation({ centerMap: true, silent: true, mapZoom: STARTUP_LOCATION_ZOOM, centerBounds: STARTUP_LOCATION_CENTER_BOUNDS });
-        return;
+        return requestUserLocation({ centerMap: true, silent: true, mapZoom: STARTUP_LOCATION_ZOOM });
       }
-      if (state.settings.proximityAlerts) locateUser();
+      if (state.settings.proximityAlerts) return locateUser();
+      return false;
     }
 
     function startLocationWatch() {
@@ -18215,6 +18215,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         syncMobileLayerButtons();
         syncMobilePanelAccessibility();
         renderCurrentTerritoryStatus();
+        if (nativeAndroid) await requestStartupLocation();
         if (nativeAndroid) {
           idleTask(() => {
             if (!state.mobileTimelineRendered) renderMobileTimeline();
@@ -18249,10 +18250,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
         });
         state.mobileStartupRendering = false;
+        if (nativeAndroid && state.userLocation) {
+          syncUserLocationMarker({ centerMap: true, zoom: NEAR_ME_ZOOM });
+          refreshAndroidMapAfterSettle("android-startup-near-me");
+        }
         if (state.selectedSite) focusSite(state.selectedSite);
         checkDailyHistoryMoment();
         checkNewContentAlerts();
-        requestStartupLocation();
+        if (!nativeAndroid) requestStartupLocation();
         idleTask(() => ensureLandMask()
           .then(mask => {
             if (!mask) return;

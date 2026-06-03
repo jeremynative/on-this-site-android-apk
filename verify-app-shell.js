@@ -61,7 +61,8 @@ requireText("mobile-app-live.html", "Android shell must include the lightweight 
 requireText("long-island-land-mask.geojson", "Android shell must include the bundled land mask fallback asset.");
 requireText("BuildConfig.MAPBOX_TOKEN", "Android shell must inject the Mapbox token from build configuration.");
 requireText("androidApkStartupScript", "Android shell must inject APK startup guards before the bundled app runs.");
-requireText("__nliAndroidGeoGateInstalled", "Android shell must suppress automatic startup geolocation prompts.");
+requireText("__nliAndroidGeoGateInstalled", "Android shell must install the APK geolocation gate.");
+requireText("window.__nliAllowGeoUntil=Date.now()+120000;", "Android shell must allow the app's startup Near me location request.");
 if (!manifest.includes("android.permission.POST_NOTIFICATIONS")) {
   throw new Error("Android shell must request notification permission for nearby site alerts.");
 }
@@ -188,6 +189,9 @@ requireBundledText('state.nativeAndroidSearchWatchTimer = window.setInterval(sch
 requireBundledText('Profile activity sync will retry later.', "Bundled Android app must keep profile activity sync retry logging.");
 requireBundledText('state.profileActivitySynced = false;\n          return false;', "Bundled Android app must leave failed profile sync retryable.");
 requireBundledText('sorted by proximity', "Bundled Android app must label nearby results as proximity sorted.");
+requireBundledText('const STARTUP_LOCATION_ZOOM = NEAR_ME_ZOOM;', "Bundled Android app must open with the Near me zoom level.");
+requireBundledText('if (nativeAndroid) await requestStartupLocation();', "Bundled Android app must request location before the first nearby list render.");
+requireBundledText('refreshAndroidMapAfterSettle("android-startup-near-me")', "Bundled Android app must recenter the initialized map on startup location.");
 requireBundledText('const SITE_CHECKIN_RADIUS_MILES = 0.25;', "Bundled Android app must require check-ins within a quarter mile.");
 requireBundledText('const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;', "Bundled Android app must alert within half a mile of a site.");
 requireBundledText('window.AndroidApp.showNotification', "Bundled Android app must use the native notification bridge.");
