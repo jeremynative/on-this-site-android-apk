@@ -5098,13 +5098,21 @@
   }
 
   function publicContributorProfiles(profiles = []) {
-    return (profiles || []).filter(profile =>
+    const publicProfiles = (profiles || []).filter(profile =>
       !isProfileBanned(profile) &&
       !isLikelyTestProfile(profile) &&
       profile.account_enabled !== false &&
       profile.public_profile !== false &&
       profile.profile_status !== "hidden"
     );
+    return publicProfiles.reduce((list, profile) => {
+      const existingIndex = list.findIndex(item => profilesShareIdentity(item, profile));
+      if (existingIndex < 0) return [...list, profile];
+      if (contributorProfileScore(profile) > contributorProfileScore(list[existingIndex])) {
+        list[existingIndex] = profile;
+      }
+      return list;
+    }, []);
   }
 
   function isLikelyTestProfile(profile = {}) {
