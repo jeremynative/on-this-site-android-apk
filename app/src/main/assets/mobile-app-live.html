@@ -16068,14 +16068,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         supporterPoints: profile?.is_monthly_supporter ? supportMonths(profile) * 100 : 0,
         emptyMilestone: "New Learner"
       });
-      if (pointsSyncing && options.syncRemote !== false) {
+      const showPointsSyncing = pointsSyncing && options.syncRemote !== false;
+      if (showPointsSyncing) {
         ensureCanonicalProfilePointEvents(profile).then(updated => {
           if (!updated) return;
           renderProfile();
           if (profilesSheetEl?.classList.contains("open")) renderProfiles();
         });
       }
-      return { ...stats, pointsSyncing };
+      return { ...stats, pointsSyncing: showPointsSyncing };
     }
 
     function mobileProfileBadgesHtml(profile, providedStats = null) {
@@ -18457,6 +18458,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
   </script>
 </body>
 </html>
+
 
 
 
