@@ -8324,20 +8324,21 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     async function syncLanguageAttempt(contentKey, word, correct) {
       const profile = currentContributorProfile();
-      if (!profile?.id || languageRemoteAttemptExists(profile.id, contentKey, word.id)) return;
-      const payload = PROFILE_UTILS.languageAttemptPayload(profile.id, contentKey, word, { correct });
+      const profileId = activeContributorProfileId();
+      if (!profile?.id || !profileId || Number(relationId(profile.id)) !== profileId || languageRemoteAttemptExists(profileId, contentKey, word.id)) return;
+      const payload = PROFILE_UTILS.languageAttemptPayload(profileId, contentKey, word, { correct });
       if (!payload) return;
-      const existing = await refreshRemoteLanguageAttempt(profile.id, contentKey, word.id, String(payload.answered_at || "").slice(0, 10)).catch(() => null);
+      const existing = await refreshRemoteLanguageAttempt(profileId, contentKey, word.id, String(payload.answered_at || "").slice(0, 10)).catch(() => null);
       if (existing) return existing;
       const created = await postDirectusItem("mobile_language_quiz_progress", payload, { requireAuth: true });
       const record = created?.data ? { ...payload, ...created.data } : payload;
       mergeLanguageAttemptRecords([record]);
       if (record.correct !== false) {
         await recordProfilePointEvent({
-          event_key: `vocab_guess:${profile.id}:${record.content_key || contentKey}:${record.word_id || word.id}:${String(record.answered_at || "").slice(0, 10)}`,
+          event_key: `vocab_guess:${profileId}:${record.content_key || contentKey}:${record.word_id || word.id}:${String(record.answered_at || "").slice(0, 10)}`,
           event_type: "vocab_guess",
           points: PROFILE_UTILS.POINT_RULES.vocab_guess,
-          member_profile: profile.id,
+          member_profile: profileId,
           source_collection: "mobile_language_quiz_progress",
           source_id: record.id,
           source_slug: record.content_key || contentKey,
@@ -9862,11 +9863,27 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return record;
     }
 
+    function pointEventRequiresActiveProfile(eventType) {
+      return ["daily_open", "vocab_guess", "site_visit", "site_checkin", "suggested_site"].includes(String(eventType || ""));
+    }
+
+    function activeContributorProfileId() {
+      const profile = currentContributorProfile();
+      const profileId = Number(relationId(profile?.id));
+      const sessionProfileId = Number(relationId(state.profile?.profileId));
+      if (sessionProfileId) return profileId === sessionProfileId ? profileId : 0;
+      return profileId || 0;
+    }
+
     async function recordProfilePointEvent(event = {}) {
       const profileId = Number(relationId(event.member_profile));
       const points = Number(event.points || 0);
       const eventType = String(event.event_type || "");
       if (!profileId || !points || !eventType || !event.event_key) return null;
+      if (pointEventRequiresActiveProfile(eventType) && activeContributorProfileId() !== profileId) {
+        console.warn("Refusing point write for a profile that is not the active login.", { eventType, profileId });
+        return null;
+      }
       const existing = localPointEventForKey(event.event_key);
       if (existing) return existing;
       const remoteExisting = await refreshRemotePointEventForKey(event.event_key, profileId).catch(() => null);
