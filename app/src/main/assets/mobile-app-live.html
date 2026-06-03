@@ -15683,22 +15683,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const repaint = () => {
         if (!state.map) return;
         try {
-          const center = state.map.getCenter?.();
-          const zoom = state.map.getZoom?.();
           state.map.resize();
           refreshMobileMapSources();
           state.map.triggerRepaint?.();
-          if (center && Number.isFinite(zoom)) {
-            const minZoom = Number.isFinite(state.map.getMinZoom?.()) ? state.map.getMinZoom() : 0;
-            const maxZoom = Number.isFinite(state.map.getMaxZoom?.()) ? state.map.getMaxZoom() : 24;
-            const nudgeZoom = zoom + 0.18 <= maxZoom ? zoom + 0.18 : Math.max(minZoom, zoom - 0.18);
-            state.map.zoomTo(nudgeZoom, { duration: 0, animate: false });
-            window.setTimeout(() => {
-              if (!state.map) return;
-              state.map.jumpTo({ center, zoom });
-              state.map.triggerRepaint?.();
-            }, 40);
-          }
         } catch {}
       };
       window.requestAnimationFrame(repaint);
