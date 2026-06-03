@@ -192,6 +192,16 @@ requireBundledText('mobileProfileStats', "Bundled Android app must render Direct
 requireBundledText('ensureProfileActivitySynced', "Bundled Android app must sync profile activity from Directus.");
 requireBundledText('async function ensureProfileStatsSynced()', "Bundled Android app must sync profile activity and canonical point events before rendering account stats.");
 requireBundledText('ensureCanonicalProfilePointEvents(currentContributorProfile())', "Bundled Android app must read canonical point events for the active profile.");
+requireBundledText('Refreshing latest Directus activity...', "Bundled Android app must render cached profile stats while Directus activity refreshes.");
+if (bundledApp.includes("Refreshing profile activity from Directus...</p>")) {
+  throw new Error("Bundled Android app still renders the old loading-only profile card.");
+}
+if (bundledApp.includes("const pointSafeActivity = pointsSyncing ? { ...activity, pointEvents: [] } : activity;")) {
+  throw new Error("Bundled Android app still hides cached point events while Directus point sync is pending.");
+}
+if (bundledApp.includes('const totalPoints = stats.pointsSyncing ? "..." : stats.points;')) {
+  throw new Error("Bundled Android app still hides account points while Directus point sync is pending.");
+}
 requireBundledText('languageRemoteAttemptExists', "Bundled Android app must check Directus before saving language attempts.");
 requireBundledText('syncLanguageAttempt', "Bundled Android app must save language attempts through the shared sync path.");
 requireBundledText('Content editing needs the editor password.', "Bundled Android app must keep admin editing behind authenticated Directus login.");

@@ -15741,21 +15741,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const website = linkedProfile?.website_url || state.profile.website_url || "";
       const websiteUrl = profileWebsiteUrl(website);
       const userSinceLine = profileUserSinceLine(linkedProfile || state.profile);
-      if (profileSyncing) {
-        profileCardEl.innerHTML = `
-          <strong>${escapeHtml(displayName || "Contributor")}</strong>
-          <p class="detail-meta">Refreshing profile activity from Directus...</p>
-          <p class="detail-meta">${escapeHtml([roleLabel, locationLabel].filter(Boolean).join(" - "))}</p>
-          ${userSinceLine ? `<p class="detail-meta">${escapeHtml(userSinceLine)}</p>` : ""}
-          <div class="profile-stats">
-            <div class="profile-stat"><strong>...</strong><span class="detail-meta">profile points</span></div>
-            <div class="profile-stat"><strong>...</strong><span class="detail-meta">places visited</span></div>
-            <div class="profile-stat"><strong>...</strong><span class="detail-meta">community notes</span></div>
-            <div class="profile-stat"><strong>...</strong><span class="detail-meta">day streak</span></div>
-          </div>
-        `;
-        return;
-      }
       const visits = mergedProfileVisits(linkedProfile);
       const comments = profileActivity(linkedProfile || {}).comments || [];
       const activeProfile = linkedProfile || state.profile;
@@ -15766,10 +15751,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const loginRewards = approved ? loginRewardStats(activeProfile) : { totalDays: 0, currentStreak: 0, bestStreak: 0, lastLoginDate: "" };
       const publicSiteCount = PROFILE_UTILS.publicSiteTotal(state.sites);
       const visitProgress = PROFILE_UTILS.visitProgressLabel(visits.length, publicSiteCount);
-      const totalPoints = stats.pointsSyncing ? "..." : stats.points;
+      const totalPoints = Number(stats.points) || 0;
       const recentVisits = visits.slice(0, 3);
       profileCardEl.innerHTML = `
         <strong>${escapeHtml(displayName || "Contributor")}</strong>
+        ${profileSyncing ? `<p class="detail-meta">Refreshing latest Directus activity...</p>` : ""}
         <p class="detail-meta">${escapeHtml([roleLabel, locationLabel].filter(Boolean).join(" - "))}</p>
         ${userSinceLine ? `<p class="detail-meta">${escapeHtml(userSinceLine)}</p>` : ""}
         ${state.profile.pending ? `<p class="detail-meta">Thank you for registering. Your account is waiting for review.</p>` : ""}
@@ -15782,11 +15768,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           </div>
         ` : `<p class="summary">Add a biography and website so people can learn more from your profile.</p>`}
         <div class="profile-stats">
-          <div class="profile-stat"><strong>${totalPoints}</strong><span class="detail-meta">${stats.pointsSyncing ? "syncing points" : "profile points"}</span></div>
+          <div class="profile-stat"><strong>${totalPoints}</strong><span class="detail-meta">profile points</span></div>
           <div class="profile-stat"><strong>${visits.length}</strong><span class="detail-meta">${escapeHtml(publicSiteCount ? `of ${publicSiteCount} places` : "places visited")}</span></div>
           <div class="profile-stat"><strong>${comments.length}</strong><span class="detail-meta">community notes</span></div>
           <div class="profile-stat"><strong>${loginRewards.currentStreak}</strong><span class="detail-meta">day streak</span></div>
         </div>
+        ${stats.pointsSyncing ? `<p class="detail-meta">Refreshing latest Directus point events...</p>` : ""}
         ${mobileProfileBadgesHtml(activeProfile, stats)}
         ${mobileProfileTrackersHtml(activeProfile, stats)}
         <p class="detail-meta">${escapeHtml(visitProgress)}</p>
@@ -15939,9 +15926,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const activity = profileActivity(profile || {});
       const ids = canonicalPointProfileIds(profile);
       const pointsSyncing = Boolean(ids.length && !profilePointEventsAreCanonical(profile));
-      const pointSafeActivity = pointsSyncing ? { ...activity, pointEvents: [] } : activity;
-      const stats = PROFILE_UTILS.profileStatsFromActivity(pointSafeActivity, {
-        homelandsCount: distinctVisitedHomelandCount(pointSafeActivity.visitedSites || []),
+      const stats = PROFILE_UTILS.profileStatsFromActivity(activity, {
+        homelandsCount: distinctVisitedHomelandCount(activity.visitedSites || []),
         languageLearned: learnedLanguageWords(profile).length,
         languageCorrectAttempts: languageCorrectAttemptCount(profile),
         loginRewards: loginRewardStats(profile),
@@ -16061,7 +16047,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         <section class="visit-preview profile-points-detail">
           <strong>Points</strong>
           ${rows.length ? rows.map(([label, value]) => `<div class="points-breakdown-row"><span>${escapeHtml(label)}</span><strong>${Number(value) || 0}</strong></div>`).join("") : `<p class="detail-meta">Points appear after daily opens, visits, check-ins, language quizzes, and community activity.</p>`}
-          <div class="points-breakdown-row"><span>Total</span><strong>${stats.pointsSyncing ? "Syncing" : Number(stats.points) || 0}</strong></div>
+          <div class="points-breakdown-row"><span>Total</span><strong>${Number(stats.points) || 0}</strong></div>
         </section>
       `;
     }
