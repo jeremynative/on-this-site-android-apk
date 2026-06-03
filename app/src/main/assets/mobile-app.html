@@ -7611,7 +7611,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const STARTUP_LOCATION_ZOOM = 9.55;
     const NEAR_ME_ZOOM = 10.5;
     const SITE_LABEL_MIN_ZOOM = 1.15;
-    const SITE_POINT_LABEL_MIN_ZOOM = 8.55;
+    const SITE_POINT_LABEL_MIN_ZOOM = 7.75;
     const NEARBY_LIST_DESKTOP_LIMIT = 80;
     const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 24;
     const NEARBY_LIST_ANDROID_DEFAULT_LIMIT = 40;
@@ -10276,7 +10276,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const delay = isNativeAndroidApp() ? 620 : 0;
       state.searchMapSyncTimer = window.setTimeout(() => {
         state.searchMapSyncTimer = null;
-        syncMarkers();
+        syncMarkers({ auxiliary: false });
       }, delay);
     }
 
@@ -12040,8 +12040,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return true;
     }
 
-    function syncMarkers() {
+    function syncMarkers(options = {}) {
       if (!state.map) return;
+      const includeAuxiliary = options.auxiliary !== false;
       const sites = activeMapSites();
       const markerSites = state.settings.showPins === false || !shouldShowCustomMapIcons()
         ? []
@@ -12069,10 +12070,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.map.getSource("mobile-sites")?.setData(siteFeatureCollection([...shapeSites, ...pointHitSites]));
       state.map.getSource("mobile-territory-labels")?.setData(polygonLabelCollection("territory", shapeSites));
       state.map.getSource("mobile-detail-labels")?.setData(polygonLabelCollection("detail", shapeSites));
-      syncExhibitMarkers();
-      syncApprovedSuggestionMarkers();
-      syncMapStoryMarkers();
-      syncSitePlantMarkers(state.selectedSite);
+      if (includeAuxiliary) {
+        syncExhibitMarkers();
+        syncApprovedSuggestionMarkers();
+        syncMapStoryMarkers();
+        syncSitePlantMarkers(state.selectedSite);
+      }
     }
 
     function syncExhibitMarkers() {
@@ -15660,7 +15663,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const refresh = () => {
         if (!state.map) return;
         try {
-          syncMarkers();
+          syncMarkers({ auxiliary: false });
           refreshMobileMapSources();
           state.map.resize();
           state.map.triggerRepaint?.();
