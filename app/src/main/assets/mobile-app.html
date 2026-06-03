@@ -10025,7 +10025,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (activitySheetEl?.classList.contains("open")) renderMobileActivitySheet();
       updateMobileActivityUnreadBadge();
       updateMobileNotificationUnreadBadge();
-      return true;
+      return state.profileActivitySynced;
     }
 
     async function ensureProfileActivitySynced() {
