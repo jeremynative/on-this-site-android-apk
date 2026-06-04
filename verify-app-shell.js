@@ -223,7 +223,7 @@ requireBundledText('async function ensureProfileStatsSynced()', "Bundled Android
 requireBundledText('ensureCanonicalProfilePointEvents(currentContributorProfile())', "Bundled Android app must read canonical point events for the active profile.");
 requireBundledText('Refreshing latest Directus activity...', "Bundled Android app must render cached profile stats while Directus activity refreshes.");
 requireBundledText('function updateProfileMenuButton', "Bundled Android app must update the profile menu button with current points.");
-requireBundledText('Profile - ${points}', "Bundled Android app must show profile points in the menu button.");
+requireBundledText('${displayName} (${points})', "Bundled Android app must show the profile display name and points in the menu button.");
 requireBundledText('mobileProfileStats(activeProfile, { syncRemote: false })', "Bundled Android profile menu points must not trigger remote point sync loops.");
 requireBundledText('updateProfileMenuButton(stats)', "Bundled Android app must refresh menu points after profile stats render.");
 requireBundledText('max-width: 142px;', "Bundled Android account button must keep the profile point label compact.");
