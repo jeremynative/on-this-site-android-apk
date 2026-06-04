@@ -9809,9 +9809,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.profileActivityCache = null;
     }
 
-    function localPointEventForKey(eventKey) {
+    function localPointEventForKey(eventKey, profileId = null) {
       if (!eventKey) return null;
-      return state.profilePointEvents.find(item => String(item.event_key || "") === String(eventKey)) || null;
+      const id = Number(relationId(profileId));
+      return state.profilePointEvents.find(item =>
+        String(item.event_key || "") === String(eventKey) &&
+        (!id || Number(relationId(item.member_profile)) === id)
+      ) || null;
     }
 
     async function ensureCanonicalProfilePointEvents(profile = currentContributorProfile()) {
@@ -9885,7 +9889,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         console.warn("Refusing point write for a profile that is not the active login.", { eventType, profileId });
         return null;
       }
-      const existing = localPointEventForKey(event.event_key);
+      const existing = localPointEventForKey(event.event_key, profileId);
       if (existing) return existing;
       const remoteExisting = await refreshRemotePointEventForKey(event.event_key, profileId).catch(() => null);
       if (remoteExisting) return remoteExisting;
@@ -9910,7 +9914,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const latest = await refreshRemotePointEventForKey(event.event_key, profileId).catch(() => null);
         if (latest) return latest;
         await refreshRemotePointEventsForProfileId(profileId).catch(() => []);
-        return localPointEventForKey(event.event_key);
+        return localPointEventForKey(event.event_key, profileId);
       }
     }
 
