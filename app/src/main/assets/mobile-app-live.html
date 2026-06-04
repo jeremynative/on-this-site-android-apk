@@ -15911,6 +15911,17 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (centerMap) state.map.easeTo({ center: state.userLocation, zoom, duration: 850 });
     }
 
+    function fitLongIslandMapView(reason = "long-island-view") {
+      if (!state.map?.fitBounds) return;
+      state.map.fitBounds(LONG_ISLAND_VIEW_BOUNDS, {
+        padding: { top: 48, right: 22, bottom: 220, left: 22 },
+        maxZoom: 7.9,
+        duration: 850,
+        essential: true
+      });
+      refreshAndroidMapAfterSettle(reason);
+    }
+
     function locationMovedEnough(nextLocation) {
       if (!state.userLocation) return true;
       const miles = milesBetween(state.userLocation, nextLocation);
@@ -15933,6 +15944,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const mayCenter = !centerMap || !centerBounds || pointWithinBounds(nextLocation, centerBounds);
       syncUserLocationMarker({ centerMap: centerMap && mayCenter, zoom: mapZoom });
       if (centerMap && mayCenter) refreshAndroidMapAfterSettle("android-location-center");
+      else if (centerMap && centerBounds && !mayCenter) fitLongIslandMapView("android-location-outside-long-island");
       state.lastLocationMarkerUpdateAt = Date.now();
       startLocationWatch();
     }
@@ -15972,7 +15984,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (isNativeAndroidApp()) {
         setMobilePanelMode("nearby");
         setNearbyPanelState("default");
-        return requestUserLocation({ centerMap: true, silent: true, mapZoom: STARTUP_LOCATION_ZOOM });
+        return requestUserLocation({ centerMap: true, silent: true, mapZoom: STARTUP_LOCATION_ZOOM, centerBounds: STARTUP_LOCATION_CENTER_BOUNDS });
       }
       if (state.settings.proximityAlerts) return locateUser();
       return false;
@@ -18994,8 +19006,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         });
         state.mobileStartupRendering = false;
         if (nativeAndroid && state.userLocation) {
-          syncUserLocationMarker({ centerMap: true, zoom: NEAR_ME_ZOOM });
-          refreshAndroidMapAfterSettle("android-startup-near-me");
+          if (pointWithinBounds(state.userLocation, STARTUP_LOCATION_CENTER_BOUNDS)) {
+            syncUserLocationMarker({ centerMap: true, zoom: NEAR_ME_ZOOM });
+            refreshAndroidMapAfterSettle("android-startup-near-me");
+          } else {
+            syncUserLocationMarker({ centerMap: false });
+            fitLongIslandMapView("android-startup-outside-long-island");
+          }
         }
         if (state.selectedSite) focusSite(state.selectedSite);
         checkDailyHistoryMoment();
