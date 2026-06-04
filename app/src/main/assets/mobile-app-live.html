@@ -7877,6 +7877,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const PLANT_OBSERVATION_FIELDS = SHARED_FIELDS.plantObservation;
     const PUBLIC_VISIT_FIELDS = SHARED_FIELDS.publicVisit;
     const SITE_SUGGESTION_FIELDS = SHARED_FIELDS.siteSuggestion;
+    const ACCOUNT_REGISTRATION_FIELDS = [
+      "id", "email", "email_normalized", "display_name", "status", "account_enabled", "account_banned",
+      "review_note", "created_at", "date_created", "reviewed_at"
+    ].join(",");
     const LANGUAGE_PROGRESS_FIELDS = SHARED_FIELDS.languageProgress;
     const LOGIN_REWARD_FIELDS = SHARED_FIELDS.loginReward;
     const FOLLOW_FIELDS = SHARED_FIELDS.follow;
@@ -8020,6 +8024,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mapStoryRefreshTimer: null,
       passwordResetToken: passwordResetTokenFromUrl(),
       plantMarkers: new Map(),
+      accountRegistrations: [],
       lastMobileMapTapAt: 0,
       lastMobileMapTapKey: "",
       mobilePanelTapBlockUntil: 0,
@@ -10266,7 +10271,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         fetchJson(`/items/timeline_events?limit=-1&fields=${TIMELINE_FIELDS}`, { cacheKey: "mobile-timeline", ttl: 60000 })
           .catch(() => fetchJson(`/items/timeline_events?limit=-1&fields=${BASIC_TIMELINE_FIELDS}`, { cacheKey: "mobile-timeline-basic", ttl: 60000 }))
           .catch(() => ({ data: [] }));
-      const [timelineResponse, wikiResponse, eventResponse, legacyExhibitResponse, profilesResponse, commentsResponse, commentVotesResponse, pointEventsResponse, plantObservationsResponse, visitsResponse, suggestionsResponse, storyResponse, storyVotesResponse, languageResponse, followsResponse, loginRewardsResponse] = await Promise.all([
+      const [timelineResponse, wikiResponse, eventResponse, legacyExhibitResponse, profilesResponse, commentsResponse, commentVotesResponse, pointEventsResponse, plantObservationsResponse, visitsResponse, suggestionsResponse, registrationsResponse, storyResponse, storyVotesResponse, languageResponse, followsResponse, loginRewardsResponse] = await Promise.all([
         loadTimelineEvents(),
         fetchJson(`/items/wiki_articles?limit=-1&sort=title&fields=${WIKI_INDEX_FIELDS}`, { cacheKey: "mobile-wiki", ttl: 60000 }).catch(() => ({ data: [] })),
         fetchJson(`/items/calendar_events?limit=-1&sort=start_datetime,title&fields=${EXHIBIT_FIELDS}`, { cacheKey: "mobile-events", ttl: 60000, fresh: false }).catch(() => ({ data: [] })),
@@ -10278,6 +10283,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         fetchJson(`/items/mobile_plant_observations?limit=-1&filter[status][_eq]=approved&fields=${PLANT_OBSERVATION_FIELDS}`, { cacheKey: "mobile-plant-observations", ttl: 45000, fresh: false }).catch(() => ({ data: [] })),
         fetchJson(`/items/mobile_site_visits?limit=-1&fields=${PUBLIC_VISIT_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.publicVisits)),
         fetchJson(`/items/site_suggestions?limit=-1&fields=${SITE_SUGGESTION_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.siteSuggestions)),
+        adminAccountRegistrationsRequest().catch(() => currentRowsFallback(state.accountRegistrations)),
         fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 30000, fresh: false }).catch(() => ({ data: [] })),
         fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 30000, fresh: false }).catch(() => ({ data: [] })),
         fetchJson(`/items/mobile_language_quiz_progress?limit=-1&fields=${LANGUAGE_PROGRESS_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.languageQuizAttempts)),
@@ -10298,6 +10304,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.plantObservations = plantObservationsResponse.data || [];
       state.publicVisits = preserveActiveProfileRows(visitsResponse.data, state.publicVisits);
       state.siteSuggestions = preserveActiveProfileRows(suggestionsResponse.data, state.siteSuggestions, ["author_profile"]);
+      state.accountRegistrations = registrationsResponse.data || [];
       state.mapStories = storyResponse.data || [];
       state.mapStoryVotes = storyVotesResponse.data || [];
       state.languageQuizAttempts = preserveActiveProfileRows(languageResponse.data, state.languageQuizAttempts);
@@ -10310,6 +10317,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         pointEventsResponse,
         visitsResponse,
         suggestionsResponse,
+        registrationsResponse,
         languageResponse,
         followsResponse,
         loginRewardsResponse
@@ -10400,13 +10408,19 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     async function refreshProfileActivityData() {
-      const [profilesResponse, commentsResponse, commentVotesResponse, pointEventsResponse, visitsResponse, suggestionsResponse, languageResponse, followsResponse, loginRewardsResponse] = await Promise.all([
+      const [profilesResponse, commentsResponse, commentVotesResponse, pointEventsResponse, visitsResponse, suggestionsResponse, registrationsResponse, languageResponse, followsResponse, loginRewardsResponse] = await Promise.all([
         withProfileSyncTimeout(fetchJson(`/items/mobile_member_profiles?limit=-1&sort=display_name&fields=${PROFILE_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.contributorProfiles)), currentRowsFallback(state.contributorProfiles)),
         withProfileSyncTimeout(fetchJson(`/items/mobile_comments?limit=-1&filter[status][_eq]=approved&filter[public_activity][_eq]=true&fields=${PUBLIC_COMMENT_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.publicComments)), currentRowsFallback(state.publicComments)),
         withProfileSyncTimeout(fetchJson(`/items/mobile_comment_votes?limit=-1&fields=${COMMENT_VOTE_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.commentVotes)), currentRowsFallback(state.commentVotes)),
         withProfileSyncTimeout(activeProfileRowsRequest("mobile_point_events", POINT_EVENT_FIELDS, state.profilePointEvents), currentRowsFallback(state.profilePointEvents)),
         withProfileSyncTimeout(activeProfileRowsRequest("mobile_site_visits", PUBLIC_VISIT_FIELDS, state.publicVisits), currentRowsFallback(state.publicVisits)),
-        withProfileSyncTimeout(activeProfileRowsRequest("site_suggestions", SITE_SUGGESTION_FIELDS, state.siteSuggestions, ["author_profile"]), currentRowsFallback(state.siteSuggestions)),
+        withProfileSyncTimeout(
+          (isCurrentAdminReviewer()
+            ? fetchJson(`/items/site_suggestions?limit=-1&fields=${SITE_SUGGESTION_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.siteSuggestions))
+            : activeProfileRowsRequest("site_suggestions", SITE_SUGGESTION_FIELDS, state.siteSuggestions, ["author_profile"])),
+          currentRowsFallback(state.siteSuggestions)
+        ),
+        withProfileSyncTimeout(adminAccountRegistrationsRequest().catch(() => currentRowsFallback(state.accountRegistrations)), currentRowsFallback(state.accountRegistrations)),
         withProfileSyncTimeout(activeProfileRowsRequest("mobile_language_quiz_progress", LANGUAGE_PROGRESS_FIELDS, state.languageQuizAttempts), currentRowsFallback(state.languageQuizAttempts)),
         withProfileSyncTimeout(fetchJson(`/items/mobile_profile_follows?limit=-1&fields=${FOLLOW_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileFollows)), currentRowsFallback(state.profileFollows)),
         withProfileSyncTimeout(activeProfileRowsRequest("mobile_profile_logins", LOGIN_REWARD_FIELDS, state.profileLoginRewards), currentRowsFallback(state.profileLoginRewards))
@@ -10417,6 +10431,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.profilePointEvents = preserveActiveProfileRows(pointEventsResponse.data, state.profilePointEvents);
       state.publicVisits = preserveActiveProfileRows(visitsResponse.data, state.publicVisits);
       state.siteSuggestions = preserveActiveProfileRows(suggestionsResponse.data, state.siteSuggestions, ["author_profile"]);
+      state.accountRegistrations = registrationsResponse.data || [];
       state.languageQuizAttempts = preserveActiveProfileRows(languageResponse.data, state.languageQuizAttempts);
       state.profileFollows = preserveActiveProfileRows(followsResponse.data, state.profileFollows, ["follower_profile", "following_profile"]);
       state.profileLoginRewards = preserveActiveProfileRows(loginRewardsResponse.data, state.profileLoginRewards);
@@ -10428,6 +10443,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         pointEventsResponse,
         visitsResponse,
         suggestionsResponse,
+        registrationsResponse,
         languageResponse,
         followsResponse,
         loginRewardsResponse
@@ -10435,6 +10451,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (profilesSheetEl?.classList.contains("open")) renderProfiles();
       if (followingSheetEl?.classList.contains("open")) renderFollowing();
       if (activitySheetEl?.classList.contains("open")) renderMobileActivitySheet();
+      if (notificationsSheetEl?.classList.contains("open")) renderMobileNotificationsSheet();
       updateMobileActivityUnreadBadge();
       updateMobileNotificationUnreadBadge();
       return state.profileActivitySynced;
@@ -16884,6 +16901,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           };
         });
       const suggestions = (state.siteSuggestions || [])
+        .filter(() => !isCurrentAdminReviewer())
         .filter(suggestion => String(suggestion.status || "").toLowerCase() === "approved")
         .map(suggestion => ({
           type: "suggestion",
@@ -16976,19 +16994,54 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return /feedback/i.test(`${item.title || ""} ${item.review_note || ""}`) || Number(item.priority) === 1;
     }
 
-    function pendingMobileSuggestionNotifications() {
+    function adminAccountRegistrationsRequest() {
+      if (!isCurrentAdminReviewer()) return Promise.resolve({ data: [] });
+      return fetchJson(`/items/mobile_account_registrations?limit=-1&sort=-created_at&fields=${ACCOUNT_REGISTRATION_FIELDS}`, { fresh: true });
+    }
+
+    function registrationDate(registration) {
+      return registration?.created_at || registration?.date_created || registration?.reviewed_at || "";
+    }
+
+    function registrationNeedsReview(registration) {
+      const status = String(registration?.status || "pending").toLowerCase();
+      if (registration?.account_enabled === true || status === "approved") return false;
+      if (registration?.account_banned === true || status === "banned" || status === "declined") return false;
+      return true;
+    }
+
+    function adminMobileSuggestionNotifications() {
       if (!isCurrentAdminReviewer()) return [];
       return (state.siteSuggestions || [])
-        .filter(item => String(item.status || "pending").toLowerCase() === "pending")
         .map(item => ({
           type: "suggestion-review",
           slug: String(item.id || ""),
-          title: suggestionIsFeedback(item) ? "Feedback needs review" : "Suggested site needs review",
-          label: suggestionIsFeedback(item) ? "Feedback" : "Suggested site",
+          title: suggestionIsFeedback(item)
+            ? "Feedback needs review"
+            : String(item.status || "pending").toLowerCase() === "pending"
+              ? "Suggested site needs review"
+              : "Site suggestion",
+          label: `${suggestionIsFeedback(item) ? "Feedback" : "Suggested site"} - ${String(item.status || "pending").toLowerCase()}`,
           preview: activityPreview(item.introduction || item.review_note || "A contributor sent information for the archive."),
           date: ACTIVITY_UTILS.suggestionDate(item),
           meta: `${item.author_name || item.author_email || "Contributor"}${item.suggested_image ? " - screenshot attached" : ""}`,
-          image: directusAssetUrl(item.suggested_image)
+          image: directusAssetUrl(item.suggested_image),
+          pendingReview: String(item.status || "pending").toLowerCase() === "pending"
+        }));
+    }
+
+    function pendingMobileAccountNotifications() {
+      if (!isCurrentAdminReviewer()) return [];
+      return (state.accountRegistrations || [])
+        .filter(registrationNeedsReview)
+        .map(item => ({
+          type: "account-review",
+          slug: String(item.id || ""),
+          title: "New contributor account",
+          label: "Account request",
+          preview: activityPreview(item.review_note || item.email || item.email_normalized || "A contributor account is waiting for review."),
+          date: registrationDate(item),
+          meta: item.display_name || item.email || item.email_normalized || "New account"
         }));
     }
 
@@ -17037,7 +17090,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function latestMobileNotifications(limit = 30) {
-      return ACTIVITY_UTILS.mergeRecentActivity([personalMobileNotificationItems(), pendingMobileSuggestionNotifications()], { limit });
+      return ACTIVITY_UTILS.mergeRecentActivity([personalMobileNotificationItems(), adminMobileSuggestionNotifications(), pendingMobileAccountNotifications()], { limit });
     }
 
     function mobileNotificationLastSeenKey() {
@@ -17127,7 +17180,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
               <strong>${escapeHtml(item.title || "Notification")}</strong>
               ${item.preview ? `<p>${escapeHtml(item.preview)}</p>` : ""}
             </button>
-            ${item.type === "suggestion-review" ? `<div class="notification-actions">
+            ${item.type === "suggestion-review" && item.pendingReview ? `<div class="notification-actions">
               <button type="button" data-mobile-notification-action="approve">Approve</button>
               <button type="button" data-mobile-notification-action="decline">Deny</button>
             </div>` : ""}
@@ -17219,6 +17272,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           ? suggestion.geojson.coordinates
           : [Number(suggestion?.longitude), Number(suggestion?.latitude)];
         if (coords.every(Number.isFinite)) state.map?.flyTo?.({ center: coords, zoom: Math.max(state.map.getZoom?.() || 9, 13), duration: 850 });
+        return;
+      }
+      if (type === "account-review") {
+        if (slug) window.open(`${DIRECTUS}/admin/content/mobile_account_registrations/${encodeURIComponent(slug)}`, "_blank", "noopener,noreferrer");
         return;
       }
       if (type === "comment") {
