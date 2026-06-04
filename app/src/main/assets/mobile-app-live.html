@@ -5407,12 +5407,13 @@
 
   function languageRemoteAttemptExists(attempts = [], profileId, contentKey, wordId, options = {}) {
     const relationId = options.relationId || defaultRelationId;
-    const dateKey = options.dateKey || localDateKey();
+    const dateKeys = new Set([String(options.dateKey || localDateKey()).slice(0, 10)]);
+    if (!options.dateKey) dateKeys.add(new Date().toISOString().slice(0, 10));
     return (attempts || []).some(item =>
       Number(relationId(item.member_profile)) === Number(profileId) &&
       String(item.content_key || "") === String(contentKey || "") &&
       String(item.word_id || "") === String(wordId || "") &&
-      String(item.answered_at || "").slice(0, 10) === dateKey
+      dateKeys.has(String(item.answered_at || "").slice(0, 10))
     );
   }
 
@@ -7270,7 +7271,8 @@
       return token ? { ...extra, authorization: `Bearer ${token}` } : { ...extra };
     }
 
-    async function refreshAuthToken() {
+    async function refreshAuthToken(options = {}) {
+      const expireOnAuthFailure = options.expireOnAuthFailure !== false;
       const refreshToken = refreshTokenProvider();
       if (!refreshToken) return "";
       const response = await fetch(`${baseUrl}/auth/refresh`, {
@@ -7280,7 +7282,7 @@
       }).catch(() => null);
       if (!response) return "";
       if (!response.ok) {
-        if (isAuthFailure(response)) onAuthExpired();
+        if (expireOnAuthFailure && isAuthFailure(response)) onAuthExpired();
         return "";
       }
       const data = await response.json();
@@ -7339,7 +7341,7 @@
         response = await fetch(fallbackUrl, { headers, cache: fresh ? "no-store" : "default" });
       }
       if ((response.status === 401 || response.status === 403) && token) {
-        const refreshed = await refreshAuthToken();
+        const refreshed = await refreshAuthToken({ expireOnAuthFailure: false });
         if (refreshed) {
           response = await fetch(url, { headers: authHeaders(refreshed), cache: fresh ? "no-store" : "default" });
         }
