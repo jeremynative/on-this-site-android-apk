@@ -29,6 +29,23 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Sync bundled mobile app from web repository
+        run: |
+          set -euo pipefail
+          curl -fsSL 'https://raw.githubusercontent.com/jeremynative/on-this-site-web/main/mobile-app-live.html' -o app/src/main/assets/mobile-app-live.html
+          curl -fsSL 'https://raw.githubusercontent.com/jeremynative/on-this-site-web/main/mobile-app.html' -o app/src/main/assets/mobile-app.html
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          token_pattern = re.compile(r"pk\.ey[A-Za-z0-9._-]+")
+          for name in ("mobile-app-live.html", "mobile-app.html"):
+              path = Path("app/src/main/assets") / name
+              text = path.read_text(encoding="utf-8")
+              text = token_pattern.sub("__NLI_MAPBOX_TOKEN__", text)
+              path.write_text(text, encoding="utf-8")
+          PY
+
       - name: Verify Android app shell
         run: node verify-app-shell.js
 
