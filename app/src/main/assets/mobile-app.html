@@ -522,9 +522,14 @@
       position: relative;
       z-index: 1202;
       min-width: 118px;
+      max-width: 142px;
+      box-sizing: border-box;
+      padding-inline: 8px;
       border-color: var(--accent-strong);
       background: #edf4ef;
       color: var(--accent-strong);
+      font-size: 11.5px;
+      white-space: nowrap;
       pointer-events: auto;
       touch-action: manipulation;
     }
@@ -16093,6 +16098,25 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       window.setTimeout(repaint, 32000);
     }
 
+    function updateProfileMenuButton(stats = null) {
+      if (!loginOpenBtn) return;
+      if (!state.profile) {
+        loginOpenBtn.textContent = "Login";
+        loginOpenBtn.title = "Login or register as a contributor";
+        return;
+      }
+      if (state.profile.pending) {
+        loginOpenBtn.textContent = "Account Pending";
+        loginOpenBtn.title = "Contributor account awaiting review";
+        return;
+      }
+      const activeProfile = currentContributorProfile() || state.profile;
+      const resolvedStats = stats || mobileProfileStats(activeProfile, { syncRemote: false });
+      const points = mobileProfilePointTotal(resolvedStats);
+      loginOpenBtn.textContent = `Profile - ${points} ${points === 1 ? "pt" : "pts"}`;
+      loginOpenBtn.title = `${points} profile ${points === 1 ? "point" : "points"}`;
+    }
+
     function renderProfile() {
       if (!profileCardEl) return;
       loginSheetEl?.classList.toggle("has-profile", !!state.profile);
@@ -16100,7 +16124,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (mapStoryOpenBtn) mapStoryOpenBtn.hidden = !isApprovedContributor();
       if (!state.profile) {
         profileCardEl.innerHTML = `<p class="summary">Not logged in. Use one contributor account for the desktop map and mobile app.</p>`;
-        loginOpenBtn.textContent = "Login";
+        updateProfileMenuButton();
         loginSubmitBtn.hidden = false;
         registerToggleBtn.hidden = false;
         if (demoLoginBtn) demoLoginBtn.hidden = true;
@@ -16114,7 +16138,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           if (updated) renderProfile();
         });
       }
-      loginOpenBtn.textContent = state.profile.pending ? "Login" : "Profile";
       loginSubmitBtn.hidden = true;
       registerToggleBtn.hidden = true;
       if (demoLoginBtn) demoLoginBtn.hidden = true;
@@ -16141,6 +16164,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const publicSiteCount = PROFILE_UTILS.publicSiteTotal(state.sites);
       const visitProgress = PROFILE_UTILS.visitProgressLabel(visits.length, publicSiteCount);
       const totalPoints = mobileProfilePointTotal(stats);
+      updateProfileMenuButton(stats);
       const recentVisits = visits.slice(0, 3);
       profileCardEl.innerHTML = `
         <strong>${escapeHtml(displayName || "Contributor")}</strong>
