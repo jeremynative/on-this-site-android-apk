@@ -34,17 +34,7 @@ jobs:
           set -euo pipefail
           curl -fsSL 'https://raw.githubusercontent.com/jeremynative/on-this-site-web/main/mobile-app-live.html' -o app/src/main/assets/mobile-app-live.html
           curl -fsSL 'https://raw.githubusercontent.com/jeremynative/on-this-site-web/main/mobile-app.html' -o app/src/main/assets/mobile-app.html
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          token_pattern = re.compile(r"pk\.ey[A-Za-z0-9._-]+")
-          for name in ("mobile-app-live.html", "mobile-app.html"):
-              path = Path("app/src/main/assets") / name
-              text = path.read_text(encoding="utf-8")
-              text = token_pattern.sub("__NLI_MAPBOX_TOKEN__", text)
-              path.write_text(text, encoding="utf-8")
-          PY
+          python3 -c 'from pathlib import Path; import re; token=re.compile(r"pk\.ey[A-Za-z0-9._-]+"); [path.write_text(token.sub("__NLI_MAPBOX_TOKEN__", path.read_text(encoding="utf-8")), encoding="utf-8") for path in (Path("app/src/main/assets/mobile-app-live.html"), Path("app/src/main/assets/mobile-app.html"))]'
 
       - name: Verify Android app shell
         run: node verify-app-shell.js
@@ -100,6 +90,7 @@ jobs:
           VERSION_CODE: ${{ steps.apk_version.outputs.version_code }}
           VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || steps.apk_version.outputs.version_name }}
         run: |
+          set -euo pipefail
           test -n "$ANDROID_KEYSTORE_PASSWORD"
           test -n "$ANDROID_KEY_ALIAS"
           test -n "$ANDROID_KEY_PASSWORD"
@@ -114,37 +105,16 @@ jobs:
             gh release download --pattern 'on-this-site-latest.apk' --dir "$previous_dir" --clobber || true
             previous_apk="$(find "$previous_dir" -name 'on-this-site-latest.apk' -print -quit)"
             if [[ -n "$previous_apk" && -f "$previous_apk" ]]; then
-              MAPBOX_TOKEN="$(APK_PATH="$previous_apk" python3 - <<'PY'
-          import os
-          import re
-          import zipfile
-
-          apk_path = os.environ.get("APK_PATH", "")
-          pattern = re.compile(rb"pk\.ey[A-Za-z0-9._-]+")
-          try:
-              with zipfile.ZipFile(apk_path) as archive:
-                  for name in archive.namelist():
-                      if not (name.endswith(".dex") or name.endswith(".html") or name.endswith(".js")):
-                          continue
-                      match = pattern.search(archive.read(name))
-                      if match:
-                          print(match.group(0).decode("ascii"))
-                          break
-          except Exception:
-              pass
-          PY
-          )"
+              MAPBOX_TOKEN="$(APK_PATH="$previous_apk" python3 -c 'import os,re,zipfile; p=os.environ.get("APK_PATH",""); pat=re.compile(rb"pk\.ey[A-Za-z0-9._-]+"); out=""; z=zipfile.ZipFile(p); [print(m.group(0).decode("ascii")) or exit(0) for n in z.namelist() if (n.endswith(".dex") or n.endswith(".html") or n.endswith(".js")) for m in [pat.search(z.read(n))] if m]')"
               export MAPBOX_TOKEN
             fi
-          fi
-          if [[ -n "${MAPBOX_TOKEN:-}" ]]; then
-            echo "::add-mask::$MAPBOX_TOKEN"
           fi
           test -n "$MAPBOX_TOKEN"
           if [[ ! "$MAPBOX_TOKEN" =~ ^pk\.ey ]]; then
             echo "MAPBOX_TOKEN must be a public pk token for APK builds."
             exit 1
           fi
+          echo "::add-mask::$MAPBOX_TOKEN"
           gradle assembleRelease --no-daemon
 
       - name: Prepare release APK files
