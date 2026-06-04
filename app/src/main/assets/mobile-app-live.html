@@ -7289,7 +7289,7 @@
       const next = data?.data || {};
       const accessToken = next.access_token || "";
       if (!accessToken) {
-        onAuthExpired();
+        if (expireOnAuthFailure) onAuthExpired();
         return "";
       }
       onTokenRefresh({
@@ -7737,9 +7737,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         });
       },
       onAuthExpired: () => {
-        if (!state.profile?.token) return;
-        saveProfile(null);
-        showBanner("Session expired. Please log in again.");
+        if (!state.profile?.token && !state.profile?.refreshToken && !state.profile?.refresh_token) return;
+        saveProfile({
+          ...state.profile,
+          token: null,
+          refreshToken: null,
+          refresh_token: null,
+          tokenExpired: true
+        });
+        showBanner("Login needs refreshing before saving changes.");
       }
     });
     const NEW_CONTENT_ALERT_INTERVAL_MS = 5 * 60 * 60 * 1000;
