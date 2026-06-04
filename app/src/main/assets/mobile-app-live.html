@@ -2324,6 +2324,27 @@
       gap: 8px;
     }
 
+    .comment-photo-status {
+      margin: 2px 0 0;
+      color: rgba(30, 56, 43, 0.72);
+      font-size: 0.9rem;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .comment-photo-status[data-tone="error"] {
+      color: #8a3d2d;
+    }
+
+    .comment-photo-preview {
+      width: min(100%, 220px);
+      max-height: 160px;
+      border: 1px solid rgba(73, 111, 93, 0.18);
+      border-radius: 10px;
+      object-fit: cover;
+      background: #eef4ef;
+    }
+
     .plant-observation-panel {
       display: grid;
       gap: 10px;
@@ -13147,6 +13168,76 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return compressPlantImage(file);
     }
 
+    function formatImageSize(bytes) {
+      const size = Number(bytes || 0);
+      if (!size) return "0 KB";
+      if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(size >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
+      return `${Math.max(1, Math.round(size / 1024))} KB`;
+    }
+
+    function setCommentPhotoStatus(section, message, tone = "") {
+      const status = section?.querySelector("[data-comment-photo-status]");
+      if (!status) return;
+      status.textContent = message || "";
+      status.hidden = !message;
+      status.dataset.tone = tone || "";
+    }
+
+    function setCommentPhotoPreview(section, file) {
+      const preview = section?.querySelector("[data-comment-photo-preview]");
+      if (!preview) return;
+      if (section._commentPhotoPreviewUrl) {
+        URL.revokeObjectURL(section._commentPhotoPreviewUrl);
+        section._commentPhotoPreviewUrl = "";
+      }
+      if (!file) {
+        preview.hidden = true;
+        preview.removeAttribute("src");
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      section._commentPhotoPreviewUrl = url;
+      preview.src = url;
+      preview.hidden = false;
+    }
+
+    async function prepareSelectedCommentPhoto(section) {
+      if (!section) return null;
+      const input = section.querySelector("[data-discussion-image]");
+      const rawFile = input?.files?.[0] || null;
+      section._commentPhotoFile = null;
+      setCommentPhotoPreview(section, null);
+      if (!rawFile) {
+        setCommentPhotoStatus(section, "");
+        return null;
+      }
+      const fileNameLooksImage = /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(rawFile.name || "");
+      if (rawFile.type && !/^image\//i.test(rawFile.type || "") && !fileNameLooksImage) {
+        setCommentPhotoStatus(section, "Choose an image file.", "error");
+        showBanner("Choose an image file.");
+        return null;
+      }
+      setCommentPhotoStatus(section, `Preparing photo (${formatImageSize(rawFile.size)})...`);
+      let prepared = rawFile;
+      if (rawFile.size > 5 * 1024 * 1024 || !/jpe?g$/i.test(rawFile.type || "") && !/\.jpe?g$/i.test(rawFile.name || "")) {
+        prepared = await compressCommentImage(rawFile);
+      }
+      const imageError = validateJpegImage(prepared);
+      if (imageError) {
+        section._commentPhotoFile = null;
+        setCommentPhotoStatus(section, imageError, "error");
+        showBanner(imageError);
+        return null;
+      }
+      section._commentPhotoFile = prepared;
+      const changedSize = prepared.size && rawFile.size && prepared.size !== rawFile.size
+        ? `, compressed from ${formatImageSize(rawFile.size)}`
+        : "";
+      setCommentPhotoPreview(section, prepared);
+      setCommentPhotoStatus(section, `Photo ready (${formatImageSize(prepared.size)}${changedSize}).`);
+      return prepared;
+    }
+
     async function compressSuggestionImage(file) {
       return compressPlantImage(file);
     }
@@ -14581,6 +14672,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
                     <button class="action secondary" type="button" data-take-comment-photo>Take photo</button>
                     <button class="action secondary" type="button" data-choose-comment-photo>Choose photo</button>
                   </div>
+                  <p class="comment-photo-status" data-comment-photo-status hidden></p>
+                  <img class="comment-photo-preview" data-comment-photo-preview alt="" hidden>
                 </div>
                 <div class="discussion-composer-actions">
                   <button class="action secondary" type="button" data-submit-discussion>Post comment</button>
@@ -14655,14 +14748,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         showBanner(moderation.message);
         return;
       }
-      let image = section.querySelector("[data-discussion-image]")?.files?.[0] || null;
-      if (image && !/^image\//i.test(image.type || "")) {
-        showBanner("Choose an image file.");
-        return;
-      }
-      if (image && (image.size > 5 * 1024 * 1024 || !/jpe?g$/i.test(image.type || "") && !/\.jpe?g$/i.test(image.name || ""))) {
+      let image = section._commentPhotoFile || section.querySelector("[data-discussion-image]")?.files?.[0] || null;
+      if (image && image !== section._commentPhotoFile) {
         try {
-          image = await compressCommentImage(image);
+          image = await prepareSelectedCommentPhoto(section);
         } catch (error) {
           showBanner(error.message || "Could not prepare that comment photo.");
           return;
@@ -17983,6 +18072,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         event.preventDefault();
         const input = discussion.querySelector("[data-discussion-image]");
         if (input) {
+          setCommentPhotoStatus(discussion, "Opening camera...");
           input.setAttribute("capture", "environment");
           input.value = "";
           try {
@@ -17997,6 +18087,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         event.preventDefault();
         const input = discussion.querySelector("[data-discussion-image]");
         if (input) {
+          setCommentPhotoStatus(discussion, "Opening photo library...");
           input.removeAttribute("capture");
           input.value = "";
           try {
@@ -18132,6 +18223,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (plantPanel && event.target.matches("[data-plant-notes]")) renderPlantContext(plantPanel);
     });
     detailBodyEl.addEventListener("change", event => {
+      const discussion = event.target.closest(".discussion-section");
+      if (discussion && event.target.matches("[data-discussion-image]")) {
+        prepareSelectedCommentPhoto(discussion).catch(error => {
+          setCommentPhotoStatus(discussion, error.message || "Could not prepare that comment photo.", "error");
+          showBanner(error.message || "Could not prepare that comment photo.");
+        });
+        return;
+      }
       const plantPanel = event.target.closest("[data-plant-observation]");
       if (plantPanel && event.target.matches("[data-plant-image]")) processPlantCameraPhoto(plantPanel);
       if (plantPanel && event.target.matches("[data-plant-image]")) event.target.setAttribute("capture", "environment");
