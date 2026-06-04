@@ -8029,6 +8029,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       feedbackScreenshotFile: null,
       contributorSortMode: "alpha",
       expandedMobileProfileKey: "",
+      memberUsageSessionStartedAt: Date.now(),
+      memberUsageLastFlushAt: 0,
+      memberUsageFlushedSeconds: 0,
+      memberUsageSessionRecorded: false,
+      memberUsageFlushPromise: null,
+      memberUsageLoadedProfileIds: new Set(),
       settings: loadSettings(),
       profile: loadProfile()
     };
@@ -8268,6 +8274,76 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         }
       }
       renderProfile();
+    }
+
+    function trackedMemberProfile() {
+      const profile = currentContributorProfile?.();
+      if (!profile?.id || state.profile?.pending || state.profile?.approved === false) return null;
+      return profile;
+    }
+
+    async function ensureMemberUsageBaseline(profile) {
+      const profileId = Number(relationId(profile?.id));
+      if (!profileId) return false;
+      if (state.memberUsageLoadedProfileIds.has(String(profileId))) return true;
+      const response = await fetchJson(`/items/mobile_member_profiles/${profileId}?fields=last_login_at,last_active_at,usage_seconds_total,usage_session_count`, { fresh: true });
+      const data = response?.data || {};
+      Object.assign(profile, data);
+      state.memberUsageLoadedProfileIds.add(String(profileId));
+      return true;
+    }
+
+    function memberUsagePayload(profile, options = {}) {
+      const now = Date.now();
+      const totalSessionSeconds = Math.max(0, Math.floor((now - state.memberUsageSessionStartedAt) / 1000));
+      const incrementalSeconds = Math.max(0, totalSessionSeconds - Number(state.memberUsageFlushedSeconds || 0));
+      const currentTotal = Math.max(0, Number(profile?.usage_seconds_total || 0));
+      const currentSessions = Math.max(0, Number(profile?.usage_session_count || 0));
+      const payload = {
+        last_active_at: new Date(now).toISOString()
+      };
+      if (options.login) payload.last_login_at = payload.last_active_at;
+      if (options.trackUsage !== false && incrementalSeconds >= 5) {
+        payload.usage_seconds_total = currentTotal + incrementalSeconds;
+      }
+      if (options.trackUsage !== false && (!state.memberUsageSessionRecorded || options.login)) {
+        payload.usage_session_count = currentSessions + 1;
+      }
+      return { payload, incrementalSeconds };
+    }
+
+    async function trackMemberProfileActivity(options = {}) {
+      const profile = trackedMemberProfile();
+      if (!profile || state.memberUsageFlushPromise) return null;
+      const now = Date.now();
+      const throttleMs = Number(options.throttleMs || 60000);
+      if (!options.force && !options.login && state.memberUsageLastFlushAt && now - state.memberUsageLastFlushAt < throttleMs) return null;
+      const baselineReady = await ensureMemberUsageBaseline(profile).catch(() => false);
+      const { payload, incrementalSeconds } = memberUsagePayload(profile, { ...options, trackUsage: baselineReady });
+      if (!Object.keys(payload).length) return null;
+      state.memberUsageFlushPromise = patchDirectusItem("mobile_member_profiles", profile.id, payload, { requireAuth: true })
+        .then(result => {
+          Object.assign(profile, payload, result?.data || {});
+          if (state.profile) {
+            saveProfile({ ...state.profile, ...payload });
+          }
+          if (incrementalSeconds) state.memberUsageFlushedSeconds += incrementalSeconds;
+          if (payload.usage_session_count !== undefined) state.memberUsageSessionRecorded = true;
+          state.memberUsageLastFlushAt = Date.now();
+          return result;
+        })
+        .catch(() => null)
+        .finally(() => {
+          state.memberUsageFlushPromise = null;
+        });
+      return state.memberUsageFlushPromise;
+    }
+
+    function scheduleMemberProfileActivityTracking(options = {}) {
+      if (!trackedMemberProfile()) return;
+      window.setTimeout(() => {
+        trackMemberProfileActivity(options).catch(() => null);
+      }, 0);
     }
 
     async function saveLanguageAttempt(contentKey, word, correct) {
@@ -18628,6 +18704,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const localProfile = await loginRegistrationStatus(loginEmailEl.value.trim(), loginPasswordEl.value);
         if (localProfile) {
           saveProfile(localProfile);
+          scheduleMemberProfileActivityTracking({ login: true, force: true });
           await ensureProfileStatsSynced();
           if (!localProfile.approved) {
             showLoginStatus("Account found. Your account is still waiting for review.", "error");
@@ -18679,6 +18756,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           tokenExpires: data.data?.expires || null,
           profileId: profile?.id || null
         });
+        scheduleMemberProfileActivityTracking({ login: true, force: true });
         await ensureProfileStatsSynced();
         await awardDailyLoginReward();
         showLoginStatus("Logged in.", "success");
@@ -18788,10 +18866,21 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     document.addEventListener("keydown", event => {
       const target = event.target;
       const editing = target && /input|textarea|select/i.test(target.tagName || "");
+      scheduleMemberProfileActivityTracking();
       if (!editing && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
         event.preventDefault();
         stepMobileTimeline(event.key === "ArrowRight" ? 1 : -1);
       }
+    });
+    ["click", "touchend"].forEach(type => {
+      document.addEventListener(type, () => scheduleMemberProfileActivityTracking(), { passive: true });
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) scheduleMemberProfileActivityTracking({ force: true, throttleMs: 0 });
+      else scheduleMemberProfileActivityTracking();
+    });
+    window.addEventListener("pagehide", () => {
+      scheduleMemberProfileActivityTracking({ force: true, throttleMs: 0 });
     });
 
     async function start() {
@@ -18869,6 +18958,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
               renderProfile();
               renderRewards();
             }
+            scheduleMemberProfileActivityTracking();
           })
           .catch(() => null));
         idleTask(() => loadDeferredData()
