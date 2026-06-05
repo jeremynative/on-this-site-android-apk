@@ -215,6 +215,10 @@ requireBundledText('sorted by proximity', "Bundled Android app must label nearby
 requireBundledText('const STARTUP_LOCATION_ZOOM = NEAR_ME_ZOOM;', "Bundled Android app must open with the Near me zoom level.");
 requireBundledText('if (nativeAndroid) await requestStartupLocation();', "Bundled Android app must request location before the first nearby list render.");
 requireBundledText('refreshAndroidMapAfterSettle("android-startup-near-me")', "Bundled Android app must recenter the initialized map on startup location.");
+requireBundledText('function randomMobileStartupSpotlightSite', "Bundled Android app must choose a random mapped site when startup location is off Long Island.");
+requireBundledText('function showMobileStartupSpotlight', "Bundled Android app must show the compact off-island startup site card.");
+requireBundledText('mobile-startup-spotlight', "Bundled Android app must include the mobile Did you know startup card.");
+requireBundledText('showRandomMobileStartupSpotlight()', "Bundled Android app must use the random site spotlight before falling back to the full island view.");
 requireBundledText('const SITE_CHECKIN_RADIUS_MILES = 0.25;', "Bundled Android app must require check-ins within a quarter mile.");
 requireBundledText('const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;', "Bundled Android app must alert within half a mile of a site.");
 requireBundledText('window.AndroidApp.showNotification', "Bundled Android app must use the native notification bridge.");
