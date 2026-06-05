@@ -1,6 +1,6 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260605-biography-path-numbers";
+const expectedBuild = "20260605-biography-path-pin-numbers-wiki-search";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -154,8 +154,11 @@ for (const [label, html] of [
   if (!html.includes('"wyandanch": {') || !html.includes("mobile-biography-place-path") || !html.includes("data-mobile-biography-path-index")) {
     throw new Error(`Bundled Android ${label} is missing the mobile Wyandanch biography path.`);
   }
-  if (!html.includes("data-mobile-biography-path-order") || !html.includes("content: attr(data-mobile-biography-path-order)")) {
+  if (!html.includes("button.dataset.mobileBiographyPathOrder = String(index + 1);") || !html.includes("button.textContent = String(index + 1);")) {
     throw new Error(`Bundled Android ${label} is missing visible numbered biography path map pins.`);
+  }
+  if (!html.includes('resultType: "wiki"') || !html.includes('data-wiki-slug="${escapeHtml(site.slug)}"')) {
+    throw new Error(`Bundled Android ${label} is missing mobile wiki article search results.`);
   }
 }
 if (bundledLiveAppBytes.length > 1500000 || /window\.NLI_MOBILE_DATA\s*=/.test(bundledLiveApp)) {
