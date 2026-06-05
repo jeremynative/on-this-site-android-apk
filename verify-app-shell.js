@@ -220,6 +220,10 @@ requireBundledText('function randomMobileStartupSpotlightSite', "Bundled Android
 requireBundledText('function showMobileStartupSpotlight', "Bundled Android app must show the compact off-island startup site card.");
 requireBundledText('mobile-startup-spotlight', "Bundled Android app must include the mobile Did you know startup card.");
 requireBundledText('showRandomMobileStartupSpotlight()', "Bundled Android app must use the random site spotlight before falling back to the full island view.");
+requireBundledText('mobileStartupSpotlightReturnOnDetailClose: false', "Bundled Android app must remember when a startup spotlight article should return to Long Island view.");
+requireBundledText('fitLongIslandMapView("mobile-startup-spotlight-dismissed")', "Bundled Android app must zoom out to Long Island after dismissing the startup spotlight.");
+requireBundledText('fitLongIslandMapView("mobile-startup-spotlight-article-closed")', "Bundled Android app must zoom out to Long Island after closing the startup spotlight article.");
+requireBundledText('fromStartupSpotlight: true', "Bundled Android app must defer the Long Island view until the spotlight article is closed.");
 requireBundledText('const SITE_CHECKIN_RADIUS_MILES = 0.25;', "Bundled Android app must require check-ins within a quarter mile.");
 requireBundledText('const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;', "Bundled Android app must alert within half a mile of a site.");
 requireBundledText('window.AndroidApp.showNotification', "Bundled Android app must use the native notification bridge.");

@@ -8177,6 +8177,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileTimelineRendered: false,
       mobileStartupSpotlightSite: null,
       mobileStartupSpotlightShown: false,
+      mobileStartupSpotlightReturnOnDetailClose: false,
       nearbyRenderLimit: 0,
       searchMapSyncTimer: null,
       searchRenderSettledTimer: null,
@@ -16073,7 +16074,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     async function openSite(slug, options = {}) {
-      hideMobileStartupSpotlight();
+      const hadStartupSpotlight = Boolean(mobileStartupSpotlightEl && !mobileStartupSpotlightEl.hidden);
+      hideMobileStartupSpotlight({
+        deferLongIslandView: slug !== "address-result" && (hadStartupSpotlight || options.fromStartupSpotlight),
+        zoomLongIslandView: slug === "address-result" && hadStartupSpotlight
+      });
       clearMobileBiographyPathOverlay();
       if (slug === "address-result") {
         const address = state.filtered.find(item => item.slug === "address-result");
@@ -16148,6 +16153,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function closeDetail(options = {}) {
+      const returnToLongIslandView = state.mobileStartupSpotlightReturnOnDetailClose;
+      state.mobileStartupSpotlightReturnOnDetailClose = false;
       if (options.blockMapTap !== false) blockMobileMapTaps();
       detailEl.classList.remove("open");
       detailEl.classList.remove("plant-browse-mode");
@@ -16162,6 +16169,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       renderList();
       if (!options.skipRoute) window.history.replaceState(null, "", window.location.pathname);
       syncMobilePanelAccessibility();
+      if (returnToLongIslandView) {
+        window.setTimeout(() => fitLongIslandMapView("mobile-startup-spotlight-article-closed"), 120);
+      }
     }
 
     window.addEventListener("popstate", () => {
@@ -16264,11 +16274,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileStartupSpotlightEl.style.top = `${Math.round(top)}px`;
     }
 
-    function hideMobileStartupSpotlight() {
+    function hideMobileStartupSpotlight(options = {}) {
       if (!mobileStartupSpotlightEl) return;
+      const wasVisible = !mobileStartupSpotlightEl.hidden;
       mobileStartupSpotlightEl.hidden = true;
       mobileStartupSpotlightEl.classList.remove("show");
       mobileStartupSpotlightEl.style.removeProperty("top");
+      if (options.deferLongIslandView) {
+        state.mobileStartupSpotlightReturnOnDetailClose = true;
+      } else if (options.zoomLongIslandView && wasVisible) {
+        state.mobileStartupSpotlightReturnOnDetailClose = false;
+        window.setTimeout(() => fitLongIslandMapView("mobile-startup-spotlight-dismissed"), 80);
+      }
     }
 
     function showMobileStartupSpotlight(site) {
@@ -19287,10 +19304,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     mobileShapesToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("shapes", state.settings.showShapes === false));
     mobileStartupSpotlightLearnBtn?.addEventListener("click", () => {
       const site = state.mobileStartupSpotlightSite;
-      hideMobileStartupSpotlight();
-      if (site?.slug) openSite(site.slug, { focus: false, drawerState: "half" });
+      if (site?.slug) openSite(site.slug, { focus: false, drawerState: "half", fromStartupSpotlight: true });
     });
-    mobileStartupSpotlightDismissBtn?.addEventListener("click", hideMobileStartupSpotlight);
+    mobileStartupSpotlightDismissBtn?.addEventListener("click", () => hideMobileStartupSpotlight({ zoomLongIslandView: true }));
     window.addEventListener("resize", positionMobileStartupSpotlight);
     window.addEventListener("orientationchange", () => window.setTimeout(positionMobileStartupSpotlight, 260));
     storyRecordBtn.addEventListener("click", async () => {
