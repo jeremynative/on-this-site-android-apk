@@ -8087,6 +8087,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       nearbyRenderLimit: 0,
       searchMapSyncTimer: null,
       searchRenderSettledTimer: null,
+      searchDataVersion: 0,
+      lastSearchDataVersion: -1,
       layers: [],
       markers: new Map(),
       mapSourceCache: null,
@@ -10672,6 +10674,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function prepareSites() {
+      state.searchDataVersion += 1;
       state.sites = repairSiteTitles(state.sites)
         .map(site => {
           const displayGeometry = siteDisplayGeometry(site);
@@ -10846,8 +10849,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function scheduleSearchSync() {
       if (!searchEl) return;
       const value = searchEl.value || "";
-      if (value === state.lastSearchValue) return;
+      if (value === state.lastSearchValue && state.lastSearchDataVersion === state.searchDataVersion) return;
       state.lastSearchValue = value;
+      state.lastSearchDataVersion = state.searchDataVersion;
       scheduleFilterSites();
     }
 
@@ -19209,7 +19213,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           .then(mask => {
             if (!mask) return;
             prepareSites();
-            renderList();
+            scheduleSearchSync();
             refreshMobileMapSources();
             stabilizeAndroidMapPaint();
           })

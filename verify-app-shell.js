@@ -188,6 +188,11 @@ requireBundledText('sendFeedbackReviewEmail', "Bundled Android app must notify r
 requireBundledText('data-take-comment-photo', "Bundled Android app must expose comment camera capture controls.");
 requireBundledText('compressCommentImage', "Bundled Android app must compress oversized comment photos before upload.");
 requireBundledText('Search sites, towns, histories', "Bundled Android app must include mobile search.");
+requireBundledText('searchDataVersion: 0', "Bundled Android app must track search data rebuilds.");
+requireBundledText('lastSearchDataVersion: -1', "Bundled Android app must remember the last processed search data version.");
+requireBundledText('state.searchDataVersion += 1;', "Bundled Android app must mark rebuilt site data for search refresh.");
+requireBundledText('value === state.lastSearchValue && state.lastSearchDataVersion === state.searchDataVersion', "Bundled Android app must not skip same-text searches after data changes.");
+requireBundledPattern(/ensureLandMask\(\)[\s\S]*?prepareSites\(\);[\s\S]*?scheduleSearchSync\(\);[\s\S]*?refreshMobileMapSources\(\);/, "Bundled Android app must preserve an active search after deferred map data rebuilds.");
 requireBundledText('normalizedSearchText: normalizeText', "Bundled Android app must include normalized mobile search text.");
 requireBundledText('function scheduleSearchSync()', "Bundled Android app must watch mobile search value changes.");
 requireBundledText('searchEl.addEventListener("keyup", scheduleSearchSync);', "Bundled Android app must filter search after Android keyboard events.");
