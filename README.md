@@ -109,6 +109,20 @@ That secret should contain a Google Cloud service account JSON key. The service 
 
 Local debug builds are only for direct developer testing. Do not publish debug APKs for Obtainium.
 
+On a fresh Windows workspace, install the local JDK, Gradle, and Android SDK tools first:
+
+```powershell
+.\setup-local-android-env.ps1
+```
+
+The setup script installs tools beside the repos in the parent workspace:
+
+- `.tools\jdk-17`
+- `.tools\gradle-8.10.2`
+- `android-sdk-local`
+
+Then build the debug APK:
+
 ```powershell
 .\build-debug-apk.ps1
 ```
