@@ -4038,7 +4038,7 @@
           <button class="locate" id="locate" type="button">Near me</button>
         </span>
       </div>
-      <input class="search" id="search" type="search" placeholder="Search sites, towns, histories">
+      <input class="search" id="search" type="search" placeholder="Search sites, towns, histories" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search">
       <button class="territory-subtitle" id="territory-subtitle" type="button" hidden></button>
       <div class="quick-actions" aria-label="App actions">
         <details class="mobile-more-menu">
@@ -8127,6 +8127,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const listEl = document.getElementById("site-list");
     const appEl = document.querySelector(".app");
     const statusEl = document.getElementById("status");
+    const listTitleTextEl = document.querySelector(".list-head .list-title strong");
     const loadingScreenEl = document.getElementById("loading-screen");
     const loadingMessageEl = document.getElementById("loading-message");
     const searchEl = document.getElementById("search");
@@ -10855,6 +10856,37 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       scheduleFilterSites();
     }
 
+    function openMobileSearchResultsPage() {
+      if (!searchEl) return;
+      const query = searchEl.value.trim();
+      window.clearTimeout(state.searchTimer);
+      if (detailEl?.classList.contains("open")) closeDetail({ skipRoute: true, blockMapTap: false });
+      filterSites();
+      if (!query) {
+        setMobilePanelMode("nearby");
+        setNearbyPanelState("default");
+        return;
+      }
+      state.nearbyRenderLimit = Math.min(NEARBY_LIST_SEARCH_LIMIT, Math.max(NEARBY_LIST_SEARCH_LIMIT, state.filtered.length));
+      renderList();
+      setMobilePanelMode("nearby");
+      setNearbyPanelState("expanded");
+      setNearbyExpanded(true);
+      listEl?.scrollTo?.({ top: 0, behavior: "smooth" });
+      searchEl.blur();
+      if (state.filtered.length) showBanner(`${state.filtered.length} search result${state.filtered.length === 1 ? "" : "s"}.`);
+    }
+
+    function handleMobileSearchKeydown(event) {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      openMobileSearchResultsPage();
+    }
+
+    function handleMobileSearchCommand() {
+      window.setTimeout(() => openMobileSearchResultsPage(), 0);
+    }
+
     function startSearchValueWatch() {
       if (!searchEl || state.searchValueWatchTimer) return;
       state.lastSearchValue = searchEl.value || "";
@@ -10870,7 +10902,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function installNativeAndroidSearchWatch() {
-      if (!isNativeAndroidApp() || state.nativeAndroidSearchWatchTimer || !searchEl) return;
+      if (!/Android/i.test(navigator.userAgent) || state.nativeAndroidSearchWatchTimer || !searchEl) return;
       state.lastSearchValue = "";
       scheduleSearchSync();
       state.nativeAndroidSearchWatchTimer = window.setInterval(scheduleSearchSync, 350);
@@ -11363,11 +11395,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function renderList() {
       const count = state.filtered.length;
       const query = searchEl.value.trim();
+      const showingSearch = Boolean(query);
       const renderLimit = Math.max(1, Math.min(count, Number(state.nearbyRenderLimit || defaultNearbyRenderLimit())));
       const visibleSites = state.filtered.slice(0, renderLimit);
+      appEl?.classList.toggle("mobile-search-results", showingSearch);
+      if (listTitleTextEl) listTitleTextEl.textContent = showingSearch ? "Search results" : "Nearby sites";
       statusEl.textContent = state.addressSearchMode
         ? "Searching map..."
-        : `${count} place${count === 1 ? "" : "s"}, sorted by proximity`;
+        : showingSearch
+          ? `${count} result${count === 1 ? "" : "s"} for "${query}"`
+          : `${count} place${count === 1 ? "" : "s"}, sorted by proximity`;
       if (!count) {
         listEl.innerHTML = `
           <div class="site-card empty-state" role="status">
@@ -18595,6 +18632,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     searchEl.addEventListener("keyup", scheduleSearchSync);
     searchEl.addEventListener("change", scheduleSearchSync);
     searchEl.addEventListener("search", scheduleSearchSync);
+    searchEl.addEventListener("search", handleMobileSearchCommand);
+    searchEl.addEventListener("keydown", handleMobileSearchKeydown);
     searchEl.addEventListener("compositionend", scheduleSearchSync);
     searchEl.addEventListener("focus", startSearchValueWatch);
     searchEl.addEventListener("blur", stopSearchValueWatch);

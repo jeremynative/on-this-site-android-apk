@@ -193,6 +193,15 @@ requireBundledText('lastSearchDataVersion: -1', "Bundled Android app must rememb
 requireBundledText('state.searchDataVersion += 1;', "Bundled Android app must mark rebuilt site data for search refresh.");
 requireBundledText('value === state.lastSearchValue && state.lastSearchDataVersion === state.searchDataVersion', "Bundled Android app must not skip same-text searches after data changes.");
 requireBundledPattern(/ensureLandMask\(\)[\s\S]*?prepareSites\(\);[\s\S]*?scheduleSearchSync\(\);[\s\S]*?refreshMobileMapSources\(\);/, "Bundled Android app must preserve an active search after deferred map data rebuilds.");
+requireBundledText('enterkeyhint="search"', "Bundled Android app must request the Android keyboard search action.");
+requireBundledText('autocomplete="off"', "Bundled Android app must keep the mobile search input from fighting app results.");
+requireBundledText('function openMobileSearchResultsPage()', "Bundled Android app must include an explicit mobile search results page.");
+requireBundledText('setNearbyPanelState("expanded")', "Bundled Android app must expand the nearby tray for submitted search results.");
+requireBundledText('setNearbyExpanded(true)', "Bundled Android app must make submitted search results use the full results view.");
+requireBundledText('searchEl.addEventListener("keydown", handleMobileSearchKeydown);', "Bundled Android app must open search results on Enter.");
+requireBundledText('searchEl.addEventListener("search", handleMobileSearchCommand);', "Bundled Android app must open search results from the Android search keyboard action.");
+requireBundledText('listTitleTextEl.textContent = showingSearch ? "Search results" : "Nearby sites";', "Bundled Android app must label the results view clearly.");
+requireBundledPattern(/function\s+installNativeAndroidSearchWatch\(\)[\s\S]*?\/Android\/i\.test\(navigator\.userAgent\)[\s\S]*?setInterval\(scheduleSearchSync,\s*350\)/, "Bundled Android app must poll search value changes on Android even if the native bridge is delayed.");
 requireBundledText('normalizedSearchText: normalizeText', "Bundled Android app must include normalized mobile search text.");
 requireBundledText('function scheduleSearchSync()', "Bundled Android app must watch mobile search value changes.");
 requireBundledText('searchEl.addEventListener("keyup", scheduleSearchSync);', "Bundled Android app must filter search after Android keyboard events.");
