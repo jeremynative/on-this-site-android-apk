@@ -8016,6 +8016,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       layers: [],
       markers: new Map(),
       mapSourceCache: null,
+      mapSourceCacheKey: "",
+      mobileSiteIconImagesLoaded: new Set(),
+      mobileSiteIconImagesFailed: new Set(),
+      mobileSiteIconImagesLoading: false,
       exhibitMarkers: new Map(),
       storyMarkers: new Map(),
       siteSourceListCache: new Map(),
@@ -9377,6 +9381,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function invalidateMapSourceCache() {
       state.mapSourceCache = null;
+      state.mapSourceCacheKey = "";
     }
 
     function polygonLabelCollection(kind = "all", sites = state.mapSites) {
@@ -11963,6 +11968,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             opacity: mobilePolygonOpacity(site),
             label_size: polygonLabelSize(site),
             has_icon: !!siteMapIconUrl(site),
+            icon_key: mobileSiteIconKey(site),
             broad: isBroadTerritory(site),
             bounds_area: geometryBoundsArea(siteDisplayGeometry(site))
           }
@@ -11971,12 +11977,20 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function cachedMobileMapSourceData() {
-      if (!state.mapSourceCache) {
+      const sites = activeMapSites();
+      const shapeSites = state.settings.showShapes === false ? [] : sites.filter(site => {
+        const type = siteDisplayGeometry(site)?.type;
+        return type === "Polygon" || type === "MultiPolygon";
+      });
+      const pointHitSites = state.settings.showPins === false ? [] : sites.filter(site => siteDisplayGeometry(site)?.type === "Point");
+      const cacheKey = `${state.settings.showPins !== false ? "pins" : "no-pins"}|${state.settings.showShapes !== false ? "shapes" : "no-shapes"}|${sites.length}`;
+      if (!state.mapSourceCache || state.mapSourceCacheKey !== cacheKey) {
         state.mapSourceCache = {
-          sites: siteFeatureCollection(),
-          territoryLabels: polygonLabelCollection("territory"),
-          detailLabels: polygonLabelCollection("detail")
+          sites: siteFeatureCollection([...shapeSites, ...pointHitSites]),
+          territoryLabels: polygonLabelCollection("territory", shapeSites),
+          detailLabels: polygonLabelCollection("detail", shapeSites)
         };
+        state.mapSourceCacheKey = cacheKey;
       }
       return state.mapSourceCache;
     }
@@ -12420,6 +12434,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         : directusAssetUrl(site?.map_icon);
     }
 
+    function mobileSiteIconKey(site) {
+      const raw = String(site?.map_icon || "").trim();
+      return raw ? `mobile-site-icon-${raw.replace(/[^a-z0-9_-]/gi, "-")}` : "";
+    }
+
     function markerElement(site) {
       const element = document.createElement("button");
       element.type = "button";
@@ -12467,6 +12486,43 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return element;
     }
 
+    function loadMobileSiteIconImages() {
+      if (!state.map || state.mobileSiteIconImagesLoading) return;
+      state.mobileSiteIconImagesLoading = true;
+      const iconEntries = new Map();
+      activeMapSites().forEach(site => {
+        const key = mobileSiteIconKey(site);
+        const url = siteMapIconUrl(site);
+        if (!key || !url || state.mobileSiteIconImagesLoaded.has(key) || state.mobileSiteIconImagesFailed.has(key) || state.map.hasImage?.(key)) return;
+        iconEntries.set(key, url);
+      });
+      if (!iconEntries.size) {
+        state.mobileSiteIconImagesLoading = false;
+        return;
+      }
+      let remaining = iconEntries.size;
+      const finishOne = () => {
+        remaining -= 1;
+        if (remaining <= 0) state.mobileSiteIconImagesLoading = false;
+      };
+      iconEntries.forEach((url, key) => {
+        state.map.loadImage(url, (error, image) => {
+          try {
+            if (error || !image) {
+              state.mobileSiteIconImagesFailed.add(key);
+              return;
+            }
+            if (!state.map.hasImage?.(key)) state.map.addImage(key, image, { sdf: false });
+            state.mobileSiteIconImagesLoaded.add(key);
+          } catch {
+            state.mobileSiteIconImagesFailed.add(key);
+          } finally {
+            finishOne();
+          }
+        });
+      });
+    }
+
     function shouldShowCustomMapIcons() {
       return true;
     }
@@ -12474,33 +12530,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function syncMarkers(options = {}) {
       if (!state.map) return;
       const includeAuxiliary = options.auxiliary !== false;
-      const sites = activeMapSites();
-      const markerSites = state.settings.showPins === false || !shouldShowCustomMapIcons()
-        ? []
-        : sites.filter(site => siteDisplayGeometry(site)?.type === "Point" && siteMapIconUrl(site));
-      const visible = new Set(markerSites.map(site => site.slug));
       for (const [slug, marker] of state.markers) {
-        if (!visible.has(slug)) {
-          marker.remove();
-          state.markers.delete(slug);
-        }
+        marker.remove();
+        state.markers.delete(slug);
       }
-      markerSites.forEach(site => {
-        if (siteDisplayGeometry(site)?.type !== "Point") return;
-        if (state.markers.has(site.slug)) return;
-        const marker = new mapboxgl.Marker({ element: markerElement(site), anchor: "center" })
-          .setLngLat(site.center)
-          .addTo(state.map);
-        state.markers.set(site.slug, marker);
-      });
-      const shapeSites = state.settings.showShapes === false ? [] : sites.filter(site => {
-        const type = siteDisplayGeometry(site)?.type;
-        return type === "Polygon" || type === "MultiPolygon";
-      });
-      const pointHitSites = state.settings.showPins === false ? [] : sites.filter(site => siteDisplayGeometry(site)?.type === "Point");
-      state.map.getSource("mobile-sites")?.setData(siteFeatureCollection([...shapeSites, ...pointHitSites]));
-      state.map.getSource("mobile-territory-labels")?.setData(polygonLabelCollection("territory", shapeSites));
-      state.map.getSource("mobile-detail-labels")?.setData(polygonLabelCollection("detail", shapeSites));
+      if (shouldShowCustomMapIcons()) loadMobileSiteIconImages();
+      refreshMobileMapSources();
       if (includeAuxiliary) {
         syncExhibitMarkers();
         syncApprovedSuggestionMarkers();
@@ -16187,16 +16222,31 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         id: "mobile-site-point-dots",
         type: "circle",
         source: "mobile-sites",
-        filter: ["all", ["==", ["geometry-type"], "Point"], ["!=", ["get", "has_icon"], true]],
+        filter: ["==", ["geometry-type"], "Point"],
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 4.6, 10, 5.6, 14, 7.2],
+          "circle-radius": ["case", ["==", ["get", "has_icon"], true], ["interpolate", ["linear"], ["zoom"], 6, 3.2, 10, 4.2, 14, 5.6], ["interpolate", ["linear"], ["zoom"], 6, 4.6, 10, 5.6, 14, 7.2]],
           "circle-color": "#326fe3",
-          "circle-opacity": 0.96,
+          "circle-opacity": ["case", ["==", ["get", "has_icon"], true], 0.58, 0.96],
           "circle-stroke-color": "rgba(255,255,255,0.94)",
           "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 6, 1.2, 12, 1.8],
           "circle-stroke-opacity": 0.95
         }
       });
+      state.map.addLayer({
+        id: "mobile-site-icons",
+        type: "symbol",
+        source: "mobile-sites",
+        filter: ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "has_icon"], true]],
+        layout: {
+          "icon-image": ["get", "icon_key"],
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 6, 0.26, 10, 0.36, 14, 0.48],
+          "icon-anchor": "center",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+          "icon-optional": true
+        }
+      });
+      loadMobileSiteIconImages();
       state.map.addSource("mobile-territory-labels", { type: "geojson", data: polygonLabelCollection("territory") });
       state.map.addLayer({
         id: "mobile-territory-labels",
@@ -16303,11 +16353,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function refreshAndroidMapAfterSettle(reason = "android-map-settle") {
       if (!isNativeAndroidApp() || !state.map) return;
+      let refreshCount = 0;
       const refresh = () => {
         if (!state.map) return;
         try {
-          syncMarkers({ auxiliary: false });
-          refreshMobileMapSources();
+          if (refreshCount === 0) {
+            syncMarkers({ auxiliary: false });
+            refreshMobileMapSources();
+          }
+          refreshCount += 1;
           state.map.resize();
           state.map.triggerRepaint?.();
         } catch (error) {
@@ -16322,11 +16376,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function stabilizeAndroidMapPaint() {
       if (!isNativeAndroidApp() || !state.map) return;
+      let repaintCount = 0;
       const repaint = () => {
         if (!state.map) return;
         try {
           state.map.resize();
-          refreshMobileMapSources();
+          if (repaintCount < 2) refreshMobileMapSources();
+          repaintCount += 1;
           state.map.triggerRepaint?.();
         } catch {}
       };
