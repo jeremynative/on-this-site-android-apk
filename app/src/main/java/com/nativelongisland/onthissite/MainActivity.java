@@ -57,7 +57,7 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260603-label-threshold-panel-tap";
+    static final String APP_VERSION = "20260605-mobile-map-gesture";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
@@ -418,7 +418,10 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
-        handleWebViewTap(event);
+        int action = event == null ? MotionEvent.ACTION_CANCEL : event.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP) {
+            handleWebViewTap(event);
+        }
         return super.dispatchTouchEvent(event);
     }
 

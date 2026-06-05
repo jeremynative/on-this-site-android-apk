@@ -8203,6 +8203,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       lastMobileMapTapKey: "",
       mobilePanelTapBlockUntil: 0,
       mobileMapTouchTap: null,
+      androidMapGestureActive: false,
+      androidMapGestureSettleTimer: null,
+      pendingAndroidMapRefresh: false,
+      androidMapGestureGuardsBound: false,
       nearbySiteOpenTimer: null,
       nearbySiteOpenToken: 0,
       feedbackScreenshotFile: null,
@@ -16712,11 +16716,51 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.map.getSource("mobile-detail-labels")?.setData(data.detailLabels);
     }
 
+    function isAndroidMapGestureActive() {
+      return isNativeAndroidApp() && state.androidMapGestureActive;
+    }
+
+    function markAndroidMapGestureActive() {
+      if (!isNativeAndroidApp()) return;
+      state.androidMapGestureActive = true;
+      if (state.androidMapGestureSettleTimer) {
+        window.clearTimeout(state.androidMapGestureSettleTimer);
+        state.androidMapGestureSettleTimer = null;
+      }
+    }
+
+    function markAndroidMapGestureSettled() {
+      if (!isNativeAndroidApp()) return;
+      if (state.androidMapGestureSettleTimer) window.clearTimeout(state.androidMapGestureSettleTimer);
+      state.androidMapGestureSettleTimer = window.setTimeout(() => {
+        state.androidMapGestureActive = false;
+        if (state.pendingAndroidMapRefresh) {
+          state.pendingAndroidMapRefresh = false;
+          refreshAndroidMapAfterSettle("android-map-post-gesture");
+        }
+      }, 260);
+    }
+
+    function bindAndroidMapGestureGuards() {
+      if (!isNativeAndroidApp() || !state.map || state.androidMapGestureGuardsBound) return;
+      state.androidMapGestureGuardsBound = true;
+      state.map.on("dragstart", markAndroidMapGestureActive);
+      state.map.on("dragend", markAndroidMapGestureSettled);
+      state.map.on("zoomstart", markAndroidMapGestureActive);
+      state.map.on("zoomend", markAndroidMapGestureSettled);
+      state.map.on("rotateend", markAndroidMapGestureSettled);
+      state.map.on("pitchend", markAndroidMapGestureSettled);
+    }
+
     function refreshAndroidMapAfterSettle(reason = "android-map-settle") {
       if (!isNativeAndroidApp() || !state.map) return;
       let refreshCount = 0;
       const refresh = () => {
         if (!state.map) return;
+        if (isAndroidMapGestureActive()) {
+          state.pendingAndroidMapRefresh = true;
+          return;
+        }
         try {
           if (refreshCount === 0) {
             syncMarkers({ auxiliary: false });
@@ -16740,6 +16784,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       let repaintCount = 0;
       const repaint = () => {
         if (!state.map) return;
+        if (isAndroidMapGestureActive()) {
+          state.pendingAndroidMapRefresh = true;
+          window.setTimeout(repaint, 900);
+          return;
+        }
         try {
           state.map.resize();
           if (repaintCount < 2) refreshMobileMapSources();
@@ -18273,6 +18322,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           addPolygonLayers();
           syncMarkers();
           syncUserLocationMarker({ centerMap: false });
+          bindAndroidMapGestureGuards();
           stabilizeAndroidMapPaint();
           state.map.once?.("idle", () => refreshAndroidMapAfterSettle("android-map-idle"));
           state.map.on("zoomend", () => {

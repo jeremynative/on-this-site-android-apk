@@ -1,6 +1,6 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260603-label-threshold-panel-tap";
+const expectedBuild = "20260605-mobile-map-gesture";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -110,6 +110,7 @@ requireText("dispatchTouchEvent", "Android shell must forward app taps into the 
 requireText("window.onAndroidMapTap", "Android shell must call the mobile map tap bridge.");
 requireText("missing-map-tap-bridge", "Android shell must log when the mobile map tap bridge is missing.");
 requireText("MotionEvent.ACTION_UP", "Android shell must only forward completed taps.");
+requireText("action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP", "Android shell must keep map drag move frames out of the tap bridge.");
 requireText("boolean isArchiveApp = \"nativelongisland.com\".equalsIgnoreCase(host);", "Android shell must keep nativelongisland.com navigation inside the APK WebView.");
 requireText("applyApkTimelineTrayFix", "Android shell must apply the APK timeline tray override after the live app loads.");
 requireText("android-apk-timeline-tray-fix", "Android shell must inject the APK timeline tray CSS override.");
@@ -235,6 +236,10 @@ requireBundledText('if (nativeAndroid) {\n          hideLoadingScreen();\n      
 requireBundledText('function stabilizeAndroidMapPaint()', "Bundled Android app must include the Android map paint stabilizer.");
 requireBundledText('state.map.resize();', "Bundled Android app must resize the map after Android WebView startup.");
 requireBundledText('refreshMobileMapSources();', "Bundled Android app must refresh map sources after Android WebView startup.");
+requireBundledText('function bindAndroidMapGestureGuards()', "Bundled Android app must pause expensive map refreshes while the user is dragging or pinching.");
+requireBundledText('state.map.on("dragstart", markAndroidMapGestureActive);', "Bundled Android app must detect the start of finger map drags.");
+requireBundledText('if (isAndroidMapGestureActive()) {\n          state.pendingAndroidMapRefresh = true;\n          return;\n        }', "Bundled Android app must defer settle refreshes during active map gestures.");
+requireBundledText('window.setTimeout(repaint, 900);', "Bundled Android paint stabilization must retry after active map gestures settle.");
 if (/function\s+stabilizeAndroidMapPaint\(\)[\s\S]*?\.zoomTo\(|function\s+stabilizeAndroidMapPaint\(\)[\s\S]*?\.jumpTo\(/.test(bundledApp) ||
     /function\s+stabilizeAndroidMapPaint\(\)[\s\S]*?\.zoomTo\(|function\s+stabilizeAndroidMapPaint\(\)[\s\S]*?\.jumpTo\(/.test(bundledLiveApp)) {
   throw new Error("Bundled Android map paint stabilizer must not change zoom or center without user input.");
