@@ -1,6 +1,6 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260605-bio-path-pin-numbers";
+const expectedBuild = "20260605-search-preview-path-numbers";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
