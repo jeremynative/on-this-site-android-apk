@@ -1,6 +1,6 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260605-search-preview-path-numbers";
+const expectedBuild = "20260605-biography-path-numbers";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -154,6 +154,9 @@ for (const [label, html] of [
   if (!html.includes('"wyandanch": {') || !html.includes("mobile-biography-place-path") || !html.includes("data-mobile-biography-path-index")) {
     throw new Error(`Bundled Android ${label} is missing the mobile Wyandanch biography path.`);
   }
+  if (!html.includes("data-mobile-biography-path-order") || !html.includes("content: attr(data-mobile-biography-path-order)")) {
+    throw new Error(`Bundled Android ${label} is missing visible numbered biography path map pins.`);
+  }
 }
 if (bundledLiveAppBytes.length > 1500000 || /window\.NLI_MOBILE_DATA\s*=/.test(bundledLiveApp)) {
   throw new Error("Bundled Android live fallback should stay lightweight and Directus-backed, not embed the full data payload.");
@@ -174,7 +177,8 @@ if (/state\.map\.on\("zoom",\s*syncMapStoryMarkers\)/.test(bundledApp) || /state
   throw new Error("Bundled Android app must not resync story markers on every zoom frame.");
 }
 requireBundledText('mobilePanelTapBlockUntil: 0', "Bundled Android app must track the panel close tap shield.");
-requireBundledText('function blockMobileMapTaps(durationMs = 550)', "Bundled Android app must block map taps briefly after panel dismissal.");
+requireBundledText('function blockMobileMapTaps(durationMs = 1600)', "Bundled Android app must block repeated map taps after panel dismissal.");
+requireBundledText('function isAndroidUiOverlayTap(clientX, clientY)', "Bundled Android app must reject drawer/header/sheet taps before trying alternate map coordinates.");
 requireBundledText('if (isMobileMapTapBlocked()) return false;', "Bundled Android map bridge must ignore taps after panel dismissal.");
 requireBundledText('"text-allow-overlap": false', "Bundled Android app must keep close-zoom point labels readable with collision handling.");
 requireBundledText('settings.showPins = true;', "Bundled Android app must recover from saved Sites-off settings so site icons stay visible.");
@@ -272,5 +276,4 @@ requireBundledText('Content editing needs the editor password.', "Bundled Androi
 requireBundledText('frontendEditorPayload', "Bundled Android app must include the current mobile admin editor payload path.");
 
 console.log(`Android shell verifier passed: ${expectedBuild}`);
-
 
