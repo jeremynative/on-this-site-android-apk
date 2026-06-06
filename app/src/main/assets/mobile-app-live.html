@@ -4825,9 +4825,20 @@
     return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
   }
 
+  function normalizeActivityDateInput(value) {
+    if (value instanceof Date || typeof value === "number") return value;
+    const text = String(value || "").trim();
+    if (!text) return value;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return `${text}T00:00:00`;
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(text) && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
+      return `${text.replace(" ", "T")}Z`;
+    }
+    return text;
+  }
+
   function activityDateValue(value) {
     if (!value) return 0;
-    const time = new Date(value).getTime();
+    const time = new Date(normalizeActivityDateInput(value)).getTime();
     return Number.isFinite(time) ? time : 0;
   }
 
@@ -5000,6 +5011,7 @@
     numeric,
     normalizeText,
     activityDateValue,
+    normalizeActivityDateInput,
     formatDate,
     validateJpegImage,
     contentSectionsFromFields,
@@ -5078,7 +5090,7 @@
     "amagansett-indian-well": "Amagansett Indian Well",
     "appaquogue": "Appaquogue",
     "ashawagh": "Ashawagh",
-    "ayeuonganit-aunakesuck-muhhogkunk": "Ayeuonganit Aunakésuck Muhhogkunk",
+    "ayeuonganit-aunakesuck-muhhogkunk": "Ayeuonganit AunakÃ©suck Muhhogkunk",
     "bethel-christian-ave-laurel-hill-historic-district": "Bethel Christian Ave., Laurel Hill Historic District",
     "canarsie": "Canarsie Traditional Land",
     "canoe-place-chapel": "Canoe Place Chapel",
@@ -5140,7 +5152,7 @@
     "winippague": "Winippague",
     "yaphank-weeks-pond-settlement": "Yaphank, Weeks Pond Settlement",
     "yennecock-southold-town": "Yennecock / Southold Town",
-    "yonahqosunuk": "Yonáhqôsunuk"
+    "yonahqosunuk": "YonÃ¡hqÃ´sunuk"
   };
 
   const smallWords = new Set(["a", "an", "and", "at", "ave", "by", "for", "in", "of", "on", "or", "the", "to"]);
@@ -6318,28 +6330,49 @@
   </script>
   <script data-inline-source="assets/js/shared-activity-utils.js">
 (function () {
+  const normalizeActivityDateInput = window.NLI_SHARED_UTILS?.normalizeActivityDateInput || (value => {
+    if (value instanceof Date || typeof value === "number") return value;
+    const text = String(value || "").trim();
+    if (!text) return value;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return `${text}T00:00:00`;
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(text) && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
+      return `${text.replace(" ", "T")}Z`;
+    }
+    return text;
+  });
+
   const activityDateValue = window.NLI_SHARED_UTILS?.activityDateValue || (value => {
     if (!value) return 0;
-    const time = new Date(value).getTime();
+    const time = new Date(normalizeActivityDateInput(value)).getTime();
     return Number.isFinite(time) ? time : 0;
   });
+
+  function localDayStart(time) {
+    const date = new Date(time);
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  }
 
   function dateLabel(value, options = {}) {
     const time = activityDateValue(value);
     if (!time) return "Recently";
+    const date = new Date(time);
     const timeLabel = options.includeTime
-      ? new Date(time).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+      ? date.toLocaleTimeString(undefined, {
+          hour: "numeric",
+          minute: "2-digit",
+          timeZoneName: options.hideTimeZone ? undefined : "short"
+        })
       : "";
     const withTime = label => timeLabel ? `${label} - ${timeLabel}` : label;
     if (options.relative) {
-      const days = Math.floor((Date.now() - time) / 86400000);
-      if (days < 0) return withTime(new Date(time).toLocaleDateString());
+      const days = Math.round((localDayStart(Date.now()) - localDayStart(time)) / 86400000);
+      if (days < 0) return withTime(date.toLocaleDateString());
       if (days <= 0) return withTime("Today");
       if (days === 1) return withTime("Yesterday");
       if (days < 7) return withTime(`${days} days ago`);
-      return withTime(new Date(time).toLocaleDateString());
+      return withTime(date.toLocaleDateString());
     }
-    return withTime(new Date(time).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }));
+    return withTime(date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }));
   }
 
   function preview(value, options = {}) {
@@ -6416,9 +6449,11 @@
 
   function sameCalendarDate(first, second) {
     if (!first || !second) return false;
-    const firstDate = new Date(first);
-    const secondDate = new Date(second);
-    if (Number.isNaN(firstDate.getTime()) || Number.isNaN(secondDate.getTime())) return false;
+    const firstTime = activityDateValue(first);
+    const secondTime = activityDateValue(second);
+    if (!firstTime || !secondTime) return false;
+    const firstDate = new Date(firstTime);
+    const secondDate = new Date(secondTime);
     return firstDate.getFullYear() === secondDate.getFullYear() &&
       firstDate.getMonth() === secondDate.getMonth() &&
       firstDate.getDate() === secondDate.getDate();
@@ -6447,6 +6482,7 @@
 
   window.NLI_ACTIVITY_UTILS = {
     dateLabel,
+    normalizeActivityDateInput,
     preview,
     lastSeenKey,
     latestTimestamp,
@@ -7415,14 +7451,14 @@
     return String(value || "")
       .replace(/\\+(?=(?:&(?:quot|#0?39|apos|amp|nbsp|rsquo|lsquo|ldquo|rdquo);)|["'])/gi, "")
       .replace(/\\{2,}/g, "\\")
-      .replace(/Ã‚Â /g, " ")
-      .replace(/Ã‚/g, "")
-      .replace(/Ã¢â‚¬â„¢|&#8217;|&rsquo;/g, "'")
-      .replace(/Ã¢â‚¬Ëœ|&#8216;|&lsquo;/g, "'")
-      .replace(/Ã¢â‚¬Å“|&#8220;|&ldquo;/g, "\"")
-      .replace(/Ã¢â‚¬Â|&#8221;|&rdquo;/g, "\"")
-      .replace(/Ã¢â‚¬â€œ|&#8211;/g, "-")
-      .replace(/Ã¢â‚¬â€|&#8212;/g, "-")
+      .replace(/Ãƒâ€šÃ‚Â /g, " ")
+      .replace(/Ãƒâ€š/g, "")
+      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢|&#8217;|&rsquo;/g, "'")
+      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“|&#8216;|&lsquo;/g, "'")
+      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8220;|&ldquo;/g, "\"")
+      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8221;|&rdquo;/g, "\"")
+      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“|&#8211;/g, "-")
+      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â|&#8212;/g, "-")
       .replace(/&quot;/g, "\"")
       .replace(/&#0?39;|&apos;/g, "'")
       .replace(/&nbsp;/gi, " ")
@@ -7929,26 +7965,26 @@
   </script>
   <script data-inline-source="assets/js/language-quiz-words.js">
 window.NLI_LANGUAGE_QUIZ_WORDS = [
-  ["water", "núp"], ["ocean", "cutstúk"], ["river", "seépus"], ["bay", "petápagh"], ["stone", "sun"],
-  ["sand", "yaac"], ["rain", "sukerun"], ["snow", "soáchpo"], ["ice", "copátn"], ["fire", "ruht; yuht"],
-  ["thunder", "pataquáhamoc"], ["lightning", "wowosúmpsa"], ["sun", "haquaqua"], ["moon", "néepa"], ["star", "aráqusac"],
-  ["cloud", "pamayáuxer"], ["rainbow", "papuhmúncsunc"], ["tree", "péewye"], ["pine", "cw"], ["oak", "húchemus"],
-  ["hickory", "wusquíat"], ["corn", "sowhámmen"], ["beans", "mais-cusseet"], ["squash", "áscoot"], ["potato", "panac"],
-  ["bread", "áp"], ["meat", "wéows"], ["milk", "wampachú-unk"], ["tobacco", "tobac"], ["whale", "púttap"],
-  ["fish", "opéramac"], ["clam", "poquahoc"], ["oyster", "apóonahac"], ["deer", "hátk"], ["dog", "arrúm"],
-  ["fox", "squiríntes"], ["squirrel", "moccás"], ["rabbit", "móh-tux"], ["mouse", "poquáttas"], ["bird", "a ássas"],
-  ["crow", "concónchus"], ["eagle", "wéquaran"], ["goose", "hakénoh"], ["duck", "nanásecus"], ["dove", "má-owks"],
-  ["snake", "skúk / skook"], ["bug", "séukr"], ["worm", "húquer"], ["fly", "mucháwas"], ["mosquito", "murráquitch"],
-  ["woman", "squah"], ["man", "run"], ["father", "cws"], ["mother", "cwca"], ["brother", "contáyux"],
-  ["sister", "kéessums"], ["grandfather", "numpsoonk"], ["grandmother", "nánnax"], ["uncle", "nisséis"], ["aunt", "cacácas"],
-  ["husband", "ks-hámps"], ["wife", "keé-us"], ["child", "neechuntz"], ["boy", "macúchax"], ["girl", "squásses"],
-  ["house", "wéecho"], ["door", "squnt"], ["blanket", "aqueéwants"], ["bow", "átump"], ["arrow", "neep"],
-  ["tomahawk", "chékenas"], ["axe", "ochégan"], ["wampum", "whámpump"], ["war", "ayutówac"], ["peace", "weéhsaac"],
-  ["head", "okéyununc"], ["hair", "wé-usk"], ["eyes", "skésuc"], ["nose", "cochón"], ["mouth", "cúttoh"],
-  ["teeth", "képut"], ["hand", "córitch"], ["finger", "córitcheus"], ["knee", "cucúttuc"], ["foot", "cusseéd"],
-  ["black", "shíckayo"], ["white", "wámpayo"], ["red", "sqúayo"], ["yellow", "weesa-wayo"], ["blue", "seewamp-wayo"],
-  ["green", "uscu-sqúayo"], ["good", "woreécan"], ["bad", "máttatéayuh"], ["small", "péewátsu"], ["turtle", "matcîk"],
-  ["sea beach", "siwâ a"], ["shell fish", "sétcawa"], ["thank you", "tabutnî"], ["greeting", "háhcamî"], ["come quick", "mekwí"]
+  ["water", "nÃºp"], ["ocean", "cutstÃºk"], ["river", "seÃ©pus"], ["bay", "petÃ¡pagh"], ["stone", "sun"],
+  ["sand", "yaac"], ["rain", "sukerun"], ["snow", "soÃ¡chpo"], ["ice", "copÃ¡tn"], ["fire", "ruht; yuht"],
+  ["thunder", "pataquÃ¡hamoc"], ["lightning", "wowosÃºmpsa"], ["sun", "haquaqua"], ["moon", "nÃ©epa"], ["star", "arÃ¡qusac"],
+  ["cloud", "pamayÃ¡uxer"], ["rainbow", "papuhmÃºncsunc"], ["tree", "pÃ©ewye"], ["pine", "cw"], ["oak", "hÃºchemus"],
+  ["hickory", "wusquÃ­at"], ["corn", "sowhÃ¡mmen"], ["beans", "mais-cusseet"], ["squash", "Ã¡scoot"], ["potato", "panac"],
+  ["bread", "Ã¡p"], ["meat", "wÃ©ows"], ["milk", "wampachÃº-unk"], ["tobacco", "tobac"], ["whale", "pÃºttap"],
+  ["fish", "opÃ©ramac"], ["clam", "poquahoc"], ["oyster", "apÃ³onahac"], ["deer", "hÃ¡tk"], ["dog", "arrÃºm"],
+  ["fox", "squirÃ­ntes"], ["squirrel", "moccÃ¡s"], ["rabbit", "mÃ³h-tux"], ["mouse", "poquÃ¡ttas"], ["bird", "a Ã¡ssas"],
+  ["crow", "concÃ³nchus"], ["eagle", "wÃ©quaran"], ["goose", "hakÃ©noh"], ["duck", "nanÃ¡secus"], ["dove", "mÃ¡-owks"],
+  ["snake", "skÃºk / skook"], ["bug", "sÃ©ukr"], ["worm", "hÃºquer"], ["fly", "muchÃ¡was"], ["mosquito", "murrÃ¡quitch"],
+  ["woman", "squah"], ["man", "run"], ["father", "cws"], ["mother", "cwca"], ["brother", "contÃ¡yux"],
+  ["sister", "kÃ©essums"], ["grandfather", "numpsoonk"], ["grandmother", "nÃ¡nnax"], ["uncle", "nissÃ©is"], ["aunt", "cacÃ¡cas"],
+  ["husband", "ks-hÃ¡mps"], ["wife", "keÃ©-us"], ["child", "neechuntz"], ["boy", "macÃºchax"], ["girl", "squÃ¡sses"],
+  ["house", "wÃ©echo"], ["door", "squnt"], ["blanket", "aqueÃ©wants"], ["bow", "Ã¡tump"], ["arrow", "neep"],
+  ["tomahawk", "chÃ©kenas"], ["axe", "ochÃ©gan"], ["wampum", "whÃ¡mpump"], ["war", "ayutÃ³wac"], ["peace", "weÃ©hsaac"],
+  ["head", "okÃ©yununc"], ["hair", "wÃ©-usk"], ["eyes", "skÃ©suc"], ["nose", "cochÃ³n"], ["mouth", "cÃºttoh"],
+  ["teeth", "kÃ©put"], ["hand", "cÃ³ritch"], ["finger", "cÃ³ritcheus"], ["knee", "cucÃºttuc"], ["foot", "cusseÃ©d"],
+  ["black", "shÃ­ckayo"], ["white", "wÃ¡mpayo"], ["red", "sqÃºayo"], ["yellow", "weesa-wayo"], ["blue", "seewamp-wayo"],
+  ["green", "uscu-sqÃºayo"], ["good", "woreÃ©can"], ["bad", "mÃ¡ttatÃ©ayuh"], ["small", "pÃ©ewÃ¡tsu"], ["turtle", "matcÃ®k"],
+  ["sea beach", "siwÃ¢ a"], ["shell fish", "sÃ©tcawa"], ["thank you", "tabutnÃ®"], ["greeting", "hÃ¡hcamÃ®"], ["come quick", "mekwÃ­"]
 ].map(([english, algonquian]) => ({
   id: english.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
   english,
@@ -8026,7 +8062,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const FALLBACK_CENTER = [-72.95, 40.86];
     const FALLBACK_STYLE = "mapbox://styles/mapbox/outdoors-v12";
     const KNOWLEDGEBASE_CATEGORIES = [
-      { label: "Biography", slugs: ["mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "sachem-warawakmy-of-the-setauket", "jeorgkee-indian-whaler", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "nathan-jeffrey-cuffee", "samson-occom", "samsom-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "sunksquaws-and-indigenous-womens-leadership"] },
+      { label: "Biography", slugs: ["mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "sachem-warawakmy-of-the-setauket", "jeorgkee-indian-whaler", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "john-a-strong", "nathan-jeffrey-cuffee", "samson-occom", "samsom-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "sunksquaws-and-indigenous-womens-leadership"] },
       { label: "Tribal Nations and Communities", entries: [["wiki", "native-long-island-overview"], ["wiki", "continued-indigenous-presence-today"], ["wiki", "the-tribes-of-long-island"], ["wiki", "western-long-island-native-communities"], ["wiki", "central-long-island-native-communities"], ["wiki", "eastern-long-island-native-communities"], ["wiki", "myth-of-the-thirteen-tribes"], ["site", "montaukett"], ["site", "shinnecock-indian-reservation"], ["site", "unkechaug-indian-reservation"], ["site", "corchaug-tribe"], ["site", "manhansack-aqua-quash-awamock"], ["site", "setaukets"], ["site", "nissaquogue"], ["site", "matinecock"], ["site", "secatogues"], ["site", "massapequas"], ["site", "merricks"], ["site", "rockaways"], ["site", "canarsie"]] },
       { label: "History", slugs: ["native-long-island-overview", "slavery", "indian-missions-on-long-island", "colonial-descriptions-of-indians", "indian-forts", "13-tribes-of-long-island-david-martine", "early-contact-period-1600-ad-1700-ad", "post-contact", "creation-of-long-island", "land-deeds-and-dispossession", "myth-of-extinction-and-survivance", "myth-of-the-thirteen-tribes", "historic-preservation", "history-and-place-names", "merrick-people-in-early-land-records"] },
       { label: "Sovereignty and Governance", slugs: ["tribal-trustees", "sovereignty-recognition-and-detribalization", "land-deeds-and-dispossession", "continued-indigenous-presence-today"] },
@@ -9363,14 +9399,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function decodeImportedText(value) {
       const textarea = document.createElement("textarea");
       textarea.innerHTML = String(value || "")
-        .replace(/Ãƒâ€šÃ‚Â /g, " ")
-        .replace(/Ãƒâ€š/g, "")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢|&#8217;|&rsquo;/g, "'")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“|&#8216;|&lsquo;/g, "'")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8220;|&ldquo;/g, "\"")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8221;|&rdquo;/g, "\"")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“|&#8211;/g, "-")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â|&#8212;/g, "-")
+        .replace(/ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â /g, " ")
+        .replace(/ÃƒÆ’Ã¢â‚¬Å¡/g, "")
+        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢|&#8217;|&rsquo;/g, "'")
+        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¹Ã…â€œ|&#8216;|&lsquo;/g, "'")
+        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“|&#8220;|&ldquo;/g, "\"")
+        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â|&#8221;|&rdquo;/g, "\"")
+        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8211;/g, "-")
+        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8212;/g, "-")
         .replace(/&nbsp;/gi, " ");
       return textarea.value.replace(/\s+/g, " ").trim();
     }
@@ -12686,6 +12722,24 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (slug) openSite(slug, { focus: false });
     }
 
+    function openMobilePolygonLayerFeature(event) {
+      if (isMobileMapTapBlocked() || state.suggestionMapPickMode) return false;
+      const feature = bestClickableFeature((event?.features || []).filter(isMobilePolygonLayerFeature));
+      if (!feature) return false;
+      const point = event?.point;
+      const lngLat = event?.lngLat;
+      const tapKey = point
+        ? `${Math.round(point.x)}:${Math.round(point.y)}`
+        : `${Math.round((lngLat?.lng || 0) * 10000)}:${Math.round((lngLat?.lat || 0) * 10000)}`;
+      state.lastMobileMapTapKey = tapKey;
+      state.lastMobileMapTapAt = performance.now();
+      event?.preventDefault?.();
+      event?.originalEvent?.preventDefault?.();
+      event?.originalEvent?.stopPropagation?.();
+      openMapFeature(feature);
+      return true;
+    }
+
     function nearestMobileMarkerFeature(event, radius = 42) {
       if (state.settings.showPins === false || !state.map || !event?.point) return null;
       let best = null;
@@ -14457,7 +14511,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             const confidence = Number(match?.confidence || 0);
             const score = confidence ? `${Math.round(confidence * 100)}%` : "score unavailable";
             const source = match?.source || "Pl@ntNet";
-            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} Â· ${escapeHtml(source)}</em></div>`;
+            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} Ã‚Â· ${escapeHtml(source)}</em></div>`;
           }).join("")}</div>`
         : "";
       const exactWarning = analysis?.safetyWarning || "Automated plant identification can be wrong. Verify with a field guide or expert before touching, eating, or using any plant.";
@@ -15169,14 +15223,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         return plantSpeciesKey(`${fields.identification || ""} ${fields.name || ""}`);
       }).filter(Boolean);
       const uniqueObserved = new Set(observedKeys);
-      const base = `${observations.length} observation${observations.length === 1 ? "" : "s"} Â· ${uniqueObserved.size} unique species`;
-      if (!knownSpecies.length) return `${base} Â· Known species list not yet added.`;
+      const base = `${observations.length} observation${observations.length === 1 ? "" : "s"} Ã‚Â· ${uniqueObserved.size} unique species`;
+      if (!knownSpecies.length) return `${base} Ã‚Â· Known species list not yet added.`;
       const documented = knownSpecies.filter(species => {
         const knownKey = plantSpeciesKey(species);
         return observedKeys.some(observed => observed.includes(knownKey) || knownKey.includes(observed));
       }).length;
       const percent = Math.round((documented / knownSpecies.length) * 100);
-      return `${base} Â· ${documented}/${knownSpecies.length} known species documented (${percent}%).`;
+      return `${base} Ã‚Â· ${documented}/${knownSpecies.length} known species documented (${percent}%).`;
     }
 
     function publicPlantText(value, fallback = "") {
@@ -17182,6 +17236,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       ["mobile-site-polygons", "mobile-territory-polygons"].forEach(layerId => {
         state.map.on("click", layerId, event => {
           if (handleSuggestionMapPickClick(event)) return;
+          if (openMobilePolygonLayerFeature(event)) return;
           openMobileMapTap(event);
         });
         state.map.on("mouseenter", layerId, () => state.map.getCanvas().style.cursor = "pointer");
@@ -17190,6 +17245,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       ["mobile-detail-labels", "mobile-territory-labels"].forEach(layerId => {
         state.map.on("click", layerId, event => {
           if (handleSuggestionMapPickClick(event)) return;
+          if (openMobilePolygonLayerFeature(event)) return;
           openMobileMapTap(event);
         });
         state.map.on("mouseenter", layerId, () => state.map.getCanvas().style.cursor = "pointer");
