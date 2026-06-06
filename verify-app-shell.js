@@ -111,6 +111,8 @@ requireText("window.onAndroidMapTap", "Android shell must call the mobile map ta
 requireText("missing-map-tap-bridge", "Android shell must log when the mobile map tap bridge is missing.");
 requireText("MAP_TAP_BRIDGE_DELAY_MS", "Android shell must delay the native map bridge until WebView UI clicks run.");
 requireText("postDelayed", "Android shell must post-delay map tap forwarding to prevent panel click-through.");
+requireText("cacheAndroidSearchResultTap(event);", "Android shell must cache search result taps before the keyboard can shift the page.");
+requireText("window.onAndroidSearchResultTapStart", "Android shell must call the search result tap bridge on touch down.");
 requireText("MotionEvent.ACTION_UP", "Android shell must only forward completed taps.");
 requireText("action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP", "Android shell must keep map drag move frames out of the tap bridge.");
 requireText("boolean isArchiveApp = \"nativelongisland.com\".equalsIgnoreCase(host);", "Android shell must keep nativelongisland.com navigation inside the APK WebView.");
@@ -162,6 +164,9 @@ for (const [label, html] of [
   if (!html.includes("button.dataset.mobileBiographyPathOrder = String(index + 1);") || !html.includes("button.dataset.pinLabel = String(index + 1);") || !html.includes("button.textContent = String(index + 1);")) {
     throw new Error(`Bundled Android ${label} is missing visible numbered biography path map pins.`);
   }
+  if (!/\.mobile-biography-path-map-number\s*\{[\s\S]*?font-size:\s*9\.5px;/.test(html) || !/\.mobile-biography-path-map-number::after\s*\{\s*content:\s*none;/.test(html)) {
+    throw new Error(`Bundled Android ${label} must show travel-pin numbers as actual marker text.`);
+  }
   if (!html.includes('resultType: "wiki"') || !html.includes('data-wiki-slug="${escapeHtml(site.slug)}"')) {
     throw new Error(`Bundled Android ${label} is missing mobile wiki article search results.`);
   }
@@ -191,6 +196,19 @@ requireBundledText('mobilePanelTapBlockUntil: 0', "Bundled Android app must trac
 requireBundledText('function blockMobileMapTaps(durationMs = 1600)', "Bundled Android app must block repeated map taps after panel dismissal.");
 requireBundledText('function isAndroidUiOverlayTap(clientX, clientY)', "Bundled Android app must reject drawer/header/sheet taps before trying alternate map coordinates.");
 requireBundledText('if (isMobileMapTapBlocked()) return false;', "Bundled Android map bridge must ignore taps after panel dismissal.");
+requireBundledText('listTouchActivationUntil: 0', "Bundled Android app must track first-tap search result activation.");
+requireBundledText('function activateMobileListTarget(target, event)', "Bundled Android app must share nearby/search card activation.");
+requireBundledText('window.onAndroidSearchResultTapStart = function onAndroidSearchResultTapStart', "Bundled Android app must cache search result taps before keyboard dismissal.");
+requireBundledText('function androidSearchResultCardFromViewPoint(viewX, viewY, viewWidth, viewHeight)', "Bundled Android app must choose search cards from screen-space bounds before elementFromPoint fallback.");
+requireBundledText('const boundsCard = androidSearchResultCardFromViewPoint(viewX, viewY, viewWidth, viewHeight);', "Bundled Android app must prioritize the visible tapped search card bounds.");
+requireBundledText('function cacheAndroidSearchResultCard(card)', "Bundled Android app must let the real touched search card override coordinate fallback.");
+requireBundledText('function mobileListCardTarget(card)', "Bundled Android app must recover a result target from the visible card title when a live card has an empty slug.");
+requireBundledText('const wiki = (state.wikiArticles || []).find(article => normalizeText(article.title || "") === key);', "Bundled Android app must map empty-slug wiki result cards back to their article slug.");
+requireBundledText('function activatePendingAndroidSearchResultTap()', "Bundled Android app must activate cached search result taps on touch end.");
+requireBundledText('listEl.addEventListener("touchstart"', "Bundled Android app must capture the actual touched search result card before keyboard dismissal.");
+requireBundledText('listEl.addEventListener("touchend"', "Bundled Android app must open search result cards on Android touchend.");
+requireBundledText('state.pendingAndroidSearchResultTap = null;', "Bundled Android app must clear pending search taps after normal touch activation.");
+requireBundledText('state.listTouchActivationUntil = performance.now() + 650;', "Bundled Android app must suppress duplicate click after touch activation.");
 requireBundledText('"text-allow-overlap": false', "Bundled Android app must keep close-zoom point labels readable with collision handling.");
 requireBundledText('settings.showPins = true;', "Bundled Android app must recover from saved Sites-off settings so site icons stay visible.");
 requireBundledText('selected-site-map-label', "Bundled Android app must show a dedicated title label for the selected site marker.");

@@ -397,6 +397,7 @@ public class MainActivity extends Activity {
             webTouchStartX = event.getX();
             webTouchStartY = event.getY();
             webTouchStartedAt = System.currentTimeMillis();
+            cacheAndroidSearchResultTap(event);
             return;
         }
         if (event.getActionMasked() != MotionEvent.ACTION_UP) return;
@@ -423,6 +424,20 @@ public class MainActivity extends Activity {
             Log.d(LOG_TAG, "Forwarding WebView tap to map bridge: x=" + tapX + " y=" + tapY);
             webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "Map bridge result: " + value));
         }, MAP_TAP_BRIDGE_DELAY_MS);
+    }
+
+    private void cacheAndroidSearchResultTap(MotionEvent event) {
+        if (webView == null || event == null) return;
+        String script = "(function(){try{"
+            + "if(!window.onAndroidSearchResultTapStart)return 'missing-search-result-tap-bridge';"
+            + "return String(window.onAndroidSearchResultTapStart("
+            + event.getX() + ","
+            + event.getY() + ","
+            + webView.getWidth() + ","
+            + webView.getHeight()
+            + "));"
+            + "}catch(error){return 'search-result-tap-error:'+(error&&error.message?error.message:String(error));}})()";
+        webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "Search result tap bridge result: " + value));
     }
 
     @Override
