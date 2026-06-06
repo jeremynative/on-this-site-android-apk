@@ -57,7 +57,7 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260605-biography-path-pin-numbers-wiki-search";
+    static final String APP_VERSION = "20260605-biography-path-pin-labels-wiki-search-tag-dedupe";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
