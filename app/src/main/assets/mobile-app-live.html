@@ -5090,7 +5090,7 @@
     "amagansett-indian-well": "Amagansett Indian Well",
     "appaquogue": "Appaquogue",
     "ashawagh": "Ashawagh",
-    "ayeuonganit-aunakesuck-muhhogkunk": "Ayeuonganit AunakÃ©suck Muhhogkunk",
+    "ayeuonganit-aunakesuck-muhhogkunk": "Ayeuonganit Aunakésuck Muhhogkunk",
     "bethel-christian-ave-laurel-hill-historic-district": "Bethel Christian Ave., Laurel Hill Historic District",
     "canarsie": "Canarsie Traditional Land",
     "canoe-place-chapel": "Canoe Place Chapel",
@@ -5152,7 +5152,7 @@
     "winippague": "Winippague",
     "yaphank-weeks-pond-settlement": "Yaphank, Weeks Pond Settlement",
     "yennecock-southold-town": "Yennecock / Southold Town",
-    "yonahqosunuk": "YonÃ¡hqÃ´sunuk"
+    "yonahqosunuk": "Yonáhqôsunuk"
   };
 
   const smallWords = new Set(["a", "an", "and", "at", "ave", "by", "for", "in", "of", "on", "or", "the", "to"]);
@@ -7451,14 +7451,14 @@
     return String(value || "")
       .replace(/\\+(?=(?:&(?:quot|#0?39|apos|amp|nbsp|rsquo|lsquo|ldquo|rdquo);)|["'])/gi, "")
       .replace(/\\{2,}/g, "\\")
-      .replace(/Ãƒâ€šÃ‚Â /g, " ")
-      .replace(/Ãƒâ€š/g, "")
-      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢|&#8217;|&rsquo;/g, "'")
-      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“|&#8216;|&lsquo;/g, "'")
-      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8220;|&ldquo;/g, "\"")
-      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8221;|&rdquo;/g, "\"")
-      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“|&#8211;/g, "-")
-      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â|&#8212;/g, "-")
+      .replace(/Ã‚Â /g, " ")
+      .replace(/Ã‚/g, "")
+      .replace(/Ã¢â‚¬â„¢|&#8217;|&rsquo;/g, "'")
+      .replace(/Ã¢â‚¬Ëœ|&#8216;|&lsquo;/g, "'")
+      .replace(/Ã¢â‚¬Å“|&#8220;|&ldquo;/g, "\"")
+      .replace(/Ã¢â‚¬Â|&#8221;|&rdquo;/g, "\"")
+      .replace(/Ã¢â‚¬â€œ|&#8211;/g, "-")
+      .replace(/Ã¢â‚¬â€|&#8212;/g, "-")
       .replace(/&quot;/g, "\"")
       .replace(/&#0?39;|&apos;/g, "'")
       .replace(/&nbsp;/gi, " ")
@@ -7965,26 +7965,26 @@
   </script>
   <script data-inline-source="assets/js/language-quiz-words.js">
 window.NLI_LANGUAGE_QUIZ_WORDS = [
-  ["water", "nÃºp"], ["ocean", "cutstÃºk"], ["river", "seÃ©pus"], ["bay", "petÃ¡pagh"], ["stone", "sun"],
-  ["sand", "yaac"], ["rain", "sukerun"], ["snow", "soÃ¡chpo"], ["ice", "copÃ¡tn"], ["fire", "ruht; yuht"],
-  ["thunder", "pataquÃ¡hamoc"], ["lightning", "wowosÃºmpsa"], ["sun", "haquaqua"], ["moon", "nÃ©epa"], ["star", "arÃ¡qusac"],
-  ["cloud", "pamayÃ¡uxer"], ["rainbow", "papuhmÃºncsunc"], ["tree", "pÃ©ewye"], ["pine", "cw"], ["oak", "hÃºchemus"],
-  ["hickory", "wusquÃ­at"], ["corn", "sowhÃ¡mmen"], ["beans", "mais-cusseet"], ["squash", "Ã¡scoot"], ["potato", "panac"],
-  ["bread", "Ã¡p"], ["meat", "wÃ©ows"], ["milk", "wampachÃº-unk"], ["tobacco", "tobac"], ["whale", "pÃºttap"],
-  ["fish", "opÃ©ramac"], ["clam", "poquahoc"], ["oyster", "apÃ³onahac"], ["deer", "hÃ¡tk"], ["dog", "arrÃºm"],
-  ["fox", "squirÃ­ntes"], ["squirrel", "moccÃ¡s"], ["rabbit", "mÃ³h-tux"], ["mouse", "poquÃ¡ttas"], ["bird", "a Ã¡ssas"],
-  ["crow", "concÃ³nchus"], ["eagle", "wÃ©quaran"], ["goose", "hakÃ©noh"], ["duck", "nanÃ¡secus"], ["dove", "mÃ¡-owks"],
-  ["snake", "skÃºk / skook"], ["bug", "sÃ©ukr"], ["worm", "hÃºquer"], ["fly", "muchÃ¡was"], ["mosquito", "murrÃ¡quitch"],
-  ["woman", "squah"], ["man", "run"], ["father", "cws"], ["mother", "cwca"], ["brother", "contÃ¡yux"],
-  ["sister", "kÃ©essums"], ["grandfather", "numpsoonk"], ["grandmother", "nÃ¡nnax"], ["uncle", "nissÃ©is"], ["aunt", "cacÃ¡cas"],
-  ["husband", "ks-hÃ¡mps"], ["wife", "keÃ©-us"], ["child", "neechuntz"], ["boy", "macÃºchax"], ["girl", "squÃ¡sses"],
-  ["house", "wÃ©echo"], ["door", "squnt"], ["blanket", "aqueÃ©wants"], ["bow", "Ã¡tump"], ["arrow", "neep"],
-  ["tomahawk", "chÃ©kenas"], ["axe", "ochÃ©gan"], ["wampum", "whÃ¡mpump"], ["war", "ayutÃ³wac"], ["peace", "weÃ©hsaac"],
-  ["head", "okÃ©yununc"], ["hair", "wÃ©-usk"], ["eyes", "skÃ©suc"], ["nose", "cochÃ³n"], ["mouth", "cÃºttoh"],
-  ["teeth", "kÃ©put"], ["hand", "cÃ³ritch"], ["finger", "cÃ³ritcheus"], ["knee", "cucÃºttuc"], ["foot", "cusseÃ©d"],
-  ["black", "shÃ­ckayo"], ["white", "wÃ¡mpayo"], ["red", "sqÃºayo"], ["yellow", "weesa-wayo"], ["blue", "seewamp-wayo"],
-  ["green", "uscu-sqÃºayo"], ["good", "woreÃ©can"], ["bad", "mÃ¡ttatÃ©ayuh"], ["small", "pÃ©ewÃ¡tsu"], ["turtle", "matcÃ®k"],
-  ["sea beach", "siwÃ¢ a"], ["shell fish", "sÃ©tcawa"], ["thank you", "tabutnÃ®"], ["greeting", "hÃ¡hcamÃ®"], ["come quick", "mekwÃ­"]
+  ["water", "núp"], ["ocean", "cutstúk"], ["river", "seépus"], ["bay", "petápagh"], ["stone", "sun"],
+  ["sand", "yaac"], ["rain", "sukerun"], ["snow", "soáchpo"], ["ice", "copátn"], ["fire", "ruht; yuht"],
+  ["thunder", "pataquáhamoc"], ["lightning", "wowosúmpsa"], ["sun", "haquaqua"], ["moon", "néepa"], ["star", "aráqusac"],
+  ["cloud", "pamayáuxer"], ["rainbow", "papuhmúncsunc"], ["tree", "péewye"], ["pine", "cw"], ["oak", "húchemus"],
+  ["hickory", "wusquíat"], ["corn", "sowhámmen"], ["beans", "mais-cusseet"], ["squash", "áscoot"], ["potato", "panac"],
+  ["bread", "áp"], ["meat", "wéows"], ["milk", "wampachú-unk"], ["tobacco", "tobac"], ["whale", "púttap"],
+  ["fish", "opéramac"], ["clam", "poquahoc"], ["oyster", "apóonahac"], ["deer", "hátk"], ["dog", "arrúm"],
+  ["fox", "squiríntes"], ["squirrel", "moccás"], ["rabbit", "móh-tux"], ["mouse", "poquáttas"], ["bird", "a ássas"],
+  ["crow", "concónchus"], ["eagle", "wéquaran"], ["goose", "hakénoh"], ["duck", "nanásecus"], ["dove", "má-owks"],
+  ["snake", "skúk / skook"], ["bug", "séukr"], ["worm", "húquer"], ["fly", "mucháwas"], ["mosquito", "murráquitch"],
+  ["woman", "squah"], ["man", "run"], ["father", "cws"], ["mother", "cwca"], ["brother", "contáyux"],
+  ["sister", "kéessums"], ["grandfather", "numpsoonk"], ["grandmother", "nánnax"], ["uncle", "nisséis"], ["aunt", "cacácas"],
+  ["husband", "ks-hámps"], ["wife", "keé-us"], ["child", "neechuntz"], ["boy", "macúchax"], ["girl", "squásses"],
+  ["house", "wéecho"], ["door", "squnt"], ["blanket", "aqueéwants"], ["bow", "átump"], ["arrow", "neep"],
+  ["tomahawk", "chékenas"], ["axe", "ochégan"], ["wampum", "whámpump"], ["war", "ayutówac"], ["peace", "weéhsaac"],
+  ["head", "okéyununc"], ["hair", "wé-usk"], ["eyes", "skésuc"], ["nose", "cochón"], ["mouth", "cúttoh"],
+  ["teeth", "képut"], ["hand", "córitch"], ["finger", "córitcheus"], ["knee", "cucúttuc"], ["foot", "cusseéd"],
+  ["black", "shíckayo"], ["white", "wámpayo"], ["red", "sqúayo"], ["yellow", "weesa-wayo"], ["blue", "seewamp-wayo"],
+  ["green", "uscu-sqúayo"], ["good", "woreécan"], ["bad", "máttatéayuh"], ["small", "péewátsu"], ["turtle", "matcîk"],
+  ["sea beach", "siwâ a"], ["shell fish", "sétcawa"], ["thank you", "tabutnî"], ["greeting", "háhcamî"], ["come quick", "mekwí"]
 ].map(([english, algonquian]) => ({
   id: english.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
   english,
@@ -8062,7 +8062,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const FALLBACK_CENTER = [-72.95, 40.86];
     const FALLBACK_STYLE = "mapbox://styles/mapbox/outdoors-v12";
     const KNOWLEDGEBASE_CATEGORIES = [
-      { label: "Biography", slugs: ["mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "sachem-warawakmy-of-the-setauket", "jeorgkee-indian-whaler", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "john-a-strong", "nathan-jeffrey-cuffee", "samson-occom", "samsom-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "sunksquaws-and-indigenous-womens-leadership"] },
+      { label: "Biography", slugs: ["mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "sachem-warawakmy-of-the-setauket", "jeorgkee-indian-whaler", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "john-a-strong", "nathan-jeffrey-cuffee", "samson-occom", "samsom-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "penhawitz-sachem-of-the-canarsie", "stephen-talkhouse-pharoah", "nasseconset-sachem-of-the-nissequogue", "keeossechok-sachem-of-the-secatogue", "sunksquaws-and-indigenous-womens-leadership"] },
       { label: "Tribal Nations and Communities", entries: [["wiki", "native-long-island-overview"], ["wiki", "continued-indigenous-presence-today"], ["wiki", "the-tribes-of-long-island"], ["wiki", "western-long-island-native-communities"], ["wiki", "central-long-island-native-communities"], ["wiki", "eastern-long-island-native-communities"], ["wiki", "myth-of-the-thirteen-tribes"], ["site", "montaukett"], ["site", "shinnecock-indian-reservation"], ["site", "unkechaug-indian-reservation"], ["site", "corchaug-tribe"], ["site", "manhansack-aqua-quash-awamock"], ["site", "setaukets"], ["site", "nissaquogue"], ["site", "matinecock"], ["site", "secatogues"], ["site", "massapequas"], ["site", "merricks"], ["site", "rockaways"], ["site", "canarsie"]] },
       { label: "History", slugs: ["native-long-island-overview", "slavery", "indian-missions-on-long-island", "colonial-descriptions-of-indians", "indian-forts", "13-tribes-of-long-island-david-martine", "early-contact-period-1600-ad-1700-ad", "post-contact", "creation-of-long-island", "land-deeds-and-dispossession", "myth-of-extinction-and-survivance", "myth-of-the-thirteen-tribes", "historic-preservation", "history-and-place-names", "merrick-people-in-early-land-records"] },
       { label: "Sovereignty and Governance", slugs: ["tribal-trustees", "sovereignty-recognition-and-detribalization", "land-deeds-and-dispossession", "continued-indigenous-presence-today"] },
@@ -8144,6 +8144,173 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             coordinates: [-72.438, 40.886],
             reason: "Her funeral procession is remembered as a Shinnecock cultural reaffirmation and community tribute."
           }
+        ]
+      },
+      "adam-achitteronose": {
+        title: "Adam Achitteronose associated places",
+        note: "This map path uses public-safe approximate places named in the biography and sources. It is not a precise travel route.",
+        places: [
+          { label: "Merrick/Mericock records", place: "Merrick and southern Hempstead bays", coordinates: [-73.555, 40.667], reason: "The biography connects Adam Achitteronose with western Long Island alliance records that included Mericock/Merrick." },
+          { label: "Hempstead conference context", place: "Hempstead", coordinates: [-73.621, 40.706], reason: "The source trail connects western Long Island sachems and envoys to Hempstead boundary and conference records." },
+          { label: "New Amsterdam diplomacy", place: "Lower Manhattan / New Amsterdam", coordinates: [-74.006, 40.705], reason: "Dutch treaty records place western Long Island diplomacy in relation to New Amsterdam." }
+        ]
+      },
+      "penhawitz-sachem-of-the-canarsie": {
+        title: "Penhawitz associated places",
+        note: "This public-safe path shows broad places connected to Penhawitz's source trail. It avoids private and sensitive locations.",
+        places: [
+          { label: "Canarsie homeland", place: "Canarsie, Brooklyn", coordinates: [-73.902, 40.640], reason: "Penhawitz is remembered in the Canarsie/Keschaechquereren source trail." },
+          { label: "Keschaechquereren / Flatbush", place: "Flatbush, Brooklyn", coordinates: [-73.961, 40.641], reason: "Museum of the City of New York identifies Penhawitz with a major community near Canarsie in what is now Flatbush." },
+          { label: "Massapequa deed context", place: "Massapequa / Fort Neck area", coordinates: [-73.462, 40.681], reason: "The source trail includes a 1639 Massapequa deed reference to Penhawitz." },
+          { label: "New Amsterdam", place: "Lower Manhattan", coordinates: [-74.006, 40.705], reason: "Dutch colonial records connect Penhawitz to New Netherland diplomacy." }
+        ]
+      },
+      "momoweta": {
+        title: "Momoweta associated places",
+        note: "This path uses approximate public places connected to Corchaug and North Fork source trails.",
+        places: [
+          { label: "Corchaug homeland", place: "North Fork / Cutchogue area", coordinates: [-72.487, 41.011], reason: "Momoweta is remembered as a Corchaug sachem." },
+          { label: "Southold records", place: "Southold", coordinates: [-72.427, 41.064], reason: "The biography connects him with North Fork records and colonial documentation." },
+          { label: "Peconic Bay diplomacy", place: "Peconic Bay", coordinates: [-72.460, 40.970], reason: "The Corchaug source trail sits within the Peconic and North Fork landscape." }
+        ]
+      },
+      "poggatacut-sachem-of-the-manhassets-of-shelter-island": {
+        title: "Poggatacut associated places",
+        note: "This path uses public-safe approximate places from the Manhansett/Shelter Island source trail.",
+        places: [
+          { label: "Manhansett homeland", place: "Shelter Island", coordinates: [-72.340, 41.070], reason: "Poggatacut is remembered as a Manhansett sachem of Shelter Island." },
+          { label: "Sylvester Manor area", place: "Shelter Island", coordinates: [-72.349, 41.084], reason: "Shelter Island colonial records and later histories preserve Manhansett source trails." },
+          { label: "Peconic Bay connection", place: "Peconic Bay", coordinates: [-72.460, 40.970], reason: "The biography connects Shelter Island with wider Peconic and eastern Long Island diplomacy." }
+        ]
+      },
+      "sachem-tackapousha": {
+        title: "Tackapousha associated places",
+        note: "This path follows broad public places tied to western Long Island diplomacy and does not mark sensitive sites.",
+        places: [
+          { label: "Massapequa homeland", place: "Massapequa / Fort Neck area", coordinates: [-73.462, 40.681], reason: "Tackapousha is remembered as a Massapequa leader." },
+          { label: "Hempstead Plains", place: "Hempstead", coordinates: [-73.621, 40.706], reason: "The source trail connects him to Hempstead boundary and conference records." },
+          { label: "Merrick / Mericock", place: "Merrick", coordinates: [-73.555, 40.667], reason: "Western Long Island diplomacy included Merrick/Mericock interests." },
+          { label: "Rockaway / Jamaica Bay", place: "Rockaway and Jamaica Bay", coordinates: [-73.835, 40.592], reason: "The treaty and alliance records connect Massapequa leadership with Rockaway and other western communities." }
+        ]
+      },
+      "sagamore-raseokan-ratiocanof-matinnicoke-matinecock": {
+        title: "Raseokan/Ratiocan associated places",
+        note: "This path shows approximate North Shore places named in the Matinecock source trail.",
+        places: [
+          { label: "Asharoken", place: "Asharoken Beach", coordinates: [-73.356, 40.927], reason: "Name variants in the biography connect Raseokan/Ratiocan with Asharoken-area records." },
+          { label: "Eaton's Neck", place: "Eaton's Neck", coordinates: [-73.393, 40.954], reason: "Matinecock and Huntington source trails include Eaton's Neck." },
+          { label: "Lloyd Neck / Caumsett", place: "Lloyd Neck", coordinates: [-73.472, 40.915], reason: "The biography connects him with Lloyd Neck and North Shore land records." },
+          { label: "Cold Spring Harbor", place: "Cold Spring Harbor", coordinates: [-73.456, 40.872], reason: "Cold Spring Harbor histories preserve part of the Matinecock source trail." }
+        ]
+      },
+      "mangwobe-sachem-of-rockaway": {
+        title: "Mangwobe associated places",
+        note: "This path uses public-safe approximate places tied to Rockaway and Hempstead conference records.",
+        places: [
+          { label: "Rockaway homeland", place: "Rockaway Peninsula", coordinates: [-73.835, 40.592], reason: "Mangwobe is remembered as a Rockaway sachem." },
+          { label: "Hempstead conference context", place: "Hempstead", coordinates: [-73.621, 40.706], reason: "His source trail includes the 1657 Hempstead conference." },
+          { label: "Merrick and south bays", place: "Merrick / southern Hempstead bays", coordinates: [-73.555, 40.667], reason: "The conference records connected Rockaway, Merrick, Massapequa, and Hempstead interests." }
+        ]
+      },
+      "sachem-warawakmy-of-the-setauket": {
+        title: "Warawakmy associated places",
+        note: "This path shows approximate public places tied to the Setauket source trail.",
+        places: [
+          { label: "Setauket homeland", place: "Setauket", coordinates: [-73.105, 40.941], reason: "Warawakmy is remembered as a Setauket sachem." },
+          { label: "Stony Brook", place: "Stony Brook", coordinates: [-73.140, 40.925], reason: "The 1655 deed source trail names land between Stony Brook and Peconic headwaters." },
+          { label: "Peconic headwaters", place: "Wading River / Peconic headwaters area", coordinates: [-72.830, 40.930], reason: "The biography connects Warawakmy to the headwaters boundary language in the deed record." }
+        ]
+      },
+      "nasseconset-sachem-of-the-nissequogue": {
+        title: "Nasseconset associated places",
+        note: "This path uses public-safe approximate places because the surviving evidence is concentrated in land and place-name records.",
+        places: [
+          { label: "Nissequogue River", place: "Nissequogue River", coordinates: [-73.203, 40.906], reason: "Nasseconset is tied to the Nissequogue River source trail." },
+          { label: "Smithtown", place: "Smithtown", coordinates: [-73.200, 40.856], reason: "Records connect Nasseconset with land that became part of Smithtown." },
+          { label: "Crab Meadow / Katawamake", place: "Crab Meadow area", coordinates: [-73.312, 40.928], reason: "The biography notes nearby place-name and land-record context." }
+        ]
+      },
+      "keeossechok-sachem-of-the-secatogue": {
+        title: "Keeossechok associated places",
+        note: "This path uses broad public places because the source trail is brief and mostly deed/place-name based.",
+        places: [
+          { label: "Secatogue Neck", place: "West Islip / Bay Shore area", coordinates: [-73.294, 40.706], reason: "Keeossechok is remembered as a Secatogue sachem." },
+          { label: "Great South Bay marshes", place: "Great South Bay", coordinates: [-73.238, 40.688], reason: "The Secatogue source trail is tied to South Shore homelands and salt meadows." },
+          { label: "Islip / Babylon south shore", place: "Islip and Babylon shoreline", coordinates: [-73.318, 40.727], reason: "The broader Secatogue region includes this South Shore corridor." }
+        ]
+      },
+      "mocomanto-shinnecock-sachem-1640": {
+        title: "Mocomanto associated places",
+        note: "This path shows approximate public places connected to Southampton and Shinnecock source trails.",
+        places: [
+          { label: "Shinnecock homeland", place: "Shinnecock, Southampton", coordinates: [-72.432, 40.884], reason: "Mocomanto is remembered as a Shinnecock leader." },
+          { label: "Conscience Point context", place: "North Sea / Conscience Point", coordinates: [-72.439, 40.920], reason: "Southampton founding narratives connect this area with early colonial arrival." },
+          { label: "Southampton records", place: "Southampton Village", coordinates: [-72.389, 40.884], reason: "His name appears in source trails connected with early Southampton records." }
+        ]
+      },
+      "mandush-17th-century-sachem-of-shinnecock": {
+        title: "Mandush associated places",
+        note: "This path uses public-safe approximate places named in Shinnecock and South Fork source trails.",
+        places: [
+          { label: "Shinnecock homeland", place: "Shinnecock, Southampton", coordinates: [-72.432, 40.884], reason: "Mandush is remembered as a Shinnecock sachem." },
+          { label: "Southampton records", place: "Southampton Village", coordinates: [-72.389, 40.884], reason: "The biography connects Mandush to Southampton land and testimony records." },
+          { label: "Montaukett diplomacy", place: "Montauk", coordinates: [-71.944, 41.036], reason: "The source trail links Mandush with regional diplomacy involving Montaukett leadership." }
+        ]
+      },
+      "sunksqua-weany-pametsechs": {
+        title: "Weany/Pametsechs associated places",
+        note: "This path uses approximate public places because women's leadership often survives in short deed and land-record references.",
+        places: [
+          { label: "Shinnecock homeland", place: "Shinnecock, Southampton", coordinates: [-72.432, 40.884], reason: "Weany/Pametsechs is remembered in Shinnecock leadership source trails." },
+          { label: "Quogue lands", place: "Quogue", coordinates: [-72.581, 40.823], reason: "The biography connects her with Quogue-area land records." },
+          { label: "Canoe Place / Niamuck", place: "Canoe Place", coordinates: [-72.504, 40.884], reason: "The South Fork corridor provides broader context for Shinnecock and neighboring source trails." }
+        ]
+      },
+      "chief-mahue-mayhew-of-unkechaug": {
+        title: "Mahue/Mayhew associated places",
+        note: "This path uses public-safe approximate places connected with Unkechaug and Setauket source trails.",
+        places: [
+          { label: "Poospatuck / Unkechaug homeland", place: "Poospatuck Reservation area", coordinates: [-72.869, 40.787], reason: "Mahue/Mayhew is remembered as an Unkechaug-connected leader." },
+          { label: "Setauket connection", place: "Setauket", coordinates: [-73.105, 40.941], reason: "The biography notes Unkechaug and Setauket connections." },
+          { label: "Mastic / Brookhaven south shore", place: "Mastic area", coordinates: [-72.840, 40.760], reason: "The Unkechaug source trail centers the south shore of Brookhaven." }
+        ]
+      },
+      "rev-paul-cuffee": {
+        title: "Rev. Paul Cuffee associated places",
+        note: "This path follows public places connected to Cuffee's preaching circuit. It is not a precise route.",
+        places: [
+          { label: "Poospatuck / Unkechaug", place: "Poospatuck Reservation area", coordinates: [-72.869, 40.787], reason: "Cuffee's ministry connected with Unkechaug community life." },
+          { label: "Shinnecock", place: "Shinnecock, Southampton", coordinates: [-72.432, 40.884], reason: "The biography connects him with Shinnecock mission history." },
+          { label: "Canoe Place", place: "Canoe Place", coordinates: [-72.504, 40.884], reason: "Canoe Place appears in the mission circuit source trail." },
+          { label: "Montauk", place: "Montauk", coordinates: [-71.944, 41.036], reason: "Cuffee's preaching route connected eastern Long Island Native communities." }
+        ]
+      },
+      "nathan-jeffrey-cuffee": {
+        title: "Nathan Jeffrey Cuffee associated places",
+        note: "This path uses broad public places connected to Montaukett writing, community history, and land advocacy.",
+        places: [
+          { label: "Eastville community", place: "Sag Harbor / Eastville", coordinates: [-72.317, 40.999], reason: "Cuffee is connected with the Eastville community." },
+          { label: "Indian Fields", place: "Montauk", coordinates: [-71.944, 41.036], reason: "The biography connects him with Montaukett advocacy for Indian Fields." },
+          { label: "Hither Woods", place: "Hither Woods, Montauk", coordinates: [-72.020, 41.030], reason: "Hither Woods is part of the Montaukett land advocacy source trail." }
+        ]
+      },
+      "sachem-aquash-of-the-montaukett": {
+        title: "Aquash associated places",
+        note: "This path uses public-safe approximate places connected to Montaukett and East Hampton source trails.",
+        places: [
+          { label: "Montaukett homeland", place: "Montauk", coordinates: [-71.944, 41.036], reason: "Aquash is remembered as a Montaukett sachem." },
+          { label: "East Hampton records", place: "East Hampton", coordinates: [-72.185, 40.963], reason: "The biography connects Aquash with East Hampton records." },
+          { label: "Indian Fields context", place: "Montauk", coordinates: [-71.972, 41.047], reason: "The source trail connects later Montaukett leadership with Montauk land and fencing agreements." }
+        ]
+      },
+      "stephen-talkhouse-pharoah": {
+        title: "Stephen Talkhouse associated places",
+        note: "This path uses public-safe approximate places connected to Stephen Talkhouse Pharoah. It does not mark private or sensitive locations.",
+        places: [
+          { label: "Springs / Molly's Hill", place: "Springs, East Hampton", coordinates: [-72.137, 41.035], reason: "Archive records connect Talkhouse with Molly's Hill in Springs." },
+          { label: "Talkhouse house site context", place: "Montauk", coordinates: [-72.014, 41.032], reason: "The biography connects his later life with the Stephen Talkhouse Pharoah House source trail." },
+          { label: "St. Matthew Chapel / Freetown", place: "East Hampton", coordinates: [-72.177, 41.020], reason: "The broader local source trail connects Montaukett and African American community places in East Hampton." },
+          { label: "Bridgehampton path context", place: "Bridgehampton", coordinates: [-72.306, 40.937], reason: "The house listing notes a footpath toward Bridgehampton." }
         ]
       }
     };
@@ -9399,14 +9566,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function decodeImportedText(value) {
       const textarea = document.createElement("textarea");
       textarea.innerHTML = String(value || "")
-        .replace(/ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â /g, " ")
-        .replace(/ÃƒÆ’Ã¢â‚¬Å¡/g, "")
-        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢|&#8217;|&rsquo;/g, "'")
-        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¹Ã…â€œ|&#8216;|&lsquo;/g, "'")
-        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“|&#8220;|&ldquo;/g, "\"")
-        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â|&#8221;|&rdquo;/g, "\"")
-        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8211;/g, "-")
-        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8212;/g, "-")
+        .replace(/Ãƒâ€šÃ‚Â /g, " ")
+        .replace(/Ãƒâ€š/g, "")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢|&#8217;|&rsquo;/g, "'")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“|&#8216;|&lsquo;/g, "'")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8220;|&ldquo;/g, "\"")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8221;|&rdquo;/g, "\"")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“|&#8211;/g, "-")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â|&#8212;/g, "-")
         .replace(/&nbsp;/gi, " ");
       return textarea.value.replace(/\s+/g, " ").trim();
     }
@@ -14511,7 +14678,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             const confidence = Number(match?.confidence || 0);
             const score = confidence ? `${Math.round(confidence * 100)}%` : "score unavailable";
             const source = match?.source || "Pl@ntNet";
-            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} Ã‚Â· ${escapeHtml(source)}</em></div>`;
+            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} Â· ${escapeHtml(source)}</em></div>`;
           }).join("")}</div>`
         : "";
       const exactWarning = analysis?.safetyWarning || "Automated plant identification can be wrong. Verify with a field guide or expert before touching, eating, or using any plant.";
@@ -15223,14 +15390,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         return plantSpeciesKey(`${fields.identification || ""} ${fields.name || ""}`);
       }).filter(Boolean);
       const uniqueObserved = new Set(observedKeys);
-      const base = `${observations.length} observation${observations.length === 1 ? "" : "s"} Ã‚Â· ${uniqueObserved.size} unique species`;
-      if (!knownSpecies.length) return `${base} Ã‚Â· Known species list not yet added.`;
+      const base = `${observations.length} observation${observations.length === 1 ? "" : "s"} Â· ${uniqueObserved.size} unique species`;
+      if (!knownSpecies.length) return `${base} Â· Known species list not yet added.`;
       const documented = knownSpecies.filter(species => {
         const knownKey = plantSpeciesKey(species);
         return observedKeys.some(observed => observed.includes(knownKey) || knownKey.includes(observed));
       }).length;
       const percent = Math.round((documented / knownSpecies.length) * 100);
-      return `${base} Ã‚Â· ${documented}/${knownSpecies.length} known species documented (${percent}%).`;
+      return `${base} Â· ${documented}/${knownSpecies.length} known species documented (${percent}%).`;
     }
 
     function publicPlantText(value, fallback = "") {
