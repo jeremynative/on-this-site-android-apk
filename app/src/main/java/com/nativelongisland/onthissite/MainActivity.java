@@ -58,11 +58,11 @@ public class MainActivity extends Activity {
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260606-direct-bundled-startup";
+    static final String APP_VERSION = "20260606-bio-section-flow-live-root";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
-        "https://nativelongisland.com/archive-test/mobile-app-live.html";
+        "https://nativelongisland.com/mobile-app-live.html";
 
     private WebView webView;
     private View loadingCover;
@@ -295,13 +295,13 @@ public class MainActivity extends Activity {
         String path = uri.getPath();
         String assetName;
         String mimeType;
-        if (loadingBundledFallback && "/archive-test/mobile-app-live.html".equals(path)) {
+        if (loadingBundledFallback && "/mobile-app-live.html".equals(path)) {
             assetName = "mobile-app-live.html";
             mimeType = "text/html";
-        } else if (loadingBundledFallback && "/archive-test/mobile-app.html".equals(path)) {
+        } else if (loadingBundledFallback && "/mobile-app.html".equals(path)) {
             assetName = "mobile-app.html";
             mimeType = "text/html";
-        } else if ("/archive-test/long-island-land-mask.geojson".equals(path) || "/long-island-land-mask.geojson".equals(path)) {
+        } else if ("/long-island-land-mask.geojson".equals(path)) {
             assetName = "long-island-land-mask.geojson";
             mimeType = "application/geo+json";
         } else {

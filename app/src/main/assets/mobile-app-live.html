@@ -4688,7 +4688,7 @@
 
   window.NLI_SHARED_CONFIG = {
     directusUrl: "https://native-long-island-archive.directus.app",
-    publicArchiveBase: "https://nativelongisland.com/archive-test/",
+    publicArchiveBase: "https://nativelongisland.com/",
     fields: {
       profile: profileFields,
       publicVisit: publicVisitFields,
@@ -8052,7 +8052,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
     });
     const NEW_CONTENT_ALERT_INTERVAL_MS = 5 * 60 * 60 * 1000;
-    const PUBLIC_ARCHIVE_BASE = SHARED_CONFIG.publicArchiveBase || "https://nativelongisland.com/archive-test/";
+    const PUBLIC_ARCHIVE_BASE = SHARED_CONFIG.publicArchiveBase || "https://nativelongisland.com/";
     const EXHIBIT_MARKER_ICON = `${PUBLIC_ARCHIVE_BASE}assets/map-icons/exhibit-framed-landscape-marker.png`;
     const LAND_MASK_URL = `long-island-land-ma${"sk"}.geojson`;
     const LAND_MASK_VERSION = "2026-05-18";
@@ -16179,6 +16179,36 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return placeTerms.some(term => eventText.includes(term));
     }
 
+    function isBiographyWikiArticle(article) {
+      return Boolean(article?.slug && BIOGRAPHY_WIKI_SLUGS.has(article.slug));
+    }
+
+    function cleanupBiographyArticleHtml(article, html) {
+      if (!isBiographyWikiArticle(article) || !html) return html;
+      const template = document.createElement("template");
+      template.innerHTML = String(html || "");
+      [...template.content.querySelectorAll("h2, h3")].forEach(heading => {
+        const label = publicCleanText(heading.textContent || "");
+        const isIntroHeading = /^introduction$/i.test(label);
+        const isDuplicateSection = /^(places connected|connected places|places|why this matters)$/i.test(label);
+        if (!isIntroHeading && !isDuplicateSection) return;
+        const level = Number(heading.tagName.replace(/^H/i, "")) || 2;
+        let node = heading.nextSibling;
+        heading.remove();
+        if (isIntroHeading) return;
+        while (node) {
+          const next = node.nextSibling;
+          const isBoundary = node.nodeType === Node.ELEMENT_NODE
+            && /^H[1-6]$/i.test(node.tagName || "")
+            && (Number(node.tagName.replace(/^H/i, "")) || 2) <= level;
+          if (isBoundary) break;
+          node.remove();
+          node = next;
+        }
+      });
+      return template.innerHTML.trim();
+    }
+
     function mobileBiographyTimelineData(article, events = []) {
       const path = mobileBiographyPathData(article);
       const pathPlaces = path?.places || [];
@@ -16434,7 +16464,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         ? (options.timelineEvent || state.timelineEvents.find(item => String(item.id) === String(options.timelineEventId)))
         : null;
       const articleTimelineHtml = article.content ? sectionTimelineHtml(cleanHtml(article.content)) : "";
-      const articleContentHtml = article.content ? removeFootnoteReferenceMarkers(articleTimelineHtml || cleanHtml(article.content)) : "";
+      const rawArticleContentHtml = article.content ? (articleTimelineHtml || cleanHtml(article.content)) : "";
+      const articleContentHtml = cleanupBiographyArticleHtml(
+        article,
+        isBiographyWikiArticle(article) ? rawArticleContentHtml : removeFootnoteReferenceMarkers(rawArticleContentHtml)
+      );
       const wikiMoments = timelineEventsForSource("wiki", article.id, article.slug);
       const biographyTimeline = mobileBiographyTimelineData(article, wikiMoments);
       detailTitleEl.innerHTML = `
@@ -16443,9 +16477,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       `;
       detailBodyEl.innerHTML = `
         ${publicCleanText(article.summary) ? `<p class="summary">${escapeHtml(publicCleanText(article.summary))}</p>` : ""}
-        ${mobileBiographyPathHtml(article, wikiMoments)}
-        ${articleContentHtml ? `<section class="section"><h3>Article</h3><div class="section-content">${articleContentHtml}</div></section>` : ""}
+        ${articleContentHtml ? `<section class="section"><h3>Sections</h3><div class="section-content">${articleContentHtml}</div></section>` : ""}
         ${whyThisMattersHtml(article)}
+        ${mobileBiographyPathHtml(article, wikiMoments)}
         ${sourcesEvidenceSection(article)}
         ${plantWikiObservationSitesHtml(article)}
         ${discussionHtml("wiki", article)}

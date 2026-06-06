@@ -1,7 +1,7 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260606-direct-bundled-startup";
-const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
+const expectedBuild = "20260606-bio-section-flow-live-root";
+const expectedUrl = "https://nativelongisland.com/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
 const bundledAppPath = "app/src/main/assets/mobile-app.html";
@@ -53,8 +53,8 @@ requireText("loadBundledFallback", "Android shell must keep the bundled archive 
 requireText("onReceivedHttpError", "Android shell must fall back when the live mobile archive returns an HTTP error.");
 requireText("isSiteGroundChallengeUrl", "Android shell must detect SiteGround challenge redirects and use the bundled fallback.");
 requireText("loadBundledFallback(\"siteground-challenge-start\")", "Android shell must switch to the bundled fallback as soon as SiteGround challenge navigation starts.");
-requireText("loadingBundledFallback && \"/archive-test/mobile-app-live.html\".equals(path)", "Android shell must not intercept the live mobile archive unless the fallback is active.");
-requireText("loadingBundledFallback && \"/archive-test/mobile-app.html\".equals(path)", "Android shell must serve the full bundled archive when live Directus startup falls back.");
+requireText("loadingBundledFallback && \"/mobile-app-live.html\".equals(path)", "Android shell must not intercept the live mobile archive unless the fallback is active.");
+requireText("loadingBundledFallback && \"/mobile-app.html\".equals(path)", "Android shell must serve the full bundled archive when live Directus startup falls back.");
 requireText('assetName = "mobile-app.html";', "Android shell must serve embedded mobile data for the full archive fallback.");
 requireText("mobile-app.html", "Android shell must include the bundled mobile app fallback asset.");
 requireText("mobile-app-live.html", "Android shell must include the lightweight Directus-backed mobile app fallback asset.");
@@ -149,6 +149,10 @@ for (const [label, bytes, html] of [
   if (!html.includes("__NLI_MAPBOX_TOKEN__")) {
     throw new Error(`Bundled Android ${label} is missing the Mapbox token placeholder.`);
   }
+}
+const archiveTestRoot = "https://nativelongisland.com/" + "archive-test/";
+if (source.includes("archive-test") || bundledApp.includes(archiveTestRoot) || bundledLiveApp.includes(archiveTestRoot)) {
+  throw new Error("Android shell and bundled APK HTML must use the live root site, not archive-test.");
 }
 
 if (!bundledApp.includes("window.NLI_MOBILE_DATA")) {
