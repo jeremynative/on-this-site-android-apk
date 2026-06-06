@@ -1,6 +1,6 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260605-map-source-skip";
+const expectedBuild = "20260606-biography-path-number-badges";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -161,7 +161,11 @@ for (const [label, html] of [
   if (!html.includes("properties: { kind: \"point\", order: index + 1, label: String(index + 1), title: place.label }")) {
     throw new Error(`Bundled Android ${label} is missing string-labeled biography path map features.`);
   }
-  if (!html.includes("button.dataset.mobileBiographyPathOrder = String(index + 1);") || !html.includes("button.dataset.pinLabel = String(index + 1);") || !html.includes("button.textContent = String(index + 1);")) {
+  if (!html.includes("label.className = \"mobile-biography-path-map-number-label\";") ||
+      !html.includes("label.textContent = String(index + 1);") ||
+      !html.includes("button.dataset.mobileBiographyPathOrder = String(index + 1);") ||
+      !html.includes("button.dataset.pinLabel = String(index + 1);") ||
+      !html.includes("button.appendChild(label);")) {
     throw new Error(`Bundled Android ${label} is missing visible numbered biography path map pins.`);
   }
   if (!html.includes('"text-field": ["to-string", ["get", "order"]]')) {
@@ -170,8 +174,8 @@ for (const [label, html] of [
   if (!/id:\s*"mobile-biography-place-labels"[\s\S]*?"text-field":\s*\["to-string",\s*\["get",\s*"order"\]\][\s\S]*?\}\s*\);/.test(html)) {
     throw new Error(`Bundled Android ${label} must render travel-pin number labels above normal site layers.`);
   }
-  if (!/\.mobile-biography-path-map-number\s*\{[\s\S]*?font-size:\s*9\.5px;[\s\S]*?z-index:\s*6;/.test(html) || !/\.mobile-biography-path-map-number::after\s*\{\s*content:\s*none;/.test(html)) {
-    throw new Error(`Bundled Android ${label} must show travel-pin numbers as actual marker text.`);
+  if (!/\.mobile-biography-path-map-number\s*\{[\s\S]*?font-size:\s*9\.5px;[\s\S]*?z-index:\s*6;/.test(html) || !/\.mobile-biography-path-map-number-label\s*\{[\s\S]*?font-size:\s*9\.5px;/.test(html)) {
+    throw new Error(`Bundled Android ${label} must show travel-pin numbers as visible marker badges.`);
   }
   if (!html.includes('resultType: "wiki"') || !html.includes('data-wiki-slug="${escapeHtml(site.slug)}"')) {
     throw new Error(`Bundled Android ${label} is missing mobile wiki article search results.`);
@@ -329,6 +333,8 @@ requireBundledText('languageRemoteAttemptExists', "Bundled Android app must chec
 requireBundledText('syncLanguageAttempt', "Bundled Android app must save language attempts through the shared sync path.");
 requireBundledText('Content editing needs the editor password.', "Bundled Android app must keep admin editing behind authenticated Directus login.");
 requireBundledText('frontendEditorPayload', "Bundled Android app must include the current mobile admin editor payload path.");
+requireBundledText('mobile-biography-path-map-number-label', "Bundled Android app must show visible numbered biography travel map pins.");
+requireBundledText('label.textContent = String(index + 1);', "Bundled Android biography travel map pins must render number text inside each marker.");
 
 console.log(`Android shell verifier passed: ${expectedBuild}`);
 

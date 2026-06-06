@@ -4017,6 +4017,15 @@
       content: none;
     }
 
+    .mobile-biography-path-map-number-label {
+      display: block;
+      color: #fff;
+      font-size: 9.5px;
+      font-weight: 850;
+      line-height: 1;
+      pointer-events: none;
+    }
+
     .mobile-biography-path-map-number:focus-visible {
       outline: 2px solid rgba(244, 201, 93, 0.9);
       outline-offset: 2px;
@@ -16046,13 +16055,17 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       });
       state.mobileBiographyPathMarkers = path.places.map((place, index) => {
         const button = document.createElement("button");
+        const label = document.createElement("span");
+        label.className = "mobile-biography-path-map-number-label";
+        label.textContent = String(index + 1);
+        label.setAttribute("aria-hidden", "true");
         button.type = "button";
         button.className = "mobile-biography-path-map-number";
         button.dataset.mobileBiographyPathOrder = String(index + 1);
         button.dataset.pinLabel = String(index + 1);
-        button.textContent = String(index + 1);
         button.setAttribute("aria-label", `Show ${place.label} on the map`);
         button.title = `${index + 1}. ${place.label}`;
+        button.appendChild(label);
         button.addEventListener("click", event => {
           event.preventDefault();
           event.stopPropagation();
