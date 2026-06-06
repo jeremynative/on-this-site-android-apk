@@ -16154,23 +16154,129 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return { ...path, places };
     }
 
-    function mobileBiographyPathHtml(article) {
+    function mobileTimelineEventCoordinates(event = {}) {
+      const lng = Number(event.longitude);
+      const lat = Number(event.latitude);
+      return Number.isFinite(lng) && Number.isFinite(lat) && lng >= -76 && lng <= -70.5 && lat >= 39.5 && lat <= 42.5 ? [lng, lat] : null;
+    }
+
+    function normalizedMobileBiographyPlaceText(value) {
+      return normalizeText(stripHtml(String(value || ""))).replace(/[^a-z0-9]+/g, " ").trim();
+    }
+
+    function mobileBiographyPlaceMatchesEvent(place, event) {
+      if (!place || !event) return false;
+      const placeText = normalizedMobileBiographyPlaceText([place.label, place.place].filter(Boolean).join(" "));
+      const eventText = normalizedMobileBiographyPlaceText([
+        timelineLocationLabel(event),
+        timelineTitle(event),
+        event.source_title,
+        event.description
+      ].filter(Boolean).join(" "));
+      if (!placeText || !eventText) return false;
+      if (eventText.includes(placeText) || placeText.includes(eventText)) return true;
+      const placeTerms = placeText.split(" ").filter(term => term.length >= 5);
+      return placeTerms.some(term => eventText.includes(term));
+    }
+
+    function mobileBiographyTimelineData(article, events = []) {
       const path = mobileBiographyPathData(article);
-      if (!path) return "";
+      const pathPlaces = path?.places || [];
+      if (!pathPlaces.length && !events.length) return null;
+      const usedPathIndexes = new Set();
+      const entries = events.map(event => {
+        const matchIndex = pathPlaces.findIndex((place, index) => !usedPathIndexes.has(index) && mobileBiographyPlaceMatchesEvent(place, event));
+        const matchedPlace = matchIndex >= 0 ? pathPlaces[matchIndex] : null;
+        if (matchIndex >= 0) usedPathIndexes.add(matchIndex);
+        const coordinates = mobileTimelineEventCoordinates(event) || matchedPlace?.coordinates || null;
+        return {
+          type: "moment",
+          event,
+          sort: timelineSortValue(event),
+          dateLabel: timelineLabel(event),
+          title: timelineTitle(event),
+          location: timelineLocationLabel(event) || matchedPlace?.place || "",
+          descriptionHtml: event.description ? cleanHtml(timelineDisplayDescription(event)) : "",
+          sourceNote: timelineSourceText(event),
+          coordinates,
+          label: timelineTitle(event),
+          place: timelineLocationLabel(event) || matchedPlace?.place || "",
+          reason: stripHtml(timelineDisplayDescription(event)) || matchedPlace?.reason || ""
+        };
+      });
+      pathPlaces.forEach((place, index) => {
+        if (usedPathIndexes.has(index)) return;
+        entries.push({
+          type: "place",
+          sort: 900000 + index,
+          dateLabel: place.dateLabel || place.date_label || "",
+          title: place.label,
+          location: place.place,
+          descriptionHtml: `<p>${escapeHtml(place.reason || "")}</p>`,
+          sourceNote: "",
+          coordinates: place.coordinates,
+          label: place.label,
+          place: place.place,
+          reason: place.reason
+        });
+      });
+      if (!entries.length) return null;
+      entries.sort((a, b) =>
+        Number(a.sort || 0) - Number(b.sort || 0) ||
+        String(a.dateLabel || "").localeCompare(String(b.dateLabel || "")) ||
+        String(a.title || "").localeCompare(String(b.title || ""))
+      );
+      const mappedPlaces = [];
+      entries.forEach(entry => {
+        if (!Array.isArray(entry.coordinates) || !entry.coordinates.every(Number.isFinite)) return;
+        entry.mapOrder = mappedPlaces.length + 1;
+        entry.pathIndex = mappedPlaces.length;
+        mappedPlaces.push({
+          label: entry.title || entry.label || `Place ${entry.mapOrder}`,
+          place: entry.location || entry.place || "",
+          coordinates: entry.coordinates,
+          reason: entry.reason || stripHtml(entry.descriptionHtml || ""),
+          order: entry.mapOrder
+        });
+      });
+      return {
+        title: path?.title || `${article?.title || "Biography"} timeline and places`,
+        note: path?.note || "Numbered entries use public-safe approximate locations where source material supports a mappable place.",
+        entries,
+        places: mappedPlaces
+      };
+    }
+
+    function mobileBiographyPathHtml(article, events = []) {
+      const path = mobileBiographyTimelineData(article, events);
+      if (!path) return historicMomentsHtml(events);
       return `
         <section class="section mobile-biography-path-section">
-          <h3>Places connected to this life</h3>
-          <p class="detail-meta">${escapeHtml(path.note)}</p>
+          <h3>Life timeline and places</h3>
+          ${path.note ? `<p class="detail-meta">${escapeHtml(path.note)}</p>` : ""}
           <div class="mobile-biography-path-list">
-            ${path.places.map((place, index) => `
-              <button class="mobile-biography-path-place" type="button" data-mobile-biography-path-index="${index}" aria-label="Show ${escapeHtml(place.label)} on the map">
-                <span class="mobile-biography-path-number">${index + 1}</span>
-                <span>
-                  <strong>${escapeHtml(place.label)}</strong>
-                  <em>${escapeHtml(place.place)}</em>
-                  <small>${escapeHtml(place.reason)}</small>
-                </span>
-              </button>
+            ${path.entries.map(entry => `
+              <article class="timeline-item mobile-biography-timeline-entry" ${entry.event?.id ? `id="timeline-moment-${escapeHtml(entry.event.id)}" data-event-id="${escapeHtml(entry.event.id)}"` : ""}>
+                <div class="timeline-year">${escapeHtml(entry.dateLabel || "Place")}</div>
+                ${Number.isFinite(entry.pathIndex) ? `
+                  <button class="mobile-biography-path-place" type="button" data-mobile-biography-path-index="${entry.pathIndex}" aria-label="Show ${escapeHtml(entry.title)} on the map">
+                    <span class="mobile-biography-path-number">${entry.mapOrder}</span>
+                    <span>
+                      <strong>${escapeHtml(entry.title)}</strong>
+                      ${entry.location ? `<em>${escapeHtml(entry.location)}</em>` : ""}
+                    </span>
+                  </button>
+                ` : `
+                  ${entry.location ? `<p class="timeline-location"><strong>Location:</strong> ${escapeHtml(entry.location)}</p>` : ""}
+                  <div class="timeline-body"><p><strong>${escapeHtml(entry.title)}</strong></p></div>
+                `}
+                ${entry.descriptionHtml ? `<div class="timeline-body">${entry.descriptionHtml}</div>` : ""}
+                ${isAdminContributor() && entry.event?.id ? `<div class="actions"><button class="action secondary" type="button" data-open-frontend-editor="timeline" data-editor-slug="${escapeHtml(entry.event.id)}">Edit moment</button></div>` : ""}
+                ${entry.sourceNote ? `
+                  <button class="timeline-source-info" type="button" data-timeline-source-info data-source-reference="${escapeHtml(entry.sourceNote)}" aria-label="Show source reference" aria-expanded="false" title="${escapeHtml(entry.sourceNote)}">i</button>
+                  <div class="timeline-source-popover" role="note"><div>${escapeHtml(entry.sourceNote)}</div><div class="timeline-source-copy-hint">Source reference.</div></div>
+                ` : ""}
+              </article>
             `).join("")}
           </div>
         </section>
@@ -16207,10 +16313,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         state.mobileBiographyPathMarkers.forEach(marker => marker?.remove?.());
       }
       state.mobileBiographyPathMarkers = [];
+      state.activeMobileBiographyPath = null;
     }
 
     function focusMobileBiographyPathPlace(pathOrArticle, index = 0, options = {}) {
-      const path = pathOrArticle?.places ? pathOrArticle : mobileBiographyPathData(pathOrArticle);
+      const path = pathOrArticle?.places ? pathOrArticle : (state.activeMobileBiographyPath?.places ? state.activeMobileBiographyPath : mobileBiographyPathData(pathOrArticle));
       if (!path?.places?.length || !state.map) return false;
       const place = path.places[Math.max(0, Math.min(path.places.length - 1, Number(index) || 0))];
       if (!place?.coordinates?.every(Number.isFinite)) return false;
@@ -16224,9 +16331,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function showMobileBiographyPathOverlay(article, options = {}) {
-      const path = mobileBiographyPathData(article);
+      const path = mobileBiographyTimelineData(article, options.events || []);
       clearMobileBiographyPathOverlay();
       if (!path || !state.map) return;
+      state.activeMobileBiographyPath = path;
       state.map.addSource("mobile-biography-place-path", { type: "geojson", data: mobileBiographyPathFeatureCollection(path) });
       const beforeLayer = state.map.getLayer("mobile-site-icons") ? "mobile-site-icons" : undefined;
       state.map.addLayer({
@@ -16328,15 +16436,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const articleTimelineHtml = article.content ? sectionTimelineHtml(cleanHtml(article.content)) : "";
       const articleContentHtml = article.content ? removeFootnoteReferenceMarkers(articleTimelineHtml || cleanHtml(article.content)) : "";
       const wikiMoments = timelineEventsForSource("wiki", article.id, article.slug);
-      const biographyPath = mobileBiographyPathData(article);
+      const biographyTimeline = mobileBiographyTimelineData(article, wikiMoments);
       detailTitleEl.innerHTML = `
         <h2>${escapeHtml(article.title)}</h2>
         <p class="detail-meta">${article.lastmod ? "Imported knowledgebase article" : "Knowledgebase"}</p>
       `;
       detailBodyEl.innerHTML = `
         ${publicCleanText(article.summary) ? `<p class="summary">${escapeHtml(publicCleanText(article.summary))}</p>` : ""}
-        ${mobileBiographyPathHtml(article)}
-        ${historicMomentsHtml(wikiMoments)}
+        ${mobileBiographyPathHtml(article, wikiMoments)}
         ${articleContentHtml ? `<section class="section"><h3>Article</h3><div class="section-content">${articleContentHtml}</div></section>` : ""}
         ${whyThisMattersHtml(article)}
         ${sourcesEvidenceSection(article)}
@@ -16351,7 +16458,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       syncMobilePanelAccessibility();
       decorateCurrentDetailForLanguageQuiz("wiki", article);
       setMobileContentRoute({ wiki: article.slug }, options);
-      if (biographyPath) showMobileBiographyPathOverlay(article, { focus: options.focus !== false });
+      if (biographyTimeline?.places?.length >= 2) showMobileBiographyPathOverlay(article, { focus: options.focus !== false, events: wikiMoments });
       if (event?.id) {
         window.setTimeout(() => detailBodyEl.querySelector(`#timeline-moment-${CSS.escape(String(event.id))}`)?.scrollIntoView({ block: "start" }), 80);
       }
@@ -19371,7 +19478,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (biographyPathPlace) {
         const slug = new URL(window.location.href).searchParams.get("wiki") || "";
         const article = slug ? state.wikiBySlug.get(slug) : null;
-        if (focusMobileBiographyPathPlace(article, biographyPathPlace.dataset.mobileBiographyPathIndex, { zoom: 12.2, duration: 720 })) {
+        if (focusMobileBiographyPathPlace(state.activeMobileBiographyPath || article, biographyPathPlace.dataset.mobileBiographyPathIndex, { zoom: 12.2, duration: 720 })) {
           biographyPathPlace.scrollIntoView({ block: "nearest", behavior: "smooth" });
         }
         return;
