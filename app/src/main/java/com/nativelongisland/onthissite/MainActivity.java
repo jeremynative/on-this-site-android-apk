@@ -58,7 +58,7 @@ public class MainActivity extends Activity {
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260606-biography-path-number-badges";
+    static final String APP_VERSION = "20260606-direct-bundled-startup";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
@@ -595,7 +595,24 @@ public class MainActivity extends Activity {
         if (webView == null || loadingBundledFallback) return;
         loadingBundledFallback = true;
         Log.w(LOG_TAG, "Loading bundled mobile archive fallback: " + reason);
-        webView.loadUrl(freshAppUrl());
+        String appUrl = freshAppUrl();
+        Thread loader = new Thread(() -> {
+            String html;
+            try {
+                html = bundledMobileHtml();
+            } catch (IOException error) {
+                Log.e(LOG_TAG, "Bundled mobile archive could not be prepared.", error);
+                runOnUiThread(() -> {
+                    if (webView != null && loadingBundledFallback) webView.loadUrl(appUrl);
+                });
+                return;
+            }
+            runOnUiThread(() -> {
+                if (webView == null || !loadingBundledFallback) return;
+                webView.loadDataWithBaseURL(appUrl, html, "text/html", "UTF-8", appUrl);
+            });
+        }, "ots-bundled-mobile-loader");
+        loader.start();
     }
 
     private void applyApkTimelineTrayFix() {

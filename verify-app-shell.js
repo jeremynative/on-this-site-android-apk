@@ -1,6 +1,6 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260606-biography-path-number-badges";
+const expectedBuild = "20260606-direct-bundled-startup";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -100,11 +100,14 @@ if (refreshAppMatch[0].includes("webView.loadUrl(url, headers);")) {
   throw new Error("Android shell must not show the SiteGround-challenged live URL during normal startup.");
 }
 const fallbackMatch = source.match(/private void loadBundledFallback\(String reason\) \{[\s\S]*?\n    \}/);
-if (!fallbackMatch || !fallbackMatch[0].includes("webView.loadUrl(freshAppUrl());")) {
-  throw new Error("Android shell must load the bundled startup shell through WebView URL interception, not UI-thread HTML injection.");
+if (!fallbackMatch || !fallbackMatch[0].includes('Thread loader = new Thread(() ->') || !fallbackMatch[0].includes('html = bundledMobileHtml();')) {
+  throw new Error("Android shell must prepare the bundled startup shell off the UI thread.");
 }
-if (fallbackMatch[0].includes("loadDataWithBaseURL")) {
-  throw new Error("Android shell must not build and inject the bundled startup HTML on the UI thread.");
+if (!fallbackMatch || !fallbackMatch[0].includes('webView.loadDataWithBaseURL(appUrl, html, "text/html", "UTF-8", appUrl);')) {
+  throw new Error("Android shell must load the prepared bundled startup shell directly with the live base URL.");
+}
+if (!fallbackMatch || !fallbackMatch[0].includes('webView.loadUrl(appUrl);')) {
+  throw new Error("Android shell must keep URL-intercept fallback if direct bundled startup preparation fails.");
 }
 requireText("dispatchTouchEvent", "Android shell must forward app taps into the mobile map.");
 requireText("window.onAndroidMapTap", "Android shell must call the mobile map tap bridge.");
