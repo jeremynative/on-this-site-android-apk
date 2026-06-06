@@ -8268,6 +8268,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       markers: new Map(),
       mapSourceCache: null,
       mapSourceCacheKey: "",
+      mapSourceRevision: 0,
+      mapSourceAppliedKey: "",
       mobileSiteIconImagesLoaded: new Set(),
       mobileSiteIconImagesFailed: new Set(),
       mobileSiteIconImagesLoading: false,
@@ -9651,6 +9653,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function invalidateMapSourceCache() {
       state.mapSourceCache = null;
       state.mapSourceCacheKey = "";
+      state.mapSourceRevision += 1;
     }
 
     function polygonLabelCollection(kind = "all", sites = state.mapSites) {
@@ -12422,7 +12425,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         return type === "Polygon" || type === "MultiPolygon";
       });
       const pointHitSites = state.settings.showPins === false ? [] : sites.filter(site => siteDisplayGeometry(site)?.type === "Point");
-      const cacheKey = `${state.settings.showPins !== false ? "pins" : "no-pins"}|${state.settings.showShapes !== false ? "shapes" : "no-shapes"}|${sites.length}`;
+      const cacheKey = `${state.mapSourceRevision}|${state.settings.showPins !== false ? "pins" : "no-pins"}|${state.settings.showShapes !== false ? "shapes" : "no-shapes"}|${sites.length}`;
       if (!state.mapSourceCache || state.mapSourceCacheKey !== cacheKey) {
         state.mapSourceCache = {
           sites: siteFeatureCollection([...shapeSites, ...pointHitSites]),
@@ -17186,12 +17189,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.map.on("mouseleave", "mobile-site-point-hit", () => state.map.getCanvas().style.cursor = "");
     }
 
-    function refreshMobileMapSources() {
+    function refreshMobileMapSources(options = {}) {
       if (!state.map) return;
       const data = cachedMobileMapSourceData();
+      const sourceKey = state.mapSourceCacheKey || "";
+      if (options.force !== true && sourceKey && state.mapSourceAppliedKey === sourceKey) return;
       state.map.getSource("mobile-sites")?.setData(data.sites);
       state.map.getSource("mobile-territory-labels")?.setData(data.territoryLabels);
       state.map.getSource("mobile-detail-labels")?.setData(data.detailLabels);
+      state.mapSourceAppliedKey = sourceKey;
     }
 
     function isAndroidMapGestureActive() {
