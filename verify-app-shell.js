@@ -1,6 +1,6 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260605-biography-path-pin-labels-search-tap-guard";
+const expectedBuild = "20260605-travel-pin-number-labels";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -164,7 +164,13 @@ for (const [label, html] of [
   if (!html.includes("button.dataset.mobileBiographyPathOrder = String(index + 1);") || !html.includes("button.dataset.pinLabel = String(index + 1);") || !html.includes("button.textContent = String(index + 1);")) {
     throw new Error(`Bundled Android ${label} is missing visible numbered biography path map pins.`);
   }
-  if (!/\.mobile-biography-path-map-number\s*\{[\s\S]*?font-size:\s*9\.5px;/.test(html) || !/\.mobile-biography-path-map-number::after\s*\{\s*content:\s*none;/.test(html)) {
+  if (!html.includes('"text-field": ["to-string", ["get", "order"]]')) {
+    throw new Error(`Bundled Android ${label} must draw travel-pin number labels from the map feature order.`);
+  }
+  if (!/id:\s*"mobile-biography-place-labels"[\s\S]*?"text-field":\s*\["to-string",\s*\["get",\s*"order"\]\][\s\S]*?\}\s*\);/.test(html)) {
+    throw new Error(`Bundled Android ${label} must render travel-pin number labels above normal site layers.`);
+  }
+  if (!/\.mobile-biography-path-map-number\s*\{[\s\S]*?font-size:\s*9\.5px;[\s\S]*?z-index:\s*6;/.test(html) || !/\.mobile-biography-path-map-number::after\s*\{\s*content:\s*none;/.test(html)) {
     throw new Error(`Bundled Android ${label} must show travel-pin numbers as actual marker text.`);
   }
   if (!html.includes('resultType: "wiki"') || !html.includes('data-wiki-slug="${escapeHtml(site.slug)}"')) {
@@ -203,6 +209,11 @@ requireBundledText('function androidSearchResultCardFromViewPoint(viewX, viewY, 
 requireBundledText('const boundsCard = androidSearchResultCardFromViewPoint(viewX, viewY, viewWidth, viewHeight);', "Bundled Android app must prioritize the visible tapped search card bounds.");
 requireBundledText('function cacheAndroidSearchResultCard(card)', "Bundled Android app must let the real touched search card override coordinate fallback.");
 requireBundledText('function mobileListCardTarget(card)', "Bundled Android app must recover a result target from the visible card title when a live card has an empty slug.");
+requireBundledText('data-result-index="${index}" data-result-kind="${isWiki ? "wiki" : "site"}" data-result-slug="${escapeHtml(site.slug || "")}"', "Bundled Android app must render stable result target metadata on search cards.");
+requireBundledText('function mobileListCardTargetFromData(card)', "Bundled Android app must use rendered result metadata before coordinate or title fallbacks.");
+requireBundledText('function mobileListCardTargetByIndex(card)', "Bundled Android app must recover a result target from the visible card index.");
+requireBundledText('const dataItem = state.filtered[dataIndex];', "Bundled Android app must map data-result-index back to the filtered result list.");
+requireBundledText('const item = index >= 0 ? state.filtered[index] : null;', "Bundled Android app must map tapped result cards back to the filtered result list.");
 requireBundledText('const wiki = (state.wikiArticles || []).find(article => normalizeText(article.title || "") === key);', "Bundled Android app must map empty-slug wiki result cards back to their article slug.");
 requireBundledText('function activatePendingAndroidSearchResultTap()', "Bundled Android app must activate cached search result taps on touch end.");
 requireBundledText('listEl.addEventListener("touchstart"', "Bundled Android app must capture the actual touched search result card before keyboard dismissal.");
