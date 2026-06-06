@@ -18224,7 +18224,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             : null;
           const date = sourceSite?.last_reviewed || sourceSite?.updated_at || sourceSite?.date_updated || sourceSite?.modified_at || sourceSite?.last_edited_at || sourceSite?.created_at;
           return {
-            type: moment.source_type === "wiki" ? "wiki" : "site",
+            type: "historic-moment",
+            sourceType: moment.source_type === "wiki" ? "wiki" : "site",
+            activityId: String(moment.id || ""),
             slug: moment.source_slug || "",
             title: moment.title || moment.source_title || "Historic moment",
             label: "Historic moment updated",
@@ -18463,7 +18465,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileActivityListEl.innerHTML = `
         <p class="summary">Most recent public activity from the archive, newest first.</p>
         ${feed.map((item, index) => `
-          <button class="activity-feed-item" type="button" data-mobile-activity-index="${index}" data-mobile-activity-type="${escapeHtml(item.type)}" data-mobile-activity-slug="${escapeHtml(item.slug || "")}">
+          <button class="activity-feed-item" type="button" data-mobile-activity-index="${index}" data-mobile-activity-type="${escapeHtml(item.type)}" data-mobile-activity-source-type="${escapeHtml(item.sourceType || "")}" data-mobile-activity-id="${escapeHtml(item.activityId || item.id || "")}" data-mobile-activity-slug="${escapeHtml(item.slug || "")}">
             <span class="detail-meta">${escapeHtml(item.label)} - ${escapeHtml(activityDateLabel(item.date))}</span>
             <strong>${escapeHtml(item.title || "Archive activity")}</strong>
             ${item.preview ? `<p>${escapeHtml(item.preview)}</p>` : ""}
@@ -18517,6 +18519,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function openMobileActivityTarget(button) {
       const type = button?.dataset.mobileActivityType || "";
       const slug = button?.dataset.mobileActivitySlug || "";
+      const sourceType = button?.dataset.mobileActivitySourceType || "";
+      const activityId = button?.dataset.mobileActivityId || "";
       activitySheetEl?.classList.remove("open");
       if (type === "map-story" && slug) {
         const story = state.mapStories.find(item => String(item.id) === String(slug));
@@ -18537,11 +18541,17 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           state.map?.flyTo?.({ center: coords, zoom: Math.max(state.map.getZoom?.() || 9, 13), duration: 850 });
           showBanner(`${suggestion.title || "Suggested site"} is marked on the map.`);
         }
+      } else if (type === "historic-moment") {
+        if (sourceType === "wiki" && slug) {
+          const event = activityId ? state.timelineEvents.find(item => String(item.id) === String(activityId)) : null;
+          openWikiArticle(slug, { timelineEventId: activityId, timelineEvent: event });
+        } else if (slug) openSite(slug, { timelineEventId: activityId });
       } else if (type === "wiki" && slug) openWikiArticle(slug);
       else if (type === "event" && slug) {
         const exhibit = state.exhibits.find(item => String(item.slug || item.id) === String(slug));
         if (exhibit) openExhibit(exhibit);
-      } else if (slug) openSite(slug);
+      } else if (slug && state.wikiBySlug.has(slug)) openWikiArticle(slug);
+      else if (slug) openSite(slug);
       syncMobilePanelAccessibility();
     }
 
