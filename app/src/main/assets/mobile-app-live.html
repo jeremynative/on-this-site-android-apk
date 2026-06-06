@@ -16634,6 +16634,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const returnToLongIslandView = state.mobileStartupSpotlightReturnOnDetailClose;
       state.mobileStartupSpotlightReturnOnDetailClose = false;
       if (options.blockMapTap !== false) blockMobileMapTaps();
+      const activeElement = document.activeElement;
+      if (activeElement && detailEl.contains(activeElement) && typeof activeElement.blur === "function") {
+        activeElement.blur();
+      }
       detailEl.classList.remove("open");
       detailEl.classList.remove("plant-browse-mode");
       detailEl.classList.remove("drawer-collapsed", "drawer-half", "drawer-expanded", "dragging");

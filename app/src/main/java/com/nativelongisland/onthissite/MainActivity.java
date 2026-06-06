@@ -58,7 +58,7 @@ public class MainActivity extends Activity {
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260605-search-card-raw-fallback";
+    static final String APP_VERSION = "20260605-detail-close-focus";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =

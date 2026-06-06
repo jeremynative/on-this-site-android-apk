@@ -1,6 +1,6 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260605-search-card-raw-fallback";
+const expectedBuild = "20260605-detail-close-focus";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -260,6 +260,7 @@ requireBundledText('normalizedSearchText: normalizeText', "Bundled Android app m
 requireBundledText('function scheduleSearchSync()', "Bundled Android app must watch mobile search value changes.");
 requireBundledText('function closeDetailForSearchResults()', "Bundled Android app must close open detail sheets before search results take over.");
 requireBundledText('if (value.trim()) closeDetailForSearchResults();', "Bundled Android search sync must close an open detail sheet while typing.");
+requireBundledPattern(/function\s+closeDetail\(options\s*=\s*\{\}\)[\s\S]*?const\s+activeElement\s*=\s*document\.activeElement;[\s\S]*?detailEl\.contains\(activeElement\)[\s\S]*?activeElement\.blur\(\);[\s\S]*?detailEl\.classList\.remove\("open"\)/, "Bundled Android detail close must release focused panel controls before hiding the panel.");
 requireBundledText('function clearMobileSearchForResultOpen()', "Bundled Android app must clear active search before opening a result detail panel.");
 requireBundledText('searchEl.value = "";', "Bundled Android result opens must empty the search box so search polling does not close the article.");
 requireBundledText('state.filtered = visitableSites();', "Bundled Android result opens must restore the nearby list after clearing search.");
