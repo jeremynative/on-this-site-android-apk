@@ -1,6 +1,6 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260605-biography-path-pin-labels-wiki-search-tag-dedupe";
+const expectedBuild = "20260605-biography-path-pin-labels-search-tap-guard";
 const expectedUrl = "https://nativelongisland.com/archive-test/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -109,6 +109,8 @@ if (fallbackMatch[0].includes("loadDataWithBaseURL")) {
 requireText("dispatchTouchEvent", "Android shell must forward app taps into the mobile map.");
 requireText("window.onAndroidMapTap", "Android shell must call the mobile map tap bridge.");
 requireText("missing-map-tap-bridge", "Android shell must log when the mobile map tap bridge is missing.");
+requireText("MAP_TAP_BRIDGE_DELAY_MS", "Android shell must delay the native map bridge until WebView UI clicks run.");
+requireText("postDelayed", "Android shell must post-delay map tap forwarding to prevent panel click-through.");
 requireText("MotionEvent.ACTION_UP", "Android shell must only forward completed taps.");
 requireText("action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP", "Android shell must keep map drag move frames out of the tap bridge.");
 requireText("boolean isArchiveApp = \"nativelongisland.com\".equalsIgnoreCase(host);", "Android shell must keep nativelongisland.com navigation inside the APK WebView.");

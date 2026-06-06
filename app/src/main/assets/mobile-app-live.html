@@ -12767,7 +12767,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!target?.closest) return insideCanvas;
       if (target.closest(".mapboxgl-marker button")) return true;
       if (target.closest("button, a, input, select, textarea, details, summary")) return false;
-      if (target.closest(".mobile-header, .mobile-view-tabs, .list-panel, .sheet, .detail, .mapboxgl-control-container, .mapboxgl-ctrl, .mobile-layer-menu")) return false;
+      if (target.closest(".mobile-header, .mobile-view-tabs, .list-panel, .list-head, .site-list, .site-card, .sheet, .sheet-head, .sheet-body, .detail, .detail-head, .detail-body, .mapboxgl-control-container, .mapboxgl-ctrl, .mobile-layer-menu")) return false;
       const mapContainer = canvas.closest?.(".mapboxgl-map") || state.map?.getContainer?.();
       return insideCanvas || (!!mapContainer && mapContainer.contains(target));
     }
@@ -12778,7 +12778,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (target.closest(".mapboxgl-marker button")) return false;
       return !!target.closest(
         "button, a, input, select, textarea, details, summary, " +
-        ".mobile-header, .mobile-view-tabs, .list-panel, .sheet, .detail, " +
+        ".mobile-header, .mobile-view-tabs, .list-panel, .list-head, .site-list, .site-card, " +
+        ".sheet, .sheet-head, .sheet-body, .detail, .detail-head, .detail-body, " +
         ".mapboxgl-control-container, .mapboxgl-ctrl, .mobile-layer-menu"
       );
     }
@@ -12820,6 +12821,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     window.onAndroidMapTap = function onAndroidMapTap(viewX, viewY, viewWidth, viewHeight) {
       if (!state.map?.getCanvas) return false;
       if (isMobileMapTapBlocked()) return false;
+      if (searchEl?.value?.trim()) return false;
       const canvas = state.map.getCanvas();
       const rect = canvas.getBoundingClientRect();
       const candidates = androidTapCandidates(viewX, viewY, viewWidth, viewHeight, canvas);

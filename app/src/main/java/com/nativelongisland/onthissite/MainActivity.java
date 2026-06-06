@@ -56,8 +56,9 @@ public class MainActivity extends Activity {
     static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long PERMISSION_RESUME_GRACE_MS = 45000;
+    private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260605-biography-path-pin-labels-wiki-search-tag-dedupe";
+    static final String APP_VERSION = "20260605-biography-path-pin-labels-search-tap-guard";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
@@ -403,17 +404,25 @@ public class MainActivity extends Activity {
         float dy = event.getY() - webTouchStartY;
         if ((dx * dx + dy * dy) > 144f) return;
         if (System.currentTimeMillis() - webTouchStartedAt > 700) return;
+        final float tapX = event.getX();
+        final float tapY = event.getY();
+        final int viewWidth = webView.getWidth();
+        final int viewHeight = webView.getHeight();
         String script = "(function(){try{"
             + "if(!window.onAndroidMapTap)return 'missing-map-tap-bridge';"
             + "return String(window.onAndroidMapTap("
-            + event.getX() + ","
-            + event.getY() + ","
-            + webView.getWidth() + ","
-            + webView.getHeight()
+            + tapX + ","
+            + tapY + ","
+            + viewWidth + ","
+            + viewHeight
             + "));"
             + "}catch(error){return 'map-tap-error:'+(error&&error.message?error.message:String(error));}})()";
-        Log.d(LOG_TAG, "Forwarding WebView tap to map bridge: x=" + event.getX() + " y=" + event.getY());
-        webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "Map bridge result: " + value));
+        Log.d(LOG_TAG, "Scheduling WebView tap for map bridge: x=" + tapX + " y=" + tapY);
+        webView.postDelayed(() -> {
+            if (webView == null) return;
+            Log.d(LOG_TAG, "Forwarding WebView tap to map bridge: x=" + tapX + " y=" + tapY);
+            webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "Map bridge result: " + value));
+        }, MAP_TAP_BRIDGE_DELAY_MS);
     }
 
     @Override
