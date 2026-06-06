@@ -11113,6 +11113,32 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (placeSearch && matches.length < 3) updateAddressSearch(query);
     }
 
+    function closeDetailForSearchResults() {
+      if (!searchEl?.value?.trim() || !detailEl?.classList.contains("open")) return false;
+      closeDetail({ skipRoute: true, blockMapTap: false });
+      return true;
+    }
+
+    function clearMobileSearchForResultOpen() {
+      if (!searchEl?.value?.trim()) return false;
+      window.clearTimeout(state.searchTimer);
+      window.clearTimeout(state.searchMapSyncTimer);
+      window.clearTimeout(state.searchRenderSettledTimer);
+      searchEl.value = "";
+      state.lastSearchValue = "";
+      state.lastSearchDataVersion = state.searchDataVersion;
+      if (state.searchValueWatchTimer) {
+        window.clearInterval(state.searchValueWatchTimer);
+        state.searchValueWatchTimer = null;
+      }
+      clearAddressSearch();
+      state.filtered = visitableSites();
+      sortSites();
+      resetNearbyRenderLimit();
+      renderList();
+      return true;
+    }
+
     function scheduleFilterSites() {
       window.clearTimeout(state.searchTimer);
       state.searchTimer = window.setTimeout(filterSites, isNativeAndroidApp() ? 260 : 140);
@@ -11121,6 +11147,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function scheduleSearchSync() {
       if (!searchEl) return;
       const value = searchEl.value || "";
+      if (value.trim()) closeDetailForSearchResults();
       if (value === state.lastSearchValue && state.lastSearchDataVersion === state.searchDataVersion) return;
       state.lastSearchValue = value;
       state.lastSearchDataVersion = state.searchDataVersion;
@@ -11156,6 +11183,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function handleMobileSearchCommand() {
       window.setTimeout(() => openMobileSearchResultsPage(), 0);
+    }
+
+    function handleMobileSearchInput() {
+      closeDetailForSearchResults();
+      scheduleSearchSync();
+    }
+
+    function handleMobileSearchFocus() {
+      closeDetailForSearchResults();
+      startSearchValueWatch();
     }
 
     function startSearchValueWatch() {
@@ -12822,6 +12859,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!searchEl?.value?.trim() || !listEl) return false;
       const boundsCard = androidSearchResultCardFromViewPoint(viewX, viewY, viewWidth, viewHeight);
       if (boundsCard) return cacheAndroidSearchResultCard(boundsCard);
+      const nearestCard = nearestAndroidSearchResultCardFromViewPoint(viewX, viewY, viewWidth, viewHeight);
+      if (nearestCard) return cacheAndroidSearchResultCard(nearestCard);
+      const rawCard = nearestAndroidSearchResultCardFromRawPoint(viewX, viewY, viewWidth, viewHeight);
+      if (rawCard) return cacheAndroidSearchResultCard(rawCard);
       for (const candidate of androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight)) {
         const target = document.elementFromPoint(candidate.clientX, candidate.clientY);
         const card = target?.closest?.(".site-card[data-slug], .site-card[data-wiki-slug]");
@@ -12860,6 +12901,81 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         if (match) return match;
       }
       return null;
+    }
+
+    function nearestAndroidSearchResultCardFromViewPoint(viewX, viewY, viewWidth, viewHeight) {
+      if (!listEl || !searchEl?.value?.trim()) return null;
+      const cards = Array.from(listEl.querySelectorAll(".site-card[data-slug], .site-card[data-wiki-slug]"))
+        .filter(card => {
+          const rect = card.getBoundingClientRect();
+          return rect.bottom > 0 && rect.top < (window.innerHeight || document.documentElement.clientHeight || 1);
+        });
+      if (!cards.length) return null;
+      const listRect = listEl.getBoundingClientRect();
+      const visibleBottom = Math.min(listRect.bottom, window.innerHeight || document.documentElement.clientHeight || listRect.bottom);
+      let best = null;
+      let bestScore = Infinity;
+      for (const point of androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight)) {
+        if (point.clientY < listRect.top - 28 || point.clientY > visibleBottom + 28) continue;
+        for (const card of cards) {
+          const rect = card.getBoundingClientRect();
+          const centerY = rect.top + (rect.height / 2);
+          const centerX = rect.left + (rect.width / 2);
+          const xPenalty = point.clientX < rect.left - 18 || point.clientX > rect.right + 18
+            ? Math.abs(point.clientX - centerX) * 0.35
+            : 0;
+          const score = Math.abs(point.clientY - centerY) + xPenalty;
+          if (score < bestScore) {
+            best = card;
+            bestScore = score;
+          }
+        }
+      }
+      return bestScore <= 190 ? best : null;
+    }
+
+    function nearestAndroidSearchResultCardFromRawPoint(viewX, viewY, viewWidth, viewHeight) {
+      if (!listEl || !searchEl?.value?.trim()) return null;
+      const rawX = Number(viewX);
+      const rawY = Number(viewY);
+      const rawWidth = Number(viewWidth) || window.innerWidth || document.documentElement.clientWidth || 1;
+      const rawHeight = Number(viewHeight) || window.innerHeight || document.documentElement.clientHeight || 1;
+      if (!Number.isFinite(rawX) || !Number.isFinite(rawY) || rawY < rawHeight * 0.26 || rawY > rawHeight * 0.74) return null;
+      const cards = Array.from(listEl.querySelectorAll(".site-card[data-slug], .site-card[data-wiki-slug]"))
+        .filter(card => {
+          const rect = card.getBoundingClientRect();
+          return rect.bottom > 0 && rect.top < (window.innerHeight || document.documentElement.clientHeight || 1);
+        });
+      if (!cards.length) return null;
+      const dpr = Number(window.devicePixelRatio) || 1;
+      const innerWidth = window.innerWidth || document.documentElement.clientWidth || rawWidth;
+      const innerHeight = window.innerHeight || document.documentElement.clientHeight || rawHeight;
+      const scales = [1, dpr, rawWidth / innerWidth, rawHeight / innerHeight]
+        .filter(scale => Number.isFinite(scale) && scale > 0);
+      let best = null;
+      let bestScore = Infinity;
+      for (const scale of scales) {
+        for (const card of cards) {
+          const rect = card.getBoundingClientRect();
+          const top = rect.top * scale;
+          const bottom = rect.bottom * scale;
+          const left = rect.left * scale;
+          const right = rect.right * scale;
+          if (rawY < top - 34 || rawY > bottom + 34) continue;
+          const centerY = top + ((bottom - top) / 2);
+          const centerX = left + ((right - left) / 2);
+          const xPenalty = rawX < left - 34 || rawX > right + 34
+            ? Math.abs(rawX - centerX) * 0.25
+            : 0;
+          const score = Math.abs(rawY - centerY) + xPenalty;
+          if (score < bestScore) {
+            best = card;
+            bestScore = score;
+          }
+        }
+      }
+      if (best && bestScore <= 240) return best;
+      return rawY > rawHeight * 0.32 && rawY < rawHeight * 0.66 ? cards[0] : null;
     }
 
     function cacheAndroidSearchResultCard(card) {
@@ -12925,6 +13041,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const pending = state.pendingAndroidSearchResultTap;
       state.pendingAndroidSearchResultTap = null;
       if (!pending || performance.now() > pending.until) return false;
+      clearMobileSearchForResultOpen();
       searchEl?.blur?.();
       state.listTouchActivationUntil = performance.now() + 650;
       if (pending.wikiSlug) {
@@ -18831,8 +18948,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (resultCard) {
         event?.preventDefault?.();
         event?.stopPropagation?.();
-        searchEl?.blur?.();
         const cardTarget = mobileListCardTarget(resultCard);
+        clearMobileSearchForResultOpen();
+        searchEl?.blur?.();
         if (cardTarget.wikiSlug) {
           setNearbyPanelState("hidden");
           openWikiArticle(cardTarget.wikiSlug);
@@ -18848,7 +18966,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     listEl.addEventListener("touchend", event => {
-      if (!isNativeAndroidApp() || !searchEl?.value?.trim() || document.activeElement !== searchEl) return;
+      if (!isNativeAndroidApp() || !searchEl?.value?.trim()) return;
       if (!event.target?.closest?.(".site-card")) return;
       if (activateMobileListTarget(event.target, event)) {
         state.pendingAndroidSearchResultTap = null;
@@ -18858,7 +18976,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }, { passive: false, capture: true });
 
     listEl.addEventListener("touchstart", event => {
-      if (!isNativeAndroidApp() || !searchEl?.value?.trim() || document.activeElement !== searchEl) return;
+      if (!isNativeAndroidApp() || !searchEl?.value?.trim()) return;
       const card = event.target?.closest?.(".site-card[data-slug], .site-card[data-wiki-slug]");
       if (card) cacheAndroidSearchResultCard(card);
     }, { passive: true, capture: true });
@@ -19262,14 +19380,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         languageQuizModalEl.hidden = true;
       }
     });
-    searchEl.addEventListener("input", scheduleSearchSync);
-    searchEl.addEventListener("keyup", scheduleSearchSync);
-    searchEl.addEventListener("change", scheduleSearchSync);
-    searchEl.addEventListener("search", scheduleSearchSync);
+    searchEl.addEventListener("input", handleMobileSearchInput);
+    searchEl.addEventListener("keyup", handleMobileSearchInput);
+    searchEl.addEventListener("change", handleMobileSearchInput);
+    searchEl.addEventListener("search", handleMobileSearchInput);
     searchEl.addEventListener("search", handleMobileSearchCommand);
     searchEl.addEventListener("keydown", handleMobileSearchKeydown);
-    searchEl.addEventListener("compositionend", scheduleSearchSync);
-    searchEl.addEventListener("focus", startSearchValueWatch);
+    searchEl.addEventListener("compositionend", handleMobileSearchInput);
+    searchEl.addEventListener("focus", handleMobileSearchFocus);
     searchEl.addEventListener("blur", stopSearchValueWatch);
     const refreshMobileViewportLayout = () => {
       syncSystemSafeArea();
