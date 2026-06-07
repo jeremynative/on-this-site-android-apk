@@ -1,6 +1,6 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260606-bio-section-flow-live-root";
+const expectedBuild = "20260607-bio-path-single-map-numbers";
 const expectedUrl = "https://nativelongisland.com/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -175,11 +175,8 @@ for (const [label, html] of [
       !html.includes("button.appendChild(label);")) {
     throw new Error(`Bundled Android ${label} is missing visible numbered biography path map pins.`);
   }
-  if (!html.includes('"text-field": ["to-string", ["get", "order"]]')) {
-    throw new Error(`Bundled Android ${label} must draw travel-pin number labels from the map feature order.`);
-  }
-  if (!/id:\s*"mobile-biography-place-labels"[\s\S]*?"text-field":\s*\["to-string",\s*\["get",\s*"order"\]\][\s\S]*?\}\s*\);/.test(html)) {
-    throw new Error(`Bundled Android ${label} must render travel-pin number labels above normal site layers.`);
+  if (html.includes('id: "mobile-biography-place-labels"') || html.includes('"id":"mobile-biography-place-labels"')) {
+    throw new Error(`Bundled Android ${label} must not render duplicate symbol labels on top of numbered travel pins.`);
   }
   if (!/\.mobile-biography-path-map-number\s*\{[\s\S]*?font-size:\s*9\.5px;[\s\S]*?z-index:\s*6;/.test(html) || !/\.mobile-biography-path-map-number-label\s*\{[\s\S]*?font-size:\s*9\.5px;/.test(html)) {
     throw new Error(`Bundled Android ${label} must show travel-pin numbers as visible marker badges.`);
