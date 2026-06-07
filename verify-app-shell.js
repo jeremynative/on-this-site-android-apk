@@ -1,6 +1,6 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260607-bio-path-single-map-numbers";
+const expectedBuild = "20260607-map-layer-restore-categories";
 const expectedUrl = "https://nativelongisland.com/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -238,7 +238,40 @@ requireBundledPattern(/listEl\.addEventListener\("touchstart"[\s\S]*?!isNativeAn
 requireBundledText('state.pendingAndroidSearchResultTap = null;', "Bundled Android app must clear pending search taps after normal touch activation.");
 requireBundledText('state.listTouchActivationUntil = performance.now() + 650;', "Bundled Android app must suppress duplicate click after touch activation.");
 requireBundledText('"text-allow-overlap": false', "Bundled Android app must keep close-zoom point labels readable with collision handling.");
-requireBundledText('settings.showPins = true;', "Bundled Android app must recover from saved Sites-off settings so site icons stay visible.");
+for (const [label, html] of [
+  ["embedded fallback", bundledApp],
+  ["live fallback", bundledLiveApp],
+]) {
+  for (const expected of [
+    'id="mobile-layer-pins"',
+    'id="mobile-layer-shapes"',
+    'id="mobile-layer-exhibits"',
+    'class="mobile-layer-category"',
+    'value="shell-middens"',
+    'value="fishing-sites"',
+    'value="whaling-sites"',
+    'value="burial-sacred"',
+    'value="villages-settlements"',
+    'value="trails-routes"',
+    'value="waterways-coastal"',
+    'value="approximate-locations"',
+    'value="precise-locations"',
+    'state.map.setStyle(style, { diff: false });',
+    'state.mobileSiteIconImagesLoaded.clear();',
+    'mobileMapLayerHandlers',
+    'state.settings.showPins = visible;',
+    'mobileLayerCategoryInputs.forEach(input => input.addEventListener("change"',
+    '"circle-color": ["case", ["==", ["get", "location_accuracy"], "approximate"], "#326fe3", "#496f5d"]'
+  ]) {
+    if (!html.includes(expected)) throw new Error(`Bundled Android ${label} is missing mobile map layer invariant ${expected}`);
+  }
+  if (html.includes('value="historical-markers-institutions"') || html.includes("Historical Markers / Institutions")) {
+    throw new Error(`Bundled Android ${label} must not expose the removed Historical Markers / Institutions layer.`);
+  }
+  if (/settings\.showPins\s*=\s*true|mobileLayerPinsInput\.disabled\s*=\s*true|mobilePinsToggleBtn\.disabled\s*=\s*true/.test(html)) {
+    throw new Error(`Bundled Android ${label} must not force-enable or disable the Sites layer.`);
+  }
+}
 requireBundledText('selected-site-map-label', "Bundled Android app must show a dedicated title label for the selected site marker.");
 requireBundledPattern(/function shouldShowCustomMapIcons\(\)\s*\{\s*return true;\s*\}/, "Bundled Android app must keep site icons visible independently of point-label zoom.");
 requireBundledPattern(/"location_label"\s*:\s*"[^"]+"/, "Bundled Android app must include historic moment location labels.");

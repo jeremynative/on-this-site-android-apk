@@ -4207,12 +4207,48 @@
               <input id="mobile-layer-exhibits" type="checkbox" checked>
             </label>
             <label class="mobile-layer-option" for="mobile-layer-pins">
-              <span>Sites</span>
+              <span>All Sites</span>
               <input id="mobile-layer-pins" type="checkbox" checked>
             </label>
             <label class="mobile-layer-option" for="mobile-layer-shapes">
-              <span>Boundaries</span>
+              <span>Polygons / Territories</span>
               <input id="mobile-layer-shapes" type="checkbox" checked>
+            </label>
+            <label class="mobile-layer-option" for="mobile-layer-shell-middens">
+              <span>Shell Middens</span>
+              <input id="mobile-layer-shell-middens" class="mobile-layer-category" type="checkbox" value="shell-middens" checked>
+            </label>
+            <label class="mobile-layer-option" for="mobile-layer-fishing-sites">
+              <span>Fishing Sites</span>
+              <input id="mobile-layer-fishing-sites" class="mobile-layer-category" type="checkbox" value="fishing-sites" checked>
+            </label>
+            <label class="mobile-layer-option" for="mobile-layer-whaling-sites">
+              <span>Whaling Sites</span>
+              <input id="mobile-layer-whaling-sites" class="mobile-layer-category" type="checkbox" value="whaling-sites" checked>
+            </label>
+            <label class="mobile-layer-option" for="mobile-layer-burial-sacred">
+              <span>Burial / Sacred Sites</span>
+              <input id="mobile-layer-burial-sacred" class="mobile-layer-category" type="checkbox" value="burial-sacred" checked>
+            </label>
+            <label class="mobile-layer-option" for="mobile-layer-villages-settlements">
+              <span>Villages / Settlements</span>
+              <input id="mobile-layer-villages-settlements" class="mobile-layer-category" type="checkbox" value="villages-settlements" checked>
+            </label>
+            <label class="mobile-layer-option" for="mobile-layer-trails-routes">
+              <span>Trails / Travel Routes</span>
+              <input id="mobile-layer-trails-routes" class="mobile-layer-category" type="checkbox" value="trails-routes" checked>
+            </label>
+            <label class="mobile-layer-option" for="mobile-layer-waterways-coastal">
+              <span>Waterways / Coastal Sites</span>
+              <input id="mobile-layer-waterways-coastal" class="mobile-layer-category" type="checkbox" value="waterways-coastal" checked>
+            </label>
+            <label class="mobile-layer-option" for="mobile-layer-approximate-locations">
+              <span>Approximate Locations</span>
+              <input id="mobile-layer-approximate-locations" class="mobile-layer-category" type="checkbox" value="approximate-locations" checked>
+            </label>
+            <label class="mobile-layer-option" for="mobile-layer-precise-locations">
+              <span>Precise Locations</span>
+              <input id="mobile-layer-precise-locations" class="mobile-layer-category" type="checkbox" value="precise-locations" checked>
             </label>
           </div>
         </details>
@@ -5074,12 +5110,79 @@
     return /territory|ancestral land|traditional land/.test(`${title} ${type}`);
   }
 
+  const SITE_LAYER_CATEGORIES = [
+    { key: "shell-middens", label: "Shell Middens" },
+    { key: "fishing-sites", label: "Fishing Sites" },
+    { key: "whaling-sites", label: "Whaling Sites" },
+    { key: "burial-sacred", label: "Burial / Sacred Sites" },
+    { key: "villages-settlements", label: "Villages / Settlements" },
+    { key: "trails-routes", label: "Trails / Travel Routes" },
+    { key: "waterways-coastal", label: "Waterways / Coastal Sites" },
+    { key: "approximate-locations", label: "Approximate Locations" },
+    { key: "precise-locations", label: "Precise Locations" }
+  ];
+
+  function siteLayerText(site = {}) {
+    return normalizeText([
+      site.title,
+      site.slug,
+      site.site_type,
+      site.summary,
+      site.address_label,
+      site.introduction_content,
+      site.history_content,
+      site.translation_content,
+      site.ancestral_territory_note
+    ].join(" "));
+  }
+
+  function siteLocationAccuracy(site = {}) {
+    const text = siteLayerText(site);
+    const status = normalizeText(site.geometry_cleanup_status || "");
+    const surface = normalizeText(site.geometry_surface || "");
+    if (/\b(approximate|general|broad|near|area|landscape|not precise|public safe|public-safe)\b/.test(text)) return "approximate";
+    if (/approx|broad|mixed|needs review|pending/.test(`${status} ${surface}`)) return "approximate";
+    if (site.display_geojson && !site.geojson) return "approximate";
+    return "precise";
+  }
+
+  function siteLayerCategoryKeys(site = {}) {
+    const text = siteLayerText(site);
+    const rawType = normalizeText(site.site_type || "");
+    const title = normalizeText(site.title || "");
+    const keys = new Set();
+    const add = key => keys.add(key);
+    if (/\bshell\s*(midden|heap|deposit|bed)|midden|shellfish|oyster|clam\b/.test(text)) add("shell-middens");
+    if (/\bfish|fishing|fishery|eel|weir|net|brook|creek|pond|bay|harbor|inlet\b/.test(text)) add("fishing-sites");
+    if (/\bwhal|whaling|whale\b/.test(text)) add("whaling-sites");
+    if (/\bburial|burial site|cemetery|grave|sacred|ceremonial|spiritual|council rock|ritual\b/.test(text) || /burial|sacred/.test(rawType)) add("burial-sacred");
+    if (/\bvillage|settlement|camp|wigwam|fort|reservation|community|neighborhood\b/.test(text) || /village|settlement|reservation/.test(rawType)) add("villages-settlements");
+    if (/\btrail|path|route|road|travel|portage|crossing|neck|landing\b/.test(text)) add("trails-routes");
+    if (/\bwater|river|bay|pond|harbor|inlet|shore|beach|coast|coastal|creek|brook|spring|well|island|neck|marsh|meadow\b/.test(text)) add("waterways-coastal");
+    if (siteLocationAccuracy(site) === "approximate") add("approximate-locations");
+    else add("precise-locations");
+    if (isExhibitSite(site)) add("exhibits");
+    if (title.includes("ma s house") || title.includes("mas house") || title.includes("preservation long island")) add("exhibits");
+    return [...keys];
+  }
+
+  function isExhibitSite(site = {}) {
+    const text = siteLayerText(site);
+    const rawType = normalizeText(site.site_type || "");
+    return /^(exhibit|exhibit supporter|museum|gallery|collection|public art|preservation|historic site)$/.test(rawType) ||
+      /\b(museum|gallery|exhibit|exhibition|public art|collection|cultural center|heritage center|house museum|ma s house|mas house|preservation long island)\b/.test(text);
+  }
+
   window.NLI_SITE_UTILS = {
     isCoordinateOnlyLabel,
     titleCaseSiteType,
     siteDisplayType,
     siteSubtitle,
-    isBroadTerritory
+    isBroadTerritory,
+    SITE_LAYER_CATEGORIES,
+    siteLayerCategoryKeys,
+    siteLocationAccuracy,
+    isExhibitSite
   };
 }());
   </script>
@@ -8485,6 +8588,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileSiteIconImagesLoaded: new Set(),
       mobileSiteIconImagesFailed: new Set(),
       mobileSiteIconImagesLoading: false,
+      mobileMapLayerEventsBound: false,
+      mobileMapLayerHandlers: new Map(),
       exhibitMarkers: new Map(),
       storyMarkers: new Map(),
       siteSourceListCache: new Map(),
@@ -8555,6 +8660,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const mobileLayerExhibitsInput = document.getElementById("mobile-layer-exhibits");
     const mobileLayerPinsInput = document.getElementById("mobile-layer-pins");
     const mobileLayerShapesInput = document.getElementById("mobile-layer-shapes");
+    const mobileLayerCategoryInputs = [...document.querySelectorAll(".mobile-layer-category")];
     const collapseListBtn = document.getElementById("collapse-list");
     const mobileTimelineEl = document.querySelector(".mobile-timeline");
     const mobileTimelineToggleBtn = document.getElementById("mobile-timeline-toggle");
@@ -8695,12 +8801,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           basemap: "outdoors",
           showPins: true,
           showShapes: true,
+          layerCategories: {},
           ...saved
         };
-        settings.showPins = true;
+        settings.layerCategories = { ...(saved.layerCategories || {}) };
         return settings;
       } catch {
-        return { historyAlerts: false, proximityAlerts: true, newContentAlerts: false, exhibits: true, locationEnabled: true, locationPrompted: false, basemap: "outdoors", showPins: true, showShapes: true };
+        return { historyAlerts: false, proximityAlerts: true, newContentAlerts: false, exhibits: true, locationEnabled: true, locationPrompted: false, basemap: "outdoors", showPins: true, showShapes: true, layerCategories: {} };
       }
     }
 
@@ -9859,7 +9966,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function activeMapSites() {
-      return state.mapSites;
+      return state.mapSites.filter(siteVisibleInMobileLayers);
     }
 
     function invalidateMapSourceCache() {
@@ -11726,6 +11833,60 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return [...tags.entries()].slice(0, 5).map(([key, label]) => ({ key, label }));
     }
 
+    function siteLayerCategoryKeys(site) {
+      return SITE_UTILS.siteLayerCategoryKeys
+        ? SITE_UTILS.siteLayerCategoryKeys(site)
+        : [];
+    }
+
+    function siteLocationAccuracy(site) {
+      return SITE_UTILS.siteLocationAccuracy
+        ? SITE_UTILS.siteLocationAccuracy(site)
+        : "precise";
+    }
+
+    function siteIsExhibitLayerSite(site) {
+      return SITE_UTILS.isExhibitSite
+        ? SITE_UTILS.isExhibitSite(site)
+        : siteCategoryTags(site).some(tag => tag.key === "theme:exhibits");
+    }
+
+    function activeMobileLayerCategories() {
+      const configured = state.settings.layerCategories || {};
+      return new Set(
+        mobileLayerCategoryInputs
+          .filter(input => configured[input.value] !== false)
+          .map(input => input.value)
+      );
+    }
+
+    function sitePassesMobileLayerCategories(site) {
+      if (!mobileLayerCategoryInputs.length) return true;
+      if (siteIsExhibitLayerSite(site) && state.settings.exhibits !== false) return true;
+      const active = activeMobileLayerCategories();
+      if (active.size >= mobileLayerCategoryInputs.length) return true;
+      if (!active.size) return false;
+      const keys = siteLayerCategoryKeys(site);
+      if (!keys.length) return true;
+      return keys.some(key => active.has(key));
+    }
+
+    function siteVisibleInMobileLayers(site) {
+      if (!sitePassesMobileLayerCategories(site)) return false;
+      const exhibitSite = siteIsExhibitLayerSite(site);
+      const exhibitsOn = state.settings.exhibits !== false;
+      if (exhibitSite && !exhibitsOn) return false;
+      const geometryType = siteDisplayGeometry(site)?.type;
+      if (geometryType === "Point") {
+        return state.settings.showPins !== false ||
+          (exhibitsOn && exhibitSite);
+      }
+      if (geometryType === "Polygon" || geometryType === "MultiPolygon") {
+        return state.settings.showShapes !== false || (exhibitsOn && exhibitSite);
+      }
+      return true;
+    }
+
     function siteTagsHtml(site) {
       const tags = siteCategoryTags(site);
       if (!tags.length) return "";
@@ -12618,6 +12779,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             title: site.title,
             site_type: site.site_type,
             color: site.site_type === "territory" ? "#496f5d" : "#b27d3f",
+            location_accuracy: siteLocationAccuracy(site),
+            layer_categories: siteLayerCategoryKeys(site).join(" "),
             fillcolor: siteTerritoryFillColor(site, isBroadTerritory(site) ? "#496f5d" : "#7b9b68"),
             opacity: mobilePolygonOpacity(site),
             label_size: polygonLabelSize(site),
@@ -12632,12 +12795,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function cachedMobileMapSourceData() {
       const sites = activeMapSites();
-      const shapeSites = state.settings.showShapes === false ? [] : sites.filter(site => {
+      const shapeSites = sites.filter(site => {
         const type = siteDisplayGeometry(site)?.type;
         return type === "Polygon" || type === "MultiPolygon";
       });
-      const pointHitSites = state.settings.showPins === false ? [] : sites.filter(site => siteDisplayGeometry(site)?.type === "Point");
-      const cacheKey = `${state.mapSourceRevision}|${state.settings.showPins !== false ? "pins" : "no-pins"}|${state.settings.showShapes !== false ? "shapes" : "no-shapes"}|${sites.length}`;
+      const pointHitSites = sites.filter(site => siteDisplayGeometry(site)?.type === "Point");
+      const categoryKey = JSON.stringify(state.settings.layerCategories || {});
+      const cacheKey = `${state.mapSourceRevision}|${state.settings.showPins !== false ? "pins" : "no-pins"}|${state.settings.showShapes !== false ? "shapes" : "no-shapes"}|${state.settings.exhibits !== false ? "exhibits" : "no-exhibits"}|${categoryKey}|${sites.length}`;
       if (!state.mapSourceCache || state.mapSourceCacheKey !== cacheKey) {
         state.mapSourceCache = {
           sites: siteFeatureCollection([...shapeSites, ...pointHitSites]),
@@ -13435,7 +13599,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       activeMapSites().forEach(site => {
         const key = mobileSiteIconKey(site);
         const url = siteMapIconUrl(site);
-        if (!key || !url || state.mobileSiteIconImagesLoaded.has(key) || state.mobileSiteIconImagesFailed.has(key) || state.map.hasImage?.(key)) return;
+        if (!key || !url || state.mobileSiteIconImagesFailed.has(key)) return;
+        if (state.map.hasImage?.(key)) {
+          state.mobileSiteIconImagesLoaded.add(key);
+          return;
+        }
         iconEntries.set(key, url);
       });
       if (!iconEntries.size) {
@@ -17376,7 +17544,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function addPolygonLayers() {
       if (!state.map || state.map.getSource("mobile-sites")) return;
-      state.map.addSource("mobile-sites", { type: "geojson", data: siteFeatureCollection() });
+      const sourceData = cachedMobileMapSourceData();
+      state.map.addSource("mobile-sites", { type: "geojson", data: sourceData.sites });
       state.map.addLayer({
         id: "mobile-territory-polygons",
         type: "fill",
@@ -17427,7 +17596,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         filter: ["==", ["geometry-type"], "Point"],
         paint: {
           "circle-radius": ["case", ["==", ["get", "has_icon"], true], ["interpolate", ["linear"], ["zoom"], 6, 3.2, 10, 4.2, 14, 5.6], ["interpolate", ["linear"], ["zoom"], 6, 4.6, 10, 5.6, 14, 7.2]],
-          "circle-color": "#326fe3",
+          "circle-color": ["case", ["==", ["get", "location_accuracy"], "approximate"], "#326fe3", "#496f5d"],
           "circle-opacity": ["case", ["==", ["get", "has_icon"], true], 0.58, 0.96],
           "circle-stroke-color": "rgba(255,255,255,0.94)",
           "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 6, 1.2, 12, 1.8],
@@ -17449,7 +17618,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         }
       });
       loadMobileSiteIconImages();
-      state.map.addSource("mobile-territory-labels", { type: "geojson", data: polygonLabelCollection("territory") });
+      state.map.addSource("mobile-territory-labels", { type: "geojson", data: sourceData.territoryLabels });
       state.map.addLayer({
         id: "mobile-territory-labels",
         type: "symbol",
@@ -17470,7 +17639,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           "text-halo-width": 1.7
         }
       });
-      state.map.addSource("mobile-detail-labels", { type: "geojson", data: polygonLabelCollection("detail") });
+      state.map.addSource("mobile-detail-labels", { type: "geojson", data: sourceData.detailLabels });
       state.map.addLayer({
         id: "mobile-detail-labels",
         type: "symbol",
@@ -17518,33 +17687,51 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           "text-halo-width": 1.5
         }
       });
-      state.map.on("click", "mobile-site-point-hit", event => {
+      state.mapSourceAppliedKey = state.mapSourceCacheKey || "";
+      bindMobileMapLayerEvents();
+    }
+
+    function rebindMobileMapLayerEvent(type, layerId, handler) {
+      if (!state.map?.getLayer(layerId)) return;
+      const key = `${type}:${layerId}`;
+      const previous = state.mobileMapLayerHandlers.get(key);
+      if (previous) state.map.off(type, layerId, previous);
+      state.mobileMapLayerHandlers.set(key, handler);
+      state.map.on(type, layerId, handler);
+    }
+
+    function bindMobileMapLayerEvents() {
+      if (!state.map) return;
+      rebindMobileMapLayerEvent("click", "mobile-site-point-hit", event => {
         if (handleSuggestionMapPickClick(event)) return;
         openMobileMapTap(event);
       });
       ["mobile-site-polygons", "mobile-territory-polygons"].forEach(layerId => {
-        state.map.on("click", layerId, event => {
+        rebindMobileMapLayerEvent("click", layerId, event => {
           if (handleSuggestionMapPickClick(event)) return;
           if (openMobilePolygonLayerFeature(event)) return;
           openMobileMapTap(event);
         });
-        state.map.on("mouseenter", layerId, () => state.map.getCanvas().style.cursor = "pointer");
-        state.map.on("mouseleave", layerId, () => state.map.getCanvas().style.cursor = "");
+        rebindMobileMapLayerEvent("mouseenter", layerId, () => state.map.getCanvas().style.cursor = "pointer");
+        rebindMobileMapLayerEvent("mouseleave", layerId, () => state.map.getCanvas().style.cursor = "");
       });
       ["mobile-detail-labels", "mobile-territory-labels"].forEach(layerId => {
-        state.map.on("click", layerId, event => {
+        rebindMobileMapLayerEvent("click", layerId, event => {
           if (handleSuggestionMapPickClick(event)) return;
           if (openMobilePolygonLayerFeature(event)) return;
           openMobileMapTap(event);
         });
-        state.map.on("mouseenter", layerId, () => state.map.getCanvas().style.cursor = "pointer");
-        state.map.on("mouseleave", layerId, () => state.map.getCanvas().style.cursor = "");
+        rebindMobileMapLayerEvent("mouseenter", layerId, () => state.map.getCanvas().style.cursor = "pointer");
+        rebindMobileMapLayerEvent("mouseleave", layerId, () => state.map.getCanvas().style.cursor = "");
       });
-      state.map.on("click", event => {
-        openMobileMapTap(event);
-      });
-      state.map.on("mouseenter", "mobile-site-point-hit", () => state.map.getCanvas().style.cursor = "pointer");
-      state.map.on("mouseleave", "mobile-site-point-hit", () => state.map.getCanvas().style.cursor = "");
+      rebindMobileMapLayerEvent("mouseenter", "mobile-site-point-hit", () => state.map.getCanvas().style.cursor = "pointer");
+      rebindMobileMapLayerEvent("mouseleave", "mobile-site-point-hit", () => state.map.getCanvas().style.cursor = "");
+      if (!state.mobileMapLayerEventsBound) {
+        state.mobileMapLayerEventsBound = true;
+        state.map.on("click", event => {
+          openMobileMapTap(event);
+        });
+      }
     }
 
     function refreshMobileMapSources(options = {}) {
@@ -19188,6 +19375,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function restoreMobileMapLayers() {
+      state.mapSourceAppliedKey = "";
+      state.mobileSiteIconImagesLoaded.clear();
+      state.mobileSiteIconImagesLoading = false;
       addPolygonLayers();
       syncMarkers();
       syncUserLocationMarker({ centerMap: false });
@@ -19197,28 +19387,34 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function syncMobileLayerButtons() {
       if (mobileLayerExhibitsInput) mobileLayerExhibitsInput.checked = state.settings.exhibits !== false;
-      state.settings.showPins = true;
       if (mobileLayerPinsInput) {
-        mobileLayerPinsInput.checked = true;
-        mobileLayerPinsInput.disabled = true;
+        mobileLayerPinsInput.checked = state.settings.showPins !== false;
+        mobileLayerPinsInput.disabled = false;
       }
       if (mobileLayerShapesInput) mobileLayerShapesInput.checked = state.settings.showShapes !== false;
+      const configured = state.settings.layerCategories || {};
+      mobileLayerCategoryInputs.forEach(input => {
+        input.checked = configured[input.value] !== false;
+        input.disabled = false;
+      });
       if (mobileLayerMenu) {
-        const count = [
+        const primaryCount = [
           state.settings.exhibits !== false,
-          true,
+          state.settings.showPins !== false,
           state.settings.showShapes !== false
         ].filter(Boolean).length;
-        mobileLayerMenu.querySelector("summary").textContent = count === 3 ? "Layers" : `Layers ${count}/3`;
+        const categoryCount = mobileLayerCategoryInputs.filter(input => input.checked).length;
+        const allOn = primaryCount === 3 && categoryCount === mobileLayerCategoryInputs.length;
+        mobileLayerMenu.querySelector("summary").textContent = allOn ? "Layers" : `Layers ${primaryCount}/3`;
       }
       if (exhibitsToggleBtn) {
         exhibitsToggleBtn.textContent = state.settings.exhibits === false ? "Exhibits off" : "Exhibits";
         exhibitsToggleBtn.setAttribute("aria-pressed", String(state.settings.exhibits !== false));
       }
       if (mobilePinsToggleBtn) {
-        mobilePinsToggleBtn.textContent = "Sites";
-        mobilePinsToggleBtn.setAttribute("aria-pressed", "true");
-        mobilePinsToggleBtn.disabled = true;
+        mobilePinsToggleBtn.textContent = state.settings.showPins === false ? "Sites off" : "Sites";
+        mobilePinsToggleBtn.setAttribute("aria-pressed", String(state.settings.showPins !== false));
+        mobilePinsToggleBtn.disabled = false;
       }
       if (mobileShapesToggleBtn) {
         mobileShapesToggleBtn.textContent = state.settings.showShapes === false ? "Boundaries off" : "Boundaries";
@@ -19228,12 +19424,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function setMobileLayerVisibility(kind, visible) {
       if (kind === "exhibits") state.settings.exhibits = visible;
-      if (kind === "pins") state.settings.showPins = true;
+      if (kind === "pins") state.settings.showPins = visible;
       if (kind === "shapes") state.settings.showShapes = visible;
+      if (kind === "category") {
+        state.settings.layerCategories = { ...(state.settings.layerCategories || {}) };
+        mobileLayerCategoryInputs.forEach(input => {
+          state.settings.layerCategories[input.value] = input.checked;
+        });
+      }
       saveSettings();
+      invalidateMapSourceCache();
       syncMobileLayerButtons();
-      if (kind === "exhibits") syncExhibitMarkers();
-      else syncMarkers();
+      syncMarkers();
     }
 
     function setMobileBasemap(value) {
@@ -19246,8 +19448,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const baseLayer = (state.layers || []).find(layer => layer.slug === "native-long-island-base-map");
       const styleJson = baseLayer?.style_json || {};
       const style = next === "streets" ? (styleJson.styleUrl || FALLBACK_STYLE) : MOBILE_BASEMAPS[next];
+      state.mapSourceAppliedKey = "";
+      state.mobileSiteIconImagesLoaded.clear();
+      state.mobileSiteIconImagesLoading = false;
       state.map.once("style.load", restoreMobileMapLayers);
-      state.map.setStyle(style);
+      state.map.setStyle(style, { diff: false });
     }
 
     function cssPixelValue(name, fallback = 0) {
@@ -20259,15 +20464,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (sent) showBanner("Alerts are enabled for this app.");
     });
     exhibitsToggleBtn?.addEventListener("click", () => {
-      state.settings.exhibits = !state.settings.exhibits;
-      saveSettings();
-      syncMobileLayerButtons();
-      syncExhibitMarkers();
+      setMobileLayerVisibility("exhibits", state.settings.exhibits === false);
     });
     mobileBasemapSelect?.addEventListener("change", () => setMobileBasemap(mobileBasemapSelect.value));
     mobileLayerExhibitsInput?.addEventListener("change", () => setMobileLayerVisibility("exhibits", mobileLayerExhibitsInput.checked));
     mobileLayerPinsInput?.addEventListener("change", () => setMobileLayerVisibility("pins", mobileLayerPinsInput.checked));
     mobileLayerShapesInput?.addEventListener("change", () => setMobileLayerVisibility("shapes", mobileLayerShapesInput.checked));
+    mobileLayerCategoryInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("category", true)));
     mobilePinsToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("pins", state.settings.showPins === false));
     mobileShapesToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("shapes", state.settings.showShapes === false));
     mobileStartupSpotlightLearnBtn?.addEventListener("click", () => {
