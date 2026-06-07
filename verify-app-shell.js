@@ -1,6 +1,6 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260607-map-layer-restore-categories";
+const expectedBuild = "20260607-mobile-layer-menu";
 const expectedUrl = "https://nativelongisland.com/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -267,6 +267,18 @@ for (const [label, html] of [
   }
   if (html.includes('value="historical-markers-institutions"') || html.includes("Historical Markers / Institutions")) {
     throw new Error(`Bundled Android ${label} must not expose the removed Historical Markers / Institutions layer.`);
+  }
+  if (html.includes("`Layers ${primaryCount}/3`") || html.includes("Layers 2/3")) {
+    throw new Error(`Bundled Android ${label} must count all mobile layer controls instead of the old 2/3 summary.`);
+  }
+  if (!html.includes("`Layers ${activeLayerCount}/${totalLayerCount}`") ||
+      !html.includes("const totalLayerCount = primaryStates.length + mobileLayerCategoryInputs.length;")) {
+    throw new Error(`Bundled Android ${label} must summarize all visible mobile layer controls.`);
+  }
+  if (html.includes("right: max(8px, var(--app-right-safe));") ||
+      !html.includes("min(288px, calc(100dvw - 16px))") ||
+      !html.includes('panel.style.setProperty("right", "auto", "important")')) {
+    throw new Error(`Bundled Android ${label} must keep the mobile layer panel clamped inside the viewport.`);
   }
   if (/settings\.showPins\s*=\s*true|mobileLayerPinsInput\.disabled\s*=\s*true|mobilePinsToggleBtn\.disabled\s*=\s*true/.test(html)) {
     throw new Error(`Bundled Android ${label} must not force-enable or disable the Sites layer.`);

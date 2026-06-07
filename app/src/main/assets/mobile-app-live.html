@@ -636,8 +636,10 @@
       display: none;
       gap: 8px;
       box-sizing: border-box;
-      width: var(--mobile-layer-width, min(220px, calc(100vw - 16px)));
-      width: var(--mobile-layer-width, min(220px, calc(100dvw - 16px)));
+      width: var(--mobile-layer-width, min(288px, calc(100vw - 16px)));
+      width: var(--mobile-layer-width, min(288px, calc(100dvw - 16px)));
+      max-width: calc(100vw - 16px);
+      max-width: calc(100dvw - 16px);
       padding: 10px;
       max-height: calc(100dvh - var(--mobile-layer-top, 112px) - var(--app-bottom-safe) - 10px);
       overflow-y: auto;
@@ -661,9 +663,12 @@
       color: var(--accent-strong);
       font-size: 13px;
       font-weight: 800;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
     }
 
     .mobile-layer-option input {
+      flex: 0 0 auto;
       width: 18px;
       height: 18px;
       accent-color: var(--accent-strong);
@@ -820,11 +825,6 @@
     .mobile-more-menu[open] .mobile-more-grid,
     .mobile-layer-menu[open] .mobile-layer-panel {
       display: grid;
-    }
-
-    .mobile-layer-menu[open] .mobile-layer-panel {
-      right: max(8px, var(--app-right-safe));
-      left: auto;
     }
 
     @media (min-width: 520px) {
@@ -5193,7 +5193,7 @@
     "amagansett-indian-well": "Amagansett Indian Well",
     "appaquogue": "Appaquogue",
     "ashawagh": "Ashawagh",
-    "ayeuonganit-aunakesuck-muhhogkunk": "Ayeuonganit AunakÃ©suck Muhhogkunk",
+    "ayeuonganit-aunakesuck-muhhogkunk": "Ayeuonganit Aunakésuck Muhhogkunk",
     "bethel-christian-ave-laurel-hill-historic-district": "Bethel Christian Ave., Laurel Hill Historic District",
     "canarsie": "Canarsie Traditional Land",
     "canoe-place-chapel": "Canoe Place Chapel",
@@ -5255,7 +5255,7 @@
     "winippague": "Winippague",
     "yaphank-weeks-pond-settlement": "Yaphank, Weeks Pond Settlement",
     "yennecock-southold-town": "Yennecock / Southold Town",
-    "yonahqosunuk": "YonÃ¡hqÃ´sunuk"
+    "yonahqosunuk": "Yonáhqôsunuk"
   };
 
   const smallWords = new Set(["a", "an", "and", "at", "ave", "by", "for", "in", "of", "on", "or", "the", "to"]);
@@ -7554,14 +7554,14 @@
     return String(value || "")
       .replace(/\\+(?=(?:&(?:quot|#0?39|apos|amp|nbsp|rsquo|lsquo|ldquo|rdquo);)|["'])/gi, "")
       .replace(/\\{2,}/g, "\\")
-      .replace(/Ãƒâ€šÃ‚Â /g, " ")
-      .replace(/Ãƒâ€š/g, "")
-      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢|&#8217;|&rsquo;/g, "'")
-      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“|&#8216;|&lsquo;/g, "'")
-      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8220;|&ldquo;/g, "\"")
-      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8221;|&rdquo;/g, "\"")
-      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“|&#8211;/g, "-")
-      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â|&#8212;/g, "-")
+      .replace(/Ã‚Â /g, " ")
+      .replace(/Ã‚/g, "")
+      .replace(/Ã¢â‚¬â„¢|&#8217;|&rsquo;/g, "'")
+      .replace(/Ã¢â‚¬Ëœ|&#8216;|&lsquo;/g, "'")
+      .replace(/Ã¢â‚¬Å“|&#8220;|&ldquo;/g, "\"")
+      .replace(/Ã¢â‚¬Â|&#8221;|&rdquo;/g, "\"")
+      .replace(/Ã¢â‚¬â€œ|&#8211;/g, "-")
+      .replace(/Ã¢â‚¬â€|&#8212;/g, "-")
       .replace(/&quot;/g, "\"")
       .replace(/&#0?39;|&apos;/g, "'")
       .replace(/&nbsp;/gi, " ")
@@ -8068,26 +8068,26 @@
   </script>
   <script data-inline-source="assets/js/language-quiz-words.js">
 window.NLI_LANGUAGE_QUIZ_WORDS = [
-  ["water", "nÃºp"], ["ocean", "cutstÃºk"], ["river", "seÃ©pus"], ["bay", "petÃ¡pagh"], ["stone", "sun"],
-  ["sand", "yaac"], ["rain", "sukerun"], ["snow", "soÃ¡chpo"], ["ice", "copÃ¡tn"], ["fire", "ruht; yuht"],
-  ["thunder", "pataquÃ¡hamoc"], ["lightning", "wowosÃºmpsa"], ["sun", "haquaqua"], ["moon", "nÃ©epa"], ["star", "arÃ¡qusac"],
-  ["cloud", "pamayÃ¡uxer"], ["rainbow", "papuhmÃºncsunc"], ["tree", "pÃ©ewye"], ["pine", "cw"], ["oak", "hÃºchemus"],
-  ["hickory", "wusquÃ­at"], ["corn", "sowhÃ¡mmen"], ["beans", "mais-cusseet"], ["squash", "Ã¡scoot"], ["potato", "panac"],
-  ["bread", "Ã¡p"], ["meat", "wÃ©ows"], ["milk", "wampachÃº-unk"], ["tobacco", "tobac"], ["whale", "pÃºttap"],
-  ["fish", "opÃ©ramac"], ["clam", "poquahoc"], ["oyster", "apÃ³onahac"], ["deer", "hÃ¡tk"], ["dog", "arrÃºm"],
-  ["fox", "squirÃ­ntes"], ["squirrel", "moccÃ¡s"], ["rabbit", "mÃ³h-tux"], ["mouse", "poquÃ¡ttas"], ["bird", "a Ã¡ssas"],
-  ["crow", "concÃ³nchus"], ["eagle", "wÃ©quaran"], ["goose", "hakÃ©noh"], ["duck", "nanÃ¡secus"], ["dove", "mÃ¡-owks"],
-  ["snake", "skÃºk / skook"], ["bug", "sÃ©ukr"], ["worm", "hÃºquer"], ["fly", "muchÃ¡was"], ["mosquito", "murrÃ¡quitch"],
-  ["woman", "squah"], ["man", "run"], ["father", "cws"], ["mother", "cwca"], ["brother", "contÃ¡yux"],
-  ["sister", "kÃ©essums"], ["grandfather", "numpsoonk"], ["grandmother", "nÃ¡nnax"], ["uncle", "nissÃ©is"], ["aunt", "cacÃ¡cas"],
-  ["husband", "ks-hÃ¡mps"], ["wife", "keÃ©-us"], ["child", "neechuntz"], ["boy", "macÃºchax"], ["girl", "squÃ¡sses"],
-  ["house", "wÃ©echo"], ["door", "squnt"], ["blanket", "aqueÃ©wants"], ["bow", "Ã¡tump"], ["arrow", "neep"],
-  ["tomahawk", "chÃ©kenas"], ["axe", "ochÃ©gan"], ["wampum", "whÃ¡mpump"], ["war", "ayutÃ³wac"], ["peace", "weÃ©hsaac"],
-  ["head", "okÃ©yununc"], ["hair", "wÃ©-usk"], ["eyes", "skÃ©suc"], ["nose", "cochÃ³n"], ["mouth", "cÃºttoh"],
-  ["teeth", "kÃ©put"], ["hand", "cÃ³ritch"], ["finger", "cÃ³ritcheus"], ["knee", "cucÃºttuc"], ["foot", "cusseÃ©d"],
-  ["black", "shÃ­ckayo"], ["white", "wÃ¡mpayo"], ["red", "sqÃºayo"], ["yellow", "weesa-wayo"], ["blue", "seewamp-wayo"],
-  ["green", "uscu-sqÃºayo"], ["good", "woreÃ©can"], ["bad", "mÃ¡ttatÃ©ayuh"], ["small", "pÃ©ewÃ¡tsu"], ["turtle", "matcÃ®k"],
-  ["sea beach", "siwÃ¢ a"], ["shell fish", "sÃ©tcawa"], ["thank you", "tabutnÃ®"], ["greeting", "hÃ¡hcamÃ®"], ["come quick", "mekwÃ­"]
+  ["water", "núp"], ["ocean", "cutstúk"], ["river", "seépus"], ["bay", "petápagh"], ["stone", "sun"],
+  ["sand", "yaac"], ["rain", "sukerun"], ["snow", "soáchpo"], ["ice", "copátn"], ["fire", "ruht; yuht"],
+  ["thunder", "pataquáhamoc"], ["lightning", "wowosúmpsa"], ["sun", "haquaqua"], ["moon", "néepa"], ["star", "aráqusac"],
+  ["cloud", "pamayáuxer"], ["rainbow", "papuhmúncsunc"], ["tree", "péewye"], ["pine", "cw"], ["oak", "húchemus"],
+  ["hickory", "wusquíat"], ["corn", "sowhámmen"], ["beans", "mais-cusseet"], ["squash", "áscoot"], ["potato", "panac"],
+  ["bread", "áp"], ["meat", "wéows"], ["milk", "wampachú-unk"], ["tobacco", "tobac"], ["whale", "púttap"],
+  ["fish", "opéramac"], ["clam", "poquahoc"], ["oyster", "apóonahac"], ["deer", "hátk"], ["dog", "arrúm"],
+  ["fox", "squiríntes"], ["squirrel", "moccás"], ["rabbit", "móh-tux"], ["mouse", "poquáttas"], ["bird", "a ássas"],
+  ["crow", "concónchus"], ["eagle", "wéquaran"], ["goose", "hakénoh"], ["duck", "nanásecus"], ["dove", "má-owks"],
+  ["snake", "skúk / skook"], ["bug", "séukr"], ["worm", "húquer"], ["fly", "mucháwas"], ["mosquito", "murráquitch"],
+  ["woman", "squah"], ["man", "run"], ["father", "cws"], ["mother", "cwca"], ["brother", "contáyux"],
+  ["sister", "kéessums"], ["grandfather", "numpsoonk"], ["grandmother", "nánnax"], ["uncle", "nisséis"], ["aunt", "cacácas"],
+  ["husband", "ks-hámps"], ["wife", "keé-us"], ["child", "neechuntz"], ["boy", "macúchax"], ["girl", "squásses"],
+  ["house", "wéecho"], ["door", "squnt"], ["blanket", "aqueéwants"], ["bow", "átump"], ["arrow", "neep"],
+  ["tomahawk", "chékenas"], ["axe", "ochégan"], ["wampum", "whámpump"], ["war", "ayutówac"], ["peace", "weéhsaac"],
+  ["head", "okéyununc"], ["hair", "wé-usk"], ["eyes", "skésuc"], ["nose", "cochón"], ["mouth", "cúttoh"],
+  ["teeth", "képut"], ["hand", "córitch"], ["finger", "córitcheus"], ["knee", "cucúttuc"], ["foot", "cusseéd"],
+  ["black", "shíckayo"], ["white", "wámpayo"], ["red", "sqúayo"], ["yellow", "weesa-wayo"], ["blue", "seewamp-wayo"],
+  ["green", "uscu-sqúayo"], ["good", "woreécan"], ["bad", "máttatéayuh"], ["small", "péewátsu"], ["turtle", "matcîk"],
+  ["sea beach", "siwâ a"], ["shell fish", "sétcawa"], ["thank you", "tabutnî"], ["greeting", "háhcamî"], ["come quick", "mekwí"]
 ].map(([english, algonquian]) => ({
   id: english.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
   english,
@@ -9673,14 +9673,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function decodeImportedText(value) {
       const textarea = document.createElement("textarea");
       textarea.innerHTML = String(value || "")
-        .replace(/ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â /g, " ")
-        .replace(/ÃƒÆ’Ã¢â‚¬Å¡/g, "")
-        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢|&#8217;|&rsquo;/g, "'")
-        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¹Ã…â€œ|&#8216;|&lsquo;/g, "'")
-        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“|&#8220;|&ldquo;/g, "\"")
-        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â|&#8221;|&rdquo;/g, "\"")
-        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8211;/g, "-")
-        .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8212;/g, "-")
+        .replace(/Ãƒâ€šÃ‚Â /g, " ")
+        .replace(/Ãƒâ€š/g, "")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢|&#8217;|&rsquo;/g, "'")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“|&#8216;|&lsquo;/g, "'")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8220;|&ldquo;/g, "\"")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8221;|&rdquo;/g, "\"")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“|&#8211;/g, "-")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â|&#8212;/g, "-")
         .replace(/&nbsp;/gi, " ");
       return textarea.value.replace(/\s+/g, " ").trim();
     }
@@ -14846,7 +14846,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             const confidence = Number(match?.confidence || 0);
             const score = confidence ? `${Math.round(confidence * 100)}%` : "score unavailable";
             const source = match?.source || "Pl@ntNet";
-            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} Ã‚Â· ${escapeHtml(source)}</em></div>`;
+            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} Â· ${escapeHtml(source)}</em></div>`;
           }).join("")}</div>`
         : "";
       const exactWarning = analysis?.safetyWarning || "Automated plant identification can be wrong. Verify with a field guide or expert before touching, eating, or using any plant.";
@@ -15558,14 +15558,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         return plantSpeciesKey(`${fields.identification || ""} ${fields.name || ""}`);
       }).filter(Boolean);
       const uniqueObserved = new Set(observedKeys);
-      const base = `${observations.length} observation${observations.length === 1 ? "" : "s"} Ã‚Â· ${uniqueObserved.size} unique species`;
-      if (!knownSpecies.length) return `${base} Ã‚Â· Known species list not yet added.`;
+      const base = `${observations.length} observation${observations.length === 1 ? "" : "s"} Â· ${uniqueObserved.size} unique species`;
+      if (!knownSpecies.length) return `${base} Â· Known species list not yet added.`;
       const documented = knownSpecies.filter(species => {
         const knownKey = plantSpeciesKey(species);
         return observedKeys.some(observed => observed.includes(knownKey) || knownKey.includes(observed));
       }).length;
       const percent = Math.round((documented / knownSpecies.length) * 100);
-      return `${base} Ã‚Â· ${documented}/${knownSpecies.length} known species documented (${percent}%).`;
+      return `${base} Â· ${documented}/${knownSpecies.length} known species documented (${percent}%).`;
     }
 
     function publicPlantText(value, fallback = "") {
@@ -19398,14 +19398,17 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         input.disabled = false;
       });
       if (mobileLayerMenu) {
-        const primaryCount = [
+        const primaryStates = [
           state.settings.exhibits !== false,
           state.settings.showPins !== false,
           state.settings.showShapes !== false
-        ].filter(Boolean).length;
+        ];
+        const primaryCount = primaryStates.filter(Boolean).length;
         const categoryCount = mobileLayerCategoryInputs.filter(input => input.checked).length;
-        const allOn = primaryCount === 3 && categoryCount === mobileLayerCategoryInputs.length;
-        mobileLayerMenu.querySelector("summary").textContent = allOn ? "Layers" : `Layers ${primaryCount}/3`;
+        const totalLayerCount = primaryStates.length + mobileLayerCategoryInputs.length;
+        const activeLayerCount = primaryCount + categoryCount;
+        const allOn = activeLayerCount === totalLayerCount;
+        mobileLayerMenu.querySelector("summary").textContent = allOn ? "Layers" : `Layers ${activeLayerCount}/${totalLayerCount}`;
       }
       if (exhibitsToggleBtn) {
         exhibitsToggleBtn.textContent = state.settings.exhibits === false ? "Exhibits off" : "Exhibits";
@@ -19504,15 +19507,20 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const viewportTop = Math.round(viewport?.offsetTop || 0);
       const pad = 8;
       const bottomSafe = cssPixelValue("--app-bottom-safe", 0);
-      const width = Math.min(220, Math.max(184, viewportWidth - (pad * 2)));
-      const preferredLeft = Math.round((summaryRect?.right || viewportWidth - pad) - width);
+      const width = Math.min(288, Math.max(184, viewportWidth - (pad * 2)));
+      const summaryRight = Math.round(summaryRect?.right || viewportLeft + viewportWidth - pad);
+      const preferredLeft = summaryRight - width;
       const left = Math.max(viewportLeft + pad, Math.min(viewportLeft + viewportWidth - width - pad, preferredLeft));
       const top = Math.max(viewportTop + pad, Math.min(viewportTop + viewportHeight - 120, Math.round(viewportTop + (summaryRect?.bottom || 74) + 6)));
       const maxHeight = Math.max(160, viewportTop + viewportHeight - top - bottomSafe - pad);
       panel.style.setProperty("--mobile-layer-top", `${top}px`);
       panel.style.setProperty("--mobile-layer-left", `${left}px`);
       panel.style.setProperty("--mobile-layer-width", `${width}px`);
-      panel.style.setProperty("max-height", `${maxHeight}px`);
+      panel.style.setProperty("left", `${left}px`, "important");
+      panel.style.setProperty("right", "auto", "important");
+      panel.style.setProperty("width", `${width}px`, "important");
+      panel.style.setProperty("max-width", `${width}px`, "important");
+      panel.style.setProperty("max-height", `${maxHeight}px`, "important");
     }
 
     function activateMobileListTarget(target, event) {
