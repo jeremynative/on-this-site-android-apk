@@ -1,6 +1,6 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260607-mobile-layer-menu";
+const expectedBuild = "20260607-mobile-layer-sheet";
 const expectedUrl = "https://nativelongisland.com/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -276,7 +276,10 @@ for (const [label, html] of [
     throw new Error(`Bundled Android ${label} must summarize all visible mobile layer controls.`);
   }
   if (html.includes("right: max(8px, var(--app-right-safe));") ||
-      !html.includes("min(288px, calc(100dvw - 16px))") ||
+      html.includes("Math.min(288") ||
+      !html.includes("calc(100dvw - 16px)") ||
+      !html.includes("const width = Math.max(160, viewportWidth - (pad * 2));") ||
+      !html.includes("const left = viewportLeft + pad;") ||
       !html.includes('panel.style.setProperty("right", "auto", "important")')) {
     throw new Error(`Bundled Android ${label} must keep the mobile layer panel clamped inside the viewport.`);
   }
