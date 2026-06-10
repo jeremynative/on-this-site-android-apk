@@ -8347,7 +8347,12 @@
     async function withAuthRetry(send, requestOptions = {}) {
       const requireAuth = requestOptions.requireAuth === true;
       let token = tokenProvider();
-      if (requireAuth && !token) throw new Error(requestOptions.missingAuthMessage || "Login required.");
+      if (requireAuth && !token) {
+        token = await refreshAuthToken({ expireOnAuthFailure: true });
+      }
+      if (requireAuth && !token) {
+        throw expiredAuthError(requestOptions.authExpiredMessage || requestOptions.missingAuthMessage || authExpiredMessage());
+      }
       let response = await send(token);
       if (isAuthFailure(response) && token && requireAuth) {
         const refreshed = await refreshAuthToken();
@@ -8409,7 +8414,6 @@
     async function postItem(collection, payload, requestOptions = {}) {
       const token = tokenProvider();
       const requireAuth = requestOptions.requireAuth === true;
-      if (requireAuth && !token) throw new Error(`Login required to save ${collection}.`);
       const timeout = Number(requestOptions.timeout || 0);
       const controller = timeout && typeof AbortController !== "undefined" ? new AbortController() : null;
       const timer = controller ? window.setTimeout(() => controller.abort(), timeout) : null;
@@ -8446,7 +8450,6 @@
     async function patchItem(collection, id, payload, requestOptions = {}) {
       const token = tokenProvider();
       const requireAuth = requestOptions.requireAuth === true;
-      if (requireAuth && !token) throw new Error(`Login required to update ${collection}.`);
       const response = await withAuthRetry(authToken => fetch(`${baseUrl}/items/${collection}/${id}`, {
         method: "PATCH",
         headers: authHeaders(authToken, { "content-type": "application/json" }),
@@ -8466,7 +8469,6 @@
     async function deleteItem(collection, id, requestOptions = {}) {
       const token = tokenProvider();
       const requireAuth = requestOptions.requireAuth === true;
-      if (requireAuth && !token) throw new Error(`Login required to delete ${collection}.`);
       const response = await withAuthRetry(authToken => fetch(`${baseUrl}/items/${collection}/${id}`, {
         method: "DELETE",
         headers: authHeaders(authToken)
@@ -8566,7 +8568,6 @@
       body.append("title", title || file.name);
       const token = tokenProvider();
       const requireAuth = requestOptions.requireAuth === true;
-      if (requireAuth && !token) throw new Error("Login required to upload images.");
       let response = await withAuthRetry(authToken => fetch(`${baseUrl}/files`, { method: "POST", headers: authHeaders(authToken), body }), { ...requestOptions, missingAuthMessage: "Login required to upload images." });
       if ((response.status === 401 || response.status === 403) && token && !requireAuth) {
         response = await fetch(`${baseUrl}/files`, { method: "POST", body });
@@ -15955,8 +15956,19 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return PROFILE_UTILS.publicContributorProfiles(state.contributorProfiles);
     }
 
+    function hasContributorWriteSession() {
+      return Boolean(state.profile?.token || state.profile?.refreshToken || state.profile?.refresh_token);
+    }
+
+    function contributorWritePrompt() {
+      if (state.profile?.pending) return "Your account is waiting for review. Commenting unlocks after approval.";
+      if (state.profile && !hasContributorWriteSession()) return "Log in again to comment or reply. Approved comments appear on contributor profiles.";
+      return "Login to comment or reply. Approved comments appear on contributor profiles.";
+    }
+
     function isApprovedContributor() {
       if (!state.profile || state.profile.pending) return false;
+      if (!hasContributorWriteSession()) return false;
       const profile = currentContributorProfile();
       if (PROFILE_UTILS.isAdminContributor(profile, { email: state.profile?.email })) return true;
       if (state.profile.token) return Boolean(!profile || !isProfileBanned(profile));
@@ -16693,7 +16705,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             <input type="hidden" data-parent-comment value="">
             <input type="hidden" data-reply-to-profile value="">
           ` : `
-            <p class="summary">${state.profile?.pending ? "Your account is waiting for review. Commenting unlocks after approval." : "Login to comment or reply. Approved comments appear on contributor profiles."}</p>
+            <p class="summary">${escapeHtml(contributorWritePrompt())}</p>
             <button class="action secondary" type="button" data-open-login>Login</button>
           `}
           ${sourceType === "site" ? `
@@ -16742,9 +16754,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const originalLabel = submitButton?.textContent || "Post comment";
       const profile = currentContributorProfile();
       if (!profile || !isApprovedContributor()) {
-        showBanner(state.profile?.pending
-          ? "Your account is waiting for approval before commenting."
-          : "Login as an approved contributor before commenting.");
+        showBanner(contributorWritePrompt());
         return;
       }
       const text = section.querySelector("[data-discussion-input]")?.value?.trim() || "";
