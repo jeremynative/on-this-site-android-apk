@@ -8296,6 +8296,21 @@
       return response?.status === 401 || response?.status === 403;
     }
 
+    function authExpiredMessage(action = "save changes") {
+      return `Login expired. Please log in again, then ${action}.`;
+    }
+
+    function expiredAuthError(message) {
+      const error = new Error(message || authExpiredMessage());
+      error.code = "AUTH_EXPIRED";
+      return error;
+    }
+
+    function responseLooksExpired(response, body = "") {
+      if (response?.status === 401) return true;
+      return /TOKEN_EXPIRED|Token expired|INVALID_TOKEN|Invalid token/i.test(String(body || ""));
+    }
+
     function authHeaders(token, extra = {}) {
       return token ? { ...extra, authorization: `Bearer ${token}` } : { ...extra };
     }
@@ -8415,6 +8430,10 @@
         }
         if (!response.ok) {
           const text = await readErrorBody(response);
+          if (requireAuth && responseLooksExpired(response, text)) {
+            onAuthExpired();
+            throw expiredAuthError(requestOptions.authExpiredMessage || authExpiredMessage(`save ${collection}`));
+          }
           throw new Error(`Could not save ${collection}: ${response.status}${text ? ` ${text.slice(0, 240)}` : ""}`);
         }
         const text = await response.text();
@@ -8433,7 +8452,14 @@
         headers: authHeaders(authToken, { "content-type": "application/json" }),
         body: JSON.stringify(payload)
       }), { ...requestOptions, missingAuthMessage: `Login required to update ${collection}.` });
-      if (!response.ok) throw new Error(`Could not update ${collection}: ${response.status}${await readErrorBody(response).then(text => text ? ` ${text}` : "")}`);
+      if (!response.ok) {
+        const text = await readErrorBody(response);
+        if (requireAuth && responseLooksExpired(response, text)) {
+          onAuthExpired();
+          throw expiredAuthError(requestOptions.authExpiredMessage || authExpiredMessage(`update ${collection}`));
+        }
+        throw new Error(`Could not update ${collection}: ${response.status}${text ? ` ${text}` : ""}`);
+      }
       return response.json();
     }
 
@@ -8445,7 +8471,14 @@
         method: "DELETE",
         headers: authHeaders(authToken)
       }), { ...requestOptions, missingAuthMessage: `Login required to delete ${collection}.` });
-      if (!response.ok) throw new Error(`Could not delete ${collection}: ${response.status}${await readErrorBody(response).then(text => text ? ` ${text}` : "")}`);
+      if (!response.ok) {
+        const text = await readErrorBody(response);
+        if (requireAuth && responseLooksExpired(response, text)) {
+          onAuthExpired();
+          throw expiredAuthError(requestOptions.authExpiredMessage || authExpiredMessage(`delete ${collection}`));
+        }
+        throw new Error(`Could not delete ${collection}: ${response.status}${text ? ` ${text}` : ""}`);
+      }
       return true;
     }
 
@@ -8539,6 +8572,11 @@
         response = await fetch(`${baseUrl}/files`, { method: "POST", body });
       }
       if (!response.ok) {
+        const text = await readErrorBody(response);
+        if (requireAuth && responseLooksExpired(response, text)) {
+          onAuthExpired();
+          throw expiredAuthError(requestOptions.authExpiredMessage || authExpiredMessage("upload the image"));
+        }
         if (response.status === 401 || response.status === 403) {
           throw new Error("This account does not have permission to upload images yet.");
         }
@@ -16742,6 +16780,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         imageId = image ? await uploadDirectusFile(image, `Comment image - ${section.dataset.discussionTitle}`, { requireAuth: true }) : null;
         if (submitButton) submitButton.textContent = "Posting...";
       } catch (error) {
+        if (error?.code === "AUTH_EXPIRED") {
+          showBanner(error.message || "Login expired. Please log in again, then post your comment.");
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = originalLabel;
+          }
+          return;
+        }
         imageId = null;
         showBanner("The image could not upload, so the comment will post without it.");
       }
@@ -16772,7 +16818,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       };
       let created = null;
       try {
-        created = await postDirectusItem("mobile_comments", payload, { requireAuth: true });
+        created = await postDirectusItem("mobile_comments", payload, {
+          requireAuth: true,
+          authExpiredMessage: "Login expired. Please log in again, then post your comment."
+        });
         const visibleComment = {
           id: created?.data?.id || `pending-${Date.now()}`,
           ...payload,
