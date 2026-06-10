@@ -4679,6 +4679,7 @@
     "show_print_purchase", "introduction_title", "introduction_content", "history_title", "history_content",
     "preservation_title", "preservation_content", "oral_history_title", "oral_history_content",
     "translation_title", "translation_content", "legends_and_lore_title", "legends_and_lore_content",
+    "whereintheworld_title", "whereintheworld_content",
     "last_reviewed", "wp_date", "known_plant_species", "ancestral_territory", "ancestral_territory_note", "why_this_matters"
   ]);
   const desktopWikiFields = fields(["id", "title", "slug", "summary", "why_this_matters", "source_url", "last_reviewed", "lastmod"]);
@@ -4861,6 +4862,44 @@
     return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
   }
 
+  function defaultStorage() {
+    return typeof localStorage !== "undefined" ? localStorage : null;
+  }
+
+  function readStorageJson(keys, fallback = null, storage = defaultStorage()) {
+    const keyList = Array.isArray(keys) ? keys : [keys];
+    for (const key of keyList.filter(Boolean)) {
+      try {
+        const raw = storage?.getItem?.(key);
+        if (!raw) continue;
+        return JSON.parse(raw);
+      } catch {}
+    }
+    return fallback;
+  }
+
+  function writeStorageJson(keys, value, storage = defaultStorage()) {
+    const keyList = Array.isArray(keys) ? keys : [keys];
+    const payload = JSON.stringify(value);
+    let saved = false;
+    keyList.filter(Boolean).forEach(key => {
+      try {
+        storage?.setItem?.(key, payload);
+        saved = true;
+      } catch {}
+    });
+    return saved;
+  }
+
+  function removeStorageKeys(keys, storage = defaultStorage()) {
+    const keyList = Array.isArray(keys) ? keys : [keys];
+    keyList.filter(Boolean).forEach(key => {
+      try {
+        storage?.removeItem?.(key);
+      } catch {}
+    });
+  }
+
   function normalizeActivityDateInput(value) {
     if (value instanceof Date || typeof value === "number") return value;
     const text = String(value || "").trim();
@@ -4897,15 +4936,55 @@
     return "";
   }
 
+  function plainTextValue(value) {
+    return String(value || "")
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;|&#160;/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function sectionTitleKey(value) {
+    return plainTextValue(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  }
+
+  function isWhyThisMattersTitle(value) {
+    return sectionTitleKey(value) === "why this matters";
+  }
+
+  function uniqueTextBlocks(values = [], options = {}) {
+    const cleanText = typeof options.cleanText === "function" ? options.cleanText : plainTextValue;
+    const normalize = typeof options.normalizeText === "function"
+      ? options.normalizeText
+      : value => sectionTitleKey(value);
+    const blocks = [];
+    (values || []).forEach(value => {
+      const text = cleanText(value || "");
+      if (!text) return;
+      const key = normalize(text);
+      if (!key) return;
+      const duplicate = blocks.some(block => {
+        if (block.key === key) return true;
+        return (key.length > 80 && block.key.includes(key)) || (block.key.length > 80 && key.includes(block.key));
+      });
+      if (!duplicate) blocks.push({ text, key });
+    });
+    return blocks.map(block => block.text);
+  }
+
   function contentSectionsFromFields(item = {}, fields = [], options = {}) {
     const hasContent = typeof options.hasContent === "function"
       ? options.hasContent
       : value => String(value || "").trim().length > 0;
+    const excludeTitle = typeof options.excludeTitle === "function" ? options.excludeTitle : null;
     return (fields || [])
-      .map(field => [
-        item[field.title] || field.defaultTitle || field.title,
-        item[field.content]
-      ])
+      .map(field => {
+        const title = item[field.title] || field.defaultTitle || field.title;
+        return [title, item[field.content], field];
+      })
+      .filter(([title, , field]) => !excludeTitle || !excludeTitle(title, field, item))
       .filter(([, value]) => hasContent(value));
   }
 
@@ -5046,10 +5125,17 @@
     relationId,
     numeric,
     normalizeText,
+    readStorageJson,
+    writeStorageJson,
+    removeStorageKeys,
     activityDateValue,
     normalizeActivityDateInput,
     formatDate,
     validateJpegImage,
+    plainTextValue,
+    sectionTitleKey,
+    isWhyThisMattersTitle,
+    uniqueTextBlocks,
     contentSectionsFromFields,
     removeFootnoteReferenceMarkers,
     importedFootnoteSources,
@@ -5166,6 +5252,36 @@
     return [...keys];
   }
 
+  function layerFilterSetFromInputs(inputs = [], isActive = input => input?.checked !== false) {
+    return new Set(
+      (inputs || [])
+        .filter(input => input && isActive(input))
+        .map(input => input.value)
+        .filter(Boolean)
+    );
+  }
+
+  function passesLayerCategoryFilters(keys = [], active = new Set(), totalCount = 0) {
+    const values = [...new Set((keys || []).filter(Boolean))];
+    if (active.size >= totalCount) return true;
+    if (!active.size) return false;
+    if (!values.length) return true;
+    return values.some(key => active.has(key));
+  }
+
+  function featureVisibleInPrimaryLayers(geometryType = "", options = {}) {
+    const isPoint = geometryType === "Point";
+    const isPolygon = geometryType === "Polygon" || geometryType === "MultiPolygon";
+    const isExhibit = options.isExhibit === true;
+    const exhibitsOn = options.exhibitsOn !== false;
+    const pinsOn = options.pinsOn !== false;
+    const shapesOn = options.shapesOn !== false;
+    if (isExhibit && !exhibitsOn) return false;
+    if (isPoint) return pinsOn || (isExhibit && exhibitsOn);
+    if (isPolygon) return shapesOn || (isExhibit && exhibitsOn);
+    return pinsOn || shapesOn || (isExhibit && exhibitsOn);
+  }
+
   function isExhibitSite(site = {}) {
     const text = siteLayerText(site);
     const rawType = normalizeText(site.site_type || "");
@@ -5181,6 +5297,9 @@
     isBroadTerritory,
     SITE_LAYER_CATEGORIES,
     siteLayerCategoryKeys,
+    layerFilterSetFromInputs,
+    passesLayerCategoryFilters,
+    featureVisibleInPrimaryLayers,
     siteLocationAccuracy,
     isExhibitSite
   };
@@ -5437,6 +5556,28 @@
     return `User since ${label}${age ? ` - ${age}` : ""}`;
   }
 
+  function memberUsagePayload(profile, options = {}) {
+    const now = Number(options.now || Date.now());
+    const sessionStartedAt = Number(options.sessionStartedAt || now);
+    const flushedSeconds = Number(options.flushedSeconds || 0);
+    const sessionRecorded = options.sessionRecorded === true;
+    const totalSessionSeconds = Math.max(0, Math.floor((now - sessionStartedAt) / 1000));
+    const incrementalSeconds = Math.max(0, totalSessionSeconds - flushedSeconds);
+    const currentTotal = Math.max(0, Number(profile?.usage_seconds_total || 0));
+    const currentSessions = Math.max(0, Number(profile?.usage_session_count || 0));
+    const payload = {
+      last_active_at: new Date(now).toISOString()
+    };
+    if (options.login) payload.last_login_at = payload.last_active_at;
+    if (options.trackUsage !== false && incrementalSeconds >= 5) {
+      payload.usage_seconds_total = currentTotal + incrementalSeconds;
+    }
+    if (options.trackUsage !== false && (!sessionRecorded || options.login)) {
+      payload.usage_session_count = currentSessions + 1;
+    }
+    return { payload, incrementalSeconds };
+  }
+
   function isProfileBanned(profile) {
     return Boolean(profile?.account_banned === true || profile?.profile_status === "banned");
   }
@@ -5494,6 +5635,97 @@
       }
     });
     return ids;
+  }
+
+  function rowsFallback(rows = [], options = {}) {
+    const fallback = { data: Array.isArray(rows) ? rows : [] };
+    if (options.markFallback) fallback.__fallback = true;
+    return fallback;
+  }
+
+  function responseUsedFallback(response) {
+    return Boolean(response?.__fallback);
+  }
+
+  function allResponsesFresh(responses = []) {
+    return (responses || []).every(response => !responseUsedFallback(response));
+  }
+
+  function withFallbackTimeout(promise, fallback, timeoutMs = 12000) {
+    const timer = typeof window !== "undefined" && window.setTimeout ? window.setTimeout.bind(window) : setTimeout;
+    return Promise.race([
+      promise,
+      new Promise(resolve => timer(() => resolve(fallback), timeoutMs))
+    ]);
+  }
+
+  function rowsIncludeProfile(rows = [], profile = {}, options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    const profileFields = options.profileFields || ["member_profile"];
+    const profileIds = profileIdentityIds(profile, options.candidates || [], options);
+    if (!profileIds.size) return false;
+    return (rows || []).some(row =>
+      profileFields.some(field => profileIds.has(Number(relationId(row?.[field]))))
+    );
+  }
+
+  function activeProfileRowKey(row = {}, options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    const id = Number(relationId(row?.id));
+    if (id) return `id:${id}`;
+    const keyFields = options.keyFields || [
+      "event_key",
+      "vote_key",
+      "site_slug",
+      "visited_at",
+      "content_key",
+      "word_id",
+      "answered_at",
+      "login_date",
+      "follower_profile",
+      "following_profile",
+      "source_collection",
+      "source_id",
+      "source_slug",
+      "created_at"
+    ];
+    const parts = [];
+    keyFields.forEach(field => {
+      const value = relationId(row?.[field]);
+      if (value !== undefined && value !== null && value !== "") parts.push(`${field}:${String(value)}`);
+    });
+    return parts.length ? parts.join("|") : "";
+  }
+
+  function preserveActiveProfileRows(nextRows = [], currentRows = [], profile = {}, options = {}) {
+    const incoming = Array.isArray(nextRows) ? nextRows : [];
+    const current = Array.isArray(currentRows) ? currentRows : [];
+    if (!profile || !current.length) return incoming;
+    const relationId = options.relationId || defaultRelationId;
+    const profileFields = options.profileFields || ["member_profile"];
+    const profileIds = profileIdentityIds(profile, options.candidates || [], options);
+    if (!profileIds.size) return incoming;
+    const incomingKeys = new Set(incoming.map(row => activeProfileRowKey(row, options)).filter(Boolean));
+    const appendedKeys = new Set();
+    const activeRows = current.filter(row =>
+      profileFields.some(field => profileIds.has(Number(relationId(row?.[field]))))
+    ).filter(row => {
+      const key = activeProfileRowKey(row, options);
+      if (!key) return true;
+      if (incomingKeys.has(key) || appendedKeys.has(key)) return false;
+      appendedKeys.add(key);
+      return true;
+    });
+    return activeRows.length ? [...incoming, ...activeRows] : incoming;
+  }
+
+  function activeProfileFilterSuffix(profile = {}, profileFields = ["member_profile"], options = {}) {
+    const profileIds = [...profileIdentityIds(profile, options.candidates || [], options)]
+      .map(id => Number(id))
+      .filter(Boolean)
+      .sort((a, b) => a - b);
+    if (!profileIds.length || profileFields.length !== 1) return "";
+    return `&filter[${profileFields[0]}][_in]=${profileIds.join(",")}`;
   }
 
   function contributorProfileScore(profile) {
@@ -5588,6 +5820,30 @@
       options.fallbackEmail ||
       "anonymous"
     ).toLowerCase();
+  }
+
+  function contributorProfileIsPending(profile = {}) {
+    return profile?.pending === true ||
+      profile?.approved === false ||
+      /awaiting review|pending/i.test(`${profile?.role || ""} ${profile?.roleLabel || ""}`);
+  }
+
+  function normalizeStoredContributorProfile(profile = {}, options = {}) {
+    if (!profile) return null;
+    const pending = contributorProfileIsPending(profile);
+    const normalized = {
+      ...profile,
+      pending,
+      approved: pending ? false : (profile.approved ?? true)
+    };
+    if (options.mobileFields) {
+      normalized.email = String(profile.email || profile.username || "").toLowerCase();
+      normalized.username = profile.username || profile.email || "";
+      normalized.display_name = profile.display_name || profile.displayName || profile.email || "";
+      normalized.displayName = profile.displayName || profile.display_name || profile.email || "";
+      normalized.role = profile.role || profile.roleLabel || (pending ? "Account awaiting review" : "Contributor");
+    }
+    return normalized;
   }
 
   const POINT_RULES = Object.freeze({
@@ -5785,6 +6041,25 @@
     };
   }
 
+  function mergeLanguageAttemptRecords(target = [], records = [], options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    (records || []).forEach(record => {
+      if (!record) return;
+      const id = Number(record.id);
+      const index = id
+        ? target.findIndex(item => Number(item.id) === id)
+        : target.findIndex(item =>
+            Number(relationId(item.member_profile)) === Number(relationId(record.member_profile)) &&
+            String(item.content_key || "") === String(record.content_key || "") &&
+            String(item.word_id || "") === String(record.word_id || "") &&
+            String(item.answered_at || "").slice(0, 10) === String(record.answered_at || "").slice(0, 10)
+          );
+      if (index >= 0) target[index] = { ...target[index], ...record };
+      else target.push(record);
+    });
+    return target;
+  }
+
   function uniqueVisitRecords(visits = []) {
     const uniqueVisits = new Map();
     (visits || []).forEach(visit => {
@@ -5794,6 +6069,24 @@
       if (!existing || String(visit.visited_at || "") > String(existing.visited_at || "")) uniqueVisits.set(key, visit);
     });
     return [...uniqueVisits.values()];
+  }
+
+  function mergeVisitRecords(target = [], records = [], options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    (records || []).forEach(record => {
+      if (!record) return;
+      const id = Number(record.id);
+      const index = id
+        ? target.findIndex(item => Number(item.id) === id)
+        : target.findIndex(item =>
+            Number(relationId(item.member_profile)) === Number(relationId(record.member_profile)) &&
+            String(item.site_slug || "") === String(record.site_slug || "") &&
+            String(item.visited_at || "") === String(record.visited_at || "")
+          );
+      if (index >= 0) target[index] = { ...target[index], ...record };
+      else target.push(record);
+    });
+    return target;
   }
 
   function profilePointEventsFromActivity(activity = {}, options = {}) {
@@ -5987,6 +6280,64 @@
     return events;
   }
 
+  function mergeProfilePointEvents(target = [], records = []) {
+    (records || []).forEach(record => {
+      if (!record?.event_key && !record?.id) return;
+      const index = target.findIndex(item =>
+        (record.id && Number(item.id) === Number(record.id)) ||
+        (record.event_key && String(item.event_key || "") === String(record.event_key))
+      );
+      if (index >= 0) target[index] = { ...target[index], ...record };
+      else target.push(record);
+    });
+    return target;
+  }
+
+  function profilePointEventMemberId(event = {}, options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    return Number(relationId(event.member_profile));
+  }
+
+  function findProfilePointEventForKey(events = [], eventKey = "", profileId = null, options = {}) {
+    const key = String(eventKey || "");
+    if (!key) return null;
+    const relationId = options.relationId || defaultRelationId;
+    const id = Number(relationId(profileId));
+    return (events || []).find(item =>
+      String(item?.event_key || "") === key &&
+      (!id || profilePointEventMemberId(item, options) === id)
+    ) || null;
+  }
+
+  function profilePointEventRequiresActiveProfile(eventType) {
+    return ["daily_open", "vocab_guess", "site_visit", "site_checkin", "suggested_site"].includes(String(eventType || ""));
+  }
+
+  function profilePointEventPayload(event = {}, options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    const profileId = Number(relationId(event.member_profile));
+    const points = Number(event.points || 0);
+    const eventType = String(event.event_type || "");
+    if (!profileId || !points || !eventType || !event.event_key) return null;
+    return {
+      event_key: String(event.event_key),
+      event_type: eventType,
+      points,
+      member_profile: profileId,
+      source_collection: event.source_collection || "",
+      source_id: event.source_id ? String(event.source_id) : "",
+      source_slug: event.source_slug || "",
+      source_title: event.source_title || "",
+      created_at: event.created_at || new Date().toISOString()
+    };
+  }
+
+  function profilePointEventsWithoutProfileIds(events = [], profileIds = [], options = {}) {
+    const idSet = new Set((profileIds || []).map(id => String(Number(id))).filter(id => id !== "0"));
+    if (!idSet.size) return Array.isArray(events) ? events : [];
+    return (events || []).filter(event => !idSet.has(String(profilePointEventMemberId(event, options))));
+  }
+
   function profileStatsFromActivity(activity = {}, options = {}) {
     const comments = activity.comments?.length || 0;
     const uniqueVisits = uniqueVisitRecords(activity.visits);
@@ -6115,6 +6466,67 @@
       stats.loginStreak ? { label: `${stats.loginStreak} day streak` } : null,
       stats.commentUpvotes ? { label: `${stats.commentUpvotes} helpful vote${stats.commentUpvotes === 1 ? "" : "s"}` } : null
     ].filter(Boolean);
+  }
+
+  function profileTrackerRowsFromStats(stats = {}) {
+    return [
+      {
+        count: Number(stats.waterwaySitesCount || 0),
+        text: `You explored ${Number(stats.waterwaySitesCount || 0)} site${Number(stats.waterwaySitesCount || 0) === 1 ? "" : "s"} connected to waterways.`
+      },
+      {
+        count: Number(stats.historicRecordsCount || 0),
+        text: `You viewed ${Number(stats.historicRecordsCount || 0)} historic record${Number(stats.historicRecordsCount || 0) === 1 ? "" : "s"}.`
+      },
+      {
+        count: Number(stats.suggestionsCount || 0),
+        text: `You contributed ${Number(stats.suggestionsCount || 0)} suggested site${Number(stats.suggestionsCount || 0) === 1 ? "" : "s"}.`
+      }
+    ].filter(row => row.count > 0);
+  }
+
+  function profilePointTotal(stats = {}) {
+    const points = Number(stats.points);
+    return Number.isFinite(points) ? points : 0;
+  }
+
+  function profilePointBreakdownRows(stats = {}, options = {}) {
+    const labels = {
+      login: "Daily opens",
+      visit: "Visited sites",
+      checkin: "Nearby check-ins",
+      language: "Language words",
+      comments: "Comments",
+      helpful: "Helpful votes",
+      suggestions: "Suggested sites",
+      support: "Support",
+      purchases: "Artwork/support badges",
+      supporter: "Monthly supporter",
+      ...(options.labels || {})
+    };
+    const rows = (options.splitSupport
+      ? [
+        [labels.comments, stats.commentPoints],
+        [labels.helpful, stats.upvotePoints],
+        [labels.visit, stats.visitPoints],
+        [labels.checkin, stats.checkinPoints],
+        [labels.suggestions, stats.suggestionPoints],
+        [labels.language, stats.languagePoints],
+        [labels.login, stats.loginPoints],
+        [labels.purchases, stats.purchasePoints],
+        [labels.supporter, stats.supporterPoints]
+      ]
+      : [
+        [labels.login, stats.loginPoints],
+        [labels.visit, stats.visitPoints],
+        [labels.checkin, stats.checkinPoints],
+        [labels.language, stats.languagePoints],
+        [labels.comments, stats.commentPoints],
+        [labels.helpful, stats.upvotePoints],
+        [labels.suggestions, stats.suggestionPoints],
+        [labels.support, Number(stats.purchasePoints || 0) + Number(stats.supporterPoints || 0)]
+      ]).filter(([, value]) => Number(value) > 0).map(([label, value]) => [label, Number(value) || 0]);
+    return rows;
   }
 
   function profileEditorPayload(root, profile = {}, options = {}) {
@@ -6272,18 +6684,28 @@
     profileJoinedDateValue,
     profileAccountAgeLabel,
     profileUserSinceLine,
+    memberUsagePayload,
     isProfileBanned,
     isLikelyTestProfile,
     profileIdentityEmail,
     profileIdentityNames,
     profilesShareIdentity,
     profileIdentityIds,
+    rowsFallback,
+    responseUsedFallback,
+    allResponsesFresh,
+    withFallbackTimeout,
+    rowsIncludeProfile,
+    preserveActiveProfileRows,
+    activeProfileFilterSuffix,
     contributorProfileScore,
     bestContributorProfile,
     publicContributorProfiles,
     isAdminContributor,
     mergeSeededProfiles,
     profileStorageKey,
+    contributorProfileIsPending,
+    normalizeStoredContributorProfile,
     loginRewardStatsFromDates,
     profileLoginRewardRecords,
     loginRewardRecordKey,
@@ -6293,6 +6715,7 @@
     languageCorrectAttemptCountFromAttempts,
     languageRemoteAttemptExists,
     languageAttemptPayload,
+    mergeLanguageAttemptRecords,
     isPublishedPublicSite,
     publicVisitAccessStatus,
     isEligiblePublicVisitSite,
@@ -6300,11 +6723,21 @@
     visitProgressLabel,
     hasSavedCheckinDistance,
     uniqueVisitRecords,
+    mergeVisitRecords,
     profileStatsFromActivity,
     profilePointEventsFromActivity,
+    mergeProfilePointEvents,
+    profilePointEventMemberId,
+    findProfilePointEventForKey,
+    profilePointEventRequiresActiveProfile,
+    profilePointEventPayload,
+    profilePointEventsWithoutProfileIds,
     profileCareBadgesFromStats,
     profileAchievementsFromStats,
     profileBadgeSummariesFromStats,
+    profileTrackerRowsFromStats,
+    profilePointTotal,
+    profilePointBreakdownRows,
     profileEditorPayload,
     profileActivityFeedItems,
     profileActivityFromCollections,
@@ -6519,9 +6952,24 @@
     }).length;
   }
 
+  function defaultStorage() {
+    return typeof localStorage !== "undefined" ? localStorage : null;
+  }
+
+  function readSeen(storageKey, storage = defaultStorage()) {
+    try {
+      const seen = Number(storage?.getItem?.(storageKey) || 0);
+      return Number.isFinite(seen) ? seen : 0;
+    } catch {
+      return 0;
+    }
+  }
+
   function writeSeen(storageKey, items = [], options = {}) {
     const latest = Math.max(Date.now(), latestTimestamp(items, options));
-    localStorage.setItem(storageKey, String(latest));
+    try {
+      (options.storage || defaultStorage())?.setItem?.(storageKey, String(latest));
+    } catch {}
     return latest;
   }
 
@@ -6542,7 +6990,11 @@
     return suggestion.submitted_at || suggestion.date_created || suggestion.created_at || "";
   }
 
-  function siteEditedDate(site = {}) {
+  function siteEditedDate(site = {}, options = {}) {
+    site = site || {};
+    if (options.extended) {
+      return site.last_reviewed || site.date_updated || site.updated_at || site.modified_at || site.last_edited_at || site.lastmod || site.wp_date || site.published_at || site.date_created || site.created_at || "";
+    }
     return site.last_reviewed || site.date_updated || site.updated_at || site.lastmod || site.wp_date || site.published_at || site.date_created || "";
   }
 
@@ -6569,6 +7021,20 @@
     return "Site updated";
   }
 
+  function editedDateLabel(value, options = {}) {
+    const formatter = window.NLI_SHARED_UTILS?.formatDate;
+    const fallback = options.fallback || "10/01/2018";
+    if (typeof formatter === "function") {
+      return formatter(value, {
+        fallback,
+        invalidAsValue: true,
+        locale: options.locale || "en-US",
+        dateOptions: options.dateOptions || { month: "2-digit", day: "2-digit", year: "numeric" }
+      });
+    }
+    return String(value || fallback);
+  }
+
   function sortByRecentActivity(items = [], options = {}) {
     const dateAccessor = typeof options.dateAccessor === "function" ? options.dateAccessor : item => item?.date || item?.created_at;
     const titleAccessor = typeof options.titleAccessor === "function" ? options.titleAccessor : item => item?.title || "";
@@ -6590,6 +7056,7 @@
     lastSeenKey,
     latestTimestamp,
     unreadCount,
+    readSeen,
     writeSeen,
     commentLabel,
     suggestionLabel,
@@ -6597,6 +7064,7 @@
     siteEditedDate,
     siteCreatedDate,
     siteActivityLabel,
+    editedDateLabel,
     sortByRecentActivity,
     mergeRecentActivity
   };
@@ -6747,6 +7215,65 @@
     return [...existing, ...seeded];
   }
 
+  function mergeRecordsByIdOrKey(target = [], records = [], keyField = "vote_key") {
+    (records || []).forEach(record => {
+      if (!record) return;
+      const id = Number(record.id);
+      const key = String(record[keyField] || "");
+      const index = id
+        ? target.findIndex(item => Number(item.id) === id)
+        : target.findIndex(item => key && String(item[keyField] || "") === key);
+      if (index >= 0) target[index] = { ...target[index], ...record };
+      else target.push(record);
+    });
+    return target;
+  }
+
+  function commentVoterKey(profile, canVote = true) {
+    if (!profile?.id || !canVote) return "";
+    return `profile:${profile.id}`;
+  }
+
+  function viewerOwnsComment(comment, options = {}) {
+    const profile = options.profile || null;
+    const viewerEmail = String(options.viewerEmail || profile?.username || "").toLowerCase();
+    if (profile?.id && Number(comment?.member_profile) === Number(profile.id)) return true;
+    return Boolean(viewerEmail && String(comment?.author_email || "").toLowerCase() === viewerEmail);
+  }
+
+  function voteKey(commentId, profileId) {
+    return `${String(commentId)}:${String(profileId)}`;
+  }
+
+  function votePayload(commentId, value, profile, options = {}) {
+    const id = String(commentId);
+    const profileId = Number(profile?.id);
+    return {
+      comment: Number(id),
+      vote: value === "report" ? "report" : "up",
+      member_profile: profileId,
+      vote_key: voteKey(id, profileId),
+      created_at: options.createdAt || new Date().toISOString()
+    };
+  }
+
+  function helpfulVotePointEvent(options = {}) {
+    const comment = options.comment || {};
+    const voteRecord = options.voteRecord || {};
+    const relation = options.relationId || relationId;
+    return {
+      event_key: `helpful_vote:${String(options.commentId)}:${String(options.profileId)}`,
+      event_type: "helpful_vote",
+      points: Number(options.points || 0),
+      member_profile: Number(relation(comment.member_profile)),
+      source_collection: "mobile_comment_votes",
+      source_id: voteRecord.id,
+      source_slug: comment.source_slug || comment.site_slug || "",
+      source_title: comment.source_title || comment.site_title || "Helpful comment vote",
+      created_at: voteRecord.created_at || new Date().toISOString()
+    };
+  }
+
   window.NLI_COMMENT_UTILS = {
     relationId,
     commentVotes,
@@ -6761,7 +7288,13 @@
     isLikelyPublicTestComment,
     visibleToViewer,
     matchesSource,
-    mergeSeededComments
+    mergeSeededComments,
+    mergeRecordsByIdOrKey,
+    commentVoterKey,
+    viewerOwnsComment,
+    voteKey,
+    votePayload,
+    helpfulVotePointEvent
   };
 }());
   </script>
@@ -6801,6 +7334,31 @@
     return options.fallback || "Source details are being restored for this historic moment.";
   }
 
+  function periodLabel(period) {
+    return String(period || "")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, letter => letter.toUpperCase());
+  }
+
+  function rangeLabel(event = {}, options = {}) {
+    if (event.period) return event.date_label || periodLabel(event.period);
+    if (event.date_label) return event.date_label;
+    if (event.start_year && event.end_year) return `${event.start_year}-${event.end_year}`;
+    if (event.start_year) return String(event.start_year);
+    return options.fallback || "Historic moment";
+  }
+
+  function locationLabel(event = {}, options = {}) {
+    const clean = value => cleanText(options, value);
+    const explicit = clean(event.location_label || event.location || event.place_label || "");
+    if (explicit) return explicit;
+    if (event.source_type === "site" && event.source_title) return clean(event.source_title);
+    const hasMappedLocation = typeof options.hasMappedLocation === "function"
+      ? options.hasMappedLocation(event)
+      : Boolean(event.latitude && event.longitude);
+    return hasMappedLocation ? (options.mappedLabel || "Mapped location") : "";
+  }
+
   function teaser(event = {}, options = {}) {
     const limit = Number(options.limit || 180);
     const text = cleanText(options, event.description || event.summary || "")
@@ -6824,6 +7382,9 @@
     footnoteSources,
     displayDescription,
     sourceText,
+    periodLabel,
+    rangeLabel,
+    locationLabel,
     teaser
   };
 }());
@@ -7018,6 +7579,25 @@
     return "Not assessed";
   }
 
+  function plantObservationFactRows(fields = {}, match = null, options = {}) {
+    const algonquianValue = options.algonquianValue ?? fields.algonquian ?? fields.algonquian_word ?? "";
+    const sourceValue = options.sourceValue ?? fields.source ?? fields.identification_source ?? fields.source_reference ?? "";
+    const guidanceValue = options.guidanceValue ?? fields.edible_safety ?? fields.visitor_guidance ?? fields.guidance ?? "";
+    const nativeStatus = usefulPlantText(fields.native_status, options) || match?.native || "";
+    const invasiveStatus = usefulPlantText(fields.invasive_status, options) || match?.invasive || "";
+    const nativeLabel = plantNativeLabel(nativeStatus, invasiveStatus, match);
+    const origin = plantOriginText(fields, match, options);
+    const source = usefulPlantText(sourceValue, options) || match?.source || "";
+    return [
+      ["Algonquian Word", plantFactValue(algonquianValue, "The word may exist or may have existed, but it has not been found in the sources reviewed.", options)],
+      ["Native / non-native", origin ? `${nativeLabel}. Origin: ${origin}.` : nativeLabel],
+      ["Status source", plantFactValue(source, "Not yet documented", options)],
+      ["Medicinal use", usefulPlantText(fields.medicinal_use, options) || match?.medicinal || "Not shown without a source"],
+      ["Endangered", plantEndangeredLabel(fields.endangered_status, match, options)],
+      ["Safety", usefulPlantText(guidanceValue, options) || match?.safety || "Verify with a field guide or expert before touching, eating, or using any plant"]
+    ];
+  }
+
   function publicPlantReferenceFor(fields = {}, species = plantObservationSpecies, options = {}) {
     const haystack = normalize([
       fields.common_name,
@@ -7151,6 +7731,7 @@
     plantNativeLabel,
     plantOriginText,
     plantEndangeredLabel,
+    plantObservationFactRows,
     publicPlantReferenceFor,
     knownPlantSpeciesList,
     plantSpeciesKey,
@@ -7250,6 +7831,28 @@
       && lat >= bounds[0][1] && lat <= bounds[1][1];
   }
 
+  function milesBetweenPoints(a, b) {
+    if (!Array.isArray(a) || !Array.isArray(b)) return null;
+    const lngA = Number(a[0]);
+    const latA = Number(a[1]);
+    const lngB = Number(b[0]);
+    const latB = Number(b[1]);
+    if (![lngA, latA, lngB, latB].every(Number.isFinite)) return null;
+    const toRad = value => value * Math.PI / 180;
+    const earthMiles = 3958.8;
+    const dLat = toRad(latB - latA);
+    const dLng = toRad(lngB - lngA);
+    const startLat = toRad(latA);
+    const endLat = toRad(latB);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(startLat) * Math.cos(endLat) * Math.sin(dLng / 2) ** 2;
+    const miles = earthMiles * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+    return Number.isFinite(miles) ? miles : null;
+  }
+
+  function distanceLabelMiles(miles) {
+    return Number.isFinite(miles) ? `${miles < 10 ? miles.toFixed(1) : Math.round(miles)} mi` : "";
+  }
+
   function geometryBounds(geometry, options = {}) {
     if (!geometry || geometry.type === "Point") return null;
     const coords = collectCoordinates(geometry.coordinates, []);
@@ -7293,6 +7896,50 @@
     return Math.abs(bounds[1][0] - bounds[0][0]) * Math.abs(bounds[1][1] - bounds[0][1]);
   }
 
+  function ringBounds(ring = []) {
+    if (!ring?.length) return null;
+    const lngs = ring.map(point => Number(point?.[0])).filter(Number.isFinite);
+    const lats = ring.map(point => Number(point?.[1])).filter(Number.isFinite);
+    if (!lngs.length || !lats.length) return null;
+    return [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]];
+  }
+
+  function ringCenter(ring = [], options = {}) {
+    if (!ring?.length) return null;
+    if (options.method === "bounds") {
+      const bounds = ringBounds(ring);
+      return bounds ? [(bounds[0][0] + bounds[1][0]) / 2, (bounds[0][1] + bounds[1][1]) / 2] : null;
+    }
+    const coords = ring
+      .map(point => [Number(point?.[0]), Number(point?.[1])])
+      .filter(point => point.every(Number.isFinite));
+    if (!coords.length) return null;
+    const lng = coords.reduce((sum, point) => sum + point[0], 0) / coords.length;
+    const lat = coords.reduce((sum, point) => sum + point[1], 0) / coords.length;
+    return Number.isFinite(lng) && Number.isFinite(lat) ? [lng, lat] : null;
+  }
+
+  function ringKey(ring = [], options = {}) {
+    const center = ringCenter(ring, options);
+    return center ? `${center[0].toFixed(4)},${center[1].toFixed(4)},${ring.length}` : "";
+  }
+
+  function appendPolygonToGeometry(geometry, polygonCoordinates, options = {}) {
+    if (!geometry || !polygonCoordinates?.length) return geometry;
+    if (geometry.type === "Polygon") {
+      return { type: "MultiPolygon", coordinates: [geometry.coordinates, polygonCoordinates] };
+    }
+    if (geometry.type === "MultiPolygon") {
+      if (options.dedupe) {
+        const key = ringKey(polygonCoordinates[0] || [], options);
+        const exists = (geometry.coordinates || []).some(rings => ringKey(rings?.[0] || [], options) === key);
+        if (exists) return geometry;
+      }
+      return { type: "MultiPolygon", coordinates: [...(geometry.coordinates || []), polygonCoordinates] };
+    }
+    return geometry;
+  }
+
   function pointInRing(point, ring = []) {
     const [x, y] = point || [];
     if (!Number.isFinite(x) || !Number.isFinite(y) || ring.length < 4) return false;
@@ -7322,10 +7969,16 @@
     normalizeHex,
     collectCoordinates,
     pointWithinBounds,
+    milesBetweenPoints,
+    distanceLabelMiles,
     geometryBounds,
     geometryBoundsCenter,
     geometryAverageCenter,
     geometryBoundsArea,
+    ringBounds,
+    ringCenter,
+    ringKey,
+    appendPolygonToGeometry,
     pointInRing,
     pointInPolygonCoordinates,
     pointInGeometry
@@ -7807,6 +8460,73 @@
       return response.data?.[0] || null;
     }
 
+    async function triggerFlow(flowId, payload = {}, requestOptions = {}) {
+      if (!flowId) return { ok: false, data: null };
+      try {
+        const response = await fetch(`${baseUrl}/flows/trigger/${flowId}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+          cache: requestOptions.cache || "no-store"
+        });
+        if (!response.ok) return { ok: false, data: null };
+        const text = await response.text();
+        return { ok: true, data: text ? JSON.parse(text) : null };
+      } catch (_error) {
+        return { ok: false, data: null };
+      }
+    }
+
+    async function triggerReviewAction(action, payload = {}, requestOptions = {}) {
+      const normalizedAction = action === "approve" ? "approve" : "decline";
+      const flowIds = requestOptions.flowIds || {};
+      const flowId = flowIds[normalizedAction] || "";
+      const flowResult = await triggerFlow(flowId, payload, requestOptions.flowOptions || {});
+      if (flowResult.ok) return flowResult.data;
+      const collection = requestOptions.collection || "site_suggestions";
+      const statusField = requestOptions.statusField || "status";
+      const noteField = requestOptions.noteField || "review_note";
+      return patchItem(collection, payload.id, {
+        [statusField]: normalizedAction === "approve"
+          ? (requestOptions.approvedStatus || "approved")
+          : (requestOptions.declinedStatus || "declined"),
+        [noteField]: payload[noteField] || payload.review_note || ""
+      }, requestOptions.patchOptions || {});
+    }
+
+    async function loginWithPassword(email, password) {
+      const response = await fetch(`${baseUrl}/auth/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password, mode: "json" })
+      });
+      if (!response.ok) throw new Error("Login failed.");
+      const data = await response.json();
+      return data?.data || {};
+    }
+
+    async function fetchProfileForToken(token, requestOptions = {}) {
+      if (!token) return { user: null, profile: null };
+      const userFields = requestOptions.userFields || "id,email,first_name,last_name";
+      const profileFields = requestOptions.profileFields || "";
+      const profileCollection = requestOptions.profileCollection || "mobile_member_profiles";
+      const userResponse = await fetch(`${baseUrl}/users/me?fields=${userFields}`, {
+        headers: authHeaders(token),
+        cache: "no-store"
+      });
+      if (!userResponse.ok) return { user: null, profile: null };
+      const user = (await userResponse.json()).data || null;
+      if (!user?.id) return { user, profile: null };
+      const fieldsParam = profileFields ? `&fields=${profileFields}` : "";
+      const profileResponse = await fetch(`${baseUrl}/items/${profileCollection}?limit=1&filter[directus_user][_eq]=${encodeURIComponent(user.id)}${fieldsParam}`, {
+        headers: authHeaders(token),
+        cache: "no-store"
+      });
+      if (!profileResponse.ok) return { user, profile: null };
+      const profile = (await profileResponse.json()).data?.[0] || null;
+      return { user, profile };
+    }
+
     async function uploadFile(file, title, requestOptions = {}) {
       const body = new FormData();
       body.append("file", file);
@@ -7828,7 +8548,7 @@
       return data.data?.id || null;
     }
 
-    return { fetchJson, postItem, patchItem, deleteItem, filterValue, fetchFirstItem, uploadFile };
+    return { fetchJson, postItem, patchItem, deleteItem, filterValue, fetchFirstItem, triggerFlow, triggerReviewAction, loginWithPassword, fetchProfileForToken, uploadFile };
   }
 
   window.NLI_DIRECTUS_CLIENT = { createDirectusClient };
@@ -7899,6 +8619,82 @@
     return deps.directusAssetUrl?.(event?.map_icon) || "";
   }
 
+  function safeImageBasename(name, fallback = "upload-image") {
+    const base = String(name || fallback)
+      .replace(/\.[a-z0-9]+$/i, "")
+      .replace(/[^a-z0-9_-]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 42);
+    return base || fallback;
+  }
+
+  function fileExtensionForType(type) {
+    if (/jpe?g/i.test(type || "")) return "jpg";
+    if (/webp/i.test(type || "")) return "webp";
+    return "png";
+  }
+
+  async function canvasToImageFile(canvas, options = {}) {
+    const type = options.type || "image/png";
+    const quality = Number(options.quality || 0.9);
+    const basename = options.basename || "screenshot";
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, type, quality));
+    if (!blob) throw new Error(options.errorMessage || "Could not prepare image.");
+    return new File([blob], `${basename}.${fileExtensionForType(type)}`, { type });
+  }
+
+  async function imageElementFromFile(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      image.decoding = "async";
+      const loaded = new Promise((resolve, reject) => {
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+      });
+      image.src = url;
+      return await loaded;
+    } finally {
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+  }
+
+  async function compressImageFile(file, options = {}) {
+    if (!file) return null;
+    if (file.type && !/^image\//i.test(file.type || "")) {
+      throw new Error(options.typeErrorMessage || "Use an image file.");
+    }
+    const basename = options.basename || "upload-image";
+    const maxBytes = Number(options.maxBytes || 3 * 1024 * 1024);
+    const maxEdge = Number(options.maxEdge || 1280);
+    const qualities = Array.isArray(options.qualities) && options.qualities.length
+      ? options.qualities
+      : [0.78, 0.68, 0.58, 0.48];
+    const finalQuality = Number(options.finalQuality || 0.42);
+    const compressedName = `${safeImageBasename(file.name, basename)}-${Date.now()}.jpg`;
+    const image = await imageElementFromFile(file);
+    const scale = Math.min(1, maxEdge / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
+    const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+    const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext("2d").drawImage(image, 0, 0, width, height);
+    const toBlob = quality => new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", quality));
+    for (const quality of qualities) {
+      const blob = await toBlob(quality);
+      if (blob && blob.size <= maxBytes) {
+        return new File([blob], compressedName, { type: "image/jpeg", lastModified: Date.now() });
+      }
+    }
+    const blob = await toBlob(finalQuality);
+    if (!blob) throw new Error(options.processErrorMessage || "Could not process that image.");
+    if (blob.size > maxBytes) {
+      throw new Error(options.tooLargeMessage || "That image is still too large after compression. Try a closer crop.");
+    }
+    return new File([blob], compressedName, { type: "image/jpeg", lastModified: Date.now() });
+  }
+
   window.NLI_MEDIA_UTILS = {
     absoluteMediaUrl,
     rewriteMediaUrl,
@@ -7909,7 +8705,80 @@
     listingImageFallback,
     listingThumbFallback,
     siteMapIconUrl,
-    eventMapIconUrl
+    eventMapIconUrl,
+    safeImageBasename,
+    fileExtensionForType,
+    canvasToImageFile,
+    imageElementFromFile,
+    compressImageFile
+  };
+}());
+  </script>
+  <script data-inline-source="assets/js/shared-map-utils.js">
+(function () {
+  function layerExists(map, layerId) {
+    return Boolean(map?.getLayer?.(layerId));
+  }
+
+  function sourceExists(map, sourceId) {
+    return Boolean(map?.getSource?.(sourceId));
+  }
+
+  function setGeoJsonSourceData(map, sourceId, data) {
+    const source = map?.getSource?.(sourceId);
+    if (!source?.setData) return false;
+    source.setData(data);
+    return true;
+  }
+
+  function setLayerVisibility(map, layerId, visibility) {
+    if (!layerExists(map, layerId)) return false;
+    map.setLayoutProperty(layerId, "visibility", visibility);
+    return true;
+  }
+
+  function setLayerVisibilityMany(map, layerIds = [], visibility) {
+    return (layerIds || []).reduce((count, layerId) =>
+      count + (setLayerVisibility(map, layerId, visibility) ? 1 : 0), 0
+    );
+  }
+
+  function existingLayerIds(map, layerIds = []) {
+    return (layerIds || []).filter(layerId => layerExists(map, layerId));
+  }
+
+  function rebindLayerEvent(map, registry, type, layerId, handler) {
+    if (!layerExists(map, layerId) || typeof handler !== "function") return false;
+    const key = `${type}:${layerId}`;
+    const previous = registry?.get?.(key);
+    if (previous) map.off(type, layerId, previous);
+    registry?.set?.(key, handler);
+    map.on(type, layerId, handler);
+    return true;
+  }
+
+  function bindPointerCursor(map, registry, layerIds = []) {
+    existingLayerIds(map, layerIds).forEach(layerId => {
+      const enter = () => {
+        map.getCanvas().style.cursor = "pointer";
+      };
+      const leave = () => {
+        map.getCanvas().style.cursor = "";
+      };
+      rebindLayerEvent(map, registry, "mouseenter", layerId, enter);
+      rebindLayerEvent(map, registry, "mouseleave", layerId, leave);
+    });
+  }
+
+  window.NLI_SHARED_MAP_UTILS = {
+    layerExists,
+    sourceExists,
+    setGeoJsonSourceData,
+    setLayerVisibility,
+    setLayerVisibilityMany,
+    existingLayerIds,
+    rebindLayerEvent,
+    bindPointerCursor
   };
 }());
   </script>
@@ -8118,6 +8987,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const ROUTE_UTILS = window.NLI_ROUTE_UTILS || {};
     const HTML_UTILS = window.NLI_HTML_UTILS || {};
     const MEDIA_UTILS = window.NLI_MEDIA_UTILS || {};
+    const MAP_UTILS = window.NLI_SHARED_MAP_UTILS || {};
     const normalizeComparisonText = SHARED_UTILS.normalizeText || (value => String(value || "").toLowerCase().trim());
     const DIRECTUS = SHARED_CONFIG.directusUrl || "https://native-long-island-archive.directus.app";
     const ADMIN_NOTIFICATION_FLOW_IDS = {
@@ -8788,80 +9658,50 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const feedbackSubmitBtn = document.getElementById("feedback-submit");
 
     function loadSettings() {
-      try {
-        const saved = JSON.parse(localStorage.getItem("nli-mobile-settings") || "{}");
-        if (!saved.basemapUserSet && saved.basemap === "streets") saved.basemap = "outdoors";
-        const settings = {
-          historyAlerts: false,
-          proximityAlerts: saved.proximityAlerts !== false,
-          newContentAlerts: false,
-          exhibits: true,
-          locationEnabled: true,
-          locationPrompted: false,
-          basemap: "outdoors",
-          showPins: true,
-          showShapes: true,
-          layerCategories: {},
-          ...saved
-        };
-        settings.layerCategories = { ...(saved.layerCategories || {}) };
-        return settings;
-      } catch {
-        return { historyAlerts: false, proximityAlerts: true, newContentAlerts: false, exhibits: true, locationEnabled: true, locationPrompted: false, basemap: "outdoors", showPins: true, showShapes: true, layerCategories: {} };
-      }
+      const storedSettings = SHARED_UTILS.readStorageJson("nli-mobile-settings", {}) || {};
+      const saved = storedSettings && typeof storedSettings === "object" && !Array.isArray(storedSettings) ? storedSettings : {};
+      if (!saved.basemapUserSet && saved.basemap === "streets") saved.basemap = "outdoors";
+      const settings = {
+        historyAlerts: false,
+        proximityAlerts: saved.proximityAlerts !== false,
+        newContentAlerts: false,
+        exhibits: true,
+        locationEnabled: true,
+        locationPrompted: false,
+        basemap: "outdoors",
+        showPins: true,
+        showShapes: true,
+        layerCategories: {},
+        ...saved
+      };
+      settings.layerCategories = { ...(saved.layerCategories || {}) };
+      return settings;
     }
 
     function saveSettings() {
-      localStorage.setItem("nli-mobile-settings", JSON.stringify(state.settings));
+      SHARED_UTILS.writeStorageJson("nli-mobile-settings", state.settings);
     }
 
     function loadProfile() {
-      try {
-        const saved = JSON.parse(localStorage.getItem("nli-contributor-profile") || localStorage.getItem("nli-contributor-session") || localStorage.getItem("nli-mobile-profile") || "null");
-        if (!saved) return null;
-        const pending = saved.pending === true || saved.approved === false || /awaiting review|pending/i.test(`${saved.role || ""} ${saved.roleLabel || ""}`);
-        return {
-          ...saved,
-          email: String(saved.email || saved.username || "").toLowerCase(),
-          username: saved.username || saved.email || "",
-          display_name: saved.display_name || saved.displayName || saved.email || "",
-          role: saved.role || saved.roleLabel || (pending ? "Account awaiting review" : "Contributor"),
-          pending,
-          approved: pending ? false : (saved.approved ?? true)
-        };
-      } catch {
-        return null;
-      }
+      const saved = SHARED_UTILS.readStorageJson(["nli-contributor-profile", "nli-contributor-session", "nli-mobile-profile"], null);
+      if (!saved) return null;
+      return PROFILE_UTILS.normalizeStoredContributorProfile(saved, { mobileFields: true });
     }
 
     function saveProfile(profile) {
       const previousKey = state.profile ? `${state.profile.email || ""}:${state.profile.profileId || ""}:${state.profile.token || ""}` : "";
       state.profile = profile;
       if (profile) {
-        const pending = profile.pending === true || profile.approved === false || /awaiting review|pending/i.test(`${profile.role || ""} ${profile.roleLabel || ""}`);
-        const normalized = {
-          ...profile,
-          email: String(profile.email || profile.username || "").toLowerCase(),
-          username: profile.username || profile.email || "",
-          display_name: profile.display_name || profile.displayName || profile.email || "",
-          displayName: profile.displayName || profile.display_name || profile.email || "",
-          role: profile.role || profile.roleLabel || (pending ? "Account awaiting review" : "Contributor"),
-          pending,
-          approved: pending ? false : (profile.approved ?? true)
-        };
+        const normalized = PROFILE_UTILS.normalizeStoredContributorProfile(profile, { mobileFields: true });
         state.profile = normalized;
-        localStorage.setItem("nli-contributor-profile", JSON.stringify(normalized));
-        localStorage.setItem("nli-contributor-session", JSON.stringify(normalized));
-        localStorage.setItem("nli-mobile-profile", JSON.stringify(normalized));
+        SHARED_UTILS.writeStorageJson(["nli-contributor-profile", "nli-contributor-session", "nli-mobile-profile"], normalized);
         const nextKey = `${normalized.email || ""}:${normalized.profileId || ""}:${normalized.token || ""}`;
         if (nextKey !== previousKey) {
           state.profileActivitySynced = false;
           state.profileActivityCache = null;
         }
       } else {
-        localStorage.removeItem("nli-contributor-profile");
-        localStorage.removeItem("nli-contributor-session");
-        localStorage.removeItem("nli-mobile-profile");
+        SHARED_UTILS.removeStorageKeys(["nli-contributor-profile", "nli-contributor-session", "nli-mobile-profile"]);
         if (previousKey) {
           state.profileActivitySynced = false;
           state.profileActivityCache = null;
@@ -8888,22 +9728,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function memberUsagePayload(profile, options = {}) {
-      const now = Date.now();
-      const totalSessionSeconds = Math.max(0, Math.floor((now - state.memberUsageSessionStartedAt) / 1000));
-      const incrementalSeconds = Math.max(0, totalSessionSeconds - Number(state.memberUsageFlushedSeconds || 0));
-      const currentTotal = Math.max(0, Number(profile?.usage_seconds_total || 0));
-      const currentSessions = Math.max(0, Number(profile?.usage_session_count || 0));
-      const payload = {
-        last_active_at: new Date(now).toISOString()
-      };
-      if (options.login) payload.last_login_at = payload.last_active_at;
-      if (options.trackUsage !== false && incrementalSeconds >= 5) {
-        payload.usage_seconds_total = currentTotal + incrementalSeconds;
-      }
-      if (options.trackUsage !== false && (!state.memberUsageSessionRecorded || options.login)) {
-        payload.usage_session_count = currentSessions + 1;
-      }
-      return { payload, incrementalSeconds };
+      return PROFILE_UTILS.memberUsagePayload(profile, {
+        ...options,
+        sessionStartedAt: state.memberUsageSessionStartedAt,
+        flushedSeconds: state.memberUsageFlushedSeconds,
+        sessionRecorded: state.memberUsageSessionRecorded
+      });
     }
 
     async function trackMemberProfileActivity(options = {}) {
@@ -9031,20 +9861,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function mergeLanguageAttemptRecords(records = []) {
-      (records || []).forEach(record => {
-        if (!record) return;
-        const id = Number(record.id);
-        const index = id
-          ? state.languageQuizAttempts.findIndex(item => Number(item.id) === id)
-          : state.languageQuizAttempts.findIndex(item =>
-              Number(relationId(item.member_profile)) === Number(relationId(record.member_profile)) &&
-              String(item.content_key || "") === String(record.content_key || "") &&
-              String(item.word_id || "") === String(record.word_id || "") &&
-              String(item.answered_at || "").slice(0, 10) === String(record.answered_at || "").slice(0, 10)
-            );
-        if (index >= 0) state.languageQuizAttempts[index] = { ...state.languageQuizAttempts[index], ...record };
-        else state.languageQuizAttempts.push(record);
-      });
+      PROFILE_UTILS.mergeLanguageAttemptRecords(state.languageQuizAttempts, records, { relationId });
       state.profileActivityCache = null;
     }
 
@@ -9097,19 +9914,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function mergeVisitRecords(records = []) {
-      (records || []).forEach(record => {
-        if (!record) return;
-        const id = Number(record.id);
-        const index = id
-          ? state.publicVisits.findIndex(item => Number(item.id) === id)
-          : state.publicVisits.findIndex(item =>
-              Number(relationId(item.member_profile)) === Number(relationId(record.member_profile)) &&
-              String(item.site_slug || "") === String(record.site_slug || "") &&
-              String(item.visited_at || "") === String(record.visited_at || "")
-            );
-        if (index >= 0) state.publicVisits[index] = { ...state.publicVisits[index], ...record };
-        else state.publicVisits.push(record);
-      });
+      PROFILE_UTILS.mergeVisitRecords(state.publicVisits, records, { relationId });
     }
 
     async function refreshRemoteSiteVisitsForProfileSite(profile, site) {
@@ -10092,17 +10897,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function appendPolygonToGeometry(geometry, polygonCoordinates) {
+      if (GEOMETRY_UTILS.appendPolygonToGeometry) return GEOMETRY_UTILS.appendPolygonToGeometry(geometry, polygonCoordinates);
       if (!geometry || !polygonCoordinates?.length) return geometry;
-      if (geometry.type === "Polygon") {
-        return { type: "MultiPolygon", coordinates: [geometry.coordinates, polygonCoordinates] };
-      }
-      if (geometry.type === "MultiPolygon") {
-        return { type: "MultiPolygon", coordinates: [...(geometry.coordinates || []), polygonCoordinates] };
-      }
+      if (geometry.type === "Polygon") return { type: "MultiPolygon", coordinates: [geometry.coordinates, polygonCoordinates] };
+      if (geometry.type === "MultiPolygon") return { type: "MultiPolygon", coordinates: [...(geometry.coordinates || []), polygonCoordinates] };
       return geometry;
     }
 
     function ringCenter(ring) {
+      if (GEOMETRY_UTILS.ringCenter) return GEOMETRY_UTILS.ringCenter(ring);
       if (!ring?.length) return null;
       const lng = ring.reduce((sum, point) => sum + Number(point?.[0] || 0), 0) / ring.length;
       const lat = ring.reduce((sum, point) => sum + Number(point?.[1] || 0), 0) / ring.length;
@@ -10110,6 +10913,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function ringBounds(ring) {
+      if (GEOMETRY_UTILS.ringBounds) return GEOMETRY_UTILS.ringBounds(ring);
       if (!ring?.length) return null;
       const lngs = ring.map(point => point?.[0]).filter(Number.isFinite);
       const lats = ring.map(point => point?.[1]).filter(Number.isFinite);
@@ -10118,6 +10922,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function milesBetween(a, b) {
+      if (GEOMETRY_UTILS.milesBetweenPoints) return GEOMETRY_UTILS.milesBetweenPoints(a, b);
       if (!a || !b) return null;
       const toRad = value => value * Math.PI / 180;
       const earthMiles = 3958.8;
@@ -10129,29 +10934,42 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return 2 * earthMiles * Math.asin(Math.sqrt(h));
     }
 
-    function siteDistance(site) {
-      if (Number.isFinite(site?._addressDistance)) return site._addressDistance;
-      if (!state.userLocation) return null;
+    function userSiteDistance(site) {
+      if (!state.userLocation || !site?.center) return null;
       const center = site.center;
       const from = state.userLocation;
       const miles = milesBetween(from, center);
       return Number.isFinite(miles) ? miles : null;
     }
 
-    function distanceLabel(site) {
-      const miles = siteDistance(site);
-      if (miles === null) return "";
-      return `${miles < 10 ? miles.toFixed(1) : Math.round(miles)} mi`;
+    function siteDistance(site, options = {}) {
+      if (options.source === "user") return userSiteDistance(site);
+      if (Number.isFinite(site?._addressDistance)) return site._addressDistance;
+      return userSiteDistance(site);
     }
 
+    function distanceLabel(site, options = {}) {
+      const miles = siteDistance(site, options);
+      if (miles === null) return "";
+      return GEOMETRY_UTILS.distanceLabelMiles
+        ? GEOMETRY_UTILS.distanceLabelMiles(miles)
+        : `${miles < 10 ? miles.toFixed(1) : Math.round(miles)} mi`;
+    }
+
+    const MOBILE_SITE_CONTENT_SECTION_FIELDS = [
+      { title: "introduction_title", content: "introduction_content", defaultTitle: "Introduction" },
+      { title: "oral_history_title", content: "oral_history_content", defaultTitle: "Oral History" },
+      { title: "legends_and_lore_title", content: "legends_and_lore_content", defaultTitle: "Legends and Lore" },
+      { title: "translation_title", content: "translation_content", defaultTitle: "Translation" },
+      { title: "preservation_title", content: "preservation_content", defaultTitle: "Preservation" },
+      { title: "whereintheworld_title", content: "whereintheworld_content", defaultTitle: "On This Site / Off This Site" }
+    ];
+
     function contentSections(site) {
-      return SHARED_UTILS.contentSectionsFromFields(site, [
-        { title: "introduction_title", content: "introduction_content", defaultTitle: "Introduction" },
-        { title: "oral_history_title", content: "oral_history_content", defaultTitle: "Oral History" },
-        { title: "legends_and_lore_title", content: "legends_and_lore_content", defaultTitle: "Legends and Lore" },
-        { title: "translation_title", content: "translation_content", defaultTitle: "Translation" },
-        { title: "preservation_title", content: "preservation_content", defaultTitle: "Preservation" }
-      ], { hasContent: value => stripHtml(value).length > 0 });
+      return SHARED_UTILS.contentSectionsFromFields(site, MOBILE_SITE_CONTENT_SECTION_FIELDS, {
+        hasContent: value => stripHtml(value).length > 0,
+        excludeTitle: title => SHARED_UTILS.isWhyThisMattersTitle?.(title)
+      });
     }
 
     const SITE_FRONTEND_EDITOR_FIELDS = [
@@ -10214,9 +11032,20 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       `;
     }
 
+    function legacyWhyThisMattersTexts(item) {
+      if (!item) return [];
+      return MOBILE_SITE_CONTENT_SECTION_FIELDS
+        .filter(field => SHARED_UTILS.isWhyThisMattersTitle?.(item[field.title] || ""))
+        .map(field => item[field.content])
+        .filter(value => stripHtml(value).length > 0);
+    }
+
     function whyThisMattersHtml(item) {
-      const text = publicCleanText(item?.why_this_matters || "");
-      return text ? `<section class="section"><h3>Why This Matters</h3><p>${escapeHtml(text)}</p></section>` : "";
+      const paragraphs = SHARED_UTILS.uniqueTextBlocks?.(
+        [item?.why_this_matters || "", ...legacyWhyThisMattersTexts(item)],
+        { cleanText: publicCleanText, normalizeText }
+      ) || [publicCleanText(item?.why_this_matters || "")].filter(Boolean);
+      return paragraphs.length ? `<section class="section"><h3>Why This Matters</h3>${paragraphs.map(text => `<p>${escapeHtml(text)}</p>`).join("")}</section>` : "";
     }
 
     function sourceReferenceHtml(source) {
@@ -10266,16 +11095,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function latestEditedDate(item) {
       if (!item) return "";
-      return item.last_reviewed || item.date_updated || item.updated_at || item.modified_at || item.last_edited_at || item.lastmod || item.wp_date || item.published_at || item.date_created || item.created_at || "";
+      return ACTIVITY_UTILS.siteEditedDate(item, { extended: true });
     }
 
     function formatEditedDate(value) {
-      return formatDate(value, {
-        fallback: DEFAULT_LAST_EDITED_LABEL,
-        invalidAsValue: true,
-        locale: "en-US",
-        dateOptions: { month: "2-digit", day: "2-digit", year: "numeric" }
-      });
+      return ACTIVITY_UTILS.editedDateLabel(value, { fallback: DEFAULT_LAST_EDITED_LABEL });
     }
 
     function sourcesEvidenceSection(item) {
@@ -10488,23 +11312,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     async function contributorProfileForToken(token, email = "") {
       if (token) {
         try {
-          const userResponse = await fetch(`${DIRECTUS}/users/me?fields=id,email,first_name,last_name`, {
-            headers: { authorization: `Bearer ${token}` }
+          const { profile } = await directusClient.fetchProfileForToken(token, {
+            profileFields: PROFILE_FIELDS
           });
-          if (userResponse.ok) {
-            const user = (await userResponse.json()).data;
-            const profileResponse = await fetch(`${DIRECTUS}/items/mobile_member_profiles?limit=1&filter[directus_user][_eq]=${encodeURIComponent(user.id)}&fields=${PROFILE_FIELDS}`, {
-              headers: { authorization: `Bearer ${token}` }
-            });
-            if (profileResponse.ok) {
-              const profile = (await profileResponse.json()).data?.[0];
-              if (profile) {
-                const index = state.contributorProfiles.findIndex(item => Number(item.id) === Number(profile.id));
-                if (index >= 0) state.contributorProfiles[index] = { ...state.contributorProfiles[index], ...profile };
-                else state.contributorProfiles.push(profile);
-                return profile;
-              }
-            }
+          if (profile) {
+            const index = state.contributorProfiles.findIndex(item => Number(item.id) === Number(profile.id));
+            if (index >= 0) state.contributorProfiles[index] = { ...state.contributorProfiles[index], ...profile };
+            else state.contributorProfiles.push(profile);
+            return profile;
           }
         } catch {}
       }
@@ -10519,22 +11334,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     async function triggerAdminNotificationAction(action, payload) {
-      const flowId = action === "approve" ? ADMIN_NOTIFICATION_FLOW_IDS.approveSuggestion : ADMIN_NOTIFICATION_FLOW_IDS.declineSuggestion;
-      if (flowId) {
-        const response = await fetch(`${DIRECTUS}/flows/trigger/${flowId}`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload),
-          cache: "no-store"
-        });
-        if (response.ok) {
-          const text = await response.text();
-          return text ? JSON.parse(text) : null;
+      return directusClient.triggerReviewAction(action, payload, {
+        flowIds: {
+          approve: ADMIN_NOTIFICATION_FLOW_IDS.approveSuggestion,
+          decline: ADMIN_NOTIFICATION_FLOW_IDS.declineSuggestion
         }
-      }
-      return patchDirectusItem("site_suggestions", payload.id, {
-        status: action === "approve" ? "approved" : "declined",
-        review_note: payload.review_note || ""
       });
     }
 
@@ -10547,25 +11351,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function mergePointEventRecords(records = []) {
-      (records || []).forEach(record => {
-        if (!record?.event_key && !record?.id) return;
-        const index = state.profilePointEvents.findIndex(item =>
-          (record.id && Number(item.id) === Number(record.id)) ||
-          (record.event_key && String(item.event_key || "") === String(record.event_key))
-        );
-        if (index >= 0) state.profilePointEvents[index] = { ...state.profilePointEvents[index], ...record };
-        else state.profilePointEvents.push(record);
-      });
+      PROFILE_UTILS.mergeProfilePointEvents(state.profilePointEvents, records);
       state.profileActivityCache = null;
     }
 
     function localPointEventForKey(eventKey, profileId = null) {
-      if (!eventKey) return null;
-      const id = Number(relationId(profileId));
-      return state.profilePointEvents.find(item =>
-        String(item.event_key || "") === String(eventKey) &&
-        (!id || Number(relationId(item.member_profile)) === id)
-      ) || null;
+      return PROFILE_UTILS.findProfilePointEventForKey(state.profilePointEvents, eventKey, profileId, { relationId });
     }
 
     async function ensureCanonicalProfilePointEvents(profile = currentContributorProfile()) {
@@ -10575,9 +11366,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (state.profilePointEventSyncPromises.has(key)) return state.profilePointEventSyncPromises.get(key);
       const promise = fetchJson(`/items/mobile_point_events?limit=-1&filter[member_profile][_in]=${key}&fields=${POINT_EVENT_FIELDS}`, { fresh: true })
         .then(response => {
-          const idSet = new Set(ids.map(String));
-          state.profilePointEvents = (state.profilePointEvents || [])
-            .filter(event => !idSet.has(String(Number(relationId(event.member_profile)))));
+          state.profilePointEvents = PROFILE_UTILS.profilePointEventsWithoutProfileIds(state.profilePointEvents, ids, { relationId });
           mergePointEventRecords(response.data || []);
           ids.forEach(id => state.profilePointEventCanonicalIds.add(String(id)));
           return true;
@@ -10598,8 +11387,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!id) return [];
       const response = await fetchJson(`/items/mobile_point_events?limit=-1&filter[member_profile][_eq]=${id}&fields=${POINT_EVENT_FIELDS}`, { fresh: true });
       const incoming = response.data || [];
-      state.profilePointEvents = (state.profilePointEvents || [])
-        .filter(event => String(Number(relationId(event.member_profile))) !== String(id));
+      state.profilePointEvents = PROFILE_UTILS.profilePointEventsWithoutProfileIds(state.profilePointEvents, [id], { relationId });
       mergePointEventRecords(incoming);
       state.profilePointEventCanonicalIds.add(String(id));
       return incoming;
@@ -10619,7 +11407,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function pointEventRequiresActiveProfile(eventType) {
-      return ["daily_open", "vocab_guess", "site_visit", "site_checkin", "suggested_site"].includes(String(eventType || ""));
+      return PROFILE_UTILS.profilePointEventRequiresActiveProfile(eventType);
     }
 
     function activeContributorProfileId() {
@@ -10632,9 +11420,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     async function recordProfilePointEvent(event = {}) {
       const profileId = Number(relationId(event.member_profile));
-      const points = Number(event.points || 0);
       const eventType = String(event.event_type || "");
-      if (!profileId || !points || !eventType || !event.event_key) return null;
+      const payload = PROFILE_UTILS.profilePointEventPayload(event, { relationId });
+      if (!payload) return null;
       if (pointEventRequiresActiveProfile(eventType) && activeContributorProfileId() !== profileId) {
         console.warn("Refusing point write for a profile that is not the active login.", { eventType, profileId });
         return null;
@@ -10643,17 +11431,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (existing) return existing;
       const remoteExisting = await refreshRemotePointEventForKey(event.event_key, profileId).catch(() => null);
       if (remoteExisting) return remoteExisting;
-      const payload = {
-        event_key: String(event.event_key),
-        event_type: eventType,
-        points,
-        member_profile: profileId,
-        source_collection: event.source_collection || "",
-        source_id: event.source_id ? String(event.source_id) : "",
-        source_slug: event.source_slug || "",
-        source_title: event.source_title || "",
-        created_at: event.created_at || new Date().toISOString()
-      };
       try {
         const created = await postDirectusItem("mobile_point_events", payload, { requireAuth: true, timeout: 6000 });
         const record = created?.data ? { ...payload, ...created.data } : payload;
@@ -10747,15 +11524,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function fileExtensionForType(type) {
-      if (/jpe?g/i.test(type || "")) return "jpg";
-      if (/webp/i.test(type || "")) return "webp";
-      return "png";
+      return MEDIA_UTILS.fileExtensionForType
+        ? MEDIA_UTILS.fileExtensionForType(type)
+        : "png";
     }
 
     async function canvasToFeedbackFile(canvas, basename = "feedback-screenshot") {
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png", 0.9));
-      if (!blob) throw new Error("Could not prepare screenshot.");
-      return new File([blob], `${basename}.png`, { type: "image/png" });
+      return MEDIA_UTILS.canvasToImageFile(canvas, {
+        basename,
+        type: "image/png",
+        quality: 0.9,
+        errorMessage: "Could not prepare screenshot."
+      });
     }
 
     async function captureFeedbackScreenshot() {
@@ -10867,18 +11647,24 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         fetchJson(`/items/timeline_events?limit=-1&fields=${TIMELINE_FIELDS}`, { cacheKey: "mobile-timeline", ttl: 60000 })
           .catch(() => fetchJson(`/items/timeline_events?limit=-1&fields=${BASIC_TIMELINE_FIELDS}`, { cacheKey: "mobile-timeline-basic", ttl: 60000 }))
           .catch(() => ({ data: [] }));
+      const legacyExhibitsRequest = state.profile?.token
+        ? fetchJson(`/items/mobile_exhibits?limit=-1&fields=${EXHIBIT_FIELDS}`, { cacheKey: "mobile-exhibits", ttl: 60000, fresh: false }).catch(() => ({ data: [] }))
+        : Promise.resolve({ data: [] });
+      const siteSuggestionsRequest = state.profile?.token
+        ? fetchJson(`/items/site_suggestions?limit=-1&fields=${SITE_SUGGESTION_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.siteSuggestions))
+        : Promise.resolve(currentRowsFallback(state.siteSuggestions));
       const [timelineResponse, wikiResponse, eventResponse, legacyExhibitResponse, profilesResponse, commentsResponse, commentVotesResponse, pointEventsResponse, plantObservationsResponse, visitsResponse, suggestionsResponse, registrationsResponse, storyResponse, storyVotesResponse, languageResponse, followsResponse, loginRewardsResponse] = await Promise.all([
         loadTimelineEvents(),
         fetchJson(`/items/wiki_articles?limit=-1&sort=title&fields=${WIKI_INDEX_FIELDS}`, { cacheKey: "mobile-wiki", ttl: 60000 }).catch(() => ({ data: [] })),
         fetchJson(`/items/calendar_events?limit=-1&sort=start_datetime,title&fields=${EXHIBIT_FIELDS}`, { cacheKey: "mobile-events", ttl: 60000, fresh: false }).catch(() => ({ data: [] })),
-        fetchJson(`/items/mobile_exhibits?limit=-1&fields=${EXHIBIT_FIELDS}`, { cacheKey: "mobile-exhibits", ttl: 60000, fresh: false }).catch(() => ({ data: [] })),
+        legacyExhibitsRequest,
         fetchJson(`/items/mobile_member_profiles?limit=-1&sort=display_name&fields=${PROFILE_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.contributorProfiles)),
         fetchJson(`/items/mobile_comments?limit=-1&filter[status][_eq]=approved&filter[public_activity][_eq]=true&fields=${PUBLIC_COMMENT_FIELDS}`, { cacheKey: "mobile-comments", ttl: 45000, fresh: false }).catch(() => currentRowsFallback(state.publicComments)),
         fetchJson(`/items/mobile_comment_votes?limit=-1&fields=${COMMENT_VOTE_FIELDS}`, { cacheKey: "mobile-comment-votes", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.commentVotes)),
         fetchJson(`/items/mobile_point_events?limit=-1&fields=${POINT_EVENT_FIELDS}`, { cacheKey: "mobile-point-events", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.profilePointEvents)),
         fetchJson(`/items/mobile_plant_observations?limit=-1&filter[status][_eq]=approved&fields=${PLANT_OBSERVATION_FIELDS}`, { cacheKey: "mobile-plant-observations", ttl: 45000, fresh: false }).catch(() => ({ data: [] })),
         fetchJson(`/items/mobile_site_visits?limit=-1&fields=${PUBLIC_VISIT_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.publicVisits)),
-        fetchJson(`/items/site_suggestions?limit=-1&fields=${SITE_SUGGESTION_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.siteSuggestions)),
+        siteSuggestionsRequest,
         adminAccountRegistrationsRequest().catch(() => currentRowsFallback(state.accountRegistrations)),
         fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 30000, fresh: false }).catch(() => ({ data: [] })),
         fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 30000, fresh: false }).catch(() => ({ data: [] })),
@@ -10957,29 +11743,29 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function withProfileSyncTimeout(promise, fallback, timeoutMs = 12000) {
-      return Promise.race([
-        promise,
-        new Promise(resolve => window.setTimeout(() => resolve(fallback), timeoutMs))
-      ]);
+      return PROFILE_UTILS.withFallbackTimeout(promise, fallback, timeoutMs);
     }
 
     function currentRowsFallback(rows) {
-      return { data: Array.isArray(rows) ? rows : [], __fallback: true };
+      return PROFILE_UTILS.rowsFallback(rows, { markFallback: true });
     }
 
     function responseUsedFallback(response) {
-      return Boolean(response?.__fallback);
+      return PROFILE_UTILS.responseUsedFallback(response);
     }
 
     function allResponsesFresh(responses = []) {
-      return responses.every(response => !responseUsedFallback(response));
+      return PROFILE_UTILS.allResponsesFresh(responses);
     }
 
     function activeProfileFilterSuffix(profileFields = ["member_profile"]) {
-      const profile = currentContributorProfile() || state.profile;
-      const profileIds = [...profileIdentityIds(profile)].map(id => Number(id)).filter(Boolean).sort((a, b) => a - b);
-      if (!profileIds.length || profileFields.length !== 1) return "";
-      return `&filter[${profileFields[0]}][_in]=${profileIds.join(",")}`;
+      return PROFILE_UTILS.activeProfileFilterSuffix(currentContributorProfile() || state.profile, profileFields, {
+        candidates: state.contributorProfiles,
+        relationId,
+        fallbackProfileId: state.profile?.profileId,
+        fallbackEmail: state.profile?.email,
+        extraNames: [state.profile?.display_name, state.profile?.displayName, state.profile?.email, state.profile?.username]
+      });
     }
 
     function activeProfileRowsRequest(collection, fields, currentRows, profileFields = ["member_profile"], options = { fresh: true }) {
@@ -10989,18 +11775,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         .catch(() => currentRowsFallback(currentRows));
     }
 
-    function rowsIncludeActiveProfile(rows, profileFields = ["member_profile"]) {
-      const profile = currentContributorProfile() || state.profile;
-      const profileIds = profileIdentityIds(profile);
-      if (!profileIds.size) return false;
-      return (rows || []).some(row => profileFields.some(field => profileIds.has(Number(relationId(row?.[field])))));
-    }
-
     function preserveActiveProfileRows(nextRows, currentRows, profileFields = ["member_profile"]) {
-      const incoming = Array.isArray(nextRows) ? nextRows : [];
-      const current = Array.isArray(currentRows) ? currentRows : [];
-      if (incoming.length || !state.profile || !current.length) return incoming;
-      return rowsIncludeActiveProfile(current, profileFields) ? current : incoming;
+      if (!state.profile) return Array.isArray(nextRows) ? nextRows : [];
+      return PROFILE_UTILS.preserveActiveProfileRows(nextRows, currentRows, currentContributorProfile() || state.profile, {
+        profileFields,
+        candidates: state.contributorProfiles,
+        relationId,
+        fallbackProfileId: state.profile?.profileId,
+        fallbackEmail: state.profile?.email,
+        extraNames: [state.profile?.display_name, state.profile?.displayName, state.profile?.email, state.profile?.username]
+      });
     }
 
     async function refreshProfileActivityData() {
@@ -11256,9 +12040,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function sortSites() {
       state.filtered.sort((a, b) => {
-        const da = siteDistance(a);
-        const db = siteDistance(b);
+        const da = siteDistance(a, { source: "user" });
+        const db = siteDistance(b, { source: "user" });
         if (da !== null && db !== null && Math.abs(da - db) > 0.02) return da - db;
+        if (da !== null && db === null) return -1;
+        if (da === null && db !== null) return 1;
         return String(a.title || "").localeCompare(String(b.title || ""));
       });
     }
@@ -11853,22 +12639,23 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function activeMobileLayerCategories() {
       const configured = state.settings.layerCategories || {};
-      return new Set(
-        mobileLayerCategoryInputs
-          .filter(input => configured[input.value] !== false)
-          .map(input => input.value)
-      );
+      return SITE_UTILS.layerFilterSetFromInputs
+        ? SITE_UTILS.layerFilterSetFromInputs(mobileLayerCategoryInputs, input => configured[input.value] !== false)
+        : new Set(
+          mobileLayerCategoryInputs
+            .filter(input => configured[input.value] !== false)
+            .map(input => input.value)
+        );
     }
 
     function sitePassesMobileLayerCategories(site) {
       if (!mobileLayerCategoryInputs.length) return true;
       if (siteIsExhibitLayerSite(site) && state.settings.exhibits !== false) return true;
       const active = activeMobileLayerCategories();
-      if (active.size >= mobileLayerCategoryInputs.length) return true;
-      if (!active.size) return false;
       const keys = siteLayerCategoryKeys(site);
-      if (!keys.length) return true;
-      return keys.some(key => active.has(key));
+      return SITE_UTILS.passesLayerCategoryFilters
+        ? SITE_UTILS.passesLayerCategoryFilters(keys, active, mobileLayerCategoryInputs.length)
+        : active.size >= mobileLayerCategoryInputs.length || (!active.size ? false : !keys.length || keys.some(key => active.has(key)));
     }
 
     function siteVisibleInMobileLayers(site) {
@@ -11877,14 +12664,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const exhibitsOn = state.settings.exhibits !== false;
       if (exhibitSite && !exhibitsOn) return false;
       const geometryType = siteDisplayGeometry(site)?.type;
-      if (geometryType === "Point") {
-        return state.settings.showPins !== false ||
-          (exhibitsOn && exhibitSite);
-      }
-      if (geometryType === "Polygon" || geometryType === "MultiPolygon") {
-        return state.settings.showShapes !== false || (exhibitsOn && exhibitSite);
-      }
-      return true;
+      return SITE_UTILS.featureVisibleInPrimaryLayers
+        ? SITE_UTILS.featureVisibleInPrimaryLayers(geometryType, {
+          isExhibit: exhibitSite,
+          exhibitsOn,
+          pinsOn: state.settings.showPins !== false,
+          shapesOn: state.settings.showShapes !== false
+        })
+        : (
+          geometryType === "Point" ? state.settings.showPins !== false || (exhibitsOn && exhibitSite) :
+          (geometryType === "Polygon" || geometryType === "MultiPolygon") ? state.settings.showShapes !== false || (exhibitsOn && exhibitSite) :
+          true
+        );
     }
 
     function siteTagsHtml(site) {
@@ -11901,8 +12692,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function relatedDistanceLabel(miles) {
-      if (!Number.isFinite(miles)) return "";
-      return `${miles < 10 ? miles.toFixed(1) : Math.round(miles)} mi`;
+      return GEOMETRY_UTILS.distanceLabelMiles
+        ? GEOMETRY_UTILS.distanceLabelMiles(miles)
+        : Number.isFinite(miles) ? `${miles < 10 ? miles.toFixed(1) : Math.round(miles)} mi` : "";
     }
 
     function relatedMomentKeys(site) {
@@ -12086,6 +12878,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const count = state.filtered.length;
       const query = searchEl.value.trim();
       const showingSearch = Boolean(query);
+      const showingAddressResults = state.filtered.some(site => site?.slug === "address-result");
       const renderLimit = Math.max(1, Math.min(count, Number(state.nearbyRenderLimit || defaultNearbyRenderLimit())));
       const visibleSites = state.filtered.slice(0, renderLimit);
       appEl?.classList.toggle("mobile-search-results", showingSearch);
@@ -12118,6 +12911,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           ? `data-wiki-slug="${escapeHtml(site.slug)}"`
           : `data-slug="${escapeHtml(site.slug)}"`;
         const resultAttrs = `data-result-index="${index}" data-result-kind="${isWiki ? "wiki" : "site"}" data-result-slug="${escapeHtml(site.slug || "")}"`;
+        const siteDistanceText = showingAddressResults && Number.isFinite(site?._addressDistance)
+          ? distanceLabel(site)
+          : state.userLocation
+            ? distanceLabel(site, { source: "user" })
+            : "Map";
         return `
           <button class="site-card${!isWiki && site.slug === state.selectedSlug ? " active" : ""}" type="button" ${buttonAttrs} ${resultAttrs}>
             ${searchResultThumbHtml(site)}
@@ -12126,7 +12924,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
               <p>${escapeHtml(location)}</p>
               <p>${escapeHtml(summary)}</p>
             </span>
-            <span class="distance">${isWiki ? "Article" : site.slug === "address-result" ? "Map" : state.userLocation ? escapeHtml(distanceLabel(site)) : "Map"}</span>
+            <span class="distance">${isWiki ? "Article" : site.slug === "address-result" ? "Map" : escapeHtml(siteDistanceText)}</span>
           </button>
         `;
       }).join("")}${count > renderLimit ? `
@@ -12178,7 +12976,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function timelineLabel(event) {
-      return cleanPlainText(event.date_label || event.period || event.start_year || "Historic moment");
+      return TIMELINE_UTILS.rangeLabel
+        ? cleanPlainText(TIMELINE_UTILS.rangeLabel(event))
+        : cleanPlainText(event.date_label || event.period || event.start_year || "Historic moment");
     }
 
     function timelineTitleLooksWeak(title) {
@@ -12233,11 +13033,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function timelineLocationLabel(event = {}) {
-      const explicit = cleanPlainText(event.location_label || event.location || event.place_label || "");
-      if (explicit) return explicit;
-      if (event.source_type === "site" && event.source_title) return cleanPlainText(event.source_title);
-      if (event.latitude && event.longitude) return "Mapped location";
-      return "";
+      return TIMELINE_UTILS.locationLabel
+        ? TIMELINE_UTILS.locationLabel(event, { cleanText: cleanPlainText })
+        : "";
     }
 
     function copyTimelineSourceReference(button) {
@@ -12856,13 +13654,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!state.map || !event?.point) return event?.features || [];
       const radius = 18;
       const point = event.point;
-      const layers = [
+      const targetLayers = [
         "mobile-site-point-hit",
         "mobile-detail-labels",
         "mobile-territory-labels",
         "mobile-site-polygons",
         "mobile-territory-polygons"
-      ].filter(layerId => state.map.getLayer(layerId));
+      ];
+      const layers = MAP_UTILS.existingLayerIds
+        ? MAP_UTILS.existingLayerIds(state.map, targetLayers)
+        : targetLayers.filter(layerId => state.map.getLayer(layerId));
       if (!layers.length) return event?.features || [];
       return state.map.queryRenderedFeatures(
         [[point.x - radius, point.y - radius], [point.x + radius, point.y + radius]],
@@ -12874,12 +13675,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!state.map || !event?.point) return [];
       const radius = 10;
       const point = event.point;
-      const layers = [
+      const targetLayers = [
         "mobile-detail-labels",
         "mobile-territory-labels",
         "mobile-site-polygons",
         "mobile-territory-polygons"
-      ].filter(layerId => state.map.getLayer(layerId));
+      ];
+      const layers = MAP_UTILS.existingLayerIds
+        ? MAP_UTILS.existingLayerIds(state.map, targetLayers)
+        : targetLayers.filter(layerId => state.map.getLayer(layerId));
       if (!layers.length) return [];
       return state.map.queryRenderedFeatures(
         [[point.x - radius, point.y - radius], [point.x + radius, point.y + radius]],
@@ -14361,51 +15165,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return "";
     }
 
-    async function imageElementFromFile(file) {
-      const url = URL.createObjectURL(file);
-      try {
-        const image = new Image();
-        image.decoding = "async";
-        const loaded = new Promise((resolve, reject) => {
-          image.onload = () => resolve(image);
-          image.onerror = reject;
-        });
-        image.src = url;
-        return await loaded;
-      } finally {
-        window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-      }
-    }
-
     async function compressPlantImage(file) {
-      if (!file) return null;
-      const maxBytes = 3 * 1024 * 1024;
-      const originalBase = String(file.name || "")
-        .replace(/\.[a-z0-9]+$/i, "")
-        .replace(/[^a-z0-9_-]+/gi, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 42);
-      const compressedName = `${originalBase || "plant-observation"}-${Date.now()}.jpg`;
-      const image = await imageElementFromFile(file);
-      const maxEdge = 1280;
-      const scale = Math.min(1, maxEdge / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
-      const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
-      const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      canvas.getContext("2d").drawImage(image, 0, 0, width, height);
-      const toBlob = quality => new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", quality));
-      for (const quality of [0.78, 0.68, 0.58, 0.48]) {
-        const blob = await toBlob(quality);
-        if (blob && blob.size <= maxBytes) {
-          return new File([blob], compressedName, { type: "image/jpeg", lastModified: Date.now() });
-        }
-      }
-      const blob = await toBlob(0.42);
-      if (!blob) throw new Error("Could not process that photo.");
-      if (blob.size > maxBytes) throw new Error("That image is still too large after compression. Try a closer crop.");
-      return new File([blob], compressedName, { type: "image/jpeg", lastModified: Date.now() });
+      return MEDIA_UTILS.compressImageFile(file, {
+        basename: "plant-observation",
+        processErrorMessage: "Could not process that photo."
+      });
     }
 
     async function compressCommentImage(file) {
@@ -14494,14 +15258,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return "";
     }
 
-    function plantProviderCooldownActive() {
-      try {
-        return Number(localStorage.getItem("nliPlantProviderCooldownUntil") || 0) > Date.now();
-      } catch {
-        return false;
-      }
-    }
-
     async function fetchPlantProviderStatus() {
       const endpoint = plantIdentificationEndpoint();
       if (!endpoint) {
@@ -14526,14 +15282,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const data = await response.json();
       state.plantProviderStatus = { ...data, checkedAt: Date.now() };
       return state.plantProviderStatus;
-    }
-
-    function plantQaMode() {
-      try {
-        return new URLSearchParams(window.location.search).has("qa");
-      } catch {
-        return false;
-      }
     }
 
     function setPlantProviderCooldown(minutes = 20) {
@@ -15601,16 +16349,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function plantObservationFactRows(fields = {}) {
       fields = enrichedPlantObservationFields(fields);
       const match = plantGuideMatchFromFields(fields);
-      const nativeLabel = plantNativeLabel(fields.native_status, fields.invasive_status, match);
-      const origin = plantOriginText(fields, match);
-      return [
-        ["Algonquian Word", plantFactValue(fields.algonquian, "The word may exist or may have existed, but it has not been found in the sources reviewed.")],
-        ["Native / non-native", origin ? `${nativeLabel}. Origin: ${origin}.` : nativeLabel],
-        ["Status source", plantFactValue(fields.source || match?.source, "Not yet documented")],
-        ["Medicinal use", plantFactValue(fields.medicinal_use, "Not shown without a source")],
-        ["Endangered", plantEndangeredLabel(fields.endangered_status, match)],
-        ["Safety", plantFactValue(fields.edible_safety || fields.guidance, "Verify with a field guide or expert before touching, eating, or using any plant")]
-      ];
+      return PLANT_UTILS.plantObservationFactRows
+        ? PLANT_UTILS.plantObservationFactRows(fields, match, {
+          cleanText: publicCleanText,
+          normalizeText: normalizeComparisonText,
+          algonquianValue: fields.algonquian,
+          sourceValue: fields.source || match?.source || "",
+          guidanceValue: fields.edible_safety || fields.guidance || ""
+        })
+        : [];
     }
 
     function plantObservationFactsHtml(fields = {}) {
@@ -15711,8 +16458,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function currentCommentVoterKey() {
       const profile = currentContributorProfile();
-      if (!profile?.id || !isApprovedContributor()) return "";
-      return `profile:${profile.id}`;
+      return COMMENT_UTILS.commentVoterKey(profile, isApprovedContributor());
     }
 
     function commentReaction(commentId) {
@@ -15728,21 +16474,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function mergeCommentVoteRecords(records = []) {
-      (records || []).forEach(record => {
-        if (!record) return;
-        const id = Number(record.id);
-        const voteKey = String(record.vote_key || "");
-        const index = id
-          ? state.commentVotes.findIndex(item => Number(item.id) === id)
-          : state.commentVotes.findIndex(item => voteKey && String(item.vote_key || "") === voteKey);
-        if (index >= 0) state.commentVotes[index] = { ...state.commentVotes[index], ...record };
-        else state.commentVotes.push(record);
-      });
+      COMMENT_UTILS.mergeRecordsByIdOrKey(state.commentVotes, records, "vote_key");
       state.profileActivityCache = null;
     }
 
     async function refreshRemoteCommentVote(commentId, profileId) {
-      const voteKey = `${commentId}:${profileId}`;
+      const voteKey = COMMENT_UTILS.voteKey(commentId, profileId);
       const response = await fetchJson(
         `/items/mobile_comment_votes?limit=1&filter[vote_key][_eq]=${encodeURIComponent(voteKey)}&fields=${COMMENT_VOTE_FIELDS}`,
         { fresh: true }
@@ -15773,13 +16510,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         showBanner("Your vote for this comment is already saved.");
         return;
       }
-      const vote = {
-        comment: Number(id),
-        vote: value === "report" ? "report" : "up",
-        member_profile: Number(profile.id),
-        vote_key: `${id}:${profile.id}`,
-        created_at: new Date().toISOString()
-      };
+      const vote = COMMENT_UTILS.votePayload(id, value, profile);
       let created;
       try {
         created = await postDirectusItem("mobile_comment_votes", vote, { requireAuth: true });
@@ -15795,17 +16526,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const voteRecord = created?.data ? { ...vote, ...created.data } : vote;
       mergeCommentVoteRecords([voteRecord]);
       if (voteRecord.vote === "up" && votedComment?.member_profile) {
-        await recordProfilePointEvent({
-          event_key: `helpful_vote:${id}:${profile.id}`,
-          event_type: "helpful_vote",
+        await recordProfilePointEvent(COMMENT_UTILS.helpfulVotePointEvent({
+          commentId: id,
+          profileId: profile.id,
+          comment: votedComment,
+          voteRecord,
           points: PROFILE_UTILS.POINT_RULES.helpful_vote,
-          member_profile: Number(relationId(votedComment.member_profile)),
-          source_collection: "mobile_comment_votes",
-          source_id: voteRecord.id,
-          source_slug: votedComment.source_slug || votedComment.site_slug || "",
-          source_title: votedComment.source_title || votedComment.site_title || "Helpful comment vote",
-          created_at: voteRecord.created_at || new Date().toISOString()
-        });
+          relationId
+        }));
       }
       document.querySelectorAll("[data-comment-actions]").forEach(container => {
         if (String(container.dataset.commentActions) !== id) return;
@@ -15818,8 +16546,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function currentViewerOwnsComment(comment) {
       const profile = currentContributorProfile();
       const viewerEmail = String(state.profile?.email || profile?.username || "").toLowerCase();
-      if (profile?.id && Number(comment?.member_profile) === Number(profile.id)) return true;
-      return Boolean(viewerEmail && String(comment?.author_email || "").toLowerCase() === viewerEmail);
+      return COMMENT_UTILS.viewerOwnsComment(comment, { profile, viewerEmail });
     }
 
     async function deleteOwnComment(commentId) {
@@ -17692,6 +18419,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function rebindMobileMapLayerEvent(type, layerId, handler) {
+      if (MAP_UTILS.rebindLayerEvent) {
+        MAP_UTILS.rebindLayerEvent(state.map, state.mobileMapLayerHandlers, type, layerId, handler);
+        return;
+      }
       if (!state.map?.getLayer(layerId)) return;
       const key = `${type}:${layerId}`;
       const previous = state.mobileMapLayerHandlers.get(key);
@@ -17739,9 +18470,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const data = cachedMobileMapSourceData();
       const sourceKey = state.mapSourceCacheKey || "";
       if (options.force !== true && sourceKey && state.mapSourceAppliedKey === sourceKey) return;
-      state.map.getSource("mobile-sites")?.setData(data.sites);
-      state.map.getSource("mobile-territory-labels")?.setData(data.territoryLabels);
-      state.map.getSource("mobile-detail-labels")?.setData(data.detailLabels);
+      MAP_UTILS.setGeoJsonSourceData?.(state.map, "mobile-sites", data.sites) || state.map.getSource("mobile-sites")?.setData(data.sites);
+      MAP_UTILS.setGeoJsonSourceData?.(state.map, "mobile-territory-labels", data.territoryLabels) || state.map.getSource("mobile-territory-labels")?.setData(data.territoryLabels);
+      MAP_UTILS.setGeoJsonSourceData?.(state.map, "mobile-detail-labels", data.detailLabels) || state.map.getSource("mobile-detail-labels")?.setData(data.detailLabels);
       state.mapSourceAppliedKey = sourceKey;
     }
 
@@ -18109,20 +18840,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function mobileProfileTrackersHtml(profile, providedStats = null) {
       const stats = providedStats || mobileProfileStats(profile || {});
-      const rows = [
-        {
-          count: stats.waterwaySitesCount,
-          text: `You explored ${stats.waterwaySitesCount} site${stats.waterwaySitesCount === 1 ? "" : "s"} connected to waterways.`
-        },
-        {
-          count: stats.historicRecordsCount,
-          text: `You viewed ${stats.historicRecordsCount} historic record${stats.historicRecordsCount === 1 ? "" : "s"}.`
-        },
-        {
-          count: stats.suggestionsCount,
-          text: `You contributed ${stats.suggestionsCount} suggested site${stats.suggestionsCount === 1 ? "" : "s"}.`
-        }
-      ].filter(row => row.count > 0);
+      const rows = PROFILE_UTILS.profileTrackerRowsFromStats
+        ? PROFILE_UTILS.profileTrackerRowsFromStats(stats)
+        : [];
       return rows.length ? `
         <div class="profile-trackers" aria-label="Profile trackers">
           ${rows.map(row => `<span class="profile-tracker">${escapeHtml(row.text)}</span>`).join("")}
@@ -18184,21 +18904,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function mobileProfilePointTotal(stats = {}) {
-      const points = Number(stats.points);
-      return Number.isFinite(points) ? points : 0;
+      return PROFILE_UTILS.profilePointTotal
+        ? PROFILE_UTILS.profilePointTotal(stats)
+        : Number.isFinite(Number(stats.points)) ? Number(stats.points) : 0;
     }
 
     function mobileProfilePointsBreakdownHtml(stats = {}) {
-      const rows = [
-        ["Daily opens", stats.loginPoints],
-        ["Visited sites", stats.visitPoints],
-        ["Nearby check-ins", stats.checkinPoints],
-        ["Language words", stats.languagePoints],
-        ["Comments", stats.commentPoints],
-        ["Helpful votes", stats.upvotePoints],
-        ["Suggested sites", stats.suggestionPoints],
-        ["Support", stats.purchasePoints + stats.supporterPoints]
-      ].filter(([, value]) => Number(value) > 0);
+      const rows = PROFILE_UTILS.profilePointBreakdownRows
+        ? PROFILE_UTILS.profilePointBreakdownRows(stats)
+        : [];
       return `
         <section class="visit-preview profile-points-detail">
           <strong>Points</strong>
@@ -18424,7 +19138,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           const sourceSite = moment.source_type === "site"
             ? state.sites.find(site => site.slug === moment.source_slug || Number(site.id) === Number(moment.source_id))
             : null;
-          const date = sourceSite?.last_reviewed || sourceSite?.updated_at || sourceSite?.date_updated || sourceSite?.modified_at || sourceSite?.last_edited_at || sourceSite?.created_at;
+          const date = ACTIVITY_UTILS.siteEditedDate(sourceSite, { extended: true });
           return {
             type: "historic-moment",
             sourceType: moment.source_type === "wiki" ? "wiki" : "site",
@@ -18461,7 +19175,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           title: site.title,
           label: ACTIVITY_UTILS.siteActivityLabel(site),
           preview: activityPreview(site.summary || site.introduction_content || siteSubtitle(site)),
-          date: site.last_reviewed || site.updated_at || site.date_updated || site.modified_at || site.last_edited_at || site.created_at
+          date: ACTIVITY_UTILS.siteEditedDate(site, { extended: true })
         }))
         .filter(item => activityDateValue(item.date));
       const wikis = state.wikiArticles.map(article => ({
@@ -18470,7 +19184,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         title: article.title || "Knowledgebase article",
         label: "Knowledgebase update",
         preview: activityPreview(article.summary || article.introduction || article.content),
-        date: article.last_reviewed || article.updated_at || article.date_updated || article.modified_at || article.lastmod || article.created_at
+        date: ACTIVITY_UTILS.siteEditedDate(article, { extended: true })
       })).filter(item => activityDateValue(item.date));
       const events = state.exhibits.map(exhibit => ({
         type: "event",
@@ -18609,8 +19323,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function mobileUnreadNotificationCount() {
-      const seen = Number(localStorage.getItem(mobileNotificationLastSeenKey()) || 0);
-      if (!Number.isFinite(seen)) return 0;
+      const seen = ACTIVITY_UTILS.readSeen(mobileNotificationLastSeenKey());
       return ACTIVITY_UTILS.unreadCount(latestMobileNotifications(), seen, { capAtNow: true });
     }
 
@@ -18640,8 +19353,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function mobileUnreadActivityCount() {
-      const seen = Number(localStorage.getItem(mobileActivityLastSeenKey()) || 0);
-      if (!Number.isFinite(seen)) return 0;
+      const seen = ACTIVITY_UTILS.readSeen(mobileActivityLastSeenKey());
       return ACTIVITY_UTILS.unreadCount(latestMobileActivity(), seen, { capAtNow: true });
     }
 
@@ -19465,10 +20177,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return Math.max(...matches.map(value => Number.parseFloat(value)).filter(Number.isFinite), fallback);
     }
 
-    function fitMobileMoreMenu(menu) {
-      if (!menu?.open) return;
-      const grid = menu.querySelector(".mobile-more-grid");
-      if (!grid) return;
+    function fitFixedMobilePanel(menu, panel, options = {}) {
+      if (!menu?.open || !panel) return;
       const summary = menu.querySelector("summary");
       const summaryRect = summary?.getBoundingClientRect();
       const viewport = window.visualViewport;
@@ -19476,49 +20186,45 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const viewportHeight = Math.round(viewport?.height || window.innerHeight || document.documentElement.clientHeight || 720);
       const viewportLeft = Math.round(viewport?.offsetLeft || 0);
       const viewportTop = Math.round(viewport?.offsetTop || 0);
-      const pad = 8;
+      const pad = options.pad ?? 8;
       const bottomSafe = cssPixelValue("--app-bottom-safe", 0);
       const top = Math.max(viewportTop + pad, Math.min(viewportTop + viewportHeight - 120, Math.round(viewportTop + (summaryRect?.bottom || 74) + 6)));
-      const width = Math.max(160, viewportWidth - (pad * 2));
-      const maxHeight = Math.max(160, viewportTop + viewportHeight - top - bottomSafe - pad);
-      grid.style.setProperty("--mobile-more-top", `${top}px`);
-      grid.style.setProperty("--mobile-more-left", `${viewportLeft + pad}px`);
-      grid.style.setProperty("--mobile-more-width", `${width}px`);
-      grid.style.setProperty("max-height", `${maxHeight}px`, "important");
-      grid.style.setProperty("position", "fixed", "important");
-      grid.style.setProperty("left", `${viewportLeft + pad}px`, "important");
-      grid.style.setProperty("right", "auto", "important");
-      grid.style.setProperty("width", `${width}px`, "important");
-      grid.style.setProperty("max-width", `${width}px`, "important");
-      grid.style.setProperty("transform", "none", "important");
-      grid.style.setProperty("z-index", "1000", "important");
-    }
-
-    function fitMobileLayerMenu(menu) {
-      if (!menu?.open) return;
-      const panel = menu.querySelector(".mobile-layer-panel");
-      if (!panel) return;
-      const summary = menu.querySelector("summary");
-      const summaryRect = summary?.getBoundingClientRect();
-      const viewport = window.visualViewport;
-      const viewportWidth = Math.round(viewport?.width || window.innerWidth || document.documentElement.clientWidth || 360);
-      const viewportHeight = Math.round(viewport?.height || window.innerHeight || document.documentElement.clientHeight || 720);
-      const viewportLeft = Math.round(viewport?.offsetLeft || 0);
-      const viewportTop = Math.round(viewport?.offsetTop || 0);
-      const pad = 8;
-      const bottomSafe = cssPixelValue("--app-bottom-safe", 0);
-      const width = Math.max(160, viewportWidth - (pad * 2));
       const left = viewportLeft + pad;
-      const top = Math.max(viewportTop + pad, Math.min(viewportTop + viewportHeight - 120, Math.round(viewportTop + (summaryRect?.bottom || 74) + 6)));
-      const maxHeight = Math.max(160, viewportTop + viewportHeight - top - bottomSafe - pad);
-      panel.style.setProperty("--mobile-layer-top", `${top}px`);
-      panel.style.setProperty("--mobile-layer-left", `${left}px`);
-      panel.style.setProperty("--mobile-layer-width", `${width}px`);
+      const width = Math.max(options.minWidth || 160, viewportWidth - (pad * 2));
+      const maxHeight = Math.max(options.minHeight || 160, viewportTop + viewportHeight - top - bottomSafe - pad);
+      panel.style.setProperty(options.topVar, `${top}px`);
+      panel.style.setProperty(options.leftVar, `${left}px`);
+      panel.style.setProperty(options.widthVar, `${width}px`);
+      panel.style.setProperty("position", "fixed", "important");
       panel.style.setProperty("left", `${left}px`, "important");
       panel.style.setProperty("right", "auto", "important");
       panel.style.setProperty("width", `${width}px`, "important");
       panel.style.setProperty("max-width", `${width}px`, "important");
       panel.style.setProperty("max-height", `${maxHeight}px`, "important");
+      if (options.disableTransform) panel.style.setProperty("transform", "none", "important");
+      if (options.zIndex) panel.style.setProperty("z-index", String(options.zIndex), "important");
+    }
+
+    function fitMobileMoreMenu(menu) {
+      if (!menu?.open) return;
+      const grid = menu.querySelector(".mobile-more-grid");
+      fitFixedMobilePanel(menu, grid, {
+        topVar: "--mobile-more-top",
+        leftVar: "--mobile-more-left",
+        widthVar: "--mobile-more-width",
+        disableTransform: true,
+        zIndex: 1000
+      });
+    }
+
+    function fitMobileLayerMenu(menu) {
+      if (!menu?.open) return;
+      const panel = menu.querySelector(".mobile-layer-panel");
+      fitFixedMobilePanel(menu, panel, {
+        topVar: "--mobile-layer-top",
+        leftVar: "--mobile-layer-left",
+        widthVar: "--mobile-layer-width"
+      });
     }
 
     function activateMobileListTarget(target, event) {
@@ -20399,14 +21105,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         showLoginStatus("Checking account approval...");
       }
       try {
-        const response = await fetch(`${DIRECTUS}/auth/login`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: loginEmailEl.value.trim(), password: loginPasswordEl.value, mode: "json" })
-        });
-        if (!response.ok) throw new Error("Login failed");
-        const data = await response.json();
-        const profile = await contributorProfileForToken(data.data?.access_token, loginEmailEl.value.trim());
+        const data = await directusClient.loginWithPassword(loginEmailEl.value.trim(), loginPasswordEl.value);
+        const profile = await contributorProfileForToken(data?.access_token, loginEmailEl.value.trim());
         if (isProfileBanned(profile)) {
           throw new Error(profile?.ban_reason || "This account has been banned.");
         }
@@ -20418,10 +21118,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           location_label: profile?.location_label || "",
           website_url: profile?.website_url || "",
           bio: profile?.bio || "",
-          token: data.data?.access_token,
-          refreshToken: data.data?.refresh_token || null,
-          refresh_token: data.data?.refresh_token || null,
-          tokenExpires: data.data?.expires || null,
+          token: data?.access_token,
+          refreshToken: data?.refresh_token || null,
+          refresh_token: data?.refresh_token || null,
+          tokenExpires: data?.expires || null,
           profileId: profile?.id || null
         });
         scheduleMemberProfileActivityTracking({ login: true, force: true });

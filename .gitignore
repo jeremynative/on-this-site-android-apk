@@ -33,3 +33,10 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Local ADB/debug artifacts
+adb-debug-*/
+adb-goal-*/
+adb-release-*/
+adb-agent*-qa-*/
+release-*/
