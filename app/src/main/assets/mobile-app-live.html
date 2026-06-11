@@ -2318,6 +2318,22 @@
       max-width: min(220px, 100%);
       margin-top: 6px;
       border-radius: 12px;
+      cursor: zoom-in;
+    }
+
+    .comment-image-button {
+      display: inline-block;
+      max-width: 100%;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      cursor: zoom-in;
+    }
+
+    .comment-image-button:focus-visible {
+      outline: 3px solid rgba(73, 111, 93, 0.34);
+      outline-offset: 3px;
     }
 
     .comment-meta-row {
@@ -4307,10 +4323,10 @@
     </div>
     <div class="detail-body" id="detail-body"></div>
   </article>
-  <div class="plant-photo-viewer" id="plant-photo-viewer" role="dialog" aria-modal="true" aria-label="Plant photo viewer" hidden>
+  <div class="plant-photo-viewer" id="plant-photo-viewer" role="dialog" aria-modal="true" aria-label="Photo viewer" hidden>
     <img id="plant-photo-viewer-image" alt="">
     <div class="plant-photo-viewer-caption">
-      <span id="plant-photo-viewer-title">Plant photo</span>
+      <span id="plant-photo-viewer-title">Photo</span>
       <button id="plant-photo-viewer-close" type="button">Close</button>
     </div>
   </div>
@@ -16649,7 +16665,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
                 ${depth ? `<span class="reply-label">Reply${parentName ? ` to ${escapeHtml(parentName)}` : ""}</span>` : ""}
                 <strong class="comment-author">${escapeHtml(name)}</strong>
                 <p class="comment-text">${escapeHtml(comment.comment || "")}</p>
-                ${attachment ? `<img class="comment-image" src="${escapeHtml(attachment)}" alt="" loading="lazy" decoding="async">` : ""}
+                ${attachment ? `
+                  <button class="comment-image-button" type="button" data-comment-photo-view="${escapeHtml(attachment)}" data-comment-photo-title="${escapeHtml(`${name} comment photo`)}" aria-label="Open comment photo">
+                    <img class="comment-image" src="${escapeHtml(attachment)}" alt="" loading="lazy" decoding="async">
+                  </button>
+                ` : ""}
               </div>
               <div class="comment-meta-row">
                 <span>${comment.created_at ? escapeHtml(new Date(comment.created_at).toLocaleString()) : "Approved comment"}</span>
@@ -20420,6 +20440,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     });
     detailBodyEl.addEventListener("click", event => {
       const discussion = event.target.closest(".discussion-section");
+      const commentPhotoButton = event.target.closest("[data-comment-photo-view]");
+      if (commentPhotoButton?.dataset.commentPhotoView) {
+        event.preventDefault();
+        openPlantPhotoViewer(commentPhotoButton.dataset.commentPhotoView, commentPhotoButton.dataset.commentPhotoTitle || "Comment photo");
+        return;
+      }
       const plantPhotoButton = event.target.closest("[data-plant-photo-view]");
       if (plantPhotoButton?.dataset.plantPhotoView) {
         event.preventDefault();
