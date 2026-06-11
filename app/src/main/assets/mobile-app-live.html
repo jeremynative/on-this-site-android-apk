@@ -3831,19 +3831,34 @@
     .tag-list {
       display: flex;
       flex-wrap: wrap;
-      gap: 7px;
-      margin: 10px 0 2px;
+      align-items: center;
+      gap: 6px;
+      margin: 10px 0 4px;
+    }
+
+    .tag-list-label {
+      flex: 0 0 100%;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: 0;
+      line-height: 1.1;
+      text-transform: uppercase;
     }
 
     .site-tag {
-      min-height: 44px;
-      padding: 5px 9px;
+      display: inline-flex;
+      align-items: center;
+      min-height: 0;
+      padding: 4px 8px;
       border: 1px solid rgba(73, 111, 93, 0.22);
-      border-radius: 999px;
-      background: #eef5f0;
+      border-radius: 7px;
+      background: rgba(238, 245, 240, 0.78);
       color: var(--accent-strong);
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 850;
+      line-height: 1.15;
+      text-decoration: none;
     }
 
     .activity-feed {
@@ -12736,7 +12751,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function siteTagsHtml(site) {
       const tags = siteCategoryTags(site);
       if (!tags.length) return "";
-      return `<div class="tag-list" aria-label="Related categories">${tags.map(tag => `<a class="site-tag" href="${escapeHtml(mobileTagUrl(tag.key))}" data-site-tag="${escapeHtml(tag.key)}">${escapeHtml(tag.label)}</a>`).join("")}</div>`;
+      return `<div class="tag-list" aria-label="Related categories"><span class="tag-list-label">Tags</span>${tags.map(tag => `<a class="site-tag" href="${escapeHtml(mobileTagUrl(tag.key))}" data-site-tag="${escapeHtml(tag.key)}">${escapeHtml(tag.label)}</a>`).join("")}</div>`;
     }
 
     function relatedSiteCenter(site) {
