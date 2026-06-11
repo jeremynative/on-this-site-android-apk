@@ -751,7 +751,13 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
-        if (webView != null) webView.onPause();
+        if (webView != null) {
+            webView.evaluateJavascript(
+                "(function(){try{if(window.__nliCaptureAndroidLifecycleSnapshot){window.__nliCaptureAndroidLifecycleSnapshot();return true;}return false;}catch(error){return false;}})();",
+                value -> Log.d(LOG_TAG, "Android lifecycle snapshot saved before pause: " + value)
+            );
+            webView.onPause();
+        }
         super.onPause();
     }
 

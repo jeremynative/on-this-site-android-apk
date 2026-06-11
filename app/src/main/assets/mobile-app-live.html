@@ -9552,6 +9552,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       androidMapGestureGuardsBound: false,
       nearbySiteOpenTimer: null,
       nearbySiteOpenToken: 0,
+      selectedWikiSlug: "",
+      androidLifecycleRestored: false,
       feedbackScreenshotFile: null,
       contributorSortMode: "alpha",
       expandedMobileProfileKey: "",
@@ -11258,11 +11260,21 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function nativeRefreshApp() {
       try {
         if (window.AndroidApp?.refreshNow) {
+          clearAndroidLifecycleSnapshot();
           window.AndroidApp.refreshNow();
           return true;
         }
       } catch {}
       return false;
+    }
+
+    const ANDROID_LIFECYCLE_STATE_KEY = "nli-android-lifecycle-state";
+    const ANDROID_LIFECYCLE_STATE_MAX_AGE = 12 * 60 * 60 * 1000;
+
+    function clearAndroidLifecycleSnapshot() {
+      try {
+        localStorage.removeItem(ANDROID_LIFECYCLE_STATE_KEY);
+      } catch {}
     }
 
     function showAndroidUpdateRequiredNotice(installedBuild = "") {
@@ -17497,6 +17509,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       let article = state.wikiBySlug.get(slug) || (typeof articleOrSlug === "object" ? articleOrSlug : null);
       state.selectedSlug = "";
       state.selectedSite = null;
+      state.selectedWikiSlug = slug;
       clearActiveSiteMapLabel();
       detailTitleEl.innerHTML = `
         <h2>${escapeHtml(article?.title || options.timelineEvent?.source_title || "Knowledgebase article")}</h2>
@@ -17560,6 +17573,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       detailBodyEl.innerHTML = bodyHtml;
       state.selectedSlug = "";
       state.selectedSite = null;
+      state.selectedWikiSlug = "";
       clearActiveSiteMapLabel();
       document.querySelectorAll(".sheet.open").forEach(item => item.classList.remove("open"));
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
@@ -17940,6 +17954,126 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return "";
     }
 
+    function currentDetailDrawerState() {
+      if (detailEl?.classList.contains("drawer-collapsed")) return "collapsed";
+      if (detailEl?.classList.contains("drawer-expanded")) return "expanded";
+      return "half";
+    }
+
+    function currentNearbyPanelState() {
+      if (appEl?.classList.contains("nearby-hidden")) return "hidden";
+      if (listPanelEl?.classList.contains("expanded")) return "expanded";
+      if (listPanelEl?.classList.contains("collapsed")) return "collapsed";
+      return "default";
+    }
+
+    function activeAndroidLifecycleContent() {
+      const params = new URLSearchParams(window.location.search || "");
+      if (detailEl?.classList.contains("open")) {
+        if (state.selectedSlug) return { type: "site", slug: state.selectedSlug };
+        if (state.selectedWikiSlug) return { type: "wiki", slug: state.selectedWikiSlug };
+        if (params.get("site")) return { type: "site", slug: params.get("site") };
+        if (params.get("wiki")) return { type: "wiki", slug: params.get("wiki") };
+        if (params.get("page")) return { type: "page", page: params.get("page") };
+      }
+      const openSheet = document.querySelector(".sheet.open");
+      const sheetKey = openSheet ? mobileSheetRouteKey(openSheet) : "";
+      if (sheetKey) return { type: "page", page: sheetKey };
+      if (params.get("page")) return { type: "page", page: params.get("page") };
+      return null;
+    }
+
+    function captureAndroidLifecycleSnapshot() {
+      if (!isNativeAndroidApp()) return null;
+      const center = state.map?.getCenter?.();
+      const activeContent = activeAndroidLifecycleContent();
+      const snapshot = {
+        savedAt: Date.now(),
+        content: activeContent,
+        panelMode: appEl?.classList.contains("panel-timeline") ? "timeline" : "nearby",
+        nearbyPanelState: currentNearbyPanelState(),
+        nearbyExpanded: Boolean(appEl?.classList.contains("nearby-expanded")),
+        detailDrawerState: currentDetailDrawerState(),
+        detailScrollTop: detailBodyEl?.scrollTop || 0,
+        search: searchEl?.value || "",
+        map: center ? {
+          center: [center.lng, center.lat],
+          zoom: state.map?.getZoom?.(),
+          bearing: state.map?.getBearing?.(),
+          pitch: state.map?.getPitch?.()
+        } : null
+      };
+      try {
+        localStorage.setItem(ANDROID_LIFECYCLE_STATE_KEY, JSON.stringify(snapshot));
+      } catch {}
+      return snapshot;
+    }
+
+    function readAndroidLifecycleSnapshot() {
+      if (!isNativeAndroidApp()) return null;
+      try {
+        const snapshot = JSON.parse(localStorage.getItem(ANDROID_LIFECYCLE_STATE_KEY) || "null");
+        if (!snapshot?.savedAt || Date.now() - Number(snapshot.savedAt) > ANDROID_LIFECYCLE_STATE_MAX_AGE) {
+          clearAndroidLifecycleSnapshot();
+          return null;
+        }
+        return snapshot;
+      } catch {
+        clearAndroidLifecycleSnapshot();
+        return null;
+      }
+    }
+
+    function restoreAndroidLifecyclePanels(snapshot) {
+      if (!snapshot) return;
+      setMobilePanelMode(snapshot.panelMode === "timeline" ? "timeline" : "nearby");
+      if (snapshot.panelMode !== "timeline") {
+        setNearbyPanelState(snapshot.nearbyPanelState || "default");
+        if (snapshot.nearbyExpanded) setNearbyExpanded(true);
+      }
+      if (searchEl && snapshot.search) {
+        searchEl.value = snapshot.search;
+        filterSites();
+      }
+    }
+
+    async function restoreAndroidLifecycleContent(snapshot) {
+      const content = snapshot?.content;
+      if (!content) return false;
+      if (content.type === "site" && content.slug) {
+        await openSite(content.slug, { focus: false, skipRoute: true, drawerState: snapshot.detailDrawerState || "half" });
+        if (snapshot.detailScrollTop && detailBodyEl) detailBodyEl.scrollTop = snapshot.detailScrollTop;
+        return true;
+      }
+      if (content.type === "wiki" && content.slug) {
+        await openWikiArticle(content.slug, { focus: false, skipRoute: true });
+        if (snapshot.detailDrawerState) setDetailDrawerState(snapshot.detailDrawerState);
+        if (snapshot.detailScrollTop && detailBodyEl) detailBodyEl.scrollTop = snapshot.detailScrollTop;
+        return true;
+      }
+      if (content.type === "page" && content.page) {
+        await openAppPage(content.page, { skipRoute: true });
+        return true;
+      }
+      return false;
+    }
+
+    function restoreAndroidLifecycleMap(snapshot) {
+      const mapState = snapshot?.map;
+      if (!state.map || !Array.isArray(mapState?.center)) return false;
+      const [lng, lat] = mapState.center.map(Number);
+      const zoom = Number(mapState.zoom);
+      if (!Number.isFinite(lng) || !Number.isFinite(lat) || !Number.isFinite(zoom)) return false;
+      state.map.jumpTo({
+        center: [lng, lat],
+        zoom,
+        bearing: Number(mapState.bearing) || 0,
+        pitch: Number(mapState.pitch) || 0
+      });
+      refreshAndroidMapAfterSettle("android-lifecycle-restore");
+      return true;
+    }
+
     function clearMobileRoute() {
       window.history.replaceState(null, "", window.location.pathname);
     }
@@ -18004,6 +18138,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!site) return;
       state.selectedSlug = slug;
       state.selectedSite = site;
+      state.selectedWikiSlug = "";
       syncActiveSiteMapLabel(site);
       renderList();
       if (options.focus !== false) focusSite(site);
@@ -18073,6 +18208,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       detailEl.style.transform = "";
       state.selectedSlug = "";
       state.selectedSite = null;
+      state.selectedWikiSlug = "";
       clearActiveSiteMapLabel();
       clearMobileBiographyPathOverlay();
       syncSitePlantMarkers(null);
@@ -21431,12 +21567,17 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       document.addEventListener(type, () => scheduleMemberProfileActivityTracking(), { passive: true });
     });
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) scheduleMemberProfileActivityTracking({ force: true, throttleMs: 0 });
-      else scheduleMemberProfileActivityTracking();
+      if (document.hidden) {
+        captureAndroidLifecycleSnapshot();
+        scheduleMemberProfileActivityTracking({ force: true, throttleMs: 0 });
+      } else scheduleMemberProfileActivityTracking();
     });
     window.addEventListener("pagehide", () => {
+      captureAndroidLifecycleSnapshot();
       scheduleMemberProfileActivityTracking({ force: true, throttleMs: 0 });
     });
+
+    window.__nliCaptureAndroidLifecycleSnapshot = captureAndroidLifecycleSnapshot;
 
     async function start() {
       try {
@@ -21455,6 +21596,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         syncMobileLayerButtons();
         syncMobilePanelAccessibility();
         renderCurrentTerritoryStatus();
+        const androidLifecycleSnapshot = nativeAndroid ? readAndroidLifecycleSnapshot() : null;
         if (nativeAndroid) await requestStartupLocation();
         if (nativeAndroid) {
           idleTask(() => {
@@ -21464,17 +21606,21 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           renderMobileTimeline();
         }
         renderList();
-        setMobilePanelMode("nearby");
-        try {
-          const savedNearbyState = isNativeAndroidApp() ? "default" : localStorage.getItem("nli-nearby-panel-state");
-          if (savedNearbyState === "expanded") setNearbyPanelState("expanded");
-          else if (savedNearbyState === "hidden") setNearbyPanelState("hidden");
-          else setNearbyPanelState("default");
-        } catch {}
-        restoreNearbyPanelHeight();
-        try {
-          if (!appEl?.classList.contains("nearby-hidden") && localStorage.getItem("nli-nearby-expanded") === "1") setNearbyExpanded(true);
-        } catch {}
+        if (androidLifecycleSnapshot) {
+          restoreAndroidLifecyclePanels(androidLifecycleSnapshot);
+        } else {
+          setMobilePanelMode("nearby");
+          try {
+            const savedNearbyState = isNativeAndroidApp() ? "default" : localStorage.getItem("nli-nearby-panel-state");
+            if (savedNearbyState === "expanded") setNearbyPanelState("expanded");
+            else if (savedNearbyState === "hidden") setNearbyPanelState("hidden");
+            else setNearbyPanelState("default");
+          } catch {}
+          restoreNearbyPanelHeight();
+          try {
+            if (!appEl?.classList.contains("nearby-hidden") && localStorage.getItem("nli-nearby-expanded") === "1") setNearbyExpanded(true);
+          } catch {}
+        }
         installNearbyPanelDrag();
         installDetailPanelDrag();
         installNativeAndroidSearchWatch();
@@ -21483,6 +21629,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           await new Promise(resolve => window.requestAnimationFrame(resolve));
         }
         await openInitialRouteFromUrl();
+        let androidLifecycleContentRestored = false;
+        const routeAlreadyOpened = Boolean(detailEl?.classList.contains("open") || document.querySelector(".sheet.open"));
+        if (!routeAlreadyOpened && androidLifecycleSnapshot) {
+          androidLifecycleContentRestored = await restoreAndroidLifecycleContent(androidLifecycleSnapshot);
+        }
         if (state.passwordResetToken) openSheet(loginSheetEl);
         if (!nativeAndroid) hideLoadingScreen();
         await initMap().catch(error => {
@@ -21490,7 +21641,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
         });
         state.mobileStartupRendering = false;
-        if (nativeAndroid && state.userLocation) {
+        const androidLifecycleMapRestored = androidLifecycleSnapshot ? restoreAndroidLifecycleMap(androidLifecycleSnapshot) : false;
+        state.androidLifecycleRestored = Boolean(androidLifecycleSnapshot && (androidLifecycleMapRestored || androidLifecycleContentRestored));
+        if (nativeAndroid && state.userLocation && !state.androidLifecycleRestored) {
           if (pointWithinBounds(state.userLocation, STARTUP_LOCATION_CENTER_BOUNDS)) {
             syncUserLocationMarker({ centerMap: true, zoom: NEAR_ME_ZOOM });
             refreshAndroidMapAfterSettle("android-startup-near-me");
@@ -21501,7 +21654,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             }
           }
         }
-        if (state.selectedSite) focusSite(state.selectedSite);
+        if (state.selectedSite && !androidLifecycleMapRestored) focusSite(state.selectedSite);
         checkDailyHistoryMoment();
         checkNewContentAlerts();
         if (!nativeAndroid) requestStartupLocation();
