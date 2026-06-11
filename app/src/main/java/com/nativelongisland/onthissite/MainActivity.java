@@ -55,8 +55,6 @@ public class MainActivity extends Activity {
     private static final int PLANT_BRIDGE_CAMERA_REQUEST = 45;
     static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
     private static final int NOTIFICATION_REQUEST = 47;
-    private static final long PERMISSION_RESUME_GRACE_MS = 45000;
-    private static final long LIFECYCLE_RELOAD_GRACE_MS = 12000;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
     static final String APP_VERSION = "20260609-shared-points-merge";
@@ -82,15 +80,11 @@ public class MainActivity extends Activity {
     private boolean pendingPhotoCaptureAfterPermission;
     private boolean created;
     private long lastRefreshAt;
-    private long stoppedAt;
     private float webTouchStartX;
     private float webTouchStartY;
     private long webTouchStartedAt;
-    private boolean wasStopped;
-    private long suppressResumeRefreshUntil;
     private boolean loadingBundledFallback;
     private boolean appShellLoaded;
-    private long resumedAt;
     Uri lastStoryVideoUri;
     String lastStoryVideoMimeType = "video/webm";
 
@@ -270,6 +264,7 @@ public class MainActivity extends Activity {
         if (savedInstanceState != null) {
             restorePendingPlantCameraUri();
             webView.restoreState(savedInstanceState);
+            appShellLoaded = true;
             lastRefreshAt = System.currentTimeMillis();
             suppressResumeRefreshAfterPermissionPrompt();
         } else {
@@ -620,14 +615,8 @@ public class MainActivity extends Activity {
     }
 
     private boolean shouldIgnoreLifecycleMainFrameReload(String reason) {
-        long now = System.currentTimeMillis();
-        boolean lifecycleTransition =
-            wasStopped
-            || now - stoppedAt < LIFECYCLE_RELOAD_GRACE_MS
-            || now - resumedAt < LIFECYCLE_RELOAD_GRACE_MS
-            || now < suppressResumeRefreshUntil;
-        if (!appShellLoaded || !lifecycleTransition) return false;
-        Log.w(LOG_TAG, "Ignoring lifecycle main-frame reload after app shell loaded: " + reason);
+        if (!appShellLoaded) return false;
+        Log.w(LOG_TAG, "Ignoring non-explicit main-frame reload after app shell loaded: " + reason);
         return true;
     }
 
@@ -725,7 +714,7 @@ public class MainActivity extends Activity {
     }
 
     void suppressResumeRefreshAfterPermissionPrompt() {
-        suppressResumeRefreshUntil = System.currentTimeMillis() + PERMISSION_RESUME_GRACE_MS;
+        Log.d(LOG_TAG, "Permission prompt resume will not reload the app shell.");
     }
 
     String packageVersionName() {
@@ -750,21 +739,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        resumedAt = System.currentTimeMillis();
         if (webView != null) webView.onResume();
-    }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
-        wasStopped = false;
-    }
-
-    @Override
-    protected void onStop() {
-        super.onStop();
-        wasStopped = true;
-        stoppedAt = System.currentTimeMillis();
     }
 
     @Override

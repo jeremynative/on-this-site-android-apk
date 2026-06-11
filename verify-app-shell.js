@@ -53,8 +53,7 @@ requireText("loadBundledFallback", "Android shell must keep the bundled archive 
 requireText("onReceivedHttpError", "Android shell must fall back when the live mobile archive returns an HTTP error.");
 requireText("isSiteGroundChallengeUrl", "Android shell must detect SiteGround challenge redirects and use the bundled fallback.");
 requireText("loadBundledFallback(\"siteground-challenge-start\")", "Android shell must switch to the bundled fallback as soon as SiteGround challenge navigation starts.");
-requireText("LIFECYCLE_RELOAD_GRACE_MS", "Android shell must protect foreground/window switches from accidental full reloads.");
-requireText("shouldIgnoreLifecycleMainFrameReload", "Android shell must ignore transient lifecycle main-frame reloads after the app has loaded.");
+requireText("shouldIgnoreLifecycleMainFrameReload", "Android shell must ignore non-explicit main-frame reloads after the app has loaded.");
 requireText("appShellLoaded = true;", "Android shell must remember when the app shell has loaded.");
 requireText("loadingBundledFallback && \"/mobile-app-live.html\".equals(path)", "Android shell must not intercept the live mobile archive unless the fallback is active.");
 requireText("loadingBundledFallback && \"/mobile-app.html\".equals(path)", "Android shell must serve the full bundled archive when live Directus startup falls back.");
@@ -68,6 +67,9 @@ requireText("__nliAndroidGeoGateInstalled", "Android shell must install the APK 
 requireText("window.__nliAllowGeoUntil=Date.now()+120000;", "Android shell must allow the app's startup Near me location request.");
 if (!manifest.includes("android.permission.POST_NOTIFICATIONS")) {
   throw new Error("Android shell must request notification permission for nearby site alerts.");
+}
+if (!manifest.includes('android:launchMode="singleTop"') || !manifest.includes('android:alwaysRetainTaskState="true"')) {
+  throw new Error("Android shell must retain the current activity when returning from the launcher or app switcher.");
 }
 requireText("NEARBY_NOTIFICATION_CHANNEL_ID", "Android shell must define a nearby site notification channel.");
 requireText("createNotificationChannel();", "Android shell must create the nearby notification channel during startup.");
@@ -108,6 +110,19 @@ if (!onResumeMatch || !onResumeMatch[0].includes("webView.onResume();")) {
 }
 if (/protected void onResume\(\) \{[\s\S]*?(refreshApp\(|loadBundledFallback\(|loadUrl\(|loadDataWithBaseURL\()/m.test(onResumeMatch[0])) {
   throw new Error("Android shell must not reload the app when returning from another window.");
+}
+const lifecycleReloadGuardMatch = source.match(/private boolean shouldIgnoreLifecycleMainFrameReload\(String reason\) \{[\s\S]*?\n    \}/);
+if (!lifecycleReloadGuardMatch || !lifecycleReloadGuardMatch[0].includes("if (!appShellLoaded) return false;")) {
+  throw new Error("Android shell must allow fallback only before the app shell has loaded.");
+}
+if (/LIFECYCLE_RELOAD_GRACE_MS|resumedAt|stoppedAt\s*</.test(lifecycleReloadGuardMatch[0])) {
+  throw new Error("Android shell must not use a timed resume window that can reload after switching apps.");
+}
+if (/LIFECYCLE_RELOAD_GRACE_MS|resumedAt|wasStopped|stoppedAt/.test(source)) {
+  throw new Error("Android shell must not keep timed resume reload state.");
+}
+if (!source.includes("webView.restoreState(savedInstanceState);\n            appShellLoaded = true;")) {
+  throw new Error("Android shell must treat a restored WebView as already loaded so resume errors cannot reload it.");
 }
 const fallbackMatch = source.match(/private void loadBundledFallback\(String reason\) \{[\s\S]*?\n    \}/);
 if (!fallbackMatch || !fallbackMatch[0].includes('Thread loader = new Thread(() ->') || !fallbackMatch[0].includes('html = bundledMobileHtml();')) {
