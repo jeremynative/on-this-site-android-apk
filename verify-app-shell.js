@@ -121,8 +121,14 @@ if (/LIFECYCLE_RELOAD_GRACE_MS|resumedAt|stoppedAt\s*</.test(lifecycleReloadGuar
 if (/LIFECYCLE_RELOAD_GRACE_MS|resumedAt|wasStopped|stoppedAt/.test(source)) {
   throw new Error("Android shell must not keep timed resume reload state.");
 }
-if (!source.includes("webView.restoreState(savedInstanceState);\n            appShellLoaded = true;")) {
-  throw new Error("Android shell must treat a restored WebView as already loaded so resume errors cannot reload it.");
+if (!source.includes("android.webkit.WebBackForwardList restoredState = webView.restoreState(savedInstanceState);") ||
+    !source.includes("restoredState != null && restoredState.getSize() > 0") ||
+    !source.includes('Log.w(LOG_TAG, "Saved WebView state was empty after restore; loading app shell.");') ||
+    !source.includes("refreshApp();")) {
+  throw new Error("Android shell must reload the app shell when saved WebView restore state is empty after an update.");
+}
+if (!source.includes('currentUrl == null || currentUrl.isEmpty() || "about:blank".equals(currentUrl)')) {
+  throw new Error("Android shell must not block fallback when the current WebView URL is blank.");
 }
 const fallbackMatch = source.match(/private void loadBundledFallback\(String reason\) \{[\s\S]*?\n    \}/);
 if (!fallbackMatch || !fallbackMatch[0].includes('Thread loader = new Thread(() ->') || !fallbackMatch[0].includes('html = bundledMobileHtml();')) {

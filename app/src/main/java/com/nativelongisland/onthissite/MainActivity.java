@@ -263,10 +263,15 @@ public class MainActivity extends Activity {
 
         if (savedInstanceState != null) {
             restorePendingPlantCameraUri();
-            webView.restoreState(savedInstanceState);
-            appShellLoaded = true;
+            android.webkit.WebBackForwardList restoredState = webView.restoreState(savedInstanceState);
             lastRefreshAt = System.currentTimeMillis();
             suppressResumeRefreshAfterPermissionPrompt();
+            if (restoredState != null && restoredState.getSize() > 0) {
+                appShellLoaded = true;
+            } else {
+                Log.w(LOG_TAG, "Saved WebView state was empty after restore; loading app shell.");
+                refreshApp();
+            }
         } else {
             restorePendingPlantCameraUri();
             refreshApp();
@@ -616,6 +621,8 @@ public class MainActivity extends Activity {
 
     private boolean shouldIgnoreLifecycleMainFrameReload(String reason) {
         if (!appShellLoaded) return false;
+        String currentUrl = webView == null ? "" : webView.getUrl();
+        if (currentUrl == null || currentUrl.isEmpty() || "about:blank".equals(currentUrl)) return false;
         Log.w(LOG_TAG, "Ignoring non-explicit main-frame reload after app shell loaded: " + reason);
         return true;
     }
