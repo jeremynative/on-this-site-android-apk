@@ -408,10 +408,12 @@ public class MainActivity extends Activity {
             webTouchStartX = event.getX();
             webTouchStartY = event.getY();
             webTouchStartedAt = System.currentTimeMillis();
+            cacheAndroidUiOverlayTap(event);
             cacheAndroidSearchResultTap(event);
             return;
         }
         if (event.getActionMasked() != MotionEvent.ACTION_UP) return;
+        cacheAndroidUiOverlayTap(event);
         float dx = event.getX() - webTouchStartX;
         float dy = event.getY() - webTouchStartY;
         if ((dx * dx + dy * dy) > 144f) return;
@@ -449,6 +451,20 @@ public class MainActivity extends Activity {
             + "));"
             + "}catch(error){return 'search-result-tap-error:'+(error&&error.message?error.message:String(error));}})()";
         webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "Search result tap bridge result: " + value));
+    }
+
+    private void cacheAndroidUiOverlayTap(MotionEvent event) {
+        if (webView == null || event == null) return;
+        String script = "(function(){try{"
+            + "if(!window.onAndroidUiOverlayTapStart)return 'missing-ui-overlay-tap-bridge';"
+            + "return String(window.onAndroidUiOverlayTapStart("
+            + event.getX() + ","
+            + event.getY() + ","
+            + webView.getWidth() + ","
+            + webView.getHeight()
+            + "));"
+            + "}catch(error){return 'ui-overlay-tap-error:'+(error&&error.message?error.message:String(error));}})()";
+        webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "UI overlay tap bridge result: " + value));
     }
 
     @Override

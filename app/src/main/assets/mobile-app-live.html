@@ -14045,6 +14045,80 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return performance.now() < (state.mobilePanelTapBlockUntil || 0);
     }
 
+    const ANDROID_UI_TAP_OVERLAY_SELECTOR = [
+      "button",
+      "a",
+      "input",
+      "select",
+      "textarea",
+      "details",
+      "summary",
+      "[role='button']",
+      "[role='dialog']",
+      "[data-app-page]",
+      "[data-close-sheet]",
+      "[data-mobile-activity-type]",
+      "[data-mobile-notification-type]",
+      ".mobile-header",
+      "header",
+      ".title-row",
+      ".title-actions",
+      ".quick-actions",
+      ".mobile-more-menu",
+      ".mobile-more-grid",
+      ".mobile-layer-menu",
+      ".mobile-layer-panel",
+      ".mobile-layer-option",
+      ".map-style-select",
+      ".mobile-activity-button",
+      ".mobile-notification-button",
+      ".mobile-view-tabs",
+      ".mobile-timeline",
+      ".timeline-current",
+      ".timeline-step",
+      ".timeline-toggle",
+      ".list-panel",
+      ".list-head",
+      ".site-list",
+      ".site-card",
+      ".sheet",
+      ".sheet-head",
+      ".sheet-body",
+      ".detail",
+      ".detail-head",
+      ".detail-body",
+      ".mobile-startup-spotlight",
+      ".plant-photo-viewer",
+      ".language-quiz-modal",
+      ".mapboxgl-control-container",
+      ".mapboxgl-ctrl"
+    ].join(", ");
+
+    function androidTapElementsAt(clientX, clientY) {
+      if (typeof document.elementsFromPoint === "function") {
+        const elements = document.elementsFromPoint(clientX, clientY);
+        if (elements?.length) return elements;
+      }
+      const target = document.elementFromPoint(clientX, clientY);
+      return target ? [target] : [];
+    }
+
+    function isAndroidMapMarkerElement(element) {
+      return !!element?.closest?.(".mapboxgl-marker button");
+    }
+
+    function isAndroidUiOverlayElement(element) {
+      if (!element?.closest) return false;
+      if (isAndroidMapMarkerElement(element)) return false;
+      return !!element.closest(ANDROID_UI_TAP_OVERLAY_SELECTOR);
+    }
+
+    function blockAndroidUiOverlayMapTapStart(event) {
+      const target = event?.target;
+      if (!target?.closest || isAndroidMapMarkerElement(target)) return;
+      if (target.closest(ANDROID_UI_TAP_OVERLAY_SELECTOR)) blockMobileMapTaps(1200);
+    }
+
     function consumePanelCloseEvent(event) {
       blockMobileMapTaps();
       event?.preventDefault?.();
@@ -14058,23 +14132,22 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const target = document.elementFromPoint(clientX, clientY);
       if (target === canvas || !!target?.closest?.(".mapboxgl-canvas")) return true;
       if (!target?.closest) return insideCanvas;
-      if (target.closest(".mapboxgl-marker button")) return true;
-      if (target.closest("button, a, input, select, textarea, details, summary")) return false;
-      if (target.closest(".mobile-header, .mobile-view-tabs, .list-panel, .list-head, .site-list, .site-card, .sheet, .sheet-head, .sheet-body, .detail, .detail-head, .detail-body, .mapboxgl-control-container, .mapboxgl-ctrl, .mobile-layer-menu")) return false;
+      if (isAndroidMapMarkerElement(target)) return true;
+      if (isAndroidUiOverlayTap(clientX, clientY)) return false;
       const mapContainer = canvas.closest?.(".mapboxgl-map") || state.map?.getContainer?.();
       return insideCanvas || (!!mapContainer && mapContainer.contains(target));
     }
 
     function isAndroidUiOverlayTap(clientX, clientY) {
-      const target = document.elementFromPoint(clientX, clientY);
-      if (!target?.closest) return false;
-      if (target.closest(".mapboxgl-marker button")) return false;
-      return !!target.closest(
-        "button, a, input, select, textarea, details, summary, " +
-        ".mobile-header, .mobile-view-tabs, .list-panel, .list-head, .site-list, .site-card, " +
-        ".sheet, .sheet-head, .sheet-body, .detail, .detail-head, .detail-body, " +
-        ".mapboxgl-control-container, .mapboxgl-ctrl, .mobile-layer-menu"
-      );
+      const canvas = state.map?.getCanvas?.();
+      const mapContainer = state.map?.getContainer?.();
+      for (const element of androidTapElementsAt(clientX, clientY)) {
+        if (isAndroidMapMarkerElement(element)) return false;
+        if (isAndroidUiOverlayElement(element)) return true;
+        if (element === canvas || element?.closest?.(".mapboxgl-canvas")) return false;
+        if (mapContainer && (element === mapContainer || element?.closest?.(".mapboxgl-map"))) return false;
+      }
+      return false;
     }
 
     function openAndroidMapDomTarget(clientX, clientY) {
@@ -14109,6 +14182,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           candidate.clientY >= 0 && candidate.clientY <= (window.innerHeight || height);
       });
     }
+
+    window.onAndroidUiOverlayTapStart = function onAndroidUiOverlayTapStart(viewX, viewY, viewWidth, viewHeight) {
+      const isOverlayTap = androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight)
+        .some(candidate => isAndroidUiOverlayTap(candidate.clientX, candidate.clientY));
+      if (isOverlayTap) blockMobileMapTaps(1200);
+      return isOverlayTap;
+    };
 
     window.onAndroidSearchResultTapStart = function onAndroidSearchResultTapStart(viewX, viewY, viewWidth, viewHeight) {
       state.pendingAndroidSearchResultTap = null;
@@ -20769,6 +20849,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     searchEl.addEventListener("compositionend", handleMobileSearchInput);
     searchEl.addEventListener("focus", handleMobileSearchFocus);
     searchEl.addEventListener("blur", stopSearchValueWatch);
+    document.addEventListener("pointerdown", blockAndroidUiOverlayMapTapStart, { passive: true, capture: true });
+    document.addEventListener("touchstart", blockAndroidUiOverlayMapTapStart, { passive: true, capture: true });
     const refreshMobileViewportLayout = () => {
       syncSystemSafeArea();
       restoreNearbyPanelHeight();
