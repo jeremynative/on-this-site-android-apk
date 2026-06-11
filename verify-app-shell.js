@@ -53,6 +53,9 @@ requireText("loadBundledFallback", "Android shell must keep the bundled archive 
 requireText("onReceivedHttpError", "Android shell must fall back when the live mobile archive returns an HTTP error.");
 requireText("isSiteGroundChallengeUrl", "Android shell must detect SiteGround challenge redirects and use the bundled fallback.");
 requireText("loadBundledFallback(\"siteground-challenge-start\")", "Android shell must switch to the bundled fallback as soon as SiteGround challenge navigation starts.");
+requireText("LIFECYCLE_RELOAD_GRACE_MS", "Android shell must protect foreground/window switches from accidental full reloads.");
+requireText("shouldIgnoreLifecycleMainFrameReload", "Android shell must ignore transient lifecycle main-frame reloads after the app has loaded.");
+requireText("appShellLoaded = true;", "Android shell must remember when the app shell has loaded.");
 requireText("loadingBundledFallback && \"/mobile-app-live.html\".equals(path)", "Android shell must not intercept the live mobile archive unless the fallback is active.");
 requireText("loadingBundledFallback && \"/mobile-app.html\".equals(path)", "Android shell must serve the full bundled archive when live Directus startup falls back.");
 requireText('assetName = "mobile-app.html";', "Android shell must serve embedded mobile data for the full archive fallback.");
@@ -98,6 +101,13 @@ if (!refreshAppMatch || !refreshAppMatch[0].includes('loadBundledFallback("start
 }
 if (refreshAppMatch[0].includes("webView.loadUrl(url, headers);")) {
   throw new Error("Android shell must not show the SiteGround-challenged live URL during normal startup.");
+}
+const onResumeMatch = source.match(/protected void onResume\(\) \{[\s\S]*?\n    \}/);
+if (!onResumeMatch || !onResumeMatch[0].includes("webView.onResume();")) {
+  throw new Error("Android shell must resume the existing WebView instead of reloading the app.");
+}
+if (/protected void onResume\(\) \{[\s\S]*?(refreshApp\(|loadBundledFallback\(|loadUrl\(|loadDataWithBaseURL\()/m.test(onResumeMatch[0])) {
+  throw new Error("Android shell must not reload the app when returning from another window.");
 }
 const fallbackMatch = source.match(/private void loadBundledFallback\(String reason\) \{[\s\S]*?\n    \}/);
 if (!fallbackMatch || !fallbackMatch[0].includes('Thread loader = new Thread(() ->') || !fallbackMatch[0].includes('html = bundledMobileHtml();')) {
