@@ -310,7 +310,7 @@ for (const [label, html] of [
     throw new Error(`Bundled Android ${label} must count all mobile layer controls instead of the old 2/3 summary.`);
   }
   if (!html.includes("`Layers ${activeLayerCount}/${totalLayerCount}`") ||
-      !html.includes("const totalLayerCount = primaryStates.length + mobileLayerCategoryInputs.length;")) {
+      !html.includes("const totalLayerCount = primaryStates.length + mobileLayerCategoryInputs.length + mobileLayerEraInputs.length;")) {
     throw new Error(`Bundled Android ${label} must summarize all visible mobile layer controls.`);
   }
   if (html.includes("right: max(8px, var(--app-right-safe));") ||
@@ -340,12 +340,14 @@ requireBundledText('window.NLI_FEEDBACK_UTILS', "Bundled Android app must includ
 requireBundledPattern(/detailBodyEl\.innerHTML\s*=\s*`[\s\S]*?\$\{siteTagsHtml\(site\)\}[\s\S]*?\$\{sections\}[\s\S]*?\$\{historyHtml\}[\s\S]*?\$\{whyThisMattersHtml\(site\)\}[\s\S]*?\$\{relatedSitesSection\(site\)\}/, "Bundled Android site articles must place Why This Matters before related sites near the end.");
 requireBundledText('const feedbackPayload = FEEDBACK_UTILS.buildFeedbackCommentPayload', "Bundled Android app must save feedback through the shared Directus payload.");
 requireBundledText('source_type: "feedback"', "Bundled Android app feedback must use the feedback source type.");
-requireBundledText('feedbackSheetEl.style.visibility = "hidden"', "Bundled Android app must hide the feedback sheet before screenshot capture.");
+requireBundledText('if (hiddenEl) hiddenEl.style.visibility = "hidden"', "Bundled Android app must hide the feedback sheet before screenshot capture.");
+requireBundledText('hiddenEl: feedbackSheetEl', "Bundled Android app must pass the feedback sheet to screenshot capture.");
 requireBundledText('sendFeedbackReviewEmail', "Bundled Android app must notify review email after feedback saves.");
 requireBundledText('data-take-comment-photo', "Bundled Android app must expose comment camera capture controls.");
-requireBundledText('compressCommentImage', "Bundled Android app must compress oversized comment photos before upload.");
+requireBundledText('prepareSelectedCommentPhoto(section)', "Bundled Android app must compress oversized comment photos before upload.");
+requireBundledText('prepareJpegUploadImage(rawFile, "plant-observation")', "Bundled Android app must route selected comment photos through the shared JPEG preparation helper.");
 requireBundledText('function compressImageFile(file, options = {})', "Bundled Android app must use the shared media image compression helper.");
-requireBundledText('MEDIA_UTILS.compressImageFile(file,', "Bundled Android app must route local image compression through shared media utilities.");
+requireBundledText('MEDIA_UTILS.prepareJpegUploadImage(file,', "Bundled Android app must route local image compression through shared media utilities.");
 requireBundledText('function canvasToImageFile(canvas, options = {})', "Bundled Android app must include shared canvas screenshot file creation.");
 requireBundledText('MEDIA_UTILS.canvasToImageFile(canvas,', "Bundled Android app must route feedback screenshots through shared media utilities.");
 requireBundledText('MEDIA_UTILS.fileExtensionForType', "Bundled Android app must route feedback upload extensions through shared media utilities.");
@@ -362,15 +364,15 @@ requireBundledText('function writeSeen(storageKey, items = [], options = {})', "
 requireBundledText('ACTIVITY_UTILS.readSeen(mobileNotificationLastSeenKey())', "Bundled Android app must route notification unread state through shared activity utilities.");
 requireBundledText('ACTIVITY_UTILS.readSeen(mobileActivityLastSeenKey())', "Bundled Android app must route activity unread state through shared activity utilities.");
 requireBundledText('function editedDateLabel(value, options = {})', "Bundled Android app must include shared edited-date labels.");
-requireBundledText('ACTIVITY_UTILS.editedDateLabel(value, { fallback: DEFAULT_LAST_EDITED_LABEL })', "Bundled Android app must route edited-date labels through shared activity utilities.");
+requireBundledText('ACTIVITY_UTILS.editedDateLabel(latestEditedDate(item), { fallback: DEFAULT_LAST_EDITED_LABEL })', "Bundled Android app must route edited-date labels through shared activity utilities.");
 requireBundledText('function siteEditedDate(site = {}, options = {})', "Bundled Android app must include shared edited-date source selection.");
 requireBundledText('ACTIVITY_UTILS.siteEditedDate(item, { extended: true })', "Bundled Android app must route mobile edited-date source selection through shared activity utilities.");
 requireBundledText('function plantObservationFactRows(fields = {}, match = null, options = {})', "Bundled Android app must include shared plant fact rows.");
 requireBundledText('PLANT_UTILS.plantObservationFactRows(fields, match,', "Bundled Android app must route mobile plant fact rows through shared plant utilities.");
 requireBundledText('function mergeRecordsByIdOrKey(target = [], records = [], keyField = "vote_key")', "Bundled Android app must include shared comment vote record merging.");
-requireBundledText('COMMENT_UTILS.mergeRecordsByIdOrKey(state.commentVotes, records, "vote_key")', "Bundled Android app must route comment vote merging through shared comment utilities.");
+requireBundledText('COMMENT_UTILS.mergeCommentVoteRecords(state.commentVotes, records)', "Bundled Android app must route comment vote merging through shared comment utilities.");
 requireBundledText('function commentVoterKey(profile, canVote = true)', "Bundled Android app must include the shared comment voter gate.");
-requireBundledText('COMMENT_UTILS.commentVoterKey(profile, isApprovedContributor())', "Bundled Android app must route mobile comment vote eligibility through shared comment utilities.");
+requireBundledText('canVote: isApprovedContributor()', "Bundled Android app must route mobile comment vote eligibility through shared comment utilities.");
 requireBundledText('function viewerOwnsComment(comment, options = {})', "Bundled Android app must include shared comment ownership checks.");
 requireBundledText('COMMENT_UTILS.viewerOwnsComment(comment, { profile, viewerEmail })', "Bundled Android app must route mobile comment ownership through shared comment utilities.");
 requireBundledText('function votePayload(commentId, value, profile, options = {})', "Bundled Android app must include shared comment vote payload building.");
@@ -394,8 +396,8 @@ requireBundledText('function rowsFallback(rows = [], options = {})', "Bundled An
 requireBundledText('function responseUsedFallback(response)', "Bundled Android app must include shared profile fallback response detection.");
 requireBundledText('function allResponsesFresh(responses = [])', "Bundled Android app must include shared profile response freshness logic.");
 requireBundledText('function withFallbackTimeout(promise, fallback, timeoutMs = 12000)', "Bundled Android app must include shared profile sync timeout logic.");
-requireBundledText('PROFILE_UTILS.withFallbackTimeout(promise, fallback, timeoutMs)', "Bundled Android app must route profile sync timeouts through shared profile utilities.");
-requireBundledText('PROFILE_UTILS.allResponsesFresh(responses)', "Bundled Android app must route profile sync freshness checks through shared profile utilities.");
+requireBundledText('const withProfileSyncTimeout = PROFILE_UTILS.withFallbackTimeout', "Bundled Android app must route profile sync timeouts through shared profile utilities.");
+requireBundledText('const allResponsesFresh = PROFILE_UTILS.allResponsesFresh', "Bundled Android app must route profile sync freshness checks through shared profile utilities.");
 requireBundledText('function activeProfileRowKey(row = {}, options = {})', "Bundled Android app must include stable active-profile row merge keys.");
 requireBundledText('PROFILE_UTILS.preserveActiveProfileRows(nextRows, currentRows, currentContributorProfile() || state.profile', "Bundled Android app must route active-profile row preservation through shared profile utilities.");
 requireBundledText('function activeProfileFilterSuffix(profile = {}, profileFields = ["member_profile"], options = {})', "Bundled Android app must include shared active-profile Directus filter logic.");
@@ -409,7 +411,7 @@ requireBundledText('return directusClient.triggerReviewAction(action, payload, {
 requireBundledText('window.NLI_SHARED_MAP_UTILS', "Bundled Android app must include shared map safety utilities.");
 requireBundledText('function setGeoJsonSourceData(map, sourceId, data)', "Bundled Android app must include shared safe GeoJSON source updates.");
 requireBundledText('MAP_UTILS.rebindLayerEvent(state.map, state.mobileMapLayerHandlers, type, layerId, handler)', "Bundled Android app must route mobile layer event rebinding through shared map utilities.");
-requireBundledText('MAP_UTILS.existingLayerIds(state.map, targetLayers)', "Bundled Android app must use shared existing-layer filtering for mobile hit testing.");
+requireBundledText('MAP_UTILS.queryRenderedFeaturesAround(state.map, point, targetLayers, radius', "Bundled Android app must use shared existing-layer filtering for mobile hit testing.");
 requireBundledText('function layerFilterSetFromInputs(inputs = [], isActive = input => input?.checked !== false)', "Bundled Android app must include shared layer category filter set creation.");
 requireBundledText('function passesLayerCategoryFilters(keys = [], active = new Set(), totalCount = 0)', "Bundled Android app must include shared layer category filter decisions.");
 requireBundledText('SITE_UTILS.passesLayerCategoryFilters(keys, active, mobileLayerCategoryInputs.length)', "Bundled Android app must route mobile layer category filtering through shared site utilities.");
@@ -420,7 +422,7 @@ requireBundledText('function distanceLabelMiles(miles)', "Bundled Android app mu
 requireBundledText('function ringCenter(ring = [], options = {})', "Bundled Android app must include shared ring center helper.");
 requireBundledText('function appendPolygonToGeometry(geometry, polygonCoordinates, options = {})', "Bundled Android app must include shared polygon append helper.");
 requireBundledText('GEOMETRY_UTILS.appendPolygonToGeometry(geometry, polygonCoordinates)', "Bundled Android app must route mobile polygon append through shared geometry utilities.");
-requireBundledText('if (GEOMETRY_UTILS.milesBetweenPoints) return GEOMETRY_UTILS.milesBetweenPoints(a, b);', "Bundled Android app must route mobile distance math through shared geometry utilities.");
+requireBundledText('return GEOMETRY_UTILS.milesBetweenPoints(a, b);', "Bundled Android app must route mobile distance math through shared geometry utilities.");
 requireBundledText('Search sites, towns, histories', "Bundled Android app must include mobile search.");
 requireBundledText('searchDataVersion: 0', "Bundled Android app must track search data rebuilds.");
 requireBundledText('lastSearchDataVersion: -1', "Bundled Android app must remember the last processed search data version.");
