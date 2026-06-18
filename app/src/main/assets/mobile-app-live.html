@@ -21112,10 +21112,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         type: "circle",
         source: "mobile-site-attention",
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 18, 10, 26, 14, 38],
-          "circle-color": "#d62727",
-          "circle-blur": 0.78,
-          "circle-opacity": 0.24
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 24, 10, 34, 14, 50],
+          "circle-color": "#d71920",
+          "circle-blur": 0.72,
+          "circle-opacity": 0.34
         }
       });
       state.map.addLayer({
@@ -21123,10 +21123,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         type: "circle",
         source: "mobile-site-attention",
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 7, 10, 11, 14, 17],
-          "circle-color": "#d62727",
-          "circle-blur": 0.48,
-          "circle-opacity": 0.26
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 10, 10, 15, 14, 22],
+          "circle-color": "#d71920",
+          "circle-blur": 0.42,
+          "circle-opacity": 0.38
         }
       });
       state.map.addLayer({
@@ -21282,10 +21282,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const elapsed = Date.now() - (state.siteAttentionPulseStartedAt || Date.now());
       const progress = (elapsed % 1800) / 1800;
       const wave = 0.5 - Math.cos(progress * Math.PI * 2) / 2;
-      state.map.setPaintProperty("mobile-site-attention-outer", "circle-radius", ["interpolate", ["linear"], ["zoom"], 6, 18 + wave * 7, 10, 26 + wave * 10, 14, 38 + wave * 14]);
-      state.map.setPaintProperty("mobile-site-attention-outer", "circle-opacity", 0.12 + (1 - wave) * 0.18);
-      state.map.setPaintProperty("mobile-site-attention-core", "circle-radius", ["interpolate", ["linear"], ["zoom"], 6, 7 + wave * 3, 10, 11 + wave * 4, 14, 17 + wave * 5]);
-      state.map.setPaintProperty("mobile-site-attention-core", "circle-opacity", 0.18 + wave * 0.22);
+      state.map.setPaintProperty("mobile-site-attention-outer", "circle-radius", ["interpolate", ["linear"], ["zoom"], 6, 24 + wave * 10, 10, 34 + wave * 14, 14, 50 + wave * 18]);
+      state.map.setPaintProperty("mobile-site-attention-outer", "circle-opacity", 0.2 + (1 - wave) * 0.3);
+      state.map.setPaintProperty("mobile-site-attention-core", "circle-radius", ["interpolate", ["linear"], ["zoom"], 6, 10 + wave * 4, 10, 15 + wave * 5, 14, 22 + wave * 7]);
+      state.map.setPaintProperty("mobile-site-attention-core", "circle-opacity", 0.26 + wave * 0.34);
     }
 
     function startMobileSiteAttentionPulse() {
