@@ -718,7 +718,14 @@
       font-size: 13px;
       font-weight: 800;
       line-height: 1.2;
-      overflow-wrap: anywhere;
+      min-width: 0;
+    }
+
+    .mobile-layer-option span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .mobile-layer-option input {
@@ -4756,7 +4763,7 @@
               <input id="mobile-layer-pins" type="checkbox" checked>
             </label>
             <label class="mobile-layer-option" for="mobile-layer-shapes">
-              <span>Polygons / Territories</span>
+              <span>Boundaries</span>
               <input id="mobile-layer-shapes" type="checkbox" checked>
             </label>
             <label class="mobile-layer-option" for="mobile-layer-biography-paths">
@@ -4776,27 +4783,27 @@
               <input id="mobile-layer-whaling-sites" class="mobile-layer-category" type="checkbox" value="whaling-sites" checked>
             </label>
             <label class="mobile-layer-option" for="mobile-layer-burial-sacred">
-              <span>Burial / Sacred Sites</span>
+              <span>Sacred Sites</span>
               <input id="mobile-layer-burial-sacred" class="mobile-layer-category" type="checkbox" value="burial-sacred" checked>
             </label>
             <label class="mobile-layer-option" for="mobile-layer-villages-settlements">
-              <span>Villages / Settlements</span>
+              <span>Villages</span>
               <input id="mobile-layer-villages-settlements" class="mobile-layer-category" type="checkbox" value="villages-settlements" checked>
             </label>
             <label class="mobile-layer-option" for="mobile-layer-trails-routes">
-              <span>Trails / Travel Routes</span>
+              <span>Trails</span>
               <input id="mobile-layer-trails-routes" class="mobile-layer-category" type="checkbox" value="trails-routes" checked>
             </label>
             <label class="mobile-layer-option" for="mobile-layer-waterways-coastal">
-              <span>Waterways / Coastal Sites</span>
+              <span>Waterways</span>
               <input id="mobile-layer-waterways-coastal" class="mobile-layer-category" type="checkbox" value="waterways-coastal" checked>
             </label>
             <label class="mobile-layer-option" for="mobile-layer-approximate-locations">
-              <span>Approximate Locations</span>
+              <span>Approximate</span>
               <input id="mobile-layer-approximate-locations" class="mobile-layer-category" type="checkbox" value="approximate-locations" checked>
             </label>
             <label class="mobile-layer-option" for="mobile-layer-precise-locations">
-              <span>Precise Locations</span>
+              <span>Precise</span>
               <input id="mobile-layer-precise-locations" class="mobile-layer-category" type="checkbox" value="precise-locations" checked>
             </label>
             <label class="mobile-layer-option" for="mobile-layer-era-precontact">
@@ -4804,7 +4811,7 @@
               <input id="mobile-layer-era-precontact" class="mobile-layer-era" type="checkbox" value="precontact" checked>
             </label>
             <label class="mobile-layer-option" for="mobile-layer-era-contact">
-              <span>Contact Period</span>
+              <span>Contact</span>
               <input id="mobile-layer-era-contact" class="mobile-layer-era" type="checkbox" value="contact" checked>
             </label>
             <label class="mobile-layer-option" for="mobile-layer-era-historic">
@@ -5920,12 +5927,12 @@
     { key: "shell-middens", label: "Shell Middens" },
     { key: "fishing-sites", label: "Fishing Sites" },
     { key: "whaling-sites", label: "Whaling Sites" },
-    { key: "burial-sacred", label: "Burial / Sacred Sites" },
-    { key: "villages-settlements", label: "Villages / Settlements" },
-    { key: "trails-routes", label: "Trails / Travel Routes" },
-    { key: "waterways-coastal", label: "Waterways / Coastal Sites" },
-    { key: "approximate-locations", label: "Approximate Locations" },
-    { key: "precise-locations", label: "Precise Locations" }
+    { key: "burial-sacred", label: "Sacred Sites" },
+    { key: "villages-settlements", label: "Villages" },
+    { key: "trails-routes", label: "Trails" },
+    { key: "waterways-coastal", label: "Waterways" },
+    { key: "approximate-locations", label: "Approximate" },
+    { key: "precise-locations", label: "Precise" }
   ];
 
   function siteLayerText(site = {}) {
