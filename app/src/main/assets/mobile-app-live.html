@@ -9810,104 +9810,6 @@
     return false;
   }
 
-  function validCoordinate(point) {
-    return Array.isArray(point)
-      && point.length >= 2
-      && Number.isFinite(Number(point[0]))
-      && Number.isFinite(Number(point[1]));
-  }
-
-  function nearestPointOnSegment(point, start, end) {
-    if (!validCoordinate(point) || !validCoordinate(start) || !validCoordinate(end)) return null;
-    const lng = Number(point[0]);
-    const lat = Number(point[1]);
-    const startLng = Number(start[0]);
-    const startLat = Number(start[1]);
-    const endLng = Number(end[0]);
-    const endLat = Number(end[1]);
-    const scale = Math.max(0.2, Math.cos(((lat + startLat + endLat) / 3) * Math.PI / 180));
-    const px = lng * scale;
-    const py = lat;
-    const ax = startLng * scale;
-    const ay = startLat;
-    const bx = endLng * scale;
-    const by = endLat;
-    const dx = bx - ax;
-    const dy = by - ay;
-    const lengthSquared = dx * dx + dy * dy;
-    const t = lengthSquared ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSquared)) : 0;
-    const nearest = [startLng + (endLng - startLng) * t, startLat + (endLat - startLat) * t];
-    const distanceSquared = ((nearest[0] - lng) * scale) ** 2 + (nearest[1] - lat) ** 2;
-    return { point: nearest, distanceSquared };
-  }
-
-  function nearestPointOnRing(point, ring = []) {
-    let best = null;
-    for (let index = 0; index < ring.length - 1; index += 1) {
-      const candidate = nearestPointOnSegment(point, ring[index], ring[index + 1]);
-      if (!candidate) continue;
-      if (!best || candidate.distanceSquared < best.distanceSquared) best = candidate;
-    }
-    return best;
-  }
-
-  function nearestPointOnPolygon(point, polygon = []) {
-    const outer = polygon[0] || [];
-    const nearest = nearestPointOnRing(point, outer);
-    if (!nearest) return null;
-    return {
-      ...nearest,
-      polygonCenter: ringCenter(outer, { method: "bounds" }) || ringCenter(outer)
-    };
-  }
-
-  function nearestPointOnGeometry(point, geometry) {
-    if (!validCoordinate(point) || !geometry) return null;
-    if (geometry.type === "Polygon") return nearestPointOnPolygon(point, geometry.coordinates || []);
-    if (geometry.type !== "MultiPolygon") return null;
-    let best = null;
-    for (const polygon of geometry.coordinates || []) {
-      const candidate = nearestPointOnPolygon(point, polygon);
-      if (!candidate) continue;
-      if (!best || candidate.distanceSquared < best.distanceSquared) best = candidate;
-    }
-    return best;
-  }
-
-  function nudgePointToward(point, target, amount = 0.0012) {
-    if (!validCoordinate(point) || !validCoordinate(target)) return point;
-    const dx = Number(target[0]) - Number(point[0]);
-    const dy = Number(target[1]) - Number(point[1]);
-    const length = Math.sqrt(dx * dx + dy * dy);
-    if (!length) return point;
-    return [Number(point[0]) + (dx / length) * amount, Number(point[1]) + (dy / length) * amount];
-  }
-
-  function shorelineDisplayPoint(point, landGeometry, options = {}) {
-    if (!validCoordinate(point) || !landGeometry) return null;
-    const normalizedPoint = [Number(point[0]), Number(point[1])];
-    const nearest = nearestPointOnGeometry(normalizedPoint, landGeometry);
-    if (pointInGeometry(normalizedPoint, landGeometry)) {
-      const insetMiles = Number.isFinite(options.minInsetMiles) ? options.minInsetMiles : 0;
-      const milesFromShore = nearest?.point ? milesBetweenPoints(normalizedPoint, nearest.point) : null;
-      if (insetMiles > 0 && Number.isFinite(milesFromShore) && milesFromShore < insetMiles) {
-        const nearShoreNudge = Number.isFinite(options.nearShoreNudgeAmount)
-          ? options.nearShoreNudgeAmount
-          : (Number.isFinite(options.nudgeAmount) ? options.nudgeAmount : 0.0012);
-        return nudgePointToward(normalizedPoint, nearest.polygonCenter, nearShoreNudge);
-      }
-      return normalizedPoint;
-    }
-    if (!nearest?.point) return null;
-    const miles = milesBetweenPoints(normalizedPoint, nearest.point);
-    const maxMiles = Number.isFinite(options.maxMiles) ? options.maxMiles : 1.75;
-    if (!Number.isFinite(miles) || miles > maxMiles) return null;
-    const offshoreNudge = Number.isFinite(options.offshoreNudgeAmount)
-      ? options.offshoreNudgeAmount
-      : (Number.isFinite(options.nudgeAmount) ? options.nudgeAmount : 0.0012);
-    return nudgePointToward(nearest.point, nearest.polygonCenter, offshoreNudge);
-  }
-
   window.NLI_GEOMETRY_UTILS = {
     normalizeHex,
     collectCoordinates,
@@ -9926,9 +9828,7 @@
     barrierBeachMatchesTerritory,
     pointInRing,
     pointInPolygonCoordinates,
-    pointInGeometry,
-    nearestPointOnGeometry,
-    shorelineDisplayPoint
+    pointInGeometry
   };
 }());
   </script>
@@ -12292,7 +12192,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       wikiDetailCache: new Map(),
       relatedSitesCache: new Map(),
       relatedSiteIndexCache: null,
-      shorelinePointCache: new Map(),
       deferredDataLoaded: false,
       deferredDataLoading: false,
       profileActivitySynced: false,
@@ -13603,33 +13502,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         }
         return geometry;
       }
-      if (site?.geojson) return shorelineAdjustedSiteGeometry(site, site.geojson);
+      if (site?.geojson) return site.geojson;
       return null;
-    }
-
-    function pointShouldRemainInWater(record = {}) {
-      const text = normalizeText([
-        record.title,
-        record.slug,
-        record.site_type,
-        record.address_label
-      ].filter(Boolean).join(" "));
-      return /\b(river|creek|harbor|bay|pond|cove|inlet|channel|sound|island|waterway)\b/.test(text);
-    }
-
-    function shorelineAdjustedSiteGeometry(site, geometry) {
-      if (!geometry || geometry.type !== "Point" || pointShouldRemainInWater(site)) return geometry;
-      const key = `site:${site?.id || site?.slug || ""}:${geometry.coordinates?.join(",") || ""}:${state.landMaskData ? "mask" : "nomask"}`;
-      if (state.shorelinePointCache.has(key)) return state.shorelinePointCache.get(key);
-      const point = GEOMETRY_UTILS.shorelineDisplayPoint?.(geometry.coordinates, state.landMaskData?.geometry, {
-        maxMiles: 2,
-        minInsetMiles: 0.35,
-        offshoreNudgeAmount: 0.0014,
-        nearShoreNudgeAmount: 0.0036
-      });
-      const adjusted = point ? { ...geometry, coordinates: point } : geometry;
-      state.shorelinePointCache.set(key, adjusted);
-      return adjusted;
     }
 
     async function ensureLandMask() {
