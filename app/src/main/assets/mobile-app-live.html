@@ -11783,7 +11783,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     });
     const NEW_CONTENT_ALERT_INTERVAL_MS = 5 * 60 * 60 * 1000;
     const PUBLIC_ARCHIVE_BASE = SHARED_CONFIG.publicArchiveBase || "https://nativelongisland.com/";
-    const EXHIBIT_MARKER_ICON = `${PUBLIC_ARCHIVE_BASE}assets/map-icons/exhibit-framed-landscape-marker.png`;
+    const EXHIBIT_MARKER_ICON = "assets/map-icons/exhibit-framed-landscape-marker.png";
     const LAND_MASK_URL = `long-island-land-ma${"sk"}.geojson`;
     const LAND_MASK_VERSION = "2026-05-18";
     const LONG_ISLAND_BOUNDS = [[-75.15, 39.75], [-70.65, 42.05]];
@@ -14728,6 +14728,24 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return candidates[Math.floor(Math.random() * candidates.length)];
     }
 
+    function mobileUpcomingExhibitDismissKey(exhibit) {
+      return `nli-mobile-hide-upcoming-exhibit-${localDateKey()}-${exhibit?.slug || exhibit?.id || "event"}`;
+    }
+
+    function upcomingMobileExhibit() {
+      const today = new Date(`${localDateKey()}T00:00:00`);
+      const candidates = state.exhibits
+        .filter(exhibit => /exhibit|exhibition|gallery|collection|on[_ ]?view|artwork|portrait/i.test([exhibit.event_type, exhibit.title, exhibit.summary, exhibit.body, exhibit.venue].join(" ")))
+        .map(exhibit => {
+          const start = new Date(exhibit.start_datetime || exhibit.collection_date || exhibit.end_datetime || "");
+          const end = new Date(exhibit.end_datetime || exhibit.start_datetime || exhibit.collection_date || "");
+          return { exhibit, start, end };
+        })
+        .filter(item => Number.isFinite(item.start.getTime()) && (!Number.isFinite(item.end.getTime()) || item.end >= today))
+        .sort((a, b) => a.start - b.start || String(a.exhibit.title || "").localeCompare(String(b.exhibit.title || "")));
+      return candidates[0]?.exhibit || null;
+    }
+
     function sortSites() {
       state.filtered.sort((a, b) => {
         const da = siteDistance(a, { source: "user" });
@@ -16991,11 +17009,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function siteMapIconUrl(site) {
-      return MEDIA_UTILS.siteMapIconUrl(site, { directusAssetUrl });
+      return MEDIA_UTILS.siteMapIconUrl(site, { directusAssetUrl }) || (SITE_UTILS.isExhibitSite(site) ? EXHIBIT_MARKER_ICON : "");
     }
 
     function mobileSiteIconKey(site) {
-      const raw = String(site?.map_icon || "").trim();
+      const raw = String(site?.map_icon || (SITE_UTILS.isExhibitSite(site) ? `exhibit-${site?.slug || site?.id || "site"}` : "")).trim();
       return raw ? `mobile-site-icon-${SHARED_UTILS.sanitizeDomKey(raw)}` : "";
     }
 
@@ -20818,6 +20836,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileStartupSpotlightEl.hidden = true;
       mobileStartupSpotlightEl.classList.remove("show");
       mobileStartupSpotlightEl.style.removeProperty("top");
+      if (options.dismissForToday && state.mobileStartupSpotlightExhibit) {
+        localStorage.setItem(mobileUpcomingExhibitDismissKey(state.mobileStartupSpotlightExhibit), "1");
+      }
+      state.mobileStartupSpotlightExhibit = null;
       if (options.deferLongIslandView) {
         state.mobileStartupSpotlightReturnOnDetailClose = true;
       } else if (options.zoomLongIslandView && wasVisible) {
@@ -20826,12 +20848,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
     }
 
-    function showMobileStartupSpotlight(site) {
+    function showMobileStartupSpotlight(site, options = {}) {
       if (!site?.center || !mobileStartupSpotlightEl) return false;
       state.mobileStartupSpotlightSite = site;
+      state.mobileStartupSpotlightExhibit = options.exhibit || null;
       state.mobileStartupSpotlightShown = true;
-      if (mobileStartupSpotlightTitleEl) mobileStartupSpotlightTitleEl.textContent = site.title || "Mapped site";
-      if (mobileStartupSpotlightSummaryEl) mobileStartupSpotlightSummaryEl.textContent = mobileStartupSpotlightText(site);
+      if (mobileStartupSpotlightTitleEl) mobileStartupSpotlightTitleEl.textContent = options.title || site.title || "Mapped site";
+      if (mobileStartupSpotlightSummaryEl) mobileStartupSpotlightSummaryEl.textContent = options.summary || mobileStartupSpotlightText(site);
       mobileStartupSpotlightEl.hidden = false;
       mobileStartupSpotlightEl.classList.add("show");
       setMobilePanelMode("nearby");
@@ -20845,7 +20868,24 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return true;
     }
 
+    function showUpcomingMobileExhibitSpotlight() {
+      const exhibit = upcomingMobileExhibit();
+      if (!exhibit || localStorage.getItem(mobileUpcomingExhibitDismissKey(exhibit)) === "1") return false;
+      const site = mobileTimelineExhibitSite(exhibit) || exhibit;
+      const dateLabel = CALENDAR_UTILS.exhibitDateLabel(exhibit);
+      const summary = [
+        [dateLabel, exhibit.venue].filter(Boolean).join(" - "),
+        publicCleanText(exhibit.summary || "")
+      ].filter(Boolean).join(". ");
+      return showMobileStartupSpotlight(site, {
+        exhibit,
+        title: `Upcoming exhibit: ${exhibit.title || "On This Site"}`,
+        summary: summary.length > 150 ? `${summary.slice(0, 147).trim()}...` : summary
+      });
+    }
+
     function showRandomMobileStartupSpotlight() {
+      if (showUpcomingMobileExhibitSpotlight()) return true;
       const site = randomMobileStartupSpotlightSite();
       return site ? showMobileStartupSpotlight(site) : false;
     }
@@ -24076,10 +24116,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     mobilePinsToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("pins", state.settings.showPins === false));
     mobileShapesToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("shapes", state.settings.showShapes === false));
     mobileStartupSpotlightLearnBtn?.addEventListener("click", () => {
+      const exhibit = state.mobileStartupSpotlightExhibit;
+      if (exhibit) {
+        hideMobileStartupSpotlight({ deferLongIslandView: true });
+        openExhibit(exhibit);
+        return;
+      }
       const site = state.mobileStartupSpotlightSite;
       if (site?.slug) openSite(site.slug, { focus: false, drawerState: "half", fromStartupSpotlight: true });
     });
-    mobileStartupSpotlightDismissBtn?.addEventListener("click", () => hideMobileStartupSpotlight({ zoomLongIslandView: true }));
+    mobileStartupSpotlightDismissBtn?.addEventListener("click", () => hideMobileStartupSpotlight({ zoomLongIslandView: true, dismissForToday: true }));
     window.addEventListener("resize", positionMobileStartupSpotlight);
     window.addEventListener("orientationchange", () => window.setTimeout(positionMobileStartupSpotlight, 260));
     storyRecordBtn.addEventListener("click", async () => {
