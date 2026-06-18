@@ -4478,6 +4478,24 @@
       border-radius: 8px;
     }
 
+    .section-content iframe {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border: 0;
+      background: #111;
+    }
+
+    .section-content .video-embed {
+      margin: 16px 0 6px;
+    }
+
+    .section-content .video-embed figcaption {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
     .timeline {
       display: grid;
       gap: 10px;
@@ -5828,8 +5846,33 @@
     "matinecock-tribal-nation"
   ]);
 
+  const SITE_CONTENT_APPEND_OVERRIDES = {
+    "shinnecock-hills-golf-club": {
+      field: "whereintheworld_content",
+      marker: "Df9SfZ2L3Z0",
+      html: `
+        <figure class="video-embed">
+          <iframe src="https://www.youtube.com/embed/Df9SfZ2L3Z0" title="The Land We Share | 2026 U.S. Open | Golf Channel" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+          <figcaption>The Land We Share, a Golf Channel video connected with the 2026 U.S. Open at Shinnecock Hills.</figcaption>
+        </figure>
+      `
+    }
+  };
+
   function siteUsesDefaultBluePin(site = {}) {
     return DEFAULT_BLUE_PIN_SITE_SLUGS.has(String(site?.slug || "").trim().toLowerCase());
+  }
+
+  function siteWithContentOverrides(site = {}) {
+    const slug = String(site?.slug || "").trim().toLowerCase();
+    const override = SITE_CONTENT_APPEND_OVERRIDES[slug];
+    if (!override?.field || !override.html) return site;
+    const current = String(site?.[override.field] || "");
+    if (override.marker && current.includes(override.marker)) return site;
+    return {
+      ...site,
+      [override.field]: `${current.trimEnd()}${current.trim() ? "\n" : ""}${override.html.trim()}`
+    };
   }
 
   function siteDisplayType(site, options = {}) {
@@ -6052,6 +6095,7 @@
     siteLocationAccuracy,
     isExhibitSite,
     siteUsesDefaultBluePin,
+    siteWithContentOverrides,
     siteTerritoryFillColor
   };
 }());
@@ -13766,7 +13810,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     ];
 
     function contentSections(site) {
-      return SHARED_UTILS.contentSectionsFromFields(site, MOBILE_SITE_CONTENT_SECTION_FIELDS, {
+      return SHARED_UTILS.contentSectionsFromFields(SITE_UTILS.siteWithContentOverrides(site), MOBILE_SITE_CONTENT_SECTION_FIELDS, {
         hasContent: value => SHARED_UTILS.richTextHasDisplayContent(value, { cleanText: stripHtml }),
         excludeTitle: title => SHARED_UTILS.isWhyThisMattersTitle(title)
       });
