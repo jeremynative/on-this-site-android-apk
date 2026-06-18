@@ -242,7 +242,7 @@
       color: #163225;
       box-shadow: 0 2px 8px rgba(20, 34, 25, 0.2);
       font-size: 13px;
-      font-weight: 850;
+      font-weight: 650;
       line-height: 1.12;
       text-align: center;
       text-wrap: balance;
@@ -3234,7 +3234,7 @@
       color: var(--accent-strong);
       box-shadow: 0 10px 26px rgba(23, 31, 25, 0.2);
       font-size: 12px;
-      font-weight: 850;
+      font-weight: 650;
       cursor: pointer;
     }
 
@@ -3311,7 +3311,7 @@
       color: #6f6f5f;
       font-size: 11px;
       font-style: normal;
-      font-weight: 850;
+      font-weight: 650;
       letter-spacing: 0;
       line-height: 1.2;
       overflow-wrap: anywhere;
@@ -4555,7 +4555,7 @@
       box-shadow: 0 2px 7px rgba(35, 25, 19, 0.24);
       font-family: inherit;
       font-size: 9.5px;
-      font-weight: 850;
+      font-weight: 650;
       line-height: 1;
       white-space: nowrap;
       touch-action: manipulation;
@@ -4573,7 +4573,7 @@
       display: block;
       color: #fff;
       font-size: 9.5px;
-      font-weight: 850;
+      font-weight: 650;
       line-height: 1;
       white-space: nowrap;
       pointer-events: none;
@@ -16302,6 +16302,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const radius = 18;
       const point = event.point;
       const targetLayers = [
+        "mobile-biography-place-labels",
+        "mobile-biography-place-points",
+        "mobile-biography-place-path",
         "mobile-biography-path-labels",
         "mobile-biography-path-points",
         "mobile-biography-path-lines",
@@ -16361,7 +16364,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function isMobileBiographyPathFeature(feature) {
       const layerId = feature?.layer?.id || "";
-      return layerId === "mobile-biography-path-labels" ||
+      return layerId === "mobile-biography-place-labels" ||
+        layerId === "mobile-biography-place-points" ||
+        layerId === "mobile-biography-place-path" ||
+        layerId === "mobile-biography-path-labels" ||
         layerId === "mobile-biography-path-points" ||
         layerId === "mobile-biography-path-lines";
     }
@@ -19763,6 +19769,79 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return String(fallbackSlug || "Biography").split("-").filter(Boolean).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
     }
 
+    function mobileBiographyPathWordCount(value) {
+      return String(value || "").trim().split(/\s+/).filter(Boolean).length;
+    }
+
+    function mobileBiographyPathCompactWords(value, maxWords = 3) {
+      return stripHtml(value || "")
+        .replace(/\([^)]*\)/g, " ")
+        .replace(/["'`]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, maxWords)
+        .join(" ");
+    }
+
+    function mobileBiographyPathCompactPersonName(person) {
+      const cleaned = stripHtml(person || "")
+        .replace(/\([^)]*\)/g, " ")
+        .replace(/["'`]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      const lead = cleaned.split(/[,;:]/)[0].trim();
+      const words = lead.split(/\s+/).filter(Boolean);
+      if (words.length <= 2) return lead || "This person";
+      const skipped = new Set(["chief", "princess", "rev", "reverend", "sachem", "of", "the"]);
+      const usable = words.filter(word => !skipped.has(word.toLowerCase()));
+      if (usable.length >= 2) return `${usable[0]} ${usable[usable.length - 1]}`;
+      return words.slice(0, 2).join(" ");
+    }
+
+    function mobileBiographyPathCompactPlace(place = {}) {
+      const candidates = [place.place, place.label].filter(Boolean);
+      for (const candidate of candidates) {
+        let text = stripHtml(candidate)
+          .replace(/^\s*\d{3,4}\s*[-–—]\s*/g, "")
+          .replace(/\([^)]*\)/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (text.includes(" - ")) text = text.split(" - ").pop().trim();
+        text = text.split(/[,;/]/)[0].replace(/\b(area|region|context)\b/ig, "").replace(/\s+/g, " ").trim();
+        const compact = mobileBiographyPathCompactWords(text, 3);
+        if (compact) return compact;
+      }
+      return "this place";
+    }
+
+    function mobileBiographyPathActionText(place = {}) {
+      const text = `${place.label || ""} ${place.place || ""} ${place.reason || ""}`.toLowerCase();
+      if (/teach|teacher|school|training|college/.test(text)) return "to teach";
+      if (/testif|testimony|voting|rights/.test(text)) return "for testimony";
+      if (/powwow|address|voice|speak|speech/.test(text)) return "to speak";
+      if (/negot|alliance|diplomac|sachem|leader/.test(text)) return "for diplomacy";
+      if (/war|pequot/.test(text)) return "after war";
+      if (/record|deed|land|source/.test(text)) return "for records";
+      if (/minister|preach|mission/.test(text)) return "to preach";
+      if (/advocacy|advocate/.test(text)) return "for advocacy";
+      if (/born|birth|homeland|home/.test(text)) return "for roots";
+      if (/funeral|remembrance|community|tribute/.test(text)) return "for community";
+      return "for history";
+    }
+
+    function mobileBiographyPathActionLabel(person, place = {}) {
+      const who = mobileBiographyPathCompactPersonName(person);
+      const where = mobileBiographyPathCompactPlace(place);
+      const action = mobileBiographyPathActionText(place);
+      let label = `${who} visits ${where} ${action}`.replace(/\s+/g, " ").trim();
+      if (mobileBiographyPathWordCount(label) <= 10) return label;
+      label = `${who} visits ${mobileBiographyPathCompactWords(where, 2)} ${action}`.replace(/\s+/g, " ").trim();
+      if (mobileBiographyPathWordCount(label) <= 10) return label;
+      return `${who} visits ${mobileBiographyPathCompactWords(where, 2)}`.replace(/\s+/g, " ").trim();
+    }
+
     function mobileBiographyPathsEnabled() {
       return state.settings.showBiographyPaths === true;
     }
@@ -19782,6 +19861,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         });
         path.places.forEach((place, index) => {
           const order = index + 1;
+          const pathLabel = mobileBiographyPathActionLabel(person, place);
           features.push({
             type: "Feature",
             geometry: { type: "Point", coordinates: place.coordinates },
@@ -19791,8 +19871,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
               wiki_slug: slug,
               order,
               label: String(order),
-              pin_label: `${person} ${order}`,
-              title: place.label || person,
+              pin_label: pathLabel,
+              title: pathLabel,
               place: place.place || "",
               reason: place.reason || ""
             }
@@ -19912,28 +19992,42 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       `;
     }
 
-    function mobileBiographyPathFeatureCollection(path) {
+    function mobileBiographyPathFeatureCollection(path, article = null) {
       if (!path?.places?.length) return { type: "FeatureCollection", features: [] };
+      const person = mobileBiographyPathPersonName(article, article?.slug || "");
       return {
         type: "FeatureCollection",
         features: [
           {
             type: "Feature",
             geometry: { type: "LineString", coordinates: path.places.map(place => place.coordinates) },
-            properties: { kind: "path", title: path.title || "Biography path" }
+            properties: { kind: "path", title: `${person || path.title || "Biography"} path`, person, wiki_slug: article?.slug || "" }
           },
-          ...path.places.map((place, index) => ({
-            type: "Feature",
-            geometry: { type: "Point", coordinates: place.coordinates },
-            properties: { kind: "point", order: index + 1, label: String(index + 1), title: place.label }
-          }))
+          ...path.places.map((place, index) => {
+            const pathLabel = mobileBiographyPathActionLabel(person, place);
+            return {
+              type: "Feature",
+              geometry: { type: "Point", coordinates: place.coordinates },
+              properties: {
+                kind: "point",
+                person,
+                wiki_slug: article?.slug || "",
+                order: index + 1,
+                label: String(index + 1),
+                pin_label: pathLabel,
+                title: pathLabel,
+                place: place.place || "",
+                reason: place.reason || ""
+              }
+            };
+          })
         ]
       };
     }
 
     function clearMobileBiographyPathOverlay() {
       if (state.map) {
-        for (const id of ["mobile-biography-place-points", "mobile-biography-place-path"]) {
+        for (const id of ["mobile-biography-place-labels", "mobile-biography-place-points", "mobile-biography-place-path"]) {
           if (state.map.getLayer(id)) state.map.removeLayer(id);
         }
         if (state.map.getSource("mobile-biography-place-path")) state.map.removeSource("mobile-biography-place-path");
@@ -19964,7 +20058,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       clearMobileBiographyPathOverlay();
       if (!path || !state.map) return;
       state.activeMobileBiographyPath = path;
-      state.map.addSource("mobile-biography-place-path", { type: "geojson", data: mobileBiographyPathFeatureCollection(path) });
+      state.map.addSource("mobile-biography-place-path", { type: "geojson", data: mobileBiographyPathFeatureCollection(path, article) });
       const beforeLayer = state.map.getLayer("mobile-site-icons") ? "mobile-site-icons" : undefined;
       state.map.addLayer({
         id: "mobile-biography-place-path",
@@ -19992,28 +20086,30 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           "circle-opacity": 0.96
         }
       });
-      state.mobileBiographyPathMarkers = path.places.map((place, index) => {
-        const button = document.createElement("button");
-        const label = document.createElement("span");
-        const person = mobileBiographyPathPersonName(article, article?.slug || "");
-        label.className = "mobile-biography-path-map-number-label";
-        label.textContent = `${person} ${index + 1}`;
-        label.setAttribute("aria-hidden", "true");
-        button.type = "button";
-        button.className = "mobile-biography-path-map-number";
-        button.dataset.mobileBiographyPathOrder = String(index + 1);
-        button.dataset.pinLabel = label.textContent;
-        button.setAttribute("aria-label", `Show ${place.label} on the map`);
-        button.title = `${index + 1}. ${place.label}`;
-        button.appendChild(label);
-        button.addEventListener("click", event => {
-          event.preventDefault();
-          event.stopPropagation();
-          focusMobileBiographyPathPlace(path, index, { zoom: 12.2, duration: 620 });
-        });
-        return new mapboxgl.Marker({ element: button, anchor: "center" })
-          .setLngLat(place.coordinates)
-          .addTo(state.map);
+      state.map.addLayer({
+        id: "mobile-biography-place-labels",
+        type: "symbol",
+        source: "mobile-biography-place-path",
+        filter: ["==", ["get", "kind"], "point"],
+        minzoom: 8.2,
+        layout: {
+          "text-field": ["get", "pin_label"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 8.2, 8, 13, 10.75],
+          "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+          "text-variable-anchor": ["literal", ["top", "bottom", "left", "right", "top-left", "top-right", "bottom-left", "bottom-right"]],
+          "text-radial-offset": ["interpolate", ["linear"], ["zoom"], 8.2, 0.78, 13, 1.16],
+          "text-justify": "auto",
+          "text-max-width": 7,
+          "text-padding": 4,
+          "text-allow-overlap": false,
+          "text-ignore-placement": false,
+          "text-optional": true
+        },
+        paint: {
+          "text-color": "#4f3a2d",
+          "text-halo-color": "rgba(255,255,255,0.94)",
+          "text-halo-width": 1.25
+        }
       });
       if (options.focus !== false) focusMobileBiographyPathPlace(path, 0, { zoom: 10.9, duration: 760 });
     }
@@ -21324,19 +21420,21 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         minzoom: 8.2,
         layout: {
           "text-field": ["get", "pin_label"],
-          "text-size": ["interpolate", ["linear"], ["zoom"], 8.2, 9, 13, 11.5],
-          "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
-          "text-anchor": "top",
-          "text-offset": ["literal", [0, 0.76]],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 8.2, 8, 13, 10.75],
+          "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+          "text-variable-anchor": ["literal", ["top", "bottom", "left", "right", "top-left", "top-right", "bottom-left", "bottom-right"]],
+          "text-radial-offset": ["interpolate", ["linear"], ["zoom"], 8.2, 0.78, 13, 1.16],
+          "text-justify": "auto",
           "text-max-width": 7,
+          "text-padding": 4,
           "text-allow-overlap": false,
           "text-ignore-placement": false,
           "text-optional": true
         },
         paint: {
-          "text-color": "#5b2f1d",
-          "text-halo-color": "rgba(255,255,255,0.92)",
-          "text-halo-width": 1.35
+          "text-color": "#4f3a2d",
+          "text-halo-color": "rgba(255,255,255,0.94)",
+          "text-halo-width": 1.25
         }
       });
       loadMobileSiteIconImages();
@@ -21445,7 +21543,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         if (handleSuggestionMapPickClick(event)) return;
         openMobileMapTap(event);
       });
-      ["mobile-biography-path-labels", "mobile-biography-path-points", "mobile-biography-path-lines"]
+      ["mobile-biography-place-labels", "mobile-biography-place-points", "mobile-biography-place-path", "mobile-biography-path-labels", "mobile-biography-path-points", "mobile-biography-path-lines"]
         .forEach(layerId => bindMobileInteractiveLayer(layerId, event => {
           if (handleSuggestionMapPickClick(event)) return;
           openMobileMapTap(event);

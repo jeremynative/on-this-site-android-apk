@@ -198,21 +198,21 @@ for (const [label, html] of [
   if (!html.includes('"wyandanch": {') || !html.includes("mobile-biography-place-path") || !html.includes("data-mobile-biography-path-index")) {
     throw new Error(`Bundled Android ${label} is missing the mobile Wyandanch biography path.`);
   }
-  if (!html.includes("properties: { kind: \"point\", order: index + 1, label: String(index + 1), title: place.label }")) {
-    throw new Error(`Bundled Android ${label} is missing string-labeled biography path map features.`);
+  if (!html.includes("mobileBiographyPathActionLabel(person, place)") ||
+      !/const\s+pathLabel\s*=\s*mobileBiographyPathActionLabel\(person,\s*place\)[\s\S]*?pin_label:\s*pathLabel[\s\S]*?title:\s*pathLabel/.test(html)) {
+    throw new Error(`Bundled Android ${label} is missing short action biography path labels.`);
   }
-  if (!html.includes("label.className = \"mobile-biography-path-map-number-label\";") ||
-      !html.includes("label.textContent = `${person} ${index + 1}`;") ||
-      !html.includes("button.dataset.mobileBiographyPathOrder = String(index + 1);") ||
-      !html.includes("button.dataset.pinLabel = label.textContent;") ||
-      !html.includes("button.appendChild(label);")) {
-    throw new Error(`Bundled Android ${label} is missing visible person-numbered biography path map pins.`);
+  if (!html.includes('id: "mobile-biography-place-labels"') ||
+      !html.includes('"text-field": ["get", "pin_label"]') ||
+      !html.includes('"text-variable-anchor": ["literal", ["top", "bottom", "left", "right", "top-left", "top-right", "bottom-left", "bottom-right"]]') ||
+      !html.includes('"text-allow-overlap": false')) {
+    throw new Error(`Bundled Android ${label} is missing collision-aware biography path labels.`);
   }
-  if (html.includes('id: "mobile-biography-place-labels"') || html.includes('"id":"mobile-biography-place-labels"')) {
-    throw new Error(`Bundled Android ${label} must not render duplicate symbol labels on top of numbered travel pins.`);
+  if (/label\.textContent\s*=\s*`\$\{person\}\s+\$\{index\s*\+\s*1\}`/.test(html)) {
+    throw new Error(`Bundled Android ${label} must not use useless person-number biography labels.`);
   }
-  if (!/\.mobile-biography-path-map-number\s*\{[\s\S]*?font-size:\s*9\.5px;[\s\S]*?z-index:\s*6;/.test(html) || !/\.mobile-biography-path-map-number-label\s*\{[\s\S]*?font-size:\s*9\.5px;/.test(html)) {
-    throw new Error(`Bundled Android ${label} must show travel-pin numbers as visible marker badges.`);
+  if (!/\.mobile-biography-path-map-number\s*\{[\s\S]*?font-size:\s*9\.5px;[\s\S]*?font-weight:\s*650;/.test(html) || !/\.mobile-biography-path-map-number-label\s*\{[\s\S]*?font-size:\s*9\.5px;[\s\S]*?font-weight:\s*650;/.test(html)) {
+    throw new Error(`Bundled Android ${label} must keep fallback biography labels visually lighter.`);
   }
   if (!html.includes('resultType: "wiki"') || !html.includes('data-wiki-slug="${escapeHtml(site.slug)}"')) {
     throw new Error(`Bundled Android ${label} is missing mobile wiki article search results.`);
@@ -510,8 +510,8 @@ requireBundledText('languageRemoteAttemptExists', "Bundled Android app must chec
 requireBundledText('syncLanguageAttempt', "Bundled Android app must save language attempts through the shared sync path.");
 requireBundledText('Content editing needs the editor password.', "Bundled Android app must keep admin editing behind authenticated Directus login.");
 requireBundledText('frontendEditorPayload', "Bundled Android app must include the current mobile admin editor payload path.");
-requireBundledText('mobile-biography-path-map-number-label', "Bundled Android app must show visible numbered biography travel map pins.");
-requireBundledText('label.textContent = `${person} ${index + 1}`;', "Bundled Android biography travel map pins must render person and number text inside each marker.");
+requireBundledText('mobileBiographyPathActionLabel(person, place)', "Bundled Android biography travel map pins must use short action labels.");
+requireBundledText('id: "mobile-biography-place-labels"', "Bundled Android biography travel map pins must use collision-aware map labels.");
 
 console.log(`Android shell verifier passed: ${expectedBuild}`);
 
