@@ -309,7 +309,7 @@ for (const [label, html] of [
   if (html.includes("`Layers ${primaryCount}/3`") || html.includes("Layers 2/3")) {
     throw new Error(`Bundled Android ${label} must count all mobile layer controls instead of the old 2/3 summary.`);
   }
-  if (!html.includes("`Layers ${activeLayerCount}/${totalLayerCount}`") ||
+  if (!html.includes("`Labels ${activeLayerCount}/${totalLayerCount}`") ||
       !html.includes("const totalLayerCount = primaryStates.length + mobileLayerCategoryInputs.length + mobileLayerEraInputs.length;")) {
     throw new Error(`Bundled Android ${label} must summarize all visible mobile layer controls.`);
   }

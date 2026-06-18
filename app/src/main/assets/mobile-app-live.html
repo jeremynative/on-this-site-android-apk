@@ -4745,7 +4745,7 @@
         <button class="ghost-button mobile-priority-action" data-app-page="about" type="button">About</button>
         <button class="ghost-button mobile-priority-action" id="feedback-open" type="button">Feedback</button>
         <details class="mobile-layer-menu" id="mobile-layer-menu">
-          <summary>Layers</summary>
+          <summary>Labels</summary>
           <div class="mobile-layer-panel" role="group" aria-label="Map layers">
             <label class="mobile-layer-option" for="mobile-layer-exhibits">
               <span>Exhibits</span>
@@ -23272,7 +23272,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const totalLayerCount = primaryStates.length + mobileLayerCategoryInputs.length + mobileLayerEraInputs.length;
         const activeLayerCount = primaryCount + categoryCount + eraCount;
         const allOn = activeLayerCount === totalLayerCount;
-        mobileLayerMenu.querySelector("summary").textContent = allOn ? "Layers" : `Layers ${activeLayerCount}/${totalLayerCount}`;
+        mobileLayerMenu.querySelector("summary").textContent = allOn ? "Labels" : `Labels ${activeLayerCount}/${totalLayerCount}`;
       }
       if (exhibitsToggleBtn) {
         exhibitsToggleBtn.textContent = state.settings.exhibits === false ? "Exhibits off" : "Exhibits";
