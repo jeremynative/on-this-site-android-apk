@@ -202,11 +202,11 @@ for (const [label, html] of [
     throw new Error(`Bundled Android ${label} is missing string-labeled biography path map features.`);
   }
   if (!html.includes("label.className = \"mobile-biography-path-map-number-label\";") ||
-      !html.includes("label.textContent = String(index + 1);") ||
+      !html.includes("label.textContent = `${person} ${index + 1}`;") ||
       !html.includes("button.dataset.mobileBiographyPathOrder = String(index + 1);") ||
-      !html.includes("button.dataset.pinLabel = String(index + 1);") ||
+      !html.includes("button.dataset.pinLabel = label.textContent;") ||
       !html.includes("button.appendChild(label);")) {
-    throw new Error(`Bundled Android ${label} is missing visible numbered biography path map pins.`);
+    throw new Error(`Bundled Android ${label} is missing visible person-numbered biography path map pins.`);
   }
   if (html.includes('id: "mobile-biography-place-labels"') || html.includes('"id":"mobile-biography-place-labels"')) {
     throw new Error(`Bundled Android ${label} must not render duplicate symbol labels on top of numbered travel pins.`);
@@ -511,7 +511,7 @@ requireBundledText('syncLanguageAttempt', "Bundled Android app must save languag
 requireBundledText('Content editing needs the editor password.', "Bundled Android app must keep admin editing behind authenticated Directus login.");
 requireBundledText('frontendEditorPayload', "Bundled Android app must include the current mobile admin editor payload path.");
 requireBundledText('mobile-biography-path-map-number-label', "Bundled Android app must show visible numbered biography travel map pins.");
-requireBundledText('label.textContent = String(index + 1);', "Bundled Android biography travel map pins must render number text inside each marker.");
+requireBundledText('label.textContent = `${person} ${index + 1}`;', "Bundled Android biography travel map pins must render person and number text inside each marker.");
 
 console.log(`Android shell verifier passed: ${expectedBuild}`);
 

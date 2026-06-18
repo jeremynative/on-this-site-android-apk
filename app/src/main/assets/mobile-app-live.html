@@ -4540,13 +4540,16 @@
 
     .mobile-biography-path-map-number {
       appearance: none;
-      display: grid;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       place-items: center;
-      width: 18px;
-      height: 18px;
-      padding: 0;
+      width: auto;
+      min-width: 22px;
+      height: 22px;
+      padding: 0 7px;
       border: 2px solid #fff;
-      border-radius: 50%;
+      border-radius: 999px;
       background: #a84f2a;
       color: #fff;
       box-shadow: 0 2px 7px rgba(35, 25, 19, 0.24);
@@ -4554,6 +4557,7 @@
       font-size: 9.5px;
       font-weight: 850;
       line-height: 1;
+      white-space: nowrap;
       touch-action: manipulation;
       position: relative;
       z-index: 6;
@@ -4571,6 +4575,7 @@
       font-size: 9.5px;
       font-weight: 850;
       line-height: 1;
+      white-space: nowrap;
       pointer-events: none;
     }
 
@@ -4767,6 +4772,10 @@
             <label class="mobile-layer-option" for="mobile-layer-shapes">
               <span>Polygons / Territories</span>
               <input id="mobile-layer-shapes" type="checkbox" checked>
+            </label>
+            <label class="mobile-layer-option" for="mobile-layer-biography-paths">
+              <span>Biography Paths</span>
+              <input id="mobile-layer-biography-paths" type="checkbox">
             </label>
             <label class="mobile-layer-option" for="mobile-layer-shell-middens">
               <span>Shell Middens</span>
@@ -12313,6 +12322,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const mobileLayerExhibitsInput = document.getElementById("mobile-layer-exhibits");
     const mobileLayerPinsInput = document.getElementById("mobile-layer-pins");
     const mobileLayerShapesInput = document.getElementById("mobile-layer-shapes");
+    const mobileLayerBiographyPathsInput = document.getElementById("mobile-layer-biography-paths");
     const mobileLayerCategoryInputs = [...document.querySelectorAll(".mobile-layer-category")];
     const mobileLayerEraInputs = [...document.querySelectorAll(".mobile-layer-era")];
     const collapseListBtn = document.getElementById("collapse-list");
@@ -12461,6 +12471,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         basemap: "outdoors",
         showPins: true,
         showShapes: true,
+        showBiographyPaths: false,
         layerCategories: {},
         eraCategories: {},
         ...saved
@@ -16249,7 +16260,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function bestClickableFeature(features = []) {
       return preferredAncestralLandFeature(features) || [...features]
-        .filter(feature => feature?.properties?.slug)
+        .filter(feature => feature?.properties?.slug || feature?.properties?.wiki_slug)
         .sort((a, b) => {
           const aBroad = a.properties?.broad === true || a.properties?.broad === "true";
           const bBroad = b.properties?.broad === true || b.properties?.broad === "true";
@@ -16291,6 +16302,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const radius = 18;
       const point = event.point;
       const targetLayers = [
+        "mobile-biography-path-labels",
+        "mobile-biography-path-points",
+        "mobile-biography-path-lines",
         "mobile-site-point-hit",
         "mobile-detail-labels",
         "mobile-territory-labels",
@@ -16345,9 +16359,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return feature?.layer?.id === "mobile-site-point-hit";
     }
 
+    function isMobileBiographyPathFeature(feature) {
+      const layerId = feature?.layer?.id || "";
+      return layerId === "mobile-biography-path-labels" ||
+        layerId === "mobile-biography-path-points" ||
+        layerId === "mobile-biography-path-lines";
+    }
+
     function bestMobileLayerEventFeature(event) {
       const features = event?.features || [];
       if (!features.length) return null;
+      const biographyPath = bestClickableFeature(features.filter(isMobileBiographyPathFeature));
+      if (biographyPath) return biographyPath;
       const point = bestClickableFeature(features.filter(isMobilePointHitFeature));
       if (point) return point;
       const polygon = bestClickableFeature(features.filter(isMobilePolygonLayerFeature));
@@ -16357,6 +16380,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function bestMobileRenderedTapFeature(event) {
       const rendered = mobileMapHitFeatures(event);
+      const biographyPath = bestClickableFeature(rendered.filter(isMobileBiographyPathFeature));
+      if (biographyPath) return biographyPath;
       const point = bestClickableFeature(rendered.filter(isMobilePointHitFeature));
       if (point) return point;
       const polygon = bestClickableFeature(rendered.filter(isMobilePolygonLayerFeature));
@@ -16475,6 +16500,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function openMapFeature(feature) {
+      const wikiSlug = feature?.properties?.wiki_slug;
+      if (wikiSlug && state.wikiBySlug.has(wikiSlug)) {
+        openWikiArticle(state.wikiBySlug.get(wikiSlug), { focus: false });
+        return;
+      }
       const slug = feature?.properties?.slug;
       if (slug) openSite(slug, { focus: false });
     }
@@ -19725,6 +19755,53 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return { ...path, places };
     }
 
+    function mobileBiographyPathPersonName(article, fallbackSlug = "") {
+      const title = stripHtml(article?.title || "").trim();
+      if (title) return title;
+      const pathTitle = stripHtml(BIOGRAPHY_PLACE_PATHS[fallbackSlug]?.title || "").replace(/\s+(associated\s+places|life\s+timeline|timeline|path|places).*$/i, "").trim();
+      if (pathTitle) return pathTitle;
+      return String(fallbackSlug || "Biography").split("-").filter(Boolean).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+    }
+
+    function mobileBiographyPathsEnabled() {
+      return state.settings.showBiographyPaths === true;
+    }
+
+    function allMobileBiographyPathFeatureCollection({ enabled = false } = {}) {
+      if (!enabled) return { type: "FeatureCollection", features: [] };
+      const features = [];
+      for (const slug of Object.keys(BIOGRAPHY_PLACE_PATHS)) {
+        const article = state.wikiBySlug.get(slug) || { slug, title: BIOGRAPHY_PLACE_PATHS[slug]?.title || "" };
+        const path = mobileBiographyPathData(article);
+        if (!path?.places?.length) continue;
+        const person = mobileBiographyPathPersonName(article, slug);
+        features.push({
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: path.places.map(place => place.coordinates) },
+          properties: { kind: "path", person, wiki_slug: slug, title: `${person} biography path` }
+        });
+        path.places.forEach((place, index) => {
+          const order = index + 1;
+          features.push({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: place.coordinates },
+            properties: {
+              kind: "point",
+              person,
+              wiki_slug: slug,
+              order,
+              label: String(order),
+              pin_label: `${person} ${order}`,
+              title: place.label || person,
+              place: place.place || "",
+              reason: place.reason || ""
+            }
+          });
+        });
+      }
+      return { type: "FeatureCollection", features };
+    }
+
     function mobileTimelineEventCoordinates(event = {}) {
       const lng = Number(event.longitude);
       const lat = Number(event.latitude);
@@ -19918,13 +19995,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.mobileBiographyPathMarkers = path.places.map((place, index) => {
         const button = document.createElement("button");
         const label = document.createElement("span");
+        const person = mobileBiographyPathPersonName(article, article?.slug || "");
         label.className = "mobile-biography-path-map-number-label";
-        label.textContent = String(index + 1);
+        label.textContent = `${person} ${index + 1}`;
         label.setAttribute("aria-hidden", "true");
         button.type = "button";
         button.className = "mobile-biography-path-map-number";
         button.dataset.mobileBiographyPathOrder = String(index + 1);
-        button.dataset.pinLabel = String(index + 1);
+        button.dataset.pinLabel = label.textContent;
         button.setAttribute("aria-label", `Show ${place.label} on the map`);
         button.title = `${index + 1}. ${place.label}`;
         button.appendChild(label);
@@ -21116,6 +21194,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const sourceData = cachedMobileMapSourceData();
       state.map.addSource("mobile-sites", { type: "geojson", data: sourceData.sites });
       state.map.addSource("mobile-site-attention", { type: "geojson", data: sourceData.attention });
+      state.map.addSource("mobile-biography-paths", { type: "geojson", data: allMobileBiographyPathFeatureCollection({ enabled: mobileBiographyPathsEnabled() }) });
       state.map.addLayer({
         id: "mobile-territory-polygons",
         type: "fill",
@@ -21211,6 +21290,55 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           "icon-optional": true
         }
       });
+      state.map.addLayer({
+        id: "mobile-biography-path-lines",
+        type: "line",
+        source: "mobile-biography-paths",
+        filter: ["==", ["get", "kind"], "path"],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#a84f2a",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 6, 1.4, 12, 3],
+          "line-opacity": 0.62,
+          "line-dasharray": ["literal", [1.2, 1.2]]
+        }
+      });
+      state.map.addLayer({
+        id: "mobile-biography-path-points",
+        type: "circle",
+        source: "mobile-biography-paths",
+        filter: ["==", ["get", "kind"], "point"],
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 4.2, 12, 7],
+          "circle-color": "#a84f2a",
+          "circle-stroke-color": "#fff",
+          "circle-stroke-width": 1.7,
+          "circle-opacity": 0.92
+        }
+      });
+      state.map.addLayer({
+        id: "mobile-biography-path-labels",
+        type: "symbol",
+        source: "mobile-biography-paths",
+        filter: ["==", ["get", "kind"], "point"],
+        minzoom: 8.2,
+        layout: {
+          "text-field": ["get", "pin_label"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 8.2, 9, 13, 11.5],
+          "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+          "text-anchor": "top",
+          "text-offset": ["literal", [0, 0.76]],
+          "text-max-width": 7,
+          "text-allow-overlap": false,
+          "text-ignore-placement": false,
+          "text-optional": true
+        },
+        paint: {
+          "text-color": "#5b2f1d",
+          "text-halo-color": "rgba(255,255,255,0.92)",
+          "text-halo-width": 1.35
+        }
+      });
       loadMobileSiteIconImages();
       state.map.addSource("mobile-territory-labels", { type: "geojson", data: sourceData.territoryLabels });
       state.map.addLayer({
@@ -21282,6 +21410,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         }
       });
       state.mapSourceAppliedKey = state.mapSourceCacheKey || "";
+      syncMobileBiographyPathLayers();
       startMobileSiteAttentionPulse();
       bindMobileMapLayerEvents();
     }
@@ -21296,6 +21425,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       rebindMobileMapLayerEvent("mouseleave", layerId, () => state.map.getCanvas().style.cursor = "");
     }
 
+    function syncMobileBiographyPathLayers() {
+      if (!state.map) return;
+      const visible = mobileBiographyPathsEnabled();
+      const source = state.map.getSource("mobile-biography-paths");
+      if (source) source.setData(allMobileBiographyPathFeatureCollection({ enabled: visible }));
+      MAP_UTILS.setLayerVisibilityMany(state.map, ["mobile-biography-path-lines", "mobile-biography-path-points", "mobile-biography-path-labels"], visible ? "visible" : "none");
+    }
+
     function openMobileInteractivePolygonLayer(event) {
       if (handleSuggestionMapPickClick(event)) return;
       if (openMobilePolygonLayerFeature(event)) return;
@@ -21308,6 +21445,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         if (handleSuggestionMapPickClick(event)) return;
         openMobileMapTap(event);
       });
+      ["mobile-biography-path-labels", "mobile-biography-path-points", "mobile-biography-path-lines"]
+        .forEach(layerId => bindMobileInteractiveLayer(layerId, event => {
+          if (handleSuggestionMapPickClick(event)) return;
+          openMobileMapTap(event);
+        }));
       ["mobile-site-polygons", "mobile-territory-polygons", "mobile-detail-labels", "mobile-territory-labels"]
         .forEach(layerId => bindMobileInteractiveLayer(layerId, openMobileInteractivePolygonLayer));
       if (!state.mobileMapLayerEventsBound) {
@@ -21350,6 +21492,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       ];
       MAP_UTILS.setGeoJsonSourceDataMany(state.map, sources);
       state.mapSourceAppliedKey = sourceKey;
+      syncMobileBiographyPathLayers();
     }
 
     function isAndroidMapGestureActive() {
@@ -22989,6 +23132,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         mobileLayerPinsInput.disabled = false;
       }
       if (mobileLayerShapesInput) mobileLayerShapesInput.checked = state.settings.showShapes !== false;
+      if (mobileLayerBiographyPathsInput) mobileLayerBiographyPathsInput.checked = mobileBiographyPathsEnabled();
       const configured = state.settings.layerCategories || {};
       mobileLayerCategoryInputs.forEach(input => {
         input.checked = configured[input.value] !== false;
@@ -23003,7 +23147,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const primaryStates = [
           state.settings.exhibits !== false,
           state.settings.showPins !== false,
-          state.settings.showShapes !== false
+          state.settings.showShapes !== false,
+          mobileBiographyPathsEnabled()
         ];
         const primaryCount = primaryStates.filter(Boolean).length;
         const categoryCount = mobileLayerCategoryInputs.filter(input => input.checked).length;
@@ -23032,6 +23177,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (kind === "exhibits") state.settings.exhibits = visible;
       if (kind === "pins") state.settings.showPins = visible;
       if (kind === "shapes") state.settings.showShapes = visible;
+      if (kind === "biographyPaths") state.settings.showBiographyPaths = visible;
       if (kind === "category") {
         state.settings.layerCategories = { ...(state.settings.layerCategories || {}) };
         mobileLayerCategoryInputs.forEach(input => {
@@ -23047,6 +23193,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       saveSettings();
       invalidateMapSourceCache();
       syncMobileLayerButtons();
+      syncMobileBiographyPathLayers();
       syncMarkers();
       if (kind === "era") renderMobileTimeline();
     }
@@ -24111,6 +24258,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     mobileLayerExhibitsInput?.addEventListener("change", () => setMobileLayerVisibility("exhibits", mobileLayerExhibitsInput.checked));
     mobileLayerPinsInput?.addEventListener("change", () => setMobileLayerVisibility("pins", mobileLayerPinsInput.checked));
     mobileLayerShapesInput?.addEventListener("change", () => setMobileLayerVisibility("shapes", mobileLayerShapesInput.checked));
+    mobileLayerBiographyPathsInput?.addEventListener("change", () => setMobileLayerVisibility("biographyPaths", mobileLayerBiographyPathsInput.checked));
     mobileLayerCategoryInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("category", true)));
     mobileLayerEraInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("era", true)));
     mobilePinsToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("pins", state.settings.showPins === false));
