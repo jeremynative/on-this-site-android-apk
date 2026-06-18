@@ -12097,6 +12097,27 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;
     const SITE_LABEL_MIN_ZOOM = 10.75;
     const SITE_POINT_LABEL_MIN_ZOOM = 13.35;
+    const ATTENTION_SITE_WINDOWS = [
+      {
+        slug: "shinnecock-hills-golf-club",
+        until: "2026-06-21",
+        reason: "Site of attention and urgency"
+      }
+    ];
+    const DATE_LABEL_MONTHS = {
+      january: "01",
+      february: "02",
+      march: "03",
+      april: "04",
+      may: "05",
+      june: "06",
+      july: "07",
+      august: "08",
+      september: "09",
+      october: "10",
+      november: "11",
+      december: "12"
+    };
     const NEARBY_LIST_DESKTOP_LIMIT = 80;
     const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 24;
     const NEARBY_LIST_ANDROID_DEFAULT_LIMIT = 40;
@@ -12212,6 +12233,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mapSourceCacheKey: "",
       mapSourceRevision: 0,
       mapSourceAppliedKey: "",
+      siteAttentionPulseTimer: null,
+      siteAttentionPulseStartedAt: 0,
       mobileSiteIconImagesLoaded: new Set(),
       mobileSiteIconImagesFailed: new Set(),
       mobileSiteIconImagesLoading: false,
@@ -13489,6 +13512,66 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             };
           })
           .filter(Boolean)
+      };
+    }
+
+    function dateLabelMonthDay(dateLabel) {
+      const text = String(dateLabel || "").trim();
+      const match = text.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:st|nd|rd|th)?\b/i);
+      if (!match) return "";
+      const month = DATE_LABEL_MONTHS[match[1].toLowerCase()];
+      const dayNumber = Number(match[2]);
+      const day = Number.isFinite(dayNumber) ? String(dayNumber).padStart(2, "0") : "";
+      return month && day ? `${month}-${day}` : "";
+    }
+
+    function timelineEventMatchesToday(event, today = localDateKey()) {
+      const todayMonthDay = String(today || "").slice(5, 10);
+      return Boolean(todayMonthDay && dateLabelMonthDay(event?.date_label) === todayMonthDay);
+    }
+
+    function activeSiteAttentionEntries(today = localDateKey()) {
+      const entries = new Map();
+      for (const config of ATTENTION_SITE_WINDOWS) {
+        if (!config.slug || (config.until && today > config.until)) continue;
+        entries.set(config.slug, {
+          kind: "urgent",
+          reason: config.reason || "Site of attention"
+        });
+      }
+      for (const event of state.timelineEvents || []) {
+        if (event.source_type !== "site" || !event.source_slug || !timelineEventMatchesToday(event, today)) continue;
+        entries.set(event.source_slug, {
+          kind: "on-this-day",
+          reason: `On this day: ${event.title || event.date_label || "historic moment"}`
+        });
+      }
+      return entries;
+    }
+
+    function siteAttentionFeatureCollection(sites = activeMapSites()) {
+      const visibleSites = new Set((sites || []).map(site => site?.slug).filter(Boolean));
+      const entries = activeSiteAttentionEntries();
+      return {
+        type: "FeatureCollection",
+        features: [...entries.entries()].map(([slug, attention]) => {
+          if (!visibleSites.has(slug)) return null;
+          const site = state.siteBySlug.get(slug) || state.sites.find(item => item.slug === slug);
+          const geometry = siteDisplayGeometry(site);
+          const center = geometryCenter(geometry);
+          if (!site || !center) return null;
+          return {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: center },
+            properties: {
+              slug: site.slug,
+              title: site.title,
+              attention_kind: attention.kind,
+              attention_reason: attention.reason,
+              layer_categories: SITE_UTILS.siteLayerCategoryKeys(site).join(" ")
+            }
+          };
+        }).filter(Boolean)
       };
     }
 
@@ -16132,10 +16215,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const pointHitSites = sites.filter(site => siteDisplayGeometry(site)?.type === "Point");
       const categoryKey = JSON.stringify(state.settings.layerCategories || {});
       const eraKey = JSON.stringify(state.settings.eraCategories || {});
-      const cacheKey = `${state.mapSourceRevision}|${state.settings.showPins !== false ? "pins" : "no-pins"}|${state.settings.showShapes !== false ? "shapes" : "no-shapes"}|${state.settings.exhibits !== false ? "exhibits" : "no-exhibits"}|${categoryKey}|${eraKey}|${sites.length}`;
+      const dateKey = localDateKey();
+      const cacheKey = `${state.mapSourceRevision}|${dateKey}|${state.settings.showPins !== false ? "pins" : "no-pins"}|${state.settings.showShapes !== false ? "shapes" : "no-shapes"}|${state.settings.exhibits !== false ? "exhibits" : "no-exhibits"}|${categoryKey}|${eraKey}|${sites.length}`;
       if (!state.mapSourceCache || state.mapSourceCacheKey !== cacheKey) {
         state.mapSourceCache = {
           sites: siteFeatureCollection([...shapeSites, ...pointHitSites]),
+          attention: siteAttentionFeatureCollection(sites),
           territoryLabels: polygonLabelCollection("territory", shapeSites),
           detailLabels: polygonLabelCollection("detail", shapeSites)
         };
@@ -20990,6 +21075,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!state.map || state.map.getSource("mobile-sites")) return;
       const sourceData = cachedMobileMapSourceData();
       state.map.addSource("mobile-sites", { type: "geojson", data: sourceData.sites });
+      state.map.addSource("mobile-site-attention", { type: "geojson", data: sourceData.attention });
       state.map.addLayer({
         id: "mobile-territory-polygons",
         type: "fill",
@@ -21019,6 +21105,28 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           "line-color": "#2f5a49",
           "line-opacity": 0.34,
           "line-width": 1
+        }
+      });
+      state.map.addLayer({
+        id: "mobile-site-attention-outer",
+        type: "circle",
+        source: "mobile-site-attention",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 18, 10, 26, 14, 38],
+          "circle-color": "#d62727",
+          "circle-blur": 0.78,
+          "circle-opacity": 0.24
+        }
+      });
+      state.map.addLayer({
+        id: "mobile-site-attention-core",
+        type: "circle",
+        source: "mobile-site-attention",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 7, 10, 11, 14, 17],
+          "circle-color": "#d62727",
+          "circle-blur": 0.48,
+          "circle-opacity": 0.26
         }
       });
       state.map.addLayer({
@@ -21132,6 +21240,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         }
       });
       state.mapSourceAppliedKey = state.mapSourceCacheKey || "";
+      startMobileSiteAttentionPulse();
       bindMobileMapLayerEvents();
     }
 
@@ -21167,6 +21276,25 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
     }
 
+    function updateMobileSiteAttentionPulse() {
+      if (!state.map) return;
+      if (!state.map.getLayer("mobile-site-attention-outer") || !state.map.getLayer("mobile-site-attention-core")) return;
+      const elapsed = Date.now() - (state.siteAttentionPulseStartedAt || Date.now());
+      const progress = (elapsed % 1800) / 1800;
+      const wave = 0.5 - Math.cos(progress * Math.PI * 2) / 2;
+      state.map.setPaintProperty("mobile-site-attention-outer", "circle-radius", ["interpolate", ["linear"], ["zoom"], 6, 18 + wave * 7, 10, 26 + wave * 10, 14, 38 + wave * 14]);
+      state.map.setPaintProperty("mobile-site-attention-outer", "circle-opacity", 0.12 + (1 - wave) * 0.18);
+      state.map.setPaintProperty("mobile-site-attention-core", "circle-radius", ["interpolate", ["linear"], ["zoom"], 6, 7 + wave * 3, 10, 11 + wave * 4, 14, 17 + wave * 5]);
+      state.map.setPaintProperty("mobile-site-attention-core", "circle-opacity", 0.18 + wave * 0.22);
+    }
+
+    function startMobileSiteAttentionPulse() {
+      if (state.siteAttentionPulseTimer) return;
+      state.siteAttentionPulseStartedAt = Date.now();
+      updateMobileSiteAttentionPulse();
+      state.siteAttentionPulseTimer = window.setInterval(updateMobileSiteAttentionPulse, 90);
+    }
+
     function refreshMobileMapSources(options = {}) {
       if (!state.map) return;
       const data = cachedMobileMapSourceData();
@@ -21174,6 +21302,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (options.force !== true && sourceKey && state.mapSourceAppliedKey === sourceKey) return;
       const sources = [
         ["mobile-sites", data.sites],
+        ["mobile-site-attention", data.attention],
         ["mobile-territory-labels", data.territoryLabels],
         ["mobile-detail-labels", data.detailLabels]
       ];
