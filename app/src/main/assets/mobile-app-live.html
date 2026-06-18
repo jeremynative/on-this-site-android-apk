@@ -8881,6 +8881,16 @@
     return cleaner(value || "");
   }
 
+  function hasValue(value) {
+    return value !== null && value !== undefined && String(value).trim() !== "";
+  }
+
+  function finiteYear(value) {
+    if (!hasValue(value)) return NaN;
+    const year = Number(value);
+    return Number.isFinite(year) ? year : NaN;
+  }
+
   function footnoteSources(event = {}, options = {}) {
     const description = String(event.description || "");
     const notes = [
@@ -8919,13 +8929,16 @@
   function rangeLabel(event = {}, options = {}) {
     if (event.period) return event.date_label || periodLabel(event.period);
     if (event.date_label) return event.date_label;
-    if (event.start_year && event.end_year) return `${event.start_year}-${event.end_year}`;
-    if (event.start_year) return String(event.start_year);
+    const start = finiteYear(event.start_year);
+    const end = finiteYear(event.end_year);
+    if (Number.isFinite(start) && Number.isFinite(end) && start !== end) return `${event.start_year}-${event.end_year}`;
+    if (Number.isFinite(start)) return String(event.start_year);
     return options.fallback || "Historic moment";
   }
 
   function dateValue(value, options = {}) {
-    const text = String(value || "").trim();
+    if (!hasValue(value)) return NaN;
+    const text = String(value).trim();
     if (!text) return NaN;
     const lower = text.toLowerCase();
     const keywordYears = options.keywordYears || [
@@ -8972,7 +8985,7 @@
     for (const field of candidates) {
       const value = typeof field === "function" ? field(event) : event[field];
       if (typeof field === "string" && numericFields.has(field)) {
-        const numeric = Number(value);
+        const numeric = finiteYear(value);
         if (Number.isFinite(numeric)) return numeric;
       }
       const parsed = dateValue(value, options);
