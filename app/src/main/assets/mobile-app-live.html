@@ -5249,6 +5249,9 @@
     "show_print_purchase", "introduction_title", "introduction_content", "history_title", "history_content",
     "preservation_title", "preservation_content", "oral_history_title", "oral_history_content",
     "translation_title", "translation_content", "legends_and_lore_title", "legends_and_lore_content",
+    "artifacts_title", "artifacts_content", "colonial_description_title", "colonial_description_content",
+    "land_loss_title", "land_loss_content", "excavation_title", "excavation_content",
+    "vandalism_title", "vandalism_content",
     "whereintheworld_title", "whereintheworld_content",
     "last_reviewed", "wp_date", "known_plant_species", "ancestral_territory", "ancestral_territory_note", "why_this_matters"
   ]);
@@ -5588,6 +5591,15 @@
       .filter(([, value]) => hasContent(value));
   }
 
+  function richTextHasDisplayContent(value, options = {}) {
+    const raw = String(value || "");
+    if (!raw.trim()) return false;
+    if (/<(?:img|iframe|figure|table)\b/i.test(raw)) return true;
+    if (/https?:\/\/[^\s"'<>]+\.(?:jpe?g|png|gif|webp|svg)(?:[?#][^\s"'<>]*)?/i.test(raw)) return true;
+    const cleanText = typeof options.cleanText === "function" ? options.cleanText : plainTextValue;
+    return cleanText(raw).length > 0;
+  }
+
   function removeFootnoteReferenceMarkers(html) {
     const template = document.createElement("template");
     template.innerHTML = String(html || "");
@@ -5621,7 +5633,7 @@
       if (node.nodeType !== Node.ELEMENT_NODE) return;
       const tag = node.tagName || "";
       if (["H1", "H2", "H3", "H4", "P", "FIGURE", "IMG", "UL", "OL", "BLOCKQUOTE", "TABLE", "IFRAME"].includes(tag)) {
-        if (cleanText(node.textContent || node.outerHTML || "").length || node.querySelector?.("img,iframe")) nodes.push(node);
+        if (["IMG", "IFRAME"].includes(tag) || cleanText(node.textContent || node.outerHTML || "").length || node.querySelector?.("img,iframe")) nodes.push(node);
         return;
       }
       [...node.childNodes].forEach(visit);
@@ -5740,6 +5752,7 @@
     uniqueTextBlocks,
     uniqueBy,
     contentSectionsFromFields,
+    richTextHasDisplayContent,
     removeFootnoteReferenceMarkers,
     importedFootnoteSources,
     sectionTimelineContentNodes,
@@ -13589,15 +13602,21 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const MOBILE_SITE_CONTENT_SECTION_FIELDS = [
       { title: "introduction_title", content: "introduction_content", defaultTitle: "Introduction" },
       { title: "oral_history_title", content: "oral_history_content", defaultTitle: "Oral History" },
+      { title: "history_title", content: "history_content", defaultTitle: "History" },
       { title: "legends_and_lore_title", content: "legends_and_lore_content", defaultTitle: "Legends and Lore" },
       { title: "translation_title", content: "translation_content", defaultTitle: "Translation" },
       { title: "preservation_title", content: "preservation_content", defaultTitle: "Preservation" },
+      { title: "artifacts_title", content: "artifacts_content", defaultTitle: "Artifacts" },
+      { title: "colonial_description_title", content: "colonial_description_content", defaultTitle: "Colonial Description" },
+      { title: "land_loss_title", content: "land_loss_content", defaultTitle: "Land Loss" },
+      { title: "excavation_title", content: "excavation_content", defaultTitle: "Excavation" },
+      { title: "vandalism_title", content: "vandalism_content", defaultTitle: "Disruption and Vandalism" },
       { title: "whereintheworld_title", content: "whereintheworld_content", defaultTitle: "On This Site / Off This Site" }
     ];
 
     function contentSections(site) {
       return SHARED_UTILS.contentSectionsFromFields(site, MOBILE_SITE_CONTENT_SECTION_FIELDS, {
-        hasContent: value => stripHtml(value).length > 0,
+        hasContent: value => SHARED_UTILS.richTextHasDisplayContent(value, { cleanText: stripHtml }),
         excludeTitle: title => SHARED_UTILS.isWhyThisMattersTitle(title)
       });
     }
@@ -13727,9 +13746,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function historicMomentsHtml(events, options = {}) {
       if (!events.length) return "";
       const showLocations = options.showLocations !== false;
+      const title = options.title || "Historic Moments";
       return `
         <section class="section">
-          <h3>History</h3>
+          <h3>${escapeHtml(title)}</h3>
           <div class="timeline">
             ${events.map(event => {
               const sourceNote = timelineSourceText(event);
@@ -20516,14 +20536,19 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const image = listingImage(site);
       const imageFallback = listingImageFallback(site);
       const moments = timelineEventsForSource("site", site.id, site.slug);
-      const historyHtml = moments.length
-        ? historicMomentsHtml(moments, { showLocations: false })
-        : (site.history_content ? sourceAwareSectionHtml(site.history_title || "History", site.history_content) : "");
       if (!Array.isArray(site.source_list)) {
         const sourceList = await fetchSiteSources(site);
         if (sourceList.length) site = { ...site, source_list: sourceList };
       }
-      const sections = contentSections(site).slice(0, 4).map(([title, content]) => sourceAwareSectionHtml(title, content)).join("");
+      let renderedMoments = false;
+      const sections = contentSections(site).map(([title, content]) => {
+        if (/^history$/i.test(title) && moments.length) {
+          renderedMoments = true;
+          return `${sourceAwareSectionHtml(title, content)}${historicMomentsHtml(moments, { showLocations: false })}`;
+        }
+        return sourceAwareSectionHtml(title, content);
+      }).join("");
+      const historyHtml = moments.length && !renderedMoments ? historicMomentsHtml(moments, { showLocations: false }) : "";
       detailTitleEl.innerHTML = mobileSiteTitleHtml(site);
       detailBodyEl.innerHTML = `
         ${image ? `<img class="hero article-sticky-hero" src="${escapeHtml(image)}" alt="${escapeHtml(site.listing_image_alt || site.title)}" loading="lazy" decoding="async" onerror="${imageErrorAction(imageFallback)}">` : ""}
