@@ -5822,6 +5822,16 @@
     return fallback;
   }
 
+  const DEFAULT_BLUE_PIN_SITE_SLUGS = new Set([
+    "matinecock",
+    "matinecock-indian-nation",
+    "matinecock-tribal-nation"
+  ]);
+
+  function siteUsesDefaultBluePin(site = {}) {
+    return DEFAULT_BLUE_PIN_SITE_SLUGS.has(String(site?.slug || "").trim().toLowerCase());
+  }
+
   function siteDisplayType(site, options = {}) {
     if (!site) return "";
     const overrides = options.overrides || {};
@@ -5950,6 +5960,7 @@
   }
 
   function siteLocationAccuracy(site = {}) {
+    if (siteUsesDefaultBluePin(site)) return "approximate";
     const text = siteLayerText(site);
     const status = normalizeText(site.geometry_cleanup_status || "");
     const surface = normalizeText(site.geometry_surface || "");
@@ -6010,6 +6021,7 @@
   }
 
   function isExhibitSite(site = {}) {
+    if (siteUsesDefaultBluePin(site)) return false;
     const text = siteLayerText(site);
     const rawType = normalizeText(site.site_type || "");
     return /^(exhibit|exhibit supporter|museum|gallery|public art|cultural center|heritage center|house museum|preservation)$/.test(rawType) ||
@@ -6039,6 +6051,7 @@
     featureVisibleInPrimaryLayers,
     siteLocationAccuracy,
     isExhibitSite,
+    siteUsesDefaultBluePin,
     siteTerritoryFillColor
   };
 }());
@@ -13613,6 +13626,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function siteDisplayGeometry(site) {
       const displayGeometry = site?.display_geojson || null;
+      if (SITE_UTILS.siteUsesDefaultBluePin?.(site)) {
+        const center = geometryCenter(site?.geojson || displayGeometry);
+        return center ? { type: "Point", coordinates: center } : (displayGeometry || site?.geojson || null);
+      }
       if (displayGeometry) {
         let geometry = restoreContainedLandPieces(site, displayGeometry);
         if (/montaukett/i.test(`${site?.title || ""} ${site?.slug || ""}`)) {
