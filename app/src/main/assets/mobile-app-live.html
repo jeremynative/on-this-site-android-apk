@@ -4961,6 +4961,10 @@
           <label for="register-password">Password</label>
           <input id="register-password" type="password" autocomplete="new-password">
         </div>
+        <div class="field">
+          <label for="register-invite-code">Invite code (optional)</label>
+          <input id="register-invite-code" autocomplete="off" inputmode="text">
+        </div>
         <button class="action" id="register-submit" type="button">Create account request</button>
         <p class="form-status" id="register-status" hidden></p>
       </section>
@@ -6661,6 +6665,7 @@
     vocab_guess: 1,
     approved_comment: 1,
     suggested_site: 5,
+    friend_invite: 100,
     artwork_support: 100,
     monthly_supporter: 100,
     helpful_vote: 1
@@ -7367,6 +7372,7 @@
     const languagePoints = Number(pointsByType.vocab_guess || 0);
     const loginPoints = Number(pointsByType.daily_open || 0);
     const suggestionPoints = Number(pointsByType.suggested_site || 0);
+    const friendInvitePoints = Number(pointsByType.friend_invite || 0);
     const points = pointEvents.reduce((sum, event) => sum + Number(event.points || 0), 0);
     const emptyMilestone = options.emptyMilestone || "New Contributor";
     const milestone = visits >= 25 ? "Archive Walker"
@@ -7374,7 +7380,7 @@
       : languageLearned >= 10 ? "Language Learner"
       : Number(loginRewards.currentStreak || 0) >= 7 ? "Daily Learner"
       : comments >= 10 ? "Community Storyteller"
-      : comments || visits || purchases || languageLearned || loginPoints ? "Active Contributor"
+      : comments || visits || purchases || languageLearned || loginPoints || friendInvitePoints ? "Active Contributor"
       : emptyMilestone;
     return {
       ...activity,
@@ -7394,6 +7400,7 @@
       checkinPoints,
       purchasePoints,
       suggestionPoints,
+      friendInvitePoints,
       supporterPoints,
       upvotePoints,
       languagePoints,
@@ -7419,6 +7426,7 @@
     if (stats.languageLearned) badges.push("Language Learner");
     if (Number(stats.loginStreak || 0) >= 3) badges.push("Daily Learner");
     if (stats.commentUpvotes) badges.push("Community Listener");
+    if (stats.friendInvitePoints) badges.push("Community Inviter");
     if (stats.purchasesCount || stats.supporterPoints) badges.push("Project Supporter");
     if (!badges.length) badges.push(options.emptyBadge || "New Learner");
     return badges;
@@ -7497,6 +7505,7 @@
       comments: "Comments",
       helpful: "Helpful votes",
       suggestions: "Suggested sites",
+      friendInvite: "Friend invites",
       support: "Support",
       purchases: "Artwork/support badges",
       supporter: "Monthly supporter",
@@ -7509,6 +7518,7 @@
         [labels.visit, stats.visitPoints],
         [labels.checkin, stats.checkinPoints],
         [labels.suggestions, stats.suggestionPoints],
+        [labels.friendInvite, stats.friendInvitePoints],
         [labels.language, stats.languagePoints],
         [labels.login, stats.loginPoints],
         [labels.purchases, stats.purchasePoints],
@@ -7522,6 +7532,7 @@
         [labels.comments, stats.commentPoints],
         [labels.helpful, stats.upvotePoints],
         [labels.suggestions, stats.suggestionPoints],
+        [labels.friendInvite, stats.friendInvitePoints],
         [labels.support, Number(stats.purchasePoints || 0) + Number(stats.supporterPoints || 0)]
       ]).filter(([, value]) => Number(value) > 0).map(([label, value]) => [label, Number(value) || 0]);
     return rows;
@@ -7605,8 +7616,17 @@
       date: purchase.created_at || purchase.purchase_date || "",
       points: 100
     }));
+    const friendInvites = profilePointEventsFromActivity(activity, options)
+      .filter(event => event.type === "friend_invite")
+      .map(event => ({
+        type: "Invite",
+        title: event.title || "Friend accepted invite",
+        detail: "A friend registered with your emailed invite code",
+        date: event.date || "",
+        points: event.points || POINT_RULES.friend_invite
+      }));
     const includePurchases = options.includePurchases !== false;
-    return [...comments, ...visits, ...suggestions, ...language, ...logins, ...(includePurchases ? purchases : [])]
+    return [...comments, ...visits, ...suggestions, ...friendInvites, ...language, ...logins, ...(includePurchases ? purchases : [])]
       .sort((a, b) => activityDateValue(b.date) - activityDateValue(a.date))
       .slice(0, Number(options.limit || 14));
   }
@@ -11282,6 +11302,50 @@
     return body;
   }
 
+  async function sendAccountInviteEmail(invite = {}, options = {}) {
+    const endpoint = new URL("feedback-email.php", window.location.href);
+    const response = await fetch(endpoint.toString(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        type: "account_invite",
+        inviter_profile: invite.inviter_profile || invite.inviterProfile || invite.profileId,
+        inviter_email: invite.inviter_email || invite.inviterEmail || "",
+        inviter_name: invite.inviter_name || invite.inviterName || "",
+        invited_email: invite.invited_email || invite.invitedEmail || "",
+        invited_name: invite.invited_name || invite.invitedName || "",
+        message: invite.message || "",
+        app_url: options.appUrl || window.location.href,
+        platform: options.platform || "desktop"
+      })
+    });
+    const text = await response.text();
+    const body = text ? JSON.parse(text) : null;
+    if (!response.ok || body?.error) throw new Error(body?.error || `Invite email failed ${response.status}`);
+    return body;
+  }
+
+  async function redeemAccountInviteCode(invite = {}, options = {}) {
+    const code = String(invite.code || "").trim();
+    if (!code) return null;
+    const endpoint = new URL("feedback-email.php", window.location.href);
+    const response = await fetch(endpoint.toString(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        type: "account_invite_redeem",
+        code,
+        email: invite.email || "",
+        account_id: invite.account_id || invite.registrationId || invite.registration_id || null,
+        platform: options.platform || "desktop"
+      })
+    });
+    const text = await response.text();
+    const body = text ? JSON.parse(text) : null;
+    if (!response.ok || body?.error) throw new Error(body?.error || `Invite code failed ${response.status}`);
+    return body;
+  }
+
   window.NLI_FEEDBACK_UTILS = {
     buildFeedbackCommentPayload,
     buildImplementationHandoffText,
@@ -11290,7 +11354,9 @@
     captureFeedbackScreenshot,
     uploadFeedbackScreenshot,
     sendFeedbackReviewEmail,
-    sendAccountSignupEmail
+    sendAccountSignupEmail,
+    sendAccountInviteEmail,
+    redeemAccountInviteCode
   };
 }());
   </script>
@@ -12488,6 +12554,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const registerNameEl = document.getElementById("register-name");
     const registerEmailEl = document.getElementById("register-email");
     const registerPasswordEl = document.getElementById("register-password");
+    const registerInviteCodeEl = document.getElementById("register-invite-code");
     const registerSubmitBtn = document.getElementById("register-submit");
     const registerStatusEl = document.getElementById("register-status");
     const passwordResetToggleBtn = document.getElementById("password-reset-toggle");
@@ -12927,7 +12994,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const existingRegistrationMessage = PROFILE_UTILS.existingRegistrationMessage;
     const strongestRegistrationRecord = PROFILE_UTILS.strongestRegistrationRecord;
 
-    async function registerLocalAccount({ displayName, email, password }) {
+    async function registerLocalAccount({ displayName, email, password, inviteCode = "" }) {
       const normalizedEmail = normalizeAccountEmail(email);
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalizedEmail)) throw new Error("Enter a valid email address.");
       if (String(password || "").length < 8) throw new Error("Password must be at least 8 characters.");
@@ -12966,6 +13033,20 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           { ...(registrationRecord?.data || {}), id: profile.registrationId || registrationRecord?.data?.id },
           { appUrl: window.location.href, platform: "mobile" }
         ).catch(error => console.warn("Account signup email failed:", error));
+      }
+      const cleanedInviteCode = String(inviteCode || "").trim();
+      if (cleanedInviteCode && profile.registrationSynced) {
+        try {
+          const inviteResult = await FEEDBACK_UTILS.redeemAccountInviteCode({
+            code: cleanedInviteCode,
+            email: normalizedEmail,
+            registrationId: profile.registrationId || registrationRecord?.data?.id
+          }, { platform: "mobile" });
+          profile.inviteRedeemed = !!inviteResult?.ok;
+          profile.invitePointsAwarded = Number(inviteResult?.points_awarded || 0);
+        } catch (error) {
+          profile.inviteError = error.message || "Invite code could not be applied.";
+        }
       }
       profile.reviewTodoSynced = profile.registrationSynced;
       profile.memberProfileSynced = profile.registrationSynced
@@ -21858,6 +21939,30 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       `;
     }
 
+    function mobileAccountInviteHtml(profile = {}) {
+      if (!profile?.id || state.profile?.pending || !isApprovedContributor()) return "";
+      return `
+        <details class="community-extra">
+          <summary>Invite a friend</summary>
+          <p class="detail-meta">Email a one-time invite code. If your friend registers with the code tied to that email, you receive 100 profile points.</p>
+          <div class="field">
+            <label for="mobile-invite-name">Friend name (optional)</label>
+            <input id="mobile-invite-name" data-account-invite-name autocomplete="name">
+          </div>
+          <div class="field">
+            <label for="mobile-invite-email">Friend email</label>
+            <input id="mobile-invite-email" data-account-invite-email autocomplete="email" inputmode="email">
+          </div>
+          <div class="field">
+            <label for="mobile-invite-message">Personal message (optional)</label>
+            <textarea id="mobile-invite-message" data-account-invite-message maxlength="600"></textarea>
+          </div>
+          <button class="action" type="button" data-send-account-invite>Email invite</button>
+          <p class="form-status" data-account-invite-status hidden></p>
+        </details>
+      `;
+    }
+
     function renderProfile() {
       if (!profileCardEl) return;
       loginSheetEl?.classList.toggle("has-profile", !!state.profile);
@@ -21934,6 +22039,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         <p class="detail-meta">${escapeHtml(visitProgress)}</p>
         ${approved ? `<p class="detail-meta">Daily login: +1 point once per day${loginRewards.bestStreak ? ` - best streak ${loginRewards.bestStreak}` : ""}. Language points: ${languagePoints}.</p>` : `<p class="detail-meta">Points and streaks unlock after this contributor account is approved.</p>`}
         ${approved ? mobileProfilePointsBreakdownHtml(stats) : ""}
+        ${mobileAccountInviteHtml(activeProfile)}
         ${mobileProfileActivityFeedHtml(activeProfile)}
         ${mobileProfileLanguageHtml(activeProfile, true)}
         <div class="visit-preview">
@@ -22001,6 +22107,64 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         showBanner("Profile updated.");
       } catch (error) {
         showBanner(error.message || "Could not save profile to Directus.");
+      }
+    }
+
+    async function sendMobileAccountInvite(root) {
+      const profile = currentContributorProfile();
+      if (!profile?.id || state.profile?.pending || !isApprovedContributor()) {
+        showBanner("Login as an approved contributor before inviting a friend.");
+        return;
+      }
+      const button = root.querySelector("[data-send-account-invite]");
+      const statusEl = root.querySelector("[data-account-invite-status]");
+      const originalLabel = button?.textContent || "Email invite";
+      const invitedName = root.querySelector("[data-account-invite-name]")?.value.trim() || "";
+      const invitedEmail = normalizeAccountEmail(root.querySelector("[data-account-invite-email]")?.value || "");
+      const message = root.querySelector("[data-account-invite-message]")?.value.trim() || "";
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(invitedEmail)) {
+        showBanner("Enter your friend's email.");
+        return;
+      }
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Sending...";
+      }
+      if (statusEl) {
+        statusEl.textContent = "Sending invite email...";
+        statusEl.hidden = false;
+        statusEl.classList.remove("error", "success");
+      }
+      try {
+        await FEEDBACK_UTILS.sendAccountInviteEmail({
+          inviterProfile: profile.id,
+          inviterEmail: state.profile?.email || profile.username || "",
+          inviterName: profile.display_name || state.profile?.display_name || state.profile?.email || "Contributor",
+          invitedName,
+          invitedEmail,
+          message
+        }, { appUrl: window.location.href, platform: "mobile" });
+        root.querySelector("[data-account-invite-name]").value = "";
+        root.querySelector("[data-account-invite-email]").value = "";
+        root.querySelector("[data-account-invite-message]").value = "";
+        if (statusEl) {
+          statusEl.textContent = "Invite emailed. The code can be used once by that email address.";
+          statusEl.hidden = false;
+          statusEl.classList.add("success");
+        }
+        showBanner("Invite emailed.");
+      } catch (error) {
+        if (statusEl) {
+          statusEl.textContent = error.message || "Could not send invite.";
+          statusEl.hidden = false;
+          statusEl.classList.add("error");
+        }
+        showBanner(error.message || "Could not send invite.");
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = originalLabel;
+        }
       }
     }
 
@@ -24237,6 +24401,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (event.target.closest("[data-save-profile]")) {
         saveEditedProfile();
       }
+      const inviteButton = event.target.closest("[data-send-account-invite]");
+      if (inviteButton) {
+        sendMobileAccountInvite(inviteButton.closest(".community-extra") || profileCardEl);
+        return;
+      }
       const languageToggle = event.target.closest("[data-show-profile-language]");
       if (languageToggle) {
         const language = profileCardEl.querySelector("[data-profile-language]");
@@ -24332,12 +24501,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const profile = await registerLocalAccount({
           displayName: registerNameEl.value.trim(),
           email: registerEmailEl.value.trim(),
-          password: registerPasswordEl.value
+          password: registerPasswordEl.value,
+          inviteCode: registerInviteCodeEl?.value || ""
         });
         loginEmailEl.value = profile.email;
         loginPasswordEl.value = "";
         registerPasswordEl.value = "";
-        const message = "Thank you for registering. We will review your account soon.";
+        if (registerInviteCodeEl) registerInviteCodeEl.value = "";
+        const message = profile.inviteRedeemed
+          ? "Thank you for registering. Your invite code was accepted and 100 points were awarded to the friend who invited you."
+          : profile.inviteError
+            ? `Thank you for registering. We will review your account soon. Invite code note: ${profile.inviteError}`
+            : "Thank you for registering. We will review your account soon.";
         showRegisterStatus(message, "success");
         showBanner(message);
       } catch (error) {
