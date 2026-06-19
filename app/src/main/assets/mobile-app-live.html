@@ -22435,9 +22435,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       })).filter(item => activityDateValue(item.date));
       const events = state.exhibits.map(exhibit => {
         const pinned = ACTIVITY_UTILS.activityIsPinned(exhibit);
+        const eventTargetSlug = exhibit.related_site_slug || exhibit.source_slug || String(exhibit.slug || exhibit.id || "");
         return {
           type: "event",
-          slug: String(exhibit.slug || exhibit.id || ""),
+          slug: eventTargetSlug,
+          activityId: String(exhibit.id || ""),
           title: pinned && exhibit.activity_pin_title ? exhibit.activity_pin_title : exhibit.title || "Event",
           label: pinned ? ACTIVITY_UTILS.activityPinLabel(exhibit) : CALENDAR_UTILS.eventTypeLabel(exhibit.event_type),
           preview: activityPreview(pinned && exhibit.activity_pin_preview ? exhibit.activity_pin_preview : exhibit.summary || exhibit.description || exhibit.venue || ""),
@@ -22701,7 +22703,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         openSupportPanel();
       } else if (type === "wiki" && slug) openWikiArticle(slug);
       else if (type === "event" && slug) {
-        const exhibit = state.exhibits.find(item => String(item.slug || item.id) === String(slug));
+        if (state.siteBySlug.has(slug)) return openSite(slug);
+        const exhibit = state.exhibits.find(item => String(item.id) === String(activityId) || String(item.slug || item.id) === String(slug));
         if (exhibit) openExhibit(exhibit);
       } else if (slug && state.wikiBySlug.has(slug)) openWikiArticle(slug);
       else if (slug) openSite(slug);
