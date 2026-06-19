@@ -4183,51 +4183,6 @@
       color: #52615a;
     }
 
-    .support-test-payment-method {
-      display: grid;
-      gap: 8px;
-      padding: 12px;
-      border: 1px dashed rgba(218, 161, 43, 0.7);
-      border-radius: 8px;
-      background: #fff8e6;
-      color: var(--ink);
-    }
-
-    .support-test-payment-method strong {
-      color: var(--accent-strong);
-      font-size: 14px;
-      letter-spacing: 0;
-    }
-
-    .support-test-payment-method p,
-    .support-test-payment-method dl {
-      margin: 0;
-    }
-
-    .support-test-payment-method dl {
-      display: grid;
-      gap: 6px;
-    }
-
-    .support-test-payment-method dl div {
-      display: grid;
-      grid-template-columns: 78px minmax(0, 1fr);
-      gap: 8px;
-      align-items: baseline;
-    }
-
-    .support-test-payment-method dt {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 900;
-      text-transform: uppercase;
-    }
-
-    .support-test-payment-method dd {
-      margin: 0;
-      font-weight: 900;
-    }
-
     .support-thank-you-list {
       display: grid;
       gap: 8px;
@@ -11557,10 +11512,9 @@
     const amounts = amountOptions();
     const defaultAmount = Number(supportConfig.defaultAmount || amounts[0] || 25);
     const title = settings.title || "Support On This Site";
-    const note = settings.support_note || "Your support helps keep the archive online, reviewed, expanded, and available across the website and mobile app.";
+    const note = settings.support_note || "Thank you to Monument Lab, Running Strong for American Indian Youth, community contributors, and other supporters who help keep On This Site online, reviewed, expanded, and available across the website and mobile app.";
     const hasStripe = Boolean(supportConfig.checkoutEndpoint);
     const hasEmbedded = hasStripe && hasEmbeddedCheckoutConfig(supportConfig);
-    const showTestPaymentMethod = hasEmbedded && isTestPublishableKey(supportConfig);
     const initialThankYousHtml = publicThankYousHtml(window.NLI_PUBLIC_SUPPORTERS || [], { escapeHtml: esc });
     return `
       <div class="ots-page-intro support-page-intro">
@@ -11624,18 +11578,6 @@
           <a class="button action secondary" href="mailto:${esc(supportConfig.supportEmail)}">Ask a question</a>
         </div>
         <p class="form-status" data-support-status hidden></p>
-        ${showTestPaymentMethod ? `
-          <aside class="support-test-payment-method" aria-label="Test payment method">
-            <strong>Test Payment Method</strong>
-            <p>Use this in Stripe test mode only.</p>
-            <dl>
-              <div><dt>Card</dt><dd>4242 4242 4242 4242</dd></div>
-              <div><dt>Expires</dt><dd>Any future date</dd></div>
-              <div><dt>CVC</dt><dd>Any 3 digits</dd></div>
-              <div><dt>ZIP</dt><dd>Any ZIP code</dd></div>
-            </dl>
-          </aside>
-        ` : ""}
         <div class="support-embedded-checkout" data-support-embedded-checkout hidden></div>
       </section>
       <section class="section ots-support-strip" ${initialThankYousHtml ? "" : "hidden"}>
@@ -11686,7 +11628,7 @@
       container.hidden = true;
       container.innerHTML = "";
     }
-    form.querySelectorAll(".support-frequency, .support-amount-grid, .field, .support-check, .actions, .support-test-payment-method").forEach(element => {
+    form.querySelectorAll(".support-frequency, .support-amount-grid, .field, .support-check, .actions").forEach(element => {
       element.hidden = true;
     });
     const completion = form.querySelector("[data-support-complete]");
