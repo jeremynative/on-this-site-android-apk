@@ -5329,7 +5329,7 @@
     "start_datetime", "end_datetime", "all_day", "timezone", "on_view_status", "is_permanent",
     "geojson", "map_icon", "icon_color", "cover_image", "external_url", "related_site_slug",
     "related_wiki_slug", "related_blog_slug", "collection_piece_title", "collection_artist",
-    "collection_date", "create_historic_moment", "historic_period"
+    "collection_date", "activity_feed_date", "create_historic_moment", "historic_period"
   ]);
 
   const plantObservationFields = fields([
@@ -8067,6 +8067,17 @@
     return site.date_created || site.created_at || site.wp_date || "";
   }
 
+  function eventActivityDate(event = {}) {
+    return event.activity_feed_date ||
+      event.date_updated ||
+      event.updated_at ||
+      event.modified_at ||
+      event.date_created ||
+      event.created_at ||
+      event.added_at ||
+      "";
+  }
+
   function sameCalendarDate(first, second) {
     if (!first || !second) return false;
     const firstTime = activityDateValue(first);
@@ -8131,6 +8142,7 @@
     registrationNeedsReview,
     siteEditedDate,
     siteCreatedDate,
+    eventActivityDate,
     siteActivityLabel,
     editedDateLabel,
     sortByRecentActivity,
@@ -22421,7 +22433,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         title: exhibit.title || "Event",
         label: CALENDAR_UTILS.eventTypeLabel(exhibit.event_type),
         preview: activityPreview(exhibit.summary || exhibit.description || exhibit.venue || ""),
-        date: exhibit.updated_at || exhibit.modified_at || exhibit.date_updated || exhibit.created_at || exhibit.start_datetime || exhibit.start_date
+        date: ACTIVITY_UTILS.eventActivityDate(exhibit)
       })).filter(item => activityDateValue(item.date));
       return ACTIVITY_UTILS.mergeRecentActivity([
           comments,
