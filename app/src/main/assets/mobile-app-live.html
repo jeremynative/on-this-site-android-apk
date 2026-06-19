@@ -4375,6 +4375,12 @@
       text-align: left;
     }
 
+    .activity-feed-item.is-pinned {
+      border-color: rgba(218, 161, 43, 0.62);
+      background: #fffaf0;
+      box-shadow: 0 6px 16px rgba(64, 49, 22, 0.08);
+    }
+
     .activity-feed-item strong {
       font-size: 14px;
       line-height: 1.22;
@@ -4388,8 +4394,33 @@
     }
 
     .activity-feed-item .detail-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
       color: var(--accent-strong);
       font-weight: 800;
+    }
+
+    .activity-pin-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 17px;
+      height: 17px;
+      flex: 0 0 auto;
+      border-radius: 999px;
+      background: rgba(218, 161, 43, 0.2);
+      color: #7a5415;
+    }
+
+    .activity-pin-icon svg {
+      width: 12px;
+      height: 12px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     .section.has-source {
@@ -5238,6 +5269,7 @@
     "id", "title", "slug", "publication_status", "summary", "address_label", "site_type", "geojson", "display_geojson",
     "geometry_surface", "geometry_cleanup_status", "map_geometry_source", "map_fill_color", "map_opacity",
     "map_icon", "listing_image_file", "listing_image_url", "listing_image_thumb_url", "listing_image_alt",
+    "activity_pin_until", "activity_pin_label", "activity_pin_title", "activity_pin_preview",
     "show_print_purchase", "introduction_content", "history_content", "preservation_content", "oral_history_content",
     "translation_content", "legends_and_lore_content", "last_reviewed", "wp_date", "known_plant_species", "ancestral_territory",
     "ancestral_territory_note", "why_this_matters"
@@ -5246,6 +5278,7 @@
     "id", "title", "slug", "publication_status", "summary", "address_label", "site_type", "geojson", "display_geojson",
     "geometry_surface", "geometry_cleanup_status", "map_icon", "map_fill_color", "map_opacity",
     "listing_image_file", "listing_image_thumb_url", "listing_image_url", "listing_image_alt",
+    "activity_pin_until", "activity_pin_label", "activity_pin_title", "activity_pin_preview",
     "show_print_purchase", "introduction_content", "history_content", "translation_content",
     "last_reviewed", "known_plant_species", "ancestral_territory", "ancestral_territory_note", "why_this_matters"
   ]);
@@ -5253,6 +5286,7 @@
     "id", "title", "slug", "publication_status", "summary", "address_label", "site_type", "geojson", "display_geojson",
     "geometry_surface", "geometry_cleanup_status", "map_icon", "map_fill_color", "map_opacity",
     "listing_image_file", "listing_image_url", "listing_image_thumb_url", "listing_image_alt",
+    "activity_pin_until", "activity_pin_label", "activity_pin_title", "activity_pin_preview",
     "show_print_purchase", "introduction_title", "introduction_content", "history_title", "history_content",
     "preservation_title", "preservation_content", "oral_history_title", "oral_history_content",
     "translation_title", "translation_content", "legends_and_lore_title", "legends_and_lore_content",
@@ -5284,7 +5318,8 @@
     "start_datetime", "end_datetime", "all_day", "timezone", "on_view_status", "is_permanent",
     "geojson", "map_icon", "icon_color", "cover_image", "external_url", "related_site_slug",
     "related_wiki_slug", "related_blog_slug", "collection_piece_title", "collection_artist",
-    "collection_date", "activity_feed_date", "create_historic_moment", "historic_period"
+    "collection_date", "activity_feed_date", "activity_pin_until", "activity_pin_label",
+    "activity_pin_title", "activity_pin_preview", "create_historic_moment", "historic_period"
   ]);
 
   const plantObservationFields = fields([
@@ -8070,6 +8105,8 @@
     const dateAccessor = typeof options.dateAccessor === "function" ? options.dateAccessor : item => item?.date || item?.created_at;
     const titleAccessor = typeof options.titleAccessor === "function" ? options.titleAccessor : item => item?.title || "";
     return [...items].sort((a, b) =>
+      Number(activityIsPinned(b)) - Number(activityIsPinned(a)) ||
+      activityDateValue(activityPinUntil(b)) - activityDateValue(activityPinUntil(a)) ||
       activityDateValue(dateAccessor(b)) - activityDateValue(dateAccessor(a)) ||
       String(titleAccessor(a)).localeCompare(String(titleAccessor(b)))
     );
@@ -8078,6 +8115,25 @@
   function mergeRecentActivity(groups = [], options = {}) {
     const limit = Number(options.limit || 40);
     return sortByRecentActivity(groups.flat()).slice(0, limit);
+  }
+
+  function activityPinUntil(item = {}) {
+    return item.pinUntil ||
+      item.activity_pin_until ||
+      item.pinned_until ||
+      item.pin_until ||
+      "";
+  }
+
+  function activityIsPinned(item = {}, options = {}) {
+    const until = activityDateValue(activityPinUntil(item));
+    if (!until) return false;
+    const now = Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now();
+    return until >= now;
+  }
+
+  function activityPinLabel(item = {}) {
+    return item.pinLabel || item.activity_pin_label || "Pinned";
   }
 
   window.NLI_ACTIVITY_UTILS = {
@@ -8100,6 +8156,9 @@
     eventActivityDate,
     siteActivityLabel,
     editedDateLabel,
+    activityPinUntil,
+    activityIsPinned,
+    activityPinLabel,
     sortByRecentActivity,
     mergeRecentActivity
   };
@@ -22352,14 +22411,19 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }));
       const sites = state.sites
         .filter(site => site.slug !== "address-result")
-        .map(site => ({
-          type: "site",
-          slug: site.slug,
-          title: site.title,
-          label: ACTIVITY_UTILS.siteActivityLabel(site),
-          preview: activityPreview(site.summary || site.introduction_content || siteSubtitle(site)),
-          date: ACTIVITY_UTILS.siteEditedDate(site, { extended: true })
-        }))
+        .map(site => {
+          const pinned = ACTIVITY_UTILS.activityIsPinned(site);
+          return {
+            type: "site",
+            slug: site.slug,
+            title: pinned && site.activity_pin_title ? site.activity_pin_title : site.title,
+            label: pinned ? ACTIVITY_UTILS.activityPinLabel(site) : ACTIVITY_UTILS.siteActivityLabel(site),
+            preview: activityPreview(pinned && site.activity_pin_preview ? site.activity_pin_preview : site.summary || site.introduction_content || siteSubtitle(site)),
+            date: ACTIVITY_UTILS.siteEditedDate(site, { extended: true }),
+            pinUntil: site.activity_pin_until,
+            pinned
+          };
+        })
         .filter(item => activityDateValue(item.date));
       const wikis = state.wikiArticles.map(article => ({
         type: "wiki",
@@ -22369,14 +22433,19 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         preview: activityPreview(article.summary || article.introduction || article.content),
         date: ACTIVITY_UTILS.siteEditedDate(article, { extended: true })
       })).filter(item => activityDateValue(item.date));
-      const events = state.exhibits.map(exhibit => ({
-        type: "event",
-        slug: String(exhibit.slug || exhibit.id || ""),
-        title: exhibit.title || "Event",
-        label: CALENDAR_UTILS.eventTypeLabel(exhibit.event_type),
-        preview: activityPreview(exhibit.summary || exhibit.description || exhibit.venue || ""),
-        date: ACTIVITY_UTILS.eventActivityDate(exhibit)
-      })).filter(item => activityDateValue(item.date));
+      const events = state.exhibits.map(exhibit => {
+        const pinned = ACTIVITY_UTILS.activityIsPinned(exhibit);
+        return {
+          type: "event",
+          slug: String(exhibit.slug || exhibit.id || ""),
+          title: pinned && exhibit.activity_pin_title ? exhibit.activity_pin_title : exhibit.title || "Event",
+          label: pinned ? ACTIVITY_UTILS.activityPinLabel(exhibit) : CALENDAR_UTILS.eventTypeLabel(exhibit.event_type),
+          preview: activityPreview(pinned && exhibit.activity_pin_preview ? exhibit.activity_pin_preview : exhibit.summary || exhibit.description || exhibit.venue || ""),
+          date: ACTIVITY_UTILS.eventActivityDate(exhibit),
+          pinUntil: exhibit.activity_pin_until,
+          pinned
+        };
+      }).filter(item => activityDateValue(item.date));
       return ACTIVITY_UTILS.mergeRecentActivity([
           comments,
           suggestions,
@@ -22543,13 +22612,17 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileActivityListEl.innerHTML = `
         <p class="summary">Most recent public activity from the archive, newest first.</p>
         ${feed.map((item, index) => `
-          <button class="activity-feed-item" type="button" data-mobile-activity-index="${index}" data-mobile-activity-type="${escapeHtml(item.type)}" data-mobile-activity-source-type="${escapeHtml(item.sourceType || "")}" data-mobile-activity-id="${escapeHtml(item.activityId || item.id || "")}" data-mobile-activity-slug="${escapeHtml(item.slug || "")}">
-            <span class="detail-meta">${escapeHtml(item.label)} - ${escapeHtml(activityDateLabel(item.date))}</span>
+          <button class="activity-feed-item${item.pinned ? " is-pinned" : ""}" type="button" data-mobile-activity-index="${index}" data-mobile-activity-type="${escapeHtml(item.type)}" data-mobile-activity-source-type="${escapeHtml(item.sourceType || "")}" data-mobile-activity-id="${escapeHtml(item.activityId || item.id || "")}" data-mobile-activity-slug="${escapeHtml(item.slug || "")}">
+            <span class="detail-meta">${item.pinned ? mobileActivityPinIconHtml() : ""}${escapeHtml(item.label)} - ${escapeHtml(activityDateLabel(item.date))}</span>
             <strong>${escapeHtml(item.title || "Archive activity")}</strong>
             ${item.preview ? `<p>${escapeHtml(item.preview)}</p>` : ""}
           </button>
         `).join("") || `<p class="summary">No public activity has loaded yet.</p>`}
       `;
+    }
+
+    function mobileActivityPinIconHtml() {
+      return `<span class="activity-pin-icon" aria-label="Pinned"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4l5 5-4 1-4 6-3-3 6-4 1-5Z"></path><path d="M9 13l-5 5"></path></svg></span>`;
     }
 
     function renderMobileNotificationsSheet() {
