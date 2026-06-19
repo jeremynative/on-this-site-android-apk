@@ -12344,6 +12344,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileSiteIconImagesLoading: false,
       mobileMapLayerEventsBound: false,
       mobileMapLayerHandlers: new Map(),
+      mobileMapPulseMoveBound: false,
       exhibitMarkers: new Map(),
       storyMarkers: new Map(),
       siteSourceListCache: new Map(),
@@ -16628,6 +16629,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       event?.preventDefault?.();
       event?.originalEvent?.preventDefault?.();
       event?.originalEvent?.stopPropagation?.();
+      markMobileMapEventHandled(event);
       openMapFeature(feature);
       return true;
     }
@@ -17873,6 +17875,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function handleSuggestionMapPickClick(event) {
       if (!handleSuggestionMapPick(event)) return false;
+      markMobileMapEventHandled(event);
       event?.preventDefault?.();
       event?.originalEvent?.preventDefault?.();
       event?.originalEvent?.stopPropagation?.();
@@ -21633,25 +21636,26 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function openMobileInteractivePolygonLayer(event) {
       if (handleSuggestionMapPickClick(event)) return;
       if (openMobilePolygonLayerFeature(event)) return;
-      openMobileMapTap(event);
+      if (openMobileMapTap(event)) markMobileMapEventHandled(event);
     }
 
     function bindMobileMapLayerEvents() {
       if (!state.map) return;
       bindMobileInteractiveLayer("mobile-site-point-hit", event => {
         if (handleSuggestionMapPickClick(event)) return;
-        openMobileMapTap(event);
+        if (openMobileMapTap(event)) markMobileMapEventHandled(event);
       });
       ["mobile-biography-place-labels", "mobile-biography-place-points", "mobile-biography-place-path", "mobile-biography-path-labels", "mobile-biography-path-points", "mobile-biography-path-lines"]
         .forEach(layerId => bindMobileInteractiveLayer(layerId, event => {
           if (handleSuggestionMapPickClick(event)) return;
-          openMobileMapTap(event);
+          if (openMobileMapTap(event)) markMobileMapEventHandled(event);
         }));
       ["mobile-site-polygons", "mobile-territory-polygons", "mobile-detail-labels", "mobile-territory-labels"]
         .forEach(layerId => bindMobileInteractiveLayer(layerId, openMobileInteractivePolygonLayer));
       if (!state.mobileMapLayerEventsBound) {
         state.mobileMapLayerEventsBound = true;
         state.map.on("click", event => {
+          if (mobileMapEventHandled(event)) return;
           openMobileMapTap(event);
         });
       }
@@ -21659,6 +21663,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function updateMobileSiteAttentionPulse() {
       if (!state.map) return;
+      if (document.hidden || isAndroidMapGestureActive() || mobileMapCameraIsInteracting()) return;
       if (!state.map.getLayer("mobile-site-attention-outer") || !state.map.getLayer("mobile-site-attention-core")) return;
       const elapsed = Date.now() - (state.siteAttentionPulseStartedAt || Date.now());
       const progress = (elapsed % 1800) / 1800;
@@ -21673,7 +21678,30 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (state.siteAttentionPulseTimer) return;
       state.siteAttentionPulseStartedAt = Date.now();
       updateMobileSiteAttentionPulse();
-      state.siteAttentionPulseTimer = window.setInterval(updateMobileSiteAttentionPulse, 90);
+      state.siteAttentionPulseTimer = window.setInterval(updateMobileSiteAttentionPulse, 240);
+      if (!state.mobileMapPulseMoveBound && state.map?.on) {
+        state.mobileMapPulseMoveBound = true;
+        state.map.on("moveend", updateMobileSiteAttentionPulse);
+        state.map.on("zoomend", updateMobileSiteAttentionPulse);
+      }
+    }
+
+    function markMobileMapEventHandled(event) {
+      if (event?.originalEvent) event.originalEvent.__nliMobileMapHandled = true;
+    }
+
+    function mobileMapEventHandled(event) {
+      return Boolean(event?.originalEvent?.__nliMobileMapHandled);
+    }
+
+    function mobileMapCameraIsInteracting() {
+      if (!state.map) return false;
+      return Boolean(
+        state.map.isMoving?.() ||
+        state.map.isZooming?.() ||
+        state.map.isRotating?.() ||
+        state.map.isEasing?.()
+      );
     }
 
     function refreshMobileMapSources(options = {}) {
