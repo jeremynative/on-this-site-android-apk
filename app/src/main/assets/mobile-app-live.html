@@ -9295,7 +9295,9 @@
         place: entry.location || entry.place || "",
         coordinates: entry.coordinates,
         reason: entry.reason || cleanText(options, entry.descriptionHtml || ""),
-        order: entry.mapOrder
+        order: entry.mapOrder,
+        eventId: entry.event?.id || "",
+        event_id: entry.event?.id || ""
       });
     });
 
@@ -16731,7 +16733,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function openMapFeature(feature) {
       const wikiSlug = feature?.properties?.wiki_slug;
       if (wikiSlug && state.wikiBySlug.has(wikiSlug)) {
-        openWikiArticle(state.wikiBySlug.get(wikiSlug), { focus: false });
+        openWikiArticle(state.wikiBySlug.get(wikiSlug), {
+          focus: false,
+          timelineEventId: feature?.properties?.event_id || feature?.properties?.eventId || ""
+        });
         return;
       }
       const slug = feature?.properties?.slug;
@@ -20076,7 +20081,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const features = [];
       for (const slug of Object.keys(BIOGRAPHY_PLACE_PATHS)) {
         const article = state.wikiBySlug.get(slug) || { slug, title: BIOGRAPHY_PLACE_PATHS[slug]?.title || "" };
-        const path = mobileBiographyPathData(article);
+        const path = mobileBiographyTimelineData(article, timelineEventsForSource("wiki", article.id, slug)) || mobileBiographyPathData(article);
         if (!path?.places?.length) continue;
         const person = mobileBiographyPathPersonName(article, slug);
         features.push({
@@ -20099,7 +20104,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
               pin_label: pathLabel,
               title: pathLabel,
               place: place.place || "",
-              reason: place.reason || ""
+              reason: place.reason || "",
+              event_id: place.event_id || place.eventId || ""
             }
           });
         });
@@ -20242,7 +20248,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
                 pin_label: pathLabel,
                 title: pathLabel,
                 place: place.place || "",
-                reason: place.reason || ""
+                reason: place.reason || "",
+                event_id: place.event_id || place.eventId || ""
               }
             };
           })
@@ -20399,7 +20406,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       syncMobilePanelAccessibility();
       decorateCurrentDetailForQuoteComments("wiki", article);
       decorateCurrentDetailForLanguageQuiz("wiki", article);
-      setMobileContentRoute({ wiki: article.slug }, options);
+      setMobileContentRoute({ wiki: article.slug, event: options.timelineEventId || "" }, options);
       if (biographyTimeline?.places?.length >= 2) showMobileBiographyPathOverlay(article, { focus: options.focus !== false, events: wikiMoments });
       if (event?.id) {
         window.setTimeout(() => detailBodyEl.querySelector(`#timeline-moment-${CSS.escape(String(event.id))}`)?.scrollIntoView({ block: "start" }), 80);
