@@ -5300,8 +5300,8 @@
     "whereintheworld_title", "whereintheworld_content",
     "last_reviewed", "wp_date", "known_plant_species", "ancestral_territory", "ancestral_territory_note", "why_this_matters"
   ]);
-  const desktopWikiFields = fields(["id", "title", "slug", "summary", "why_this_matters", "source_url", "last_reviewed", "lastmod"]);
-  const mobileWikiDetailFields = fields(["id", "title", "slug", "summary", "content", "why_this_matters", "source_url", "last_reviewed", "lastmod"]);
+  const desktopWikiFields = fields(["id", "title", "slug", "summary", "why_this_matters", "source_url", "last_reviewed", "lastmod", "imported_at"]);
+  const mobileWikiDetailFields = fields(["id", "title", "slug", "summary", "content", "why_this_matters", "source_url", "last_reviewed", "lastmod", "imported_at"]);
   const desktopPageFields = fields(["id", "title", "slug", "summary", "content_type", "wp_date", "featured_image_url"]);
   const desktopBlogFields = fields(["id", "title", "slug", "summary", "published_at", "featured_image_url"]);
   const timelineFields = fields([
@@ -8074,7 +8074,14 @@
   }
 
   function siteCreatedDate(site = {}) {
-    return site.date_created || site.created_at || site.wp_date || "";
+    return site.imported_at || site.date_created || site.created_at || site.wp_date || "";
+  }
+
+  function wikiActivityLabel(article = {}) {
+    const created = siteCreatedDate(article);
+    const edited = siteEditedDate(article, { extended: true });
+    if (created && (!edited || sameCalendarDate(created, edited))) return "New Article";
+    return "Wiki updated";
   }
 
   function eventActivityDate(event = {}) {
@@ -8175,6 +8182,7 @@
     siteCreatedDate,
     eventActivityDate,
     siteActivityLabel,
+    wikiActivityLabel,
     editedDateLabel,
     activityPinUntil,
     activityIsPinned,
@@ -22621,7 +22629,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           const sourceSite = moment.source_type === "site"
             ? state.sites.find(site => site.slug === moment.source_slug || Number(site.id) === Number(moment.source_id))
             : null;
-          const date = ACTIVITY_UTILS.siteEditedDate(sourceSite, { extended: true });
+          const sourceWiki = moment.source_type === "wiki"
+            ? state.wikiArticles.find(article => article.slug === moment.source_slug || Number(article.id) === Number(moment.source_id))
+            : null;
+          if (sourceWiki && ACTIVITY_UTILS.wikiActivityLabel(sourceWiki) === "New Article") return null;
+          const date = ACTIVITY_UTILS.siteEditedDate(sourceSite || sourceWiki, { extended: true });
           return {
             type: "historic-moment",
             sourceType: moment.source_type === "wiki" ? "wiki" : "site",
@@ -22633,6 +22645,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             date
           };
         })
+        .filter(Boolean)
         .filter(item => item.slug && activityDateValue(item.date));
       const visits = state.publicVisits.map(visit => ({
         type: "site",
@@ -22670,7 +22683,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         type: "wiki",
         slug: article.slug,
         title: article.title || "Knowledgebase article",
-        label: "Knowledgebase update",
+        label: ACTIVITY_UTILS.wikiActivityLabel(article),
         preview: activityPreview(article.summary || article.introduction || article.content),
         date: ACTIVITY_UTILS.siteEditedDate(article, { extended: true })
       })).filter(item => activityDateValue(item.date));
