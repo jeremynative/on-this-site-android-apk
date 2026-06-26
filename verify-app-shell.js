@@ -199,8 +199,8 @@ for (const [label, html] of [
     throw new Error(`Bundled Android ${label} is missing the mobile Wyandanch biography path.`);
   }
   if (!html.includes("mobileBiographyPathActionLabel(person, place)") ||
-      !/const\s+pathLabel\s*=\s*mobileBiographyPathActionLabel\(person,\s*place\)[\s\S]*?pin_label:\s*pathLabel[\s\S]*?title:\s*pathLabel/.test(html)) {
-    throw new Error(`Bundled Android ${label} is missing short action biography path labels.`);
+      !/const\s+pathLabel\s*=\s*mobileBiographyPathActionLabel\(person,\s*place\)[\s\S]*?const\s+numberedPathLabel\s*=\s*`\$\{order\}\.\s+\$\{pathLabel\}`[\s\S]*?pin_label:\s*numberedPathLabel[\s\S]*?title:\s*pathLabel/.test(html)) {
+    throw new Error(`Bundled Android ${label} is missing numbered short action biography path labels.`);
   }
   if (!html.includes('id: "mobile-biography-place-labels"') ||
       !html.includes('"text-field": ["get", "pin_label"]') ||
