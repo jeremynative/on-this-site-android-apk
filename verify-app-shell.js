@@ -1,7 +1,7 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260609-shared-points-merge";
-const expectedUrl = "https://nativelongisland.com/mobile-app-live.html";
+const expectedBuild = "20260704-apk-snapshot-no-directus";
+const expectedUrl = "https://nativelongisland.com/mobile-app.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
 const bundledAppPath = "app/src/main/assets/mobile-app.html";
@@ -64,6 +64,9 @@ requireText("long-island-land-mask.geojson", "Android shell must include the bun
 requireText("BuildConfig.MAPBOX_TOKEN", "Android shell must inject the Mapbox token from build configuration.");
 requireText("androidApkStartupScript", "Android shell must inject APK startup guards before the bundled app runs.");
 requireText("__nliAndroidGeoGateInstalled", "Android shell must install the APK geolocation gate.");
+requireText("window.NLI_APK_SNAPSHOT_MODE=true;", "Android shell must mark the bundled app as a snapshot APK.");
+requireText("window.NLI_DISABLE_DIRECTUS_RUNTIME=true;", "Android shell must disable Directus runtime calls in the snapshot APK.");
+requireText("native-long-island-archive.directus.app", "Android shell must block Directus requests while the API cycle is exhausted.");
 requireText("window.__nliAllowGeoUntil=Date.now()+120000;", "Android shell must allow the app's startup Near me location request.");
 if (!manifest.includes("android.permission.POST_NOTIFICATIONS")) {
   throw new Error("Android shell must request notification permission for nearby site alerts.");
@@ -78,7 +81,7 @@ if (!appBridge.includes("showNotification") || !appBridge.includes("showNearbyNo
   throw new Error("Android app bridge must expose native notifications to the mobile web app.");
 }
 requireText("CookieManager.getInstance()", "Android shell must explicitly enable WebView cookies for SiteGround and app sessions.");
-requireText("setAcceptThirdPartyCookies(webView, true)", "Android shell must allow SiteGround/Directus session cookies inside the APK WebView.");
+requireText("setAcceptThirdPartyCookies(webView, true)", "Android shell must allow web session cookies inside the APK WebView.");
 requireText("settings.setCacheMode(WebSettings.LOAD_DEFAULT)", "Android shell must allow WebView to cache remote Mapbox/static resources between launches.");
 requireText("FrameLayout root = new FrameLayout(this);", "Android shell must layer a native startup cover over slow cold WebView startup.");
 requireText("webView.setBackgroundColor(Color.rgb(238, 243, 237));", "Android shell must use the app theme color behind the WebView during startup.");
@@ -98,8 +101,8 @@ if (source.includes("webView.clearCache(true)")) {
   throw new Error("Android shell must not clear WebView cache/cookies on every startup.");
 }
 const refreshAppMatch = source.match(/void refreshApp\(\) \{[\s\S]*?\n    \}/);
-if (!refreshAppMatch || !refreshAppMatch[0].includes('loadBundledFallback("startup-live-shell");')) {
-  throw new Error("Android shell must start from the bundled Directus-backed live shell to avoid SiteGround challenge screens.");
+if (!refreshAppMatch || !refreshAppMatch[0].includes('loadBundledFallback("startup-snapshot-shell");')) {
+  throw new Error("Android shell must start from the bundled snapshot shell while Directus API usage is paused.");
 }
 if (refreshAppMatch[0].includes("webView.loadUrl(url, headers);")) {
   throw new Error("Android shell must not show the SiteGround-challenged live URL during normal startup.");
@@ -198,9 +201,10 @@ for (const [label, html] of [
   if (!html.includes('"wyandanch": {') || !html.includes("mobile-biography-place-path") || !html.includes("data-mobile-biography-path-index")) {
     throw new Error(`Bundled Android ${label} is missing the mobile Wyandanch biography path.`);
   }
-  if (!html.includes("mobileBiographyPathActionLabel(person, place)") ||
-      !/const\s+pathLabel\s*=\s*mobileBiographyPathActionLabel\(person,\s*place\)[\s\S]*?const\s+numberedPathLabel\s*=\s*`\$\{order\}\.\s+\$\{pathLabel\}`[\s\S]*?pin_label:\s*numberedPathLabel[\s\S]*?title:\s*pathLabel/.test(html)) {
-    throw new Error(`Bundled Android ${label} is missing numbered short action biography path labels.`);
+  if (!html.includes("function mobileBiographyPathMapPinLabel(place = {}, order = 1)") ||
+      !/return\s+`\$\{order\}\s+-\s+\$\{mobileBiographyPathTimelineLabel\(place\)\}`/.test(html) ||
+      !/const\s+pathLabel\s*=\s*mobileBiographyPathTimelineLabel\(place\)[\s\S]*?const\s+numberedPathLabel\s*=\s*mobileBiographyPathMapPinLabel\(place,\s*order\)[\s\S]*?pin_label:\s*numberedPathLabel[\s\S]*?title:\s*pathLabel/.test(html)) {
+    throw new Error(`Bundled Android ${label} is missing numbered biography path labels.`);
   }
   if (!html.includes('id: "mobile-biography-place-labels"') ||
       !html.includes('"text-field": ["get", "pin_label"]') ||
@@ -299,7 +303,7 @@ for (const [label, html] of [
     'mobileMapLayerHandlers',
     'state.settings.showPins = visible;',
     'mobileLayerCategoryInputs.forEach(input => input.addEventListener("change"',
-    '"circle-color": ["case", ["==", ["get", "location_accuracy"], "approximate"], "#326fe3", "#496f5d"]'
+    '"circle-color": ["case", ["==", ["get", "has_header_image"], true], "#326fe3", "#496f5d"]'
   ]) {
     if (!html.includes(expected)) throw new Error(`Bundled Android ${label} is missing mobile map layer invariant ${expected}`);
   }
@@ -490,7 +494,7 @@ requireBundledText('mobileProfileStats', "Bundled Android app must render Direct
 requireBundledText('ensureProfileActivitySynced', "Bundled Android app must sync profile activity from Directus.");
 requireBundledText('async function ensureProfileStatsSynced()', "Bundled Android app must sync profile activity and canonical point events before rendering account stats.");
 requireBundledText('ensureCanonicalProfilePointEvents(currentContributorProfile())', "Bundled Android app must read canonical point events for the active profile.");
-requireBundledText('Refreshing latest Directus activity...', "Bundled Android app must render cached profile stats while Directus activity refreshes.");
+requireText("NLI_DIRECTUS_PAUSED_MESSAGE", "Android snapshot APK must expose a clear Directus pause message.");
 requireBundledText('function updateProfileMenuButton', "Bundled Android app must update the profile menu button with current points.");
 requireBundledText('${displayName} (${points})', "Bundled Android app must show the profile display name and points in the menu button.");
 requireBundledText('mobileProfileStats(activeProfile, { syncRemote: false })', "Bundled Android profile menu points must not trigger remote point sync loops.");
@@ -510,7 +514,7 @@ requireBundledText('languageRemoteAttemptExists', "Bundled Android app must chec
 requireBundledText('syncLanguageAttempt', "Bundled Android app must save language attempts through the shared sync path.");
 requireBundledText('Content editing needs the editor password.', "Bundled Android app must keep admin editing behind authenticated Directus login.");
 requireBundledText('frontendEditorPayload', "Bundled Android app must include the current mobile admin editor payload path.");
-requireBundledText('mobileBiographyPathActionLabel(person, place)', "Bundled Android biography travel map pins must use short action labels.");
+requireBundledText('mobileBiographyPathMapPinLabel(place, order)', "Bundled Android biography travel map pins must use numbered map labels.");
 requireBundledText('id: "mobile-biography-place-labels"', "Bundled Android biography travel map pins must use collision-aware map labels.");
 
 console.log(`Android shell verifier passed: ${expectedBuild}`);

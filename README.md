@@ -2,11 +2,15 @@
 
 This repo builds the Android APK for the On This Site / Native Long Island mobile app.
 
-The APK is a small Android WebView wrapper around the live mobile site:
+The APK is a small Android WebView wrapper around the mobile On This Site app.
 
-`https://nativelongisland.com/archive-test/mobile-app-live.html`
+Current emergency Directus-limit releases load the bundled snapshot first:
 
-Because it opens the hosted live mobile app, site content stays synced with Directus/live data without rebuilding the APK for every content update.
+`https://nativelongisland.com/mobile-app.html`
+
+The bundled snapshot keeps the map, articles, timeline, learning paths, and static content usable without spending Directus API requests. Directus-backed account/community writes can be paused in these builds until the project usage cycle resets. After the Directus API cycle is healthy again, the APK can return to the lightweight live shell:
+
+`https://nativelongisland.com/mobile-app-live.html`
 
 ## Android Package
 
@@ -32,7 +36,7 @@ Use `1.0.0` only for the first real public release.
 
 ## Phone Updates With Obtainium
 
-Most fixes do not require reinstalling the APK. UI, map, timeline, content, and data changes load from the live mobile page the next time the app refreshes.
+When the APK is in bundled snapshot mode, content changes require a new APK release. When the APK is returned to the live shell, most UI, map, timeline, content, and data changes load from the live mobile page the next time the app refreshes.
 
 Only reinstall the APK after native Android wrapper changes such as permissions, WebView behavior, or app packaging.
 

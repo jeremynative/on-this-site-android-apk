@@ -57,11 +57,11 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260609-shared-points-merge";
+    static final String APP_VERSION = "20260704-apk-snapshot-no-directus";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
-        "https://nativelongisland.com/mobile-app-live.html";
+        "https://nativelongisland.com/mobile-app.html";
 
     private WebView webView;
     private View loadingCover;
@@ -337,7 +337,7 @@ public class MainActivity extends Activity {
     }
 
     private String bundledMobileHtml() throws IOException {
-        return bundledMobileHtml("mobile-app-live.html");
+        return bundledMobileHtml("mobile-app.html");
     }
 
     private String bundledMobileHtml(String assetName) throws IOException {
@@ -380,6 +380,21 @@ public class MainActivity extends Activity {
         String script = "(function(){"
             + "if(window.__nliAndroidGeoGateInstalled)return;"
             + "window.__nliAndroidGeoGateInstalled=true;"
+            + "window.NLI_APK_SNAPSHOT_MODE=true;"
+            + "window.NLI_DISABLE_DIRECTUS_RUNTIME=true;"
+            + "window.NLI_DIRECTUS_PAUSED_MESSAGE='Directus-backed account and community updates are paused in this APK snapshot until the API request cycle resets.';"
+            + "if(!window.__nliAndroidDirectusPauseInstalled&&window.fetch){"
+                + "window.__nliAndroidDirectusPauseInstalled=true;"
+                + "var originalFetch=window.fetch.bind(window);"
+                + "window.fetch=function(input,init){"
+                    + "var url='';"
+                    + "try{url=String((input&&input.url)||input||'');}catch(error){url='';}"
+                    + "if(url.indexOf('native-long-island-archive.directus.app')!==-1){"
+                        + "return Promise.reject(new Error(window.NLI_DIRECTUS_PAUSED_MESSAGE));"
+                    + "}"
+                    + "return originalFetch(input,init);"
+                + "};"
+            + "}"
             + "window.__nliAllowGeoUntil=Date.now()+120000;"
             + "function allowGeo(){window.__nliAllowGeoUntil=Date.now()+30000;}"
             + "document.addEventListener('click',function(event){"
@@ -616,7 +631,7 @@ public class MainActivity extends Activity {
         lastRefreshAt = System.currentTimeMillis();
         appShellLoaded = false;
         loadingBundledFallback = false;
-        loadBundledFallback("startup-live-shell");
+        loadBundledFallback("startup-snapshot-shell");
     }
 
     private boolean shouldIgnoreLifecycleMainFrameReload(String reason) {

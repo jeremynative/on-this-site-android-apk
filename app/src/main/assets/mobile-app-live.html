@@ -12,7 +12,6 @@
   <link rel="manifest" href="mobile-manifest.webmanifest">
   <link rel="preconnect" href="https://api.mapbox.com">
   <link rel="preconnect" href="https://events.mapbox.com">
-  <link rel="preconnect" href="https://native-long-island-archive.directus.app">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet">
   <style data-inline-source="assets/css/mobile-app.css">
@@ -78,10 +77,21 @@
     .loading-screen {
       position: fixed;
       inset: 0;
+      width: 100dvw;
+      min-height: 100vh;
+      min-height: 100svh;
+      min-height: 100dvh;
       z-index: 20000;
       display: grid;
       place-items: center;
+      align-content: center;
       padding: 22px;
+      padding:
+        max(22px, env(safe-area-inset-top))
+        max(22px, env(safe-area-inset-right))
+        max(22px, env(safe-area-inset-bottom))
+        max(22px, env(safe-area-inset-left));
+      box-sizing: border-box;
       background: linear-gradient(180deg, #e8f4ee 0%, #f7faf6 58%, #d9edf3 100%);
       color: var(--ink);
       transition: opacity 220ms ease, visibility 220ms ease;
@@ -604,6 +614,14 @@
       display: none;
     }
 
+    .mobile-header-instruction {
+      margin: -2px 0 0;
+      color: rgba(41, 52, 43, 0.78);
+      font-size: 11px;
+      font-weight: 650;
+      line-height: 1.25;
+    }
+
     .mobile-more-menu[open] {
       z-index: 1000;
     }
@@ -740,7 +758,7 @@
       position: fixed;
       top: calc(var(--app-top-safe) + 190px);
       left: max(12px, var(--app-left-safe));
-      z-index: 9;
+      z-index: 30;
       display: inline-grid;
       place-items: center;
       width: 44px;
@@ -753,12 +771,11 @@
     }
 
     .mobile-notification-button {
-      top: calc(var(--app-top-safe) + 242px);
+      left: auto;
+      right: max(12px, var(--app-right-safe));
     }
 
     .app.nearby-expanded .mobile-activity-button,
-    .app.nearby-expanded .mobile-notification-button,
-    .app.mobile-search-results .mobile-activity-button,
     .app.mobile-search-results .mobile-notification-button {
       display: none;
     }
@@ -4432,6 +4449,49 @@
       font-size: 15px;
     }
 
+    .section-content h2,
+    .section-content h3 {
+      margin: 20px 0 8px;
+      padding-top: 2px;
+      line-height: 1.25;
+    }
+
+    .section-content h2:first-child,
+    .section-content h3:first-child {
+      margin-top: 0;
+      padding-top: 0;
+    }
+
+    .section-content blockquote {
+      margin: 12px 0;
+      padding: 0 0 0 14px;
+      border-left: 3px solid #c9d2c8;
+      color: #475148;
+    }
+
+    .section-content .place-name-quote {
+      margin: 14px 0 2px;
+      padding: 12px 14px;
+      border-left: 4px solid var(--accent);
+      border-radius: 0 8px 8px 0;
+      background: rgba(232, 238, 229, 0.72);
+      color: var(--ink);
+    }
+
+    .section-content .place-name-quote p {
+      margin: 0 0 8px;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
+    .section-content .place-name-quote cite {
+      display: block;
+      color: var(--muted);
+      font-style: normal;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
     .form-status {
       margin: 10px 0 0;
       padding: 9px 10px;
@@ -4763,6 +4823,7 @@
         </span>
       </div>
       <input class="search" id="search" type="search" placeholder="Search sites, towns, histories" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search">
+      <p class="mobile-header-instruction">421 listings, 103 wiki articles, 10 blog posts, and 4 calendar events loaded. Click a pin or colored territory to read its article.</p>
       <button class="territory-subtitle" id="territory-subtitle" type="button" hidden></button>
       <div class="quick-actions" aria-label="App actions">
         <button class="ghost-button mobile-priority-action" data-app-page="about" type="button">About</button>
@@ -5839,6 +5900,43 @@
       .replace(/\b\w/g, letter => letter.toUpperCase());
   }
 
+  const SITE_TYPE_DISPLAY_LABELS = {
+    activism_protest: "Activism / Protest"
+  };
+
+  function normalizedSiteTypeKey(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[-\s]+/g, "_")
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_|_$/g, "");
+  }
+
+  function siteTypeHasSensitiveFlag(value) {
+    const key = normalizedSiteTypeKey(value);
+    return key === "sensitive" || key.startsWith("sensitive_") || key.endsWith("_sensitive") || key.includes("_sensitive_");
+  }
+
+  function publicSiteTypeKey(value) {
+    const key = normalizedSiteTypeKey(value);
+    if (!key) return "";
+    if (key === "sensitive") return "";
+    return key
+      .replace(/^sensitive_+/, "")
+      .replace(/_+sensitive_+/g, "_")
+      .replace(/_+sensitive$/, "")
+      .replace(/_+/g, "_")
+      .replace(/^_|_$/g, "");
+  }
+
+  function publicSiteTypeLabel(value) {
+    const key = publicSiteTypeKey(value);
+    if (!key) return siteTypeHasSensitiveFlag(value) ? "Sensitive Site" : "";
+    return SITE_TYPE_DISPLAY_LABELS[key] || titleCaseSiteType(key);
+  }
+
   function normalizeHexColor(value, fallback) {
     const text = String(value || "").trim();
     if (/^#[0-9a-f]{6}$/i.test(text)) return text;
@@ -5881,6 +5979,165 @@
     };
   }
 
+  const PUBLIC_SITE_CONTENT_FIELDS = [
+    ["introduction_title", "introduction_content"],
+    ["oral_history_title", "oral_history_content"],
+    ["history_title", "history_content"],
+    ["legends_and_lore_title", "legends_and_lore_content"],
+    ["translation_title", "translation_content"],
+    ["preservation_title", "preservation_content"],
+    ["artifacts_title", "artifacts_content"],
+    ["colonial_description_title", "colonial_description_content"],
+    ["land_loss_title", "land_loss_content"],
+    ["excavation_title", "excavation_content"],
+    ["vandalism_title", "vandalism_content"],
+    ["whereintheworld_title", "whereintheworld_content"]
+  ];
+
+  function plainPublicSiteText(value) {
+    return String(value || "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/gi, '"')
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function normalizeOcrQuestionMarkQuotes(value) {
+    return String(value || "")
+      .replace(/([A-Za-z])\?(s|t|re|ve|ll|d|m)\b/g, "$1'$2")
+      .replace(/\b(or|as|called|titled|named)\?([^?\n<>]{1,80})\?/gi, (match, prefix, inner) => {
+        if (!/[A-Za-z]/.test(inner) || /[()=&/\\]/.test(inner)) return match;
+        return `${prefix} "${inner}"`;
+      })
+      .replace(/(^|[\s([{])\?([A-Za-z0-9][^?\n<>]{0,100})\?/g, (match, prefix, inner) => {
+        if (!/[A-Za-z]/.test(inner) || /https?:|www\.|[()=&/\\]/i.test(inner)) return match;
+        return `${prefix}"${inner}"`;
+      });
+  }
+
+  function publicFacingWorkflowTextCleanup(value) {
+    if (value == null || typeof value !== "string") return value;
+    return normalizeOcrQuestionMarkQuotes(value)
+      .replace(/,\s*a public-safe way to explain ([^.]+?) without mapping private or sacred-use details/gi, ", a careful account of $1 while keeping sensitive place details private")
+      .replace(/\ba public-safe way to explain\b/gi, "a careful account of")
+      .replace(/\bpublic-safe overview\b/gi, "public overview")
+      .replace(/\bpublic safety note\b/gi, "Learning With Care")
+      .replace(/\bpublic-safe note\b/gi, "note")
+      .replace(/\bpublic-safe interpretation\b/gi, "careful interpretation")
+      .replace(/\bpublic-safe context\b/gi, "public context")
+      .replace(/\bpublic-safe approximate\b/gi, "approximate")
+      .replace(/\bpublic-safe shell-deposit\b/gi, "carefully framed shell-deposit")
+      .replace(/\bpublic-safety handling\b/gi, "careful handling")
+      .replace(/\bpublic-safe\b/gi, "carefully framed")
+      .replace(/\bsource-supported biography\b/gi, "sourced biography")
+      .replace(/\bsource-supported place-name moment\b/gi, "sourced place-name moment")
+      .replace(/\bsource-supported case\b/gi, "sourced case")
+      .replace(/\bsource-supported\b/gi, "source-based")
+      .replace(/\bwith inline footnotes for specific facts\b/gi, "with references for specific facts")
+      .replace(/\bon this site knowledgebase\b/gi, "the knowledgebase")
+      .replace(/\bsee this page notes for sensitivity and location-generalization context\b/gi, "see the sensitivity and broad-location context notes")
+      .replace(/\bthis page notes\b/gi, "the public notes")
+      .replace(/\bthis page\b/gi, "the history")
+      .replace(/\bthis article\b/gi, "the history")
+      .replace(/\bthis entry\b/gi, "the history")
+      .replace(/\bthis record part of\b/gi, "the name part of")
+      .replace(/\bthis record\b/gi, "the source record")
+      .replace(/\bthis listing\b/gi, "the mapped place")
+      .replace(/\bthe entry is\b/gi, "the history is")
+      .replace(/\bthe entry avoids\b/gi, "sensitive details are left out")
+      .replace(/\bthe entry\b/gi, "the history")
+      .replace(/\bIndian burying grounds\b/gi, "Native burial grounds")
+      .replace(/\bIndian burying ground\b/gi, "Native burial ground")
+      .replace(/\bwithout mapping private or sacred-use details\b/gi, "while keeping sensitive place details private")
+      .replace(/[;.]\s*(?:exact|original|additional)?[^.;]*(?:citation|page|pages|quotation|transcription|source|edition|record|coordinate|access date|details|sheet|title|year|volume|authority|article|archive|map|gnis|usgs)[^.;]*(?:need|needs|recommended|requires?)[^.;]*review[^.]*\./gi, ".")
+      .replace(/[;.]\s*(?:exact|original|additional)?[^.;]*(?:citation|page|pages|quotation|transcription|source|edition|record|coordinate|access date|details|sheet|title|year|volume|authority|article|archive|map|gnis|usgs)[^.;]*review\s+(?:needed|recommended)[^.]*\./gi, ".")
+      .replace(/[;.]\s*(?:exact|original|additional)?[^.;]*(?:citation|page|pages|quotation|transcription|source|edition|record|coordinate|access date|details|sheet|title|year|volume|authority|article|archive|map|gnis|usgs)[^.;]*(?:need|needs|recommended|requires?)[^.;]*review[^.;]*$/gi, "")
+      .replace(/[;.]\s*(?:exact|original|additional)?[^.;]*(?:citation|page|pages|quotation|transcription|source|edition|record|coordinate|access date|details|sheet|title|year|volume|authority|article|archive|map|gnis|usgs)[^.;]*review\s+(?:needed|recommended)[^.;]*$/gi, "")
+      .replace(/[;.]\s*review needed before public citation refinement\./gi, ".")
+      .replace(/[;.]\s*review needed before public citation refinement$/gi, "")
+      .replace(/\s+\./g, ".")
+      .replace(/\.{2,}/g, ".")
+      .replace(/;\s*\./g, ".")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function stripInternalPublicSiteSections(value) {
+    if (value == null || typeof value !== "string") return value;
+    const marker = ["audit", "pass"].join("-");
+    const pattern = new RegExp(`<section\\b[^>]*\\b${marker}[^>]*>[\\s\\S]*?<\\/section>`, "gi");
+    const stripped = publicFacingWorkflowTextCleanup(value).replace(pattern, " ");
+    if (stripped === value) return value;
+    return plainPublicSiteText(stripped) ? stripped.trim() : null;
+  }
+
+  function isInternalPublicSiteNoteSection(title, content) {
+    const combined = normalizeText(`${plainPublicSiteText(title)} ${plainPublicSiteText(content)}`);
+    const hasPhrase = words => combined.includes(words.join(" "));
+    const titleLooksInternal =
+      hasPhrase(["public", "engagement"]) ||
+      hasPhrase(["public", "access", "note"]) ||
+      hasPhrase(["public", "engagement", "note"]) ||
+      /\bstewardship\b/.test(combined);
+    const processLooksInternal =
+      hasPhrase(["this", "page", "should", "frame"]) ||
+      hasPhrase(["any", "map", "location", "should", "identify", "only"]) ||
+      hasPhrase(["map", "location", "should", "identify", "only"]) ||
+      hasPhrase(["should", "avoid", "archaeological", "burial", "residential", "or", "private", "property", "details"]);
+    const contentLooksInternal =
+      titleLooksInternal ||
+      hasPhrase(["public", "event", "education", "site"]) ||
+      hasPhrase(["map", "only", "the", "general", "public", "school", "event", "grounds"]) ||
+      hasPhrase(["do", "not", "map", "surrounding", "habitation", "burial", "or", "private", "property", "archaeology"]) ||
+      hasPhrase(["suitable", "for", "public", "education", "when", "tied", "to", "a", "public", "event", "venue"]) ||
+      hasPhrase(["should", "not", "point", "readers", "to", "sensitive", "or", "unverified", "locations"]);
+    return processLooksInternal || (titleLooksInternal && contentLooksInternal);
+  }
+
+  function sanitizePublicSiteContent(site = {}) {
+    if (!site || typeof site !== "object") return site;
+    let next = site;
+    for (const field of ["summary", "why_this_matters", "listing_image_alt"]) {
+      const cleaned = publicFacingWorkflowTextCleanup(site[field]);
+      if (cleaned !== site[field]) {
+        if (next === site) next = { ...site };
+        next[field] = cleaned;
+      }
+    }
+    if (Array.isArray(site.source_list)) {
+      const cleanedSources = site.source_list.map(source => ({
+        ...source,
+        citation: publicFacingWorkflowTextCleanup(source?.citation),
+        citation_context: publicFacingWorkflowTextCleanup(source?.citation_context)
+      }));
+      if (JSON.stringify(cleanedSources) !== JSON.stringify(site.source_list)) {
+        if (next === site) next = { ...site };
+        next.source_list = cleanedSources;
+      }
+    }
+    for (const [titleField, contentField] of PUBLIC_SITE_CONTENT_FIELDS) {
+      const cleanedTitle = publicFacingWorkflowTextCleanup(site[titleField]);
+      const cleanedContent = stripInternalPublicSiteSections(site[contentField]);
+      if (cleanedTitle !== site[titleField]) {
+        if (next === site) next = { ...site };
+        next[titleField] = cleanedTitle;
+      }
+      if (cleanedContent !== site[contentField]) {
+        if (next === site) next = { ...site };
+        next[contentField] = cleanedContent;
+      }
+      if (isInternalPublicSiteNoteSection(site[titleField], cleanedContent)) {
+        if (next === site) next = { ...site };
+        next[titleField] = null;
+        next[contentField] = null;
+      }
+    }
+    return next;
+  }
+
   function siteDisplayType(site, options = {}) {
     if (!site) return "";
     const overrides = options.overrides || {};
@@ -5889,7 +6146,7 @@
     if (override) return override;
     const rawType = String(site.site_type || "").trim();
     const normalizedType = rawType.toLowerCase();
-    return rawType ? typeLabels[normalizedType] || titleCaseSiteType(rawType) : "";
+    return rawType ? typeLabels[normalizedType] || publicSiteTypeLabel(rawType) || titleCaseSiteType(rawType) : "";
   }
 
   function siteSubtitle(site, options = {}) {
@@ -5953,15 +6210,17 @@
     };
     const rawType = String(site.site_type || "").trim();
     const useDisplayType = options.typeMode === "display";
-    const typeLabel = useDisplayType ? siteDisplayType(site, options) : rawType;
-    const normalizedRawType = normalize(rawType).replace(/\s+/g, "-");
+    const publicTypeKey = publicSiteTypeKey(rawType);
+    const typeLabel = useDisplayType ? siteDisplayType(site, options) : publicSiteTypeLabel(rawType);
+    const normalizedRawType = normalize(publicTypeKey || rawType).replace(/\s+/g, "-");
     if (typeLabel) {
       const normalizedType = useDisplayType ? normalize(typeLabel).replace(/\s+/g, "-") : normalizedRawType;
-      const excludedType = /^(place-name|placename|historic-site|historical-site|historicsite|historicalsite|site|map-pin|pin)$/.test(normalizedType);
+      const excludedType = /^(place-name|placename|historic-site|historical-site|historicsite|historicalsite|site|map-pin|pin|sensitive-site)$/.test(normalizedType);
       if (!excludedType) {
-        addTag(`type:${normalizedType}`, useDisplayType ? typeLabel : titleCaseSiteType(rawType));
+        addTag(`type:${normalizedType}`, typeLabel);
       }
     }
+    if (siteTypeHasSensitiveFlag(rawType)) addTag("theme:sensitive-site", "Sensitive Site");
     const text = normalize([site.title, site.summary, site.introduction_content, site.history_content].join(" "));
     const typeText = normalize(rawType).replace(/[^a-z0-9]+/g, " ");
     const broad = typeof options.isBroadTerritory === "function"
@@ -5971,7 +6230,7 @@
     const algonquian = typeof options.isAlgonquianPlaceName === "function"
       ? options.isAlgonquianPlaceName(site)
       : siteIsAlgonquianPlaceName(site, { ...options, isBroadTerritory: () => broad });
-    if (algonquian) addTag("theme:algonquian-place-name", "Algonquian Place Name");
+    if (algonquian) addTag("theme:algonquian-place-name", "Native Place Name");
     if (/\b(deed|deeds|patent|patents|treaty|treaties|court|document|documents|archive|archives|land record|land records|town record|town records|colonial record|colonial records)\b/.test(typeText) ||
       /\b(deed|deeds|patent|patents|treaty|treaties|court case|court cases|colonial document|colonial documents|land record|land records|town record|town records|archival record|archival records|records and deeds)\b/.test(text)) {
       addTag("theme:records", "Records and Deeds");
@@ -6100,7 +6359,11 @@
     featureVisibleInPrimaryLayers,
     siteLocationAccuracy,
     isExhibitSite,
+    isInternalPublicSiteNoteSection,
+    publicFacingWorkflowTextCleanup,
     siteUsesDefaultBluePin,
+    sanitizePublicSiteContent,
+    stripInternalPublicSiteSections,
     siteWithContentOverrides,
     siteTerritoryFillColor
   };
@@ -6315,7 +6578,12 @@
   }
 
   function hasContributorWriteSession(session = {}) {
+    if (!session || session.tokenExpired === true) return Boolean(session?.refreshToken || session?.refresh_token);
     return Boolean(session?.token || session?.refreshToken || session?.refresh_token);
+  }
+
+  function contributorWriteSessionMessage(action = "save this") {
+    return `Your login expired. Please log back in to ${action}.`;
   }
 
   function money(value) {
@@ -7732,6 +8000,7 @@
     strongestRegistrationRecord,
     registrationIsApproved,
     hasContributorWriteSession,
+    contributorWriteSessionMessage,
     money,
     supportMonths,
     supporterLine,
@@ -8012,7 +8281,7 @@
     const cleanText = typeof options.cleanText === "function"
       ? options.cleanText(value || "")
       : String(value || "");
-    const text = cleanText.replace(/\s+/g, " ").trim();
+    const text = cleanPlaceholderActivityText(cleanText).replace(/\s+/g, " ").trim();
     if (!text || text.length <= limit) return text;
     if (options.preferSentence) {
       const sentence = text.split(/(?<=[.!?])\s+/).find(part => part.length > 35 && part.length <= limit);
@@ -8022,6 +8291,13 @@
       return `${clipped.slice(0, boundary > 48 ? boundary : limit).trim()}...`;
     }
     return `${text.slice(0, limit - 3).trim()}...`;
+  }
+
+  function cleanPlaceholderActivityText(value) {
+    return String(value || "")
+      .replace(/\bExample permanent collection \/ on-view record\.?/gi, "")
+      .replace(/\bExample permanent collection\b\.?/gi, "")
+      .replace(/\bExample on-view record\b\.?/gi, "");
   }
 
   function lastSeenKey(prefix, profileKey = "public") {
@@ -8188,18 +8464,20 @@
   function sortByRecentActivity(items = [], options = {}) {
     const dateAccessor = typeof options.dateAccessor === "function" ? options.dateAccessor : item => item?.date || item?.created_at;
     const titleAccessor = typeof options.titleAccessor === "function" ? options.titleAccessor : item => item?.title || "";
-    return [...items].sort((a, b) =>
-      Number(activityIsPinned(b)) - Number(activityIsPinned(a)) ||
-      activityDateValue(activityPinUntil(b)) - activityDateValue(activityPinUntil(a)) ||
-      activityDateValue(dateAccessor(b)) - activityDateValue(dateAccessor(a)) ||
-      Number(b.activityPriority || b.activity_priority || 0) - Number(a.activityPriority || a.activity_priority || 0) ||
-      String(titleAccessor(a)).localeCompare(String(titleAccessor(b)))
-    );
+    return [...items].sort((a, b) => {
+      const pinnedA = activityIsPinned(a, options);
+      const pinnedB = activityIsPinned(b, options);
+      return Number(pinnedB) - Number(pinnedA) ||
+        (pinnedB ? activityDateValue(activityPinUntil(b)) : 0) - (pinnedA ? activityDateValue(activityPinUntil(a)) : 0) ||
+        activityDateValue(dateAccessor(b)) - activityDateValue(dateAccessor(a)) ||
+        Number(b.activityPriority || b.activity_priority || 0) - Number(a.activityPriority || a.activity_priority || 0) ||
+        String(titleAccessor(a)).localeCompare(String(titleAccessor(b)));
+    });
   }
 
   function mergeRecentActivity(groups = [], options = {}) {
     const limit = Number(options.limit || 40);
-    return sortByRecentActivity(groups.flat()).slice(0, limit);
+    return sortByRecentActivity(groups.flat(), options).slice(0, limit);
   }
 
   function activityPinUntil(item = {}) {
@@ -8224,6 +8502,7 @@
   window.NLI_ACTIVITY_UTILS = {
     dateLabel,
     normalizeActivityDateInput,
+    cleanPlaceholderActivityText,
     preview,
     lastSeenKey,
     latestTimestamp,
@@ -9147,6 +9426,10 @@
     return !text || /^(place|mapped place|historic moment)$/i.test(text);
   }
 
+  function broadEraDateLabel(value) {
+    return /^(pre.?contact|contact period|historic|contemporary|modern|current|present)$/i.test(String(value || "").trim());
+  }
+
   function extractedDateLabel(record = {}, options = {}) {
     const clean = value => cleanText(options, value);
     const start = finiteYear(record.start_year);
@@ -9155,7 +9438,7 @@
     if (Number.isFinite(start)) return String(record.start_year);
 
     const explicit = clean(record.date_label || record.dateLabel || "");
-    if (explicit && !genericDateLabel(explicit)) return explicit;
+    if (explicit && !genericDateLabel(explicit) && !(options.ignoreBroadEraLabels && broadEraDateLabel(explicit))) return explicit;
 
     const text = clean([
       record.title,
@@ -9240,6 +9523,40 @@
       if (Number.isFinite(parsed)) return parsed;
     }
     return safeFallback;
+  }
+
+  function chronologicalSortValue(record = {}, options = {}) {
+    const fallback = Number(options.fallback);
+    const safeFallback = Number.isFinite(fallback) ? fallback : NaN;
+    const start = finiteYear(record.start_year);
+    const rawLabel = cleanText(options, record.dateLabel || record.date_label || "");
+    const explicitLabel = rawLabel && !genericDateLabel(rawLabel) && !broadEraDateLabel(rawLabel)
+      ? rawLabel
+      : "";
+    const labelValue = dateValue(explicitLabel, options);
+    if (Number.isFinite(start)) {
+      if (Number.isFinite(labelValue)) {
+        const labelYear = labelValue < 0 ? Math.ceil(labelValue) : Math.floor(labelValue);
+        if (labelYear === start) return labelValue;
+      }
+      return start;
+    }
+    if (Number.isFinite(labelValue)) return labelValue;
+
+    const extracted = extractedDateLabel(record, { ...options, ignoreBroadEraLabels: true });
+    const extractedValue = dateValue(extracted, options);
+    if (Number.isFinite(extractedValue)) return extractedValue;
+
+    return sortValue(record, {
+      ...options,
+      fallback: safeFallback,
+      candidates: ["start_year", "date_label", "dateLabel", "title", "label", "description", "summary", "reason", "source_excerpt", "sort_key"]
+    });
+  }
+
+  function safeSortNumber(value, fallback = 999999) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : fallback;
   }
 
   const ERAS = [
@@ -9349,7 +9666,7 @@
     const escape = typeof options.escapeHtml === "function" ? options.escapeHtml : value => String(value || "");
     const usedPathIndexes = new Set();
 
-    const entries = events.map(event => {
+    const entries = events.map((event, eventIndex) => {
       const matchIndex = pathPlaces.findIndex((place, index) => !usedPathIndexes.has(index) && matchesEvent(place, event));
       const matchedPlace = matchIndex >= 0 ? pathPlaces[matchIndex] : null;
       if (matchIndex >= 0) usedPathIndexes.add(matchIndex);
@@ -9357,10 +9674,13 @@
       const entryTitle = titleForEvent(event);
       const reason = reasonTextForEvent(event) || matchedPlace?.reason || "";
       const rawDateLabel = dateLabelForEvent(event);
+      const chronologicalSort = chronologicalSortValue(event, options);
+      const fallbackSort = sortForEvent(event);
       return {
         type: "moment",
         event,
-        sort: sortForEvent(event),
+        originalOrder: eventIndex,
+        sort: Number.isFinite(chronologicalSort) ? chronologicalSort : fallbackSort,
         dateLabel: usefulDateLabel(rawDateLabel, event, options),
         title: entryTitle,
         location: locationText,
@@ -9375,10 +9695,13 @@
 
     pathPlaces.forEach((place, index) => {
       if (usedPathIndexes.has(index)) return;
+      const dateLabel = usefulDateLabel(place.dateLabel || place.date_label || "", place, options);
+      const chronologicalSort = chronologicalSortValue({ ...place, dateLabel }, options);
       entries.push({
         type: "place",
-        sort: 900000 + index,
-        dateLabel: usefulDateLabel(place.dateLabel || place.date_label || "", place, options),
+        originalOrder: events.length + index,
+        sort: Number.isFinite(chronologicalSort) ? chronologicalSort : 900000 + index,
+        dateLabel,
         title: place.label,
         location: place.place,
         descriptionHtml: `<p>${escape(place.reason || "")}</p>`,
@@ -9392,8 +9715,9 @@
 
     if (!entries.length) return null;
     entries.sort((a, b) =>
-      Number(a.sort || 0) - Number(b.sort || 0) ||
+      safeSortNumber(a.sort) - safeSortNumber(b.sort) ||
       String(a.dateLabel || "").localeCompare(String(b.dateLabel || "")) ||
+      safeSortNumber(a.originalOrder) - safeSortNumber(b.originalOrder) ||
       String(a.title || "").localeCompare(String(b.title || ""))
     );
 
@@ -9404,6 +9728,8 @@
       entry.pathIndex = mappedPlaces.length;
       mappedPlaces.push({
         label: entry.title || entry.label || `Place ${entry.mapOrder}`,
+        title: entry.title || entry.label || `Place ${entry.mapOrder}`,
+        dateLabel: entry.dateLabel || "",
         place: entry.location || entry.place || "",
         coordinates: entry.coordinates,
         reason: entry.reason || cleanText(options, entry.descriptionHtml || ""),
@@ -9415,7 +9741,7 @@
 
     return {
       title: path?.title || `${article?.title || "Biography"} timeline and places`,
-      note: path?.note || "Numbered entries use broad public locations where source material supports a mappable place.",
+      note: path?.note || "Numbered entries use broad locations where source material supports a mappable place.",
       entries,
       places: mappedPlaces
     };
@@ -9429,6 +9755,7 @@
     rangeLabel,
     dateValue,
     sortValue,
+    chronologicalSortValue,
     eras: ERAS,
     eraYearValue,
     eraForEvent,
@@ -10209,17 +10536,66 @@
   ]);
   const DESKTOP_ALLOWED_ATTRS = new Set(["allow", "allowfullscreen", "class", "data-src", "frameborder", "height", "href", "referrerpolicy", "src", "title", "width", "alt"]);
   const TIMELINE_SECTION_TITLE_PATTERN = /history|colonial|land loss|excavation|preservation|disruption|vandalism/i;
+  const BLOCKED_REMOTE_IMAGE_HOSTS = new Set([
+    "cdn.newsday.com",
+    "www.easthamptonstar.com"
+  ]);
+  const BLOCKED_REMOTE_IMAGE_TAG_PATTERN = /<img\b(?=[^>]*https?:\/\/(?:cdn\.newsday\.com|www\.easthamptonstar\.com)\b)[^>]*>/gi;
+
+  function publicFacingWorkflowTextCleanup(value) {
+    return String(value || "")
+      .replace(/,\s*a public-safe way to explain ([^.]+?) without mapping private or sacred-use details/gi, ", a careful account of $1 while keeping sensitive place details private")
+      .replace(/\ba public-safe way to explain\b/gi, "a careful account of")
+      .replace(/\bpublic-safe way to explain\b/gi, "careful account of")
+      .replace(/\bpublic-safe overview\b/gi, "public overview")
+      .replace(/\bpublic safety note\b/gi, "Learning With Care")
+      .replace(/\bpublic-safe note\b/gi, "note")
+      .replace(/\bpublic-safe interpretation\b/gi, "careful interpretation")
+      .replace(/\bpublic-safe context\b/gi, "public context")
+      .replace(/\bpublic-safe approximate\b/gi, "approximate")
+      .replace(/\bpublic-safe shell-deposit\b/gi, "carefully framed shell-deposit")
+      .replace(/\bpublic-safety handling\b/gi, "careful handling")
+      .replace(/\bpublic-safe\b/gi, "carefully framed")
+      .replace(/\bsource-supported biography\b/gi, "sourced biography")
+      .replace(/\bsource-supported place-name moment\b/gi, "sourced place-name moment")
+      .replace(/\bsource-supported case\b/gi, "sourced case")
+      .replace(/\bsource-supported\b/gi, "source-based")
+      .replace(/\bwith inline footnotes for specific facts\b/gi, "with references for specific facts")
+      .replace(/\bon this site knowledgebase\b/gi, "the knowledgebase")
+      .replace(/\bsee this page notes for sensitivity and location-generalization context\b/gi, "see the sensitivity and broad-location context notes")
+      .replace(/\bthis page notes\b/gi, "the public notes")
+      .replace(/\bthis page\b/gi, "the history")
+      .replace(/\bthis article\b/gi, "the history")
+      .replace(/\bthis entry\b/gi, "the history")
+      .replace(/\bthis record part of\b/gi, "the name part of")
+      .replace(/\bthis record\b/gi, "the source record")
+      .replace(/\bthis listing\b/gi, "the mapped place")
+      .replace(/\bthe entry avoids\b/gi, "sensitive details are left out")
+      .replace(/\bwithout mapping private or sacred-use details\b/gi, "while keeping sensitive place details private");
+  }
+
+  function isBlockedRemoteImageUrl(value) {
+    const raw = String(value || "").trim();
+    if (!raw || raw.startsWith("/") || raw.startsWith("#")) return false;
+    try {
+      const url = new URL(raw, window.location.href);
+      return BLOCKED_REMOTE_IMAGE_HOSTS.has(url.hostname.toLowerCase());
+    } catch {
+      return false;
+    }
+  }
 
   function baseClean(value, options = {}) {
     const convertImportedFootnotes = options.convertImportedFootnotes || (text => String(text || ""));
     const source = options.convertFootnotes === false ? String(value || "") : convertImportedFootnotes(value);
-    let html = source
+    let html = publicFacingWorkflowTextCleanup(source)
       .replace(/This map feature is imported from WP Go Maps but is not paired to a complete Directus listing yet\.?/gi, "")
       .replace(/This map feature is imported from WP Go Maps but is not paired to a Directus listing yet\.?/gi, "")
       .replace(/This map feature is imported from WP Go Maps but is not paired to (?:a complete )?[^.]*listing yet\.?/gi, "")
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/<style[\s\S]*?<\/style>/gi, "")
       .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
+      .replace(BLOCKED_REMOTE_IMAGE_TAG_PATTERN, "")
       .replace(/&nbsp;/gi, " ")
       .replace(/\sdata-src=/gi, " src=");
     if (options.mode === "desktop") {
@@ -10267,7 +10643,7 @@
       }
       if (element.tagName === "IMG") {
         const src = element.getAttribute("src") || "";
-        if (!src || src.startsWith("data:image/gif")) {
+        if (!src || src.startsWith("data:image/gif") || isBlockedRemoteImageUrl(src)) {
           element.remove();
           continue;
         }
@@ -10308,7 +10684,7 @@
     const cleanImageUrl = options.cleanImageUrl || (value => String(value || ""));
     template.content.querySelectorAll("img").forEach(img => {
       const src = cleanImageUrl(img.getAttribute("src") || "");
-      if (!src) img.remove();
+      if (!src || isBlockedRemoteImageUrl(src)) img.remove();
       else {
         img.src = rewriteMediaUrl(src);
         img.loading = "lazy";
@@ -10372,6 +10748,7 @@
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/<style[\s\S]*?<\/style>/gi, "")
       .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
+      .replace(BLOCKED_REMOTE_IMAGE_TAG_PATTERN, "")
       .replace(/\[(caption|gallery|vc_|et_|wpsm|perfectpullquote)[^\]]*\]/gi, "")
       .replace(/\[\/(caption|gallery|vc_|et_|wpsm|perfectpullquote)\]/gi, "")
       .replace(/&nbsp;/gi, " ");
@@ -10389,7 +10766,7 @@
       .replace(/\[(?:caption|gallery|embed|video|audio|playlist|wpvideo|vc_[^\]]*|et_[^\]]*|wpsm[^\]]*)[^\]]*\]/gi, " ")
       .replace(/\[\/(?:caption|gallery|embed|video|audio|playlist|wpvideo|vc_[^\]]*|et_[^\]]*|wpsm[^\]]*)\]/gi, " ")
       .replace(/\[(\d+)\.\s*([^\]]{8,300})\]/g, " ");
-    return strip(cleaned)
+    return publicFacingWorkflowTextCleanup(strip(cleaned))
       .replace(/This map feature is imported from WP Go Maps but is not paired to a complete Directus listing yet\.?/gi, "")
       .replace(/This map feature is imported from WP Go Maps but is not paired to a Directus listing yet\.?/gi, "")
       .replace(/\s+/g, " ")
@@ -10455,6 +10832,7 @@
     convertImportedFootnotes,
     stripHtml,
     publicCleanText,
+    publicFacingWorkflowTextCleanup,
     sourceReferences,
     sourceReferenceHtml,
     sourcesEvidenceHtml,
@@ -10527,7 +10905,7 @@
       }).catch(() => null);
       if (!response) return "";
       if (!response.ok) {
-        if (expireOnAuthFailure && isAuthFailure(response)) onAuthExpired();
+        if (expireOnAuthFailure && (isAuthFailure(response) || response.status === 400)) onAuthExpired();
         return "";
       }
       const data = await response.json();
@@ -10560,6 +10938,14 @@
         if (refreshed) response = await send(refreshed);
       }
       return response;
+    }
+
+    async function ensureAuthSession(requestOptions = {}) {
+      let token = tokenProvider();
+      if (token) return token;
+      token = await refreshAuthToken({ expireOnAuthFailure: true });
+      if (token) return token;
+      throw expiredAuthError(requestOptions.authExpiredMessage || requestOptions.missingAuthMessage || authExpiredMessage());
     }
 
     async function fetchJsonFromNetwork(path, requestOptions = {}, cacheKey = "", ttl = 0) {
@@ -10640,7 +11026,7 @@
           headers: authHeaders(authToken, { "content-type": "application/json" }),
           body: JSON.stringify(payload),
           signal: controller?.signal
-        }), { ...requestOptions, missingAuthMessage: `Login required to save ${collection}.` });
+        }), { ...requestOptions, missingAuthMessage: requestOptions.missingAuthMessage || `Login required to save ${collection}.` });
         if ((response.status === 401 || response.status === 403) && token && !requireAuth) {
           response = await fetch(`${baseUrl}/items/${collection}`, {
             method: "POST",
@@ -10671,7 +11057,7 @@
         method: "PATCH",
         headers: authHeaders(authToken, { "content-type": "application/json" }),
         body: JSON.stringify(payload)
-      }), { ...requestOptions, missingAuthMessage: `Login required to update ${collection}.` });
+      }), { ...requestOptions, missingAuthMessage: requestOptions.missingAuthMessage || `Login required to update ${collection}.` });
       if (!response.ok) {
         const text = await readErrorBody(response);
         if (requireAuth && responseLooksExpired(response, text)) {
@@ -10689,7 +11075,7 @@
       const response = await withAuthRetry(authToken => fetch(`${baseUrl}/items/${collection}/${id}`, {
         method: "DELETE",
         headers: authHeaders(authToken)
-      }), { ...requestOptions, missingAuthMessage: `Login required to delete ${collection}.` });
+      }), { ...requestOptions, missingAuthMessage: requestOptions.missingAuthMessage || `Login required to delete ${collection}.` });
       if (!response.ok) {
         const text = await readErrorBody(response);
         if (requireAuth && responseLooksExpired(response, text)) {
@@ -10785,7 +11171,7 @@
       body.append("title", title || file.name);
       const token = tokenProvider();
       const requireAuth = requestOptions.requireAuth === true;
-      let response = await withAuthRetry(authToken => fetch(`${baseUrl}/files`, { method: "POST", headers: authHeaders(authToken), body }), { ...requestOptions, missingAuthMessage: "Login required to upload images." });
+      let response = await withAuthRetry(authToken => fetch(`${baseUrl}/files`, { method: "POST", headers: authHeaders(authToken), body }), { ...requestOptions, missingAuthMessage: requestOptions.missingAuthMessage || "Login required to upload images." });
       if ((response.status === 401 || response.status === 403) && token && !requireAuth) {
         response = await fetch(`${baseUrl}/files`, { method: "POST", body });
       }
@@ -10804,7 +11190,7 @@
       return normalizeUploadFileId(data);
     }
 
-    return { fetchJson, postItem, patchItem, deleteItem, filterValue, fetchFirstItem, triggerFlow, triggerReviewAction, loginWithPassword, fetchProfileForToken, uploadFile };
+    return { fetchJson, postItem, patchItem, deleteItem, filterValue, fetchFirstItem, triggerFlow, triggerReviewAction, loginWithPassword, fetchProfileForToken, uploadFile, ensureAuthSession };
   }
 
   window.NLI_DIRECTUS_CLIENT = { createDirectusClient, normalizeUploadFileId, uploadDirectusFile };
@@ -10813,6 +11199,10 @@
   <script data-inline-source="assets/js/shared-media-utils.js">
 (function () {
   const DEFAULT_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+  const BLOCKED_REMOTE_IMAGE_HOSTS = new Set([
+    "cdn.newsday.com",
+    "www.easthamptonstar.com"
+  ]);
 
   function absoluteMediaUrl(url, baseHref) {
     const raw = String(url || "").replace(/&amp;/g, "&");
@@ -10830,10 +11220,22 @@
     return absoluteMediaUrl(rewritten, options.baseHref);
   }
 
+  function isBlockedRemoteImageUrl(value, baseHref) {
+    const raw = String(value || "").trim();
+    if (!raw || raw.startsWith("/") || raw.startsWith("#")) return false;
+    try {
+      const url = new URL(raw, baseHref || window.location.href);
+      return BLOCKED_REMOTE_IMAGE_HOSTS.has(url.hostname.toLowerCase());
+    } catch {
+      return false;
+    }
+  }
+
   function cleanImageUrl(value) {
     const raw = String(value || "").trim();
     if (!raw || raw === "null" || raw === "undefined" || raw === "#") return "";
     if (/^(?:about:blank|data:image\/gif)/i.test(raw)) return "";
+    if (isBlockedRemoteImageUrl(raw)) return "";
     if (!/\.(?:jpe?g|png|gif|webp|svg)(?:[?#].*)?$/i.test(raw) && !/\/assets\/[a-f0-9-]{20,}/i.test(raw)) return "";
     return raw;
   }
@@ -10892,8 +11294,7 @@
 
   function siteMapIconUrl(site, deps = {}) {
     const overrides = {
-      "whales-fin": "3caadb30-8343-405d-9ab6-7a6f84d6f3d7",
-      "orient-burial": "bc3e2208-7840-4efe-9ab0-011d5df4412e"
+      "whales-fin": "3caadb30-8343-405d-9ab6-7a6f84d6f3d7"
     };
     if (overrides[site?.slug]) return deps.directusAssetUrl?.(overrides[site.slug]) || "";
     return deps.directusAssetUrl?.(site?.map_icon) || "";
@@ -11053,6 +11454,7 @@
   window.NLI_MEDIA_UTILS = {
     absoluteMediaUrl,
     rewriteMediaUrl,
+    isBlockedRemoteImageUrl,
     cleanImageUrl,
     listingImage,
     listingHoverImage: listingImage,
@@ -11123,11 +11525,14 @@
 
   function queryRenderedFeaturesAround(map, point, layerIds = [], radius = 0, options = {}) {
     if (!map?.queryRenderedFeatures || !point) return options.fallback || [];
+    const x = Number(point.x);
+    const y = Number(point.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return options.fallback || [];
     const layers = existingLayerIds(map, layerIds);
     if (!layers.length) return options.fallback || [];
-    const distance = Number(radius || 0);
+    const distance = Math.max(0, Number.isFinite(Number(radius)) ? Number(radius) : 0);
     return map.queryRenderedFeatures(
-      [[point.x - distance, point.y - distance], [point.x + distance, point.y + distance]],
+      [[x - distance, y - distance], [x + distance, y + distance]],
       { layers }
     );
   }
@@ -11278,14 +11683,16 @@
     const copy = platformCopy(options.platform);
     const profile = options.profile || null;
     const fallbackEmail = options.fallbackEmail || "";
+    const attachProfile = options.attachProfile !== false;
     const payload = {
       status: options.status || "pending",
       public_activity: false,
       source_type: "feedback",
       source_slug: copy.slug,
       source_title: copy.title,
-      member_profile: profile?.id || null,
+      member_profile: attachProfile ? profile?.id || null : null,
       author_name: options.name || profile?.display_name || fallbackEmail || "Visitor",
+      author_email: options.email || fallbackEmail || "",
       comment: buildFeedbackText(options),
       comment_image: options.screenshotId || null,
       article_url: options.pageUrl || "",
@@ -11548,6 +11955,11 @@
     const amount = selectedAmount(form);
     const name = cleanText(form.querySelector("[data-support-name]")?.value, 180);
     const email = cleanText(form.querySelector("[data-support-email]")?.value, 180);
+    const publicThankYou = Boolean(form.querySelector("[data-support-public-thanks]")?.checked);
+    const publicDisplayName = cleanText(form.querySelector("[data-support-public-name]")?.value, 180) || (publicThankYou ? name : "");
+    const supportType = cleanText(form.querySelector("[data-support-type]")?.value, 80);
+    const siteSlug = cleanText(form.querySelector("[data-support-site-slug]")?.value, 180);
+    const siteTitle = cleanText(form.querySelector("[data-support-site-title]")?.value, 220);
     if (!name) {
       throw new Error("Enter your name.");
     }
@@ -11560,12 +11972,15 @@
       amount,
       name,
       email,
-      publicDisplayName: cleanText(form.querySelector("[data-support-public-name]")?.value, 180),
-      publicThankYou: Boolean(form.querySelector("[data-support-public-thanks]")?.checked),
+      publicDisplayName,
+      publicThankYou,
       publicCaption: cleanText(form.querySelector("[data-support-public-caption]")?.value, 180),
       note: cleanText(form.querySelector("[data-support-note]")?.value, 1000),
       connection: cleanText(form.querySelector("[data-support-connection]")?.value, 500),
       artworkTitle: cleanText(form.querySelector("[data-support-artwork-title]")?.value, 180),
+      supportType,
+      siteSlug,
+      siteTitle,
       sourceUrl: pageUrl,
       createdAt: new Date().toISOString()
     };
@@ -11746,12 +12161,22 @@
 
   function supportFormHtml(options = {}) {
     const settings = options.settings || {};
+    const prefill = options.prefill || {};
+    const adoption = options.adoption || null;
     const supportConfig = config();
     const esc = options.escapeHtml || escapeHtml;
     const amounts = amountOptions();
-    const defaultAmount = Number(supportConfig.defaultAmount || amounts[0] || 25);
-    const title = settings.title || "Support On This Site";
-    const note = settings.support_note || "Thank you to Monument Lab, Running Strong for American Indian Youth, community contributors, and other supporters who help keep On This Site online, reviewed, expanded, and available across the website and mobile app.";
+    const defaultAmount = Number(adoption?.amount || prefill.amount || supportConfig.defaultAmount || amounts[0] || 25);
+    const selectedFrequency = adoption ? "monthly" : (prefill.frequency === "monthly" ? "monthly" : "once");
+    const title = adoption ? `Adopt ${adoption.siteTitle || "This Place"}` : (settings.title || "Support On This Site");
+    const note = adoption
+      ? `Adopt this place for $${Number(adoption.amount || 25)}/month. Confirmed monthly adopters can be shown near the listing title as "Adopted by ${adoption.displayName || "your name"}" while helping keep the map, research, sources, and stewardship information maintained.`
+      : (settings.support_note || "Thank you to Monument Lab, Running Strong for American Indian Youth, community contributors, and other supporters who help keep On This Site online, reviewed, expanded, and available across the website and mobile app.");
+    const supportName = prefill.name || "";
+    const supportEmail = prefill.email || "";
+    const publicName = prefill.publicDisplayName || supportName || "";
+    const connection = adoption ? `Adopt This Place: ${adoption.siteTitle || "On This Site listing"}` : (prefill.connection || "");
+    const supportNote = adoption ? `Monthly place adoption for ${adoption.siteTitle || "On This Site listing"}.` : (prefill.note || "");
     const hasStripe = Boolean(supportConfig.checkoutEndpoint);
     const hasEmbedded = hasStripe && hasEmbeddedCheckoutConfig(supportConfig);
     const initialThankYousHtml = publicThankYousHtml(window.NLI_PUBLIC_SUPPORTERS || [], { escapeHtml: esc });
@@ -11761,59 +12186,78 @@
       </div>
       <section class="section support-form-section" data-support-form data-support-platform="${esc(options.platform || "web")}">
         <h3>${esc(title)}</h3>
+        ${adoption ? `
+          <input type="hidden" data-support-type value="place_adoption">
+          <input type="hidden" data-support-site-slug value="${esc(adoption.siteSlug || "")}">
+          <input type="hidden" data-support-site-title value="${esc(adoption.siteTitle || "")}">
+          <div class="support-adoption-summary">
+            <strong>${esc(adoption.siteTitle || "This place")}</strong>
+            <span>${esc("Monthly adoption support helps steward the public map, sources, and community knowledge connected to this place.")}</span>
+          </div>
+        ` : ""}
         <p class="article-meta">${hasStripe ? (hasEmbedded ? "Secure payment opens here on the project site." : "Payments open through secure Stripe checkout.") : "Stripe checkout is being connected. Payment will open here after private Stripe and Airtable checks pass."}</p>
         ${supportReturnNoticeHtml(options.pageUrl || window.location.href, { escapeHtml: esc })}
         ${supportCompletionHtml({ escapeHtml: esc })}
         <div class="support-frequency" role="group" aria-label="Support frequency">
-          <label><input type="radio" name="support-frequency-${esc(options.platform || "web")}" data-support-frequency value="once" checked> One-time</label>
-          <label><input type="radio" name="support-frequency-${esc(options.platform || "web")}" data-support-frequency value="monthly"> Monthly</label>
+          ${adoption
+            ? `<label><input type="radio" name="support-frequency-${esc(options.platform || "web")}" data-support-frequency value="monthly" checked> Monthly adoption</label>`
+            : `
+              <label><input type="radio" name="support-frequency-${esc(options.platform || "web")}" data-support-frequency value="once" ${selectedFrequency === "once" ? "checked" : ""}> One-time</label>
+              <label><input type="radio" name="support-frequency-${esc(options.platform || "web")}" data-support-frequency value="monthly" ${selectedFrequency === "monthly" ? "checked" : ""}> Monthly</label>
+            `}
         </div>
         <div class="support-amount-grid" aria-label="Support amount">
-          ${amounts.map(amount => `
-            <label>
-              <input type="radio" name="support-amount-${esc(options.platform || "web")}" data-support-amount value="${amount}" ${amount === defaultAmount ? "checked" : ""}>
-              <span>${esc(money(amount))}</span>
-            </label>
-          `).join("")}
+          ${adoption
+            ? `<label><input type="radio" name="support-amount-${esc(options.platform || "web")}" data-support-amount value="25" checked><span>${esc(money(25))}</span></label>`
+            : amounts.map(amount => `
+              <label>
+                <input type="radio" name="support-amount-${esc(options.platform || "web")}" data-support-amount value="${amount}" ${amount === defaultAmount ? "checked" : ""}>
+                <span>${esc(money(amount))}</span>
+              </label>
+            `).join("")}
         </div>
-        <div class="field">
-          <label for="${esc(options.platform || "web")}-support-custom-amount">Custom amount</label>
-          <input id="${esc(options.platform || "web")}-support-custom-amount" data-support-custom-amount type="number" min="1" step="1" inputmode="decimal" placeholder="Optional">
-        </div>
+        ${adoption ? "" : `
+          <div class="field">
+            <label for="${esc(options.platform || "web")}-support-custom-amount">Custom amount</label>
+            <input id="${esc(options.platform || "web")}-support-custom-amount" data-support-custom-amount type="number" min="1" step="1" inputmode="decimal" placeholder="Optional">
+          </div>
+        `}
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-name">Name</label>
-          <input id="${esc(options.platform || "web")}-support-name" data-support-name autocomplete="name" required>
+          <input id="${esc(options.platform || "web")}-support-name" data-support-name autocomplete="name" value="${esc(supportName)}" required>
         </div>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-email">Email</label>
-          <input id="${esc(options.platform || "web")}-support-email" data-support-email autocomplete="email" inputmode="email" type="email" required>
+          <input id="${esc(options.platform || "web")}-support-email" data-support-email autocomplete="email" inputmode="email" type="email" value="${esc(supportEmail)}" required>
         </div>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-public-name">Public display name</label>
-          <input id="${esc(options.platform || "web")}-support-public-name" data-support-public-name placeholder="Optional">
+          <input id="${esc(options.platform || "web")}-support-public-name" data-support-public-name placeholder="Optional" value="${esc(publicName)}">
         </div>
         <label class="support-check">
-          <input type="checkbox" data-support-public-thanks>
-          <span>Thank me publicly on the project site.</span>
+          <input type="checkbox" data-support-public-thanks ${adoption ? "checked" : ""}>
+          <span>${adoption ? "Show my adoption publicly when the monthly support is confirmed." : "Thank me publicly on the project site."}</span>
         </label>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-public-caption">Public donation caption</label>
           <textarea id="${esc(options.platform || "web")}-support-public-caption" data-support-public-caption rows="2" maxlength="180" placeholder="Optional short note for the activity feed"></textarea>
         </div>
         <div class="field">
-          <label for="${esc(options.platform || "web")}-support-connection">Artwork or project connection</label>
-          <input id="${esc(options.platform || "web")}-support-connection" data-support-connection placeholder="Optional">
+          <label for="${esc(options.platform || "web")}-support-connection">${adoption ? "Place connection" : "Artwork or project connection"}</label>
+          <input id="${esc(options.platform || "web")}-support-connection" data-support-connection placeholder="Optional" value="${esc(connection)}">
         </div>
-        <div class="field">
-          <label for="${esc(options.platform || "web")}-support-artwork-title">Artwork collected</label>
-          <input id="${esc(options.platform || "web")}-support-artwork-title" data-support-artwork-title placeholder="Optional artwork or edition title">
-        </div>
+        ${adoption ? "" : `
+          <div class="field">
+            <label for="${esc(options.platform || "web")}-support-artwork-title">Artwork collected</label>
+            <input id="${esc(options.platform || "web")}-support-artwork-title" data-support-artwork-title placeholder="Optional artwork or edition title">
+          </div>
+        `}
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-note">Optional note</label>
-          <textarea id="${esc(options.platform || "web")}-support-note" data-support-note rows="4"></textarea>
+          <textarea id="${esc(options.platform || "web")}-support-note" data-support-note rows="4">${esc(supportNote)}</textarea>
         </div>
         <div class="actions">
-          <button class="button action" type="button" data-support-submit ${hasStripe ? "" : "disabled"}>Continue to secure payment</button>
+          <button class="button action" type="button" data-support-submit ${hasStripe ? "" : "disabled"}>${adoption ? "Continue to monthly adoption" : "Continue to secure payment"}</button>
           <a class="button action secondary" href="mailto:${esc(supportConfig.supportEmail)}">Ask a question</a>
         </div>
         <p class="form-status" data-support-status hidden></p>
@@ -12055,14 +12499,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       },
       onAuthExpired: () => {
         if (!state.profile?.token && !state.profile?.refreshToken && !state.profile?.refresh_token) return;
-        saveProfile({
-          ...state.profile,
-          token: null,
-          refreshToken: null,
-          refresh_token: null,
-          tokenExpired: true
-        });
-        showBanner("Login needs refreshing before saving changes.");
+        expireProfileSession("Your login expired. Please log back in to save points and activity.");
       }
     });
     const NEW_CONTENT_ALERT_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -12092,7 +12529,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const BIOGRAPHY_PLACE_PATHS = {
       "wyandanch": {
         title: "Wyandanch associated places",
-        note: "Broad places named in the biography. This shows associated places in the story, not a precise travel route.",
+        note: "Broad associated places from the story; not a precise travel route.",
         places: [
           {
             label: "Montaukett homeland",
@@ -12104,25 +12541,25 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             label: "Fort Saybrook",
             place: "Old Saybrook, Connecticut",
             coordinates: [-72.351, 41.284],
-            reason: "The biography describes Wyandanch negotiating an English alliance at Fort Saybrook after the Pequot War."
+            reason: "Wyandanch negotiated an English alliance at Fort Saybrook after the Pequot War."
           },
           {
             label: "Pequot War region",
             place: "Mystic River area, Connecticut",
             coordinates: [-71.966, 41.355],
-            reason: "The biography connects his diplomacy to the 1637 Pequot War and its aftermath."
+            reason: "His diplomacy is connected with the 1637 Pequot War and its aftermath."
           },
           {
             label: "Shinnecock diplomacy",
             place: "Southampton / Shinnecock area",
             coordinates: [-72.436, 40.884],
-            reason: "The biography links Wyandanch to 1649 negotiations involving Mandush of Shinnecock."
+            reason: "Wyandanch is linked to 1649 negotiations involving Mandush of Shinnecock."
           }
         ]
       },
       "quashawam": {
         title: "Quashawam associated places",
-        note: "Broad places named in the biography and historic moments. This shows associated places in the records, not a precise travel route.",
+        note: "Broad associated places from the records and historic moments; not a precise travel route.",
         places: [
           {
             label: "1653 - Niantic raid and ransom",
@@ -12164,7 +12601,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       },
       "elizabeth-thunder-bird-haile-shinnecock": {
         title: "Elizabeth Thunder Bird Haile life timeline and places",
-        note: "Numbered entries use broad public locations supported by the biography sources. The reviewed sources do not provide a precise birth location, death date, or detailed off-Island travel route.",
+        note: "Numbered entries use broad locations from the cited sources. Current sources do not provide a precise birth location, death date, or detailed off-Island travel route.",
         places: [
           {
             label: "c. 1930 - Shinnecock roots",
@@ -12219,7 +12656,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       },
       "lois-princess-nowedonah-hunter": {
         title: "Lois Hunter associated places",
-        note: "Public places and institutions connected to the biography. This is an educational sequence of associated places, not a precise private route.",
+        note: "Places and institutions connected with this life story; not a precise private route.",
         places: [
           {
             label: "1903 - Shinnecock homeland",
@@ -12237,13 +12674,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             label: "Teaching - Reservation School",
             place: "Shinnecock Reservation School area, Southampton",
             coordinates: [-72.426, 40.882],
-            reason: "The biography describes Hunter teaching at the Shinnecock Reservation School before World War II."
+            reason: "Hunter taught at the Shinnecock Reservation School before World War II."
           },
           {
             label: "Public voice - Powwow grounds",
             place: "Shinnecock Powwow grounds, Southampton",
             coordinates: [-72.418, 40.883],
-            reason: "Hunter gave opening addresses at Shinnecock powwows and helped carry Shinnecock public memory."
+            reason: "Hunter gave opening addresses at Shinnecock powwows and helped carry Shinnecock community memory."
           },
           {
             label: "1967 - Voting rights testimony",
@@ -12261,9 +12698,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       },
       "john-a-strong": {
         title: "John A. Strong associated places",
-        note: "Broad public places connected with Strong's Long Island Native history scholarship and public research roles.",
+        note: "Broad places connected with Strong's Long Island Native history scholarship and research roles.",
         places: [
-          { label: "1964 - Long Island University teaching", place: "Southampton College, Long Island University", coordinates: [-72.427, 40.887], reason: "Strong began teaching at Long Island University in 1964 and later source biographies identify him with Southampton College." },
+          { label: "1964 - Long Island University teaching", place: "Southampton College, Long Island University", coordinates: [-72.427, 40.887], reason: "Strong began teaching at Long Island University in 1964 and later published biographies identify him with Southampton College." },
           { label: "1996-1997 - Hofstra Long Island Studies Institute publications", place: "Hofstra University, Hempstead", coordinates: [-73.601, 40.716], reason: "Hofstra's Long Island Studies Institute published Strong's companion volumes on Long Island Algonquian history and contemporary Native communities." },
           { label: "2001 - Montaukett history", place: "Montauk / eastern Long Island context", coordinates: [-71.944, 41.036], reason: "Strong's Montaukett history focused on land tenure, recognition, and eastern Long Island Native history." },
           { label: "2009-2011 - Unkechaug sovereignty and history", place: "Poospatuck Reservation / Unkechaug context", coordinates: [-72.869, 40.787], reason: "Strong's expert-witness work and 2011 book documented Unkechaug community persistence and sovereignty." },
@@ -12272,9 +12709,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       },
       "adam-achitteronose": {
         title: "Adam Achitteronose associated places",
-        note: "Broad places named in the biography and sources. This is not a precise travel route.",
+        note: "Broad places from the cited sources; not a precise travel route.",
         places: [
-          { label: "Merrick/Mericock records", place: "Merrick and southern Hempstead bays", coordinates: [-73.555, 40.667], reason: "The biography connects Adam Achitteronose with western Long Island alliance records that included Mericock/Merrick." },
+          { label: "Merrick/Mericock records", place: "Merrick and southern Hempstead bays", coordinates: [-73.555, 40.667], reason: "Adam Achitteronose is connected with western Long Island alliance records that included Mericock/Merrick." },
           { label: "Hempstead conference context", place: "Hempstead", coordinates: [-73.621, 40.706], reason: "The cited records connect western Long Island sachems and envoys to Hempstead boundary and conference records." },
           { label: "New Amsterdam diplomacy", place: "Lower Manhattan / New Amsterdam", coordinates: [-74.006, 40.705], reason: "Dutch treaty records place western Long Island diplomacy in relation to New Amsterdam." }
         ]
@@ -12291,25 +12728,25 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       },
       "momoweta": {
         title: "Momoweta associated places",
-        note: "Broad public places connected to Corchaug and North Fork records.",
+        note: "Broad places connected to Corchaug and North Fork records.",
         places: [
           { label: "Corchaug homeland", place: "North Fork / Cutchogue area", coordinates: [-72.487, 41.011], reason: "Momoweta is remembered as a Corchaug sachem." },
-          { label: "Southold records", place: "Southold", coordinates: [-72.427, 41.064], reason: "The biography connects him with North Fork records and colonial documentation." },
+          { label: "Southold records", place: "Southold", coordinates: [-72.427, 41.064], reason: "North Fork records and colonial documentation preserve this connection." },
           { label: "Peconic Bay diplomacy", place: "Peconic Bay", coordinates: [-72.460, 40.970], reason: "The Corchaug record context sits within the Peconic and North Fork landscape." }
         ]
       },
       "poggatacut-sachem-of-the-manhassets-of-shelter-island": {
         title: "Poggatacut associated places",
-        note: "Broad public places from Manhansett and Shelter Island records.",
+        note: "Broad places from Manhansett and Shelter Island records.",
         places: [
           { label: "Manhansett homeland", place: "Shelter Island", coordinates: [-72.340, 41.070], reason: "Poggatacut is remembered as a Manhansett sachem of Shelter Island." },
           { label: "Sylvester Manor area", place: "Shelter Island", coordinates: [-72.349, 41.084], reason: "Shelter Island colonial records and later histories preserve Manhansett place and leadership history." },
-          { label: "Peconic Bay connection", place: "Peconic Bay", coordinates: [-72.460, 40.970], reason: "The biography connects Shelter Island with wider Peconic and eastern Long Island diplomacy." }
+          { label: "Peconic Bay connection", place: "Peconic Bay", coordinates: [-72.460, 40.970], reason: "Shelter Island is connected with wider Peconic and eastern Long Island diplomacy." }
         ]
       },
       "sachem-tackapousha": {
         title: "Tackapousha associated places",
-        note: "Broad public places tied to western Long Island diplomacy. Sensitive sites are not pinned.",
+        note: "Broad places tied to western Long Island diplomacy. Sensitive sites are not pinned.",
         places: [
           { label: "Massapequa homeland", place: "Massapequa / Fort Neck area", coordinates: [-73.462, 40.681], reason: "Tackapousha is remembered as a Massapequa leader." },
           { label: "Hempstead Plains", place: "Hempstead", coordinates: [-73.621, 40.706], reason: "The cited records connect him to Hempstead boundary and conference records." },
@@ -12321,15 +12758,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         title: "Raseokan/Ratiocan associated places",
         note: "Broad North Shore places named in Matinecock records.",
         places: [
-          { label: "Asharoken", place: "Asharoken Beach", coordinates: [-73.356, 40.927], reason: "Name variants in the biography connect Raseokan/Ratiocan with Asharoken-area records." },
+          { label: "Asharoken", place: "Asharoken Beach", coordinates: [-73.356, 40.927], reason: "Name variants connect Raseokan/Ratiocan with Asharoken-area records." },
           { label: "Eaton's Neck", place: "Eaton's Neck", coordinates: [-73.393, 40.954], reason: "Matinecock and Huntington records include Eaton's Neck." },
-          { label: "Lloyd Neck / Caumsett", place: "Lloyd Neck", coordinates: [-73.472, 40.915], reason: "The biography connects him with Lloyd Neck and North Shore land records." },
+          { label: "Lloyd Neck / Caumsett", place: "Lloyd Neck", coordinates: [-73.472, 40.915], reason: "Lloyd Neck and North Shore land records preserve this connection." },
           { label: "Cold Spring Harbor", place: "Cold Spring Harbor", coordinates: [-73.456, 40.872], reason: "Cold Spring Harbor histories preserve part of the Matinecock record context." }
         ]
       },
       "mangwobe-sachem-of-rockaway": {
         title: "Mangwobe associated places",
-        note: "Broad public places tied to Rockaway and Hempstead conference records.",
+        note: "Broad places tied to Rockaway and Hempstead conference records.",
         places: [
           { label: "Rockaway homeland", place: "Rockaway Peninsula", coordinates: [-73.835, 40.592], reason: "Mangwobe is remembered as a Rockaway sachem." },
           { label: "Hempstead conference context", place: "Hempstead", coordinates: [-73.621, 40.706], reason: "His cited records include the 1657 Hempstead conference." },
@@ -12338,25 +12775,25 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       },
       "sachem-warawakmy-of-the-setauket": {
         title: "Warawakmy associated places",
-        note: "Broad public places tied to Setauket records.",
+        note: "Broad places tied to Setauket records.",
         places: [
           { label: "Setauket homeland", place: "Setauket", coordinates: [-73.105, 40.941], reason: "Warawakmy is remembered as a Setauket sachem." },
           { label: "Stony Brook", place: "Stony Brook", coordinates: [-73.140, 40.925], reason: "The 1655 deed names land between Stony Brook and Peconic headwaters." },
-          { label: "Peconic headwaters", place: "Wading River / Peconic headwaters area", coordinates: [-72.830, 40.930], reason: "The biography connects Warawakmy to the headwaters boundary language in the deed record." }
+          { label: "Peconic headwaters", place: "Wading River / Peconic headwaters area", coordinates: [-72.830, 40.930], reason: "The deed record connects Warawakmy to the headwaters boundary language." }
         ]
       },
       "nasseconset-sachem-of-the-nissequogue": {
         title: "Nasseconset associated places",
-        note: "Broad public places connected with land and place-name records.",
+        note: "Broad places connected with land and place-name records.",
         places: [
           { label: "Nissequogue River", place: "Nissequogue River", coordinates: [-73.203, 40.906], reason: "Nasseconset is tied to the Nissequogue River records." },
           { label: "Smithtown", place: "Smithtown", coordinates: [-73.200, 40.856], reason: "Records connect Nasseconset with land that became part of Smithtown." },
-          { label: "Crab Meadow / Katawamake", place: "Crab Meadow area", coordinates: [-73.312, 40.928], reason: "The biography notes nearby place-name and land-record context." }
+          { label: "Crab Meadow / Katawamake", place: "Crab Meadow area", coordinates: [-73.312, 40.928], reason: "Nearby place-name and land records provide context." }
         ]
       },
       "keeossechok-sachem-of-the-secatogue": {
         title: "Keeossechok associated places",
-        note: "Broad public places connected with the brief deed and place-name record.",
+        note: "Broad places connected with the brief deed and place-name record.",
         places: [
           { label: "Secatogue Neck", place: "West Islip / Bay Shore area", coordinates: [-73.294, 40.706], reason: "Keeossechok is remembered as a Secatogue sachem." },
           { label: "Great South Bay marshes", place: "Great South Bay", coordinates: [-73.238, 40.688], reason: "The Secatogue record context is tied to South Shore homelands and salt meadows." },
@@ -12365,7 +12802,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       },
       "mocomanto-shinnecock-sachem-1640": {
         title: "Mocomanto associated places",
-        note: "Broad public places connected to Southampton and Shinnecock records.",
+        note: "Broad places connected to Southampton and Shinnecock records.",
         places: [
           { label: "Shinnecock homeland", place: "Shinnecock, Southampton", coordinates: [-72.432, 40.884], reason: "Mocomanto is remembered as a Shinnecock leader." },
           { label: "Conscience Point context", place: "North Sea / Conscience Point", coordinates: [-72.439, 40.920], reason: "Southampton founding narratives connect this area with early colonial arrival." },
@@ -12377,53 +12814,79 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         note: "Approximate places named in Shinnecock and South Fork records.",
         places: [
           { label: "Shinnecock homeland", place: "Shinnecock, Southampton", coordinates: [-72.432, 40.884], reason: "Mandush is remembered as a Shinnecock sachem." },
-          { label: "Southampton records", place: "Southampton Village", coordinates: [-72.389, 40.884], reason: "The biography connects Mandush to Southampton land and testimony records." },
+          { label: "Southampton records", place: "Southampton Village", coordinates: [-72.389, 40.884], reason: "Southampton land and testimony records preserve Mandush's name." },
           { label: "Montaukett diplomacy", place: "Montauk", coordinates: [-71.944, 41.036], reason: "The cited records link Mandush with regional diplomacy involving Montaukett leadership." }
         ]
       },
       "sunksqua-weany-pametsechs": {
         title: "Weany/Pametsechs associated places",
-        note: "Broad public places connected with deed and land-record references to women's leadership.",
+        note: "Broad places connected with deed and land-record references to women's leadership.",
         places: [
           { label: "Shinnecock homeland", place: "Shinnecock, Southampton", coordinates: [-72.432, 40.884], reason: "Weany is remembered in Shinnecock leadership records." },
-          { label: "Quogue lands", place: "Quogue", coordinates: [-72.581, 40.823], reason: "The biography connects her with Quogue-area land records." },
+          { label: "Quogue lands", place: "Quogue", coordinates: [-72.581, 40.823], reason: "Quogue-area land records preserve Weany's name." },
           { label: "Canoe Place / Niamuck", place: "Canoe Place", coordinates: [-72.504, 40.884], reason: "The South Fork corridor provides broader context for Shinnecock and neighboring records." }
         ]
       },
       "chief-mahue-mayhew-of-unkechaug": {
         title: "Mahue/Mayhew associated places",
-        note: "Broad public places connected with Unkechaug and Setauket records.",
+        note: "Broad places connected with Unkechaug and Setauket records.",
         places: [
           { label: "Poospatuck / Unkechaug homeland", place: "Poospatuck Reservation area", coordinates: [-72.869, 40.787], reason: "Mahue/Mayhew is remembered as an Unkechaug-connected leader." },
-          { label: "Setauket connection", place: "Setauket", coordinates: [-73.105, 40.941], reason: "The biography notes Unkechaug and Setauket connections." },
+          { label: "Setauket connection", place: "Setauket", coordinates: [-73.105, 40.941], reason: "Unkechaug and Setauket records preserve these connections." },
           { label: "Mastic / Brookhaven south shore", place: "Mastic area", coordinates: [-72.840, 40.760], reason: "Unkechaug records center the south shore of Brookhaven." }
+        ]
+      },
+      "wobetom": {
+        title: "Wobetom associated places",
+        note: "Broad places connected with Wobetom in East Hampton, Montauk, and shore-whaling records. Cemetery and burial contexts are not pinned.",
+        places: [
+          { label: "1657 - East Hampton deed record", place: "East Hampton", coordinates: [-72.185, 40.963], reason: "Wobetom, marked with an X, appears among the signatures to a 1657 deed conveying Montaukett lands to East Hampton trustees." },
+          { label: "1670 - cattle keeping beyond Fort Pond", place: "Fort Pond / Montauk", coordinates: [-71.947, 41.0448], reason: "East Hampton settlers hired Wobetom to keep cattle beyond Fort Pond at Montauk." },
+          { label: "1675 - shore-whaling agreement", place: "East Hampton shore-whaling records", coordinates: [-72.185, 40.963], reason: "Wobetom appears as Awaupetun / Wahpetum in a 1675 agreement to hunt whales for Thomas James's company." }
+        ]
+      },
+      "worison-unkechaug-whaler": {
+        title: "Worison associated places",
+        note: "Broad places connected with Worison in Unkechaug land and shore-whaling records.",
+        places: [
+          { label: "Winter 1676-1677 - shore-whaling contracts", place: "Southampton shore-whaling records", coordinates: [-72.389, 40.884], reason: "Worison signed early shore-whaling contracts with John Cooper for a share of the profits." },
+          { label: "1680 - Watchogue Neck residence", place: "Watchogue Neck / East Moriches area", coordinates: [-72.789, 40.762], reason: "A land description places Warishone at a neck of land west of Watchogue and identifies him as Mahue's kinsman." }
         ]
       },
       "rev-paul-cuffee": {
         title: "Rev. Paul Cuffee associated places",
-        note: "Broad public places connected to Cuffee's preaching circuit. This is not a precise route.",
+        note: "Broad places connected to Cuffee's preaching circuit; not a precise route.",
         places: [
           { label: "Poospatuck / Unkechaug", place: "Poospatuck Reservation area", coordinates: [-72.869, 40.787], reason: "Cuffee's ministry connected with Unkechaug community life." },
-          { label: "Shinnecock", place: "Shinnecock, Southampton", coordinates: [-72.432, 40.884], reason: "The biography connects him with Shinnecock mission history." },
+          { label: "Shinnecock", place: "Shinnecock, Southampton", coordinates: [-72.432, 40.884], reason: "Shinnecock mission history preserves this connection." },
           { label: "Canoe Place", place: "Canoe Place", coordinates: [-72.504, 40.884], reason: "Canoe Place appears in the mission circuit records." },
           { label: "Montauk", place: "Montauk", coordinates: [-71.944, 41.036], reason: "Cuffee's preaching route connected eastern Long Island Native communities." }
         ]
       },
       "nathan-jeffrey-cuffee": {
         title: "Nathan Jeffrey Cuffee associated places",
-        note: "Broad public places connected to Montaukett writing, community history, and land advocacy.",
+        note: "Broad places connected to Montaukett writing, community history, and land advocacy.",
         places: [
           { label: "Eastville community", place: "Sag Harbor / Eastville", coordinates: [-72.317, 40.999], reason: "Cuffee is connected with the Eastville community." },
-          { label: "Indian Fields", place: "Montauk", coordinates: [-71.944, 41.036], reason: "The biography connects him with Montaukett advocacy for Indian Fields." },
+          { label: "Indian Fields", place: "Montauk", coordinates: [-71.944, 41.036], reason: "Montaukett advocacy for Indian Fields preserves this connection." },
           { label: "Hither Woods", place: "Hither Woods, Montauk", coordinates: [-72.020, 41.030], reason: "Hither Woods is part of the Montaukett land advocacy record." }
+        ]
+      },
+      "jeremiah-pharoah-montaukett-whaler": {
+        title: "Jeremiah Pharoah associated places",
+        note: "Broad places connected with Jeremiah Pharoah's whaling life. Indian Fields archaeological and household locations are not pinned.",
+        places: [
+          { label: "1794 - Nantucket marriage and whaling", place: "Nantucket, Massachusetts", coordinates: [-70.1, 41.283], reason: "Jeremiah Pharoah married Aloosa / Lois Tallman while working as a whaler out of Nantucket." },
+          { label: "1798 - return to Montauk", place: "Montauk / Indian Fields context", coordinates: [-71.944, 41.036], reason: "A transcription records Jeremiah Pharoah returning to Montauk after nine years and five months away sailing out of Nantucket." },
+          { label: "late 18th-early 19th century - household material culture", place: "Indian Fields, Montauk", coordinates: [-71.944, 41.036], reason: "Archaeological research at Indian Fields documented household material culture associated with Jeremiah Pharoah, including a scrimshaw knife handle bearing his name." }
         ]
       },
       "sachem-aquash-of-the-montaukett": {
         title: "Aquash associated places",
-        note: "Broad public places connected to Montaukett and East Hampton records.",
+        note: "Broad places connected to Montaukett and East Hampton records.",
         places: [
           { label: "Montaukett homeland", place: "Montauk", coordinates: [-71.944, 41.036], reason: "Aquash is remembered as a Montaukett sachem." },
-          { label: "East Hampton records", place: "East Hampton", coordinates: [-72.185, 40.963], reason: "The biography connects Aquash with East Hampton records." },
+          { label: "East Hampton records", place: "East Hampton", coordinates: [-72.185, 40.963], reason: "East Hampton records preserve Aquash's name." },
           { label: "Indian Fields context", place: "Montauk", coordinates: [-71.972, 41.047], reason: "The cited records connect later Montaukett leadership with Montauk land and fencing agreements." }
         ]
       },
@@ -12432,7 +12895,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         note: "Approximate places connected to Stephen Talkhouse Pharoah. Private or sensitive locations are not pinned.",
         places: [
           { label: "Springs / Molly's Hill", place: "Springs, East Hampton", coordinates: [-72.137, 41.035], reason: "Archive records connect Talkhouse with Molly's Hill in Springs." },
-          { label: "Talkhouse house site context", place: "Montauk", coordinates: [-72.014, 41.032], reason: "The biography connects his later life with Stephen Talkhouse Pharoah House context." },
+          { label: "Talkhouse house site context", place: "Montauk", coordinates: [-72.014, 41.032], reason: "Stephen Talkhouse Pharoah House context belongs to his later-life story." },
           { label: "St. Matthew Chapel / Freetown", place: "East Hampton", coordinates: [-72.177, 41.020], reason: "Local records connect Montaukett and African American community places in East Hampton." },
           { label: "Bridgehampton path context", place: "Bridgehampton", coordinates: [-72.306, 40.937], reason: "The house listing notes a footpath toward Bridgehampton." }
         ]
@@ -12900,6 +13363,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       renderProfile();
     }
 
+    function expireProfileSession(message = "Your login expired. Please log back in.") {
+      if (!state.profile) return;
+      saveProfile(null);
+      showBanner(message);
+      if (registerPanelEl) registerPanelEl.hidden = true;
+      if (state.selectedSite?.slug) openSite(state.selectedSite.slug, { focus: false });
+    }
+
     function trackedMemberProfile() {
       const profile = currentContributorProfile?.();
       if (!profile?.id || state.profile?.pending || state.profile?.approved === false) return null;
@@ -12961,14 +13432,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     async function saveLanguageAttempt(contentKey, word, correct) {
-      const profile = state.profile || currentContributorProfile();
-      if (!profile) throw new Error("Login required.");
+      await ensureContributorWriteSession("save language progress");
       const saved = await syncLanguageAttempt(contentKey, word, correct);
       if (saved) {
         renderProfile();
         renderRewards();
       }
-      return saved || null;
+      if (!saved) throw new Error(PROFILE_UTILS.contributorWriteSessionMessage("save language progress"));
+      return saved;
     }
 
     const localDateKey = SHARED_UTILS.localDateKey;
@@ -13107,7 +13578,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const pointEvent = await recordLanguagePointForAttempt(profileId, contentKey, word, record);
         return record ? { ...record, _existingAttempt: true, _languagePointEvent: pointEvent || null } : null;
       }
-      const created = await postDirectusItem("mobile_language_quiz_progress", payload);
+      const languageAuthMessage = PROFILE_UTILS.contributorWriteSessionMessage("save language progress");
+      const created = await postDirectusItem("mobile_language_quiz_progress", payload, {
+        requireAuth: true,
+        missingAuthMessage: languageAuthMessage,
+        authExpiredMessage: languageAuthMessage
+      });
       const record = created?.data ? { ...payload, ...created.data } : payload;
       mergeLanguageAttemptRecords([record]);
       const pointEvent = await recordLanguagePointForAttempt(profileId, contentKey, word, record);
@@ -13158,7 +13634,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const distanceMiles = Number(options.distanceMiles);
       const wantsCheckin = Number.isFinite(distanceMiles);
       if (wantsCheckin && distanceMiles > SITE_CHECKIN_RADIUS_MILES) {
-        throw new Error(`Check-ins unlock within ${SITE_CHECKIN_RADIUS_MILES.toFixed(2)} mi of a public learning point.`);
+        throw new Error(`Check-ins unlock within ${SITE_CHECKIN_RADIUS_MILES.toFixed(2)} mi of this site.`);
       }
       let existing = siteVisitRecord(profile, site);
       if (!existing || (wantsCheckin && !siteHasCheckin(profile, site))) {
@@ -13526,7 +14002,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       button.setAttribute("aria-label", `Language quiz for ${word.english}`);
       button.dataset.languageQuizId = word.id;
       button.dataset.languageContentKey = contentKey;
-      button.dataset.languageContentTitle = item?.title || "this article";
+      button.dataset.languageContentTitle = item?.title || "current story";
       term.parentNode.insertBefore(button, after);
     }
 
@@ -13576,7 +14052,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const result = card.querySelector("[data-language-result]");
         if (result) {
           result.hidden = false;
-          result.textContent = "You already tried this article's language quiz today.";
+          result.textContent = "You already tried this language quiz today.";
         }
         detailBodyEl.querySelector(`.language-quiz-marker[data-language-quiz-id="${CSS.escape(word.id)}"]`)?.remove();
         return;
@@ -13608,8 +14084,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           item.disabled = false;
           item.classList.remove("correct", "wrong");
         });
-        if (result) result.textContent = "Could not save language progress to Directus. Please log in again and try once more.";
-        showBanner("Could not save language progress to Directus. Please log in again and try once more.");
+        const message = error?.message || "Could not save language progress. Please log in again and try once more.";
+        if (result) result.textContent = message;
+        showBanner(message);
       }
     }
 
@@ -13764,7 +14241,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function sanitizePublicWikiArticle(article = {}) {
       const summary = publicWikiSummary(article);
-      return summary === article.summary ? article : { ...article, summary };
+      const content = SITE_UTILS.stripInternalPublicSiteSections(article.content);
+      const whyThisMatters = SITE_UTILS.stripInternalPublicSiteSections(article.why_this_matters);
+      if (summary === article.summary && content === article.content && whyThisMatters === article.why_this_matters) return article;
+      return { ...article, summary, content, why_this_matters: whyThisMatters };
     }
 
     function sourceAwareSectionHtml(title, content) {
@@ -14190,7 +14670,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     ];
 
     function contentSections(site) {
-      return SHARED_UTILS.contentSectionsFromFields(SITE_UTILS.siteWithContentOverrides(site), MOBILE_SITE_CONTENT_SECTION_FIELDS, {
+      const publicSite = SITE_UTILS.siteWithContentOverrides(SITE_UTILS.sanitizePublicSiteContent(site));
+      return SHARED_UTILS.contentSectionsFromFields(publicSite, MOBILE_SITE_CONTENT_SECTION_FIELDS, {
         hasContent: value => SHARED_UTILS.richTextHasDisplayContent(value, { cleanText: stripHtml }),
         excludeTitle: title => SHARED_UTILS.isWhyThisMattersTitle(title)
       });
@@ -14245,7 +14726,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return `
         <form class="section frontend-content-editor" data-frontend-editor="${escapeHtml(kind)}" data-editor-id="${escapeHtml(item.id || "")}" data-editor-slug="${escapeHtml(editorSlug || "")}">
           <h3>Edit ${label} content</h3>
-          <p class="summary">Edit simple public-facing text without leaving the app.</p>
+          <p class="summary">Edit reader-facing text without leaving the app.</p>
           ${fields.map(field => frontendEditorFieldHtml(item, field)).join("")}
           <div class="actions">
             <button class="action" type="submit">Save updates</button>
@@ -14262,9 +14743,21 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       });
     }
 
+    function mobileWhyThisMattersFallback(item) {
+      const text = publicCleanText([
+        item?.summary,
+        item?.introduction_content,
+        item?.preservation_content,
+        item?.history_content
+      ].filter(Boolean).join(" "));
+      const fallback = "A mapped place can connect Native Long Island history, presence, stewardship, and memory.";
+      return firstCompleteSentences(text, 2, 320) || fallback;
+    }
+
     function whyThisMattersHtml(item) {
+      const realTexts = [item?.why_this_matters || "", ...legacyWhyThisMattersTexts(item)].filter(Boolean);
       const paragraphs = SHARED_UTILS.uniqueTextBlocks(
-        [item?.why_this_matters || "", ...legacyWhyThisMattersTexts(item)],
+        realTexts.length ? realTexts : [mobileWhyThisMattersFallback(item)],
         { cleanText: publicCleanText, normalizeText }
       );
       return paragraphs.length ? `<section class="section"><h3>Why This Matters</h3>${paragraphs.map(text => `<p>${escapeHtml(text)}</p>`).join("")}</section>` : "";
@@ -14273,15 +14766,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function normalizeSourceRelation(relation) {
       const source = relation?.source || relation;
       if (!source?.title && !source?.citation && !source?.url) return null;
+      const cleanSourceText = SHARED_UTILS.publicFacingWorkflowTextCleanup || publicCleanText;
       return {
         id: source.id,
         title: source.title || source.citation || "Reference",
         source_type: source.source_type || "",
         author: source.author || "",
         year: source.year || "",
-        citation: source.citation || "",
+        citation: cleanSourceText(source.citation || ""),
         url: source.url || "",
-        citation_context: publicCleanText(relation?.citation_context || source.citation_context || "")
+        citation_context: cleanSourceText(relation?.citation_context || source.citation_context || "")
       };
     }
 
@@ -14624,11 +15118,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     async function fetchSiteDetail(site) {
       if (!site?.slug) return site;
-      if ("introduction_content" in site || "history_content" in site) return site;
+      if ("introduction_content" in site || "history_content" in site) return SITE_UTILS.sanitizePublicSiteContent(site);
       if (state.siteDetailCache.has(site.slug)) return state.siteDetailCache.get(site.slug);
       const promise = fetchJson(`/items/sites?limit=1&filter[publication_status][_eq]=published&filter[slug][_eq]=${encodeURIComponent(site.slug)}&fields=${SITE_DETAIL_FIELDS}`)
         .then(response => {
-          const full = response.data?.[0] ? { ...site, ...response.data[0] } : site;
+          const full = SITE_UTILS.sanitizePublicSiteContent(response.data?.[0] ? { ...site, ...response.data[0] } : site);
           const index = state.sites.findIndex(item => item.slug === site.slug);
           if (index >= 0) state.sites[index] = { ...state.sites[index], ...full };
           const filteredIndex = state.filtered.findIndex(item => item.slug === site.slug);
@@ -14636,7 +15130,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           clearRelatedSiteCaches();
           return full;
         })
-        .catch(() => site);
+        .catch(() => SITE_UTILS.sanitizePublicSiteContent(site));
       state.siteDetailCache.set(site.slug, promise);
       return promise;
     }
@@ -14714,7 +15208,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     async function loadData() {
       if (window.NLI_MOBILE_DATA) {
-        state.sites = repairSiteTitles(window.NLI_MOBILE_DATA.sites || []);
+        state.sites = repairSiteTitles((window.NLI_MOBILE_DATA.sites || []).map(SITE_UTILS.sanitizePublicSiteContent));
         state.wikiArticles = (window.NLI_MOBILE_DATA.wikiArticles || []).map(sanitizePublicWikiArticle);
         state.wikiBySlug = new Map(state.wikiArticles.map(article => [article.slug, article]));
         state.layers = window.NLI_MOBILE_DATA.layers || [];
@@ -14760,7 +15254,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         }
         throw error;
       }
-      state.sites = repairSiteTitles(sitesResponse.data || []);
+      state.sites = repairSiteTitles((sitesResponse.data || []).map(SITE_UTILS.sanitizePublicSiteContent));
       state.layers = layersResponse.data || [];
       state.supportSettings = supportResponse.data?.[0] || null;
       state.mediaMap = window.NLI_MOBILE_MEDIA_MAP || {};
@@ -15092,7 +15586,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         mobileRefreshAppBtn.textContent = "Refreshing...";
       }
       try {
-        showBanner("Refreshing profile and app data from Directus...");
+        showBanner("Refreshing profile and app data...");
         state.profileActivitySynced = false;
         const results = await Promise.allSettled([
           ensureDeferredDataLoaded(),
@@ -15101,7 +15595,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           refreshMapStories()
         ]);
         const refreshed = results.some(result => result.status === "fulfilled" && result.value !== false);
-        if (!refreshed) throw new Error("No Directus refresh task completed.");
+        if (!refreshed) throw new Error("No refresh task completed.");
         state.profileActivityCache = null;
         renderProfile();
         renderRewards();
@@ -16837,6 +17331,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         "mobile-biography-place-points",
         "mobile-biography-place-path",
         "mobile-biography-path-labels",
+        "mobile-biography-path-point-numbers",
         "mobile-biography-path-points",
         "mobile-biography-path-lines",
         "mobile-site-point-hit",
@@ -16899,6 +17394,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         layerId === "mobile-biography-place-points" ||
         layerId === "mobile-biography-place-path" ||
         layerId === "mobile-biography-path-labels" ||
+        layerId === "mobile-biography-path-point-numbers" ||
         layerId === "mobile-biography-path-points" ||
         layerId === "mobile-biography-path-lines";
     }
@@ -18250,7 +18746,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           return;
         }
         if (miles > SITE_CHECKIN_RADIUS_MILES) {
-          showBanner(`Check-in not saved. You are about ${miles.toFixed(1)} mi from this public learning point.`);
+          showBanner(`Check-in not saved. You are about ${miles.toFixed(1)} mi from this site.`);
           return;
         }
         recordSiteVisit(site, { distanceMiles: miles })
@@ -18898,7 +19394,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const admin = isAdminContributor();
       suggestSubmitBtn.textContent = image ? "Preparing image..." : (admin ? "Publishing..." : "Submitting...");
       try {
-        const profile = currentContributorProfile();
+        const identity = currentContributorIdentity();
+        const profile = identity.profile;
         image = await prepareJpegUploadImage(image, "plant-observation");
         suggestSubmitBtn.textContent = image ? "Uploading image..." : (admin ? "Publishing..." : "Submitting...");
         const imageId = image ? await uploadDirectusFile(image, title) : null;
@@ -18914,8 +19411,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           longitude,
           latitude,
           author_profile: profile?.id || null,
-          author_name: profile?.display_name || state.profile.display_name || state.profile.email || "Contributor",
-          author_email: state.profile.email || "",
+          author_name: identity.name,
+          author_email: identity.email,
           submitted_at: submittedAt,
           review_note: admin
             ? `Editor public site submission. Contribution type: ${prompt}`
@@ -18960,15 +19457,28 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const linked = bestContributorProfile(state.contributorProfiles.filter(profile => Number(profile.id) === Number(state.profile.profileId)));
       if (linked) {
         if (profileMatchesSessionEmail(linked) && !isProfileBanned(linked) && (linked.account_enabled !== false || PROFILE_UTILS.isAdminContributor(linked, { email: state.profile?.email }))) return linked;
-        saveProfile({ ...state.profile, profileId: null });
+        if (isProfileBanned(linked) || !profileMatchesSessionEmail(linked) || linked.account_enabled === false) {
+          saveProfile({ ...state.profile, profileId: null });
+        }
       }
       const byEmail = profileForLogin(state.profile.email || "");
       if (byEmail && (byEmail.account_enabled !== false || PROFILE_UTILS.isAdminContributor(byEmail, { email: state.profile?.email }))) return byEmail;
       return {
-        id: null,
+        id: state.profile.profileId || null,
         slug: "",
         display_name: state.profile.display_name || state.profile.email || "Contributor",
         username: state.profile.email || ""
+      };
+    }
+
+    function currentContributorIdentity() {
+      const profile = currentContributorProfile();
+      const email = normalizeAccountEmail(state.profile?.email || profile?.username || profile?.email || "");
+      const name = String(profile?.display_name || state.profile?.display_name || state.profile?.displayName || profile?.username || email || "Contributor").trim();
+      return {
+        profile,
+        name: name === "undefined" ? "Contributor" : name,
+        email: email === "undefined" ? "" : email
       };
     }
 
@@ -19010,6 +19520,28 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function hasContributorWriteSession() {
       return PROFILE_UTILS.hasContributorWriteSession(state.profile);
+    }
+
+    function requireContributorWriteSession(action = "save this") {
+      const profile = currentContributorProfile();
+      if (!profile) throw new Error("Login required.");
+      if (state.profile?.pending) throw new Error("Your account is waiting for review before saving points.");
+      if (!hasContributorWriteSession()) {
+        const message = PROFILE_UTILS.contributorWriteSessionMessage(action);
+        expireProfileSession(message);
+        throw new Error(message);
+      }
+      return profile;
+    }
+
+    async function ensureContributorWriteSession(action = "save this") {
+      const profile = requireContributorWriteSession(action);
+      await directusClient.ensureAuthSession({
+        requireAuth: true,
+        missingAuthMessage: PROFILE_UTILS.contributorWriteSessionMessage(action),
+        authExpiredMessage: PROFILE_UTILS.contributorWriteSessionMessage(action)
+      });
+      return profile;
     }
 
     function contributorWritePrompt() {
@@ -19584,7 +20116,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function jumpToCommentQuote(commentId) {
       const target = detailBodyEl.querySelector(`[data-quote-comment-anchor="${CSS.escape(String(commentId))}"]`);
       if (!target) {
-        showBanner("The quoted text is not visible in this article section.");
+        showBanner("The quoted text is not visible in this section.");
         return;
       }
       target.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -19819,7 +20351,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         try {
           await patchDirectusItem("mobile_comments", id, { status: "deleted" }, { requireAuth: true });
         } catch (error) {
-          showBanner("Could not delete the comment in Directus yet. Please try again.");
+          showBanner("Could not delete the comment yet. Please try again.");
           return;
         }
       }
@@ -20367,7 +20899,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (/powwow|address|voice|speak|speech/.test(text)) return "to speak";
       if (/negot|alliance|diplomac|sachem|leader/.test(text)) return "for diplomacy";
       if (/war|pequot/.test(text)) return "after war";
-      if (/record|deed|land|source/.test(text)) return "for records";
+      if (/record|deed|land|source/.test(text)) return "to document land history";
       if (/minister|preach|mission/.test(text)) return "to preach";
       if (/advocacy|advocate/.test(text)) return "for advocacy";
       if (/born|birth|homeland|home/.test(text)) return "for roots";
@@ -20384,6 +20916,63 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       label = `${who} visits ${mobileBiographyPathCompactWords(where, 2)} ${action}`.replace(/\s+/g, " ").trim();
       if (mobileBiographyPathWordCount(label) <= 10) return label;
       return `${who} visits ${mobileBiographyPathCompactWords(where, 2)}`.replace(/\s+/g, " ").trim();
+    }
+
+    function mobileBiographyPathTimelineLabel(place = {}) {
+      const title = stripHtml(place.title || place.label || place.place || "Mapped place")
+        .replace(/\s+/g, " ")
+        .trim();
+      const date = stripHtml(place.dateLabel || place.date_label || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      const titleLower = title.toLowerCase();
+      const dateLower = date.toLowerCase();
+      if (!date || titleLower.startsWith(dateLower) || titleLower.includes(dateLower)) return title;
+      return `${date} - ${title}`;
+    }
+
+    function mobileBiographyPathMapPinLabel(place = {}, order = 1) {
+      return `${order} - ${mobileBiographyPathTimelineLabel(place)}`.replace(/\s+/g, " ").trim();
+    }
+
+    function mobileBiographyPathCompactTimelineLabel(place = {}) {
+      const title = stripHtml(place.title || place.label || place.place || "Mapped place")
+        .replace(/\s+/g, " ")
+        .trim();
+      const date = stripHtml(place.dateLabel || place.date_label || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      const compactTitle = mobileBiographyPathCompactWords(title, 5);
+      if (!date || title.toLowerCase().includes(date.toLowerCase())) return compactTitle;
+      return `${date} - ${compactTitle}`.replace(/\s+/g, " ").trim();
+    }
+
+    function mobileBiographyPathCompactMapPinLabel(place = {}, order = 1) {
+      return `${order} - ${mobileBiographyPathCompactTimelineLabel(place)}`.replace(/\s+/g, " ").trim();
+    }
+
+    function mobileBiographyPathLabelCoordinates(places = [], index = 0) {
+      const place = places[index] || {};
+      const coordinates = Array.isArray(place.coordinates) ? place.coordinates : null;
+      if (!coordinates?.every(Number.isFinite)) return coordinates;
+      const closeIndexes = places
+        .map((candidate, candidateIndex) => {
+          const coords = Array.isArray(candidate?.coordinates) ? candidate.coordinates : null;
+          if (!coords?.every(Number.isFinite)) return null;
+          const lngDelta = Math.abs(coords[0] - coordinates[0]);
+          const latDelta = Math.abs(coords[1] - coordinates[1]);
+          return lngDelta <= 0.16 && latDelta <= 0.07 ? candidateIndex : null;
+        })
+        .filter(Number.isFinite);
+      if (closeIndexes.length <= 1) return coordinates;
+      const localIndex = Math.max(0, closeIndexes.indexOf(index));
+      const lane = localIndex - ((closeIndexes.length - 1) / 2);
+      const radiusLat = Math.max(0.0135, Math.min(0.024, 0.09 / Math.max(2, closeIndexes.length)));
+      const radiusLng = (localIndex % 2 === 0 ? -0.006 : 0.006) * (Math.floor(localIndex / 2) + 1);
+      return [
+        Number((coordinates[0] + radiusLng).toFixed(6)),
+        Number((coordinates[1] + lane * radiusLat).toFixed(6))
+      ];
     }
 
     function mobileBiographyPathsEnabled() {
@@ -20405,8 +20994,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         });
         path.places.forEach((place, index) => {
           const order = index + 1;
-          const pathLabel = mobileBiographyPathActionLabel(person, place);
-          const numberedPathLabel = `${order}. ${pathLabel}`;
+          const pathLabel = mobileBiographyPathTimelineLabel(place);
+          const numberedPathLabel = mobileBiographyPathMapPinLabel(place, order);
+          const compactPathLabel = mobileBiographyPathCompactMapPinLabel(place, order);
+          const labelCoordinates = mobileBiographyPathLabelCoordinates(path.places, index);
           features.push({
             type: "Feature",
             geometry: { type: "Point", coordinates: place.coordinates },
@@ -20417,6 +21008,24 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
               order,
               label: String(order),
               pin_label: numberedPathLabel,
+              compact_pin_label: compactPathLabel,
+              title: pathLabel,
+              place: place.place || "",
+              reason: place.reason || "",
+              event_id: place.event_id || place.eventId || ""
+            }
+          });
+          features.push({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: labelCoordinates || place.coordinates },
+            properties: {
+              kind: "label",
+              person,
+              wiki_slug: slug,
+              order,
+              label: String(order),
+              pin_label: numberedPathLabel,
+              compact_pin_label: compactPathLabel,
               title: pathLabel,
               place: place.place || "",
               reason: place.reason || "",
@@ -20550,9 +21159,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             properties: { kind: "path", title: `${person || path.title || "Biography"} path`, person, wiki_slug: article?.slug || "" }
           },
           ...path.places.map((place, index) => {
-            const pathLabel = mobileBiographyPathActionLabel(person, place);
             const order = index + 1;
-            const numberedPathLabel = `${order}. ${pathLabel}`;
+            const pathLabel = mobileBiographyPathTimelineLabel(place);
+            const numberedPathLabel = mobileBiographyPathMapPinLabel(place, order);
+            const compactPathLabel = mobileBiographyPathCompactMapPinLabel(place, order);
             return {
               type: "Feature",
               geometry: { type: "Point", coordinates: place.coordinates },
@@ -20563,6 +21173,30 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
                 order,
                 label: String(order),
                 pin_label: numberedPathLabel,
+                compact_pin_label: compactPathLabel,
+                title: pathLabel,
+                place: place.place || "",
+                reason: place.reason || "",
+                event_id: place.event_id || place.eventId || ""
+              }
+            };
+          }),
+          ...path.places.map((place, index) => {
+            const order = index + 1;
+            const pathLabel = mobileBiographyPathTimelineLabel(place);
+            const numberedPathLabel = mobileBiographyPathMapPinLabel(place, order);
+            const compactPathLabel = mobileBiographyPathCompactMapPinLabel(place, order);
+            return {
+              type: "Feature",
+              geometry: { type: "Point", coordinates: mobileBiographyPathLabelCoordinates(path.places, index) || place.coordinates },
+              properties: {
+                kind: "label",
+                person,
+                wiki_slug: article?.slug || "",
+                order,
+                label: String(order),
+                pin_label: numberedPathLabel,
+                compact_pin_label: compactPathLabel,
                 title: pathLabel,
                 place: place.place || "",
                 reason: place.reason || "",
@@ -20586,6 +21220,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
       state.mobileBiographyPathMarkers = [];
       state.activeMobileBiographyPath = null;
+    }
+
+    function promoteMobileBiographyPathLayers() {
+      if (!state.map) return;
+      for (const id of ["mobile-biography-place-path", "mobile-biography-place-points", "mobile-biography-place-labels"]) {
+        if (state.map.getLayer(id)) state.map.moveLayer(id);
+      }
     }
 
     function focusMobileBiographyPathPlace(pathOrArticle, index = 0, options = {}) {
@@ -20639,20 +21280,20 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         id: "mobile-biography-place-labels",
         type: "symbol",
         source: "mobile-biography-place-path",
-        filter: ["==", ["get", "kind"], "point"],
+        filter: ["==", ["get", "kind"], "label"],
         minzoom: 8.2,
         layout: {
-          "text-field": ["get", "pin_label"],
+          "text-field": ["step", ["zoom"], ["get", "compact_pin_label"], 10.6, ["get", "pin_label"]],
           "text-size": ["interpolate", ["linear"], ["zoom"], 8.2, 8, 13, 10.75],
           "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
           "text-variable-anchor": ["literal", ["top", "bottom", "left", "right", "top-left", "top-right", "bottom-left", "bottom-right"]],
           "text-radial-offset": ["interpolate", ["linear"], ["zoom"], 8.2, 0.78, 13, 1.16],
           "text-justify": "auto",
-          "text-max-width": 7,
-          "text-padding": 4,
-          "text-allow-overlap": true,
-          "text-ignore-placement": true,
-          "text-optional": false
+          "text-max-width": ["interpolate", ["linear"], ["zoom"], 8.2, 5.25, 13, 7.5],
+          "text-padding": 10,
+          "text-allow-overlap": false,
+          "text-ignore-placement": false,
+          "text-optional": true
         },
         paint: {
           "text-color": "#3f4742",
@@ -20660,10 +21301,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           "text-halo-width": 1.25
         }
       });
-      ["mobile-biography-place-path", "mobile-biography-place-points", "mobile-biography-place-labels"]
-        .forEach(id => {
-          if (state.map.getLayer(id)) state.map.moveLayer(id);
-        });
+      promoteMobileBiographyPathLayers();
       if (options.focus !== false) focusMobileBiographyPathPlace(path, 0, { zoom: 10.9, duration: 760 });
     }
 
@@ -20688,7 +21326,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       syncMobilePanelAccessibility();
       article = await fetchWikiDetail(article || slug);
       if (!article) {
-        detailBodyEl.innerHTML = `<p class="summary">This knowledgebase article has not been imported into the mobile app yet.</p>`;
+        detailBodyEl.innerHTML = `<p class="summary">This knowledgebase article is not available in this view yet.</p>`;
         return;
       }
       const event = options.timelineEventId
@@ -20701,15 +21339,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         article,
         isBiographyWikiArticle(article) ? rawArticleContentHtml : removeFootnoteReferenceMarkers(rawArticleContentHtml)
       );
+      const showArticleSummary = Boolean(publicCleanText(article.summary)) && !articleContentHtml;
       const wikiMoments = timelineEventsForSource("wiki", article.id, article.slug);
       const biographyTimeline = mobileBiographyTimelineData(article, wikiMoments);
       detailTitleEl.innerHTML = `
         <h2>${escapeHtml(article.title)}</h2>
-        <p class="detail-meta">${article.lastmod ? "Imported knowledgebase article" : "Knowledgebase"}</p>
+        <p class="detail-meta">${article.lastmod ? "Knowledgebase article" : "Knowledgebase"}</p>
       `;
       detailBodyEl.innerHTML = `
         ${image ? `<img class="hero article-sticky-hero" src="${escapeHtml(image)}" alt="${escapeHtml(article.title)}" loading="lazy" decoding="async" onerror="${imageErrorAction("")}">` : ""}
-        ${publicCleanText(article.summary) ? `<p class="summary">${escapeHtml(publicCleanText(article.summary))}</p>` : ""}
+        ${showArticleSummary ? `<p class="summary">${escapeHtml(publicCleanText(article.summary))}</p>` : ""}
         ${articleContentHtml ? `<section class="section"><h3>Sections</h3><div class="section-content">${articleContentHtml}</div></section>` : ""}
         ${whyThisMattersHtml(article)}
         ${mobileBiographyPathHtml(article, wikiMoments)}
@@ -20824,7 +21463,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         <section class="section ots-page-grid">
           <article class="ots-page-card">
             <h3>Start exploring</h3>
-            <p>Browse public learning points, ancestral territories, wiki articles, historic moments, and community notes through the map.</p>
+            <p>Browse sites, ancestral territories, wiki articles, historic moments, and community notes through the map.</p>
             <div class="actions">
               <button class="action secondary" type="button" data-app-page="browse">Browse sites</button>
               <button class="action secondary" type="button" data-app-page="knowledgebase">Knowledgebase</button>
@@ -20966,7 +21605,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const uncategorizedArticles = articles.filter(article => !categorizedSlugs.has(article.slug));
       detailTitleEl.innerHTML = `<h2>Knowledgebase</h2><p class="detail-meta">${articles.length} articles</p>`;
       detailBodyEl.innerHTML = `
-        <p class="summary">Imported articles grouped by topic, with community notes when available.</p>
+        <p class="summary">Articles grouped by topic, with community notes when available.</p>
         <section class="section">
           <h3>Featured</h3>
           <div class="compact-list">
@@ -21918,7 +22557,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         filter: ["==", ["geometry-type"], "Point"],
         paint: {
           "circle-radius": ["case", ["==", ["get", "has_icon"], true], ["interpolate", ["linear"], ["zoom"], 6, 3, 10, 3.8, 14, 5], ["interpolate", ["linear"], ["zoom"], 6, 3.8, 10, 4.8, 14, 6.2]],
-          "circle-color": ["case", ["==", ["get", "location_accuracy"], "approximate"], "#326fe3", "#496f5d"],
+          "circle-color": ["case", ["==", ["get", "has_header_image"], true], "#326fe3", "#496f5d"],
           "circle-opacity": ["case", ["==", ["get", "has_icon"], true], 0.52, 0.9],
           "circle-stroke-color": "rgba(255,255,255,0.94)",
           "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 6, 1, 12, 1.5],
@@ -21966,10 +22605,28 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         }
       });
       state.map.addLayer({
-        id: "mobile-biography-path-labels",
+        id: "mobile-biography-path-point-numbers",
         type: "symbol",
         source: "mobile-biography-paths",
         filter: ["==", ["get", "kind"], "point"],
+        layout: {
+          "text-field": ["get", "label"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 6, 8, 12, 10.25],
+          "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+          "text-allow-overlap": true,
+          "text-ignore-placement": true
+        },
+        paint: {
+          "text-color": "#fff",
+          "text-halo-color": "rgba(42,47,44,0.8)",
+          "text-halo-width": 0.6
+        }
+      });
+      state.map.addLayer({
+        id: "mobile-biography-path-labels",
+        type: "symbol",
+        source: "mobile-biography-paths",
+        filter: ["==", ["get", "kind"], "label"],
         minzoom: 8.2,
         layout: {
           "text-field": ["get", "pin_label"],
@@ -22081,7 +22738,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const visible = mobileBiographyPathsEnabled();
       const source = state.map.getSource("mobile-biography-paths");
       if (source) source.setData(allMobileBiographyPathFeatureCollection({ enabled: visible }));
-      MAP_UTILS.setLayerVisibilityMany(state.map, ["mobile-biography-path-lines", "mobile-biography-path-points", "mobile-biography-path-labels"], visible ? "visible" : "none");
+      MAP_UTILS.setLayerVisibilityMany(state.map, ["mobile-biography-path-lines", "mobile-biography-path-points", "mobile-biography-path-point-numbers", "mobile-biography-path-labels"], visible ? "visible" : "none");
     }
 
     function openMobileInteractivePolygonLayer(event) {
@@ -22096,7 +22753,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         if (handleSuggestionMapPickClick(event)) return;
         if (openMobileMapTap(event)) markMobileMapEventHandled(event);
       });
-      ["mobile-biography-place-labels", "mobile-biography-place-points", "mobile-biography-place-path", "mobile-biography-path-labels", "mobile-biography-path-points", "mobile-biography-path-lines"]
+      ["mobile-biography-place-labels", "mobile-biography-place-points", "mobile-biography-place-path", "mobile-biography-path-labels", "mobile-biography-path-point-numbers", "mobile-biography-path-points", "mobile-biography-path-lines"]
         .forEach(layerId => bindMobileInteractiveLayer(layerId, event => {
           if (handleSuggestionMapPickClick(event)) return;
           if (openMobileMapTap(event)) markMobileMapEventHandled(event);
@@ -22385,7 +23042,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const recentVisits = visits.slice(0, 3);
       profileCardEl.innerHTML = `
         <strong>${escapeHtml(displayName || "Contributor")}</strong>
-        ${profileSyncing ? `<p class="detail-meta">Refreshing latest Directus activity...</p>` : ""}
+        ${profileSyncing ? `<p class="detail-meta">Refreshing latest activity...</p>` : ""}
         <p class="detail-meta">${escapeHtml([roleLabel, locationLabel].filter(Boolean).join(" - "))}</p>
         ${userSinceLine ? `<p class="detail-meta">${escapeHtml(userSinceLine)}</p>` : ""}
         ${state.profile.pending ? `<p class="detail-meta">Thank you for registering. Your account is waiting for review.</p>` : ""}
@@ -22403,7 +23060,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           <div class="profile-stat"><strong>${comments.length}</strong><span class="detail-meta">community notes</span></div>
           <div class="profile-stat"><strong>${loginRewards.currentStreak}</strong><span class="detail-meta">day streak</span></div>
         </div>
-        ${stats.pointsSyncing ? `<p class="detail-meta">Refreshing latest Directus point events...</p>` : ""}
+        ${stats.pointsSyncing ? `<p class="detail-meta">Refreshing latest point activity...</p>` : ""}
         ${showProgress ? mobileContributorTierProgressHtml(stats) : ""}
         ${mobileProfileBadgesHtml(activeProfile, stats)}
         ${mobileProfileTrackersHtml(activeProfile, stats)}
@@ -22466,7 +23123,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (state.profile.pending || !linkedProfile?.id) {
         showBanner(state.profile.pending
           ? "This account is still waiting for approval. Profile edits save after approval."
-          : "Could not find a Directus profile to update. Please log in again.");
+          : "Could not find your profile to update. Please log in again.");
         return;
       }
       try {
@@ -22477,7 +23134,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         renderProfile();
         showBanner("Profile updated.");
       } catch (error) {
-        showBanner(error.message || "Could not save profile to Directus.");
+        showBanner(error.message || "Could not save profile.");
       }
     }
 
@@ -22992,7 +23649,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             pinned
           };
         })
-        .filter(item => activityDateValue(item.date));
+        .filter(item => item.pinned || activityDateValue(item.date));
       const wikis = state.wikiArticles.map(article => ({
         type: "wiki",
         slug: article.slug,
@@ -23016,7 +23673,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           pinUntil: exhibit.activity_pin_until,
           pinned
         };
-      }).filter(item => activityDateValue(item.date));
+      }).filter(item => item.pinned || activityDateValue(item.date));
       return ACTIVITY_UTILS.mergeRecentActivity([
           comments,
           suggestions,
@@ -23436,6 +24093,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
       if (sheet === contributeSheetEl || sheet === suggestSiteSheetEl) updateContributionReviewCopy();
       if (sheet === suggestSiteSheetEl) setSuggestionMapPickMode(false);
+      if (sheet === feedbackSheetEl) prefillFeedbackIdentity();
+    }
+
+    function prefillFeedbackIdentity() {
+      const identity = currentContributorIdentity();
+      if (feedbackNameEl && !feedbackNameEl.value.trim() && identity.name !== "Contributor") feedbackNameEl.value = identity.name;
+      if (feedbackEmailEl && !feedbackEmailEl.value.trim() && identity.email) feedbackEmailEl.value = identity.email;
     }
 
     function openContributorAccountSheet() {
@@ -23460,8 +24124,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     async function sendFeedback() {
-      const name = feedbackNameEl.value.trim();
-      const email = feedbackEmailEl.value.trim();
+      const identity = currentContributorIdentity();
+      const name = feedbackNameEl.value.trim() || identity.name || "";
+      const email = feedbackEmailEl.value.trim() || identity.email || "";
       const message = feedbackMessageEl.value.trim();
       if (!message) {
         showBanner("Add a short feedback message first.");
@@ -23490,14 +24155,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           }
         }
         feedbackSubmitBtn.textContent = "Sending...";
-        const profile = currentContributorProfile();
+        const profile = identity.profile;
         const feedbackPayload = FEEDBACK_UTILS.buildFeedbackCommentPayload({
           platform: "mobile",
           name,
           email,
           message,
           profile,
-          fallbackEmail: state.profile?.email || "",
+          fallbackEmail: identity.email,
           pageUrl: window.location.href,
           screenshotId,
           screenshotNote
@@ -23508,6 +24173,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           await FEEDBACK_UTILS.sendFeedbackReviewEmail(record);
         } catch (emailError) {
           console.warn("Feedback was saved, but the review email could not be sent immediately.", emailError);
+          showBanner("Feedback saved, but email notification failed. Email onthissiteny@gmail.com if this is urgent.");
+          return;
         }
       } finally {
         feedbackSubmitBtn.disabled = false;
@@ -24637,6 +25304,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     document.addEventListener("scroll", event => {
       if (!event.target?.closest?.(".timeline-source-popover")) closeTimelineSourceReferences(document);
     }, { passive: true, capture: true });
+    document.addEventListener("pointerdown", event => {
+      if (event.target?.closest?.("[data-timeline-source-info], .timeline-source-popover")) return;
+      closeTimelineSourceReferences(document);
+    }, { capture: true });
     collapseListBtn.addEventListener("click", event => {
       blockPanelControlMapTap(event);
       const hidden = appEl?.classList.contains("nearby-hidden");
