@@ -12,7 +12,7 @@
   <link rel="manifest" href="mobile-manifest.webmanifest">
   <link rel="preconnect" href="https://api.mapbox.com">
   <link rel="preconnect" href="https://events.mapbox.com">
-  <link rel="preconnect" href="https://native-long-island-archive.directus.app">
+  <link rel="preconnect" href="https://directus.nativelongisland.com">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet">
   <style data-inline-source="assets/css/mobile-app.css">
@@ -5416,7 +5416,7 @@
   ]);
 
   window.NLI_SHARED_CONFIG = {
-    directusUrl: "https://native-long-island-archive.directus.app",
+    directusUrl: "https://directus.nativelongisland.com",
     publicArchiveBase: "https://nativelongisland.com/",
     fields: {
       profile: profileFields,
@@ -11767,7 +11767,7 @@
   async function sendFeedbackReviewEmail(record = {}, options = {}) {
     const id = record?.id || record?.data?.id || options.id;
     if (!id) return null;
-    const directus = "https://native-long-island-archive.directus.app";
+    const directus = "https://directus.nativelongisland.com";
     const endpoint = new URL("feedback-email.php", window.location.href);
     const response = await fetch(endpoint.toString(), {
       method: "POST",
@@ -12474,7 +12474,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     });
     const MAP_UTILS = window.NLI_SHARED_MAP_UTILS || {};
     const normalizeComparisonText = SHARED_UTILS.normalizeText || (value => String(value || "").toLowerCase().trim());
-    const DIRECTUS = SHARED_CONFIG.directusUrl || "https://native-long-island-archive.directus.app";
+    const DIRECTUS = SHARED_CONFIG.directusUrl || "https://directus.nativelongisland.com";
     const ADMIN_NOTIFICATION_FLOW_IDS = {
       approveSuggestion: "6f80f94d-c0d9-4266-9291-2a455e7a7f8d",
       declineSuggestion: "dd749434-2093-4d04-8ec4-5084400ce14c"
@@ -12507,6 +12507,45 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const EXHIBIT_MARKER_ICON = "assets/map-icons/exhibit-framed-landscape-marker.png";
     const HEADER_IMAGE_BLUE_PLACEHOLDER_ICON_IDS = new Set(["18979e5a-120e-4af1-b711-9867a67936eb"]);
     const TEXT_ONLY_GREEN_PLACEHOLDER_ICON = "assets/map-icons/acombamack-green-dot-placeholder.png";
+    const APK_LOCAL_MAP_ICON_OVERRIDES = Object.freeze({
+      "1eb120bb-fff6-4bd5-9c6e-062d18454856": "assets/map-icons/historicalsite-marker.png",
+      "02e1cfbf-55b7-4276-abe0-fb5fa18352d4": "assets/map-icons/fishingsite-marker.png",
+      "3975e162-74df-4858-a1db-5aa560b4e4fc": "assets/map-icons/burialsite-marker.png",
+      "903968a4-64a0-4a70-b7ce-7430ec4d3e8b": "assets/map-icons/shellheap-marker.png",
+      "253f1ea8-eebf-46cf-bb28-8d17c0734eae": "assets/map-icons/historicalsite-marker.png",
+      "de9dbd0c-551d-4568-b487-d1142eaebadc": "assets/map-icons/sacredsite-marker.png",
+      "93a5cfa5-bc2c-426e-9be5-ad80d1181c0e": "assets/map-icons/powwowground-marker.png",
+      "ce3d3f40-95fd-47f8-887d-e000411b9369": "assets/map-icons/historicalsite-marker.png",
+      "f7b0a998-7baf-42fe-a94d-7f33afae43a7": "assets/map-icons/church-marker.png",
+      "7daa69ee-9773-433b-a52b-5447bf28d475": "assets/map-icons/ayeuonganit-wampum-ayimooup-icon.png",
+      "75d778f9-5728-47a3-a7af-9976a7bea1b9": "assets/map-icons/bethel-christian-laurel-hill-icon.png",
+      "29a78e22-70d0-4f0a-91e6-658072411469": "assets/map-icons/canoe-place-chapel-icon.png",
+      "d3d05fdf-43fc-441c-a213-b24844d1cc77": "assets/map-icons/circassian-shipwreck-icon.png",
+      "3b60bd8c-0a3b-40ee-b485-18465fb30355": "assets/map-icons/conscience-point-icon.png",
+      "204485ed-5e28-4fbb-b455-3cb63a69a3f9": "assets/map-icons/cove-realty-site-icon.png",
+      "a6737992-c153-4ab2-a595-ef1ceff3c7db": "assets/map-icons/devils-footprint-icon.png",
+      "fd0b9061-a37e-47e9-9736-e72d7a12cfb0": "assets/map-icons/eastville-icon.png",
+      "94d941a0-038e-42b7-824c-f12b2fbd1095": "assets/map-icons/elliott-brooks-carvings-icon.png",
+      "482e2fb0-420a-4b95-b80e-bd4cf119be7d": "assets/map-icons/fowler-house-icon.png",
+      "0c9a0aca-543d-47d0-aced-7cc9630710da": "assets/map-icons/halsey-house-icon.png",
+      "d50ea654-5470-495d-98e4-8b60c0c34f57": "assets/map-icons/horse-barn-site-icon.png",
+      "7934a356-b60b-47bb-b7d7-58ae61aa301f": "assets/map-icons/howell-home-icon.png",
+      "e98ed5ef-1b3c-4a49-a7d6-81084516104c": "assets/map-icons/manitou-hill-icon.png",
+      "b2562ac4-4d51-4536-bd9e-b1f930f6e908": "assets/map-icons/mas-house-logo-marker.png",
+      "2833b659-933b-4456-a45b-861dcb73a46c": "assets/map-icons/matinecock-way-icon.png",
+      "45f2e7fd-636d-48e9-9e36-ed5ba2dd669e": EXHIBIT_MARKER_ICON,
+      "051fb219-f05e-4fee-a2d9-a6a837ca3b45": "assets/map-icons/shinnecock-hills-golf-club-icon.png",
+      "5a1d550a-10f1-4090-aa54-44120290ed49": "assets/map-icons/shinnecock-reservation-flag-icon.png",
+      "8c60c835-6c14-42c9-82a4-bd9bc462747c": "assets/map-icons/shinnecock-monument-icon.png",
+      "6fffc301-439e-4c15-bc6d-b3e18e2df14c": "assets/map-icons/southold-museum-icon.png",
+      "de8dcc31-4398-4287-8fd1-7ab5bc3c8405": "assets/map-icons/stephen-talkhouse-house-icon.png",
+      "73ada1c6-be6c-4f93-a038-7c02f7e9c982": "assets/map-icons/st-matthew-chapel-icon.png",
+      "1768130a-aff0-41bd-830e-e071250cead6": "assets/map-icons/sugar-loaf-hill-icon.png",
+      "282c9aa3-a264-44f1-ba48-5df26be16cc3": "assets/map-icons/sylvester-manor-icon.png",
+      "29a08e0a-5ebb-449b-ae57-f1d9d571b114": "assets/map-icons/unkechaug-reservation-flag-icon.png",
+      "e0fadae2-69d2-4fec-a85e-afcabb384f0c": "assets/map-icons/wertheim-refuge-icon.png",
+      "cfb5f041-859b-448c-b980-d91d6b620d4e": "assets/map-icons/william-floyd-estate-icon.png"
+    });
     const LAND_MASK_URL = `long-island-land-ma${"sk"}.geojson`;
     const LAND_MASK_VERSION = "2026-05-18";
     const LONG_ISLAND_BOUNDS = [[-75.15, 39.75], [-70.65, 42.05]];
@@ -14423,8 +14462,57 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const territory = territoryForSite(site);
       return `
         <h2>${escapeHtml(site.title)}</h2>
+        ${placeAdoptionBylineHtml(site)}
         <p class="detail-meta">${escapeHtml(siteSubtitle(site))} ${distanceLabel(site) ? ` - ${escapeHtml(distanceLabel(site))}` : ""}</p>
         ${territory ? `<button class="detail-territory-link" type="button" data-site-territory-slug="${escapeHtml(territory.slug)}">On ${escapeHtml(territory.title)}</button>` : ""}
+      `;
+    }
+
+    function placeAdoptionDisplayName(item = {}) {
+      const fields = [
+        item.adopted_by_display_name,
+        item.adopted_by_name,
+        item.adopter_display_name,
+        item.adopter_name,
+        item.place_steward_name,
+        item.supporter_display_name
+      ];
+      return publicCleanText(fields.find(Boolean) || "");
+    }
+
+    function placeAdoptionIsActive(item = {}) {
+      const name = placeAdoptionDisplayName(item);
+      if (!name) return false;
+      const status = normalizeComparisonText(item.adoption_status || item.adopted_status || item.place_stewardship_status || "");
+      if (item.adoption_active === false || item.place_stewardship_active === false) return false;
+      return !["inactive", "expired", "cancelled", "canceled", "ended"].includes(status);
+    }
+
+    function placeAdoptionBylineHtml(item = {}) {
+      if (!placeAdoptionIsActive(item)) return "";
+      return `<p class="place-adoption-byline">Adopted by ${escapeHtml(placeAdoptionDisplayName(item))}</p>`;
+    }
+
+    function mobileAdoptPlaceCtaHtml(item = {}) {
+      const title = publicCleanText(item.title || item.polyname || item.name || "this place");
+      if (!title) return "";
+      const slug = publicCleanText(item.slug || item.id || title);
+      const activeName = placeAdoptionDisplayName(item);
+      const active = placeAdoptionIsActive(item);
+      return `
+        <section class="section adopt-place-section" data-adopt-place-section>
+          <div class="adopt-place-sign">
+            <span class="adopt-place-kicker">${active ? "Place Stewardship" : "Adopt This Place"}</span>
+            <h3>${active ? `Adopted by ${escapeHtml(activeName)}` : "Adopt This Place"}</h3>
+            <p>${active
+              ? escapeHtml(`${activeName} helps support care, research, source review, and public information connected to ${title}.`)
+              : escapeHtml(`For $25/month, registered supporters can help steward ${title}. Confirmed adopters may have their public display name shown below the listing title as "Adopted by Name."`)}</p>
+            <p class="adopt-place-note">${escapeHtml("Adoption supports the map, sources, community knowledge, and respectful updates. It does not imply ownership or permission to access private or sensitive places.")}</p>
+            <button class="action adopt-place-button" type="button" data-mobile-adopt-place data-adopt-place-slug="${escapeHtml(slug)}" data-adopt-place-title="${escapeHtml(title)}">
+              ${active ? "Add support for this place" : "Adopt this place - $25/month"}
+            </button>
+          </div>
+        </section>
       `;
     }
 
@@ -18141,6 +18229,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function siteMapIconUrl(site) {
       const rawIcon = String(site?.map_icon || "").trim();
+      if (isNativeAndroidApp()) {
+        const localIcon = APK_LOCAL_MAP_ICON_OVERRIDES[rawIcon] || (SITE_UTILS.isExhibitSite(site) ? EXHIBIT_MARKER_ICON : "");
+        return localIcon || "";
+      }
       if (HEADER_IMAGE_BLUE_PLACEHOLDER_ICON_IDS.has(rawIcon) && !siteHasHeaderImage(site)) return TEXT_ONLY_GREEN_PLACEHOLDER_ICON;
       return MEDIA_UTILS.siteMapIconUrl(site, { directusAssetUrl }) || (SITE_UTILS.isExhibitSite(site) ? EXHIBIT_MARKER_ICON : "");
     }
@@ -18184,6 +18276,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const key = mobileSiteIconKey(site);
         const url = siteMapIconUrl(site);
         if (!key || !url || state.mobileSiteIconImagesFailed.has(key)) return;
+        if (isNativeAndroidApp() && !/^assets\/map-icons\//i.test(url)) return;
         if (state.map.hasImage?.(key)) {
           state.mobileSiteIconImagesLoaded.add(key);
           return;
@@ -22109,6 +22202,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         ${whyThisMattersHtml(site)}
         ${relatedSitesSection(site)}
         ${sourcesEvidenceSection(site)}
+        ${mobileAdoptPlaceCtaHtml(site)}
         ${discussionHtml("site", site)}
         <div class="actions">
           <a class="action" href="${escapeHtml(googleMapsUrl(site))}" target="_blank" rel="noreferrer">Directions</a>
@@ -25075,6 +25169,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (event.target.id === "open-story-current") openSheet(storySheetEl);
       if (event.target.closest("[data-open-login]")) {
         openSheet(loginSheetEl);
+        return;
+      }
+      const adoptPlaceButton = event.target.closest("[data-mobile-adopt-place]");
+      if (adoptPlaceButton) {
+        event.preventDefault();
+        openSupportPanel({
+          adoption: {
+            siteSlug: adoptPlaceButton.dataset.adoptPlaceSlug || state.selectedSite?.slug || "",
+            siteTitle: adoptPlaceButton.dataset.adoptPlaceTitle || state.selectedSite?.title || "this place",
+            amount: 25
+          }
+        });
         return;
       }
       if (event.target.closest("[data-demo-login-inline]")) return;

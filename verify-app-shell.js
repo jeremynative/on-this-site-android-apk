@@ -1,7 +1,7 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260704-apk-snapshot-refresh";
-const expectedUrl = "https://nativelongisland.com/mobile-app.html";
+const expectedBuild = "20260704-apk-vps-shell";
+const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
 const bundledAppPath = "app/src/main/assets/mobile-app.html";
@@ -55,6 +55,10 @@ requireText("isSiteGroundChallengeUrl", "Android shell must detect SiteGround ch
 requireText("loadBundledFallback(\"siteground-challenge-start\")", "Android shell must switch to the bundled fallback as soon as SiteGround challenge navigation starts.");
 requireText("shouldIgnoreLifecycleMainFrameReload", "Android shell must ignore non-explicit main-frame reloads after the app has loaded.");
 requireText("appShellLoaded = true;", "Android shell must remember when the app shell has loaded.");
+requireText('"directus.nativelongisland.com".equalsIgnoreCase(host)', "Android shell must treat the VPS-hosted app shell as an archive host.");
+requireText('"nativelongisland.com".equalsIgnoreCase(host) && path != null && path.startsWith("/assets/")', "Android shell must not intercept Directus root asset URLs as bundled app assets.");
+requireText('path.startsWith("/app/assets/")', "Android shell must serve VPS app-shell assets from the bundled APK when available.");
+requireText('"/app/long-island-land-mask.geojson".equals(path)', "Android shell must serve the VPS app-shell land mask from the bundled APK when available.");
 requireText("loadingBundledFallback && \"/mobile-app-live.html\".equals(path)", "Android shell must not intercept the live mobile archive unless the fallback is active.");
 requireText("loadingBundledFallback && \"/mobile-app.html\".equals(path)", "Android shell must serve the full bundled archive when live Directus startup falls back.");
 requireText('assetName = "mobile-app.html";', "Android shell must serve embedded mobile data for the full archive fallback.");
@@ -66,7 +70,7 @@ requireText("androidApkStartupScript", "Android shell must inject APK startup gu
 requireText("__nliAndroidGeoGateInstalled", "Android shell must install the APK geolocation gate.");
 requireText("window.NLI_APK_SNAPSHOT_MODE=true;", "Android shell must mark the bundled app as a snapshot APK.");
 requireText("window.NLI_DISABLE_DIRECTUS_RUNTIME=true;", "Android shell must disable Directus runtime calls in the snapshot APK.");
-requireText("native-long-island-archive.directus.app", "Android shell must block Directus requests while the API cycle is exhausted.");
+requireText("directus.nativelongisland.com", "Android shell must block Directus requests while the APK snapshot is offline.");
 requireText("window.__nliAllowGeoUntil=Date.now()+120000;", "Android shell must allow the app's startup Near me location request.");
 if (!manifest.includes("android.permission.POST_NOTIFICATIONS")) {
   throw new Error("Android shell must request notification permission for nearby site alerts.");
@@ -101,11 +105,11 @@ if (source.includes("webView.clearCache(true)")) {
   throw new Error("Android shell must not clear WebView cache/cookies on every startup.");
 }
 const refreshAppMatch = source.match(/void refreshApp\(\) \{[\s\S]*?\n    \}/);
-if (!refreshAppMatch || !refreshAppMatch[0].includes('loadBundledFallback("startup-snapshot-shell");')) {
-  throw new Error("Android shell must start from the bundled snapshot shell while Directus API usage is paused.");
+if (!refreshAppMatch || !refreshAppMatch[0].includes("webView.loadUrl(url, headers);")) {
+  throw new Error("Android shell must start from the live self-hosted mobile shell.");
 }
-if (refreshAppMatch[0].includes("webView.loadUrl(url, headers);")) {
-  throw new Error("Android shell must not show the SiteGround-challenged live URL during normal startup.");
+if (refreshAppMatch[0].includes('loadBundledFallback("startup-snapshot-shell");')) {
+  throw new Error("Android shell must not start from the emergency bundled snapshot now that self-hosted Directus is live.");
 }
 const onResumeMatch = source.match(/protected void onResume\(\) \{[\s\S]*?\n    \}/);
 if (!onResumeMatch || !onResumeMatch[0].includes("webView.onResume();")) {
@@ -239,7 +243,10 @@ requireBundledText('const SITE_LABEL_MIN_ZOOM = 10.75;', "Bundled Android app mu
 requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 13.35;', "Bundled Android app should show point labels at close neighborhood zoom.");
 requireBundledText('function prepareMobileSiteIconImage(image)', "Bundled Android app must normalize custom marker images before Mapbox rendering.");
 requireBundledText('id: "mobile-site-point-dots"', "Bundled Android app must render visible bundled point markers without remote icon images.");
-requireBundledText('if (!isNativeAndroidApp()) loadMobileSiteIconImages();', "Bundled Android app must not require remote marker icon image loading during snapshot startup.");
+requireBundledText('const APK_LOCAL_MAP_ICON_OVERRIDES = Object.freeze({', "Bundled Android app must map Directus marker icon ids to bundled local assets.");
+requireBundledText('if (isNativeAndroidApp() && !/^assets\\/map-icons\\//i.test(url)) return;', "Bundled Android app must ignore non-bundled marker icon URLs during snapshot startup.");
+requireBundledText('id: "mobile-site-icons"', "Bundled Android app must render local custom marker icons in the APK.");
+requireBundledText('data-mobile-adopt-place', "Bundled Android app must expose Adopt This Place from listing pages.");
 requireBundledText('function updateMobileHeaderInstruction()', "Bundled Android app must keep mobile content-count header text synced to bundled data.");
 requireBundledText('data-blog-count="10"', "Bundled Android app must retain the blog count fallback for the mobile header.");
 requireBundledText('"timelineEvents"', "Bundled Android app must include bundled timeline events in the offline snapshot.");

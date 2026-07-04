@@ -37,6 +37,7 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.MimeTypeMap;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -57,11 +58,11 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260704-apk-snapshot-refresh";
+    static final String APP_VERSION = "20260704-apk-vps-shell";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
-        "https://nativelongisland.com/mobile-app.html";
+        "https://directus.nativelongisland.com/app/mobile-app-live.html";
 
     private WebView webView;
     private View loadingCover;
@@ -253,11 +254,7 @@ public class MainActivity extends Activity {
                     loadBundledFallback("siteground-challenge");
                     return;
                 }
-                appShellLoaded = true;
-                if (BuildConfig.DEBUG) logLoadedAppState();
-                applyApkTimelineTrayFix();
-                dispatchPendingPlantPhoto();
-                hideLoadingCover();
+                validateLoadedAppShell(url);
             }
         });
 
@@ -302,17 +299,29 @@ public class MainActivity extends Activity {
 
     private WebResourceResponse bundledAppResponse(Uri uri) {
         if (uri == null) return null;
-        if (!"nativelongisland.com".equalsIgnoreCase(uri.getHost())) return null;
+        String host = uri.getHost();
+        boolean isArchiveHost = "nativelongisland.com".equalsIgnoreCase(host)
+            || "directus.nativelongisland.com".equalsIgnoreCase(host);
+        if (!isArchiveHost) return null;
         String path = uri.getPath();
         String assetName;
         String mimeType;
-        if (loadingBundledFallback && "/mobile-app-live.html".equals(path)) {
+        if ("nativelongisland.com".equalsIgnoreCase(host) && path != null && path.startsWith("/assets/") && !path.contains("..")) {
+            assetName = path.substring(1);
+            mimeType = mimeTypeForAsset(assetName);
+        } else if (path != null && path.startsWith("/app/assets/") && !path.contains("..")) {
+            assetName = path.substring("/app/".length());
+            mimeType = mimeTypeForAsset(assetName);
+        } else if (loadingBundledFallback && "/mobile-app-live.html".equals(path)) {
             assetName = "mobile-app-live.html";
             mimeType = "text/html";
         } else if (loadingBundledFallback && "/mobile-app.html".equals(path)) {
             assetName = "mobile-app.html";
             mimeType = "text/html";
         } else if ("/long-island-land-mask.geojson".equals(path)) {
+            assetName = "long-island-land-mask.geojson";
+            mimeType = "application/geo+json";
+        } else if ("/app/long-island-land-mask.geojson".equals(path)) {
             assetName = "long-island-land-mask.geojson";
             mimeType = "application/geo+json";
         } else {
@@ -376,20 +385,47 @@ public class MainActivity extends Activity {
         );
     }
 
+    private void validateLoadedAppShell(String url) {
+        if (webView == null) return;
+        webView.evaluateJavascript(
+            "(function(){try{var hasShell=!!(document.getElementById('map')||document.querySelector('.app')||document.querySelector('.mobile-app')||document.querySelector('[data-mobile-app]'));var text=(document.body&&document.body.innerText||'').slice(0,240);return hasShell||/On This Site|listings loaded|Search/i.test(text)?'ready':'empty';}catch(error){return 'empty:'+String(error&&error.message||error);}})();",
+            value -> {
+                if (BuildConfig.DEBUG) logLoadedAppState();
+                if (value == null || !value.contains("ready")) {
+                    Log.w(LOG_TAG, "WebView finished without archive UI: " + url);
+                    if (!loadingBundledFallback && isNativeLongIslandUrl(url)) {
+                        loadBundledFallback("empty-app-shell");
+                        return;
+                    }
+                }
+                appShellLoaded = true;
+                applyApkTimelineTrayFix();
+                dispatchPendingPlantPhoto();
+                hideLoadingCover();
+            }
+        );
+    }
+
+    private boolean isNativeLongIslandUrl(String url) {
+        if (url == null) return false;
+        Uri uri = Uri.parse(url);
+        return "nativelongisland.com".equalsIgnoreCase(uri.getHost());
+    }
+
     private String androidApkStartupScript() {
         String script = "(function(){"
             + "if(window.__nliAndroidGeoGateInstalled)return;"
             + "window.__nliAndroidGeoGateInstalled=true;"
             + "window.NLI_APK_SNAPSHOT_MODE=true;"
             + "window.NLI_DISABLE_DIRECTUS_RUNTIME=true;"
-            + "window.NLI_DIRECTUS_PAUSED_MESSAGE='Directus-backed account and community updates are paused in this APK snapshot until the API request cycle resets.';"
+            + "window.NLI_DIRECTUS_PAUSED_MESSAGE='Directus-backed account and community updates are paused in this offline APK snapshot.';"
             + "if(!window.__nliAndroidDirectusPauseInstalled&&window.fetch){"
                 + "window.__nliAndroidDirectusPauseInstalled=true;"
                 + "var originalFetch=window.fetch.bind(window);"
                 + "window.fetch=function(input,init){"
                     + "var url='';"
                     + "try{url=String((input&&input.url)||input||'');}catch(error){url='';}"
-                    + "if(url.indexOf('native-long-island-archive.directus.app')!==-1){"
+                    + "if(url.indexOf('directus.nativelongisland.com')!==-1){"
                         + "return Promise.reject(new Error(window.NLI_DIRECTUS_PAUSED_MESSAGE));"
                     + "}"
                     + "return originalFetch(input,init);"
@@ -452,6 +488,20 @@ public class MainActivity extends Activity {
             Log.d(LOG_TAG, "Forwarding WebView tap to map bridge: x=" + tapX + " y=" + tapY);
             webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "Map bridge result: " + value));
         }, MAP_TAP_BRIDGE_DELAY_MS);
+    }
+
+    private String mimeTypeForAsset(String assetName) {
+        String extension = MimeTypeMap.getFileExtensionFromUrl(assetName);
+        String mimeType = extension == null ? null : MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.toLowerCase());
+        if (mimeType != null && !mimeType.isEmpty()) return mimeType;
+        if (assetName.endsWith(".js")) return "application/javascript";
+        if (assetName.endsWith(".css")) return "text/css";
+        if (assetName.endsWith(".svg")) return "image/svg+xml";
+        if (assetName.endsWith(".webp")) return "image/webp";
+        if (assetName.endsWith(".png")) return "image/png";
+        if (assetName.endsWith(".jpg") || assetName.endsWith(".jpeg")) return "image/jpeg";
+        if (assetName.endsWith(".json") || assetName.endsWith(".geojson")) return "application/json";
+        return "application/octet-stream";
     }
 
     private void cacheAndroidSearchResultTap(MotionEvent event) {
@@ -631,7 +681,10 @@ public class MainActivity extends Activity {
         lastRefreshAt = System.currentTimeMillis();
         appShellLoaded = false;
         loadingBundledFallback = false;
-        loadBundledFallback("startup-snapshot-shell");
+        String url = freshAppUrl();
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Cache-Control", "no-cache");
+        webView.loadUrl(url, headers);
     }
 
     private boolean shouldIgnoreLifecycleMainFrameReload(String reason) {
@@ -646,6 +699,7 @@ public class MainActivity extends Activity {
         if (webView == null || loadingBundledFallback) return;
         loadingBundledFallback = true;
         Log.w(LOG_TAG, "Loading bundled mobile archive fallback: " + reason);
+        webView.stopLoading();
         String appUrl = freshAppUrl();
         Thread loader = new Thread(() -> {
             String html;
@@ -660,6 +714,7 @@ public class MainActivity extends Activity {
             }
             runOnUiThread(() -> {
                 if (webView == null || !loadingBundledFallback) return;
+                webView.stopLoading();
                 webView.loadDataWithBaseURL(appUrl, html, "text/html", "UTF-8", appUrl);
             });
         }, "ots-bundled-mobile-loader");
