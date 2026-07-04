@@ -1,6 +1,6 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260704-apk-marker-fallback";
+const expectedBuild = "20260704-apk-snapshot-refresh";
 const expectedUrl = "https://nativelongisland.com/mobile-app.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -240,6 +240,9 @@ requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 13.35;', "Bundled Android 
 requireBundledText('function prepareMobileSiteIconImage(image)', "Bundled Android app must normalize custom marker images before Mapbox rendering.");
 requireBundledText('id: "mobile-site-point-dots"', "Bundled Android app must render visible bundled point markers without remote icon images.");
 requireBundledText('if (!isNativeAndroidApp()) loadMobileSiteIconImages();', "Bundled Android app must not require remote marker icon image loading during snapshot startup.");
+requireBundledText('function updateMobileHeaderInstruction()', "Bundled Android app must keep mobile content-count header text synced to bundled data.");
+requireBundledText('data-blog-count="10"', "Bundled Android app must retain the blog count fallback for the mobile header.");
+requireBundledText('"timelineEvents"', "Bundled Android app must include bundled timeline events in the offline snapshot.");
 requireBundledText('"text-opacity": ["interpolate", ["linear"], ["zoom"], SITE_POINT_LABEL_MIN_ZOOM, 0, SITE_POINT_LABEL_MIN_ZOOM + 0.35, 1]', "Bundled Android point labels must fade in around the local-area zoom threshold.");
 requireBundledPattern(/mapSourceRevision:\s*0[\s\S]*?mapSourceAppliedKey:\s*""[\s\S]*?function\s+invalidateMapSourceCache\(\)[\s\S]*?state\.mapSourceRevision\s*\+=\s*1;[\s\S]*?function\s+refreshMobileMapSources\(options\s*=\s*\{\}\)[\s\S]*?state\.mapSourceAppliedKey\s*===\s*sourceKey\)\s*return;[\s\S]*?state\.mapSourceAppliedKey\s*=\s*sourceKey;/, "Bundled Android map source refresh must skip repeated identical GeoJSON setData work.");
 requireBundledPattern(/state\.map\.on\("zoomend",\s*\(\)\s*=>\s*\{[\s\S]*?syncMarkers\(\{\s*auxiliary:\s*false\s*\}\);[\s\S]*?syncMapStoryMarkers\(\);[\s\S]*?\}\);/, "Bundled Android zoom should refresh marker offsets once on zoomend without full auxiliary marker work.");
