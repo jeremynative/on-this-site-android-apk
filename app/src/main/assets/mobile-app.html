@@ -22556,28 +22556,30 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         source: "mobile-sites",
         filter: ["==", ["geometry-type"], "Point"],
         paint: {
-          "circle-radius": ["case", ["==", ["get", "has_icon"], true], ["interpolate", ["linear"], ["zoom"], 6, 3, 10, 3.8, 14, 5], ["interpolate", ["linear"], ["zoom"], 6, 3.8, 10, 4.8, 14, 6.2]],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 4.4, 10, 5.8, 14, 7.2],
           "circle-color": ["case", ["==", ["get", "has_header_image"], true], "#326fe3", "#496f5d"],
-          "circle-opacity": ["case", ["==", ["get", "has_icon"], true], 0.52, 0.9],
-          "circle-stroke-color": "rgba(255,255,255,0.94)",
-          "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 6, 1, 12, 1.5],
-          "circle-stroke-opacity": 0.95
+          "circle-opacity": 0.92,
+          "circle-stroke-color": "rgba(255,255,255,0.36)",
+          "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 6, 0.4, 12, 0.8],
+          "circle-stroke-opacity": 0.55
         }
       });
-      state.map.addLayer({
-        id: "mobile-site-icons",
-        type: "symbol",
-        source: "mobile-sites",
-        filter: ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "has_icon"], true]],
-        layout: {
-          "icon-image": ["get", "icon_key"],
-          "icon-size": ["interpolate", ["linear"], ["zoom"], 6, 0.72, 10, 0.9, 14, 1.08],
-          "icon-anchor": "center",
-          "icon-allow-overlap": true,
-          "icon-ignore-placement": true,
-          "icon-optional": true
-        }
-      });
+      if (!isNativeAndroidApp()) {
+        state.map.addLayer({
+          id: "mobile-site-icons",
+          type: "symbol",
+          source: "mobile-sites",
+          filter: ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "has_icon"], true]],
+          layout: {
+            "icon-image": ["get", "icon_key"],
+            "icon-size": ["interpolate", ["linear"], ["zoom"], 6, 0.72, 10, 0.9, 14, 1.08],
+            "icon-anchor": "center",
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true,
+            "icon-optional": true
+          }
+        });
+      }
       state.map.addLayer({
         id: "mobile-biography-path-lines",
         type: "line",
@@ -22647,7 +22649,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           "text-halo-width": 1.25
         }
       });
-      loadMobileSiteIconImages();
+      if (!isNativeAndroidApp()) loadMobileSiteIconImages();
       state.map.addSource("mobile-territory-labels", { type: "geojson", data: sourceData.territoryLabels });
       state.map.addLayer({
         id: "mobile-territory-labels",
