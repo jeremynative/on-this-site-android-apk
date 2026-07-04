@@ -1,6 +1,6 @@
 ﻿const fs = require("fs");
 
-const expectedBuild = "20260704-apk-vps-shell";
+const expectedBuild = "20260704-apk-vps-shell-r3";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -72,6 +72,15 @@ requireText("window.NLI_APK_SNAPSHOT_MODE=true;", "Android shell must mark the b
 requireText("window.NLI_DISABLE_DIRECTUS_RUNTIME=true;", "Android shell must disable Directus runtime calls in the snapshot APK.");
 requireText("directus.nativelongisland.com", "Android shell must block Directus requests while the APK snapshot is offline.");
 requireText("window.__nliAllowGeoUntil=Date.now()+120000;", "Android shell must allow the app's startup Near me location request.");
+if (!bundledLiveApp.includes("function isApkSnapshotMode()") || !bundledApp.includes("function isApkSnapshotMode()")) {
+  throw new Error("Bundled mobile shells must distinguish live Android mode from offline APK snapshot mode.");
+}
+if (!bundledLiveApp.includes("const text = isApkSnapshotMode()")) {
+  throw new Error("The live Android shell must not label every Android WebView as an APK snapshot.");
+}
+if (!/if \(isApkSnapshotMode\(\)\) \{\r?\n        const localIcon = APK_LOCAL_MAP_ICON_OVERRIDES/.test(bundledLiveApp)) {
+  throw new Error("The live Android shell must allow VPS-hosted icon URLs outside offline snapshot mode.");
+}
 if (!manifest.includes("android.permission.POST_NOTIFICATIONS")) {
   throw new Error("Android shell must request notification permission for nearby site alerts.");
 }
@@ -244,7 +253,7 @@ requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 13.35;', "Bundled Android 
 requireBundledText('function prepareMobileSiteIconImage(image)', "Bundled Android app must normalize custom marker images before Mapbox rendering.");
 requireBundledText('id: "mobile-site-point-dots"', "Bundled Android app must render visible bundled point markers without remote icon images.");
 requireBundledText('const APK_LOCAL_MAP_ICON_OVERRIDES = Object.freeze({', "Bundled Android app must map Directus marker icon ids to bundled local assets.");
-requireBundledText('if (isNativeAndroidApp() && !/^assets\\/map-icons\\//i.test(url)) return;', "Bundled Android app must ignore non-bundled marker icon URLs during snapshot startup.");
+requireBundledText('if (isApkSnapshotMode() && !/^assets\\/map-icons\\//i.test(url)) return;', "Bundled Android app must ignore non-bundled marker icon URLs during snapshot startup.");
 requireBundledText('id: "mobile-site-icons"', "Bundled Android app must render local custom marker icons in the APK.");
 requireBundledText('data-mobile-adopt-place', "Bundled Android app must expose Adopt This Place from listing pages.");
 requireBundledText('function updateMobileHeaderInstruction()', "Bundled Android app must keep mobile content-count header text synced to bundled data.");
