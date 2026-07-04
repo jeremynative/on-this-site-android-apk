@@ -15162,7 +15162,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return window.setTimeout(callback, 250);
     }
 
-    function waitForMapbox(timeout = 3600) {
+    function waitForMapbox(timeout = 12000) {
       if (window.mapboxgl?.Map) return Promise.resolve(true);
       const script = document.getElementById("mapbox-gl-script");
       return new Promise(resolve => {
@@ -25871,7 +25871,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         installDetailPanelDrag();
         installNativeAndroidSearchWatch();
         if (nativeAndroid) {
-          hideLoadingScreen();
           await new Promise(resolve => window.requestAnimationFrame(resolve));
         }
         await openInitialRouteFromUrl();
@@ -25886,7 +25885,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           console.warn("Map did not initialize yet.", error);
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
         });
-        idleTask(refreshMobileSiteIconFieldsFromDirectus);
+        if (nativeAndroid) hideLoadingScreen();
+        if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) idleTask(refreshMobileSiteIconFieldsFromDirectus);
         state.mobileStartupRendering = false;
         const androidLifecycleMapRestored = androidLifecycleSnapshot ? restoreAndroidLifecycleMap(androidLifecycleSnapshot) : false;
         state.androidLifecycleRestored = Boolean(androidLifecycleSnapshot && (androidLifecycleMapRestored || androidLifecycleContentRestored));
@@ -25914,28 +25914,30 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             stabilizeAndroidMapPaint();
           })
           .catch(() => null));
-        idleTask(() => (state.profile ? ensureProfileStatsSynced() : Promise.resolve(false))
-          .then(() => awardDailyLoginReward({ silent: true }))
-          .then(result => {
-            if (result?.earned) {
-              renderProfile();
-              renderRewards();
-            }
-            scheduleMemberProfileActivityTracking();
-          })
-          .catch(() => null));
-        idleTask(() => loadDeferredData()
-          .then(() => state.profile && !state.profileActivitySynced ? ensureProfileActivitySynced() : true)
-          .then(() => {
-            if (state.profile) {
-              renderProfile();
-              renderRewards();
-            }
-            checkDailyHistoryMoment();
-            checkNewContentAlerts();
-            startMapStoryRefresh();
-          })
-          .catch(error => console.warn("Deferred archive data did not load yet.", error)));
+        if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {
+          idleTask(() => (state.profile ? ensureProfileStatsSynced() : Promise.resolve(false))
+            .then(() => awardDailyLoginReward({ silent: true }))
+            .then(result => {
+              if (result?.earned) {
+                renderProfile();
+                renderRewards();
+              }
+              scheduleMemberProfileActivityTracking();
+            })
+            .catch(() => null));
+          idleTask(() => loadDeferredData()
+            .then(() => state.profile && !state.profileActivitySynced ? ensureProfileActivitySynced() : true)
+            .then(() => {
+              if (state.profile) {
+                renderProfile();
+                renderRewards();
+              }
+              checkDailyHistoryMoment();
+              checkNewContentAlerts();
+              startMapStoryRefresh();
+            })
+            .catch(error => console.warn("Deferred archive data did not load yet.", error)));
+        }
       } catch (error) {
         state.mobileStartupRendering = false;
         statusEl.textContent = "Could not load archive";
