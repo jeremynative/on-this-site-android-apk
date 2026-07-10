@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260710-mobile-delivery-r1";
+const expectedBuild = "20260710-mobile-overlays-r2";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
