@@ -4450,49 +4450,6 @@
       font-size: 15px;
     }
 
-    .section-content h2,
-    .section-content h3 {
-      margin: 20px 0 8px;
-      padding-top: 2px;
-      line-height: 1.25;
-    }
-
-    .section-content h2:first-child,
-    .section-content h3:first-child {
-      margin-top: 0;
-      padding-top: 0;
-    }
-
-    .section-content blockquote {
-      margin: 12px 0;
-      padding: 0 0 0 14px;
-      border-left: 3px solid #c9d2c8;
-      color: #475148;
-    }
-
-    .section-content .place-name-quote {
-      margin: 14px 0 2px;
-      padding: 12px 14px;
-      border-left: 4px solid var(--accent);
-      border-radius: 0 8px 8px 0;
-      background: rgba(232, 238, 229, 0.72);
-      color: var(--ink);
-    }
-
-    .section-content .place-name-quote p {
-      margin: 0 0 8px;
-      font-weight: 700;
-      line-height: 1.45;
-    }
-
-    .section-content .place-name-quote cite {
-      display: block;
-      color: var(--muted);
-      font-style: normal;
-      font-size: 13px;
-      line-height: 1.35;
-    }
-
     .form-status {
       margin: 10px 0 0;
       padding: 9px 10px;
@@ -4704,6 +4661,213 @@
       color: #565b56;
       font-size: 12px;
       line-height: 1.35;
+    }
+
+    .mobile-moving-biography-mapbox-icon,
+    .mobile-moving-dog-mapbox-icon,
+    .mobile-moving-whale-mapbox-icon {
+      display: grid;
+      place-items: center;
+      overflow: visible;
+      border: 0 !important;
+      background: transparent !important;
+      pointer-events: auto;
+      touch-action: manipulation;
+    }
+
+    .mobile-moving-biography-mapbox-icon {
+      width: 44px !important;
+      height: 44px !important;
+      z-index: 56;
+    }
+
+    .mobile-moving-biography-marker,
+    .mobile-moving-dog-marker,
+    .mobile-moving-whale-marker {
+      appearance: none;
+      position: relative;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      pointer-events: auto;
+      touch-action: manipulation;
+    }
+
+    .mobile-moving-biography-marker {
+      width: 44px;
+      height: 44px;
+    }
+
+    .mobile-moving-biography-shell {
+      position: relative;
+      display: block;
+      width: 24px;
+      height: 24px;
+    }
+
+    .mobile-moving-biography-shell img {
+      position: relative;
+      z-index: 2;
+      display: block;
+      width: auto !important;
+      height: 24px !important;
+      max-width: 24px !important;
+      max-height: 24px !important;
+      object-fit: contain;
+      filter: drop-shadow(0 1px 2px rgba(23, 32, 25, 0.32));
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .mobile-moving-biography-canoe {
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      z-index: 4;
+      width: 25px;
+      height: 7px;
+      transform: translateX(-50%);
+      border: 1px solid #3f2916;
+      border-radius: 999px 999px 700px 700px / 80% 80% 55% 55%;
+      background: #74491f;
+      box-shadow: 0 1px 2px rgba(23, 32, 25, 0.26);
+      opacity: 0;
+      transition: opacity 240ms ease;
+      pointer-events: none;
+    }
+
+    .mobile-moving-biography-marker[data-on-water="true"] .mobile-moving-biography-canoe {
+      opacity: 1;
+    }
+
+    .mobile-moving-biography-label,
+    .mobile-moving-dog-label {
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 4px);
+      display: none;
+      min-width: 80px;
+      max-width: 176px;
+      transform: translateX(-50%);
+      color: #1f2d25;
+      font-weight: 850;
+      line-height: 1.12;
+      text-align: center;
+      text-shadow:
+        -1px -1px 0 rgba(255, 255, 255, 0.94),
+        1px -1px 0 rgba(255, 255, 255, 0.94),
+        -1px 1px 0 rgba(255, 255, 255, 0.94),
+        1px 1px 0 rgba(255, 255, 255, 0.94),
+        0 2px 3px rgba(18, 26, 22, 0.28);
+      pointer-events: none;
+    }
+
+    .mobile-moving-biography-marker[data-show-label="true"] .mobile-moving-biography-label,
+    .mobile-moving-dog-marker[data-show-label="true"] .mobile-moving-dog-label {
+      display: block;
+    }
+
+    .mobile-moving-biography-name,
+    .mobile-moving-biography-status {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .mobile-moving-biography-name {
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .mobile-moving-biography-status {
+      display: -webkit-box;
+      margin-top: 2px;
+      color: rgba(55, 47, 37, 0.76);
+      font-size: 9.5px;
+      font-weight: 700;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+
+    .mobile-moving-dog-mapbox-icon {
+      width: 30px !important;
+      height: 24px !important;
+      z-index: 55;
+    }
+
+    .mobile-moving-dog-marker {
+      width: 30px;
+      height: 24px;
+    }
+
+    .mobile-moving-dog-shell {
+      display: block;
+      width: 24px !important;
+      height: 16px !important;
+      transform-origin: 50% 50%;
+      transition: transform 700ms ease;
+      will-change: transform;
+    }
+
+    .mobile-moving-dog-marker[data-direction="left"] .mobile-moving-dog-shell {
+      transform: scaleX(-1);
+    }
+
+    .mobile-moving-dog-shell img {
+      display: block;
+      width: 24px !important;
+      max-width: 24px !important;
+      max-height: 16px !important;
+      height: auto;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 3px rgba(12, 29, 47, 0.30));
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .mobile-moving-dog-label {
+      min-width: 0;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .mobile-moving-whale-mapbox-icon {
+      width: 74px !important;
+      height: 46px !important;
+      z-index: 54;
+    }
+
+    .mobile-moving-whale-marker {
+      width: 74px;
+      height: 46px;
+    }
+
+    .mobile-moving-whale-shell {
+      display: block;
+      width: 56px !important;
+      height: 29px !important;
+      transform-origin: 50% 50%;
+      transition: transform 900ms ease;
+      will-change: transform;
+    }
+
+    .mobile-moving-whale-marker[data-direction="left"] .mobile-moving-whale-shell {
+      transform: scaleX(-1) rotate(8deg);
+    }
+
+    .mobile-moving-whale-shell img {
+      display: block;
+      width: 56px !important;
+      max-width: 56px !important;
+      max-height: 29px !important;
+      height: auto;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 3px rgba(12, 29, 47, 0.34));
+      pointer-events: none;
+      user-select: none;
     }
 
     .timeline-body img,
@@ -4975,7 +5139,7 @@
               <option value="blank">Blank</option>
             </select>
             <button class="ghost-button" data-app-page="contact" type="button">Contact</button>
-            <button class="ghost-button" id="mobile-kid-mode" type="button">Kid Mode</button>
+            <button class="ghost-button" id="mobile-learn-open" type="button">Learn</button>
             <button class="ghost-button" data-app-page="browse" type="button">Browse</button>
             <button class="ghost-button" data-app-page="blog" type="button">Blog</button>
             <button class="ghost-button" data-app-page="knowledgebase" type="button">Knowledgebase</button>
@@ -5067,7 +5231,7 @@
     <div class="sheet-body">
       <div class="login-hero">
         <strong>Contributor account</strong>
-        <p>Sign in once for contributor tools on the desktop map and mobile app. Visitors can close this screen and keep browsing.</p>
+        <p>Sign in once for contributor tools on the desktop map and mobile app. You can close this screen and keep browsing.</p>
       </div>
       <p class="summary login-intro">Use a contributor account for comments, achievements, visitor photos, suggested edits, and your public biography.</p>
       <div class="field login-field">
@@ -5405,22 +5569,28 @@
   const loginRewardFields = fields(["id", "member_profile", "login_date", "streak_day", "created_at"]);
   const followFields = fields(["id", "status", "follower_profile", "following_profile", "follower_name", "following_name", "created_at"]);
   const supportFields = fields(["id", "key", "title", "show_support_goal", "monthly_goal", "current_monthly_support", "donate_url", "support_note"]);
+  const siteAdoptionFields = [
+    "adopted_by_display_name", "adopted_by_name", "adopter_display_name", "adopter_name",
+    "place_steward_name", "supporter_display_name", "adoption_status", "adopted_status",
+    "place_stewardship_status", "adoption_active", "place_stewardship_active"
+  ];
   const desktopSiteFields = fields([
     "id", "title", "slug", "publication_status", "summary", "address_label", "site_type", "geojson", "display_geojson",
     "geometry_surface", "geometry_cleanup_status", "map_geometry_source", "map_fill_color", "map_opacity",
     "map_icon", "listing_image_file", "listing_image_url", "listing_image_thumb_url", "listing_image_alt",
     "activity_pin_until", "activity_pin_label", "activity_pin_title", "activity_pin_preview",
-    "show_print_purchase", "introduction_content", "history_content", "preservation_content", "oral_history_content",
-    "translation_content", "legends_and_lore_content", "last_reviewed", "wp_date", "known_plant_species", "ancestral_territory",
-    "ancestral_territory_note", "why_this_matters"
+    "show_print_purchase", "last_reviewed", "wp_date", "known_plant_species", "ancestral_territory",
+    "ancestral_territory_note", "why_this_matters",
+    ...siteAdoptionFields
   ]);
   const mobileSiteIndexFields = fields([
     "id", "title", "slug", "publication_status", "summary", "address_label", "site_type", "geojson", "display_geojson",
     "geometry_surface", "geometry_cleanup_status", "map_icon", "map_fill_color", "map_opacity",
     "listing_image_file", "listing_image_thumb_url", "listing_image_url", "listing_image_alt",
     "activity_pin_until", "activity_pin_label", "activity_pin_title", "activity_pin_preview",
-    "show_print_purchase", "introduction_content", "history_content", "translation_content",
-    "last_reviewed", "known_plant_species", "ancestral_territory", "ancestral_territory_note", "why_this_matters"
+    "show_print_purchase",
+    "last_reviewed", "known_plant_species", "ancestral_territory", "ancestral_territory_note", "why_this_matters",
+    ...siteAdoptionFields
   ]);
   const mobileSiteDetailFields = fields([
     "id", "title", "slug", "publication_status", "summary", "address_label", "site_type", "geojson", "display_geojson",
@@ -5434,9 +5604,11 @@
     "land_loss_title", "land_loss_content", "excavation_title", "excavation_content",
     "vandalism_title", "vandalism_content",
     "whereintheworld_title", "whereintheworld_content",
-    "last_reviewed", "wp_date", "known_plant_species", "ancestral_territory", "ancestral_territory_note", "why_this_matters"
+    "last_reviewed", "wp_date", "known_plant_species", "ancestral_territory", "ancestral_territory_note", "why_this_matters",
+    ...siteAdoptionFields
   ]);
-  const desktopWikiFields = fields(["id", "title", "slug", "summary", "why_this_matters", "source_url", "last_reviewed", "lastmod", "imported_at"]);
+  const desktopWikiFields = fields(["id", "title", "slug", "summary", "why_this_matters", "source_url", "biography_source_citation", "last_reviewed", "lastmod", "imported_at"]);
+  const mobileWikiIndexFields = fields(["id", "title", "slug", "summary", "why_this_matters", "source_url", "last_reviewed", "lastmod", "imported_at"]);
   const mobileWikiDetailFields = fields(["id", "title", "slug", "summary", "content", "why_this_matters", "source_url", "last_reviewed", "lastmod", "imported_at"]);
   const desktopPageFields = fields(["id", "title", "slug", "summary", "content_type", "wp_date", "featured_image_url"]);
   const desktopBlogFields = fields(["id", "title", "slug", "summary", "published_at", "featured_image_url"]);
@@ -5493,7 +5665,7 @@
       mobileSiteIndex: mobileSiteIndexFields,
       mobileSiteDetail: mobileSiteDetailFields,
       desktopWiki: desktopWikiFields,
-      mobileWikiIndex: desktopWikiFields,
+      mobileWikiIndex: mobileWikiIndexFields,
       mobileWikiDetail: mobileWikiDetailFields,
       desktopPage: desktopPageFields,
       desktopBlog: desktopBlogFields,
@@ -5963,43 +6135,6 @@
       .replace(/\b\w/g, letter => letter.toUpperCase());
   }
 
-  const SITE_TYPE_DISPLAY_LABELS = {
-    activism_protest: "Activism / Protest"
-  };
-
-  function normalizedSiteTypeKey(value) {
-    return String(value || "")
-      .trim()
-      .toLowerCase()
-      .replace(/[-\s]+/g, "_")
-      .replace(/[^a-z0-9_]+/g, "_")
-      .replace(/_+/g, "_")
-      .replace(/^_|_$/g, "");
-  }
-
-  function siteTypeHasSensitiveFlag(value) {
-    const key = normalizedSiteTypeKey(value);
-    return key === "sensitive" || key.startsWith("sensitive_") || key.endsWith("_sensitive") || key.includes("_sensitive_");
-  }
-
-  function publicSiteTypeKey(value) {
-    const key = normalizedSiteTypeKey(value);
-    if (!key) return "";
-    if (key === "sensitive") return "";
-    return key
-      .replace(/^sensitive_+/, "")
-      .replace(/_+sensitive_+/g, "_")
-      .replace(/_+sensitive$/, "")
-      .replace(/_+/g, "_")
-      .replace(/^_|_$/g, "");
-  }
-
-  function publicSiteTypeLabel(value) {
-    const key = publicSiteTypeKey(value);
-    if (!key) return siteTypeHasSensitiveFlag(value) ? "Sensitive Site" : "";
-    return SITE_TYPE_DISPLAY_LABELS[key] || titleCaseSiteType(key);
-  }
-
   function normalizeHexColor(value, fallback) {
     const text = String(value || "").trim();
     if (/^#[0-9a-f]{6}$/i.test(text)) return text;
@@ -6068,22 +6203,11 @@
       .trim();
   }
 
-  function normalizeOcrQuestionMarkQuotes(value) {
-    return String(value || "")
-      .replace(/([A-Za-z])\?(s|t|re|ve|ll|d|m)\b/g, "$1'$2")
-      .replace(/\b(or|as|called|titled|named)\?([^?\n<>]{1,80})\?/gi, (match, prefix, inner) => {
-        if (!/[A-Za-z]/.test(inner) || /[()=&/\\]/.test(inner)) return match;
-        return `${prefix} "${inner}"`;
-      })
-      .replace(/(^|[\s([{])\?([A-Za-z0-9][^?\n<>]{0,100})\?/g, (match, prefix, inner) => {
-        if (!/[A-Za-z]/.test(inner) || /https?:|www\.|[()=&/\\]/i.test(inner)) return match;
-        return `${prefix}"${inner}"`;
-      });
-  }
-
   function publicFacingWorkflowTextCleanup(value) {
     if (value == null || typeof value !== "string") return value;
-    return normalizeOcrQuestionMarkQuotes(value)
+    const vulnerableSites = ["vulnerable", "sites"].join(" ");
+    const historyShouldBeTaught = ["The history", "should be taught"].join(" ");
+    return String(value || "")
       .replace(/,\s*a public-safe way to explain ([^.]+?) without mapping private or sacred-use details/gi, ", a careful account of $1 while keeping sensitive place details private")
       .replace(/\ba public-safe way to explain\b/gi, "a careful account of")
       .replace(/\bpublic-safe overview\b/gi, "public overview")
@@ -6099,33 +6223,37 @@
       .replace(/\bsource-supported place-name moment\b/gi, "sourced place-name moment")
       .replace(/\bsource-supported case\b/gi, "sourced case")
       .replace(/\bsource-supported\b/gi, "source-based")
+      .replace(/\bTimi\?oara\b/g, "Timisoara")
+      .replace(/\bThe entry preserves\b/g, "The name preserves")
       .replace(/\bwith inline footnotes for specific facts\b/gi, "with references for specific facts")
-      .replace(/\bon this site knowledgebase\b/gi, "the knowledgebase")
-      .replace(/\bsee this page notes for sensitivity and location-generalization context\b/gi, "see the sensitivity and broad-location context notes")
-      .replace(/\bthis page notes\b/gi, "the public notes")
-      .replace(/\bthis page\b/gi, "the history")
-      .replace(/\bthis article\b/gi, "the history")
-      .replace(/\bthis entry\b/gi, "the history")
-      .replace(/\bthis record part of\b/gi, "the name part of")
-      .replace(/\bthis record\b/gi, "the source record")
-      .replace(/\bthis listing\b/gi, "the mapped place")
-      .replace(/\bthe entry is\b/gi, "the history is")
-      .replace(/\bthe entry avoids\b/gi, "sensitive details are left out")
-      .replace(/\bthe entry\b/gi, "the history")
-      .replace(/\bIndian burying grounds\b/gi, "Native burial grounds")
-      .replace(/\bIndian burying ground\b/gi, "Native burial ground")
+      .replace(/\bon this site knowledgebase\b/gi, "this knowledgebase")
+      .replace(/\bthe entry avoids\b/gi, "the account avoids")
       .replace(/\bwithout mapping private or sacred-use details\b/gi, "while keeping sensitive place details private")
-      .replace(/[;.]\s*(?:exact|original|additional)?[^.;]*(?:citation|page|pages|quotation|transcription|source|edition|record|coordinate|access date|details|sheet|title|year|volume|authority|article|archive|map|gnis|usgs)[^.;]*(?:need|needs|recommended|requires?)[^.;]*review[^.]*\./gi, ".")
-      .replace(/[;.]\s*(?:exact|original|additional)?[^.;]*(?:citation|page|pages|quotation|transcription|source|edition|record|coordinate|access date|details|sheet|title|year|volume|authority|article|archive|map|gnis|usgs)[^.;]*review\s+(?:needed|recommended)[^.]*\./gi, ".")
-      .replace(/[;.]\s*(?:exact|original|additional)?[^.;]*(?:citation|page|pages|quotation|transcription|source|edition|record|coordinate|access date|details|sheet|title|year|volume|authority|article|archive|map|gnis|usgs)[^.;]*(?:need|needs|recommended|requires?)[^.;]*review[^.;]*$/gi, "")
-      .replace(/[;.]\s*(?:exact|original|additional)?[^.;]*(?:citation|page|pages|quotation|transcription|source|edition|record|coordinate|access date|details|sheet|title|year|volume|authority|article|archive|map|gnis|usgs)[^.;]*review\s+(?:needed|recommended)[^.;]*$/gi, "")
-      .replace(/[;.]\s*review needed before public citation refinement\./gi, ".")
-      .replace(/[;.]\s*review needed before public citation refinement$/gi, "")
-      .replace(/\s+\./g, ".")
-      .replace(/\.{2,}/g, ".")
-      .replace(/;\s*\./g, ".")
-      .replace(/\s+/g, " ")
-      .trim();
+      .replace(new RegExp(`\\b${historyShouldBeTaught} with respect for cultural places and without turning ${vulnerableSites} into destinations\\.?`, "gi"), "")
+      .replace(new RegExp(`\\bThey should be interpreted through broad landscape context and community care, without exposing ${vulnerableSites}\\.?`, "gi"), "Shell midden history belongs within broad coastal landscapes, foodways, and community care; exact sensitive locations are not shared.")
+      .replace(new RegExp(`\\bwithout exposing ${vulnerableSites}\\b`, "gi"), "without sharing sensitive locations")
+      .replace(/\bSource used for this Freeport\/Merrick archive entry; see this page notes for sensitivity and location-generalization context\.?/gi, "Reference for Freeport and Merrick-area context; exact sensitive locations are kept broad.")
+      .replace(/\bSource used for this Native-history entry\.?/gi, "Reference for Native history context.")
+      .replace(/\bSource used for this ancestral-land public learning page\.?/gi, "Reference for ancestral land and community history context.")
+      .replace(/\bwomen\?s\b/gi, "women's")
+      .replace(/\bsource trails\b/gi, "source materials")
+      .replace(/\bsource trail\b/gi, "source material")
+      .replace(/\bSource used for this ([^.;]{2,80}) archive entry\b/gi, "Reference for $1 context")
+      .replace(/\bsee this page notes for sensitivity and location-generalization context\b/gi, "exact sensitive locations are kept broad")
+      .replace(/;\s*exact heading\/page review needed because source scan cuts this page heading\.?/gi, "")
+      .replace(/;\s*exact title and page need citation review\.?/gi, "")
+      .replace(/;\s*exact transcription and page details need citation review\.?/gi, "")
+      .replace(/\s*Exact calendar edition and document details need citation review\.?/gi, "")
+      .replace(/\s*Exact record and transcription need citation review\.?/gi, "")
+      .replace(/;\s*exact volume and page details need citation review\.?/gi, "")
+      .replace(/\s*Exact sheet and date need citation review\.?/gi, "")
+      .replace(/;\s*exact [^.]{1,180}citation review(?: needed)?\.?/gi, "")
+      .replace(/\s*Exact [^.]{1,180}citation review(?: needed)?\.?/g, "")
+      .replace(/\bcurrent preserve location and history need citation review\.?/gi, "current preserve location and history context")
+      .replace(/\bmodern preserve context and acreage\/coastline details need citation review\.?/gi, "modern preserve context and acreage/coastline details")
+      .replace(new RegExp(`\\bThe digital source has a gap in the ${"entry"} text\\.?`, "gi"), "")
+      .replace(/\bcalled in Bob\b/gi, "called Bob")
+      .replace(new RegExp(`\\b${"general"}ized\\b`, "gi"), "general");
   }
 
   function stripInternalPublicSiteSections(value) {
@@ -6163,7 +6291,7 @@
   function sanitizePublicSiteContent(site = {}) {
     if (!site || typeof site !== "object") return site;
     let next = site;
-    for (const field of ["summary", "why_this_matters", "listing_image_alt"]) {
+    for (const field of ["summary", "address_label", "why_this_matters", "listing_image_alt"]) {
       const cleaned = publicFacingWorkflowTextCleanup(site[field]);
       if (cleaned !== site[field]) {
         if (next === site) next = { ...site };
@@ -6184,6 +6312,12 @@
     for (const [titleField, contentField] of PUBLIC_SITE_CONTENT_FIELDS) {
       const cleanedTitle = publicFacingWorkflowTextCleanup(site[titleField]);
       const cleanedContent = stripInternalPublicSiteSections(site[contentField]);
+      if (plainPublicSiteText(cleanedTitle) && !plainPublicSiteText(cleanedContent)) {
+        if (next === site) next = { ...site };
+        next[titleField] = null;
+        next[contentField] = null;
+        continue;
+      }
       if (cleanedTitle !== site[titleField]) {
         if (next === site) next = { ...site };
         next[titleField] = cleanedTitle;
@@ -6209,7 +6343,7 @@
     if (override) return override;
     const rawType = String(site.site_type || "").trim();
     const normalizedType = rawType.toLowerCase();
-    return rawType ? typeLabels[normalizedType] || publicSiteTypeLabel(rawType) || titleCaseSiteType(rawType) : "";
+    return rawType ? typeLabels[normalizedType] || titleCaseSiteType(rawType) : "";
   }
 
   function siteSubtitle(site, options = {}) {
@@ -6273,17 +6407,15 @@
     };
     const rawType = String(site.site_type || "").trim();
     const useDisplayType = options.typeMode === "display";
-    const publicTypeKey = publicSiteTypeKey(rawType);
-    const typeLabel = useDisplayType ? siteDisplayType(site, options) : publicSiteTypeLabel(rawType);
-    const normalizedRawType = normalize(publicTypeKey || rawType).replace(/\s+/g, "-");
+    const typeLabel = useDisplayType ? siteDisplayType(site, options) : rawType;
+    const normalizedRawType = normalize(rawType).replace(/\s+/g, "-");
     if (typeLabel) {
       const normalizedType = useDisplayType ? normalize(typeLabel).replace(/\s+/g, "-") : normalizedRawType;
-      const excludedType = /^(place-name|placename|historic-site|historical-site|historicsite|historicalsite|site|map-pin|pin|sensitive-site)$/.test(normalizedType);
+      const excludedType = /^(place-name|placename|historic-site|historical-site|historicsite|historicalsite|site|map-pin|pin)$/.test(normalizedType);
       if (!excludedType) {
-        addTag(`type:${normalizedType}`, typeLabel);
+        addTag(`type:${normalizedType}`, useDisplayType ? typeLabel : titleCaseSiteType(rawType));
       }
     }
-    if (siteTypeHasSensitiveFlag(rawType)) addTag("theme:sensitive-site", "Sensitive Site");
     const text = normalize([site.title, site.summary, site.introduction_content, site.history_content].join(" "));
     const typeText = normalize(rawType).replace(/[^a-z0-9]+/g, " ");
     const broad = typeof options.isBroadTerritory === "function"
@@ -6293,7 +6425,7 @@
     const algonquian = typeof options.isAlgonquianPlaceName === "function"
       ? options.isAlgonquianPlaceName(site)
       : siteIsAlgonquianPlaceName(site, { ...options, isBroadTerritory: () => broad });
-    if (algonquian) addTag("theme:algonquian-place-name", "Native Place Name");
+    if (algonquian) addTag("theme:algonquian-place-name", "Algonquian Place Name");
     if (/\b(deed|deeds|patent|patents|treaty|treaties|court|document|documents|archive|archives|land record|land records|town record|town records|colonial record|colonial records)\b/.test(typeText) ||
       /\b(deed|deeds|patent|patents|treaty|treaties|court case|court cases|colonial document|colonial documents|land record|land records|town record|town records|archival record|archival records|records and deeds)\b/.test(text)) {
       addTag("theme:records", "Records and Deeds");
@@ -6423,7 +6555,6 @@
     siteLocationAccuracy,
     isExhibitSite,
     isInternalPublicSiteNoteSection,
-    publicFacingWorkflowTextCleanup,
     siteUsesDefaultBluePin,
     sanitizePublicSiteContent,
     stripInternalPublicSiteSections,
@@ -6641,12 +6772,7 @@
   }
 
   function hasContributorWriteSession(session = {}) {
-    if (!session || session.tokenExpired === true) return Boolean(session?.refreshToken || session?.refresh_token);
     return Boolean(session?.token || session?.refreshToken || session?.refresh_token);
-  }
-
-  function contributorWriteSessionMessage(action = "save this") {
-    return `Your login expired. Please log back in to ${action}.`;
   }
 
   function money(value) {
@@ -8063,7 +8189,6 @@
     strongestRegistrationRecord,
     registrationIsApproved,
     hasContributorWriteSession,
-    contributorWriteSessionMessage,
     money,
     supportMonths,
     supporterLine,
@@ -8344,7 +8469,7 @@
     const cleanText = typeof options.cleanText === "function"
       ? options.cleanText(value || "")
       : String(value || "");
-    const text = cleanPlaceholderActivityText(cleanText).replace(/\s+/g, " ").trim();
+    const text = cleanText.replace(/\s+/g, " ").trim();
     if (!text || text.length <= limit) return text;
     if (options.preferSentence) {
       const sentence = text.split(/(?<=[.!?])\s+/).find(part => part.length > 35 && part.length <= limit);
@@ -8354,13 +8479,6 @@
       return `${clipped.slice(0, boundary > 48 ? boundary : limit).trim()}...`;
     }
     return `${text.slice(0, limit - 3).trim()}...`;
-  }
-
-  function cleanPlaceholderActivityText(value) {
-    return String(value || "")
-      .replace(/\bExample permanent collection \/ on-view record\.?/gi, "")
-      .replace(/\bExample permanent collection\b\.?/gi, "")
-      .replace(/\bExample on-view record\b\.?/gi, "");
   }
 
   function lastSeenKey(prefix, profileKey = "public") {
@@ -8565,7 +8683,6 @@
   window.NLI_ACTIVITY_UTILS = {
     dateLabel,
     normalizeActivityDateInput,
-    cleanPlaceholderActivityText,
     preview,
     lastSeenKey,
     latestTimestamp,
@@ -10601,11 +10718,9 @@
   const TIMELINE_SECTION_TITLE_PATTERN = /history|colonial|land loss|excavation|preservation|disruption|vandalism/i;
   const BLOCKED_REMOTE_IMAGE_HOSTS = new Set([
     "cdn.newsday.com",
-    "www.27east.com",
-    "27east.com",
     "www.easthamptonstar.com"
   ]);
-  const BLOCKED_REMOTE_IMAGE_TAG_PATTERN = /<img\b(?=[^>]*https?:\/\/(?:cdn\.newsday\.com|(?:www\.)?27east\.com|www\.easthamptonstar\.com)\b)[^>]*>/gi;
+  const BLOCKED_REMOTE_IMAGE_TAG_PATTERN = /<img\b(?=[^>]*https?:\/\/(?:cdn\.newsday\.com|www\.easthamptonstar\.com)\b)[^>]*>/gi;
 
   function publicFacingWorkflowTextCleanup(value) {
     return String(value || "")
@@ -10625,17 +10740,13 @@
       .replace(/\bsource-supported place-name moment\b/gi, "sourced place-name moment")
       .replace(/\bsource-supported case\b/gi, "sourced case")
       .replace(/\bsource-supported\b/gi, "source-based")
+      .replace(/\bTimi\?oara\b/g, "Timisoara")
+      .replace(/\bThe entry preserves\b/g, "The name preserves")
       .replace(/\bwith inline footnotes for specific facts\b/gi, "with references for specific facts")
-      .replace(/\bon this site knowledgebase\b/gi, "the knowledgebase")
-      .replace(/\bsee this page notes for sensitivity and location-generalization context\b/gi, "see the sensitivity and broad-location context notes")
-      .replace(/\bthis page notes\b/gi, "the public notes")
-      .replace(/\bthis page\b/gi, "the history")
-      .replace(/\bthis article\b/gi, "the history")
-      .replace(/\bthis entry\b/gi, "the history")
-      .replace(/\bthis record part of\b/gi, "the name part of")
-      .replace(/\bthis record\b/gi, "the source record")
-      .replace(/\bthis listing\b/gi, "the mapped place")
-      .replace(/\bthe entry avoids\b/gi, "sensitive details are left out")
+      .replace(/\bon this site knowledgebase\b/gi, "this knowledgebase")
+      .replace(/\bthe entry avoids\b/gi, "the account avoids")
+      .replace(/\bsource trails\b/gi, "source materials")
+      .replace(/\bsource trail\b/gi, "source material")
       .replace(/\bwithout mapping private or sacred-use details\b/gi, "while keeping sensitive place details private");
   }
 
@@ -10842,6 +10953,10 @@
     const sources = Array.isArray(item?.source_list)
       ? item.source_list.filter(source => source?.title || source?.citation || source?.url)
       : [];
+    const biographyCitation = publicCleanText(item?.biography_source_citation || "");
+    if (!sources.length && biographyCitation) {
+      return [{ title: "Sources", citation: biographyCitation, url: item?.source_url || "" }];
+    }
     if (!sources.length && item?.source_url) return [{ title: "Source", url: item.source_url }];
     return sources;
   }
@@ -10883,7 +10998,7 @@
               ${sources.slice(0, limit).map(renderSource).join("")}
             </div>
           ` : ""}
-          <p class="${escape(metaClass)}">Last Edited: ${escape(editedLabel)}. This is not all the information for the site; On This Site is an active work in progress and entries continue to be revised as research develops.</p>
+          <p class="${escape(metaClass)}">Last edited: ${escape(editedLabel)}. Sources and entries are periodically reviewed.</p>
         </section>
       `;
   }
@@ -10970,7 +11085,7 @@
       }).catch(() => null);
       if (!response) return "";
       if (!response.ok) {
-        if (expireOnAuthFailure && (isAuthFailure(response) || response.status === 400)) onAuthExpired();
+        if (expireOnAuthFailure && isAuthFailure(response)) onAuthExpired();
         return "";
       }
       const data = await response.json();
@@ -11003,14 +11118,6 @@
         if (refreshed) response = await send(refreshed);
       }
       return response;
-    }
-
-    async function ensureAuthSession(requestOptions = {}) {
-      let token = tokenProvider();
-      if (token) return token;
-      token = await refreshAuthToken({ expireOnAuthFailure: true });
-      if (token) return token;
-      throw expiredAuthError(requestOptions.authExpiredMessage || requestOptions.missingAuthMessage || authExpiredMessage());
     }
 
     async function fetchJsonFromNetwork(path, requestOptions = {}, cacheKey = "", ttl = 0) {
@@ -11091,7 +11198,7 @@
           headers: authHeaders(authToken, { "content-type": "application/json" }),
           body: JSON.stringify(payload),
           signal: controller?.signal
-        }), { ...requestOptions, missingAuthMessage: requestOptions.missingAuthMessage || `Login required to save ${collection}.` });
+        }), { ...requestOptions, missingAuthMessage: `Login required to save ${collection}.` });
         if ((response.status === 401 || response.status === 403) && token && !requireAuth) {
           response = await fetch(`${baseUrl}/items/${collection}`, {
             method: "POST",
@@ -11122,7 +11229,7 @@
         method: "PATCH",
         headers: authHeaders(authToken, { "content-type": "application/json" }),
         body: JSON.stringify(payload)
-      }), { ...requestOptions, missingAuthMessage: requestOptions.missingAuthMessage || `Login required to update ${collection}.` });
+      }), { ...requestOptions, missingAuthMessage: `Login required to update ${collection}.` });
       if (!response.ok) {
         const text = await readErrorBody(response);
         if (requireAuth && responseLooksExpired(response, text)) {
@@ -11140,7 +11247,7 @@
       const response = await withAuthRetry(authToken => fetch(`${baseUrl}/items/${collection}/${id}`, {
         method: "DELETE",
         headers: authHeaders(authToken)
-      }), { ...requestOptions, missingAuthMessage: requestOptions.missingAuthMessage || `Login required to delete ${collection}.` });
+      }), { ...requestOptions, missingAuthMessage: `Login required to delete ${collection}.` });
       if (!response.ok) {
         const text = await readErrorBody(response);
         if (requireAuth && responseLooksExpired(response, text)) {
@@ -11236,7 +11343,7 @@
       body.append("title", title || file.name);
       const token = tokenProvider();
       const requireAuth = requestOptions.requireAuth === true;
-      let response = await withAuthRetry(authToken => fetch(`${baseUrl}/files`, { method: "POST", headers: authHeaders(authToken), body }), { ...requestOptions, missingAuthMessage: requestOptions.missingAuthMessage || "Login required to upload images." });
+      let response = await withAuthRetry(authToken => fetch(`${baseUrl}/files`, { method: "POST", headers: authHeaders(authToken), body }), { ...requestOptions, missingAuthMessage: "Login required to upload images." });
       if ((response.status === 401 || response.status === 403) && token && !requireAuth) {
         response = await fetch(`${baseUrl}/files`, { method: "POST", body });
       }
@@ -11255,7 +11362,7 @@
       return normalizeUploadFileId(data);
     }
 
-    return { fetchJson, postItem, patchItem, deleteItem, filterValue, fetchFirstItem, triggerFlow, triggerReviewAction, loginWithPassword, fetchProfileForToken, uploadFile, ensureAuthSession };
+    return { fetchJson, postItem, patchItem, deleteItem, filterValue, fetchFirstItem, triggerFlow, triggerReviewAction, loginWithPassword, fetchProfileForToken, uploadFile };
   }
 
   window.NLI_DIRECTUS_CLIENT = { createDirectusClient, normalizeUploadFileId, uploadDirectusFile };
@@ -11748,14 +11855,13 @@
     const copy = platformCopy(options.platform);
     const profile = options.profile || null;
     const fallbackEmail = options.fallbackEmail || "";
-    const attachProfile = options.attachProfile !== false;
     const payload = {
-      status: options.status || "pending",
+      status: options.status || "approved",
       public_activity: false,
       source_type: "feedback",
       source_slug: copy.slug,
       source_title: copy.title,
-      member_profile: attachProfile ? profile?.id || null : null,
+      member_profile: profile?.id || null,
       author_name: options.name || profile?.display_name || fallbackEmail || "Visitor",
       author_email: options.email || fallbackEmail || "",
       comment: buildFeedbackText(options),
@@ -11767,6 +11873,24 @@
       payload[feedbackHandoffField()] = buildImplementationHandoffText(options);
     }
     return payload;
+  }
+
+  async function submitFeedbackReview(record = {}, options = {}) {
+    const endpoint = new URL("feedback-email.php", window.location.href);
+    const response = await fetch(endpoint.toString(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        type: "feedback_submission",
+        app_url: options.appUrl || window.location.href,
+        platform: options.platform || record.platform || "desktop",
+        record
+      })
+    });
+    const text = await response.text();
+    const body = text ? JSON.parse(text) : null;
+    if (!response.ok || body?.error) throw new Error(body?.error || `Feedback submission failed ${response.status}`);
+    return body;
   }
 
   function fileExtensionForType(type) {
@@ -11939,6 +12063,7 @@
     canvasToFeedbackFile,
     captureFeedbackScreenshot,
     uploadFeedbackScreenshot,
+    submitFeedbackReview,
     sendFeedbackReviewEmail,
     sendAccountSignupEmail,
     sendAccountInviteEmail,
@@ -11949,7 +12074,7 @@
   <script data-inline-source="assets/js/support-public-config.js">
 (function () {
   const workerUrl = "https://on-this-site-support.onthissiteny.workers.dev";
-  const publishableKey = "pk_test_51TZGQxAkpq699T4I9T4p8OeBHBzKPN4YrUEta7HQOEhIyXNLdIdO4lLlwB15ug1VYxrHBKLkBAN13MiikDTMtvHV00XJQXmWTt";
+  const publishableKey = "";
   const endpoint = workerUrl.replace(/\/+$/, "");
   window.NLI_SUPPORT_CONFIG = {
     ...(window.NLI_SUPPORT_CONFIG || {}),
@@ -12020,11 +12145,6 @@
     const amount = selectedAmount(form);
     const name = cleanText(form.querySelector("[data-support-name]")?.value, 180);
     const email = cleanText(form.querySelector("[data-support-email]")?.value, 180);
-    const publicThankYou = Boolean(form.querySelector("[data-support-public-thanks]")?.checked);
-    const publicDisplayName = cleanText(form.querySelector("[data-support-public-name]")?.value, 180) || (publicThankYou ? name : "");
-    const supportType = cleanText(form.querySelector("[data-support-type]")?.value, 80);
-    const siteSlug = cleanText(form.querySelector("[data-support-site-slug]")?.value, 180);
-    const siteTitle = cleanText(form.querySelector("[data-support-site-title]")?.value, 220);
     if (!name) {
       throw new Error("Enter your name.");
     }
@@ -12037,15 +12157,12 @@
       amount,
       name,
       email,
-      publicDisplayName,
-      publicThankYou,
+      publicDisplayName: cleanText(form.querySelector("[data-support-public-name]")?.value, 180),
+      publicThankYou: Boolean(form.querySelector("[data-support-public-thanks]")?.checked),
       publicCaption: cleanText(form.querySelector("[data-support-public-caption]")?.value, 180),
       note: cleanText(form.querySelector("[data-support-note]")?.value, 1000),
       connection: cleanText(form.querySelector("[data-support-connection]")?.value, 500),
       artworkTitle: cleanText(form.querySelector("[data-support-artwork-title]")?.value, 180),
-      supportType,
-      siteSlug,
-      siteTitle,
       sourceUrl: pageUrl,
       createdAt: new Date().toISOString()
     };
@@ -12206,10 +12323,6 @@
     return /^pk_(test|live)_/.test(String(supportConfig.publishableKey || ""));
   }
 
-  function isTestPublishableKey(supportConfig = config()) {
-    return /^pk_test_/.test(String(supportConfig.publishableKey || ""));
-  }
-
   function loadStripeJs(supportConfig = config()) {
     if (window.Stripe) return Promise.resolve(window.Stripe);
     if (window.NLI_STRIPE_JS_PROMISE) return window.NLI_STRIPE_JS_PROMISE;
@@ -12226,22 +12339,12 @@
 
   function supportFormHtml(options = {}) {
     const settings = options.settings || {};
-    const prefill = options.prefill || {};
-    const adoption = options.adoption || null;
     const supportConfig = config();
     const esc = options.escapeHtml || escapeHtml;
     const amounts = amountOptions();
-    const defaultAmount = Number(adoption?.amount || prefill.amount || supportConfig.defaultAmount || amounts[0] || 25);
-    const selectedFrequency = adoption ? "monthly" : (prefill.frequency === "monthly" ? "monthly" : "once");
-    const title = adoption ? `Adopt ${adoption.siteTitle || "This Place"}` : (settings.title || "Support On This Site");
-    const note = adoption
-      ? `Adopt this place for $${Number(adoption.amount || 25)}/month. Confirmed monthly adopters can be shown near the listing title as "Adopted by ${adoption.displayName || "your name"}" while helping keep the map, research, sources, and stewardship information maintained.`
-      : (settings.support_note || "Thank you to Monument Lab, Running Strong for American Indian Youth, community contributors, and other supporters who help keep On This Site online, reviewed, expanded, and available across the website and mobile app.");
-    const supportName = prefill.name || "";
-    const supportEmail = prefill.email || "";
-    const publicName = prefill.publicDisplayName || supportName || "";
-    const connection = adoption ? `Adopt This Place: ${adoption.siteTitle || "On This Site listing"}` : (prefill.connection || "");
-    const supportNote = adoption ? `Monthly place adoption for ${adoption.siteTitle || "On This Site listing"}.` : (prefill.note || "");
+    const defaultAmount = Number(supportConfig.defaultAmount || amounts[0] || 25);
+    const title = settings.title || "Support On This Site";
+    const note = settings.support_note || "Thank you to Monument Lab, Running Strong for American Indian Youth, community contributors, and other supporters who help keep On This Site online, reviewed, expanded, and available across the website and mobile app.";
     const hasStripe = Boolean(supportConfig.checkoutEndpoint);
     const hasEmbedded = hasStripe && hasEmbeddedCheckoutConfig(supportConfig);
     const initialThankYousHtml = publicThankYousHtml(window.NLI_PUBLIC_SUPPORTERS || [], { escapeHtml: esc });
@@ -12251,78 +12354,59 @@
       </div>
       <section class="section support-form-section" data-support-form data-support-platform="${esc(options.platform || "web")}">
         <h3>${esc(title)}</h3>
-        ${adoption ? `
-          <input type="hidden" data-support-type value="place_adoption">
-          <input type="hidden" data-support-site-slug value="${esc(adoption.siteSlug || "")}">
-          <input type="hidden" data-support-site-title value="${esc(adoption.siteTitle || "")}">
-          <div class="support-adoption-summary">
-            <strong>${esc(adoption.siteTitle || "This place")}</strong>
-            <span>${esc("Monthly adoption support helps steward the public map, sources, and community knowledge connected to this place.")}</span>
-          </div>
-        ` : ""}
-        <p class="article-meta">${hasStripe ? (hasEmbedded ? "Secure payment opens here on the project site." : "Payments open through secure Stripe checkout.") : "Stripe checkout is being connected. Payment will open here after private Stripe and Airtable checks pass."}</p>
+        <p class="article-meta">${hasStripe ? (hasEmbedded ? "Secure payment opens here on the project site." : "Payments open through secure checkout.") : "Secure checkout is being connected. Payment will open here after the support system is ready."}</p>
         ${supportReturnNoticeHtml(options.pageUrl || window.location.href, { escapeHtml: esc })}
         ${supportCompletionHtml({ escapeHtml: esc })}
         <div class="support-frequency" role="group" aria-label="Support frequency">
-          ${adoption
-            ? `<label><input type="radio" name="support-frequency-${esc(options.platform || "web")}" data-support-frequency value="monthly" checked> Monthly adoption</label>`
-            : `
-              <label><input type="radio" name="support-frequency-${esc(options.platform || "web")}" data-support-frequency value="once" ${selectedFrequency === "once" ? "checked" : ""}> One-time</label>
-              <label><input type="radio" name="support-frequency-${esc(options.platform || "web")}" data-support-frequency value="monthly" ${selectedFrequency === "monthly" ? "checked" : ""}> Monthly</label>
-            `}
+          <label><input type="radio" name="support-frequency-${esc(options.platform || "web")}" data-support-frequency value="once" checked> One-time</label>
+          <label><input type="radio" name="support-frequency-${esc(options.platform || "web")}" data-support-frequency value="monthly"> Monthly</label>
         </div>
         <div class="support-amount-grid" aria-label="Support amount">
-          ${adoption
-            ? `<label><input type="radio" name="support-amount-${esc(options.platform || "web")}" data-support-amount value="25" checked><span>${esc(money(25))}</span></label>`
-            : amounts.map(amount => `
-              <label>
-                <input type="radio" name="support-amount-${esc(options.platform || "web")}" data-support-amount value="${amount}" ${amount === defaultAmount ? "checked" : ""}>
-                <span>${esc(money(amount))}</span>
-              </label>
-            `).join("")}
+          ${amounts.map(amount => `
+            <label>
+              <input type="radio" name="support-amount-${esc(options.platform || "web")}" data-support-amount value="${amount}" ${amount === defaultAmount ? "checked" : ""}>
+              <span>${esc(money(amount))}</span>
+            </label>
+          `).join("")}
         </div>
-        ${adoption ? "" : `
-          <div class="field">
-            <label for="${esc(options.platform || "web")}-support-custom-amount">Custom amount</label>
-            <input id="${esc(options.platform || "web")}-support-custom-amount" data-support-custom-amount type="number" min="1" step="1" inputmode="decimal" placeholder="Optional">
-          </div>
-        `}
+        <div class="field">
+          <label for="${esc(options.platform || "web")}-support-custom-amount">Custom amount</label>
+          <input id="${esc(options.platform || "web")}-support-custom-amount" data-support-custom-amount type="number" min="1" step="1" inputmode="decimal" placeholder="Optional">
+        </div>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-name">Name</label>
-          <input id="${esc(options.platform || "web")}-support-name" data-support-name autocomplete="name" value="${esc(supportName)}" required>
+          <input id="${esc(options.platform || "web")}-support-name" data-support-name autocomplete="name" required>
         </div>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-email">Email</label>
-          <input id="${esc(options.platform || "web")}-support-email" data-support-email autocomplete="email" inputmode="email" type="email" value="${esc(supportEmail)}" required>
+          <input id="${esc(options.platform || "web")}-support-email" data-support-email autocomplete="email" inputmode="email" type="email" required>
         </div>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-public-name">Public display name</label>
-          <input id="${esc(options.platform || "web")}-support-public-name" data-support-public-name placeholder="Optional" value="${esc(publicName)}">
+          <input id="${esc(options.platform || "web")}-support-public-name" data-support-public-name placeholder="Optional">
         </div>
         <label class="support-check">
-          <input type="checkbox" data-support-public-thanks ${adoption ? "checked" : ""}>
-          <span>${adoption ? "Show my adoption publicly when the monthly support is confirmed." : "Thank me publicly on the project site."}</span>
+          <input type="checkbox" data-support-public-thanks>
+          <span>Thank me publicly on the project site.</span>
         </label>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-public-caption">Public donation caption</label>
           <textarea id="${esc(options.platform || "web")}-support-public-caption" data-support-public-caption rows="2" maxlength="180" placeholder="Optional short note for the activity feed"></textarea>
         </div>
         <div class="field">
-          <label for="${esc(options.platform || "web")}-support-connection">${adoption ? "Place connection" : "Artwork or project connection"}</label>
-          <input id="${esc(options.platform || "web")}-support-connection" data-support-connection placeholder="Optional" value="${esc(connection)}">
+          <label for="${esc(options.platform || "web")}-support-connection">Artwork or project connection</label>
+          <input id="${esc(options.platform || "web")}-support-connection" data-support-connection placeholder="Optional">
         </div>
-        ${adoption ? "" : `
-          <div class="field">
-            <label for="${esc(options.platform || "web")}-support-artwork-title">Artwork collected</label>
-            <input id="${esc(options.platform || "web")}-support-artwork-title" data-support-artwork-title placeholder="Optional artwork or edition title">
-          </div>
-        `}
+        <div class="field">
+          <label for="${esc(options.platform || "web")}-support-artwork-title">Artwork collected</label>
+          <input id="${esc(options.platform || "web")}-support-artwork-title" data-support-artwork-title placeholder="Optional artwork or edition title">
+        </div>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-note">Optional note</label>
-          <textarea id="${esc(options.platform || "web")}-support-note" data-support-note rows="4">${esc(supportNote)}</textarea>
+          <textarea id="${esc(options.platform || "web")}-support-note" data-support-note rows="4"></textarea>
         </div>
         <div class="actions">
-          <button class="button action" type="button" data-support-submit ${hasStripe ? "" : "disabled"}>${adoption ? "Continue to monthly adoption" : "Continue to secure payment"}</button>
+          <button class="button action" type="button" data-support-submit ${hasStripe ? "" : "disabled"}>Continue to secure payment</button>
           <a class="button action secondary" href="mailto:${esc(supportConfig.supportEmail)}">Ask a question</a>
         </div>
         <p class="form-status" data-support-status hidden></p>
@@ -12453,7 +12537,7 @@
       if (!data.url) throw new Error(data.message || "Payment checkout could not start.");
       return { url: data.url };
     }
-    throw new Error("Stripe checkout is not connected yet.");
+    throw new Error("Secure checkout is not connected yet.");
   }
 
   window.NLI_SUPPORT_UTILS = {
@@ -12465,7 +12549,6 @@
     supportReturnNotice,
     supportReturnNoticeHtml,
     hasEmbeddedCheckoutConfig,
-    isTestPublishableKey,
     supportCompletionHtml,
     renderPublicThankYous,
     completeEmbeddedCheckout,
@@ -12570,6 +12653,40 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const NEW_CONTENT_ALERT_INTERVAL_MS = 5 * 60 * 60 * 1000;
     const PUBLIC_ARCHIVE_BASE = SHARED_CONFIG.publicArchiveBase || "https://nativelongisland.com/";
     const EXHIBIT_MARKER_ICON = "assets/map-icons/exhibit-framed-landscape-marker.png";
+    const BIOGRAPHY_PERSON_ICON_URL = "assets/map-icons/person-biography-marker.png";
+    const WHALING_WHALE_ICON_URL = "assets/map-icons/whaling-moving-whale.png";
+    const WHALING_FEATURE_SLUG = "whaling";
+    const MOVING_DOG_ICON_URL = "assets/map-icons/dog-moving-icon.png";
+    const MOVING_DOG_WIKI_SLUG = "dog-ceremonialism";
+    const MOBILE_MOVING_MARKER_INTERVAL_MS = 180;
+    const MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS = 720000;
+    const MOBILE_BIOGRAPHY_MARKER_STAGGER_MS = 85;
+    const MOBILE_WHALE_ONE_WAY_MS = 900000;
+    const MOBILE_WHALE_START_OFFSET_MS = MOBILE_WHALE_ONE_WAY_MS * 0.78;
+    const MOBILE_WHALE_ROUTE = Object.freeze([
+      [-73.88, 40.52],
+      [-73.62, 40.52],
+      [-73.34, 40.56],
+      [-73.03, 40.61],
+      [-72.74, 40.68],
+      [-72.50, 40.74],
+      [-72.24, 40.79],
+      [-71.98, 40.84]
+    ]);
+    const MOBILE_DOG_ONE_WAY_MS = 1020000;
+    const MOBILE_DOG_START_OFFSET_MS = MOBILE_DOG_ONE_WAY_MS * 0.35;
+    const MOBILE_DOG_ROUTE = Object.freeze([
+      [-73.86, 40.70],
+      [-73.72, 40.72],
+      [-73.56, 40.75],
+      [-73.39, 40.78],
+      [-73.20, 40.80],
+      [-73.02, 40.82],
+      [-72.84, 40.84],
+      [-72.72, 40.865],
+      [-72.64, 40.865],
+      [-72.56, 40.855]
+    ]);
     const HEADER_IMAGE_BLUE_PLACEHOLDER_ICON_IDS = new Set(["18979e5a-120e-4af1-b711-9867a67936eb"]);
     const TEXT_ONLY_GREEN_PLACEHOLDER_ICON = "assets/map-icons/acombamack-green-dot-placeholder.png";
     const APK_LOCAL_MAP_ICON_OVERRIDES = Object.freeze({
@@ -12611,8 +12728,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       "e0fadae2-69d2-4fec-a85e-afcabb384f0c": "assets/map-icons/wertheim-refuge-icon.png",
       "cfb5f041-859b-448c-b980-d91d6b620d4e": "assets/map-icons/william-floyd-estate-icon.png"
     });
-    const LAND_MASK_URL = `long-island-land-ma${"sk"}.geojson`;
-    const LAND_MASK_VERSION = "2026-05-18";
+    const LAND_MASK_URL = `long-island-land-ma${"sk"}-lite.geojson`;
+    const LAND_MASK_VERSION = "2026-06-24-lite-runtime-mask";
     const LONG_ISLAND_BOUNDS = [[-75.15, 39.75], [-70.65, 42.05]];
     const LONG_ISLAND_VIEW_BOUNDS = [[-74.35, 40.32], [-71.48, 41.36]];
     const STARTUP_LOCATION_CENTER_BOUNDS = [[-74.25, 40.45], [-71.65, 41.25]];
@@ -13013,11 +13130,22 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     };
     const MAPBOX_PUBLIC_TOKEN = "__NLI_MAPBOX_TOKEN__";
     const SITE_INDEX_FIELDS = SHARED_FIELDS.mobileSiteIndex;
+    const LIVE_SITE_INDEX_FIELDS = String(SITE_INDEX_FIELDS || "").split(",").filter(field => field !== "display_geojson").join(",");
+    const SITE_INDEX_RUNTIME_FIELDS = String(SITE_INDEX_FIELDS || "").split(",").filter(field => !["geojson", "display_geojson"].includes(field)).join(",");
+    const SITE_INDEX_URL = "assets/data/mobile-site-index.json";
+    const SITE_INDEX_VERSION = "20260705-site-index-v1";
+    const SITE_GEOMETRY_URL = "assets/data/mobile-site-geometry.json";
+    const SITE_GEOMETRY_VERSION = "20260705-geometry-v1";
     const SITE_DETAIL_FIELDS = SHARED_FIELDS.mobileSiteDetail;
     const WIKI_INDEX_FIELDS = SHARED_FIELDS.mobileWikiIndex;
+    const WIKI_INDEX_URL = "assets/data/mobile-wiki-index.json";
+    const WIKI_INDEX_VERSION = "20260705-wiki-v1";
     const WIKI_DETAIL_FIELDS = SHARED_FIELDS.mobileWikiDetail;
     const TIMELINE_FIELDS = SHARED_FIELDS.timeline;
     const BASIC_TIMELINE_FIELDS = SHARED_FIELDS.basicTimeline;
+    const TIMELINE_INDEX_FIELDS = String(BASIC_TIMELINE_FIELDS || "").split(",").filter(field => field !== "description").join(",");
+    const TIMELINE_INDEX_URL = "assets/data/mobile-timeline-index.json";
+    const TIMELINE_INDEX_VERSION = "20260705-timeline-v1";
     const EXHIBIT_FIELDS = SHARED_FIELDS.exhibit;
     const PROFILE_FIELDS = SHARED_FIELDS.profile;
     const PUBLIC_COMMENT_FIELDS = SHARED_FIELDS.publicComment;
@@ -13176,6 +13304,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       blogPostsLoaded: false,
       siteDetailCache: new Map(),
       wikiDetailCache: new Map(),
+      timelineDetailCache: new Map(),
       relatedSitesCache: new Map(),
       relatedSiteIndexCache: null,
       deferredDataLoaded: false,
@@ -13212,6 +13341,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       suggestionPublicMarkers: new Map(),
       activeSiteLabelMarker: null,
       mobileBiographyPathMarkers: [],
+      mobileMovingBiographyMarkers: new Map(),
+      mobileMovingBiographyMarkerQueueTimer: null,
+      mobileMovingDogMarker: null,
+      mobileMovingWhaleMarker: null,
+      mobileMovingMarkerFrame: null,
+      mobileMovingMarkerLastAt: 0,
       mapStoryRefreshTimer: null,
       passwordResetToken: ROUTE_UTILS.passwordResetTokenFromUrl(window.location),
       plantMarkers: new Map(),
@@ -13263,7 +13398,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const storyOpenBtn = document.getElementById("story-open");
     const mobileRefreshAppBtn = document.getElementById("mobile-refresh-app");
     const suggestSiteOpenBtn = document.getElementById("suggest-site-open");
-    const mobileKidModeBtn = document.getElementById("mobile-kid-mode");
+    const mobileLearnOpenBtn = document.getElementById("mobile-learn-open");
     const mobileDonateButton = document.getElementById("mobile-donate-button");
     const mobileAdminMenu = document.getElementById("mobile-admin-menu");
     const mobileBasemapSelect = document.getElementById("mobile-basemap");
@@ -13473,7 +13608,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function expireProfileSession(message = "Your login expired. Please log back in.") {
       if (!state.profile) return;
-      saveProfile(null);
+      saveProfile({
+        ...state.profile,
+        token: null,
+        refreshToken: null,
+        refresh_token: null,
+        tokenExpired: true
+      });
       showBanner(message);
       if (registerPanelEl) registerPanelEl.hidden = true;
       if (state.selectedSite?.slug) openSite(state.selectedSite.slug, { focus: false });
@@ -14039,7 +14180,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           <span class="detail-meta">${money(current)} / ${money(goal)} monthly</span>
         </div>
         <div class="support-meter" aria-label="${escapeHtml(`${pct}% of monthly support goal`)}"><span style="width:${pct}%"></span></div>
-        <p class="detail-meta">${escapeHtml(settings.support_note || "Monthly support keeps the archive online and growing.")}</p>
+        <p class="detail-meta">${escapeHtml(settings.support_note || "Monthly support keeps On This Site online and growing.")}</p>
         <button class="action secondary" type="button" data-app-page="support">Support Project</button>
       `;
     }
@@ -14192,7 +14333,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           item.disabled = false;
           item.classList.remove("correct", "wrong");
         });
-        const message = error?.message || "Could not save language progress. Please log in again and try once more.";
+        const message = error?.message || "Could not save language progress to Directus. Please log in again and try once more.";
         if (result) result.textContent = message;
         showBanner(message);
       }
@@ -14939,9 +15080,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function whyThisMattersHtml(item) {
-      const realTexts = [item?.why_this_matters || "", ...legacyWhyThisMattersTexts(item)].filter(Boolean);
       const paragraphs = SHARED_UTILS.uniqueTextBlocks(
-        realTexts.length ? realTexts : [mobileWhyThisMattersFallback(item)],
+        (() => {
+          const realTexts = [item?.why_this_matters || "", ...legacyWhyThisMattersTexts(item)].filter(Boolean);
+          return realTexts.length ? realTexts : [mobileWhyThisMattersFallback(item)];
+        })(),
         { cleanText: publicCleanText, normalizeText }
       );
       return paragraphs.length ? `<section class="section"><h3>Why This Matters</h3>${paragraphs.map(text => `<p>${escapeHtml(text)}</p>`).join("")}</section>` : "";
@@ -15319,6 +15462,60 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return promise;
     }
 
+    function compactSiteGeometryToGeojson(row = {}) {
+      if (row.geojson) return row.geojson;
+      return Array.isArray(row.center) && row.center.length >= 2
+        ? { type: "Point", coordinates: row.center }
+        : null;
+    }
+
+    function mergeMobileSiteGeometryRows(sites = [], rows = []) {
+      if (!Array.isArray(rows) || !rows.length) return sites;
+      const bySlug = new Map(rows.filter(row => row?.slug).map(row => [String(row.slug), row]));
+      const byId = new Map(rows.filter(row => row?.id != null).map(row => [String(row.id), row]));
+      return sites.map(site => {
+        const row = bySlug.get(String(site?.slug || "")) || byId.get(String(site?.id || ""));
+        const geojson = compactSiteGeometryToGeojson(row);
+        return geojson ? { ...site, geojson } : site;
+      });
+    }
+
+    async function fetchMobileSiteIndexRows() {
+      try {
+        const response = await fetch(`${SITE_INDEX_URL}?v=${SITE_INDEX_VERSION}`, { cache: "force-cache" });
+        if (!response.ok) throw new Error(`Mobile site index unavailable: ${response.status}`);
+        const json = await response.json();
+        if (Array.isArray(json?.rows) && json.rows.length) return json.rows;
+        throw new Error("Mobile site index snapshot was empty.");
+      } catch (error) {
+        console.warn("Static mobile site index unavailable; falling back to Directus site metadata.", error);
+        const fallback = await fetchJson(`/items/sites?limit=-1&filter[publication_status][_eq]=published&sort=title&fields=${SITE_INDEX_RUNTIME_FIELDS}`, {
+          cacheKey: "mobile-sites",
+          ttl: 60000,
+          fresh: false
+        });
+        return fallback.data || [];
+      }
+    }
+
+    async function fetchMobileSiteGeometryRows() {
+      try {
+        const response = await fetch(`${SITE_GEOMETRY_URL}?v=${SITE_GEOMETRY_VERSION}`, { cache: "force-cache" });
+        if (!response.ok) throw new Error(`Mobile site geometry unavailable: ${response.status}`);
+        const json = await response.json();
+        if (Array.isArray(json?.rows) && json.rows.length) return json.rows;
+        throw new Error("Mobile site geometry snapshot was empty.");
+      } catch (error) {
+        console.warn("Static mobile geometry unavailable; falling back to Directus geometry.", error);
+        const fallback = await fetchJson("/items/sites?limit=-1&filter[publication_status][_eq]=published&sort=title&fields=id,slug,geojson", {
+          cacheKey: "mobile-site-geometry-fallback",
+          ttl: 60000,
+          fresh: false
+        });
+        return fallback.data || [];
+      }
+    }
+
     async function fetchWikiDetail(articleOrSlug) {
       const slug = typeof articleOrSlug === "string" ? articleOrSlug : articleOrSlug?.slug;
       if (!slug) return null;
@@ -15338,6 +15535,44 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         })
         .catch(() => existing ? sanitizePublicWikiArticle(existing) : null);
       state.wikiDetailCache.set(slug, promise);
+      return promise;
+    }
+
+    function mergeTimelineEvents(rows = []) {
+      let changed = false;
+      rows.forEach(row => {
+        if (!row?.id) return;
+        const id = String(row.id);
+        const existing = state.timelineById.get(id) || null;
+        const merged = existing ? { ...existing, ...row } : row;
+        const index = state.timelineEvents.findIndex(event => String(event.id) === id);
+        if (index >= 0) state.timelineEvents[index] = merged;
+        else state.timelineEvents.push(merged);
+        state.timelineById.set(id, merged);
+        changed = true;
+      });
+      if (changed) rebuildSortedTimelineEvents();
+      return rows;
+    }
+
+    async function ensureTimelineDetailsForSource(sourceType, sourceId, sourceSlug) {
+      const type = String(sourceType || "").trim();
+      const slug = String(sourceSlug || "").trim();
+      const numericId = Number(sourceId);
+      if (!type || (!slug && !Number.isFinite(numericId))) return [];
+      const key = `${type}:${slug || numericId}`;
+      if (state.timelineDetailCache.has(key)) return state.timelineDetailCache.get(key);
+      const sourceFilter = slug
+        ? `&filter[source_slug][_eq]=${encodeURIComponent(slug)}`
+        : `&filter[source_id][_eq]=${encodeURIComponent(String(numericId))}`;
+      const promise = fetchJson(`/items/timeline_events?limit=-1&filter[source_type][_eq]=${encodeURIComponent(type)}${sourceFilter}&fields=${TIMELINE_FIELDS}`, {
+        cacheKey: `timeline-detail-${key}`,
+        ttl: 60000,
+        fresh: false
+      })
+        .then(response => mergeTimelineEvents(response.data || []))
+        .catch(() => []);
+      state.timelineDetailCache.set(key, promise);
       return promise;
     }
 
@@ -15422,12 +15657,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return;
       }
       let sitesResponse;
+      let siteGeometryRows;
       let layersResponse;
       let supportResponse;
       try {
-        [sitesResponse, layersResponse, supportResponse] = await Promise.all([
-          fetchJson(`/items/sites?limit=-1&filter[publication_status][_eq]=published&sort=title&fields=${SITE_INDEX_FIELDS}`, { cacheKey: "mobile-sites", ttl: 60000 }),
-          fetchJson("/items/map_layers?limit=-1", { cacheKey: "mobile-layers", ttl: 60000, fresh: false }),
+        [sitesResponse, siteGeometryRows, layersResponse, supportResponse] = await Promise.all([
+          fetchMobileSiteIndexRows().then(data => ({ data })),
+          fetchMobileSiteGeometryRows(),
+          fetchJson("/items/map_layers?limit=1&filter[slug][_eq]=native-long-island-base-map&fields=id,title,slug,layer_type,style_json,visible_by_default,description", { cacheKey: "mobile-layers-base", ttl: 300000, fresh: false }),
           fetchJson(`/items/project_support_settings?limit=1&filter[key][_eq]=native-long-island&fields=${SUPPORT_FIELDS}`, { cacheKey: "mobile-support", ttl: 300000, fresh: false }).catch(() => ({ data: [] }))
         ]);
       } catch (error) {
@@ -15439,7 +15676,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         }
         throw error;
       }
-      state.sites = repairSiteTitles((sitesResponse.data || []).map(SITE_UTILS.sanitizePublicSiteContent));
+      state.sites = repairSiteTitles(mergeMobileSiteGeometryRows(sitesResponse.data || [], siteGeometryRows).map(SITE_UTILS.sanitizePublicSiteContent));
       state.layers = layersResponse.data || [];
       state.supportSettings = supportResponse.data?.[0] || null;
       state.mediaMap = window.NLI_MOBILE_MEDIA_MAP || {};
@@ -15519,6 +15756,42 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
     }
 
+    async function fetchMobileWikiIndexRows() {
+      try {
+        const response = await fetch(`${WIKI_INDEX_URL}?v=${WIKI_INDEX_VERSION}`, { cache: "force-cache" });
+        if (!response.ok) throw new Error(`Mobile wiki index unavailable: ${response.status}`);
+        const json = await response.json();
+        if (Array.isArray(json?.rows) && json.rows.length) return json.rows;
+        throw new Error("Mobile wiki index snapshot was empty.");
+      } catch (error) {
+        console.warn("Static mobile wiki index unavailable; falling back to Directus wiki index.", error);
+        const fallback = await fetchJson(`/items/wiki_articles?limit=-1&filter[status][_eq]=published&sort=title&fields=${WIKI_INDEX_FIELDS}`, {
+          cacheKey: "mobile-wiki",
+          ttl: 60000,
+          fresh: false
+        });
+        return fallback.data || [];
+      }
+    }
+
+    async function fetchMobileTimelineIndexRows() {
+      try {
+        const response = await fetch(`${TIMELINE_INDEX_URL}?v=${TIMELINE_INDEX_VERSION}`, { cache: "force-cache" });
+        if (!response.ok) throw new Error(`Mobile timeline index unavailable: ${response.status}`);
+        const json = await response.json();
+        if (Array.isArray(json?.rows) && json.rows.length) return json.rows;
+        throw new Error("Mobile timeline index snapshot was empty.");
+      } catch (error) {
+        console.warn("Static mobile timeline index unavailable; falling back to Directus timeline index.", error);
+        const fallback = await fetchJson(`/items/timeline_events?limit=-1&fields=${TIMELINE_INDEX_FIELDS}`, {
+          cacheKey: "mobile-timeline-index",
+          ttl: 60000,
+          fresh: false
+        });
+        return fallback.data || [];
+      }
+    }
+
     async function loadDeferredData() {
       if (state.deferredDataLoaded) return true;
       if (state.deferredDataLoading && state.deferredDataPromise) return state.deferredDataPromise;
@@ -15527,7 +15800,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       try {
       runDeferredUpdate("Mobile timeline", renderMobileTimeline);
       const loadTimelineEvents = () =>
-        fetchJson(`/items/timeline_events?limit=-1&fields=${TIMELINE_FIELDS}`, { cacheKey: "mobile-timeline", ttl: 60000 })
+        fetchMobileTimelineIndexRows()
+          .then(data => ({ data }))
           .catch(() => fetchJson(`/items/timeline_events?limit=-1&fields=${BASIC_TIMELINE_FIELDS}`, { cacheKey: "mobile-timeline-basic", ttl: 60000 }))
           .catch(() => ({ data: [] }));
       const legacyExhibitsRequest = state.profile?.token
@@ -15538,24 +15812,25 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         : Promise.resolve(currentRowsFallback(state.siteSuggestions));
       const [timelineResponse, wikiResponse, eventResponse, legacyExhibitResponse, profilesResponse, commentsResponse, commentVotesResponse, pointEventsResponse, plantObservationsResponse, visitsResponse, suggestionsResponse, registrationsResponse, storyResponse, storyVotesResponse, languageResponse, followsResponse, loginRewardsResponse] = await Promise.all([
         loadTimelineEvents(),
-        fetchJson(`/items/wiki_articles?limit=-1&filter[status][_eq]=published&sort=title&fields=${WIKI_INDEX_FIELDS}`, { cacheKey: "mobile-wiki", ttl: 60000 }).catch(() => ({ data: [] })),
+        fetchMobileWikiIndexRows().then(data => ({ data })).catch(() => ({ data: [] })),
         fetchJson(`/items/calendar_events?limit=-1&sort=start_datetime,title&fields=${EXHIBIT_FIELDS}`, { cacheKey: "mobile-events", ttl: 60000, fresh: false }).catch(() => ({ data: [] })),
         legacyExhibitsRequest,
-        fetchJson(`/items/mobile_member_profiles?limit=-1&sort=display_name&fields=${PROFILE_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.contributorProfiles)),
+        state.profile?.token ? fetchJson(`/items/mobile_member_profiles?limit=-1&sort=display_name&fields=${PROFILE_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.contributorProfiles)) : Promise.resolve(currentRowsFallback(state.contributorProfiles)),
         fetchJson(`/items/mobile_comments?limit=-1&filter[status][_eq]=approved&filter[public_activity][_eq]=true&fields=${PUBLIC_COMMENT_FIELDS}`, { cacheKey: "mobile-comments", ttl: 45000, fresh: false }).catch(() => currentRowsFallback(state.publicComments)),
         fetchJson(`/items/mobile_comment_votes?limit=-1&fields=${COMMENT_VOTE_FIELDS}`, { cacheKey: "mobile-comment-votes", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.commentVotes)),
-        fetchJson(`/items/mobile_point_events?limit=-1&fields=${POINT_EVENT_FIELDS}`, { cacheKey: "mobile-point-events", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.profilePointEvents)),
+        state.profile?.token ? fetchJson(`/items/mobile_point_events?limit=-1&fields=${POINT_EVENT_FIELDS}`, { cacheKey: "mobile-point-events", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.profilePointEvents)) : Promise.resolve(currentRowsFallback(state.profilePointEvents)),
         fetchJson(`/items/mobile_plant_observations?limit=-1&filter[status][_eq]=approved&fields=${PLANT_OBSERVATION_FIELDS}`, { cacheKey: "mobile-plant-observations", ttl: 45000, fresh: false }).catch(() => ({ data: [] })),
         fetchJson(`/items/mobile_site_visits?limit=-1&fields=${PUBLIC_VISIT_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.publicVisits)),
         siteSuggestionsRequest,
         adminAccountRegistrationsRequest().catch(() => currentRowsFallback(state.accountRegistrations)),
         fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 30000, fresh: false }).catch(() => ({ data: [] })),
         fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 30000, fresh: false }).catch(() => ({ data: [] })),
-        fetchJson(`/items/mobile_language_quiz_progress?limit=-1&fields=${LANGUAGE_PROGRESS_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.languageQuizAttempts)),
-        fetchJson(`/items/mobile_profile_follows?limit=-1&fields=${FOLLOW_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileFollows)),
-        fetchJson(`/items/mobile_profile_logins?limit=-1&fields=${LOGIN_REWARD_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileLoginRewards))
+        state.profile?.token ? fetchJson(`/items/mobile_language_quiz_progress?limit=-1&fields=${LANGUAGE_PROGRESS_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.languageQuizAttempts)) : Promise.resolve(currentRowsFallback(state.languageQuizAttempts)),
+        state.profile?.token ? fetchJson(`/items/mobile_profile_follows?limit=-1&fields=${FOLLOW_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileFollows)) : Promise.resolve(currentRowsFallback(state.profileFollows)),
+        state.profile?.token ? fetchJson(`/items/mobile_profile_logins?limit=-1&fields=${LOGIN_REWARD_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileLoginRewards)) : Promise.resolve(currentRowsFallback(state.profileLoginRewards))
       ]);
-      state.timelineEvents = timelineResponse.data || [];
+      const existingTimelineById = new Map(state.timelineEvents.map(item => [String(item.id), item]));
+      state.timelineEvents = (timelineResponse.data || []).map(item => ({ ...item, ...(existingTimelineById.get(String(item.id)) || {}) }));
       state.timelineById = new Map(state.timelineEvents.map(item => [String(item.id), item]));
       rebuildSortedTimelineEvents();
       state.wikiArticles = (wikiResponse.data || []).map(sanitizePublicWikiArticle);
@@ -15615,7 +15890,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
       return true;
       } catch (error) {
-        console.warn("Deferred archive data will retry later.", error);
+        console.warn("Deferred site data will retry later.", error);
         return false;
       } finally {
         state.deferredDataLoading = false;
@@ -15739,7 +16014,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         return await loadDeferredData();
       } catch (error) {
         state.deferredDataLoading = false;
-        console.warn("Deferred archive data will retry later.", error);
+        console.warn("Deferred site data will retry later.", error);
         return false;
       }
     }
@@ -15775,7 +16050,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           fetchJson(`/items/mobile_comments?limit=-1&filter[status][_eq]=approved&filter[public_activity][_eq]=true&fields=${PUBLIC_COMMENT_FIELDS}`, { fresh: true }),
           fetchJson(`/items/mobile_plant_observations?limit=-1&filter[status][_eq]=approved&fields=${PLANT_OBSERVATION_FIELDS}`, { fresh: true }).catch(() => ({ data: state.plantObservations || [] }))
         ]);
-        state.publicComments = mergeSeededComments(response.data || []);
+        state.publicComments = mergeSeededComments(preserveActiveProfileRows(response.data, state.publicComments));
         state.plantObservations = plantResponse.data || [];
         state.profileActivityCache = null;
         if (rerender) {
@@ -17116,7 +17391,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileTabNearbyBtn?.setAttribute("aria-pressed", String(next === "nearby"));
       mobileTimelineEl?.setAttribute("aria-hidden", next === "nearby" ? "true" : "false");
       listPanelEl?.setAttribute("aria-hidden", next === "timeline" ? "true" : "false");
-      if (next === "timeline") renderMobileTimeline();
+      if (next === "timeline" && !state.mobileTimelineRendered) renderMobileTimeline();
       try {
         localStorage.setItem("nli-mobile-panel-mode", next);
       } catch {}
@@ -18303,7 +18578,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         return localIcon || "";
       }
       if (HEADER_IMAGE_BLUE_PLACEHOLDER_ICON_IDS.has(rawIcon) && !siteHasHeaderImage(site)) return TEXT_ONLY_GREEN_PLACEHOLDER_ICON;
-      return MEDIA_UTILS.siteMapIconUrl(site, { directusAssetUrl }) || (SITE_UTILS.isExhibitSite(site) ? EXHIBIT_MARKER_ICON : "");
+      return MEDIA_UTILS.siteMapIconUrl(site, { directusAssetUrl }) || "";
     }
 
     function mobileSiteIconKey(site) {
@@ -21216,7 +21491,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         features.push({
           type: "Feature",
           geometry: { type: "LineString", coordinates: path.places.map(place => place.coordinates) },
-          properties: { kind: "path", person, wiki_slug: slug, title: `${person} biography path` }
+          properties: { kind: "path", person, wiki_slug: slug, title: `${person} learning path` }
         });
         path.places.forEach((place, index) => {
           const order = index + 1;
@@ -21531,6 +21806,262 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (options.focus !== false) focusMobileBiographyPathPlace(path, 0, { zoom: 10.9, duration: 760 });
     }
 
+    function mobileMovingRouteSegments(route = []) {
+      return route.slice(0, -1).map((start, index) => {
+        const end = route[index + 1];
+        return { start, end, distance: milesBetween(start, end) || 0 };
+      }).filter(segment => segment.start?.every(Number.isFinite) && segment.end?.every(Number.isFinite));
+    }
+
+    function mobileMovingCoordinateAt(route = [], progress = 0) {
+      const segments = mobileMovingRouteSegments(route);
+      const total = segments.reduce((sum, segment) => sum + segment.distance, 0);
+      if (!segments.length || total <= 0) return route[0] || null;
+      let remaining = Math.max(0, Math.min(1, progress)) * total;
+      for (const segment of segments) {
+        if (remaining <= segment.distance) {
+          const local = segment.distance ? remaining / segment.distance : 0;
+          return [
+            segment.start[0] + (segment.end[0] - segment.start[0]) * local,
+            segment.start[1] + (segment.end[1] - segment.start[1]) * local
+          ];
+        }
+        remaining -= segment.distance;
+      }
+      return segments[segments.length - 1].end;
+    }
+
+    function mobileMovingPingPong(route = [], oneWayMs = 600000, offsetMs = 0, now = performance.now()) {
+      const cycle = Math.max(1000, oneWayMs * 2);
+      const elapsed = (((now + offsetMs) % cycle) + cycle) % cycle;
+      const movingRight = elapsed <= oneWayMs;
+      const progress = movingRight ? elapsed / oneWayMs : 1 - ((elapsed - oneWayMs) / oneWayMs);
+      const coordinates = mobileMovingCoordinateAt(route, progress) || route[0] || [FALLBACK_CENTER[0], FALLBACK_CENTER[1]];
+      const sample = mobileMovingCoordinateAt(route, Math.min(1, Math.max(0, progress + (movingRight ? 0.01 : -0.01)))) || coordinates;
+      return {
+        coordinates,
+        direction: sample[0] >= coordinates[0] ? "right" : "left",
+        progress
+      };
+    }
+
+    function mobileMovingRouteDuration(route = []) {
+      const totalMiles = mobileMovingRouteSegments(route).reduce((sum, segment) => sum + segment.distance, 0);
+      return Math.max(360000, Math.min(1440000, totalMiles * 42000));
+    }
+
+    function mobileMovingPointIsOnLand(coordinates = []) {
+      if (!coordinates.every(Number.isFinite) || !state.landMaskData?.geometry) return true;
+      try {
+        return pointInGeometry(coordinates, state.landMaskData.geometry);
+      } catch {
+        return true;
+      }
+    }
+
+    function mobileMovingBiographyItems() {
+      return Object.keys(BIOGRAPHY_PLACE_PATHS)
+        .map((slug, index) => {
+          const article = state.wikiBySlug.get(slug) || { slug, title: BIOGRAPHY_PLACE_PATHS[slug]?.title || slug };
+          const path = mobileBiographyTimelineData(article, timelineEventsForSource("wiki", article.id, slug)) || mobileBiographyPathData(article);
+          if (!path?.places?.length || path.places.length < 2) return null;
+          const route = path.places.map(place => place.coordinates).filter(coords => Array.isArray(coords) && coords.every(Number.isFinite));
+          if (route.length < 2) return null;
+          return {
+            slug,
+            article,
+            path,
+            route,
+            person: mobileBiographyPathPersonName(article, slug),
+            duration: mobileMovingRouteDuration(route),
+            offset: index * 31000
+          };
+        })
+        .filter(Boolean);
+    }
+
+    function mobileMovingBiographyStatus(item, motion) {
+      const places = item?.path?.places || [];
+      if (!places.length) return "";
+      const targetIndex = Math.min(places.length - 1, Math.max(0, Math.ceil((motion?.progress || 0) * (places.length - 1))));
+      const target = places[targetIndex] || places[places.length - 1];
+      const compact = mobileBiographyPathCompactPlace(target);
+      return compact ? `on the way to ${compact}` : "";
+    }
+
+    function mobileMovingBiographyHtml(item) {
+      const name = item?.person || "Biography";
+      return `
+        <button class="mobile-moving-biography-marker" type="button" aria-label="Open ${escapeHtml(name)}">
+          <span class="mobile-moving-biography-shell" aria-hidden="true">
+            <span class="mobile-moving-biography-canoe"></span>
+            <img src="${escapeHtml(BIOGRAPHY_PERSON_ICON_URL)}" alt="">
+          </span>
+          <span class="mobile-moving-biography-label" aria-hidden="true">
+            <span class="mobile-moving-biography-name">${escapeHtml(name)}</span>
+            <span class="mobile-moving-biography-status"></span>
+          </span>
+        </button>
+      `;
+    }
+
+    function bindMobileMovingBiographyElement(marker, item) {
+      const button = marker?.getElement?.()?.querySelector?.(".mobile-moving-biography-marker");
+      if (!button || button.dataset.bound === "true") return;
+      button.dataset.bound = "true";
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        openWikiArticle(item.slug, { focus: false });
+      });
+    }
+
+    function updateMobileMovingBiographyMarker(item, marker, now = performance.now()) {
+      const motion = mobileMovingPingPong(item.route, item.duration, item.offset, now);
+      marker.setLngLat(motion.coordinates);
+      const element = marker.getElement?.();
+      const button = element?.querySelector?.(".mobile-moving-biography-marker");
+      if (!button) return;
+      button.dataset.direction = motion.direction;
+      button.dataset.showLabel = state.map?.getZoom?.() >= SITE_POINT_LABEL_MIN_ZOOM ? "true" : "false";
+      button.dataset.onWater = mobileMovingPointIsOnLand(motion.coordinates) ? "false" : "true";
+      const status = button.querySelector(".mobile-moving-biography-status");
+      if (status) status.textContent = mobileMovingBiographyStatus(item, motion);
+    }
+
+    function ensureMobileMovingBiographyMarkers() {
+      if (!state.map || !window.mapboxgl?.Marker) return;
+      const items = mobileMovingBiographyItems();
+      const wanted = new Set(items.map(item => item.slug));
+      for (const [slug, entry] of state.mobileMovingBiographyMarkers) {
+        if (!wanted.has(slug)) {
+          entry.marker?.remove?.();
+          state.mobileMovingBiographyMarkers.delete(slug);
+        }
+      }
+      const missing = items.filter(item => !state.mobileMovingBiographyMarkers.has(item.slug));
+      if (!missing.length) return;
+      let index = 0;
+      const addNext = () => {
+        const item = missing[index++];
+        if (!item || !state.map || state.mobileMovingBiographyMarkers.has(item.slug)) return;
+        const element = document.createElement("div");
+        element.className = "mobile-moving-biography-mapbox-icon";
+        element.innerHTML = mobileMovingBiographyHtml(item);
+        const marker = new mapboxgl.Marker({ element, anchor: "center" })
+          .setLngLat(item.route[0])
+          .addTo(state.map);
+        state.mobileMovingBiographyMarkers.set(item.slug, { item, marker });
+        bindMobileMovingBiographyElement(marker, item);
+        updateMobileMovingBiographyMarker(item, marker, performance.now());
+        if (index < missing.length) {
+          state.mobileMovingBiographyMarkerQueueTimer = window.setTimeout(addNext, MOBILE_BIOGRAPHY_MARKER_STAGGER_MS);
+        } else {
+          state.mobileMovingBiographyMarkerQueueTimer = null;
+        }
+      };
+      if (!state.mobileMovingBiographyMarkerQueueTimer) addNext();
+    }
+
+    function mobileMovingDogHtml() {
+      return `
+        <button class="mobile-moving-dog-marker" type="button" aria-label="Open Dog article">
+          <span class="mobile-moving-dog-shell" aria-hidden="true"><img src="${escapeHtml(MOVING_DOG_ICON_URL)}" alt=""></span>
+          <span class="mobile-moving-dog-label" aria-hidden="true">Dog</span>
+        </button>
+      `;
+    }
+
+    function ensureMobileMovingDogMarker() {
+      if (!state.map || !window.mapboxgl?.Marker || state.mobileMovingDogMarker) return;
+      const element = document.createElement("div");
+      element.className = "mobile-moving-dog-mapbox-icon";
+      element.innerHTML = mobileMovingDogHtml();
+      state.mobileMovingDogMarker = new mapboxgl.Marker({ element, anchor: "center" })
+        .setLngLat(MOBILE_DOG_ROUTE[0])
+        .addTo(state.map);
+      const button = element.querySelector(".mobile-moving-dog-marker");
+      button?.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        openWikiArticle(MOVING_DOG_WIKI_SLUG, { focus: false });
+      });
+    }
+
+    function updateMobileMovingDogMarker(now = performance.now()) {
+      if (!state.mobileMovingDogMarker) return;
+      const motion = mobileMovingPingPong(MOBILE_DOG_ROUTE, MOBILE_DOG_ONE_WAY_MS, MOBILE_DOG_START_OFFSET_MS, now);
+      state.mobileMovingDogMarker.setLngLat(motion.coordinates);
+      const button = state.mobileMovingDogMarker.getElement?.()?.querySelector?.(".mobile-moving-dog-marker");
+      if (!button) return;
+      button.dataset.direction = motion.direction;
+      button.dataset.showLabel = state.map?.getZoom?.() >= SITE_POINT_LABEL_MIN_ZOOM ? "true" : "false";
+    }
+
+    function mobileMovingWhaleHtml() {
+      return `
+        <button class="mobile-moving-whale-marker" type="button" aria-label="Open Whaling">
+          <span class="mobile-moving-whale-shell" aria-hidden="true"><img src="${escapeHtml(WHALING_WHALE_ICON_URL)}" alt=""></span>
+        </button>
+      `;
+    }
+
+    function ensureMobileMovingWhaleMarker() {
+      if (!state.map || !window.mapboxgl?.Marker || state.mobileMovingWhaleMarker) return;
+      const element = document.createElement("div");
+      element.className = "mobile-moving-whale-mapbox-icon";
+      element.innerHTML = mobileMovingWhaleHtml();
+      state.mobileMovingWhaleMarker = new mapboxgl.Marker({ element, anchor: "center" })
+        .setLngLat(MOBILE_WHALE_ROUTE[0])
+        .addTo(state.map);
+      const button = element.querySelector(".mobile-moving-whale-marker");
+      button?.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (state.siteBySlug.has(WHALING_FEATURE_SLUG)) openSite(WHALING_FEATURE_SLUG, { focus: false });
+        else openWikiArticle(WHALING_FEATURE_SLUG, { focus: false });
+      });
+    }
+
+    function updateMobileMovingWhaleMarker(now = performance.now()) {
+      if (!state.mobileMovingWhaleMarker) return;
+      const motion = mobileMovingPingPong(MOBILE_WHALE_ROUTE, MOBILE_WHALE_ONE_WAY_MS, MOBILE_WHALE_START_OFFSET_MS, now);
+      state.mobileMovingWhaleMarker.setLngLat(motion.coordinates);
+      const button = state.mobileMovingWhaleMarker.getElement?.()?.querySelector?.(".mobile-moving-whale-marker");
+      if (!button) return;
+      button.dataset.direction = motion.direction;
+    }
+
+    function updateMobileMovingFeatureMarkers(now = performance.now()) {
+      if (!state.map || document.hidden || isAndroidMapGestureActive() || mobileMapCameraIsInteracting()) return;
+      for (const entry of state.mobileMovingBiographyMarkers.values()) {
+        updateMobileMovingBiographyMarker(entry.item, entry.marker, now);
+      }
+      updateMobileMovingDogMarker(now);
+      updateMobileMovingWhaleMarker(now);
+    }
+
+    function startMobileMovingFeatureAnimation() {
+      if (state.mobileMovingMarkerFrame || !window.requestAnimationFrame) return;
+      const tick = now => {
+        if (!document.hidden && now - (state.mobileMovingMarkerLastAt || 0) >= MOBILE_MOVING_MARKER_INTERVAL_MS) {
+          updateMobileMovingFeatureMarkers(now);
+          state.mobileMovingMarkerLastAt = now;
+        }
+        state.mobileMovingMarkerFrame = window.requestAnimationFrame(tick);
+      };
+      state.mobileMovingMarkerFrame = window.requestAnimationFrame(tick);
+    }
+
+    async function ensureMobileMovingFeatureMarkers() {
+      if (!state.map) return;
+      ensureMobileMovingDogMarker();
+      ensureMobileMovingWhaleMarker();
+      ensureMobileMovingBiographyMarkers();
+      ensureLandMask().then(() => updateMobileMovingFeatureMarkers()).catch(() => {});
+      updateMobileMovingFeatureMarkers();
+      startMobileMovingFeatureAnimation();
+    }
     async function openWikiArticle(articleOrSlug, options = {}) {
       clearMobileBiographyPathOverlay();
       const slug = typeof articleOrSlug === "string" ? articleOrSlug : articleOrSlug?.slug;
@@ -21555,8 +22086,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         detailBodyEl.innerHTML = `<p class="summary">This knowledgebase article is not available in this view yet.</p>`;
         return;
       }
+      await ensureTimelineDetailsForSource("wiki", article.id, article.slug);
+      if (state.selectedWikiSlug !== slug) return;
       const event = options.timelineEventId
-        ? (options.timelineEvent || state.timelineEvents.find(item => String(item.id) === String(options.timelineEventId)))
+        ? (state.timelineById.get(String(options.timelineEventId)) || options.timelineEvent || state.timelineEvents.find(item => String(item.id) === String(options.timelineEventId)))
         : null;
       const image = mobileSnapshotImageUrl(firstContentImage(article.content || ""));
       const articleTimelineHtml = article.content ? sectionTimelineHtml(cleanHtml(article.content)) : "";
@@ -21698,7 +22231,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           </article>
           <article class="ots-page-card">
             <h3>Support the project</h3>
-            <p>Community support helps keep the archive online, reviewed, expanded, and available across the website and mobile app.</p>
+            <p>Community support helps keep On This Site online, reviewed, expanded, and available across the website and mobile app.</p>
             <div class="actions">
               <button class="action secondary" type="button" data-app-page="support">Support Project</button>
               <button class="action secondary" type="button" data-app-page="about">About the project</button>
@@ -21729,7 +22262,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         </section>
         <section class="section ots-support-strip">
           <h3>Project support</h3>
-          <p>On This Site has been supported in part through a Monument Lab fellowship, with continuing support from community members, collaborators, and visitors who help keep the archive public.</p>
+          <p>On This Site has been supported in part through a Monument Lab fellowship, with continuing support from community members, collaborators, and visitors who help keep the project public.</p>
           <div class="actions">
             <button class="action secondary" type="button" data-app-page="support">Support Project</button>
             <button class="action secondary" type="button" data-app-page="contact">Contact</button>
@@ -21740,7 +22273,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function openContactPanel() {
       openInfoPanel("Contact", "On This Site", `
-        <p class="summary">For corrections, collaboration, educational use, or questions about the archive, contact the project through the website or email Jeremy Dennis.</p>
+        <p class="summary">For corrections, collaboration, educational use, or questions about On This Site, contact the project through the website or email Jeremy Dennis.</p>
         <div class="actions">
           <a class="action secondary" href="mailto:jeremynative@gmail.com">Email project</a>
           <button class="action secondary" type="button" data-app-page="browse">Browse mapped sites</button>
@@ -22262,6 +22795,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       syncActiveSiteMapLabel(site);
       const image = mobileSnapshotImageUrl(listingImage(site));
       const imageFallback = mobileSnapshotImageUrl(listingImageFallback(site));
+      await ensureTimelineDetailsForSource("site", site.id, site.slug);
+      if (state.selectedSlug !== slug) return;
       const moments = timelineEventsForSource("site", site.id, site.slug);
       if (!Array.isArray(site.source_list)) {
         const sourceList = await fetchSiteSources(site);
@@ -22964,6 +23499,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.mapSourceAppliedKey = state.mapSourceCacheKey || "";
       syncMobileBiographyPathLayers();
       startMobileSiteAttentionPulse();
+      ensureMobileMovingFeatureMarkers();
       bindMobileMapLayerEvents();
     }
 
@@ -23286,7 +23822,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const recentVisits = visits.slice(0, 3);
       profileCardEl.innerHTML = `
         <strong>${escapeHtml(displayName || "Contributor")}</strong>
-        ${profileSyncing ? `<p class="detail-meta">Refreshing latest activity...</p>` : ""}
+        ${profileSyncing ? `<p class="detail-meta">Refreshing latest Directus activity...</p>` : ""}
         <p class="detail-meta">${escapeHtml([roleLabel, locationLabel].filter(Boolean).join(" - "))}</p>
         ${userSinceLine ? `<p class="detail-meta">${escapeHtml(userSinceLine)}</p>` : ""}
         ${state.profile.pending ? `<p class="detail-meta">Thank you for registering. Your account is waiting for review.</p>` : ""}
@@ -23835,7 +24371,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           slug: String(suggestion.id || ""),
           title: suggestion.title || "Suggested site",
           label: ACTIVITY_UTILS.suggestionLabel(suggestion),
-          preview: activityPreview(suggestion.review_note || "A contributor sent information for the archive."),
+          preview: activityPreview(suggestion.review_note || "A contributor sent information for On This Site."),
           date: ACTIVITY_UTILS.suggestionDate(suggestion)
         }))
         .filter(item => activityDateValue(item.date));
@@ -23953,7 +24489,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             slug: String(item.id || ""),
             title: feedback ? "Feedback needs review" : status === "pending" ? "Suggested site needs review" : "Site suggestion",
             label: `${feedback ? "Feedback" : "Suggested site"} - ${status}`,
-            preview: activityPreview(item.introduction || item.review_note || "A contributor sent information for the archive."),
+            preview: activityPreview(item.introduction || item.review_note || "A contributor sent information for On This Site."),
             date: ACTIVITY_UTILS.suggestionDate(item),
             meta: `${item.author_name || item.author_email || "Contributor"}${item.suggested_image ? " - screenshot attached" : ""}`,
             image: directusAssetUrl(item.suggested_image),
@@ -24082,7 +24618,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!mobileActivityListEl) return;
       const feed = latestMobileActivity();
       mobileActivityListEl.innerHTML = `
-        <p class="summary">Most recent public activity from the archive, newest first.</p>
+        <p class="summary">Most recent public activity from On This Site, newest first.</p>
         ${feed.map((item, index) => `
           <button class="activity-feed-item${item.pinned ? " is-pinned" : ""}" type="button" data-mobile-activity-index="${index}" data-mobile-activity-type="${escapeHtml(item.type)}" data-mobile-activity-source-type="${escapeHtml(item.sourceType || "")}" data-mobile-activity-id="${escapeHtml(item.activityId || item.id || "")}" data-mobile-activity-slug="${escapeHtml(item.slug || "")}">
             <span class="detail-meta">${item.pinned ? mobileActivityPinIconHtml() : ""}${escapeHtml(item.label)} - ${escapeHtml(activityDateLabel(item.date))}</span>
@@ -24411,15 +24947,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           screenshotId,
           screenshotNote
         });
-        const created = await postDirectusItem("mobile_comments", feedbackPayload);
-        const record = { ...feedbackPayload, ...(created?.data || {}) };
-        try {
-          await FEEDBACK_UTILS.sendFeedbackReviewEmail(record);
-        } catch (emailError) {
-          console.warn("Feedback was saved, but the review email could not be sent immediately.", emailError);
-          showBanner("Feedback saved, but email notification failed. Email onthissiteny@gmail.com if this is urgent.");
-          return;
-        }
+        await FEEDBACK_UTILS.submitFeedbackReview(feedbackPayload, { platform: "mobile", appUrl: window.location.href });
       } finally {
         feedbackSubmitBtn.disabled = false;
         feedbackSubmitBtn.textContent = "Send feedback";
@@ -24817,6 +25345,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       syncUserLocationMarker({ centerMap: false });
       syncExhibitMarkers();
       syncApprovedSuggestionMarkers();
+      ensureMobileMovingFeatureMarkers();
     }
 
     function syncMobileLayerButtons() {
@@ -25639,11 +26168,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
       await refreshMobileAppDataFromDirectus();
     });
-    mobileKidModeBtn?.addEventListener("click", () => {
-      localStorage.setItem("nli-kid-mode", "1");
+    mobileLearnOpenBtn?.addEventListener("click", () => {
+      localStorage.removeItem("nli-kid-mode");
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
-      openHomePanel();
-      showBanner("Kid Mode is on.");
+      openPage("knowledgebase");
+      showBanner("Learning articles opened.");
     });
     suggestSiteOpenBtn.addEventListener("click", () => {
       if (!requireRegisteredContributor()) return;
@@ -26142,7 +26671,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
         });
         if (nativeAndroid) hideLoadingScreen();
-        if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) idleTask(refreshMobileSiteIconFieldsFromDirectus);
+        if (!window.NLI_DISABLE_DIRECTUS_RUNTIME && !(state.sites || []).every(site => Object.prototype.hasOwnProperty.call(site, "map_icon"))) idleTask(refreshMobileSiteIconFieldsFromDirectus);
         state.mobileStartupRendering = false;
         updateMobileHeaderInstruction();
         if (nativeAndroid) {
@@ -26197,13 +26726,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             checkNewContentAlerts();
             startMapStoryRefresh();
           })
-          .catch(error => console.warn("Deferred archive data did not load yet.", error)));
+          .catch(error => console.warn("Deferred site data did not load yet.", error)));
       } catch (error) {
         state.mobileStartupRendering = false;
-        statusEl.textContent = "Could not load archive";
-        setLoadingMessage("The mobile archive could not finish loading.");
+        statusEl.textContent = "Could not load site data";
+        setLoadingMessage("The mobile site data could not finish loading.");
         window.setTimeout(hideLoadingScreen, 1200);
-        showBanner("The mobile archive could not load yet.");
+        showBanner("The mobile site data could not load yet.");
         console.error(error);
       }
     }
