@@ -12647,7 +12647,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       },
       onAuthExpired: () => {
         if (!state.profile?.token && !state.profile?.refreshToken && !state.profile?.refresh_token) return;
-        expireProfileSession("Your login expired. Please log back in to save points and activity.");
+        saveProfile({
+          ...state.profile,
+          token: null,
+          refreshToken: null,
+          refresh_token: null,
+          tokenExpired: true
+        });
+        showBanner("Login needs refreshing before saving changes.");
       }
     });
     const NEW_CONTENT_ALERT_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -15810,10 +15817,31 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const siteSuggestionsRequest = state.profile?.token
         ? fetchJson(`/items/site_suggestions?limit=-1&fields=${SITE_SUGGESTION_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.siteSuggestions))
         : Promise.resolve(currentRowsFallback(state.siteSuggestions));
+      // Keep the map usable while slower account and social requests finish. Public learning content
+      // is rendered immediately when its own request resolves instead of waiting for every request.
+      const wikiRequest = fetchMobileWikiIndexRows()
+        .then(data => ({ data }))
+        .then(response => {
+          state.wikiArticles = (response.data || []).map(sanitizePublicWikiArticle);
+          state.wikiBySlug = new Map(state.wikiArticles.map(article => [article.slug, article]));
+          clearRelatedSiteCaches();
+          updateMobileHeaderInstruction();
+          return response;
+        })
+        .catch(() => ({ data: [] }));
+      const eventRequest = fetchJson(`/items/calendar_events?limit=-1&sort=start_datetime,title&fields=${EXHIBIT_FIELDS}`, { cacheKey: "mobile-events", ttl: 60000, fresh: false })
+        .then(response => {
+          state.exhibits = mergeCalendarEvents(response.data || [], state.exhibits || []);
+          updateMobileHeaderInstruction();
+          runDeferredUpdate("Exhibits", prepareExhibits);
+          runDeferredUpdate("Exhibit markers", syncExhibitMarkers);
+          return response;
+        })
+        .catch(() => ({ data: [] }));
       const [timelineResponse, wikiResponse, eventResponse, legacyExhibitResponse, profilesResponse, commentsResponse, commentVotesResponse, pointEventsResponse, plantObservationsResponse, visitsResponse, suggestionsResponse, registrationsResponse, storyResponse, storyVotesResponse, languageResponse, followsResponse, loginRewardsResponse] = await Promise.all([
         loadTimelineEvents(),
-        fetchMobileWikiIndexRows().then(data => ({ data })).catch(() => ({ data: [] })),
-        fetchJson(`/items/calendar_events?limit=-1&sort=start_datetime,title&fields=${EXHIBIT_FIELDS}`, { cacheKey: "mobile-events", ttl: 60000, fresh: false }).catch(() => ({ data: [] })),
+        wikiRequest,
+        eventRequest,
         legacyExhibitsRequest,
         state.profile?.token ? fetchJson(`/items/mobile_member_profiles?limit=-1&sort=display_name&fields=${PROFILE_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.contributorProfiles)) : Promise.resolve(currentRowsFallback(state.contributorProfiles)),
         fetchJson(`/items/mobile_comments?limit=-1&filter[status][_eq]=approved&filter[public_activity][_eq]=true&fields=${PUBLIC_COMMENT_FIELDS}`, { cacheKey: "mobile-comments", ttl: 45000, fresh: false }).catch(() => currentRowsFallback(state.publicComments)),
@@ -24618,7 +24646,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!mobileActivityListEl) return;
       const feed = latestMobileActivity();
       mobileActivityListEl.innerHTML = `
-        <p class="summary">Most recent public activity from On This Site, newest first.</p>
+        <p class="summary">Most recent public activity from the archive, newest first.</p>
         ${feed.map((item, index) => `
           <button class="activity-feed-item${item.pinned ? " is-pinned" : ""}" type="button" data-mobile-activity-index="${index}" data-mobile-activity-type="${escapeHtml(item.type)}" data-mobile-activity-source-type="${escapeHtml(item.sourceType || "")}" data-mobile-activity-id="${escapeHtml(item.activityId || item.id || "")}" data-mobile-activity-slug="${escapeHtml(item.slug || "")}">
             <span class="detail-meta">${item.pinned ? mobileActivityPinIconHtml() : ""}${escapeHtml(item.label)} - ${escapeHtml(activityDateLabel(item.date))}</span>
