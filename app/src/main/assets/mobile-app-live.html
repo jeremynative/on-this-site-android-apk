@@ -12012,6 +12012,27 @@
     return body;
   }
 
+  async function sendCommentSubmissionEmail(record = {}, options = {}) {
+    const id = record?.id || record?.data?.id || options.id;
+    if (!id) return null;
+    const endpoint = new URL("feedback-email.php", window.location.href);
+    const response = await fetch(endpoint.toString(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        type: "comment_submission",
+        id,
+        comment_id: id,
+        app_url: options.appUrl || window.location.href,
+        platform: options.platform || "desktop"
+      })
+    });
+    const text = await response.text();
+    const body = text ? JSON.parse(text) : null;
+    if (!response.ok || body?.error) throw new Error(body?.error || `Comment email failed ${response.status}`);
+    return body;
+  }
+
   async function sendAccountInviteEmail(invite = {}, options = {}) {
     const endpoint = new URL("feedback-email.php", window.location.href);
     const response = await fetch(endpoint.toString(), {
@@ -12066,6 +12087,7 @@
     submitFeedbackReview,
     sendFeedbackReviewEmail,
     sendAccountSignupEmail,
+    sendCommentSubmissionEmail,
     sendAccountInviteEmail,
     redeemAccountInviteCode
   };
@@ -14005,10 +14027,17 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         profile.registrationId = registrationReview?.id || null;
       }
       if (profile.registrationSynced) {
-        await FEEDBACK_UTILS.sendAccountSignupEmail(
-          { ...(registrationRecord?.data || {}), id: profile.registrationId || registrationRecord?.data?.id },
-          { appUrl: window.location.href, platform: "mobile" }
-        ).catch(error => console.warn("Account signup email failed:", error));
+        try {
+          await FEEDBACK_UTILS.sendAccountSignupEmail(
+            { ...(registrationRecord?.data || {}), id: profile.registrationId || registrationRecord?.data?.id },
+            { appUrl: window.location.href, platform: "mobile" }
+          );
+          profile.signupEmailSent = true;
+        } catch (error) {
+          profile.signupEmailSent = false;
+          profile.signupEmailError = "Your account request was saved, but the admin email could not be sent. Please use Feedback to let us know.";
+          console.warn("Account signup email failed:", error);
+        }
       }
       const cleanedInviteCode = String(inviteCode || "").trim();
       if (cleanedInviteCode && profile.registrationSynced) {
@@ -21110,6 +21139,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         created_at: new Date().toISOString()
       };
       let created = null;
+      let commentEmailError = "";
       try {
         created = await postDirectusItem("mobile_comments", payload, {
           requireAuth: true,
@@ -21150,13 +21180,22 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             created_at: new Date().toISOString()
           }).catch(() => null);
         }
+        try {
+          await FEEDBACK_UTILS.sendCommentSubmissionEmail(created, {
+            appUrl: payload.article_url,
+            platform: "mobile"
+          });
+        } catch (error) {
+          commentEmailError = "Your comment is visible, but the admin email could not be sent.";
+          console.warn("Comment email failed:", error);
+        }
       } finally {
         if (submitButton) {
           submitButton.disabled = false;
           submitButton.textContent = originalLabel;
         }
       }
-      showBanner("Your comment is now visible. Thank you.");
+      showBanner(commentEmailError || "Your comment is now visible. Thank you.");
       await refreshCommentsNow({ rerender: false });
       if (sourceType === "site" && sourceSlug) openSite(sourceSlug, { focus: false, skipCommentRefresh: true });
       else if (sourceType === "wiki" && sourceSlug) openWikiArticle(sourceSlug, { focus: false, skipCommentRefresh: true });
@@ -26378,12 +26417,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         loginPasswordEl.value = "";
         registerPasswordEl.value = "";
         if (registerInviteCodeEl) registerInviteCodeEl.value = "";
-        const message = profile.inviteRedeemed
+        const message = profile.signupEmailError || (profile.inviteRedeemed
           ? "Thank you for registering. Your invite code was accepted and 100 points were awarded to the friend who invited you."
           : profile.inviteError
             ? `Thank you for registering. We will review your account soon. Invite code note: ${profile.inviteError}`
-            : "Thank you for registering. We will review your account soon.";
-        showRegisterStatus(message, "success");
+            : "Thank you for registering. We will review your account soon.");
+        showRegisterStatus(message, profile.signupEmailError ? "error" : "success");
         showBanner(message);
       } catch (error) {
         showRegisterStatus(error.message || "Could not create registration.", "error");
