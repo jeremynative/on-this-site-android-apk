@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260710-account-alert-r3";
+const expectedBuild = "20260710-story-auth-r4";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";

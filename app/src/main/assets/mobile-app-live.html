@@ -18952,12 +18952,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         story: Number(story.id),
         vote: Number(value) > 0 ? 1 : -1,
         visitor_key: MAP_STORY_UTILS.memberVoteKey(story?.id, profile?.id),
-        member_profile: Number(profile.id),
         created_at: new Date().toISOString()
       };
       try {
         const created = await postDirectusItem("mobile_map_story_votes", vote, { requireAuth: true, timeout: 10000 });
-        mergeMapStoryVoteRecords([{ id: created.data?.id || `local-${Date.now()}`, ...vote, ...(created.data || {}) }]);
+        mergeMapStoryVoteRecords([{ id: created.data?.id || `local-${Date.now()}`, ...vote, member_profile: Number(profile.id), ...(created.data || {}) }]);
         const counts = MAP_STORY_UTILS.storyVoteCounts(story, state.mapStoryVotes);
         const patch = {
           up_votes: counts.up,
@@ -18968,7 +18967,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const expiry = MAP_STORY_UTILS.effectiveExpiresAt(story, state.mapStoryVotes, MAP_STORY_RULES);
         if (expiry) patch.expires_at = expiry.toISOString();
         if (expiry && expiry.getTime() <= Date.now()) patch.status = "archived";
-        patchDirectusItem("mobile_map_stories", story.id, patch).catch(() => {});
+
         Object.assign(story, patch);
         openMapStory(story);
         syncMapStoryMarkers();
@@ -19068,7 +19067,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const now = new Date();
         const expires = new Date(now.getTime() + MAP_STORY_BASE_LIFETIME_MS);
         const payload = {
-          status: "active",
           prompt_key: prompt.key,
           prompt_label: prompt.label,
           caption,
@@ -19079,19 +19077,24 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           attached_site: attachedSite?.id || null,
           attached_site_slug: attachedSite?.slug || "",
           attached_site_title: attachedSite?.title || "",
-          member_profile: profile?.id || null,
-          author_name: profile?.display_name || state.profile?.display_name || state.profile?.email || "Contributor",
           created_at: now.toISOString(),
           expires_at: expires.toISOString(),
-          expires_original_at: expires.toISOString(),
-          permanent: false,
-          admin_permanent: false,
-          up_votes: 0,
-          down_votes: 0,
-          vote_score: 0
+          expires_original_at: expires.toISOString()
         };
-        const created = await postDirectusItem("mobile_map_stories", payload, { timeout: 20000 });
-        state.mapStories.push({ id: created.data?.id || `local-${Date.now()}`, ...payload });
+        const created = await postDirectusItem("mobile_map_stories", payload, { requireAuth: true, timeout: 20000 });
+        state.mapStories.push({
+          id: created.data?.id || `local-${Date.now()}`,
+          ...payload,
+          status: created.data?.status || "active",
+          member_profile: profile?.id || null,
+          author_name: profile?.display_name || state.profile?.display_name || state.profile?.email || "Contributor",
+          permanent: Boolean(created.data?.permanent),
+          admin_permanent: Boolean(created.data?.admin_permanent),
+          up_votes: Number(created.data?.up_votes || 0),
+          down_votes: Number(created.data?.down_votes || 0),
+          vote_score: Number(created.data?.vote_score || 0),
+          ...(created.data || {})
+        });
         mapStorySheetEl.classList.remove("open");
         syncMapStoryMarkers();
         if (activitySheetEl?.classList.contains("open")) renderMobileActivitySheet();
@@ -21448,7 +21451,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const candidates = [place.place, place.label].filter(Boolean);
       for (const candidate of candidates) {
         let text = stripHtml(candidate)
-          .replace(/^\s*\d{3,4}\s*[-��]\s*/g, "")
+          .replace(/^\s*\d{3,4}\s*[-–—]\s*/g, "")
           .replace(/\([^)]*\)/g, " ")
           .replace(/\s+/g, " ")
           .trim();
