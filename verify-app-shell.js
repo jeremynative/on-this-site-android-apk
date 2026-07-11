@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260710-learning-paths-r6";
+const expectedBuild = "20260711-mobile-startup-r7";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -412,8 +412,9 @@ requireBundledText('function viewerOwnsComment(comment, options = {})', "Bundled
 requireBundledText('COMMENT_UTILS.viewerOwnsComment(comment, { profile, viewerEmail })', "Bundled Android app must route mobile comment ownership through shared comment utilities.");
 requireBundledText('function votePayload(commentId, value, profile, options = {})', "Bundled Android app must include shared comment vote payload building.");
 requireBundledText('COMMENT_UTILS.helpfulVotePointEvent({', "Bundled Android app must route helpful-vote point events through shared comment utilities.");
-requireBundledText('const legacyExhibitsRequest = state.profile?.token', "Bundled Android app must not request restricted legacy exhibits for anonymous public startup.");
-requireBundledText('const siteSuggestionsRequest = state.profile?.token', "Bundled Android app must not request restricted site suggestions for anonymous public startup.");
+requireBundledText('const legacyExhibitsRequest = includeCommunity && state.profile?.token', "Bundled Android app must not request restricted legacy exhibits for anonymous public startup.");
+requireBundledText('const siteSuggestionsRequest = includeCommunity && state.profile?.token', "Bundled Android app must not request restricted site suggestions for anonymous public startup.");
+requireBundledText('const communityRequest = async (request, fallbackRows = [])', "Bundled Android app must defer community collections until their panels are opened.");
 requireBundledText('function mergeProfilePointEvents(target = [], records = [])', "Bundled Android app must include shared point-event record merging.");
 requireBundledText('function mergeLanguageAttemptRecords(target = [], records = [], options = {})', "Bundled Android app must include shared language attempt merging.");
 requireBundledText('PROFILE_UTILS.mergeLanguageAttemptRecords(state.languageQuizAttempts, records, { relationId })', "Bundled Android app must route language attempt merging through shared profile utilities.");
@@ -509,7 +510,7 @@ requireBundledText('data-nearby-show-more', "Bundled Android app must let users 
 requireBundledText('const nativeAndroid = isNativeAndroidApp();', "Bundled Android app must cache native Android startup state.");
 requireBundledText('function waitForMapbox(timeout = 12000)', "Bundled Android app must give Mapbox enough time to load inside WebView before falling back.");
 requireBundledText('if (nativeAndroid) {\n          await new Promise(resolve => window.requestAnimationFrame(resolve));\n        }\n        await openInitialRouteFromUrl();', "Bundled Android app must keep the loading screen up during native startup instead of revealing a half-built shell.");
-requireBundledText('if (nativeAndroid) hideLoadingScreen();\n        if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) idleTask(refreshMobileSiteIconFieldsFromDirectus);', "Bundled Android app must hide loading after map startup and skip live Directus icon refresh in snapshot mode.");
+requireBundledText('if (nativeAndroid) hideLoadingScreen();\n        if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {\n          window.setTimeout(() => idleTask(refreshMobileSiteIconFieldsFromDirectus), 30000);', "Bundled Android app must hide loading after map startup and keep the broad icon refresh outside the interaction window.");
 requireBundledText('if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {\n          idleTask(() => (state.profile ? ensureProfileStatsSynced() : Promise.resolve(false))', "Bundled Android app must skip Directus-backed profile refresh work in snapshot mode.");
 requireBundledText('function stabilizeAndroidMapPaint()', "Bundled Android app must include the Android map paint stabilizer.");
 requireBundledText('state.map.resize();', "Bundled Android app must resize the map after Android WebView startup.");
@@ -517,12 +518,14 @@ requireBundledText('refreshMobileMapSources();', "Bundled Android app must refre
 requireBundledText('function bindAndroidMapGestureGuards()', "Bundled Android app must pause expensive map refreshes while the user is dragging or pinching.");
 requireBundledText('state.map.on("dragstart", markAndroidMapGestureActive);', "Bundled Android app must detect the start of finger map drags.");
 requireBundledText('if (isAndroidMapGestureActive()) {\n          state.pendingAndroidMapRefresh = true;\n          return;\n        }', "Bundled Android app must defer settle refreshes during active map gestures.");
-requireBundledText('window.setTimeout(repaint, 900);', "Bundled Android paint stabilization must retry after active map gestures settle.");
+requireBundledText('androidMapRefreshTimers: new Set()', "Bundled Android app must keep one cancellable map refresh chain.");
+requireBundledText('[280, 1100, 2600].forEach(delay => {', "Bundled Android paint stabilization must use a short bounded retry sequence.");
+requireBundledText('refreshAndroidMapAfterSettle("android-map-stabilize")', "Bundled Android paint stabilization must use the coalesced settle refresh.");
 if (/function\s+stabilizeAndroidMapPaint\(\)[\s\S]*?\.zoomTo\(|function\s+stabilizeAndroidMapPaint\(\)[\s\S]*?\.jumpTo\(/.test(bundledApp) ||
     /function\s+stabilizeAndroidMapPaint\(\)[\s\S]*?\.zoomTo\(|function\s+stabilizeAndroidMapPaint\(\)[\s\S]*?\.jumpTo\(/.test(bundledLiveApp)) {
   throw new Error("Bundled Android map paint stabilizer must not change zoom or center without user input.");
 }
-requireBundledText('window.setTimeout(repaint, 32000);', "Bundled Android app must keep retrying map paint after slower Android WebView startup.");
+requireBundledText('const stable = Boolean(state.map.loaded?.() && (!state.map.areTilesLoaded || state.map.areTilesLoaded()))', "Bundled Android app must stop repaint retries once the map and tiles are stable.");
 requireBundledText('stabilizeAndroidMapPaint();', "Bundled Android app must trigger map paint stabilization after layers and markers are attached.");
 requireBundledText('mobileProfileStats', "Bundled Android app must render Directus-backed profile stats.");
 requireBundledText('ensureProfileActivitySynced', "Bundled Android app must sync profile activity from Directus.");

@@ -13352,6 +13352,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       relatedSiteIndexCache: null,
       deferredDataLoaded: false,
       deferredDataLoading: false,
+      deferredCommunityDataLoaded: false,
       profileActivitySynced: false,
       profileActivitySyncPromise: null,
       mobileStartupRendering: false,
@@ -13404,6 +13405,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       androidMapGestureSettleTimer: null,
       pendingAndroidMapRefresh: false,
       androidMapGestureGuardsBound: false,
+      androidMapRefreshTimers: new Set(),
+      androidMapRefreshToken: 0,
+      androidMapResizeObserver: null,
+      androidMapLastSizeKey: "",
       nearbySiteOpenTimer: null,
       nearbySiteOpenToken: 0,
       selectedWikiSlug: "",
@@ -15842,27 +15847,45 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
     }
 
-    async function loadDeferredData() {
-      if (state.deferredDataLoaded) return true;
-      if (state.deferredDataLoading && state.deferredDataPromise) return state.deferredDataPromise;
+    async function loadDeferredData(options = {}) {
+      const includeCommunity = options.includeCommunity === true;
+      if (state.deferredDataLoaded && (!includeCommunity || state.deferredCommunityDataLoaded)) return true;
+      if (state.deferredDataLoading && state.deferredDataPromise) {
+        return state.deferredDataPromise.then(() =>
+          includeCommunity && !state.deferredCommunityDataLoaded
+            ? loadDeferredData({ includeCommunity: true })
+            : true
+        );
+      }
       state.deferredDataLoading = true;
       state.deferredDataPromise = (async () => {
       try {
       runDeferredUpdate("Mobile timeline", renderMobileTimeline);
+      const loadCoreData = !state.deferredDataLoaded;
       const loadTimelineEvents = () =>
-        fetchMobileTimelineIndexRows()
+        loadCoreData ? fetchMobileTimelineIndexRows()
           .then(data => ({ data }))
           .catch(() => fetchJson(`/items/timeline_events?limit=-1&fields=${BASIC_TIMELINE_FIELDS}`, { cacheKey: "mobile-timeline-basic", ttl: 60000 }))
-          .catch(() => ({ data: [] }));
-      const legacyExhibitsRequest = state.profile?.token
+          .catch(() => ({ data: [] }))
+          : Promise.resolve({ data: state.timelineEvents });
+      const legacyExhibitsRequest = includeCommunity && state.profile?.token
         ? fetchJson(`/items/mobile_exhibits?limit=-1&fields=${EXHIBIT_FIELDS}`, { cacheKey: "mobile-exhibits", ttl: 60000, fresh: false }).catch(() => ({ data: [] }))
         : Promise.resolve({ data: [] });
-      const siteSuggestionsRequest = state.profile?.token
-        ? fetchJson(`/items/site_suggestions?limit=-1&fields=${SITE_SUGGESTION_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.siteSuggestions))
-        : Promise.resolve(currentRowsFallback(state.siteSuggestions));
+      const siteSuggestionsRequest = includeCommunity && state.profile?.token
+        ? fetchJson(`/items/site_suggestions?limit=-1&fields=${SITE_SUGGESTION_FIELDS}`, { fresh: true }).catch(() => ({ data: currentRowsFallback(state.siteSuggestions), _fallback: true }))
+        : Promise.resolve({ data: currentRowsFallback(state.siteSuggestions), _skipped: true });
+      const communityRequest = async (request, fallbackRows = []) => {
+        if (!includeCommunity) return { data: currentRowsFallback(fallbackRows), _skipped: true };
+        try {
+          const response = await request();
+          return Array.isArray(response) ? { data: response, _fallback: true } : (response || { data: [] });
+        } catch (_) {
+          return { data: currentRowsFallback(fallbackRows), _fallback: true };
+        }
+      };
       // Keep the map usable while slower account and social requests finish. Public learning content
       // is rendered immediately when its own request resolves instead of waiting for every request.
-      const wikiRequest = fetchMobileWikiIndexRows()
+      const wikiRequest = loadCoreData ? fetchMobileWikiIndexRows()
         .then(data => ({ data }))
         .then(response => {
           state.wikiArticles = (response.data || []).map(sanitizePublicWikiArticle);
@@ -15871,8 +15894,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           updateMobileHeaderInstruction();
           return response;
         })
-        .catch(() => ({ data: [] }));
-      const eventRequest = fetchJson(`/items/calendar_events?limit=-1&sort=start_datetime,title&fields=${EXHIBIT_FIELDS}`, { cacheKey: "mobile-events", ttl: 60000, fresh: false })
+        .catch(() => ({ data: [] }))
+        : Promise.resolve({ data: state.wikiArticles });
+      const eventRequest = loadCoreData ? fetchJson(`/items/calendar_events?limit=-1&sort=start_datetime,title&fields=${EXHIBIT_FIELDS}`, { cacheKey: "mobile-events", ttl: 60000, fresh: false })
         .then(response => {
           state.exhibits = mergeCalendarEvents(response.data || [], state.exhibits || []);
           updateMobileHeaderInstruction();
@@ -15880,25 +15904,26 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           runDeferredUpdate("Exhibit markers", syncExhibitMarkers);
           return response;
         })
-        .catch(() => ({ data: [] }));
+        .catch(() => ({ data: [] }))
+        : Promise.resolve({ data: state.exhibits });
       const [timelineResponse, wikiResponse, eventResponse, legacyExhibitResponse, profilesResponse, commentsResponse, commentVotesResponse, pointEventsResponse, plantObservationsResponse, visitsResponse, suggestionsResponse, registrationsResponse, storyResponse, storyVotesResponse, languageResponse, followsResponse, loginRewardsResponse] = await Promise.all([
         loadTimelineEvents(),
         wikiRequest,
         eventRequest,
         legacyExhibitsRequest,
-        state.profile?.token ? fetchJson(`/items/mobile_member_profiles?limit=-1&sort=display_name&fields=${PROFILE_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.contributorProfiles)) : Promise.resolve(currentRowsFallback(state.contributorProfiles)),
-        fetchJson(`/items/mobile_comments?limit=-1&filter[status][_eq]=approved&filter[public_activity][_eq]=true&fields=${PUBLIC_COMMENT_FIELDS}`, { cacheKey: "mobile-comments", ttl: 45000, fresh: false }).catch(() => currentRowsFallback(state.publicComments)),
-        fetchJson(`/items/mobile_comment_votes?limit=-1&fields=${COMMENT_VOTE_FIELDS}`, { cacheKey: "mobile-comment-votes", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.commentVotes)),
-        state.profile?.token ? fetchJson(`/items/mobile_point_events?limit=-1&fields=${POINT_EVENT_FIELDS}`, { cacheKey: "mobile-point-events", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.profilePointEvents)) : Promise.resolve(currentRowsFallback(state.profilePointEvents)),
-        fetchJson(`/items/mobile_plant_observations?limit=-1&filter[status][_eq]=approved&fields=${PLANT_OBSERVATION_FIELDS}`, { cacheKey: "mobile-plant-observations", ttl: 45000, fresh: false }).catch(() => ({ data: [] })),
-        fetchJson(`/items/mobile_site_visits?limit=-1&fields=${PUBLIC_VISIT_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.publicVisits)),
+        communityRequest(() => fetchJson(`/items/mobile_member_profiles?limit=-1&sort=display_name&fields=${PROFILE_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.contributorProfiles)), state.contributorProfiles),
+        communityRequest(() => fetchJson(`/items/mobile_comments?limit=-1&filter[status][_eq]=approved&filter[public_activity][_eq]=true&fields=${PUBLIC_COMMENT_FIELDS}`, { cacheKey: "mobile-comments", ttl: 45000, fresh: false }).catch(() => currentRowsFallback(state.publicComments)), state.publicComments),
+        communityRequest(() => fetchJson(`/items/mobile_comment_votes?limit=-1&fields=${COMMENT_VOTE_FIELDS}`, { cacheKey: "mobile-comment-votes", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.commentVotes)), state.commentVotes),
+        communityRequest(() => fetchJson(`/items/mobile_point_events?limit=-1&fields=${POINT_EVENT_FIELDS}`, { cacheKey: "mobile-point-events", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.profilePointEvents)), state.profilePointEvents),
+        communityRequest(() => fetchJson(`/items/mobile_plant_observations?limit=-1&filter[status][_eq]=approved&fields=${PLANT_OBSERVATION_FIELDS}`, { cacheKey: "mobile-plant-observations", ttl: 45000, fresh: false }).catch(() => ({ data: [] })), state.plantObservations),
+        communityRequest(() => fetchJson(`/items/mobile_site_visits?limit=-1&fields=${PUBLIC_VISIT_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.publicVisits)), state.publicVisits),
         siteSuggestionsRequest,
-        adminAccountRegistrationsRequest().catch(() => currentRowsFallback(state.accountRegistrations)),
-        fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 30000, fresh: false }).catch(() => ({ data: [] })),
-        fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 30000, fresh: false }).catch(() => ({ data: [] })),
-        state.profile?.token ? fetchJson(`/items/mobile_language_quiz_progress?limit=-1&fields=${LANGUAGE_PROGRESS_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.languageQuizAttempts)) : Promise.resolve(currentRowsFallback(state.languageQuizAttempts)),
-        state.profile?.token ? fetchJson(`/items/mobile_profile_follows?limit=-1&fields=${FOLLOW_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileFollows)) : Promise.resolve(currentRowsFallback(state.profileFollows)),
-        state.profile?.token ? fetchJson(`/items/mobile_profile_logins?limit=-1&fields=${LOGIN_REWARD_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileLoginRewards)) : Promise.resolve(currentRowsFallback(state.profileLoginRewards))
+        communityRequest(() => adminAccountRegistrationsRequest().catch(() => currentRowsFallback(state.accountRegistrations)), state.accountRegistrations),
+        loadCoreData ? fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 30000, fresh: false }).catch(() => ({ data: [] })) : Promise.resolve({ data: state.mapStories }),
+        loadCoreData ? fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 30000, fresh: false }).catch(() => ({ data: [] })) : Promise.resolve({ data: state.mapStoryVotes }),
+        communityRequest(() => fetchJson(`/items/mobile_language_quiz_progress?limit=-1&fields=${LANGUAGE_PROGRESS_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.languageQuizAttempts)), state.languageQuizAttempts),
+        communityRequest(() => fetchJson(`/items/mobile_profile_follows?limit=-1&fields=${FOLLOW_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileFollows)), state.profileFollows),
+        communityRequest(() => fetchJson(`/items/mobile_profile_logins?limit=-1&fields=${LOGIN_REWARD_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileLoginRewards)), state.profileLoginRewards)
       ]);
       const existingTimelineById = new Map(state.timelineEvents.map(item => [String(item.id), item]));
       state.timelineEvents = (timelineResponse.data || []).map(item => ({ ...item, ...(existingTimelineById.get(String(item.id)) || {}) }));
@@ -15921,7 +15946,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.languageQuizAttempts = preserveActiveProfileRows(languageResponse.data, state.languageQuizAttempts);
       state.profileFollows = preserveActiveProfileRows(followsResponse.data, state.profileFollows, ["follower_profile", "following_profile"]);
       state.profileLoginRewards = preserveActiveProfileRows(loginRewardsResponse.data, state.profileLoginRewards);
-      state.profileActivitySynced = Boolean(state.profile && allResponsesFresh([
+      state.profileActivitySynced = includeCommunity && Boolean(state.profile && allResponsesFresh([
         profilesResponse,
         commentsResponse,
         commentVotesResponse,
@@ -15935,6 +15960,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       ]));
       state.profileActivityCache = null;
       state.deferredDataLoaded = true;
+      if (includeCommunity) state.deferredCommunityDataLoaded = true;
       runDeferredUpdate("Exhibits", prepareExhibits);
       runDeferredUpdate("Profile", renderProfile);
       runDeferredUpdate("Achievements", renderRewards);
@@ -23807,9 +23833,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function refreshAndroidMapAfterSettle(reason = "android-map-settle") {
       if (!isNativeAndroidApp() || !state.map) return;
+      state.androidMapRefreshToken += 1;
+      const token = state.androidMapRefreshToken;
+      state.androidMapRefreshTimers.forEach(timer => window.clearTimeout(timer));
+      state.androidMapRefreshTimers.clear();
       let refreshCount = 0;
       const refresh = () => {
-        if (!state.map) return;
+        if (!state.map || token !== state.androidMapRefreshToken || document.hidden) return;
         if (isAndroidMapGestureActive()) {
           state.pendingAndroidMapRefresh = true;
           return;
@@ -23825,37 +23855,43 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         } catch (error) {
           console.warn(`${reason} map refresh will retry later.`, error);
         }
+        const stable = Boolean(state.map.loaded?.() && (!state.map.areTilesLoaded || state.map.areTilesLoaded()));
+        if (stable && refreshCount >= 2) {
+          state.androidMapRefreshTimers.forEach(timer => window.clearTimeout(timer));
+          state.androidMapRefreshTimers.clear();
+        }
       };
       window.requestAnimationFrame(refresh);
-      window.setTimeout(refresh, 350);
-      window.setTimeout(refresh, 1400);
-      window.setTimeout(refresh, 3600);
+      [280, 1100, 2600].forEach(delay => {
+        const timer = window.setTimeout(() => {
+          state.androidMapRefreshTimers.delete(timer);
+          refresh();
+        }, delay);
+        state.androidMapRefreshTimers.add(timer);
+      });
     }
 
     function stabilizeAndroidMapPaint() {
       if (!isNativeAndroidApp() || !state.map) return;
-      let repaintCount = 0;
-      const repaint = () => {
-        if (!state.map) return;
-        if (isAndroidMapGestureActive()) {
-          state.pendingAndroidMapRefresh = true;
-          window.setTimeout(repaint, 900);
-          return;
-        }
-        try {
-          state.map.resize();
-          if (repaintCount < 2) refreshMobileMapSources();
-          repaintCount += 1;
-          state.map.triggerRepaint?.();
-        } catch {}
+      refreshAndroidMapAfterSettle("android-map-stabilize");
+    }
+
+    function bindAndroidMapResizeObserver() {
+      if (!isNativeAndroidApp() || !state.map || state.androidMapResizeObserver || !window.ResizeObserver) return;
+      const mapElement = document.getElementById("map");
+      if (!mapElement) return;
+      const sizeKey = () => {
+        const rect = mapElement.getBoundingClientRect();
+        return `${Math.round(rect.width)}x${Math.round(rect.height)}`;
       };
-      window.requestAnimationFrame(repaint);
-      window.setTimeout(repaint, 450);
-      window.setTimeout(repaint, 1600);
-      window.setTimeout(repaint, 4200);
-      window.setTimeout(repaint, 9000);
-      window.setTimeout(repaint, 18000);
-      window.setTimeout(repaint, 32000);
+      state.androidMapLastSizeKey = sizeKey();
+      state.androidMapResizeObserver = new ResizeObserver(() => {
+        const nextSizeKey = sizeKey();
+        if (!nextSizeKey || nextSizeKey === state.androidMapLastSizeKey) return;
+        state.androidMapLastSizeKey = nextSizeKey;
+        refreshAndroidMapAfterSettle("android-map-container-resize");
+      });
+      state.androidMapResizeObserver.observe(mapElement);
     }
 
     function updateProfileMenuButton(stats = null) {
@@ -24819,8 +24855,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     async function openMobileActivitySheet() {
       renderMobileActivitySheet();
       openSheet(activitySheetEl);
-      if (!state.deferredDataLoaded && !window.NLI_MOBILE_DATA) {
-        await loadDeferredData();
+      if (!state.deferredCommunityDataLoaded && !window.NLI_MOBILE_DATA) {
+        await loadDeferredData({ includeCommunity: true });
       }
       renderMobileActivitySheet();
       markMobileActivitySeen();
@@ -24829,8 +24865,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     async function openMobileNotificationsSheet() {
       renderMobileNotificationsSheet();
       openSheet(notificationsSheetEl);
-      if (!state.deferredDataLoaded && !window.NLI_MOBILE_DATA) {
-        await loadDeferredData();
+      if (!state.deferredCommunityDataLoaded && !window.NLI_MOBILE_DATA) {
+        await loadDeferredData({ includeCommunity: true });
       }
       renderMobileNotificationsSheet();
       markMobileNotificationsSeen();
@@ -25516,6 +25552,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           syncMarkers();
           syncUserLocationMarker({ centerMap: false });
           bindAndroidMapGestureGuards();
+          bindAndroidMapResizeObserver();
           stabilizeAndroidMapPaint();
           state.map.once?.("idle", () => refreshAndroidMapAfterSettle("android-map-idle"));
           state.map.on("zoomend", () => {
@@ -26797,7 +26834,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (document.hidden) {
         captureAndroidLifecycleSnapshot();
         scheduleMemberProfileActivityTracking({ force: true, throttleMs: 0 });
-      } else scheduleMemberProfileActivityTracking();
+      } else {
+        scheduleMemberProfileActivityTracking();
+        refreshAndroidMapAfterSettle("android-app-visible");
+      }
     });
     window.addEventListener("pagehide", () => {
       captureAndroidLifecycleSnapshot();
@@ -26867,7 +26907,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
         });
         if (nativeAndroid) hideLoadingScreen();
-        if (!window.NLI_DISABLE_DIRECTUS_RUNTIME && !(state.sites || []).every(site => Object.prototype.hasOwnProperty.call(site, "map_icon"))) idleTask(refreshMobileSiteIconFieldsFromDirectus);
+        if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {
+          window.setTimeout(() => idleTask(refreshMobileSiteIconFieldsFromDirectus), 30000);
+        }
         state.mobileStartupRendering = false;
         updateMobileHeaderInstruction();
         if (nativeAndroid) {
