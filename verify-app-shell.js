@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260711-marker-loading-r9";
+const expectedBuild = "20260711-single-pass-mask-r10";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -464,7 +464,7 @@ requireBundledText('searchDataVersion: 0', "Bundled Android app must track searc
 requireBundledText('lastSearchDataVersion: -1', "Bundled Android app must remember the last processed search data version.");
 requireBundledText('state.searchDataVersion += 1;', "Bundled Android app must mark rebuilt site data for search refresh.");
 requireBundledText('value === state.lastSearchValue && state.lastSearchDataVersion === state.searchDataVersion', "Bundled Android app must not skip same-text searches after data changes.");
-requireBundledPattern(/ensureLandMask\(\)[\s\S]*?prepareSites\(\);[\s\S]*?scheduleSearchSync\(\);[\s\S]*?refreshMobileMapSources\(\);/, "Bundled Android app must preserve an active search after deferred map data rebuilds.");
+requireBundledPattern(/const\s+startupLandMask\s*=\s*ensureLandMask\(\);[\s\S]*?await\s+loadData\(\);[\s\S]*?await\s+startupLandMask;[\s\S]*?prepareSites\(\);/, "Bundled Android app must apply the land mask before preparing searchable site data.");
 requireBundledText('enterkeyhint="search"', "Bundled Android app must request the Android keyboard search action.");
 requireBundledText('autocomplete="off"', "Bundled Android app must keep the mobile search input from fighting app results.");
 requireBundledText('function openMobileSearchResultsPage()', "Bundled Android app must include an explicit mobile search results page.");
@@ -510,7 +510,7 @@ requireBundledText('data-nearby-show-more', "Bundled Android app must let users 
 requireBundledText('const nativeAndroid = isNativeAndroidApp();', "Bundled Android app must cache native Android startup state.");
 requireBundledText('function waitForMapbox(timeout = 12000)', "Bundled Android app must give Mapbox enough time to load inside WebView before falling back.");
 requireBundledText('if (nativeAndroid) {\n          await new Promise(resolve => window.requestAnimationFrame(resolve));\n        }\n        await openInitialRouteFromUrl();', "Bundled Android app must keep the loading screen up during native startup instead of revealing a half-built shell.");
-requireBundledText('if (nativeAndroid) hideLoadingScreen();\n        if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {\n          window.setTimeout(() => idleTask(refreshMobileSiteIconFieldsFromDirectus), 30000);', "Bundled Android app must hide loading after map startup and keep the broad icon refresh outside the interaction window.");
+requireBundledText('hideLoadingScreen();\n        if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {\n          window.setTimeout(() => idleTask(refreshMobileSiteIconFieldsFromDirectus), 30000);', "Bundled Android app must hide loading after map startup and keep the broad icon refresh outside the interaction window.");
 requireBundledText('if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {\n          idleTask(() => (state.profile ? ensureProfileStatsSynced() : Promise.resolve(false))', "Bundled Android app must skip Directus-backed profile refresh work in snapshot mode.");
 requireBundledText('function stabilizeAndroidMapPaint()', "Bundled Android app must include the Android map paint stabilizer.");
 requireBundledText('state.map.resize();', "Bundled Android app must resize the map after Android WebView startup.");

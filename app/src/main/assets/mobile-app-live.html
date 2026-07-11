@@ -13329,6 +13329,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       profileFollows: [],
       supportSettings: null,
       landMaskData: null,
+      landMaskPromise: null,
       selectedSlug: "",
       selectedSite: null,
       userLocation: null,
@@ -14942,16 +14943,22 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     async function ensureLandMask() {
       if (state.landMaskData !== null) return state.landMaskData;
-      try {
-        const response = await fetch(`${LAND_MASK_URL}?v=${LAND_MASK_VERSION}`, { cache: "no-store" });
-        if (!response.ok) throw new Error(`Land mask unavailable: ${response.status}`);
-        const mask = await response.json();
-        state.landMaskData = mask?.type === "Feature" ? mask : null;
-      } catch (error) {
-        console.warn("Mobile land mask could not be loaded for shoreline display cleanup.", error);
-        state.landMaskData = null;
-      }
-      return state.landMaskData;
+      if (state.landMaskPromise) return state.landMaskPromise;
+      state.landMaskPromise = fetch(`${LAND_MASK_URL}?v=${LAND_MASK_VERSION}`, { cache: "force-cache" })
+        .then(response => {
+          if (!response.ok) throw new Error(`Land mask unavailable: ${response.status}`);
+          return response.json();
+        })
+        .then(mask => {
+          state.landMaskData = mask?.type === "Feature" ? mask : null;
+          return state.landMaskData;
+        })
+        .catch(error => {
+          console.warn("Mobile land mask could not be loaded for shoreline display cleanup.", error);
+          state.landMaskData = null;
+          return null;
+        });
+      return state.landMaskPromise;
     }
 
     function islandPolygonFromMask(name) {
@@ -16230,6 +16237,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function prepareSites() {
+      performance.mark?.("nli-mobile-sites-prepare-start");
       state.searchDataVersion += 1;
       state.sites = repairSiteTitles(state.sites)
         .map(site => {
@@ -16253,6 +16261,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       clearRelatedSiteCaches();
       sortSites();
       resetNearbyRenderLimit();
+      performance.mark?.("nli-mobile-sites-prepare-end");
+      performance.measure?.("nli-mobile-sites-prepare", "nli-mobile-sites-prepare-start", "nli-mobile-sites-prepare-end");
     }
 
     function prepareExhibits() {
@@ -26911,7 +26921,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const nativeAndroid = isNativeAndroidApp();
         state.mobileStartupRendering = true;
         setLoadingMessage("Loading sites and nearby tools.");
+        const startupLandMask = ensureLandMask();
         await loadData();
+        await startupLandMask;
         setLoadingMessage("Preparing the mobile interface.");
         prepareSites();
         renderProfile();
@@ -26960,12 +26972,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           androidLifecycleContentRestored = await restoreAndroidLifecycleContent(androidLifecycleSnapshot);
         }
         if (state.passwordResetToken) openSheet(loginSheetEl);
-        if (!nativeAndroid) hideLoadingScreen();
         await initMap().catch(error => {
           console.warn("Map did not initialize yet.", error);
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
         });
-        if (nativeAndroid) hideLoadingScreen();
+        hideLoadingScreen();
         if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {
           window.setTimeout(() => idleTask(refreshMobileSiteIconFieldsFromDirectus), 30000);
         }
@@ -26991,15 +27002,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         checkDailyHistoryMoment();
         checkNewContentAlerts();
         if (!nativeAndroid) requestStartupLocation();
-        idleTask(() => ensureLandMask()
-          .then(mask => {
-            if (!mask) return;
-            prepareSites();
-            scheduleSearchSync();
-            refreshMobileMapSources();
-            stabilizeAndroidMapPaint();
-          })
-          .catch(() => null));
         if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {
           idleTask(() => (state.profile ? ensureProfileStatsSynced() : Promise.resolve(false))
             .then(() => awardDailyLoginReward({ silent: true }))
