@@ -757,9 +757,9 @@
     .mobile-activity-button,
     .mobile-notification-button {
       position: fixed;
-      top: calc(var(--app-top-safe) + 190px);
+      top: var(--mobile-map-actions-top, calc(var(--app-top-safe) + 190px));
       left: max(12px, var(--app-left-safe));
-      z-index: 30;
+      z-index: 18;
       display: inline-grid;
       place-items: center;
       width: 44px;
@@ -772,12 +772,13 @@
     }
 
     .mobile-notification-button {
-      left: auto;
-      right: max(12px, var(--app-right-safe));
+      top: calc(var(--mobile-map-actions-top, calc(var(--app-top-safe) + 190px)) + 52px);
     }
 
     .app.nearby-expanded .mobile-activity-button,
-    .app.mobile-search-results .mobile-notification-button {
+    .app.mobile-search-results .mobile-notification-button,
+    body.mobile-content-open .mobile-activity-button,
+    body.mobile-content-open .mobile-notification-button {
       display: none;
     }
 
@@ -954,6 +955,9 @@
     }
 
     #map {
+      position: relative;
+      z-index: 1;
+      isolation: isolate;
       min-height: 190px;
     }
 
@@ -1472,7 +1476,7 @@
     .detail {
       position: fixed;
       inset: auto var(--app-right-safe) var(--app-bottom-safe) var(--app-left-safe);
-      z-index: 20;
+      z-index: 200;
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
       height: var(--detail-drawer-height, min(58dvh, calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe) - 12px)));
@@ -1487,7 +1491,7 @@
     .sheet {
       position: fixed;
       inset: auto var(--app-right-safe) var(--app-bottom-safe) var(--app-left-safe);
-      z-index: 25;
+      z-index: 210;
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
       max-height: min(84dvh, calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe) - 10px));
@@ -3856,6 +3860,16 @@
       visibility: visible;
     }
 
+    body.mobile-content-open .app header {
+      gap: 0;
+      padding-top: max(7px, var(--app-top-safe));
+      padding-bottom: 7px;
+    }
+
+    body.mobile-content-open .app header > :not(.title-row) {
+      display: none !important;
+    }
+
     .sheet.account-sheet.open,
     #feedback-sheet.open {
       top: var(--app-top-safe);
@@ -4678,7 +4692,7 @@
     .mobile-moving-biography-mapbox-icon {
       width: 44px !important;
       height: 44px !important;
-      z-index: 56;
+      z-index: 3;
     }
 
     .mobile-moving-biography-marker,
@@ -4795,7 +4809,7 @@
     .mobile-moving-dog-mapbox-icon {
       width: 30px !important;
       height: 24px !important;
-      z-index: 55;
+      z-index: 2;
     }
 
     .mobile-moving-dog-marker {
@@ -4837,7 +4851,7 @@
     .mobile-moving-whale-mapbox-icon {
       width: 74px !important;
       height: 46px !important;
-      z-index: 54;
+      z-index: 1;
     }
 
     .mobile-moving-whale-marker {
@@ -17059,7 +17073,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return related;
     }
 
-    function relatedSiteCardHtml(entry, index, { initialLimit = 6 } = {}) {
+    function relatedSiteCardHtml(entry, index, { initialLimit = 3 } = {}) {
       const site = entry.site;
       const summary = publicCleanText(site.summary || site.address_label || "Mapped place").slice(0, 145);
       const meta = [siteSubtitle(site), GEOMETRY_UTILS.distanceLabelMiles(entry.miles)].filter(Boolean).join(" - ");
@@ -17076,16 +17090,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function relatedSitesSection(site, options = {}) {
-      const related = connectedSitesFor(site, { limit: options.limit || 12 });
+      const related = connectedSitesFor(site, { limit: options.limit || 3 });
       if (!related.length) return "";
-      const initialLimit = options.initialLimit || 6;
+      const initialLimit = Math.min(3, options.initialLimit || 3);
       return `
         <section class="section related-sites-section">
           <h3>Sites connected to this place</h3>
           <div class="related-sites-list">
             ${related.map((entry, index) => relatedSiteCardHtml(entry, index, { initialLimit })).join("")}
           </div>
-          ${related.length > initialLimit ? `<button class="action secondary related-sites-more" type="button" data-related-sites-more>View more</button>` : ""}
         </section>
       `;
     }
@@ -19229,23 +19242,65 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
     }
 
+    function mobilePanelMapPadding() {
+      const mapRect = document.getElementById("map")?.getBoundingClientRect?.();
+      if (!mapRect?.height) return { top: 12, right: 12, bottom: 12, left: 12 };
+      const openPanel = detailEl?.classList.contains("open")
+        ? detailEl
+        : document.querySelector(".sheet.open");
+      const panelRect = openPanel?.getBoundingClientRect?.();
+      const overlap = panelRect
+        ? Math.max(0, Math.min(mapRect.bottom, panelRect.bottom) - Math.max(mapRect.top, panelRect.top))
+        : 0;
+      const maxBottom = Math.max(12, mapRect.height - 72);
+      return {
+        top: 12,
+        right: 12,
+        bottom: Math.min(maxBottom, Math.round(overlap + 14)),
+        left: 12
+      };
+    }
+
+    function focusMobileCoordinateInVisibleMap(coordinates, options = {}) {
+      if (!state.map || !Array.isArray(coordinates) || !coordinates.every(Number.isFinite)) return;
+      const currentZoom = Number(state.map.getZoom?.()) || 10;
+      state.map.easeTo?.({
+        center: coordinates,
+        zoom: Number.isFinite(Number(options.zoom)) ? Number(options.zoom) : currentZoom,
+        padding: mobilePanelMapPadding(),
+        retainPadding: false,
+        duration: Number.isFinite(Number(options.duration)) ? Number(options.duration) : 420,
+        essential: true
+      });
+    }
+
     function focusSite(site, options = {}) {
       if (!state.map || !site?.center) return;
       const geometry = siteDisplayGeometry(site);
       const duration = options.duration || 600;
       const motion = options.timeline ? smoothTimelineMapOptions() : { duration, essential: true };
+      const padding = options.forPanel ? mobilePanelMapPadding() : (options.timeline ? 64 : 40);
+      const currentZoom = Number(state.map.getZoom?.()) || 10;
       if (geometry?.type === "Point") {
         const method = options.preview && typeof state.map.flyTo === "function" ? "flyTo" : "easeTo";
-        state.map[method]({ center: site.center, zoom: options.zoom || (options.timeline ? 11.3 : 12), ...motion });
+        state.map[method]({
+          center: options.center || site.center,
+          zoom: options.preserveZoom ? currentZoom : (options.zoom || (options.timeline ? 11.3 : 12)),
+          padding,
+          retainPadding: false,
+          ...motion
+        });
       } else {
         const bounds = geometryBounds(geometry);
         if (options.zoom) {
           const method = options.preview && typeof state.map.flyTo === "function" ? "flyTo" : "easeTo";
-          state.map[method]({ center: site.center, zoom: options.zoom, ...motion });
-        } else if (bounds) state.map.fitBounds(bounds, { padding: options.timeline ? 64 : 40, maxZoom: options.timeline ? 10.8 : 12, ...motion });
+          state.map[method]({ center: options.center || site.center, zoom: options.zoom, padding, retainPadding: false, ...motion });
+        } else if (options.preserveZoom) {
+          focusMobileCoordinateInVisibleMap(options.center || site.center, { zoom: currentZoom, duration });
+        } else if (bounds) state.map.fitBounds(bounds, { padding, maxZoom: options.timeline ? 10.8 : 12, ...motion });
         else {
           const method = options.preview && typeof state.map.flyTo === "function" ? "flyTo" : "easeTo";
-          state.map[method]({ center: site.center, zoom: options.timeline ? 10.2 : 10.5, ...motion });
+          state.map[method]({ center: options.center || site.center, zoom: options.timeline ? 10.2 : 10.5, padding, retainPadding: false, ...motion });
         }
       }
     }
@@ -21982,7 +22037,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       button.addEventListener("click", event => {
         event.preventDefault();
         event.stopPropagation();
-        openWikiArticle(item.slug, { focus: false });
+        const point = marker.getLngLat?.();
+        openWikiArticle(item.slug, {
+          focus: false,
+          mapCenter: point ? [point.lng, point.lat] : null
+        });
       });
     }
 
@@ -22054,7 +22113,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       button?.addEventListener("click", event => {
         event.preventDefault();
         event.stopPropagation();
-        openWikiArticle(MOVING_DOG_WIKI_SLUG, { focus: false });
+        const point = state.mobileMovingDogMarker?.getLngLat?.();
+        openWikiArticle(MOVING_DOG_WIKI_SLUG, {
+          focus: false,
+          mapCenter: point ? [point.lng, point.lat] : null
+        });
       });
     }
 
@@ -22088,8 +22151,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       button?.addEventListener("click", event => {
         event.preventDefault();
         event.stopPropagation();
-        if (state.siteBySlug.has(WHALING_FEATURE_SLUG)) openSite(WHALING_FEATURE_SLUG, { focus: false });
-        else openWikiArticle(WHALING_FEATURE_SLUG, { focus: false });
+        const point = state.mobileMovingWhaleMarker?.getLngLat?.();
+        const mapCenter = point ? [point.lng, point.lat] : null;
+        if (state.siteBySlug.has(WHALING_FEATURE_SLUG)) openSite(WHALING_FEATURE_SLUG, { focus: false, mapCenter });
+        else openWikiArticle(WHALING_FEATURE_SLUG, { focus: false, mapCenter });
       });
     }
 
@@ -22151,6 +22216,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       detailBodyEl.innerHTML = `<p class="summary">Loading article details...</p>`;
       detailEl.classList.add("open");
       syncMobilePanelAccessibility();
+      resetMobilePanelScroll(detailEl);
+      if (options.mapCenter?.every?.(Number.isFinite)) {
+        window.requestAnimationFrame(() => focusMobileCoordinateInVisibleMap(options.mapCenter, { duration: 420 }));
+      }
       article = await fetchWikiDetail(article || slug);
       if (!article) {
         detailBodyEl.innerHTML = `<p class="summary">This knowledgebase article is not available in this view yet.</p>`;
@@ -22222,6 +22291,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       detailEl.classList.remove("plant-browse-mode");
       detailEl.classList.add("open");
       syncMobilePanelAccessibility();
+      resetMobilePanelScroll(detailEl);
+      resetMobilePanelScroll(detailEl);
       const fallbackQuizItem = { title, slug: title.toLowerCase().replace(/[^a-z0-9]+/g, "-") };
       decorateCurrentDetailForLanguageQuiz(quizContext?.type || "page", quizContext?.item || fallbackQuizItem);
     }
@@ -22853,12 +22924,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.selectedWikiSlug = "";
       syncActiveSiteMapLabel(site);
       renderList();
-      if (options.focus !== false) focusSite(site);
       detailTitleEl.innerHTML = mobileSiteTitleHtml(site);
       detailBodyEl.innerHTML = `<p class="summary">Loading article details...</p>`;
       detailEl.classList.add("open");
       setDetailDrawerState(options.drawerState || "half");
       syncMobilePanelAccessibility();
+      resetMobilePanelScroll(detailEl);
+      window.requestAnimationFrame(() => focusSite(site, {
+        forPanel: true,
+        center: options.mapCenter || site.center,
+        preserveZoom: options.focus === false,
+        duration: options.focus === false ? 360 : 520
+      }));
       site = await fetchSiteDetail(site);
       if (state.selectedSlug !== slug) return;
       state.selectedSite = site;
@@ -22908,6 +22985,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       setDetailDrawerState(options.drawerState || "half");
       detailEl.classList.toggle("plant-browse-mode", plantObservationsForSource("site", site).length > 0);
       syncMobilePanelAccessibility();
+      resetMobilePanelScroll(detailEl);
       syncSitePlantMarkers(site);
       decorateCurrentDetailForQuoteComments("site", site);
       decorateCurrentDetailForLanguageQuiz("site", site);
@@ -22942,6 +23020,19 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       syncMobilePanelAccessibility();
       if (returnToLongIslandView) {
         window.setTimeout(() => fitLongIslandMapView("mobile-startup-spotlight-article-closed"), 120);
+      } else if (options.settleMap !== false && state.map) {
+        const currentZoom = Number(state.map.getZoom?.());
+        const overviewZoom = 11.25;
+        if (Number.isFinite(currentZoom) && currentZoom > overviewZoom) {
+          window.setTimeout(() => state.map?.easeTo?.({
+            center: state.map.getCenter?.(),
+            zoom: overviewZoom,
+            padding: 0,
+            retainPadding: false,
+            duration: 420,
+            essential: true
+          }), 60);
+        }
       }
     }
 
@@ -24918,6 +25009,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
       sheet.classList.add("open");
       syncMobilePanelAccessibility();
+      resetMobilePanelScroll(sheet);
       const routeKey = mobileSheetRouteKey(sheet);
       if (routeKey) setMobileContentRoute({ page: routeKey }, options);
       if (sheet === rewardsSheetEl) renderRewards();
@@ -25039,15 +25131,45 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }, 180);
     }
 
+    function resetMobilePanelScroll(panel) {
+      if (!panel) return;
+      const scrollTargets = [
+        panel,
+        panel.querySelector?.(".sheet-body"),
+        panel.querySelector?.(".detail-body")
+      ].filter(Boolean);
+      const reset = () => scrollTargets.forEach(target => {
+        if (typeof target.scrollTo === "function") target.scrollTo({ top: 0, left: 0, behavior: "auto" });
+        else target.scrollTop = 0;
+      });
+      reset();
+      window.requestAnimationFrame(reset);
+    }
+
+    function positionMobileMapActionButtons() {
+      const mapRect = document.getElementById("map")?.getBoundingClientRect?.();
+      if (!mapRect?.height) return;
+      document.documentElement.style.setProperty("--mobile-map-actions-top", `${Math.round(mapRect.top + 10)}px`);
+    }
+
     function syncMobilePanelAccessibility() {
+      let sheetOpen = false;
       document.querySelectorAll(".sheet").forEach(sheet => {
         const open = sheet.classList.contains("open");
+        sheetOpen ||= open;
         sheet.toggleAttribute("inert", !open);
         sheet.setAttribute("aria-hidden", open ? "false" : "true");
       });
       const detailOpen = detailEl?.classList.contains("open");
       detailEl?.toggleAttribute("inert", !detailOpen);
       detailEl?.setAttribute("aria-hidden", detailOpen ? "false" : "true");
+      document.body.classList.toggle("mobile-content-open", Boolean(detailOpen || sheetOpen));
+      document.body.classList.toggle("mobile-detail-open", Boolean(detailOpen));
+      document.body.classList.toggle("mobile-sheet-open", Boolean(sheetOpen));
+      window.requestAnimationFrame(() => {
+        positionMobileMapActionButtons();
+        state.map?.resize?.();
+      });
     }
 
     function updateStoryText() {
@@ -26083,7 +26205,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const refreshMobileViewportLayout = () => {
       syncSystemSafeArea();
       restoreNearbyPanelHeight();
-      window.setTimeout(() => state.map?.resize?.(), 80);
+      positionMobileMapActionButtons();
+      window.setTimeout(() => {
+        positionMobileMapActionButtons();
+        state.map?.resize?.();
+      }, 80);
     };
     window.addEventListener("resize", refreshMobileViewportLayout);
     window.addEventListener("orientationchange", () => window.setTimeout(refreshMobileViewportLayout, 280));

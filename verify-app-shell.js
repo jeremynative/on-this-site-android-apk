@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260710-story-auth-r4";
+const expectedBuild = "20260710-apk-ui-r5";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -77,6 +77,16 @@ if (!bundledLiveApp.includes("function isApkSnapshotMode()") || !bundledApp.incl
 }
 if (!bundledLiveApp.includes("const text = isApkSnapshotMode()")) {
   throw new Error("The live Android shell must not label every Android WebView as an APK snapshot.");
+}
+for (const [needle, message] of [
+  ["--mobile-map-actions-top", "APK activity controls must track the visible map top."],
+  ["body.mobile-content-open .mobile-notification-button", "APK floating controls must hide while content panels are open."],
+  ["function mobilePanelMapPadding()", "APK map focus must account for open content panels."],
+  ["function resetMobilePanelScroll(panel)", "APK panels must reset to the beginning when opened."],
+  ["const overviewZoom = 11.25", "APK detail close must return to a stable overview zoom."],
+  ["limit: options.limit || 3", "APK related sites must be capped at three."]
+]) {
+  if (!bundledLiveApp.includes(needle) || !bundledApp.includes(needle)) throw new Error(message);
 }
 if (!/if \(isApkSnapshotMode\(\)\) \{\r?\n        const localIcon = APK_LOCAL_MAP_ICON_OVERRIDES/.test(bundledLiveApp)) {
   throw new Error("The live Android shell must allow VPS-hosted icon URLs outside offline snapshot mode.");
