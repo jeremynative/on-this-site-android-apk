@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260710-apk-ui-r5";
+const expectedBuild = "20260710-learning-paths-r6";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
