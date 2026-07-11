@@ -4809,7 +4809,7 @@
     .mobile-moving-dog-mapbox-icon {
       width: 30px !important;
       height: 24px !important;
-      z-index: 2;
+      z-index: 5;
     }
 
     .mobile-moving-dog-marker {
@@ -4851,7 +4851,7 @@
     .mobile-moving-whale-mapbox-icon {
       width: 74px !important;
       height: 46px !important;
-      z-index: 1;
+      z-index: 4;
     }
 
     .mobile-moving-whale-marker {
@@ -11487,6 +11487,15 @@
     return deps.directusAssetUrl?.(site?.map_icon) || "";
   }
 
+  function optimizedMapIconUrl(url, options = {}) {
+    const value = String(url || "").trim();
+    if (!/^https?:\/\/[^/]+\/assets\/[0-9a-f-]{36}(?:\?|$)/i.test(value)) return value;
+    const width = Math.max(32, Math.min(256, Number(options.width) || 128));
+    const height = Math.max(32, Math.min(256, Number(options.height) || 128));
+    const separator = value.includes("?") ? "&" : "?";
+    return `${value}${separator}width=${width}&height=${height}&fit=contain&format=webp&quality=82`;
+  }
+
   function eventMapIconUrl(event, deps = {}) {
     return deps.directusAssetUrl?.(event?.map_icon) || "";
   }
@@ -11653,6 +11662,7 @@
     imageErrorAction,
     dataFallbackImageErrorAction,
     siteMapIconUrl,
+    optimizedMapIconUrl,
     eventMapIconUrl,
     safeImageBasename,
     fileExtensionForType,
@@ -13376,6 +13386,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileSiteIconImagesLoaded: new Set(),
       mobileSiteIconImagesFailed: new Set(),
       mobileSiteIconImagesLoading: false,
+      mobileSiteIconImageQueue: [],
+      mobileSiteIconImagesQueued: new Set(),
+      mobileSiteIconQueueTimer: null,
       mobileMapLayerEventsBound: false,
       mobileMapLayerHandlers: new Map(),
       mobileMapPulseMoveBound: false,
@@ -13391,6 +13404,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileMovingWhaleMarker: null,
       mobileMovingMarkerFrame: null,
       mobileMovingMarkerLastAt: 0,
+      mobileMovingMarkerInteractionUntil: 0,
       mapStoryRefreshTimer: null,
       passwordResetToken: ROUTE_UTILS.passwordResetTokenFromUrl(window.location),
       plantMarkers: new Map(),
@@ -18674,7 +18688,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         return localIcon || "";
       }
       if (HEADER_IMAGE_BLUE_PLACEHOLDER_ICON_IDS.has(rawIcon) && !siteHasHeaderImage(site)) return TEXT_ONLY_GREEN_PLACEHOLDER_ICON;
-      return MEDIA_UTILS.siteMapIconUrl(site, { directusAssetUrl }) || "";
+      const iconUrl = MEDIA_UTILS.siteMapIconUrl(site, { directusAssetUrl }) || "";
+      return MEDIA_UTILS.optimizedMapIconUrl?.(iconUrl, { width: 128, height: 128 }) || iconUrl;
     }
 
     function mobileSiteIconKey(site) {
@@ -18708,49 +18723,78 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       };
     }
 
-    function loadMobileSiteIconImages() {
+    function mobileSiteIconPriority(site) {
+      const geometry = siteDisplayGeometry(site);
+      const coordinates = geometry?.type === "Point" ? geometry.coordinates : site?.center;
+      if (!Array.isArray(coordinates) || coordinates.length < 2) return Number.MAX_SAFE_INTEGER;
+      const center = state.map?.getCenter?.();
+      const dx = Number(coordinates[0]) - Number(center?.lng || FALLBACK_CENTER[0]);
+      const dy = Number(coordinates[1]) - Number(center?.lat || FALLBACK_CENTER[1]);
+      const visible = state.map?.getBounds?.()?.contains?.(coordinates) ? 0 : 1000;
+      return visible + (dx * dx) + (dy * dy);
+    }
+
+    function scheduleNextMobileSiteIcon() {
+      if (state.mobileSiteIconQueueTimer || state.mobileSiteIconImagesLoading || !state.mobileSiteIconImageQueue.length) return;
+      state.mobileSiteIconQueueTimer = window.setTimeout(() => {
+        state.mobileSiteIconQueueTimer = null;
+        processMobileSiteIconQueue();
+      }, 72);
+    }
+
+    function processMobileSiteIconQueue() {
       if (!state.map || state.mobileSiteIconImagesLoading) return;
+      const entry = state.mobileSiteIconImageQueue.shift();
+      if (!entry) return;
+      const { key, url } = entry;
+      state.mobileSiteIconImagesQueued.delete(key);
+      if (state.map.hasImage?.(key)) {
+        state.mobileSiteIconImagesLoaded.add(key);
+        scheduleNextMobileSiteIcon();
+        return;
+      }
       state.mobileSiteIconImagesLoading = true;
+      state.map.loadImage(url, (error, image) => {
+        try {
+          if (error || !image) {
+            state.mobileSiteIconImagesFailed.add(key);
+            return;
+          }
+          if (!state.map.hasImage?.(key)) {
+            const prepared = prepareMobileSiteIconImage(image);
+            state.map.addImage(key, prepared.image, { sdf: false, ...(prepared.options || {}) });
+          }
+          state.mobileSiteIconImagesLoaded.add(key);
+        } catch {
+          state.mobileSiteIconImagesFailed.add(key);
+        } finally {
+          state.mobileSiteIconImagesLoading = false;
+          scheduleNextMobileSiteIcon();
+        }
+      });
+    }
+
+    function loadMobileSiteIconImages() {
+      if (!state.map) return;
       const iconEntries = new Map();
       activeMapSites().forEach(site => {
         const key = mobileSiteIconKey(site);
         const url = siteMapIconUrl(site);
-        if (!key || !url || state.mobileSiteIconImagesFailed.has(key)) return;
+        if (!key || !url || state.mobileSiteIconImagesFailed.has(key) || state.mobileSiteIconImagesLoaded.has(key)) return;
         if (isApkSnapshotMode() && !/^assets\/map-icons\//i.test(url)) return;
         if (state.map.hasImage?.(key)) {
           state.mobileSiteIconImagesLoaded.add(key);
           return;
         }
-        iconEntries.set(key, url);
+        const current = iconEntries.get(key);
+        const priority = mobileSiteIconPriority(site);
+        if (!current || priority < current.priority) iconEntries.set(key, { key, url, priority });
       });
-      if (!iconEntries.size) {
-        state.mobileSiteIconImagesLoading = false;
-        return;
-      }
-      let remaining = iconEntries.size;
-      const finishOne = () => {
-        remaining -= 1;
-        if (remaining <= 0) state.mobileSiteIconImagesLoading = false;
-      };
-      iconEntries.forEach((url, key) => {
-        state.map.loadImage(url, (error, image) => {
-          try {
-            if (error || !image) {
-              state.mobileSiteIconImagesFailed.add(key);
-              return;
-            }
-            if (!state.map.hasImage?.(key)) {
-              const prepared = prepareMobileSiteIconImage(image);
-              state.map.addImage(key, prepared.image, { sdf: false, ...(prepared.options || {}) });
-            }
-            state.mobileSiteIconImagesLoaded.add(key);
-          } catch {
-            state.mobileSiteIconImagesFailed.add(key);
-          } finally {
-            finishOne();
-          }
-        });
-      });
+      const pending = new Map(state.mobileSiteIconImageQueue.map(entry => [entry.key, entry]));
+      iconEntries.forEach((entry, key) => pending.set(key, entry));
+      state.mobileSiteIconImageQueue = [...pending.values()].sort((a, b) => a.priority - b.priority || a.key.localeCompare(b.key));
+      state.mobileSiteIconImagesQueued = new Set(state.mobileSiteIconImageQueue.map(entry => entry.key));
+      processMobileSiteIconQueue();
     }
 
     function shouldShowCustomMapIcons() {
@@ -22056,13 +22100,27 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       `;
     }
 
-    function bindMobileMovingBiographyElement(marker, item) {
-      const button = marker?.getElement?.()?.querySelector?.(".mobile-moving-biography-marker");
+    function claimMobileMovingMarkerInteraction(event, options = {}) {
+      state.mobileMovingMarkerInteractionUntil = Math.max(state.mobileMovingMarkerInteractionUntil || 0, performance.now() + 900);
+      blockMobileMapTaps(1000);
+      if (options.preventDefault) event?.preventDefault?.();
+      event?.stopPropagation?.();
+      event?.stopImmediatePropagation?.();
+    }
+
+    function bindMobileMovingMarkerButton(button, open) {
       if (!button || button.dataset.bound === "true") return;
       button.dataset.bound = "true";
+      button.addEventListener("pointerdown", event => claimMobileMovingMarkerInteraction(event));
       button.addEventListener("click", event => {
-        event.preventDefault();
-        event.stopPropagation();
+        claimMobileMovingMarkerInteraction(event, { preventDefault: true });
+        open();
+      });
+    }
+
+    function bindMobileMovingBiographyElement(marker, item) {
+      const button = marker?.getElement?.()?.querySelector?.(".mobile-moving-biography-marker");
+      bindMobileMovingMarkerButton(button, () => {
         const point = marker.getLngLat?.();
         openWikiArticle(item.slug, {
           focus: false,
@@ -22136,9 +22194,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         .setLngLat(MOBILE_DOG_ROUTE[0])
         .addTo(state.map);
       const button = element.querySelector(".mobile-moving-dog-marker");
-      button?.addEventListener("click", event => {
-        event.preventDefault();
-        event.stopPropagation();
+      bindMobileMovingMarkerButton(button, () => {
         const point = state.mobileMovingDogMarker?.getLngLat?.();
         openWikiArticle(MOVING_DOG_WIKI_SLUG, {
           focus: false,
@@ -22174,9 +22230,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         .setLngLat(MOBILE_WHALE_ROUTE[0])
         .addTo(state.map);
       const button = element.querySelector(".mobile-moving-whale-marker");
-      button?.addEventListener("click", event => {
-        event.preventDefault();
-        event.stopPropagation();
+      bindMobileMovingMarkerButton(button, () => {
         const point = state.mobileMovingWhaleMarker?.getLngLat?.();
         const mapCenter = point ? [point.lng, point.lat] : null;
         if (state.siteBySlug.has(WHALING_FEATURE_SLUG)) openSite(WHALING_FEATURE_SLUG, { focus: false, mapCenter });
@@ -22194,7 +22248,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function updateMobileMovingFeatureMarkers(now = performance.now()) {
-      if (!state.map || document.hidden || isAndroidMapGestureActive() || mobileMapCameraIsInteracting()) return;
+      if (!state.map || document.hidden || isAndroidMapGestureActive() || mobileMapCameraIsInteracting() || now < (state.mobileMovingMarkerInteractionUntil || 0)) return;
       for (const entry of state.mobileMovingBiographyMarkers.values()) {
         updateMobileMovingBiographyMarker(entry.item, entry.marker, now);
       }
@@ -25559,6 +25613,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             syncMarkers({ auxiliary: false });
             syncMapStoryMarkers();
           });
+          state.map.on("moveend", loadMobileSiteIconImages);
           window.setTimeout(() => resolve(true), 160);
         });
         state.map.on("error", () => window.setTimeout(() => resolve(false), 800));
@@ -25569,6 +25624,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.mapSourceAppliedKey = "";
       state.mobileSiteIconImagesLoaded.clear();
       state.mobileSiteIconImagesLoading = false;
+      state.mobileSiteIconImageQueue = [];
+      state.mobileSiteIconImagesQueued.clear();
+      if (state.mobileSiteIconQueueTimer) window.clearTimeout(state.mobileSiteIconQueueTimer);
+      state.mobileSiteIconQueueTimer = null;
       addPolygonLayers();
       syncMarkers();
       syncUserLocationMarker({ centerMap: false });
