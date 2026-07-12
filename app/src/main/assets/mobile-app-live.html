@@ -5043,7 +5043,6 @@
       display: block;
     }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 </head>
 <body>
   <div class="loading-screen" id="loading-screen" role="status" aria-live="polite">
@@ -11493,7 +11492,10 @@
     const width = Math.max(32, Math.min(256, Number(options.width) || 128));
     const height = Math.max(32, Math.min(256, Number(options.height) || 128));
     const separator = value.includes("?") ? "&" : "?";
-    return `${value}${separator}width=${width}&height=${height}&fit=contain&format=webp&quality=82`;
+    // Directus `fit=contain` can fill transparent PNG padding with black when
+    // converting marker artwork to WebP. `inside` keeps the original aspect
+    // ratio without adding a background, so transparent icons remain clean.
+    return `${value}${separator}width=${width}&height=${height}&fit=inside&format=webp&quality=82`;
   }
 
   function eventMapIconUrl(event, deps = {}) {
@@ -11815,6 +11817,8 @@
 (function () {
   const MEDIA_UTILS = window.NLI_MEDIA_UTILS || {};
   const SHARED_DIRECTUS = window.NLI_DIRECTUS_CLIENT || {};
+  const HTML2CANVAS_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+  let html2canvasRuntimePromise = null;
 
   const PLATFORM_COPY = {
     desktop: {
@@ -11933,9 +11937,34 @@
     });
   }
 
+  function loadHtml2canvasRuntime() {
+    if (window.html2canvas) return Promise.resolve(window.html2canvas);
+    if (html2canvasRuntimePromise) return html2canvasRuntimePromise;
+    html2canvasRuntimePromise = new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[data-nli-html2canvas-runtime]');
+      const script = existing || document.createElement("script");
+      const finish = () => window.html2canvas
+        ? resolve(window.html2canvas)
+        : reject(new Error("Screenshot capture loaded without exposing its runtime."));
+      script.addEventListener("load", finish, { once: true });
+      script.addEventListener("error", () => reject(new Error("Screenshot capture could not be loaded. Upload a screenshot instead.")), { once: true });
+      if (!existing) {
+        script.src = HTML2CANVAS_SCRIPT_URL;
+        script.async = true;
+        script.dataset.nliHtml2canvasRuntime = "1";
+        document.head.appendChild(script);
+      } else if (window.html2canvas) {
+        finish();
+      }
+    }).catch(error => {
+      html2canvasRuntimePromise = null;
+      throw error;
+    });
+    return html2canvasRuntimePromise;
+  }
+
   async function captureFeedbackScreenshot(options = {}) {
-    const html2canvas = options.html2canvas || window.html2canvas;
-    if (!html2canvas) throw new Error("Screenshot capture is still loading. Try again or upload a screenshot.");
+    const html2canvas = options.html2canvas || await loadHtml2canvasRuntime();
     const statusEl = options.statusEl || null;
     const hiddenEl = options.hiddenEl || null;
     if (statusEl) statusEl.textContent = options.captureMessage || "Capturing the current page...";
@@ -12108,6 +12137,7 @@
     buildFeedbackText,
     canvasToFeedbackFile,
     captureFeedbackScreenshot,
+    loadHtml2canvasRuntime,
     uploadFeedbackScreenshot,
     submitFeedbackReview,
     sendFeedbackReviewEmail,
@@ -13412,6 +13442,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       accountRegistrations: [],
       lastMobileMapTapAt: 0,
       lastMobileMapTapKey: "",
+      lastMobileMapTapFeatureKey: "",
       mobilePanelTapBlockUntil: 0,
       listTouchActivationUntil: 0,
       mobileMapTouchTap: null,
@@ -17945,11 +17976,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const targetLayers = [
         "mobile-biography-place-labels",
         "mobile-biography-place-points",
-        "mobile-biography-place-path",
         "mobile-biography-path-labels",
         "mobile-biography-path-point-numbers",
         "mobile-biography-path-points",
-        "mobile-biography-path-lines",
         "mobile-site-point-hit",
         "mobile-detail-labels",
         "mobile-territory-labels",
@@ -17973,6 +18002,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function bestAndroidPolygonFeature(event) {
+      const containedPolygon = bestClickableFeature([
+        ...mobileGeometryHitFeatures(event),
+        ...mobileProjectedGeometryHitFeatures(event)
+      ]);
+      if (containedPolygon) return containedPolygon;
       const renderedFeatures = mobileMapPolygonHitFeatures(event);
       const detailLabel = bestClickableFeature(renderedFeatures.filter(feature =>
         feature?.layer?.id === "mobile-detail-labels" && feature?.properties?.slug
@@ -17986,10 +18020,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         feature?.layer?.id === "mobile-territory-labels" && feature?.properties?.slug
       ));
       if (territoryLabel) return territoryLabel;
-      return bestClickableFeature([
-        ...mobileGeometryHitFeatures(event),
-        ...mobileProjectedGeometryHitFeatures(event)
-      ]);
+      return null;
     }
 
     function isMobilePolygonLayerFeature(feature) {
@@ -18170,8 +18201,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const tapKey = point
         ? `${Math.round(point.x)}:${Math.round(point.y)}`
         : `${Math.round((lngLat?.lng || 0) * 10000)}:${Math.round((lngLat?.lat || 0) * 10000)}`;
-      state.lastMobileMapTapKey = tapKey;
-      state.lastMobileMapTapAt = performance.now();
+      rememberMobileMapTap(tapKey, feature);
       event?.preventDefault?.();
       event?.originalEvent?.preventDefault?.();
       event?.originalEvent?.stopPropagation?.();
@@ -18180,7 +18210,23 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return true;
     }
 
-    function nearestMobileMarkerFeature(event, radius = 42) {
+    function mobileMarkerTapRadius(androidWebViewTap = false) {
+      const zoom = Number(state.map?.getZoom?.() || 6);
+      const visualRadius = 14 + Math.max(0, Math.min(1, (zoom - 6) / 8)) * 10;
+      return Math.round(Math.min(26, visualRadius + (androidWebViewTap ? 2 : 0)));
+    }
+
+    function mobileFeatureTapKey(feature) {
+      return String(feature?.properties?.wiki_slug || feature?.properties?.slug || feature?.properties?.id || "");
+    }
+
+    function rememberMobileMapTap(tapKey, feature, now = performance.now()) {
+      state.lastMobileMapTapKey = tapKey || "";
+      state.lastMobileMapTapFeatureKey = mobileFeatureTapKey(feature);
+      state.lastMobileMapTapAt = now;
+    }
+
+    function nearestMobileMarkerFeature(event, radius = 24) {
       if (state.settings.showPins === false || !state.map || !event?.point) return null;
       let best = null;
       activeMapSites().forEach(site => {
@@ -18208,24 +18254,21 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function openMobileMapTap(event) {
-      if (isMobileMapTapBlocked()) return false;
+      const androidWebViewTap = event?.source === "android-webview";
+      const now = performance.now();
+      const followsAndroidOverlayTap = now - (state.lastAndroidUiOverlayTapAt || 0) < 300;
+      if (isMobileMapTapBlocked() && (!androidWebViewTap || followsAndroidOverlayTap)) return false;
       if (state.suggestionMapPickMode) return false;
       const point = event?.point;
       const lngLat = event?.lngLat;
       const tapKey = point
         ? `${Math.round(point.x)}:${Math.round(point.y)}`
         : `${Math.round((lngLat?.lng || 0) * 10000)}:${Math.round((lngLat?.lat || 0) * 10000)}`;
-      const now = performance.now();
+      if (androidWebViewTap && state.lastMobileMapTapAt > 0 && now - state.lastMobileMapTapAt < 650) return true;
       if (tapKey && state.lastMobileMapTapKey === tapKey && now - state.lastMobileMapTapAt < 300) return true;
-      const androidWebViewTap = event?.source === "android-webview";
-      const preciseMarkerFeature = androidWebViewTap
-        ? nearestMobileMarkerFeature(event, 34)
-        : nearestMobileMarkerFeature(event, 22);
+      const preciseMarkerFeature = nearestMobileMarkerFeature(event, mobileMarkerTapRadius(androidWebViewTap));
       const polygonFeature = androidWebViewTap
         ? bestAndroidPolygonFeature(event)
-        : null;
-      const markerFeature = androidWebViewTap
-        ? nearestMobileMarkerFeature(event)
         : null;
       const layerEventFeature = androidWebViewTap
         ? null
@@ -18233,11 +18276,19 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const feature = preciseMarkerFeature ||
         polygonFeature ||
         layerEventFeature ||
-        markerFeature ||
         bestMobileRenderedTapFeature(event);
-      if (!feature) return false;
-      state.lastMobileMapTapKey = tapKey;
-      state.lastMobileMapTapAt = now;
+      if (!feature) {
+        if (event?.source === "android-webview" && !event?.retry && point && state.map) {
+          window.setTimeout(() => {
+            const retryLngLat = state.map?.unproject?.(point);
+            if (!retryLngLat) return;
+            openMobileMapTap({ ...event, lngLat: retryLngLat, source: "android-retry", retry: true });
+          }, 140);
+          return true;
+        }
+        return false;
+      }
+      rememberMobileMapTap(tapKey, feature, now);
       openMapFeature(feature);
       return true;
     }
@@ -18252,6 +18303,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           state.mobileMapTouchTap.moved = true;
           return;
         }
+        if (state.mobileDetailCloseMapTimer) {
+          window.clearTimeout(state.mobileDetailCloseMapTimer);
+          state.mobileDetailCloseMapTimer = 0;
+        }
+        if (state.map?.isEasing?.()) state.map.stop?.();
         const touch = event.touches[0];
         state.mobileMapTouchTap.startX = touch.clientX;
         state.mobileMapTouchTap.startY = touch.clientY;
@@ -18286,7 +18342,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }, { passive: false, capture: true });
     }
 
-    function blockMobileMapTaps(durationMs = 1600) {
+    function blockMobileMapTaps(durationMs = 240) {
       const now = performance.now();
       state.mobilePanelTapBlockUntil = Math.max(state.mobilePanelTapBlockUntil || 0, now + durationMs);
     }
@@ -18366,7 +18422,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function blockAndroidUiOverlayMapTapStart(event) {
       const target = event?.target;
       if (!target?.closest || isAndroidMapMarkerElement(target)) return;
-      if (target.closest(ANDROID_UI_TAP_OVERLAY_SELECTOR)) blockMobileMapTaps(1200);
+      if (target.closest(ANDROID_UI_TAP_OVERLAY_SELECTOR)) blockMobileMapTaps(240);
     }
 
     function consumePanelCloseEvent(event) {
@@ -18409,19 +18465,22 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight) {
-      const width = Number(viewWidth) || window.innerWidth || document.documentElement.clientWidth || 1;
-      const height = Number(viewHeight) || window.innerHeight || document.documentElement.clientHeight || 1;
+      const suppliedWidth = Number(viewWidth);
+      const suppliedHeight = Number(viewHeight);
+      const hasSuppliedViewport = Number.isFinite(suppliedWidth) && suppliedWidth > 0 &&
+        Number.isFinite(suppliedHeight) && suppliedHeight > 0;
+      const width = hasSuppliedViewport ? suppliedWidth : (window.innerWidth || document.documentElement.clientWidth || 1);
+      const height = hasSuppliedViewport ? suppliedHeight : (window.innerHeight || document.documentElement.clientHeight || 1);
       const rawX = Number(viewX);
       const rawY = Number(viewY);
       const dpr = Number(window.devicePixelRatio) || 1;
-      const candidates = [
-        {
-          clientX: rawX * ((window.innerWidth || width) / width),
-          clientY: rawY * ((window.innerHeight || height) / height)
-        },
-        { clientX: rawX, clientY: rawY },
-        { clientX: rawX / dpr, clientY: rawY / dpr }
-      ];
+      const scaled = {
+        clientX: rawX * ((window.innerWidth || width) / width),
+        clientY: rawY * ((window.innerHeight || height) / height)
+      };
+      const candidates = hasSuppliedViewport
+        ? [scaled]
+        : [scaled, { clientX: rawX, clientY: rawY }, { clientX: rawX / dpr, clientY: rawY / dpr }];
       const uniqueCandidates = SHARED_UTILS.uniqueBy(candidates, candidate => `${Math.round(candidate.clientX)}:${Math.round(candidate.clientY)}`);
       return uniqueCandidates.filter(candidate => {
         if (!Number.isFinite(candidate.clientX) || !Number.isFinite(candidate.clientY)) return false;
@@ -18433,7 +18492,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     window.onAndroidUiOverlayTapStart = function onAndroidUiOverlayTapStart(viewX, viewY, viewWidth, viewHeight) {
       const isOverlayTap = androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight)
         .some(candidate => isAndroidUiOverlayTap(candidate.clientX, candidate.clientY));
-      if (isOverlayTap) blockMobileMapTaps(1200);
+      if (isOverlayTap) {
+        state.lastAndroidUiOverlayTapAt = performance.now();
+        blockMobileMapTaps(240);
+      }
       return isOverlayTap;
     };
 
@@ -18642,30 +18704,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function androidTapCandidates(viewX, viewY, viewWidth, viewHeight, canvas) {
       const rect = canvas.getBoundingClientRect();
-      const width = Number(viewWidth) || window.innerWidth || rect.width;
-      const height = Number(viewHeight) || window.innerHeight || rect.height;
-      const rawX = Number(viewX);
-      const rawY = Number(viewY);
-      const dpr = Number(window.devicePixelRatio) || 1;
-      const candidates = [
-        {
-          clientX: rawX * ((window.innerWidth || width) / width),
-          clientY: rawY * ((window.innerHeight || height) / height)
-        },
-        { clientX: rawX, clientY: rawY },
-        { clientX: rawX / dpr, clientY: rawY / dpr }
-      ];
-      const uniqueCandidates = SHARED_UTILS.uniqueBy(candidates, candidate => `${Math.round(candidate.clientX)}:${Math.round(candidate.clientY)}`);
-      return uniqueCandidates.filter(candidate => {
+      return androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight).filter(candidate => {
         if (!Number.isFinite(candidate.clientX) || !Number.isFinite(candidate.clientY)) return false;
         return candidate.clientX >= rect.left && candidate.clientX <= rect.right &&
           candidate.clientY >= rect.top && candidate.clientY <= rect.bottom;
       });
     }
 
-    window.onAndroidMapTap = function onAndroidMapTap(viewX, viewY, viewWidth, viewHeight) {
+    window.onAndroidMapTap = function onAndroidMapTap(viewX, viewY, viewWidth, viewHeight, retry = false) {
       if (!state.map?.getCanvas) return false;
-      if (isMobileMapTapBlocked()) return false;
+      if (isMobileMapTapBlocked() && performance.now() - (state.lastAndroidUiOverlayTapAt || 0) < 300) return false;
       if (activatePendingAndroidSearchResultTap()) return true;
       if (searchEl?.value?.trim()) return false;
       const canvas = state.map.getCanvas();
@@ -18680,6 +18728,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const lngLat = state.map.unproject(point);
         if (handleSuggestionMapPick({ lngLat })) return true;
         if (openMobileMapTap({ point, lngLat, source: "android-webview" })) return true;
+      }
+      if (!retry) {
+        window.setTimeout(() => window.onAndroidMapTap(viewX, viewY, viewWidth, viewHeight, true), 180);
+        return true;
       }
       return false;
     };
@@ -23114,14 +23166,27 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const currentZoom = Number(state.map.getZoom?.());
         const overviewZoom = 11.25;
         if (Number.isFinite(currentZoom) && currentZoom > overviewZoom) {
-          window.setTimeout(() => state.map?.easeTo?.({
+          const settleOptions = {
             center: state.map.getCenter?.(),
             zoom: overviewZoom,
             padding: 0,
-            retainPadding: false,
-            duration: 420,
-            essential: true
-          }), 60);
+            retainPadding: false
+          };
+          if (isNativeAndroidApp()) {
+            window.clearTimeout(state.mobileDetailCloseMapTimer);
+            state.mobileDetailCloseMapTimer = window.setTimeout(() => {
+              state.mobileDetailCloseMapTimer = 0;
+              state.map?.stop?.();
+              state.map?.jumpTo?.(settleOptions);
+              state.map?.triggerRepaint?.();
+            }, 700);
+          } else {
+            window.setTimeout(() => state.map?.easeTo?.({
+              ...settleOptions,
+              duration: 260,
+              essential: true
+            }), 60);
+          }
         }
       }
     }
@@ -23784,7 +23849,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         if (handleSuggestionMapPickClick(event)) return;
         if (openMobileMapTap(event)) markMobileMapEventHandled(event);
       });
-      ["mobile-biography-place-labels", "mobile-biography-place-points", "mobile-biography-place-path", "mobile-biography-path-labels", "mobile-biography-path-point-numbers", "mobile-biography-path-points", "mobile-biography-path-lines"]
+      ["mobile-biography-place-labels", "mobile-biography-place-points", "mobile-biography-path-labels", "mobile-biography-path-point-numbers", "mobile-biography-path-points"]
         .forEach(layerId => bindMobileInteractiveLayer(layerId, event => {
           if (handleSuggestionMapPickClick(event)) return;
           if (openMobileMapTap(event)) markMobileMapEventHandled(event);

@@ -10,6 +10,12 @@ const stylesPath = "app/src/main/res/values/styles.xml";
 const launchBackgroundPath = "app/src/main/res/drawable/launch_background.xml";
 const manifestPath = "app/src/main/AndroidManifest.xml";
 const appBridgePath = "app/src/main/java/com/nativelongisland/onthissite/AppBridge.java";
+const bundledMobileIndexPaths = [
+  "app/src/main/assets/assets/data/mobile-site-geometry.json",
+  "app/src/main/assets/assets/data/mobile-site-index.json",
+  "app/src/main/assets/assets/data/mobile-timeline-index.json",
+  "app/src/main/assets/assets/data/mobile-wiki-index.json"
+];
 
 const bundledAppBytes = fs.readFileSync(bundledAppPath);
 const bundledLiveAppBytes = fs.readFileSync(bundledLiveAppPath);
@@ -21,6 +27,12 @@ const bundledApp = bundledAppBytes.toString("utf8");
 const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
 const styles = fs.readFileSync(stylesPath, "utf8");
 const launchBackground = fs.readFileSync(launchBackgroundPath, "utf8");
+
+for (const file of bundledMobileIndexPaths) {
+  if (!fs.existsSync(file) || fs.statSync(file).size < 100) {
+    throw new Error(`Bundled Android fallback is missing required mobile index: ${file}`);
+  }
+}
 
 function requireText(text, message) {
   if (!source.includes(text)) {
@@ -276,14 +288,21 @@ if (/state\.map\.on\("zoom",\s*syncMapStoryMarkers\)/.test(bundledApp) || /state
   throw new Error("Bundled Android app must not resync story markers on every zoom frame.");
 }
 requireBundledText('mobilePanelTapBlockUntil: 0', "Bundled Android app must track the panel close tap shield.");
-requireBundledText('function blockMobileMapTaps(durationMs = 1600)', "Bundled Android app must block repeated map taps after panel dismissal.");
+requireBundledText('function blockMobileMapTaps(durationMs = 240)', "Bundled Android app must block the delayed bridge without swallowing the visitor's next map tap.");
 requireBundledText('function isAndroidUiOverlayTap(clientX, clientY)', "Bundled Android app must reject drawer/header/sheet taps before trying alternate map coordinates.");
 requireBundledText('ANDROID_UI_TAP_OVERLAY_SELECTOR', "Bundled Android app must centralize UI overlay tap targets.");
 requireBundledText('function blockAndroidUiOverlayMapTapStart(event)', "Bundled Android app must block map forwarding as soon as UI taps start.");
 requireBundledText('window.onAndroidUiOverlayTapStart', "Bundled Android app must expose the UI overlay tap bridge to the native shell.");
 requireBundledText('document.addEventListener("pointerdown", blockAndroidUiOverlayMapTapStart', "Bundled Android app must guard pointerdown UI taps from map click-through.");
 requireBundledText('document.addEventListener("touchstart", blockAndroidUiOverlayMapTapStart', "Bundled Android app must guard touchstart UI taps from map click-through.");
-requireBundledText('if (isMobileMapTapBlocked()) return false;', "Bundled Android map bridge must ignore taps after panel dismissal.");
+requireBundledText('isMobileMapTapBlocked() && (!androidWebViewTap || followsAndroidOverlayTap)', "Bundled Android map bridge must reject delayed overlay taps without swallowing the next deliberate map tap.");
+requireBundledText('return androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight).filter', "Bundled Android map bridge must use one canonical viewport-scaled tap coordinate.");
+requireBundledText('function mobileMarkerTapRadius(androidWebViewTap = false)', "Bundled Android marker taps must scale with the visible marker size.");
+requireBundledText('Math.round(Math.min(26, visualRadius + (androidWebViewTap ? 2 : 0)))', "Bundled Android marker hit targets must remain bounded.");
+requireBundledText('function rememberMobileMapTap(tapKey, feature, now = performance.now())', "Bundled Android app must remember the feature opened by a physical tap.");
+requireBundledText('androidWebViewTap && state.lastMobileMapTapAt > 0 && now - state.lastMobileMapTapAt < 650', "Bundled Android bridge must not replace a feature already opened by the same tap.");
+requireBundledText('if (containedPolygon) return containedPolygon;', "Bundled Android polygon taps must prefer exact geometry containment.");
+requireBundledText('if (state.map?.isEasing?.()) state.map.stop?.();', "Bundled Android map taps must interrupt camera easing before selecting a feature.");
 requireBundledText('listTouchActivationUntil: 0', "Bundled Android app must track first-tap search result activation.");
 requireBundledText('function activateMobileListTarget(target, event)', "Bundled Android app must share nearby/search card activation.");
 requireBundledText('window.onAndroidSearchResultTapStart = function onAndroidSearchResultTapStart', "Bundled Android app must cache search result taps before keyboard dismissal.");
