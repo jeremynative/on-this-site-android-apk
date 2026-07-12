@@ -98,9 +98,13 @@ for (const [needle, message] of [
   ["const overviewZoom = 11.25", "APK detail close must return to a stable overview zoom."],
   ["limit: options.limit || 3", "APK related sites must be capped at three."],
   ["const MOBILE_CANOE_LAND_SAMPLE_RADIUS_DEG = 0.00022", "APK canoe state must sample the moving icon footprint near narrow land."],
-  ["mobileMovingLandSamples(coordinates).some", "APK canoe state must hide when any sampled point touches land."]
+  ["mobileMovingLandSamples(coordinates).some", "APK canoe state must hide when any sampled point touches land."],
+  ["Marker originals are already map-sized", "APK map markers must preserve original transparent PNG artwork."]
 ]) {
   if (!bundledLiveApp.includes(needle) || !bundledApp.includes(needle)) throw new Error(message);
+}
+if (bundledLiveApp.includes("fit=inside&format=webp") || bundledApp.includes("fit=inside&format=webp")) {
+  throw new Error("APK map markers must not use Directus WebP transforms that add dark edge bars.");
 }
 if (!/if \(isApkSnapshotMode\(\)\) \{\r?\n        const localIcon = APK_LOCAL_MAP_ICON_OVERRIDES/.test(bundledLiveApp)) {
   throw new Error("The live Android shell must allow VPS-hosted icon URLs outside offline snapshot mode.");

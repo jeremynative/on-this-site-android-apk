@@ -11488,14 +11488,10 @@
 
   function optimizedMapIconUrl(url, options = {}) {
     const value = String(url || "").trim();
-    if (!/^https?:\/\/[^/]+\/assets\/[0-9a-f-]{36}(?:\?|$)/i.test(value)) return value;
-    const width = Math.max(32, Math.min(256, Number(options.width) || 128));
-    const height = Math.max(32, Math.min(256, Number(options.height) || 128));
-    const separator = value.includes("?") ? "&" : "?";
-    // Directus `fit=contain` can fill transparent PNG padding with black when
-    // converting marker artwork to WebP. `inside` keeps the original aspect
-    // ratio without adding a background, so transparent icons remain clean.
-    return `${value}${separator}width=${width}&height=${height}&fit=inside&format=webp&quality=82`;
+    // Marker originals are already map-sized. Directus image transformations,
+    // especially WebP conversion, can add dark edge pixels to transparent art
+    // when Mapbox or Leaflet resamples it into a marker texture atlas.
+    return value;
   }
 
   function eventMapIconUrl(event, deps = {}) {
