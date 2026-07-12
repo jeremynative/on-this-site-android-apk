@@ -299,6 +299,9 @@ requireBundledText('isMobileMapTapBlocked() && (!androidWebViewTap || followsAnd
 requireBundledText('return androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight).filter', "Bundled Android map bridge must use one canonical viewport-scaled tap coordinate.");
 requireBundledText('function mobileMarkerTapRadius(androidWebViewTap = false)', "Bundled Android marker taps must scale with the visible marker size.");
 requireBundledText('Math.round(Math.min(26, visualRadius + (androidWebViewTap ? 2 : 0)))', "Bundled Android marker hit targets must remain bounded.");
+requireBundledText('function bestMobilePointHitFeature(features = [], event = null)', "Bundled Android taps must rank overlapping point markers by distance from the touch.");
+requireBundledText('const renderedPointFeature = bestMobileRenderedPointHitFeature(event);', "Bundled Android taps must resolve the rendered site marker before polygon fallbacks.");
+requireBundledText('if (mobileMapEventHandled(event)) return;', "Bundled Android polygon callbacks must not replace a site selected by the same touch.");
 requireBundledText('function rememberMobileMapTap(tapKey, feature, now = performance.now())', "Bundled Android app must remember the feature opened by a physical tap.");
 requireBundledText('androidWebViewTap && state.lastMobileMapTapAt > 0 && now - state.lastMobileMapTapAt < 650', "Bundled Android bridge must not replace a feature already opened by the same tap.");
 requireBundledText('if (containedPolygon) return containedPolygon;', "Bundled Android polygon taps must prefer exact geometry containment.");

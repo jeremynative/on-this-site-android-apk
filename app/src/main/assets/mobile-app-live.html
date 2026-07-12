@@ -18035,6 +18035,37 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return feature?.layer?.id === "mobile-site-point-hit";
     }
 
+    function bestMobilePointHitFeature(features = [], event = null) {
+      const candidates = features.filter(feature =>
+        isMobilePointHitFeature(feature) && (feature?.properties?.slug || feature?.properties?.wiki_slug)
+      );
+      if (!candidates.length) return null;
+      if (!state.map || !event?.point) return bestClickableFeature(candidates);
+      return [...candidates].sort((a, b) => {
+        const aCoordinates = a?.geometry?.type === "Point" ? a.geometry.coordinates : null;
+        const bCoordinates = b?.geometry?.type === "Point" ? b.geometry.coordinates : null;
+        const aPoint = Array.isArray(aCoordinates) ? state.map.project(aCoordinates) : null;
+        const bPoint = Array.isArray(bCoordinates) ? state.map.project(bCoordinates) : null;
+        const aDistance = aPoint ? Math.hypot(aPoint.x - event.point.x, aPoint.y - event.point.y) : Number.POSITIVE_INFINITY;
+        const bDistance = bPoint ? Math.hypot(bPoint.x - event.point.x, bPoint.y - event.point.y) : Number.POSITIVE_INFINITY;
+        return aDistance - bDistance;
+      })[0] || null;
+    }
+
+    function bestMobileRenderedPointHitFeature(event) {
+      if (!state.map || !event?.point) {
+        return bestMobilePointHitFeature(event?.features || [], event);
+      }
+      const rendered = MAP_UTILS.queryRenderedFeaturesAround(
+        state.map,
+        event.point,
+        ["mobile-site-point-hit"],
+        2,
+        { fallback: event?.features || [] }
+      );
+      return bestMobilePointHitFeature(rendered, event);
+    }
+
     function isMobileBiographyPathFeature(feature) {
       const layerId = feature?.layer?.id || "";
       return layerId === "mobile-biography-place-labels" ||
@@ -18051,7 +18082,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!features.length) return null;
       const biographyPath = bestClickableFeature(features.filter(isMobileBiographyPathFeature));
       if (biographyPath) return biographyPath;
-      const point = bestClickableFeature(features.filter(isMobilePointHitFeature));
+      const point = bestMobilePointHitFeature(features, event);
       if (point) return point;
       const polygon = bestClickableFeature(features.filter(isMobilePolygonLayerFeature));
       if (polygon) return polygon;
@@ -18062,7 +18093,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const rendered = mobileMapHitFeatures(event);
       const biographyPath = bestClickableFeature(rendered.filter(isMobileBiographyPathFeature));
       if (biographyPath) return biographyPath;
-      const point = bestClickableFeature(rendered.filter(isMobilePointHitFeature));
+      const point = bestMobilePointHitFeature(rendered, event);
       if (point) return point;
       const polygon = bestClickableFeature(rendered.filter(isMobilePolygonLayerFeature));
       if (polygon) return polygon;
@@ -18194,6 +18225,22 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function openMobilePolygonLayerFeature(event) {
       if (isMobileMapTapBlocked() || state.suggestionMapPickMode) return false;
+      if (mobileMapEventHandled(event)) return true;
+      const pointFeature = bestMobileRenderedPointHitFeature(event);
+      if (pointFeature) {
+        const point = event?.point;
+        const lngLat = event?.lngLat;
+        const tapKey = point
+          ? `${Math.round(point.x)}:${Math.round(point.y)}`
+          : `${Math.round((lngLat?.lng || 0) * 10000)}:${Math.round((lngLat?.lat || 0) * 10000)}`;
+        rememberMobileMapTap(tapKey, pointFeature);
+        event?.preventDefault?.();
+        event?.originalEvent?.preventDefault?.();
+        event?.originalEvent?.stopPropagation?.();
+        markMobileMapEventHandled(event);
+        openMapFeature(pointFeature);
+        return true;
+      }
       const feature = bestClickableFeature((event?.features || []).filter(isMobilePolygonLayerFeature));
       if (!feature) return false;
       const point = event?.point;
@@ -18266,6 +18313,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         : `${Math.round((lngLat?.lng || 0) * 10000)}:${Math.round((lngLat?.lat || 0) * 10000)}`;
       if (androidWebViewTap && state.lastMobileMapTapAt > 0 && now - state.lastMobileMapTapAt < 650) return true;
       if (tapKey && state.lastMobileMapTapKey === tapKey && now - state.lastMobileMapTapAt < 300) return true;
+      const renderedPointFeature = bestMobileRenderedPointHitFeature(event);
       const preciseMarkerFeature = nearestMobileMarkerFeature(event, mobileMarkerTapRadius(androidWebViewTap));
       const polygonFeature = androidWebViewTap
         ? bestAndroidPolygonFeature(event)
@@ -18273,7 +18321,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const layerEventFeature = androidWebViewTap
         ? null
         : bestMobileLayerEventFeature(event);
-      const feature = preciseMarkerFeature ||
+      const feature = renderedPointFeature ||
+        preciseMarkerFeature ||
         polygonFeature ||
         layerEventFeature ||
         bestMobileRenderedTapFeature(event);
@@ -23838,6 +23887,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function openMobileInteractivePolygonLayer(event) {
+      if (mobileMapEventHandled(event)) return;
       if (handleSuggestionMapPickClick(event)) return;
       if (openMobilePolygonLayerFeature(event)) return;
       if (openMobileMapTap(event)) markMobileMapEventHandled(event);
