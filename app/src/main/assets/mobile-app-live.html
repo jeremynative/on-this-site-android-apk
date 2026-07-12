@@ -22156,10 +22156,32 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return Math.max(360000, Math.min(1440000, totalMiles * 42000));
     }
 
+    const MOBILE_CANOE_LAND_SAMPLE_RADIUS_DEG = 0.00022;
+
+    function mobileMovingLandSamples(coordinates = []) {
+      const lng = Number(coordinates?.[0]);
+      const lat = Number(coordinates?.[1]);
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) return [];
+      const radius = MOBILE_CANOE_LAND_SAMPLE_RADIUS_DEG;
+      return [
+        [lng, lat],
+        [lng + radius, lat],
+        [lng - radius, lat],
+        [lng, lat + radius],
+        [lng, lat - radius],
+        [lng + radius, lat + radius],
+        [lng + radius, lat - radius],
+        [lng - radius, lat + radius],
+        [lng - radius, lat - radius]
+      ];
+    }
+
     function mobileMovingPointIsOnLand(coordinates = []) {
       if (!coordinates.every(Number.isFinite) || !state.landMaskData?.geometry) return true;
       try {
-        return pointInGeometry(coordinates, state.landMaskData.geometry);
+        return mobileMovingLandSamples(coordinates).some(sample =>
+          pointInGeometry(sample, state.landMaskData.geometry)
+        );
       } catch {
         return true;
       }

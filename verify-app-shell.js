@@ -96,7 +96,9 @@ for (const [needle, message] of [
   ["function mobilePanelMapPadding()", "APK map focus must account for open content panels."],
   ["function resetMobilePanelScroll(panel)", "APK panels must reset to the beginning when opened."],
   ["const overviewZoom = 11.25", "APK detail close must return to a stable overview zoom."],
-  ["limit: options.limit || 3", "APK related sites must be capped at three."]
+  ["limit: options.limit || 3", "APK related sites must be capped at three."],
+  ["const MOBILE_CANOE_LAND_SAMPLE_RADIUS_DEG = 0.00022", "APK canoe state must sample the moving icon footprint near narrow land."],
+  ["mobileMovingLandSamples(coordinates).some", "APK canoe state must hide when any sampled point touches land."]
 ]) {
   if (!bundledLiveApp.includes(needle) || !bundledApp.includes(needle)) throw new Error(message);
 }
