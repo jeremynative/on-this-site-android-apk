@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260714-map-locate-r1";
+const expectedBuild = "20260714-map-locate-r3";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -84,6 +84,7 @@ requireText("window.NLI_APK_SNAPSHOT_MODE=true;", "Android shell must mark the b
 requireText("window.NLI_DISABLE_DIRECTUS_RUNTIME=true;", "Android shell must disable Directus runtime calls in the snapshot APK.");
 requireText("directus.nativelongisland.com", "Android shell must block Directus requests while the APK snapshot is offline.");
 requireText("window.__nliAllowGeoUntil=Date.now()+120000;", "Android shell must allow the app's startup Near me location request.");
+requireText("#locate,#mobile-map-locate,#suggest-use-location", "Android shell must allow the dedicated map location control through the geolocation gate.");
 if (!bundledLiveApp.includes("function isApkSnapshotMode()") || !bundledApp.includes("function isApkSnapshotMode()")) {
   throw new Error("Bundled mobile shells must distinguish live Android mode from offline APK snapshot mode.");
 }
@@ -101,6 +102,7 @@ for (const [needle, message] of [
   ["mobileMovingLandSamples(coordinates).some", "APK canoe state must hide when any sampled point touches land."],
   ["Marker originals are already map-sized", "APK map markers must preserve original transparent PNG artwork."],
   ["id=\"mobile-map-locate\"", "APK map must include a dedicated current-location control."],
+  ["id=\"mobile-map-locate\" type=\"button\" data-allow-geolocation", "APK current-location control must pass the Android geolocation gate."],
   [".native-android-app .mobile-map-locate", "APK current-location control must only appear in the native Android app."],
   ["mobileMapLocateBtn?.addEventListener", "APK current-location control must be interactive."],
   ["async function locateMapUser()", "APK current-location control must reuse the map location flow."]
