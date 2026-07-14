@@ -961,6 +961,63 @@
       min-height: 190px;
     }
 
+    .mobile-map-locate {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      z-index: 8;
+      display: none;
+      width: 48px;
+      height: 48px;
+      padding: 0;
+      border: 1px solid rgba(45, 61, 52, 0.2);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.97);
+      box-shadow: 0 2px 7px rgba(24, 39, 30, 0.28);
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .native-android-app .mobile-map-locate {
+      display: inline-flex;
+    }
+
+    .mobile-map-locate:focus-visible {
+      outline: 3px solid rgba(26, 115, 232, 0.35);
+      outline-offset: 2px;
+    }
+
+    .mobile-map-locate:active {
+      transform: translateY(1px);
+      background: #f4f8ff;
+    }
+
+    .mobile-map-locate:disabled {
+      cursor: wait;
+      opacity: 0.76;
+    }
+
+    .mobile-map-locate-dot {
+      display: block;
+      width: 14px;
+      height: 14px;
+      border: 3px solid #fff;
+      border-radius: 50%;
+      background: #1a73e8;
+      box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.28);
+    }
+
+    .mobile-map-locate.is-finding .mobile-map-locate-dot {
+      animation: mobile-map-locate-pulse 900ms ease-in-out infinite alternate;
+    }
+
+    @keyframes mobile-map-locate-pulse {
+      from { box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.24); }
+      to { box-shadow: 0 0 0 8px rgba(26, 115, 232, 0.08); }
+    }
+
     .mobile-startup-spotlight {
       position: fixed;
       left: max(12px, var(--app-left-safe));
@@ -5175,7 +5232,11 @@
         </details>
       </div>
     </header>
-      <div id="map" aria-label="Native Long Island mobile map"></div>
+      <div id="map" aria-label="Native Long Island mobile map">
+        <button class="mobile-map-locate" id="mobile-map-locate" type="button" aria-label="Go to my location" title="Go to my location">
+          <span class="mobile-map-locate-dot" aria-hidden="true"></span>
+        </button>
+      </div>
     <aside class="mobile-startup-spotlight" id="mobile-startup-spotlight" aria-live="polite" hidden>
       <span>Did you know?</span>
       <strong id="mobile-startup-spotlight-title">Mapped site</strong>
@@ -13299,8 +13360,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function syncSystemSafeArea() {
       const isAndroid = /Android/i.test(navigator.userAgent);
+      const isNativeAndroid = isAndroid && Boolean(window.AndroidApp || window.AndroidStory);
       document.body.classList.toggle("android-device", isAndroid);
       document.documentElement.classList.toggle("android-device", isAndroid);
+      document.body.classList.toggle("native-android-app", isNativeAndroid);
+      document.documentElement.classList.toggle("native-android-app", isNativeAndroid);
       const viewport = window.visualViewport;
       const topGap = viewport ? Math.max(0, viewport.offsetTop) : 0;
       const bottomGap = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
@@ -13477,6 +13541,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const searchEl = document.getElementById("search");
     const territorySubtitleEl = document.getElementById("territory-subtitle");
     const locateBtn = document.getElementById("locate");
+    const mobileMapLocateBtn = document.getElementById("mobile-map-locate");
     const mapStoryOpenBtn = document.getElementById("map-story-open");
     const loginOpenBtn = document.getElementById("login-open");
     const rewardsOpenBtn = document.getElementById("rewards-open");
@@ -23424,6 +23489,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return Number.isFinite(miles) && miles >= 0.006;
     }
 
+    function setLocationControlsBusy(busy) {
+      locateBtn.textContent = busy ? "Finding..." : "Near me";
+      if (!mobileMapLocateBtn) return;
+      mobileMapLocateBtn.disabled = busy;
+      mobileMapLocateBtn.classList.toggle("is-finding", busy);
+      mobileMapLocateBtn.setAttribute("aria-busy", busy ? "true" : "false");
+    }
+
     function applyUserLocation(position, { centerMap = false, mapZoom = NEAR_ME_ZOOM, centerBounds = null } = {}) {
       const nextLocation = [position.coords.longitude, position.coords.latitude];
       const moved = locationMovedEnough(nextLocation);
@@ -23431,7 +23504,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.settings.locationEnabled = true;
       state.settings.locationPrompted = true;
       saveSettings();
-      locateBtn.textContent = "Near me";
+      setLocationControlsBusy(false);
       renderCurrentTerritoryStatus();
       if (moved || centerMap) {
         sortSites();
@@ -23452,7 +23525,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         if (!silent) showBanner("Location is not available on this device.");
         return false;
       }
-      locateBtn.textContent = "Finding...";
+      setLocationControlsBusy(true);
       return new Promise(resolve => {
         navigator.geolocation.getCurrentPosition(position => {
           applyUserLocation(position, { centerMap, mapZoom, centerBounds });
@@ -23461,7 +23534,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         state.settings.locationEnabled = false;
         state.settings.locationPrompted = true;
         saveSettings();
-        locateBtn.textContent = "Near me";
+        setLocationControlsBusy(false);
         state.userLocation = null;
         renderCurrentTerritoryStatus();
           renderList();
@@ -23475,6 +23548,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       setMobilePanelMode("nearby");
       setNearbyPanelState("default");
       if (appEl?.classList.contains("nearby-expanded")) setNearbyExpanded(false);
+      return requestUserLocation({ centerMap: true, silent: false, mapZoom: NEAR_ME_ZOOM });
+    }
+
+    async function locateMapUser() {
       return requestUserLocation({ centerMap: true, silent: false, mapZoom: NEAR_ME_ZOOM });
     }
 
@@ -26454,6 +26531,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     window.addEventListener("orientationchange", () => window.setTimeout(refreshMobileViewportLayout, 280));
     window.visualViewport?.addEventListener("resize", refreshMobileViewportLayout);
     locateBtn.addEventListener("click", locateUser);
+    mobileMapLocateBtn?.addEventListener("click", event => {
+      event.stopPropagation();
+      locateMapUser();
+    });
     const blockPanelControlMapTap = event => {
       blockMobileMapTaps();
       event?.stopPropagation?.();
@@ -26463,7 +26544,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileTimelineToggleBtn,
       showTimelineBtn,
       mobileTabTimelineBtn,
-      mobileTabNearbyBtn
+      mobileTabNearbyBtn,
+      mobileMapLocateBtn
     ].forEach(control => {
       control?.addEventListener("pointerdown", blockPanelControlMapTap, { capture: true });
       control?.addEventListener("touchstart", blockPanelControlMapTap, { capture: true, passive: true });

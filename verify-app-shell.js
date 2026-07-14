@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260711-single-pass-mask-r10";
+const expectedBuild = "20260714-map-locate-r1";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -99,7 +99,11 @@ for (const [needle, message] of [
   ["limit: options.limit || 3", "APK related sites must be capped at three."],
   ["const MOBILE_CANOE_LAND_SAMPLE_RADIUS_DEG = 0.00022", "APK canoe state must sample the moving icon footprint near narrow land."],
   ["mobileMovingLandSamples(coordinates).some", "APK canoe state must hide when any sampled point touches land."],
-  ["Marker originals are already map-sized", "APK map markers must preserve original transparent PNG artwork."]
+  ["Marker originals are already map-sized", "APK map markers must preserve original transparent PNG artwork."],
+  ["id=\"mobile-map-locate\"", "APK map must include a dedicated current-location control."],
+  [".native-android-app .mobile-map-locate", "APK current-location control must only appear in the native Android app."],
+  ["mobileMapLocateBtn?.addEventListener", "APK current-location control must be interactive."],
+  ["async function locateMapUser()", "APK current-location control must reuse the map location flow."]
 ]) {
   if (!bundledLiveApp.includes(needle) || !bundledApp.includes(needle)) throw new Error(message);
 }
