@@ -58,7 +58,7 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260714-map-locate-r3";
+    static final String APP_VERSION = "20260718-startup-assets-r1";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
@@ -324,6 +324,12 @@ public class MainActivity extends Activity {
         } else if ("/app/long-island-land-mask.geojson".equals(path)) {
             assetName = "long-island-land-mask.geojson";
             mimeType = "application/geo+json";
+        } else if ("/long-island-land-mask-lite.json".equals(path)) {
+            assetName = "long-island-land-mask-lite.json";
+            mimeType = "application/json";
+        } else if ("/app/long-island-land-mask-lite.json".equals(path)) {
+            assetName = "long-island-land-mask-lite.json";
+            mimeType = "application/json";
         } else {
             return null;
         }
@@ -341,8 +347,13 @@ public class MainActivity extends Activity {
     }
 
     private InputStream bundledAssetStream(String assetName) throws IOException {
-        if (!"mobile-app.html".equals(assetName) && !"mobile-app-live.html".equals(assetName)) return getAssets().open(assetName);
-        return new ByteArrayInputStream(bundledMobileHtml(assetName).getBytes(StandardCharsets.UTF_8));
+        if ("mobile-app.html".equals(assetName) || "mobile-app-live.html".equals(assetName)) {
+            return new ByteArrayInputStream(bundledMobileHtml(assetName).getBytes(StandardCharsets.UTF_8));
+        }
+        if ("assets/js/mobile-app.js".equals(assetName)) {
+            return new ByteArrayInputStream(injectMapboxToken(readBundledTextAsset(assetName)).getBytes(StandardCharsets.UTF_8));
+        }
+        return getAssets().open(assetName);
     }
 
     private String bundledMobileHtml() throws IOException {
@@ -350,6 +361,11 @@ public class MainActivity extends Activity {
     }
 
     private String bundledMobileHtml(String assetName) throws IOException {
+        String html = injectMapboxToken(readBundledTextAsset(assetName));
+        return html.replace("</head>", androidApkStartupScript() + "</head>");
+    }
+
+    private String readBundledTextAsset(String assetName) throws IOException {
         InputStream stream = getAssets().open(assetName);
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         byte[] buffer = new byte[8192];
@@ -361,12 +377,14 @@ public class MainActivity extends Activity {
         } finally {
             stream.close();
         }
-        String html = new String(output.toByteArray(), StandardCharsets.UTF_8);
+        return new String(output.toByteArray(), StandardCharsets.UTF_8);
+    }
+
+    private String injectMapboxToken(String content) {
         if (BuildConfig.MAPBOX_TOKEN != null && !BuildConfig.MAPBOX_TOKEN.isEmpty()) {
-            html = html.replace("__NLI_MAPBOX_TOKEN__", BuildConfig.MAPBOX_TOKEN);
+            return content.replace("__NLI_MAPBOX_TOKEN__", BuildConfig.MAPBOX_TOKEN);
         }
-        html = html.replace("</head>", androidApkStartupScript() + "</head>");
-        return html;
+        return content;
     }
 
     private boolean isSiteGroundChallengeUrl(String url) {
