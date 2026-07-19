@@ -4120,6 +4120,13 @@
       line-height: 1.48;
     }
 
+    .detail-loading-status {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
     .ots-page-intro,
     .section-content .ots-page-intro {
       display: grid;
@@ -22660,6 +22667,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       updateMobileMovingFeatureMarkers();
       startMobileMovingFeatureAnimation();
     }
+
+    function mobileDetailLoadingHtml(item = {}) {
+      const summary = publicCleanText(item?.summary);
+      return `
+        ${summary ? `<p class="summary">${escapeHtml(summary)}</p>` : ""}
+        <p class="detail-loading-status" role="status">Loading full article...</p>
+      `;
+    }
+
     async function openWikiArticle(articleOrSlug, options = {}) {
       clearMobileBiographyPathOverlay();
       const slug = typeof articleOrSlug === "string" ? articleOrSlug : articleOrSlug?.slug;
@@ -22676,7 +22692,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         <h2>${escapeHtml(article?.title || options.timelineEvent?.source_title || "Knowledgebase article")}</h2>
         <p class="detail-meta">Knowledgebase</p>
       `;
-      detailBodyEl.innerHTML = `<p class="summary">Loading article details...</p>`;
+      detailBodyEl.innerHTML = mobileDetailLoadingHtml(article);
       detailEl.classList.add("open");
       syncMobilePanelAccessibility();
       resetMobilePanelScroll(detailEl);
@@ -23388,7 +23404,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       syncActiveSiteMapLabel(site);
       renderList();
       detailTitleEl.innerHTML = mobileSiteTitleHtml(site);
-      detailBodyEl.innerHTML = `<p class="summary">Loading article details...</p>`;
+      detailBodyEl.innerHTML = mobileDetailLoadingHtml(site);
       detailEl.classList.add("open");
       setDetailDrawerState(options.drawerState || "half");
       syncMobilePanelAccessibility();
