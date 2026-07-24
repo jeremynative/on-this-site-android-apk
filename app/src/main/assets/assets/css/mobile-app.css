@@ -298,6 +298,7 @@
       padding-bottom: var(--app-bottom-safe);
     }
 
+    .app.nearby-expanded .mobile-map-shell,
     .app.nearby-expanded #map {
       min-height: 0;
       overflow: hidden;
@@ -936,10 +937,17 @@
       font-size: 15px;
     }
 
-    #map {
+    .mobile-map-shell {
       position: relative;
       z-index: 1;
       isolation: isolate;
+      min-height: 190px;
+      overflow: hidden;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
       min-height: 190px;
     }
 
@@ -964,6 +972,15 @@
 
     .native-android-app .mobile-map-locate {
       display: inline-flex;
+    }
+
+    body:has(.research-question-shell-mobile .research-question-prompt:not([hidden])) .mobile-map-locate {
+      bottom: 136px;
+    }
+
+    body.mobile-content-open .mobile-map-locate {
+      display: none;
+      pointer-events: none;
     }
 
     .mobile-map-locate:focus-visible {
@@ -1095,6 +1112,82 @@
       line-height: 1.4;
     }
 
+    .offline-text-mode .mobile-map-shell {
+      min-height: 220px;
+      background: #eef3ed;
+    }
+
+    .offline-text-mode .mobile-map-locate,
+    .offline-text-mode .mobile-activity-button,
+    .offline-text-mode .mobile-notification-button,
+    .offline-text-mode [data-requires-online] {
+      display: none !important;
+    }
+
+    .offline-text-mode img,
+    .offline-text-mode video,
+    .offline-text-mode audio,
+    .offline-text-mode iframe,
+    .offline-text-mode picture {
+      display: none !important;
+    }
+
+    .offline-map-index {
+      display: grid;
+      align-content: center;
+      gap: 10px;
+      width: 100%;
+      height: 100%;
+      min-height: 220px;
+      box-sizing: border-box;
+      padding: 18px;
+      background: #eef3ed;
+      color: #21372b;
+      text-align: left;
+    }
+
+    .offline-map-index strong,
+    .offline-map-index p {
+      margin: 0;
+    }
+
+    .offline-map-index p {
+      color: #56665a;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .offline-map-regions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .offline-map-regions button {
+      min-height: 44px;
+      padding: 8px 10px;
+      border: 1px solid #9fb2a5;
+      border-radius: 8px;
+      background: #fff;
+      color: #2f5a49;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      touch-action: manipulation;
+    }
+
+    .offline-map-regions button.active {
+      border-color: #2f6b4f;
+      background: #2f6b4f;
+      color: #fff;
+    }
+
+    .offline-text-mode .mobile-header-instruction {
+      padding: 8px 10px;
+      border-left: 4px solid #2f6b4f;
+      background: #eef3ed;
+    }
+
     .mobile-timeline {
       display: grid;
       grid-template-columns: 36px minmax(0, 1fr) 36px auto;
@@ -1208,6 +1301,12 @@
       color: #526156;
       font-size: 11px;
       font-weight: 750;
+    }
+
+    .timeline-source-link {
+      color: var(--accent-strong);
+      text-decoration: underline;
+      overflow-wrap: anywhere;
     }
 
     .timeline-current.show-source .timeline-source-popover {
@@ -4102,6 +4201,13 @@
       line-height: 1.48;
     }
 
+    .detail-loading-status {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
     .ots-page-intro,
     .section-content .ots-page-intro {
       display: grid;
@@ -4846,14 +4952,14 @@
     }
 
     .mobile-moving-dog-mapbox-icon {
-      width: 30px !important;
-      height: 24px !important;
+      width: 44px !important;
+      height: 44px !important;
       z-index: 5;
     }
 
     .mobile-moving-dog-marker {
-      width: 30px;
-      height: 24px;
+      width: 44px;
+      height: 44px;
     }
 
     .mobile-moving-dog-shell {

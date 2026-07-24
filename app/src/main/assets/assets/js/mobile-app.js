@@ -661,6 +661,10 @@
       return Boolean(window.NLI_APK_SNAPSHOT_MODE);
     }
 
+    function isOfflineTextMode() {
+      return Boolean(window.NLI_APK_OFFLINE_TEXT_MODE) || (isNativeAndroidApp() && navigator.onLine === false);
+    }
+
     const SEEDED_PUBLIC_PROFILES = SHARED_CONFIG.seededPublicProfiles || [];
     const SEEDED_PUBLIC_COMMENTS = SHARED_CONFIG.seededPublicComments || [];
 
@@ -749,6 +753,8 @@
       siteAttentionPulseStartedAt: 0,
       mobileSiteIconImagesLoaded: new Set(),
       mobileSiteIconImagesFailed: new Set(),
+      mobileSiteIconImagePlaceholders: new Set(),
+      mobileStyleImageMissingBound: false,
       mobileSiteIconImagesLoading: false,
       mobileSiteIconImageQueue: [],
       mobileSiteIconImagesQueued: new Set(),
@@ -1805,10 +1811,12 @@
     }
 
     function listingImage(site) {
+      if (isOfflineTextMode()) return "";
       return MEDIA_UTILS.listingHeroImage(site, { directusAssetUrl, rewriteMediaUrl });
     }
 
     function listingImageFallback(site) {
+      if (isOfflineTextMode()) return "";
       return MEDIA_UTILS.listingRewrittenImageFallback(site, { directusAssetUrl, rewriteMediaUrl });
     }
 
@@ -1827,6 +1835,7 @@
 
     function mobileSnapshotImageUrl(url) {
       const value = String(url || "").trim();
+      if (isOfflineTextMode()) return "";
       if (!isApkSnapshotMode()) return value;
       return isBundledMobileImageUrl(value) ? value : "";
     }
@@ -1834,7 +1843,7 @@
     function removeUnbundledSnapshotImages(root) {
       if (!isApkSnapshotMode() || !root) return;
       root.querySelectorAll("img").forEach(image => {
-        if (!isBundledMobileImageUrl(image.getAttribute("src") || image.currentSrc)) image.remove();
+        if (isOfflineTextMode() || !isBundledMobileImageUrl(image.getAttribute("src") || image.currentSrc)) image.remove();
       });
     }
 
@@ -3023,8 +3032,10 @@
       const wikiArticles = state.wikiArticles?.length || 0;
       const blogPosts = Number(window.NLI_MOBILE_DATA?.blogPosts?.length || headerEls[0].dataset.blogCount || 10);
       const calendarEvents = state.exhibits?.length || 0;
-      const text = isApkSnapshotMode()
-        ? `${listings} listings loaded from the APK snapshot. Click a pin or colored territory to read its article.`
+      const text = isOfflineTextMode()
+        ? `Offline archive: ${listings} listings and ${wikiArticles} wiki articles are saved on this device. Search or browse text below; maps, media, accounts, and submissions return when online.`
+        : isApkSnapshotMode()
+          ? `${listings} listings loaded from the APK snapshot. Click a pin or colored territory to read its article.`
         : `${listings} listings, ${wikiArticles} wiki articles, ${blogPosts} blog posts, and ${calendarEvents} calendar events loaded. Click a pin or colored territory to read its article.`;
       headerEls.forEach(el => {
         el.textContent = text;
@@ -3516,7 +3527,7 @@
       invalidateMapSourceCache();
       prepareExhibits();
       updateMobileHeaderInstruction();
-      state.filtered = visitableSites().filter(site => site.center);
+      state.filtered = browsableSites().filter(site => isOfflineTextMode() || site.center);
       clearRelatedSiteCaches();
       sortSites();
       resetNearbyRenderLimit();
@@ -3534,6 +3545,10 @@
       return state.sites.filter(site => {
         return !isBroadTerritory(site);
       });
+    }
+
+    function browsableSites() {
+      return isOfflineTextMode() ? [...state.sites] : visitableSites();
     }
 
     function mobileStartupSpotlightCandidates() {
@@ -3794,7 +3809,7 @@
       const normalizedQuery = normalizeText(rawQuery);
       if (!query) {
         clearAddressSearch();
-        state.filtered = visitableSites();
+        state.filtered = browsableSites();
         sortSites();
         resetNearbyRenderLimit();
         renderList();
@@ -3848,7 +3863,7 @@
         state.searchValueWatchTimer = null;
       }
       clearAddressSearch();
-      state.filtered = visitableSites();
+      state.filtered = browsableSites();
       sortSites();
       resetNearbyRenderLimit();
       renderList();
@@ -5573,8 +5588,8 @@
 
     function mobileMarkerTapRadius(androidWebViewTap = false) {
       const zoom = Number(state.map?.getZoom?.() || 6);
-      const visualRadius = 14 + Math.max(0, Math.min(1, (zoom - 6) / 8)) * 10;
-      return Math.round(Math.min(26, visualRadius + (androidWebViewTap ? 2 : 0)));
+      const visualRadius = 12 + Math.max(0, Math.min(1, (zoom - 6) / 8)) * 8;
+      return Math.round(Math.min(21, visualRadius + (androidWebViewTap ? 1 : 0)));
     }
 
     function mobileFeatureTapKey(feature) {
@@ -6107,6 +6122,7 @@
     }
 
     function siteMapIconUrl(site) {
+      if (isOfflineTextMode()) return "";
       const rawIcon = String(site?.map_icon || "").trim();
       const forceBlueDot = FORCE_BLUE_DOT_SITE_SLUGS.has(String(site?.slug || "").trim());
       if (isApkSnapshotMode()) {
@@ -6176,7 +6192,7 @@
       if (!entry) return;
       const { key, url } = entry;
       state.mobileSiteIconImagesQueued.delete(key);
-      if (state.map.hasImage?.(key)) {
+      if (state.map.hasImage?.(key) && !state.mobileSiteIconImagePlaceholders.has(key)) {
         state.mobileSiteIconImagesLoaded.add(key);
         scheduleNextMobileSiteIcon();
         return;
@@ -6188,10 +6204,10 @@
             state.mobileSiteIconImagesFailed.add(key);
             return;
           }
-          if (!state.map.hasImage?.(key)) {
-            const prepared = prepareMobileSiteIconImage(image);
-            state.map.addImage(key, prepared.image, { sdf: false, ...(prepared.options || {}) });
-          }
+          if (state.mobileSiteIconImagePlaceholders.has(key) && state.map.hasImage?.(key)) state.map.removeImage(key);
+          const prepared = prepareMobileSiteIconImage(image);
+          if (!state.map.hasImage?.(key)) state.map.addImage(key, prepared.image, { sdf: false, ...(prepared.options || {}) });
+          state.mobileSiteIconImagePlaceholders.delete(key);
           state.mobileSiteIconImagesLoaded.add(key);
         } catch {
           state.mobileSiteIconImagesFailed.add(key);
@@ -6210,7 +6226,7 @@
         const url = siteMapIconUrl(site);
         if (!key || !url || state.mobileSiteIconImagesFailed.has(key) || state.mobileSiteIconImagesLoaded.has(key)) return;
         if (isApkSnapshotMode() && !/^assets\/map-icons\//i.test(url)) return;
-        if (state.map.hasImage?.(key)) {
+        if (state.map.hasImage?.(key) && !state.mobileSiteIconImagePlaceholders.has(key)) {
           state.mobileSiteIconImagesLoaded.add(key);
           return;
         }
@@ -10996,6 +11012,16 @@
 
     function addPolygonLayers() {
       if (!state.map || state.map.getSource("mobile-sites")) return;
+      if (!state.mobileStyleImageMissingBound) {
+        state.mobileStyleImageMissingBound = true;
+        state.map.on("styleimagemissing", event => {
+          const key = String(event?.id || "");
+          if (!key.startsWith("mobile-site-icon-") || state.map.hasImage?.(key)) return;
+          const transparent = new Uint8Array(4 * 4 * 4);
+          state.map.addImage(key, { width: 4, height: 4, data: transparent });
+          state.mobileSiteIconImagePlaceholders.add(key);
+        });
+      }
       const sourceData = cachedMobileMapSourceData();
       CALENDAR_UTILS.addOnThisDayMapImage?.(state.map, "mobile-on-this-day-calendar");
       state.map.addSource("mobile-sites", { type: "geojson", data: sourceData.sites });
@@ -11086,7 +11112,7 @@
         source: "mobile-sites",
         filter: ["==", ["geometry-type"], "Point"],
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 14, 10, 18, 14, 24],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 10, 10, 14, 14, 18],
           "circle-color": "#245f43",
           "circle-opacity": 0.01,
           "circle-stroke-opacity": 0
@@ -12842,6 +12868,7 @@
       const mapRect = document.getElementById("map")?.getBoundingClientRect?.();
       if (!mapRect?.height) return;
       document.documentElement.style.setProperty("--mobile-map-actions-top", `${Math.round(mapRect.top + 10)}px`);
+      document.documentElement.style.setProperty("--mobile-map-prompt-bottom", `${Math.round(Math.max(10, window.innerHeight - mapRect.bottom + 10))}px`);
     }
 
     function syncMobilePanelAccessibility() {
@@ -13173,6 +13200,11 @@
 
     async function initMap() {
       setLoadingMessage("Drawing the mobile map.");
+      if (isOfflineTextMode()) {
+        renderOfflineMapIndex();
+        statusEl.textContent = `${state.filtered.length || state.sites.length} saved places`;
+        return false;
+      }
       const ready = await waitForMapbox();
       if (!ready) {
         const mapEl = document.getElementById("map");
@@ -13222,9 +13254,67 @@
       });
     }
 
+    function offlineRegionSites(region) {
+      if (region === "all") return [...state.sites];
+      return state.sites.filter(site => {
+        const longitude = Number(site?.center?.[0]);
+        if (!Number.isFinite(longitude)) return false;
+        if (region === "west") return longitude < -73.45;
+        if (region === "central") return longitude >= -73.45 && longitude < -72.95;
+        if (region === "east") return longitude >= -72.95;
+        return true;
+      });
+    }
+
+    function selectOfflineRegion(region = "all") {
+      searchEl.value = "";
+      state.addressSearchMode = false;
+      state.filtered = offlineRegionSites(region).sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
+      state.nearbyRenderLimit = defaultNearbyRenderLimit();
+      renderList();
+      setMobilePanelMode("nearby");
+      setNearbyPanelState("default");
+      document.querySelectorAll("[data-offline-region]").forEach(button => {
+        const active = button.dataset.offlineRegion === region;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+    }
+
+    function renderOfflineMapIndex() {
+      document.body.classList.add("offline-text-mode");
+      document.documentElement.classList.add("offline-text-mode");
+      const mapEl = document.getElementById("map");
+      if (!mapEl) return;
+      mapEl.innerHTML = `
+        <div class="offline-map-index" role="region" aria-label="Offline place index">
+          <strong>Offline place index</strong>
+          <p>Choose an area, then open any saved listing below. This backup uses text only and does not load map tiles or media.</p>
+          <div class="offline-map-regions" aria-label="Saved areas">
+            <button type="button" data-offline-region="all" class="active" aria-pressed="true">All areas</button>
+            <button type="button" data-offline-region="west" aria-pressed="false">Western Long Island</button>
+            <button type="button" data-offline-region="central" aria-pressed="false">Central Long Island</button>
+            <button type="button" data-offline-region="east" aria-pressed="false">East End and islands</button>
+          </div>
+        </div>
+      `;
+      mapEl.querySelectorAll("[data-offline-region]").forEach(button => {
+        button.addEventListener("click", () => selectOfflineRegion(button.dataset.offlineRegion || "all"));
+      });
+      [loginOpenBtn, feedbackOpenBtn, locateBtn, mobileMapLocateBtn, suggestSiteOpenBtn].forEach(button => {
+        if (!button) return;
+        button.disabled = true;
+        button.title = "Available when the app is online";
+        button.setAttribute("aria-disabled", "true");
+        button.dataset.requiresOnline = "true";
+      });
+      updateMobileHeaderInstruction();
+    }
+
     function restoreMobileMapLayers() {
       state.mapSourceAppliedKey = "";
       state.mobileSiteIconImagesLoaded.clear();
+      state.mobileSiteIconImagePlaceholders.clear();
       state.mobileSiteIconImagesLoading = false;
       state.mobileSiteIconImageQueue = [];
       state.mobileSiteIconImagesQueued.clear();
@@ -14531,7 +14621,7 @@
         syncMobilePanelAccessibility();
         renderCurrentTerritoryStatus();
         const androidLifecycleSnapshot = nativeAndroid ? readAndroidLifecycleSnapshot() : null;
-        if (nativeAndroid) await requestStartupLocation();
+        if (nativeAndroid && !isOfflineTextMode()) await requestStartupLocation();
         if (nativeAndroid) {
           idleTask(() => {
             if (!state.mobileTimelineRendered) renderMobileTimeline();
@@ -14573,17 +14663,19 @@
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
         });
         hideLoadingScreen();
-        window.NLI_RESEARCH_QUESTION_UTILS?.init?.({
-          platform: "mobile",
-          getIdentity: currentContributorIdentity,
-          getAccessToken: () => state.profile?.token || "",
-          isUiBusy: () => Boolean(
-            detailEl?.classList.contains("open")
-            || document.querySelector(".sheet.open")
-            || document.querySelector("#language-quiz-modal:not([hidden])")
-            || document.querySelector("#plant-photo-viewer:not([hidden])")
-          )
-        });
+        if (!isOfflineTextMode()) {
+          window.NLI_RESEARCH_QUESTION_UTILS?.init?.({
+            platform: "mobile",
+            getIdentity: currentContributorIdentity,
+            getAccessToken: () => state.profile?.token || "",
+            isUiBusy: () => Boolean(
+              detailEl?.classList.contains("open")
+              || document.querySelector(".sheet.open")
+              || document.querySelector("#language-quiz-modal:not([hidden])")
+              || document.querySelector("#plant-photo-viewer:not([hidden])")
+            )
+          });
+        }
         if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {
           window.setTimeout(() => idleTask(refreshMobileSiteIconFieldsFromDirectus), 30000);
         }

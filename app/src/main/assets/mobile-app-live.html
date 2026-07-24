@@ -319,6 +319,7 @@
       padding-bottom: var(--app-bottom-safe);
     }
 
+    .app.nearby-expanded .mobile-map-shell,
     .app.nearby-expanded #map {
       min-height: 0;
       overflow: hidden;
@@ -957,10 +958,17 @@
       font-size: 15px;
     }
 
-    #map {
+    .mobile-map-shell {
       position: relative;
       z-index: 1;
       isolation: isolate;
+      min-height: 190px;
+      overflow: hidden;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
       min-height: 190px;
     }
 
@@ -985,6 +993,15 @@
 
     .native-android-app .mobile-map-locate {
       display: inline-flex;
+    }
+
+    body:has(.research-question-shell-mobile .research-question-prompt:not([hidden])) .mobile-map-locate {
+      bottom: 136px;
+    }
+
+    body.mobile-content-open .mobile-map-locate {
+      display: none;
+      pointer-events: none;
     }
 
     .mobile-map-locate:focus-visible {
@@ -1114,6 +1131,82 @@
       background: linear-gradient(180deg, #b9e6f2, #e9f2ea);
       font-size: 14px;
       line-height: 1.4;
+    }
+
+    .offline-text-mode .mobile-map-shell {
+      min-height: 220px;
+      background: #eef3ed;
+    }
+
+    .offline-text-mode .mobile-map-locate,
+    .offline-text-mode .mobile-activity-button,
+    .offline-text-mode .mobile-notification-button,
+    .offline-text-mode [data-requires-online] {
+      display: none !important;
+    }
+
+    .offline-text-mode img,
+    .offline-text-mode video,
+    .offline-text-mode audio,
+    .offline-text-mode iframe,
+    .offline-text-mode picture {
+      display: none !important;
+    }
+
+    .offline-map-index {
+      display: grid;
+      align-content: center;
+      gap: 10px;
+      width: 100%;
+      height: 100%;
+      min-height: 220px;
+      box-sizing: border-box;
+      padding: 18px;
+      background: #eef3ed;
+      color: #21372b;
+      text-align: left;
+    }
+
+    .offline-map-index strong,
+    .offline-map-index p {
+      margin: 0;
+    }
+
+    .offline-map-index p {
+      color: #56665a;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .offline-map-regions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .offline-map-regions button {
+      min-height: 44px;
+      padding: 8px 10px;
+      border: 1px solid #9fb2a5;
+      border-radius: 8px;
+      background: #fff;
+      color: #2f5a49;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      touch-action: manipulation;
+    }
+
+    .offline-map-regions button.active {
+      border-color: #2f6b4f;
+      background: #2f6b4f;
+      color: #fff;
+    }
+
+    .offline-text-mode .mobile-header-instruction {
+      padding: 8px 10px;
+      border-left: 4px solid #2f6b4f;
+      background: #eef3ed;
     }
 
     .mobile-timeline {
@@ -4880,14 +4973,14 @@
     }
 
     .mobile-moving-dog-mapbox-icon {
-      width: 30px !important;
-      height: 24px !important;
+      width: 44px !important;
+      height: 44px !important;
       z-index: 5;
     }
 
     .mobile-moving-dog-marker {
-      width: 30px;
-      height: 24px;
+      width: 44px;
+      height: 44px;
     }
 
     .mobile-moving-dog-shell {
@@ -5481,16 +5574,16 @@ body.research-question-dialog-open .research-question-prompt,
 }
 
 @media (max-width: 760px) {
-  .research-question-prompt {
+  .research-question-shell-mobile .research-question-prompt {
     left: 16px;
     right: 16px;
-    bottom: calc(118px + env(safe-area-inset-bottom));
+    bottom: var(--mobile-map-prompt-bottom, calc(118px + env(safe-area-inset-bottom)));
     width: auto;
     padding: 10px 42px 10px 12px;
     transform: none;
   }
 
-  .research-question-prompt span {
+  .research-question-shell-mobile .research-question-prompt span {
     max-width: 210px;
   }
 
@@ -5530,15 +5623,15 @@ body.research-question-dialog-open .research-question-prompt,
 }
 
 @media (max-width: 480px) {
-  .research-question-prompt {
-    grid-template-columns: 1fr;
-    gap: 7px;
-    right: auto;
-    width: min(330px, calc(100vw - 32px));
+  .research-question-shell-mobile .research-question-prompt {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    right: 16px;
+    width: auto;
     padding-right: 42px;
   }
 
-  .research-question-prompt-action {
+  .research-question-shell-mobile .research-question-prompt-action {
     width: fit-content;
   }
 }
@@ -5699,11 +5792,12 @@ body.research-question-dialog-open .research-question-prompt,
         </details>
       </div>
     </header>
-      <div id="map" aria-label="Native Long Island mobile map">
+    <div class="mobile-map-shell">
+      <div id="map" aria-label="Native Long Island mobile map"></div>
         <button class="mobile-map-locate" id="mobile-map-locate" type="button" data-allow-geolocation aria-label="Go to my location" title="Go to my location">
           <span class="mobile-map-locate-dot" aria-hidden="true"></span>
         </button>
-      </div>
+    </div>
     <aside class="mobile-startup-spotlight" id="mobile-startup-spotlight" aria-live="polite" hidden>
       <span>Did you know?</span>
       <strong id="mobile-startup-spotlight-title">Mapped site</strong>
@@ -14633,6 +14727,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return Boolean(window.NLI_APK_SNAPSHOT_MODE);
     }
 
+    function isOfflineTextMode() {
+      return Boolean(window.NLI_APK_OFFLINE_TEXT_MODE) || (isNativeAndroidApp() && navigator.onLine === false);
+    }
+
     const SEEDED_PUBLIC_PROFILES = SHARED_CONFIG.seededPublicProfiles || [];
     const SEEDED_PUBLIC_COMMENTS = SHARED_CONFIG.seededPublicComments || [];
 
@@ -14721,6 +14819,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       siteAttentionPulseStartedAt: 0,
       mobileSiteIconImagesLoaded: new Set(),
       mobileSiteIconImagesFailed: new Set(),
+      mobileSiteIconImagePlaceholders: new Set(),
+      mobileStyleImageMissingBound: false,
       mobileSiteIconImagesLoading: false,
       mobileSiteIconImageQueue: [],
       mobileSiteIconImagesQueued: new Set(),
@@ -15777,10 +15877,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function listingImage(site) {
+      if (isOfflineTextMode()) return "";
       return MEDIA_UTILS.listingHeroImage(site, { directusAssetUrl, rewriteMediaUrl });
     }
 
     function listingImageFallback(site) {
+      if (isOfflineTextMode()) return "";
       return MEDIA_UTILS.listingRewrittenImageFallback(site, { directusAssetUrl, rewriteMediaUrl });
     }
 
@@ -15799,6 +15901,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function mobileSnapshotImageUrl(url) {
       const value = String(url || "").trim();
+      if (isOfflineTextMode()) return "";
       if (!isApkSnapshotMode()) return value;
       return isBundledMobileImageUrl(value) ? value : "";
     }
@@ -15806,7 +15909,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function removeUnbundledSnapshotImages(root) {
       if (!isApkSnapshotMode() || !root) return;
       root.querySelectorAll("img").forEach(image => {
-        if (!isBundledMobileImageUrl(image.getAttribute("src") || image.currentSrc)) image.remove();
+        if (isOfflineTextMode() || !isBundledMobileImageUrl(image.getAttribute("src") || image.currentSrc)) image.remove();
       });
     }
 
@@ -16995,8 +17098,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const wikiArticles = state.wikiArticles?.length || 0;
       const blogPosts = Number(window.NLI_MOBILE_DATA?.blogPosts?.length || headerEls[0].dataset.blogCount || 10);
       const calendarEvents = state.exhibits?.length || 0;
-      const text = isApkSnapshotMode()
-        ? `${listings} listings loaded from the APK snapshot. Click a pin or colored territory to read its article.`
+      const text = isOfflineTextMode()
+        ? `Offline archive: ${listings} listings and ${wikiArticles} wiki articles are saved on this device. Search or browse text below; maps, media, accounts, and submissions return when online.`
+        : isApkSnapshotMode()
+          ? `${listings} listings loaded from the APK snapshot. Click a pin or colored territory to read its article.`
         : `${listings} listings, ${wikiArticles} wiki articles, ${blogPosts} blog posts, and ${calendarEvents} calendar events loaded. Click a pin or colored territory to read its article.`;
       headerEls.forEach(el => {
         el.textContent = text;
@@ -17488,7 +17593,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       invalidateMapSourceCache();
       prepareExhibits();
       updateMobileHeaderInstruction();
-      state.filtered = visitableSites().filter(site => site.center);
+      state.filtered = browsableSites().filter(site => isOfflineTextMode() || site.center);
       clearRelatedSiteCaches();
       sortSites();
       resetNearbyRenderLimit();
@@ -17506,6 +17611,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return state.sites.filter(site => {
         return !isBroadTerritory(site);
       });
+    }
+
+    function browsableSites() {
+      return isOfflineTextMode() ? [...state.sites] : visitableSites();
     }
 
     function mobileStartupSpotlightCandidates() {
@@ -17766,7 +17875,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const normalizedQuery = normalizeText(rawQuery);
       if (!query) {
         clearAddressSearch();
-        state.filtered = visitableSites();
+        state.filtered = browsableSites();
         sortSites();
         resetNearbyRenderLimit();
         renderList();
@@ -17820,7 +17929,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         state.searchValueWatchTimer = null;
       }
       clearAddressSearch();
-      state.filtered = visitableSites();
+      state.filtered = browsableSites();
       sortSites();
       resetNearbyRenderLimit();
       renderList();
@@ -19545,8 +19654,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function mobileMarkerTapRadius(androidWebViewTap = false) {
       const zoom = Number(state.map?.getZoom?.() || 6);
-      const visualRadius = 14 + Math.max(0, Math.min(1, (zoom - 6) / 8)) * 10;
-      return Math.round(Math.min(26, visualRadius + (androidWebViewTap ? 2 : 0)));
+      const visualRadius = 12 + Math.max(0, Math.min(1, (zoom - 6) / 8)) * 8;
+      return Math.round(Math.min(21, visualRadius + (androidWebViewTap ? 1 : 0)));
     }
 
     function mobileFeatureTapKey(feature) {
@@ -20079,6 +20188,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function siteMapIconUrl(site) {
+      if (isOfflineTextMode()) return "";
       const rawIcon = String(site?.map_icon || "").trim();
       const forceBlueDot = FORCE_BLUE_DOT_SITE_SLUGS.has(String(site?.slug || "").trim());
       if (isApkSnapshotMode()) {
@@ -20148,7 +20258,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!entry) return;
       const { key, url } = entry;
       state.mobileSiteIconImagesQueued.delete(key);
-      if (state.map.hasImage?.(key)) {
+      if (state.map.hasImage?.(key) && !state.mobileSiteIconImagePlaceholders.has(key)) {
         state.mobileSiteIconImagesLoaded.add(key);
         scheduleNextMobileSiteIcon();
         return;
@@ -20160,10 +20270,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             state.mobileSiteIconImagesFailed.add(key);
             return;
           }
-          if (!state.map.hasImage?.(key)) {
-            const prepared = prepareMobileSiteIconImage(image);
-            state.map.addImage(key, prepared.image, { sdf: false, ...(prepared.options || {}) });
-          }
+          if (state.mobileSiteIconImagePlaceholders.has(key) && state.map.hasImage?.(key)) state.map.removeImage(key);
+          const prepared = prepareMobileSiteIconImage(image);
+          if (!state.map.hasImage?.(key)) state.map.addImage(key, prepared.image, { sdf: false, ...(prepared.options || {}) });
+          state.mobileSiteIconImagePlaceholders.delete(key);
           state.mobileSiteIconImagesLoaded.add(key);
         } catch {
           state.mobileSiteIconImagesFailed.add(key);
@@ -20182,7 +20292,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const url = siteMapIconUrl(site);
         if (!key || !url || state.mobileSiteIconImagesFailed.has(key) || state.mobileSiteIconImagesLoaded.has(key)) return;
         if (isApkSnapshotMode() && !/^assets\/map-icons\//i.test(url)) return;
-        if (state.map.hasImage?.(key)) {
+        if (state.map.hasImage?.(key) && !state.mobileSiteIconImagePlaceholders.has(key)) {
           state.mobileSiteIconImagesLoaded.add(key);
           return;
         }
@@ -24968,6 +25078,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function addPolygonLayers() {
       if (!state.map || state.map.getSource("mobile-sites")) return;
+      if (!state.mobileStyleImageMissingBound) {
+        state.mobileStyleImageMissingBound = true;
+        state.map.on("styleimagemissing", event => {
+          const key = String(event?.id || "");
+          if (!key.startsWith("mobile-site-icon-") || state.map.hasImage?.(key)) return;
+          const transparent = new Uint8Array(4 * 4 * 4);
+          state.map.addImage(key, { width: 4, height: 4, data: transparent });
+          state.mobileSiteIconImagePlaceholders.add(key);
+        });
+      }
       const sourceData = cachedMobileMapSourceData();
       CALENDAR_UTILS.addOnThisDayMapImage?.(state.map, "mobile-on-this-day-calendar");
       state.map.addSource("mobile-sites", { type: "geojson", data: sourceData.sites });
@@ -25058,7 +25178,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         source: "mobile-sites",
         filter: ["==", ["geometry-type"], "Point"],
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 14, 10, 18, 14, 24],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 10, 10, 14, 14, 18],
           "circle-color": "#245f43",
           "circle-opacity": 0.01,
           "circle-stroke-opacity": 0
@@ -26814,6 +26934,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const mapRect = document.getElementById("map")?.getBoundingClientRect?.();
       if (!mapRect?.height) return;
       document.documentElement.style.setProperty("--mobile-map-actions-top", `${Math.round(mapRect.top + 10)}px`);
+      document.documentElement.style.setProperty("--mobile-map-prompt-bottom", `${Math.round(Math.max(10, window.innerHeight - mapRect.bottom + 10))}px`);
     }
 
     function syncMobilePanelAccessibility() {
@@ -27145,6 +27266,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     async function initMap() {
       setLoadingMessage("Drawing the mobile map.");
+      if (isOfflineTextMode()) {
+        renderOfflineMapIndex();
+        statusEl.textContent = `${state.filtered.length || state.sites.length} saved places`;
+        return false;
+      }
       const ready = await waitForMapbox();
       if (!ready) {
         const mapEl = document.getElementById("map");
@@ -27194,9 +27320,67 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       });
     }
 
+    function offlineRegionSites(region) {
+      if (region === "all") return [...state.sites];
+      return state.sites.filter(site => {
+        const longitude = Number(site?.center?.[0]);
+        if (!Number.isFinite(longitude)) return false;
+        if (region === "west") return longitude < -73.45;
+        if (region === "central") return longitude >= -73.45 && longitude < -72.95;
+        if (region === "east") return longitude >= -72.95;
+        return true;
+      });
+    }
+
+    function selectOfflineRegion(region = "all") {
+      searchEl.value = "";
+      state.addressSearchMode = false;
+      state.filtered = offlineRegionSites(region).sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
+      state.nearbyRenderLimit = defaultNearbyRenderLimit();
+      renderList();
+      setMobilePanelMode("nearby");
+      setNearbyPanelState("default");
+      document.querySelectorAll("[data-offline-region]").forEach(button => {
+        const active = button.dataset.offlineRegion === region;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+    }
+
+    function renderOfflineMapIndex() {
+      document.body.classList.add("offline-text-mode");
+      document.documentElement.classList.add("offline-text-mode");
+      const mapEl = document.getElementById("map");
+      if (!mapEl) return;
+      mapEl.innerHTML = `
+        <div class="offline-map-index" role="region" aria-label="Offline place index">
+          <strong>Offline place index</strong>
+          <p>Choose an area, then open any saved listing below. This backup uses text only and does not load map tiles or media.</p>
+          <div class="offline-map-regions" aria-label="Saved areas">
+            <button type="button" data-offline-region="all" class="active" aria-pressed="true">All areas</button>
+            <button type="button" data-offline-region="west" aria-pressed="false">Western Long Island</button>
+            <button type="button" data-offline-region="central" aria-pressed="false">Central Long Island</button>
+            <button type="button" data-offline-region="east" aria-pressed="false">East End and islands</button>
+          </div>
+        </div>
+      `;
+      mapEl.querySelectorAll("[data-offline-region]").forEach(button => {
+        button.addEventListener("click", () => selectOfflineRegion(button.dataset.offlineRegion || "all"));
+      });
+      [loginOpenBtn, feedbackOpenBtn, locateBtn, mobileMapLocateBtn, suggestSiteOpenBtn].forEach(button => {
+        if (!button) return;
+        button.disabled = true;
+        button.title = "Available when the app is online";
+        button.setAttribute("aria-disabled", "true");
+        button.dataset.requiresOnline = "true";
+      });
+      updateMobileHeaderInstruction();
+    }
+
     function restoreMobileMapLayers() {
       state.mapSourceAppliedKey = "";
       state.mobileSiteIconImagesLoaded.clear();
+      state.mobileSiteIconImagePlaceholders.clear();
       state.mobileSiteIconImagesLoading = false;
       state.mobileSiteIconImageQueue = [];
       state.mobileSiteIconImagesQueued.clear();
@@ -28503,7 +28687,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         syncMobilePanelAccessibility();
         renderCurrentTerritoryStatus();
         const androidLifecycleSnapshot = nativeAndroid ? readAndroidLifecycleSnapshot() : null;
-        if (nativeAndroid) await requestStartupLocation();
+        if (nativeAndroid && !isOfflineTextMode()) await requestStartupLocation();
         if (nativeAndroid) {
           idleTask(() => {
             if (!state.mobileTimelineRendered) renderMobileTimeline();
@@ -28545,17 +28729,19 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
         });
         hideLoadingScreen();
-        window.NLI_RESEARCH_QUESTION_UTILS?.init?.({
-          platform: "mobile",
-          getIdentity: currentContributorIdentity,
-          getAccessToken: () => state.profile?.token || "",
-          isUiBusy: () => Boolean(
-            detailEl?.classList.contains("open")
-            || document.querySelector(".sheet.open")
-            || document.querySelector("#language-quiz-modal:not([hidden])")
-            || document.querySelector("#plant-photo-viewer:not([hidden])")
-          )
-        });
+        if (!isOfflineTextMode()) {
+          window.NLI_RESEARCH_QUESTION_UTILS?.init?.({
+            platform: "mobile",
+            getIdentity: currentContributorIdentity,
+            getAccessToken: () => state.profile?.token || "",
+            isUiBusy: () => Boolean(
+              detailEl?.classList.contains("open")
+              || document.querySelector(".sheet.open")
+              || document.querySelector("#language-quiz-modal:not([hidden])")
+              || document.querySelector("#plant-photo-viewer:not([hidden])")
+            )
+          });
+        }
         if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {
           window.setTimeout(() => idleTask(refreshMobileSiteIconFieldsFromDirectus), 30000);
         }

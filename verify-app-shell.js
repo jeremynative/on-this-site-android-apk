@@ -1,11 +1,12 @@
 const fs = require("fs");
 
-const expectedBuild = "20260723-live-asset-parity-r1";
+const expectedBuild = "20260724-apk-interaction-offline-r1";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
 const bundledAppPath = "app/src/main/assets/mobile-app.html";
 const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
+const bundledMobileJsPath = "app/src/main/assets/assets/js/mobile-app.js";
 const stylesPath = "app/src/main/res/values/styles.xml";
 const launchBackgroundPath = "app/src/main/res/drawable/launch_background.xml";
 const manifestPath = "app/src/main/AndroidManifest.xml";
@@ -25,6 +26,7 @@ const manifest = fs.readFileSync(manifestPath, "utf8");
 const appBridge = fs.readFileSync(appBridgePath, "utf8");
 const bundledApp = bundledAppBytes.toString("utf8");
 const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
+const bundledMobileJs = fs.readFileSync(bundledMobileJsPath, "utf8");
 const styles = fs.readFileSync(stylesPath, "utf8");
 const launchBackground = fs.readFileSync(launchBackgroundPath, "utf8");
 
@@ -120,6 +122,7 @@ requireText('"assets/js/mobile-app.js".equals(assetName)', "Android shell must i
 requireText("androidApkStartupScript", "Android shell must inject APK startup guards before the bundled app runs.");
 requireText("__nliAndroidGeoGateInstalled", "Android shell must install the APK geolocation gate.");
 requireText("window.NLI_APK_SNAPSHOT_MODE=true;", "Android shell must mark the bundled app as a snapshot APK.");
+requireText("window.NLI_APK_OFFLINE_TEXT_MODE=true;", "Android shell must mark the bundled fallback as a text-first offline archive.");
 requireText("window.NLI_DISABLE_DIRECTUS_RUNTIME=true;", "Android shell must disable Directus runtime calls in the snapshot APK.");
 requireText("directus.nativelongisland.com", "Android shell must block Directus requests while the APK snapshot is offline.");
 requireText("window.__nliAllowGeoUntil=Date.now()+120000;", "Android shell must allow the app's startup Near me location request.");
@@ -127,7 +130,7 @@ requireText("#locate,#mobile-map-locate,#suggest-use-location", "Android shell m
 if (!bundledLiveApp.includes("function isApkSnapshotMode()") || !bundledApp.includes("function isApkSnapshotMode()")) {
   throw new Error("Bundled mobile shells must distinguish live Android mode from offline APK snapshot mode.");
 }
-if (!bundledLiveApp.includes("const text = isApkSnapshotMode()")) {
+if (!bundledLiveApp.includes("const text = isOfflineTextMode()")) {
   throw new Error("The live Android shell must not label every Android WebView as an APK snapshot.");
 }
 for (const [needle, message] of [
@@ -144,7 +147,11 @@ for (const [needle, message] of [
   ["id=\"mobile-map-locate\" type=\"button\" data-allow-geolocation", "APK current-location control must pass the Android geolocation gate."],
   [".native-android-app .mobile-map-locate", "APK current-location control must only appear in the native Android app."],
   ["mobileMapLocateBtn?.addEventListener", "APK current-location control must be interactive."],
-  ["async function locateMapUser()", "APK current-location control must reuse the map location flow."]
+  ["async function locateMapUser()", "APK current-location control must reuse the map location flow."],
+  ["function renderOfflineMapIndex()", "APK fallback must provide a browsable text-only place index."],
+  ["Offline archive:", "APK fallback must clearly identify saved offline content."],
+  ["data-offline-region=\"west\"", "APK fallback must allow browsing saved sites by Long Island area."],
+  [".offline-text-mode img", "APK fallback must suppress media while offline."]
 ]) {
   if (!bundledLiveApp.includes(needle) || !bundledApp.includes(needle)) throw new Error(message);
 }
@@ -273,6 +280,12 @@ for (const [label, bytes, html] of [
     throw new Error(`Bundled Android ${label} is missing the Mapbox token placeholder.`);
   }
 }
+if ((bundledMobileJs.match(/(?:^|[^A-Za-z0-9_-])[ps]k\.[A-Za-z0-9._-]+/g) || []).length) {
+  throw new Error("Bundled Android JavaScript must keep Mapbox tokens as build-time placeholders.");
+}
+if (!bundledMobileJs.includes('const MAPBOX_PUBLIC_TOKEN = "__NLI_MAPBOX_TOKEN__";')) {
+  throw new Error("Bundled Android JavaScript is missing the Mapbox build-time placeholder.");
+}
 const archiveTestRoot = "https://nativelongisland.com/" + "archive-test/";
 if (source.includes("archive-test") || bundledApp.includes(archiveTestRoot) || bundledLiveApp.includes(archiveTestRoot)) {
   throw new Error("Android shell and bundled APK HTML must use the live root site, not archive-test.");
@@ -350,7 +363,7 @@ requireBundledText('document.addEventListener("touchstart", blockAndroidUiOverla
 requireBundledText('isMobileMapTapBlocked() && (!androidWebViewTap || followsAndroidOverlayTap)', "Bundled Android map bridge must reject delayed overlay taps without swallowing the next deliberate map tap.");
 requireBundledText('return androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight).filter', "Bundled Android map bridge must use one canonical viewport-scaled tap coordinate.");
 requireBundledText('function mobileMarkerTapRadius(androidWebViewTap = false)', "Bundled Android marker taps must scale with the visible marker size.");
-requireBundledText('Math.round(Math.min(26, visualRadius + (androidWebViewTap ? 2 : 0)))', "Bundled Android marker hit targets must remain bounded.");
+requireBundledText('Math.round(Math.min(21, visualRadius + (androidWebViewTap ? 1 : 0)))', "Bundled Android marker hit targets must remain bounded.");
 requireBundledText('function bestMobilePointHitFeature(features = [], event = null)', "Bundled Android taps must rank overlapping point markers by distance from the touch.");
 requireBundledText('const renderedPointFeature = bestMobileRenderedPointHitFeature(event);', "Bundled Android taps must resolve the rendered site marker before polygon fallbacks.");
 requireBundledText('if (mobileMapEventHandled(event)) return;', "Bundled Android polygon callbacks must not replace a site selected by the same touch.");
@@ -555,7 +568,7 @@ requireBundledText('if (value.trim()) closeDetailForSearchResults();', "Bundled 
 requireBundledPattern(/function\s+closeDetail\(options\s*=\s*\{\}\)[\s\S]*?const\s+activeElement\s*=\s*document\.activeElement;[\s\S]*?detailEl\.contains\(activeElement\)[\s\S]*?activeElement\.blur\(\);[\s\S]*?detailEl\.classList\.remove\("open"\)/, "Bundled Android detail close must release focused panel controls before hiding the panel.");
 requireBundledText('function clearMobileSearchForResultOpen()', "Bundled Android app must clear active search before opening a result detail panel.");
 requireBundledText('searchEl.value = "";', "Bundled Android result opens must empty the search box so search polling does not close the article.");
-requireBundledText('state.filtered = visitableSites();', "Bundled Android result opens must restore the nearby list after clearing search.");
+requireBundledText('state.filtered = browsableSites();', "Bundled Android result opens must restore all saved content offline and normal visitable sites online after clearing search.");
 requireBundledText('searchEl.addEventListener("keyup", handleMobileSearchInput);', "Bundled Android app must filter search after Android keyboard events.");
 requireBundledText('searchEl.addEventListener("focus", handleMobileSearchFocus);', "Bundled Android app must poll focused search values for WebView text changes.");
 requireBundledText('function installNativeAndroidSearchWatch()', "Bundled Android app must keep polling native Android search values.");
@@ -565,7 +578,7 @@ requireBundledText('Profile activity sync will retry later.', "Bundled Android a
 requireBundledText('state.profileActivitySynced = false;\n          return false;', "Bundled Android app must leave failed profile sync retryable.");
 requireBundledText('sorted by proximity', "Bundled Android app must label nearby results as proximity sorted.");
 requireBundledText('const STARTUP_LOCATION_ZOOM = NEAR_ME_ZOOM;', "Bundled Android app must open with the Near me zoom level.");
-requireBundledText('if (nativeAndroid) await requestStartupLocation();', "Bundled Android app must request location before the first nearby list render.");
+requireBundledText('if (nativeAndroid && !isOfflineTextMode()) await requestStartupLocation();', "Bundled Android app must request location before the first nearby list render while online and skip the prompt in offline text mode.");
 requireBundledText('refreshAndroidMapAfterSettle("android-startup-near-me")', "Bundled Android app must recenter the initialized map on startup location.");
 requireBundledText('function randomMobileStartupSpotlightSite', "Bundled Android app must choose a random mapped site when startup location is off Long Island.");
 requireBundledText('function showMobileStartupSpotlight', "Bundled Android app must show the compact off-island startup site card.");
