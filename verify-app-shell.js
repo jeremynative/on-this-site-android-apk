@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260724-apk-interaction-offline-r1";
+const expectedBuild = "20260724-apk-daily-promos-r2";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -346,6 +346,14 @@ requireBundledText('data-mobile-adopt-place', "Bundled Android app must expose A
 requireBundledText('function updateMobileHeaderInstruction()', "Bundled Android app must keep mobile content-count header text synced to bundled data.");
 requireBundledText('data-blog-count="10"', "Bundled Android app must retain the blog count fallback for the mobile header.");
 requireBundledText('"timelineEvents"', "Bundled Android app must include bundled timeline events in the offline snapshot.");
+for (const promoKind of ["event", "on-this-date", "did-you-know", "learning", "question"]) {
+  requireBundledText(`data-mobile-promo-kind="${promoKind}"`, `Bundled Android app must retain the ${promoKind} daily feature restore bubble.`);
+}
+requireBundledText("function availableMobilePromoKinds()", "Bundled Android app must resolve available daily feature bubbles from current content.");
+requireBundledText("function showRandomMobileStartupSpotlight()", "Bundled Android app must choose no more than one expanded daily feature at startup.");
+requireBundledText("const selected = candidates.filter(() => Math.random() < 0.28);", "Bundled Android daily features must retain independent randomized startup chances.");
+requireBundledText("autoPrompt: false", "Bundled Android app must disable the legacy competing question timer.");
+requireBundledText("showRestore: false", "Bundled Android app must use the unified question restore bubble.");
 requireBundledText('"text-opacity": ["interpolate", ["linear"], ["zoom"], SITE_POINT_LABEL_MIN_ZOOM, 0, SITE_POINT_LABEL_MIN_ZOOM + 0.35, 1]', "Bundled Android point labels must fade in around the local-area zoom threshold.");
 requireBundledPattern(/mapSourceRevision:\s*0[\s\S]*?mapSourceAppliedKey:\s*""[\s\S]*?function\s+invalidateMapSourceCache\(\)[\s\S]*?state\.mapSourceRevision\s*\+=\s*1;[\s\S]*?function\s+refreshMobileMapSources\(options\s*=\s*\{\}\)[\s\S]*?state\.mapSourceAppliedKey\s*===\s*sourceKey\)\s*return;[\s\S]*?state\.mapSourceAppliedKey\s*=\s*sourceKey;/, "Bundled Android map source refresh must skip repeated identical GeoJSON setData work.");
 requireBundledPattern(/state\.map\.on\("zoomend",\s*\(\)\s*=>\s*\{[\s\S]*?syncMarkers\(\{\s*auxiliary:\s*false\s*\}\);[\s\S]*?syncMapStoryMarkers\(\);[\s\S]*?\}\);/, "Bundled Android zoom should refresh marker offsets once on zoomend without full auxiliary marker work.");
@@ -580,14 +588,10 @@ requireBundledText('sorted by proximity', "Bundled Android app must label nearby
 requireBundledText('const STARTUP_LOCATION_ZOOM = NEAR_ME_ZOOM;', "Bundled Android app must open with the Near me zoom level.");
 requireBundledText('if (nativeAndroid && !isOfflineTextMode()) await requestStartupLocation();', "Bundled Android app must request location before the first nearby list render while online and skip the prompt in offline text mode.");
 requireBundledText('refreshAndroidMapAfterSettle("android-startup-near-me")', "Bundled Android app must recenter the initialized map on startup location.");
-requireBundledText('function randomMobileStartupSpotlightSite', "Bundled Android app must choose a random mapped site when startup location is off Long Island.");
-requireBundledText('function showMobileStartupSpotlight', "Bundled Android app must show the compact off-island startup site card.");
-requireBundledText('mobile-startup-spotlight', "Bundled Android app must include the mobile Did you know startup card.");
-requireBundledText('showRandomMobileStartupSpotlight()', "Bundled Android app must use the random site spotlight before falling back to the full island view.");
-requireBundledText('mobileStartupSpotlightReturnOnDetailClose: false', "Bundled Android app must remember when a startup spotlight article should return to Long Island view.");
-requireBundledText('fitLongIslandMapView("mobile-startup-spotlight-dismissed")', "Bundled Android app must zoom out to Long Island after dismissing the startup spotlight.");
-requireBundledText('fitLongIslandMapView("mobile-startup-spotlight-article-closed")', "Bundled Android app must zoom out to Long Island after closing the startup spotlight article.");
-requireBundledText('fromStartupSpotlight: true', "Bundled Android app must defer the Long Island view until the spotlight article is closed.");
+requireBundledText('mobile-startup-spotlight', "Bundled Android app must include the shared daily feature card.");
+requireBundledText('showRandomMobileStartupSpotlight()', "Bundled Android app must resolve the randomized daily feature after startup.");
+requireBundledText('scheduleMobilePromoStartup();', "Bundled Android app must schedule the daily feature after the map is interactive.");
+requireBundledText('fitLongIslandMapView("android-startup-outside-long-island")', "Bundled Android app must use the Long Island overview when startup location is outside the project area.");
 requireBundledText('const SITE_CHECKIN_RADIUS_MILES = 0.25;', "Bundled Android app must require check-ins within a quarter mile.");
 requireBundledText('const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;', "Bundled Android app must alert within half a mile of a site.");
 requireBundledText('window.AndroidApp.showNotification', "Bundled Android app must use the native notification bridge.");

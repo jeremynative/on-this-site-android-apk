@@ -184,6 +184,27 @@ const timeline = await evaluate(`(() => {
   return result;
 })()`);
 
+const promos = await evaluate(`(() => {
+  const buttons = [...document.querySelectorAll("[data-mobile-promo-kind]")].map(button => {
+    const rect = button.getBoundingClientRect();
+    const style = getComputedStyle(button);
+    return {
+      kind: button.dataset.mobilePromoKind || "",
+      hidden: button.hidden,
+      visible: rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden",
+      width: Math.round(rect.width),
+      height: Math.round(rect.height)
+    };
+  });
+  const card = document.querySelector("#mobile-startup-spotlight");
+  return {
+    buttons,
+    availableKinds: typeof availableMobilePromoKinds === "function" ? availableMobilePromoKinds() : [],
+    cardVisible: Boolean(card && !card.hidden && card.getBoundingClientRect().height > 0),
+    cardLabel: document.querySelector("#mobile-startup-spotlight-label")?.textContent?.trim() || ""
+  };
+})()`);
+
 const overlapAudit = await evaluate(`(() => {
   const selectors = [
     "#mobile-activity-open",
@@ -221,6 +242,7 @@ const failures = [
   ...panels.filter(item => item.missing || item.missingPanel || !item.open || !item.visible || item.openSheets !== 1),
   ...menus.filter(item => item.missing || !item.opened || !item.closed),
   ...(timeline.buttonMissing || !timeline.visible || !timeline.previousExists || !timeline.nextExists ? [timeline] : []),
+  ...promos.buttons.filter(item => !item.hidden && (!item.visible || item.width < 36 || item.height < 36)),
   ...overlapAudit.overlaps,
 ];
 
@@ -231,6 +253,7 @@ console.log(JSON.stringify({
   panels,
   menus,
   timeline,
+  promos,
   overlaps: overlapAudit.overlaps,
   pass: failures.length === 0,
   failures,

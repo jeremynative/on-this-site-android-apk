@@ -1004,6 +1004,58 @@
       pointer-events: none;
     }
 
+    .mobile-promo-dock {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      z-index: 9;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      max-width: calc(100% - 82px);
+    }
+
+    .mobile-promo-dock[hidden] {
+      display: none;
+    }
+
+    .mobile-promo-dock button {
+      display: inline-grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      padding: 0;
+      border: 1px solid rgba(45, 61, 52, 0.2);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.97);
+      color: var(--accent-strong);
+      box-shadow: 0 2px 7px rgba(24, 39, 30, 0.24);
+      font-size: 16px;
+      font-weight: 900;
+      line-height: 1;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .mobile-promo-dock button:hover,
+    .mobile-promo-dock button:focus-visible,
+    .mobile-promo-dock button.is-active {
+      border-color: rgba(73, 111, 93, 0.65);
+      background: #eef6ef;
+      outline: 0;
+      transform: translateY(-1px);
+    }
+
+    .mobile-promo-dock button[hidden] {
+      display: none;
+    }
+
+    body.mobile-content-open .mobile-promo-dock,
+    body.research-question-dialog-open .mobile-promo-dock {
+      display: none;
+      pointer-events: none;
+    }
+
     .mobile-map-locate:focus-visible {
       outline: 3px solid rgba(26, 115, 232, 0.35);
       outline-offset: 2px;
@@ -1047,7 +1099,7 @@
       display: grid;
       gap: 4px;
       box-sizing: border-box;
-      max-width: 560px;
+      max-width: 520px;
       margin: 0 auto;
       padding: 10px 12px 11px;
       border: 1px solid rgba(47, 90, 73, 0.18);
@@ -1061,6 +1113,25 @@
       transition: opacity 180ms ease, transform 180ms ease;
     }
 
+    .mobile-startup-spotlight-close {
+      position: absolute;
+      top: 7px;
+      right: 7px;
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      min-height: 0;
+      padding: 0;
+      border: 1px solid rgba(45, 61, 52, 0.2);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.92);
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
     .mobile-startup-spotlight.show {
       transform: translateY(0);
       opacity: 1;
@@ -1072,6 +1143,7 @@
     }
 
     .mobile-startup-spotlight span {
+      padding-right: 30px;
       color: var(--accent-strong);
       font-size: 10px;
       font-weight: 860;
@@ -1081,6 +1153,7 @@
 
     .mobile-startup-spotlight strong {
       display: block;
+      padding-right: 30px;
       font-size: 15px;
       line-height: 1.18;
     }
@@ -1120,6 +1193,12 @@
       background: #fff6d8;
     }
 
+    body.mobile-content-open .mobile-startup-spotlight,
+    body.research-question-dialog-open .mobile-startup-spotlight {
+      display: none;
+      pointer-events: none;
+    }
+
     .map-fallback {
       display: grid;
       min-height: 190px;
@@ -1139,6 +1218,8 @@
     }
 
     .offline-text-mode .mobile-map-locate,
+    .offline-text-mode .mobile-promo-dock,
+    .offline-text-mode .mobile-startup-spotlight,
     .offline-text-mode .mobile-activity-button,
     .offline-text-mode .mobile-notification-button,
     .offline-text-mode [data-requires-online] {
@@ -5797,14 +5878,22 @@ body.research-question-dialog-open .research-question-prompt,
         <button class="mobile-map-locate" id="mobile-map-locate" type="button" data-allow-geolocation aria-label="Go to my location" title="Go to my location">
           <span class="mobile-map-locate-dot" aria-hidden="true"></span>
         </button>
+        <nav class="mobile-promo-dock" id="mobile-promo-dock" aria-label="Daily map features" hidden>
+          <button type="button" data-mobile-promo-kind="event" aria-label="Show upcoming exhibit" title="Upcoming exhibit"><span aria-hidden="true">&#9733;</span></button>
+          <button type="button" data-mobile-promo-kind="on-this-date" aria-label="Show On This Date" title="On This Date"><span aria-hidden="true">&#128197;</span></button>
+          <button type="button" data-mobile-promo-kind="did-you-know" aria-label="Show Did You Know" title="Did You Know"><span aria-hidden="true">i</span></button>
+          <button type="button" data-mobile-promo-kind="learning" aria-label="Show daily learning" title="Daily learning"><span aria-hidden="true">&#128214;</span></button>
+          <button type="button" data-mobile-promo-kind="question" aria-label="Ask a question" title="Ask a question"><span aria-hidden="true">?</span></button>
+        </nav>
     </div>
     <aside class="mobile-startup-spotlight" id="mobile-startup-spotlight" aria-live="polite" hidden>
-      <span>Did you know?</span>
+      <button class="mobile-startup-spotlight-close" id="mobile-startup-spotlight-close" type="button" aria-label="Collapse this card" title="Collapse to icon">x</button>
+      <span id="mobile-startup-spotlight-label">Did you know?</span>
       <strong id="mobile-startup-spotlight-title">Mapped site</strong>
       <p id="mobile-startup-spotlight-summary">Explore this mapped place in the On This Site archive.</p>
       <div class="mobile-startup-spotlight-actions">
         <button id="mobile-startup-spotlight-learn" type="button">Learn more</button>
-        <button id="mobile-startup-spotlight-dismiss" type="button">Dismiss</button>
+        <button id="mobile-startup-spotlight-dismiss" type="button">Not now</button>
       </div>
     </aside>
     <button class="mobile-activity-button" id="mobile-activity-open" type="button" aria-label="Open community activity">
@@ -7245,7 +7334,7 @@ window.NLI_PLACE_NAME_AREAS = {"type":"FeatureCollection","name":"Reviewed Indig
     "amagansett-indian-well": "Amagansett Indian Well",
     "appaquogue": "Appaquogue",
     "ashawagh": "Ashawagh",
-    "ayeuonganit-aunakesuck-muhhogkunk": "Ayeuonganit Aunakésuck Muhhogkunk",
+    "ayeuonganit-aunakesuck-muhhogkunk": "Ayeuonganit AunakÃ©suck Muhhogkunk",
     "bethel-christian-ave-laurel-hill-historic-district": "Bethel Christian Ave., Laurel Hill Historic District",
     "canarsie": "Canarsie Traditional Land",
     "canoe-place-chapel": "Canoe Place Chapel",
@@ -7307,7 +7396,7 @@ window.NLI_PLACE_NAME_AREAS = {"type":"FeatureCollection","name":"Reviewed Indig
     "winippague": "Winippague",
     "yaphank-weeks-pond-settlement": "Yaphank, Weeks Pond Settlement",
     "yennecock-southold-town": "Yennecock / Southold Town",
-    "yonahqosunuk": "Yonáhqôsunuk"
+    "yonahqosunuk": "YonÃ¡hqÃ´sunuk"
   };
 
   const smallWords = new Set(["a", "an", "and", "at", "ave", "by", "for", "in", "of", "on", "or", "the", "to"]);
@@ -10378,7 +10467,7 @@ window.NLI_PLACE_NAME_AREAS = {"type":"FeatureCollection","name":"Reviewed Indig
     ].filter(Boolean).join(" "));
     if (!text) return "";
 
-    const range = text.match(/\b(?:c\.?|ca\.?|circa|about|around)?\s*(-?\d{3,4})\s*(?:-|–|—|to)\s*(-?\d{3,4})\b/i);
+    const range = text.match(/\b(?:c\.?|ca\.?|circa|about|around)?\s*(-?\d{3,4})\s*(?:-|â€“|â€”|to)\s*(-?\d{3,4})\b/i);
     if (range) return `${range[1]}-${range[2]}`;
     const year = text.match(/\b(?:c\.?|ca\.?|circa|about|around)?\s*(-?\d{3,4})(?:s)?\b/i);
     if (year) return year[1];
@@ -11718,14 +11807,14 @@ window.NLI_PLACE_NAME_AREAS = {"type":"FeatureCollection","name":"Reviewed Indig
     return String(value || "")
       .replace(/\\+(?=(?:&(?:quot|#0?39|apos|amp|nbsp|rsquo|lsquo|ldquo|rdquo);)|["'])/gi, "")
       .replace(/\\{2,}/g, "\\")
-      .replace(/Ã‚Â /g, " ")
-      .replace(/Ã‚/g, "")
-      .replace(/Ã¢â‚¬â„¢|&#8217;|&rsquo;/g, "'")
-      .replace(/Ã¢â‚¬Ëœ|&#8216;|&lsquo;/g, "'")
-      .replace(/Ã¢â‚¬Å“|&#8220;|&ldquo;/g, "\"")
-      .replace(/Ã¢â‚¬Â|&#8221;|&rdquo;/g, "\"")
-      .replace(/Ã¢â‚¬â€œ|&#8211;/g, "-")
-      .replace(/Ã¢â‚¬â€|&#8212;/g, "-")
+      .replace(/Ãƒâ€šÃ‚Â /g, " ")
+      .replace(/Ãƒâ€š/g, "")
+      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢|&#8217;|&rsquo;/g, "'")
+      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“|&#8216;|&lsquo;/g, "'")
+      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8220;|&ldquo;/g, "\"")
+      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8221;|&rdquo;/g, "\"")
+      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“|&#8211;/g, "-")
+      .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â|&#8212;/g, "-")
       .replace(/&quot;/g, "\"")
       .replace(/&#0?39;|&apos;/g, "'")
       .replace(/&nbsp;/gi, " ")
@@ -13700,6 +13789,8 @@ window.NLI_PLACE_NAME_AREAS = {"type":"FeatureCollection","name":"Reviewed Indig
     const supportToggle = shell.querySelector("[data-research-support-enabled]");
     const supportFields = shell.querySelector("[data-research-support-fields]");
     const promptDismiss = shell.querySelector("[data-research-question-dismiss]");
+    const showRestore = options.showRestore !== false;
+    const autoPrompt = options.autoPrompt !== false;
     let promptRequested = false;
     let questionSent = false;
     let checkoutAttempt = 0;
@@ -13719,7 +13810,7 @@ window.NLI_PLACE_NAME_AREAS = {"type":"FeatureCollection","name":"Reviewed Indig
 
     function syncPrompt() {
       prompt.hidden = !promptRequested || dismissed() || interfaceBusy();
-      restore.hidden = !promptRequested || !prompt.hidden || !dialog.hidden;
+      restore.hidden = !showRestore || !promptRequested || !prompt.hidden || !dialog.hidden;
     }
 
     function setStatus(message, kind = "") {
@@ -13788,7 +13879,7 @@ window.NLI_PLACE_NAME_AREAS = {"type":"FeatureCollection","name":"Reviewed Indig
       event?.stopPropagation();
       setDismissed();
       prompt.hidden = true;
-      restore.hidden = false;
+      restore.hidden = !showRestore;
     }
 
     async function submitQuestion(event) {
@@ -13890,13 +13981,27 @@ window.NLI_PLACE_NAME_AREAS = {"type":"FeatureCollection","name":"Reviewed Indig
     document.addEventListener("click", () => window.requestAnimationFrame(syncPrompt));
     window.addEventListener("resize", syncPrompt);
 
-    const delay = Number.isFinite(Number(options.delay)) ? Number(options.delay) : (platform === "mobile" ? 11000 : 9000);
-    window.setTimeout(() => {
-      promptRequested = true;
-      syncPrompt();
-    }, Math.max(0, delay));
+    if (autoPrompt) {
+      const delay = Number.isFinite(Number(options.delay)) ? Number(options.delay) : (platform === "mobile" ? 11000 : 9000);
+      window.setTimeout(() => {
+        promptRequested = true;
+        syncPrompt();
+      }, Math.max(0, delay));
+    }
 
-    instance = { shell, prompt, restore, dialog, form, open: openDialog, close: closeDialog, showPrompt: () => { promptRequested = true; syncPrompt(); } };
+    instance = {
+      shell,
+      prompt,
+      restore,
+      dialog,
+      form,
+      open: openDialog,
+      close: closeDialog,
+      showPrompt: () => {
+        promptRequested = true;
+        syncPrompt();
+      }
+    };
     return instance;
   }
 
@@ -13905,26 +14010,26 @@ window.NLI_PLACE_NAME_AREAS = {"type":"FeatureCollection","name":"Reviewed Indig
   </script>
   <script data-inline-source="assets/js/language-quiz-words.js">
 window.NLI_LANGUAGE_QUIZ_WORDS = [
-  ["water", "núp"], ["ocean", "cutstúk"], ["river", "seépus"], ["bay", "petápagh"], ["stone", "sun"],
-  ["sand", "yaac"], ["rain", "sukerun"], ["snow", "soáchpo"], ["ice", "copátn"], ["fire", "ruht; yuht"],
-  ["thunder", "pataquáhamoc"], ["lightning", "wowosúmpsa"], ["sun", "haquaqua"], ["moon", "néepa"], ["star", "aráqusac"],
-  ["cloud", "pamayáuxer"], ["rainbow", "papuhmúncsunc"], ["tree", "péewye"], ["pine", "cw"], ["oak", "húchemus"],
-  ["hickory", "wusquíat"], ["corn", "sowhámmen"], ["beans", "mais-cusseet"], ["squash", "áscoot"], ["potato", "panac"],
-  ["bread", "áp"], ["meat", "wéows"], ["milk", "wampachú-unk"], ["tobacco", "tobac"], ["whale", "púttap"],
-  ["fish", "opéramac"], ["clam", "poquahoc"], ["oyster", "apóonahac"], ["deer", "hátk"], ["dog", "arrúm"],
-  ["fox", "squiríntes"], ["squirrel", "moccás"], ["rabbit", "móh-tux"], ["mouse", "poquáttas"], ["bird", "a ássas"],
-  ["crow", "concónchus"], ["eagle", "wéquaran"], ["goose", "hakénoh"], ["duck", "nanásecus"], ["dove", "má-owks"],
-  ["snake", "skúk / skook"], ["bug", "séukr"], ["worm", "húquer"], ["fly", "mucháwas"], ["mosquito", "murráquitch"],
-  ["woman", "squah"], ["man", "run"], ["father", "cws"], ["mother", "cwca"], ["brother", "contáyux"],
-  ["sister", "kéessums"], ["grandfather", "numpsoonk"], ["grandmother", "nánnax"], ["uncle", "nisséis"], ["aunt", "cacácas"],
-  ["husband", "ks-hámps"], ["wife", "keé-us"], ["child", "neechuntz"], ["boy", "macúchax"], ["girl", "squásses"],
-  ["house", "wéecho"], ["door", "squnt"], ["blanket", "aqueéwants"], ["bow", "átump"], ["arrow", "neep"],
-  ["tomahawk", "chékenas"], ["axe", "ochégan"], ["wampum", "whámpump"], ["war", "ayutówac"], ["peace", "weéhsaac"],
-  ["head", "okéyununc"], ["hair", "wé-usk"], ["eyes", "skésuc"], ["nose", "cochón"], ["mouth", "cúttoh"],
-  ["teeth", "képut"], ["hand", "córitch"], ["finger", "córitcheus"], ["knee", "cucúttuc"], ["foot", "cusseéd"],
-  ["black", "shíckayo"], ["white", "wámpayo"], ["red", "sqúayo"], ["yellow", "weesa-wayo"], ["blue", "seewamp-wayo"],
-  ["green", "uscu-sqúayo"], ["good", "woreécan"], ["bad", "máttatéayuh"], ["small", "péewátsu"], ["turtle", "matcîk"],
-  ["sea beach", "siwâ a"], ["shell fish", "sétcawa"], ["thank you", "tabutnî"], ["greeting", "háhcamî"], ["come quick", "mekwí"]
+  ["water", "nÃºp"], ["ocean", "cutstÃºk"], ["river", "seÃ©pus"], ["bay", "petÃ¡pagh"], ["stone", "sun"],
+  ["sand", "yaac"], ["rain", "sukerun"], ["snow", "soÃ¡chpo"], ["ice", "copÃ¡tn"], ["fire", "ruht; yuht"],
+  ["thunder", "pataquÃ¡hamoc"], ["lightning", "wowosÃºmpsa"], ["sun", "haquaqua"], ["moon", "nÃ©epa"], ["star", "arÃ¡qusac"],
+  ["cloud", "pamayÃ¡uxer"], ["rainbow", "papuhmÃºncsunc"], ["tree", "pÃ©ewye"], ["pine", "cw"], ["oak", "hÃºchemus"],
+  ["hickory", "wusquÃ­at"], ["corn", "sowhÃ¡mmen"], ["beans", "mais-cusseet"], ["squash", "Ã¡scoot"], ["potato", "panac"],
+  ["bread", "Ã¡p"], ["meat", "wÃ©ows"], ["milk", "wampachÃº-unk"], ["tobacco", "tobac"], ["whale", "pÃºttap"],
+  ["fish", "opÃ©ramac"], ["clam", "poquahoc"], ["oyster", "apÃ³onahac"], ["deer", "hÃ¡tk"], ["dog", "arrÃºm"],
+  ["fox", "squirÃ­ntes"], ["squirrel", "moccÃ¡s"], ["rabbit", "mÃ³h-tux"], ["mouse", "poquÃ¡ttas"], ["bird", "a Ã¡ssas"],
+  ["crow", "concÃ³nchus"], ["eagle", "wÃ©quaran"], ["goose", "hakÃ©noh"], ["duck", "nanÃ¡secus"], ["dove", "mÃ¡-owks"],
+  ["snake", "skÃºk / skook"], ["bug", "sÃ©ukr"], ["worm", "hÃºquer"], ["fly", "muchÃ¡was"], ["mosquito", "murrÃ¡quitch"],
+  ["woman", "squah"], ["man", "run"], ["father", "cws"], ["mother", "cwca"], ["brother", "contÃ¡yux"],
+  ["sister", "kÃ©essums"], ["grandfather", "numpsoonk"], ["grandmother", "nÃ¡nnax"], ["uncle", "nissÃ©is"], ["aunt", "cacÃ¡cas"],
+  ["husband", "ks-hÃ¡mps"], ["wife", "keÃ©-us"], ["child", "neechuntz"], ["boy", "macÃºchax"], ["girl", "squÃ¡sses"],
+  ["house", "wÃ©echo"], ["door", "squnt"], ["blanket", "aqueÃ©wants"], ["bow", "Ã¡tump"], ["arrow", "neep"],
+  ["tomahawk", "chÃ©kenas"], ["axe", "ochÃ©gan"], ["wampum", "whÃ¡mpump"], ["war", "ayutÃ³wac"], ["peace", "weÃ©hsaac"],
+  ["head", "okÃ©yununc"], ["hair", "wÃ©-usk"], ["eyes", "skÃ©suc"], ["nose", "cochÃ³n"], ["mouth", "cÃºttoh"],
+  ["teeth", "kÃ©put"], ["hand", "cÃ³ritch"], ["finger", "cÃ³ritcheus"], ["knee", "cucÃºttuc"], ["foot", "cusseÃ©d"],
+  ["black", "shÃ­ckayo"], ["white", "wÃ¡mpayo"], ["red", "sqÃºayo"], ["yellow", "weesa-wayo"], ["blue", "seewamp-wayo"],
+  ["green", "uscu-sqÃºayo"], ["good", "woreÃ©can"], ["bad", "mÃ¡ttatÃ©ayuh"], ["small", "pÃ©ewÃ¡tsu"], ["turtle", "matcÃ®k"],
+  ["sea beach", "siwÃ¢ a"], ["shell fish", "sÃ©tcawa"], ["thank you", "tabutnÃ®"], ["greeting", "hÃ¡hcamÃ®"], ["come quick", "mekwÃ­"]
 ].map(([english, algonquian]) => ({
   id: english.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
   english,
@@ -14804,6 +14909,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileStartupSpotlightSite: null,
       mobileStartupSpotlightShown: false,
       mobileStartupSpotlightReturnOnDetailClose: false,
+      mobilePromoKind: "",
+      mobilePromoPayload: null,
+      mobilePromoStartupScheduled: false,
+      mobilePromoStartupResolved: false,
+      researchQuestionInstance: null,
       nearbyRenderLimit: 0,
       searchMapSyncTimer: null,
       searchRenderSettledTimer: null,
@@ -14903,10 +15013,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const mobileAdminMenu = document.getElementById("mobile-admin-menu");
     const mobileBasemapSelect = document.getElementById("mobile-basemap");
     const mobileStartupSpotlightEl = document.getElementById("mobile-startup-spotlight");
+    const mobileStartupSpotlightLabelEl = document.getElementById("mobile-startup-spotlight-label");
     const mobileStartupSpotlightTitleEl = document.getElementById("mobile-startup-spotlight-title");
     const mobileStartupSpotlightSummaryEl = document.getElementById("mobile-startup-spotlight-summary");
     const mobileStartupSpotlightLearnBtn = document.getElementById("mobile-startup-spotlight-learn");
     const mobileStartupSpotlightDismissBtn = document.getElementById("mobile-startup-spotlight-dismiss");
+    const mobileStartupSpotlightCloseBtn = document.getElementById("mobile-startup-spotlight-close");
+    const mobilePromoDockEl = document.getElementById("mobile-promo-dock");
+    const mobilePromoButtons = [...document.querySelectorAll("[data-mobile-promo-kind]")];
     const mobilePinsToggleBtn = document.getElementById("mobile-pins-toggle");
     const mobileShapesToggleBtn = document.getElementById("mobile-shapes-toggle");
     const exhibitsToggleBtn = document.getElementById("exhibits-toggle");
@@ -15752,14 +15866,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function decodeImportedText(value) {
       const textarea = document.createElement("textarea");
       textarea.innerHTML = String(value || "")
-        .replace(/Ã‚Â /g, " ")
-        .replace(/Ã‚/g, "")
-        .replace(/Ã¢â‚¬â„¢|&#8217;|&rsquo;/g, "'")
-        .replace(/Ã¢â‚¬Ëœ|&#8216;|&lsquo;/g, "'")
-        .replace(/Ã¢â‚¬Å“|&#8220;|&ldquo;/g, "\"")
-        .replace(/Ã¢â‚¬Â|&#8221;|&rdquo;/g, "\"")
-        .replace(/Ã¢â‚¬â€œ|&#8211;/g, "-")
-        .replace(/Ã¢â‚¬â€|&#8212;/g, "-")
+        .replace(/Ãƒâ€šÃ‚Â /g, " ")
+        .replace(/Ãƒâ€š/g, "")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢|&#8217;|&rsquo;/g, "'")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“|&#8216;|&lsquo;/g, "'")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8220;|&ldquo;/g, "\"")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8221;|&rdquo;/g, "\"")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“|&#8211;/g, "-")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â|&#8212;/g, "-")
         .replace(/&nbsp;/gi, " ");
       return textarea.value.replace(/\s+/g, " ").trim();
     }
@@ -17625,16 +17739,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       });
     }
 
-    function randomMobileStartupSpotlightSite() {
-      const candidates = mobileStartupSpotlightCandidates();
-      if (!candidates.length) return null;
-      return candidates[Math.floor(Math.random() * candidates.length)];
-    }
-
-    function mobileUpcomingExhibitDismissKey(exhibit) {
-      return `nli-mobile-hide-upcoming-exhibit-${localDateKey()}-${exhibit?.slug || exhibit?.id || "event"}`;
-    }
-
     function upcomingMobileExhibit() {
       const today = new Date(`${localDateKey()}T00:00:00`);
       const candidates = state.exhibits
@@ -17647,6 +17751,41 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         .filter(item => Number.isFinite(item.start.getTime()) && (!Number.isFinite(item.end.getTime()) || item.end >= today))
         .sort((a, b) => a.start - b.start || String(a.exhibit.title || "").localeCompare(String(b.exhibit.title || "")));
       return candidates[0]?.exhibit || null;
+    }
+
+    function mobilePromoDailyIndex(length, salt = "") {
+      if (!length) return -1;
+      const seed = `${localDateKey()}-${salt}`;
+      let hash = 0;
+      for (let index = 0; index < seed.length; index += 1) {
+        hash = ((hash << 5) - hash + seed.charCodeAt(index)) | 0;
+      }
+      return Math.abs(hash) % length;
+    }
+
+    function mobileOnThisDateMoment() {
+      const moments = sortedTimelineEvents().filter(event => (
+        timelineEventMatchesToday(event)
+        && publicCleanText(event.description || event.summary || event.title)
+      ));
+      return moments[mobilePromoDailyIndex(moments.length, "on-this-date")] || null;
+    }
+
+    function mobileDidYouKnowMoment() {
+      const moments = sortedTimelineEvents().filter(event => (
+        !timelineEventMatchesToday(event)
+        && publicCleanText(event.description || event.summary || event.title)
+      ));
+      return moments[mobilePromoDailyIndex(moments.length, "did-you-know")] || null;
+    }
+
+    function mobileDailyLearningSite() {
+      const candidates = mobileStartupSpotlightCandidates().filter(site => (
+        publicCleanText(site.why_this_matters)
+        || publicCleanText(site.summary)
+        || publicCleanText(stripHtml(site.introduction_content || ""))
+      ));
+      return candidates[mobilePromoDailyIndex(candidates.length, "daily-learning")] || null;
     }
 
     function sortSites() {
@@ -21380,7 +21519,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             const confidence = Number(match?.confidence || 0);
             const score = confidence ? `${Math.round(confidence * 100)}%` : "score unavailable";
             const source = match?.source || "Pl@ntNet";
-            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} · ${escapeHtml(source)}</em></div>`;
+            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} Â· ${escapeHtml(source)}</em></div>`;
           }).join("")}</div>`
         : "";
       const exactWarning = analysis?.safetyWarning || "Automated plant identification can be wrong. Verify with a field guide or expert before touching, eating, or using any plant.";
@@ -23090,7 +23229,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const candidates = [place.place, place.label].filter(Boolean);
       for (const candidate of candidates) {
         let text = stripHtml(candidate)
-          .replace(/^\s*\d{3,4}\s*[-–—]\s*/g, "")
+          .replace(/^\s*\d{3,4}\s*[-â€“â€”]\s*/g, "")
           .replace(/\([^)]*\)/g, " ")
           .replace(/\s+/g, " ")
           .trim();
@@ -24778,69 +24917,183 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const rect = mapEl?.getBoundingClientRect();
       if (!rect?.height) return;
       const cardHeight = mobileStartupSpotlightEl.offsetHeight || 104;
-      const bottomInset = 10;
+      const bottomInset = 58;
       const top = Math.max(rect.top + 8, rect.bottom - cardHeight - bottomInset);
       mobileStartupSpotlightEl.style.top = `${Math.round(top)}px`;
     }
 
-    function hideMobileStartupSpotlight(options = {}) {
+    function hideMobileStartupSpotlight() {
       if (!mobileStartupSpotlightEl) return;
-      const wasVisible = !mobileStartupSpotlightEl.hidden;
       mobileStartupSpotlightEl.hidden = true;
       mobileStartupSpotlightEl.classList.remove("show");
       mobileStartupSpotlightEl.style.removeProperty("top");
-      if (options.dismissForToday && state.mobileStartupSpotlightExhibit) {
-        localStorage.setItem(mobileUpcomingExhibitDismissKey(state.mobileStartupSpotlightExhibit), "1");
-      }
+      state.mobileStartupSpotlightSite = null;
       state.mobileStartupSpotlightExhibit = null;
-      if (options.deferLongIslandView) {
-        state.mobileStartupSpotlightReturnOnDetailClose = true;
-      } else if (options.zoomLongIslandView && wasVisible) {
-        state.mobileStartupSpotlightReturnOnDetailClose = false;
-        window.setTimeout(() => fitLongIslandMapView("mobile-startup-spotlight-dismissed"), 80);
-      }
+      state.mobilePromoKind = "";
+      state.mobilePromoPayload = null;
+      mobilePromoButtons.forEach(button => button.classList.remove("is-active"));
     }
 
-    function showMobileStartupSpotlight(site, options = {}) {
-      if (!site?.center || !mobileStartupSpotlightEl) return false;
-      state.mobileStartupSpotlightSite = site;
-      state.mobileStartupSpotlightExhibit = options.exhibit || null;
+    function mobilePromoPayload(kind) {
+      if (kind === "event") {
+        const exhibit = upcomingMobileExhibit();
+        if (!exhibit) return null;
+        const dateLabel = CALENDAR_UTILS.exhibitDateLabel(exhibit);
+        const context = [dateLabel, exhibit.venue].filter(Boolean).join(" - ");
+        const summary = [context, publicCleanText(exhibit.summary || "")].filter(Boolean).join(". ");
+        return {
+          kind,
+          label: "Upcoming exhibit",
+          title: exhibit.title || "On This Site exhibit",
+          summary: summary || "Open the event details for dates, location, and related sites.",
+          actionLabel: "View exhibit",
+          exhibit
+        };
+      }
+      if (kind === "on-this-date") {
+        const event = mobileOnThisDateMoment();
+        if (!event) return null;
+        return {
+          kind,
+          label: `On This Date - ${timelineLabel(event)}`,
+          title: timelineTitle(event),
+          summary: timelineTeaser(event),
+          actionLabel: "Read history",
+          event
+        };
+      }
+      if (kind === "did-you-know") {
+        const event = mobileDidYouKnowMoment();
+        if (!event) return null;
+        return {
+          kind,
+          label: "Did You Know?",
+          title: timelineTitle(event),
+          summary: timelineTeaser(event),
+          actionLabel: "Learn more",
+          event
+        };
+      }
+      if (kind === "learning") {
+        const site = mobileDailyLearningSite();
+        if (!site) return null;
+        const summary = publicCleanText(site.why_this_matters)
+          || publicCleanText(site.summary)
+          || publicCleanText(stripHtml(site.introduction_content || ""));
+        return {
+          kind,
+          label: "Daily learning",
+          title: site.title || "Explore a mapped place",
+          summary: firstCompleteSentences(summary, 2, 180) || mobileStartupSpotlightText(site),
+          actionLabel: "Open place",
+          site
+        };
+      }
+      if (kind === "question" && state.researchQuestionInstance?.open) {
+        return {
+          kind,
+          label: "Support through curiosity",
+          title: "Have a question about Native Long Island?",
+          summary: "Ask a public-history question or support deeper research with a paid question.",
+          actionLabel: "Ask a question"
+        };
+      }
+      return null;
+    }
+
+    function availableMobilePromoKinds() {
+      return ["event", "on-this-date", "did-you-know", "learning", "question"]
+        .filter(kind => Boolean(mobilePromoPayload(kind)));
+    }
+
+    function syncMobilePromoDock() {
+      if (!mobilePromoDockEl) return;
+      if (!isNativeAndroidApp() || isOfflineTextMode()) {
+        mobilePromoDockEl.hidden = true;
+        return;
+      }
+      const available = new Set(availableMobilePromoKinds());
+      mobilePromoButtons.forEach(button => {
+        button.hidden = !available.has(button.dataset.mobilePromoKind || "");
+      });
+      mobilePromoDockEl.hidden = available.size === 0;
+    }
+
+    function showMobilePromo(kind) {
+      const payload = mobilePromoPayload(kind);
+      if (!payload || !mobileStartupSpotlightEl) return false;
+      state.mobilePromoKind = kind;
+      state.mobilePromoPayload = payload;
+      state.mobileStartupSpotlightSite = payload.site || null;
+      state.mobileStartupSpotlightExhibit = payload.exhibit || null;
       state.mobileStartupSpotlightShown = true;
-      if (mobileStartupSpotlightTitleEl) mobileStartupSpotlightTitleEl.textContent = options.title || site.title || "Mapped site";
-      if (mobileStartupSpotlightSummaryEl) mobileStartupSpotlightSummaryEl.textContent = options.summary || mobileStartupSpotlightText(site);
+      if (mobileStartupSpotlightLabelEl) mobileStartupSpotlightLabelEl.textContent = payload.label;
+      if (mobileStartupSpotlightTitleEl) mobileStartupSpotlightTitleEl.textContent = payload.title;
+      if (mobileStartupSpotlightSummaryEl) mobileStartupSpotlightSummaryEl.textContent = payload.summary;
+      if (mobileStartupSpotlightLearnBtn) mobileStartupSpotlightLearnBtn.textContent = payload.actionLabel;
       mobileStartupSpotlightEl.hidden = false;
       mobileStartupSpotlightEl.classList.add("show");
-      setMobilePanelMode("nearby");
-      setNearbyPanelState("default");
-      focusSite(site, { preview: true, zoom: 11.4, duration: isNativeAndroidApp() ? 0 : 700 });
-      syncActiveSiteMapLabel(site);
-      animateMobileSiteMarker(site);
+      mobilePromoButtons.forEach(button => {
+        button.classList.toggle("is-active", button.dataset.mobilePromoKind === kind);
+      });
       window.requestAnimationFrame(positionMobileStartupSpotlight);
       window.setTimeout(positionMobileStartupSpotlight, 120);
-      refreshAndroidMapAfterSettle("android-startup-site-spotlight");
       return true;
     }
 
-    function showUpcomingMobileExhibitSpotlight() {
-      const exhibit = upcomingMobileExhibit();
-      if (!exhibit || localStorage.getItem(mobileUpcomingExhibitDismissKey(exhibit)) === "1") return false;
-      const site = mobileTimelineExhibitSite(exhibit) || exhibit;
-      const dateLabel = CALENDAR_UTILS.exhibitDateLabel(exhibit);
-      const summary = [
-        [dateLabel, exhibit.venue].filter(Boolean).join(" - "),
-        publicCleanText(exhibit.summary || "")
-      ].filter(Boolean).join(". ");
-      return showMobileStartupSpotlight(site, {
-        exhibit,
-        title: `Upcoming exhibit: ${exhibit.title || "On This Site"}`,
-        summary: summary.length > 150 ? `${summary.slice(0, 147).trim()}...` : summary
-      });
+    function activateMobilePromo() {
+      const payload = state.mobilePromoPayload;
+      if (!payload) return;
+      hideMobileStartupSpotlight();
+      if (payload.kind === "event" && payload.exhibit) {
+        openExhibit(payload.exhibit);
+        return;
+      }
+      if (["on-this-date", "did-you-know"].includes(payload.kind) && payload.event) {
+        openMobileTimelineEvent(payload.event);
+        return;
+      }
+      if (payload.kind === "learning" && payload.site?.slug) {
+        openSite(payload.site.slug, { focus: true, drawerState: "half" });
+        return;
+      }
+      if (payload.kind === "question") state.researchQuestionInstance?.open?.();
     }
 
     function showRandomMobileStartupSpotlight() {
-      if (showUpcomingMobileExhibitSpotlight()) return true;
-      const site = randomMobileStartupSpotlightSite();
-      return site ? showMobileStartupSpotlight(site) : false;
+      const candidates = availableMobilePromoKinds();
+      if (!candidates.length) return false;
+      const selected = candidates.filter(() => Math.random() < 0.28);
+      if (!selected.length) return false;
+      return showMobilePromo(selected[Math.floor(Math.random() * selected.length)]);
+    }
+
+    function mobilePromoUiBusy() {
+      return Boolean(
+        detailEl?.classList.contains("open")
+        || document.querySelector(".sheet.open")
+        || document.querySelector("#language-quiz-modal:not([hidden])")
+        || document.querySelector("#plant-photo-viewer:not([hidden])")
+        || document.body.classList.contains("research-question-dialog-open")
+      );
+    }
+
+    function scheduleMobilePromoStartup(attempt = 0) {
+      if (!isNativeAndroidApp() || state.mobilePromoStartupResolved) return;
+      if (attempt === 0) {
+        if (state.mobilePromoStartupScheduled) return;
+        state.mobilePromoStartupScheduled = true;
+      }
+      window.setTimeout(() => {
+        if (state.mobilePromoStartupResolved) return;
+        if (mobilePromoUiBusy()) {
+          if (attempt < 4) scheduleMobilePromoStartup(attempt + 1);
+          else state.mobilePromoStartupResolved = true;
+          return;
+        }
+        state.mobilePromoStartupResolved = true;
+        showRandomMobileStartupSpotlight();
+      }, attempt === 0 ? 1600 : 900);
     }
 
     function locationMovedEnough(nextLocation) {
@@ -24873,7 +25126,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const mayCenter = !centerMap || !centerBounds || pointWithinBounds(nextLocation, centerBounds);
       syncUserLocationMarker({ centerMap: centerMap && mayCenter, zoom: mapZoom });
       if (centerMap && mayCenter) refreshAndroidMapAfterSettle("android-location-center");
-      else if (centerMap && centerBounds && !mayCenter && !showRandomMobileStartupSpotlight()) {
+      else if (centerMap && centerBounds && !mayCenter) {
         fitLongIslandMapView("android-location-outside-long-island");
       }
       state.lastLocationMarkerUpdateAt = Date.now();
@@ -28558,17 +28811,17 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     mobileLayerEraInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("era", true)));
     mobilePinsToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("pins", state.settings.showPins === false));
     mobileShapesToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("shapes", state.settings.showShapes === false));
-    mobileStartupSpotlightLearnBtn?.addEventListener("click", () => {
-      const exhibit = state.mobileStartupSpotlightExhibit;
-      if (exhibit) {
-        hideMobileStartupSpotlight({ deferLongIslandView: true });
-        openExhibit(exhibit);
+    mobileStartupSpotlightLearnBtn?.addEventListener("click", activateMobilePromo);
+    mobileStartupSpotlightDismissBtn?.addEventListener("click", hideMobileStartupSpotlight);
+    mobileStartupSpotlightCloseBtn?.addEventListener("click", hideMobileStartupSpotlight);
+    mobilePromoButtons.forEach(button => button.addEventListener("click", () => {
+      const kind = button.dataset.mobilePromoKind || "";
+      if (state.mobilePromoKind === kind && !mobileStartupSpotlightEl?.hidden) {
+        hideMobileStartupSpotlight();
         return;
       }
-      const site = state.mobileStartupSpotlightSite;
-      if (site?.slug) openSite(site.slug, { focus: false, drawerState: "half", fromStartupSpotlight: true });
-    });
-    mobileStartupSpotlightDismissBtn?.addEventListener("click", () => hideMobileStartupSpotlight({ zoomLongIslandView: true, dismissForToday: true }));
+      showMobilePromo(kind);
+    }));
     window.addEventListener("resize", positionMobileStartupSpotlight);
     window.addEventListener("orientationchange", () => window.setTimeout(positionMobileStartupSpotlight, 260));
     storyRecordBtn.addEventListener("click", async () => {
@@ -28730,18 +28983,21 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         });
         hideLoadingScreen();
         if (!isOfflineTextMode()) {
-          window.NLI_RESEARCH_QUESTION_UTILS?.init?.({
+          state.researchQuestionInstance = window.NLI_RESEARCH_QUESTION_UTILS?.init?.({
             platform: "mobile",
             getIdentity: currentContributorIdentity,
             getAccessToken: () => state.profile?.token || "",
+            autoPrompt: false,
+            showRestore: false,
             isUiBusy: () => Boolean(
               detailEl?.classList.contains("open")
               || document.querySelector(".sheet.open")
               || document.querySelector("#language-quiz-modal:not([hidden])")
               || document.querySelector("#plant-photo-viewer:not([hidden])")
             )
-          });
+          }) || null;
         }
+        syncMobilePromoDock();
         if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {
           window.setTimeout(() => idleTask(refreshMobileSiteIconFieldsFromDirectus), 30000);
         }
@@ -28758,12 +29014,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             refreshAndroidMapAfterSettle("android-startup-near-me");
           } else {
             syncUserLocationMarker({ centerMap: false });
-            if (!showRandomMobileStartupSpotlight()) {
-              fitLongIslandMapView("android-startup-outside-long-island");
-            }
+            fitLongIslandMapView("android-startup-outside-long-island");
           }
         }
         if (state.selectedSite && !androidLifecycleMapRestored) focusSite(state.selectedSite);
+        scheduleMobilePromoStartup();
         checkDailyHistoryMoment();
         checkNewContentAlerts();
         if (!nativeAndroid) requestStartupLocation();
@@ -28788,6 +29043,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             }
             checkDailyHistoryMoment();
             checkNewContentAlerts();
+            syncMobilePromoDock();
             startMapStoryRefresh();
           })
           .catch(error => console.warn("Deferred site data did not load yet.", error)));

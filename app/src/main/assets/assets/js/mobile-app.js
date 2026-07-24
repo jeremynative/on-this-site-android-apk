@@ -738,6 +738,11 @@
       mobileStartupSpotlightSite: null,
       mobileStartupSpotlightShown: false,
       mobileStartupSpotlightReturnOnDetailClose: false,
+      mobilePromoKind: "",
+      mobilePromoPayload: null,
+      mobilePromoStartupScheduled: false,
+      mobilePromoStartupResolved: false,
+      researchQuestionInstance: null,
       nearbyRenderLimit: 0,
       searchMapSyncTimer: null,
       searchRenderSettledTimer: null,
@@ -837,10 +842,14 @@
     const mobileAdminMenu = document.getElementById("mobile-admin-menu");
     const mobileBasemapSelect = document.getElementById("mobile-basemap");
     const mobileStartupSpotlightEl = document.getElementById("mobile-startup-spotlight");
+    const mobileStartupSpotlightLabelEl = document.getElementById("mobile-startup-spotlight-label");
     const mobileStartupSpotlightTitleEl = document.getElementById("mobile-startup-spotlight-title");
     const mobileStartupSpotlightSummaryEl = document.getElementById("mobile-startup-spotlight-summary");
     const mobileStartupSpotlightLearnBtn = document.getElementById("mobile-startup-spotlight-learn");
     const mobileStartupSpotlightDismissBtn = document.getElementById("mobile-startup-spotlight-dismiss");
+    const mobileStartupSpotlightCloseBtn = document.getElementById("mobile-startup-spotlight-close");
+    const mobilePromoDockEl = document.getElementById("mobile-promo-dock");
+    const mobilePromoButtons = [...document.querySelectorAll("[data-mobile-promo-kind]")];
     const mobilePinsToggleBtn = document.getElementById("mobile-pins-toggle");
     const mobileShapesToggleBtn = document.getElementById("mobile-shapes-toggle");
     const exhibitsToggleBtn = document.getElementById("exhibits-toggle");
@@ -1686,14 +1695,14 @@
     function decodeImportedText(value) {
       const textarea = document.createElement("textarea");
       textarea.innerHTML = String(value || "")
-        .replace(/Ã‚Â /g, " ")
-        .replace(/Ã‚/g, "")
-        .replace(/Ã¢â‚¬â„¢|&#8217;|&rsquo;/g, "'")
-        .replace(/Ã¢â‚¬Ëœ|&#8216;|&lsquo;/g, "'")
-        .replace(/Ã¢â‚¬Å“|&#8220;|&ldquo;/g, "\"")
-        .replace(/Ã¢â‚¬Â|&#8221;|&rdquo;/g, "\"")
-        .replace(/Ã¢â‚¬â€œ|&#8211;/g, "-")
-        .replace(/Ã¢â‚¬â€|&#8212;/g, "-")
+        .replace(/Ãƒâ€šÃ‚Â /g, " ")
+        .replace(/Ãƒâ€š/g, "")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢|&#8217;|&rsquo;/g, "'")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“|&#8216;|&lsquo;/g, "'")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8220;|&ldquo;/g, "\"")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8221;|&rdquo;/g, "\"")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“|&#8211;/g, "-")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â|&#8212;/g, "-")
         .replace(/&nbsp;/gi, " ");
       return textarea.value.replace(/\s+/g, " ").trim();
     }
@@ -3559,16 +3568,6 @@
       });
     }
 
-    function randomMobileStartupSpotlightSite() {
-      const candidates = mobileStartupSpotlightCandidates();
-      if (!candidates.length) return null;
-      return candidates[Math.floor(Math.random() * candidates.length)];
-    }
-
-    function mobileUpcomingExhibitDismissKey(exhibit) {
-      return `nli-mobile-hide-upcoming-exhibit-${localDateKey()}-${exhibit?.slug || exhibit?.id || "event"}`;
-    }
-
     function upcomingMobileExhibit() {
       const today = new Date(`${localDateKey()}T00:00:00`);
       const candidates = state.exhibits
@@ -3581,6 +3580,41 @@
         .filter(item => Number.isFinite(item.start.getTime()) && (!Number.isFinite(item.end.getTime()) || item.end >= today))
         .sort((a, b) => a.start - b.start || String(a.exhibit.title || "").localeCompare(String(b.exhibit.title || "")));
       return candidates[0]?.exhibit || null;
+    }
+
+    function mobilePromoDailyIndex(length, salt = "") {
+      if (!length) return -1;
+      const seed = `${localDateKey()}-${salt}`;
+      let hash = 0;
+      for (let index = 0; index < seed.length; index += 1) {
+        hash = ((hash << 5) - hash + seed.charCodeAt(index)) | 0;
+      }
+      return Math.abs(hash) % length;
+    }
+
+    function mobileOnThisDateMoment() {
+      const moments = sortedTimelineEvents().filter(event => (
+        timelineEventMatchesToday(event)
+        && publicCleanText(event.description || event.summary || event.title)
+      ));
+      return moments[mobilePromoDailyIndex(moments.length, "on-this-date")] || null;
+    }
+
+    function mobileDidYouKnowMoment() {
+      const moments = sortedTimelineEvents().filter(event => (
+        !timelineEventMatchesToday(event)
+        && publicCleanText(event.description || event.summary || event.title)
+      ));
+      return moments[mobilePromoDailyIndex(moments.length, "did-you-know")] || null;
+    }
+
+    function mobileDailyLearningSite() {
+      const candidates = mobileStartupSpotlightCandidates().filter(site => (
+        publicCleanText(site.why_this_matters)
+        || publicCleanText(site.summary)
+        || publicCleanText(stripHtml(site.introduction_content || ""))
+      ));
+      return candidates[mobilePromoDailyIndex(candidates.length, "daily-learning")] || null;
     }
 
     function sortSites() {
@@ -7314,7 +7348,7 @@
             const confidence = Number(match?.confidence || 0);
             const score = confidence ? `${Math.round(confidence * 100)}%` : "score unavailable";
             const source = match?.source || "Pl@ntNet";
-            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} · ${escapeHtml(source)}</em></div>`;
+            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} Â· ${escapeHtml(source)}</em></div>`;
           }).join("")}</div>`
         : "";
       const exactWarning = analysis?.safetyWarning || "Automated plant identification can be wrong. Verify with a field guide or expert before touching, eating, or using any plant.";
@@ -9024,7 +9058,7 @@
       const candidates = [place.place, place.label].filter(Boolean);
       for (const candidate of candidates) {
         let text = stripHtml(candidate)
-          .replace(/^\s*\d{3,4}\s*[-–—]\s*/g, "")
+          .replace(/^\s*\d{3,4}\s*[-â€“â€”]\s*/g, "")
           .replace(/\([^)]*\)/g, " ")
           .replace(/\s+/g, " ")
           .trim();
@@ -10712,69 +10746,183 @@
       const rect = mapEl?.getBoundingClientRect();
       if (!rect?.height) return;
       const cardHeight = mobileStartupSpotlightEl.offsetHeight || 104;
-      const bottomInset = 10;
+      const bottomInset = 58;
       const top = Math.max(rect.top + 8, rect.bottom - cardHeight - bottomInset);
       mobileStartupSpotlightEl.style.top = `${Math.round(top)}px`;
     }
 
-    function hideMobileStartupSpotlight(options = {}) {
+    function hideMobileStartupSpotlight() {
       if (!mobileStartupSpotlightEl) return;
-      const wasVisible = !mobileStartupSpotlightEl.hidden;
       mobileStartupSpotlightEl.hidden = true;
       mobileStartupSpotlightEl.classList.remove("show");
       mobileStartupSpotlightEl.style.removeProperty("top");
-      if (options.dismissForToday && state.mobileStartupSpotlightExhibit) {
-        localStorage.setItem(mobileUpcomingExhibitDismissKey(state.mobileStartupSpotlightExhibit), "1");
-      }
+      state.mobileStartupSpotlightSite = null;
       state.mobileStartupSpotlightExhibit = null;
-      if (options.deferLongIslandView) {
-        state.mobileStartupSpotlightReturnOnDetailClose = true;
-      } else if (options.zoomLongIslandView && wasVisible) {
-        state.mobileStartupSpotlightReturnOnDetailClose = false;
-        window.setTimeout(() => fitLongIslandMapView("mobile-startup-spotlight-dismissed"), 80);
-      }
+      state.mobilePromoKind = "";
+      state.mobilePromoPayload = null;
+      mobilePromoButtons.forEach(button => button.classList.remove("is-active"));
     }
 
-    function showMobileStartupSpotlight(site, options = {}) {
-      if (!site?.center || !mobileStartupSpotlightEl) return false;
-      state.mobileStartupSpotlightSite = site;
-      state.mobileStartupSpotlightExhibit = options.exhibit || null;
+    function mobilePromoPayload(kind) {
+      if (kind === "event") {
+        const exhibit = upcomingMobileExhibit();
+        if (!exhibit) return null;
+        const dateLabel = CALENDAR_UTILS.exhibitDateLabel(exhibit);
+        const context = [dateLabel, exhibit.venue].filter(Boolean).join(" - ");
+        const summary = [context, publicCleanText(exhibit.summary || "")].filter(Boolean).join(". ");
+        return {
+          kind,
+          label: "Upcoming exhibit",
+          title: exhibit.title || "On This Site exhibit",
+          summary: summary || "Open the event details for dates, location, and related sites.",
+          actionLabel: "View exhibit",
+          exhibit
+        };
+      }
+      if (kind === "on-this-date") {
+        const event = mobileOnThisDateMoment();
+        if (!event) return null;
+        return {
+          kind,
+          label: `On This Date - ${timelineLabel(event)}`,
+          title: timelineTitle(event),
+          summary: timelineTeaser(event),
+          actionLabel: "Read history",
+          event
+        };
+      }
+      if (kind === "did-you-know") {
+        const event = mobileDidYouKnowMoment();
+        if (!event) return null;
+        return {
+          kind,
+          label: "Did You Know?",
+          title: timelineTitle(event),
+          summary: timelineTeaser(event),
+          actionLabel: "Learn more",
+          event
+        };
+      }
+      if (kind === "learning") {
+        const site = mobileDailyLearningSite();
+        if (!site) return null;
+        const summary = publicCleanText(site.why_this_matters)
+          || publicCleanText(site.summary)
+          || publicCleanText(stripHtml(site.introduction_content || ""));
+        return {
+          kind,
+          label: "Daily learning",
+          title: site.title || "Explore a mapped place",
+          summary: firstCompleteSentences(summary, 2, 180) || mobileStartupSpotlightText(site),
+          actionLabel: "Open place",
+          site
+        };
+      }
+      if (kind === "question" && state.researchQuestionInstance?.open) {
+        return {
+          kind,
+          label: "Support through curiosity",
+          title: "Have a question about Native Long Island?",
+          summary: "Ask a public-history question or support deeper research with a paid question.",
+          actionLabel: "Ask a question"
+        };
+      }
+      return null;
+    }
+
+    function availableMobilePromoKinds() {
+      return ["event", "on-this-date", "did-you-know", "learning", "question"]
+        .filter(kind => Boolean(mobilePromoPayload(kind)));
+    }
+
+    function syncMobilePromoDock() {
+      if (!mobilePromoDockEl) return;
+      if (!isNativeAndroidApp() || isOfflineTextMode()) {
+        mobilePromoDockEl.hidden = true;
+        return;
+      }
+      const available = new Set(availableMobilePromoKinds());
+      mobilePromoButtons.forEach(button => {
+        button.hidden = !available.has(button.dataset.mobilePromoKind || "");
+      });
+      mobilePromoDockEl.hidden = available.size === 0;
+    }
+
+    function showMobilePromo(kind) {
+      const payload = mobilePromoPayload(kind);
+      if (!payload || !mobileStartupSpotlightEl) return false;
+      state.mobilePromoKind = kind;
+      state.mobilePromoPayload = payload;
+      state.mobileStartupSpotlightSite = payload.site || null;
+      state.mobileStartupSpotlightExhibit = payload.exhibit || null;
       state.mobileStartupSpotlightShown = true;
-      if (mobileStartupSpotlightTitleEl) mobileStartupSpotlightTitleEl.textContent = options.title || site.title || "Mapped site";
-      if (mobileStartupSpotlightSummaryEl) mobileStartupSpotlightSummaryEl.textContent = options.summary || mobileStartupSpotlightText(site);
+      if (mobileStartupSpotlightLabelEl) mobileStartupSpotlightLabelEl.textContent = payload.label;
+      if (mobileStartupSpotlightTitleEl) mobileStartupSpotlightTitleEl.textContent = payload.title;
+      if (mobileStartupSpotlightSummaryEl) mobileStartupSpotlightSummaryEl.textContent = payload.summary;
+      if (mobileStartupSpotlightLearnBtn) mobileStartupSpotlightLearnBtn.textContent = payload.actionLabel;
       mobileStartupSpotlightEl.hidden = false;
       mobileStartupSpotlightEl.classList.add("show");
-      setMobilePanelMode("nearby");
-      setNearbyPanelState("default");
-      focusSite(site, { preview: true, zoom: 11.4, duration: isNativeAndroidApp() ? 0 : 700 });
-      syncActiveSiteMapLabel(site);
-      animateMobileSiteMarker(site);
+      mobilePromoButtons.forEach(button => {
+        button.classList.toggle("is-active", button.dataset.mobilePromoKind === kind);
+      });
       window.requestAnimationFrame(positionMobileStartupSpotlight);
       window.setTimeout(positionMobileStartupSpotlight, 120);
-      refreshAndroidMapAfterSettle("android-startup-site-spotlight");
       return true;
     }
 
-    function showUpcomingMobileExhibitSpotlight() {
-      const exhibit = upcomingMobileExhibit();
-      if (!exhibit || localStorage.getItem(mobileUpcomingExhibitDismissKey(exhibit)) === "1") return false;
-      const site = mobileTimelineExhibitSite(exhibit) || exhibit;
-      const dateLabel = CALENDAR_UTILS.exhibitDateLabel(exhibit);
-      const summary = [
-        [dateLabel, exhibit.venue].filter(Boolean).join(" - "),
-        publicCleanText(exhibit.summary || "")
-      ].filter(Boolean).join(". ");
-      return showMobileStartupSpotlight(site, {
-        exhibit,
-        title: `Upcoming exhibit: ${exhibit.title || "On This Site"}`,
-        summary: summary.length > 150 ? `${summary.slice(0, 147).trim()}...` : summary
-      });
+    function activateMobilePromo() {
+      const payload = state.mobilePromoPayload;
+      if (!payload) return;
+      hideMobileStartupSpotlight();
+      if (payload.kind === "event" && payload.exhibit) {
+        openExhibit(payload.exhibit);
+        return;
+      }
+      if (["on-this-date", "did-you-know"].includes(payload.kind) && payload.event) {
+        openMobileTimelineEvent(payload.event);
+        return;
+      }
+      if (payload.kind === "learning" && payload.site?.slug) {
+        openSite(payload.site.slug, { focus: true, drawerState: "half" });
+        return;
+      }
+      if (payload.kind === "question") state.researchQuestionInstance?.open?.();
     }
 
     function showRandomMobileStartupSpotlight() {
-      if (showUpcomingMobileExhibitSpotlight()) return true;
-      const site = randomMobileStartupSpotlightSite();
-      return site ? showMobileStartupSpotlight(site) : false;
+      const candidates = availableMobilePromoKinds();
+      if (!candidates.length) return false;
+      const selected = candidates.filter(() => Math.random() < 0.28);
+      if (!selected.length) return false;
+      return showMobilePromo(selected[Math.floor(Math.random() * selected.length)]);
+    }
+
+    function mobilePromoUiBusy() {
+      return Boolean(
+        detailEl?.classList.contains("open")
+        || document.querySelector(".sheet.open")
+        || document.querySelector("#language-quiz-modal:not([hidden])")
+        || document.querySelector("#plant-photo-viewer:not([hidden])")
+        || document.body.classList.contains("research-question-dialog-open")
+      );
+    }
+
+    function scheduleMobilePromoStartup(attempt = 0) {
+      if (!isNativeAndroidApp() || state.mobilePromoStartupResolved) return;
+      if (attempt === 0) {
+        if (state.mobilePromoStartupScheduled) return;
+        state.mobilePromoStartupScheduled = true;
+      }
+      window.setTimeout(() => {
+        if (state.mobilePromoStartupResolved) return;
+        if (mobilePromoUiBusy()) {
+          if (attempt < 4) scheduleMobilePromoStartup(attempt + 1);
+          else state.mobilePromoStartupResolved = true;
+          return;
+        }
+        state.mobilePromoStartupResolved = true;
+        showRandomMobileStartupSpotlight();
+      }, attempt === 0 ? 1600 : 900);
     }
 
     function locationMovedEnough(nextLocation) {
@@ -10807,7 +10955,7 @@
       const mayCenter = !centerMap || !centerBounds || pointWithinBounds(nextLocation, centerBounds);
       syncUserLocationMarker({ centerMap: centerMap && mayCenter, zoom: mapZoom });
       if (centerMap && mayCenter) refreshAndroidMapAfterSettle("android-location-center");
-      else if (centerMap && centerBounds && !mayCenter && !showRandomMobileStartupSpotlight()) {
+      else if (centerMap && centerBounds && !mayCenter) {
         fitLongIslandMapView("android-location-outside-long-island");
       }
       state.lastLocationMarkerUpdateAt = Date.now();
@@ -14492,17 +14640,17 @@
     mobileLayerEraInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("era", true)));
     mobilePinsToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("pins", state.settings.showPins === false));
     mobileShapesToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("shapes", state.settings.showShapes === false));
-    mobileStartupSpotlightLearnBtn?.addEventListener("click", () => {
-      const exhibit = state.mobileStartupSpotlightExhibit;
-      if (exhibit) {
-        hideMobileStartupSpotlight({ deferLongIslandView: true });
-        openExhibit(exhibit);
+    mobileStartupSpotlightLearnBtn?.addEventListener("click", activateMobilePromo);
+    mobileStartupSpotlightDismissBtn?.addEventListener("click", hideMobileStartupSpotlight);
+    mobileStartupSpotlightCloseBtn?.addEventListener("click", hideMobileStartupSpotlight);
+    mobilePromoButtons.forEach(button => button.addEventListener("click", () => {
+      const kind = button.dataset.mobilePromoKind || "";
+      if (state.mobilePromoKind === kind && !mobileStartupSpotlightEl?.hidden) {
+        hideMobileStartupSpotlight();
         return;
       }
-      const site = state.mobileStartupSpotlightSite;
-      if (site?.slug) openSite(site.slug, { focus: false, drawerState: "half", fromStartupSpotlight: true });
-    });
-    mobileStartupSpotlightDismissBtn?.addEventListener("click", () => hideMobileStartupSpotlight({ zoomLongIslandView: true, dismissForToday: true }));
+      showMobilePromo(kind);
+    }));
     window.addEventListener("resize", positionMobileStartupSpotlight);
     window.addEventListener("orientationchange", () => window.setTimeout(positionMobileStartupSpotlight, 260));
     storyRecordBtn.addEventListener("click", async () => {
@@ -14664,18 +14812,21 @@
         });
         hideLoadingScreen();
         if (!isOfflineTextMode()) {
-          window.NLI_RESEARCH_QUESTION_UTILS?.init?.({
+          state.researchQuestionInstance = window.NLI_RESEARCH_QUESTION_UTILS?.init?.({
             platform: "mobile",
             getIdentity: currentContributorIdentity,
             getAccessToken: () => state.profile?.token || "",
+            autoPrompt: false,
+            showRestore: false,
             isUiBusy: () => Boolean(
               detailEl?.classList.contains("open")
               || document.querySelector(".sheet.open")
               || document.querySelector("#language-quiz-modal:not([hidden])")
               || document.querySelector("#plant-photo-viewer:not([hidden])")
             )
-          });
+          }) || null;
         }
+        syncMobilePromoDock();
         if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {
           window.setTimeout(() => idleTask(refreshMobileSiteIconFieldsFromDirectus), 30000);
         }
@@ -14692,12 +14843,11 @@
             refreshAndroidMapAfterSettle("android-startup-near-me");
           } else {
             syncUserLocationMarker({ centerMap: false });
-            if (!showRandomMobileStartupSpotlight()) {
-              fitLongIslandMapView("android-startup-outside-long-island");
-            }
+            fitLongIslandMapView("android-startup-outside-long-island");
           }
         }
         if (state.selectedSite && !androidLifecycleMapRestored) focusSite(state.selectedSite);
+        scheduleMobilePromoStartup();
         checkDailyHistoryMoment();
         checkNewContentAlerts();
         if (!nativeAndroid) requestStartupLocation();
@@ -14722,6 +14872,7 @@
             }
             checkDailyHistoryMoment();
             checkNewContentAlerts();
+            syncMobilePromoDock();
             startMapStoryRefresh();
           })
           .catch(error => console.warn("Deferred site data did not load yet.", error)));
