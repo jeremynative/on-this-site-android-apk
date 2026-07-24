@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260718-startup-assets-r1";
+const expectedBuild = "20260723-live-asset-parity-r1";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -34,6 +34,41 @@ for (const file of bundledMobileIndexPaths) {
   }
 }
 
+const bundledSiteIndex = JSON.parse(fs.readFileSync(
+  "app/src/main/assets/assets/data/mobile-site-index.json",
+  "utf8"
+));
+const bundledSiteGeometry = JSON.parse(fs.readFileSync(
+  "app/src/main/assets/assets/data/mobile-site-geometry.json",
+  "utf8"
+));
+
+function siteSlugs(payload) {
+  return new Set((Array.isArray(payload?.rows) ? payload.rows : [])
+    .map(row => String(row?.slug || "").trim())
+    .filter(Boolean));
+}
+
+function setDifference(left, right) {
+  return [...left].filter(slug => !right.has(slug)).sort();
+}
+
+const bundledIndexSlugs = siteSlugs(bundledSiteIndex);
+const bundledGeometrySlugs = siteSlugs(bundledSiteGeometry);
+const missingBundledGeometry = setDifference(bundledIndexSlugs, bundledGeometrySlugs);
+const extraBundledGeometry = setDifference(bundledGeometrySlugs, bundledIndexSlugs);
+if (missingBundledGeometry.length || extraBundledGeometry.length) {
+  throw new Error(
+    `Bundled Android site index/geometry parity failed. Missing geometry: ${missingBundledGeometry.join(", ") || "none"}; `
+      + `unexpected geometry: ${extraBundledGeometry.join(", ") || "none"}.`
+  );
+}
+for (const slug of ["coopers-beach-shinnecock-access", "watermill-center"]) {
+  if (!bundledIndexSlugs.has(slug)) {
+    throw new Error(`Bundled Android fallback is missing recently published site: ${slug}`);
+  }
+}
+
 function requireText(text, message) {
   if (!source.includes(text)) {
     throw new Error(message);
@@ -62,6 +97,7 @@ requireText("&refresh=", "Android shell must use a refresh token when loading th
 requireText("Cache-Control", "Android shell must request a fresh copy of the mobile web app.");
 requireText("shouldInterceptRequest", "Android shell must be able to serve the bundled app fallback inside the APK WebView.");
 requireText("loadBundledFallback", "Android shell must keep the bundled archive as a fallback path.");
+requireText("if (!loadingBundledFallback) return null;", "Android live mode must use deployed assets instead of stale APK-packaged site data.");
 requireText("onReceivedHttpError", "Android shell must fall back when the live mobile archive returns an HTTP error.");
 requireText("isSiteGroundChallengeUrl", "Android shell must detect SiteGround challenge redirects and use the bundled fallback.");
 requireText("loadBundledFallback(\"siteground-challenge-start\")", "Android shell must switch to the bundled fallback as soon as SiteGround challenge navigation starts.");
@@ -115,7 +151,8 @@ for (const [needle, message] of [
 if (bundledLiveApp.includes("fit=inside&format=webp") || bundledApp.includes("fit=inside&format=webp")) {
   throw new Error("APK map markers must not use Directus WebP transforms that add dark edge bars.");
 }
-if (!/if \(isApkSnapshotMode\(\)\) \{\r?\n        const localIcon = APK_LOCAL_MAP_ICON_OVERRIDES/.test(bundledLiveApp)) {
+if (!bundledLiveApp.includes("if (isApkSnapshotMode()) {")
+    || !bundledLiveApp.includes("const localIcon = APK_LOCAL_MAP_ICON_OVERRIDES")) {
   throw new Error("The live Android shell must allow VPS-hosted icon URLs outside offline snapshot mode.");
 }
 if (!manifest.includes("android.permission.POST_NOTIFICATIONS")) {
@@ -547,7 +584,8 @@ requireBundledText('data-nearby-show-more', "Bundled Android app must let users 
 requireBundledText('const nativeAndroid = isNativeAndroidApp();', "Bundled Android app must cache native Android startup state.");
 requireBundledText('function waitForMapbox(timeout = 12000)', "Bundled Android app must give Mapbox enough time to load inside WebView before falling back.");
 requireBundledText('if (nativeAndroid) {\n          await new Promise(resolve => window.requestAnimationFrame(resolve));\n        }\n        await openInitialRouteFromUrl();', "Bundled Android app must keep the loading screen up during native startup instead of revealing a half-built shell.");
-requireBundledText('hideLoadingScreen();\n        if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {\n          window.setTimeout(() => idleTask(refreshMobileSiteIconFieldsFromDirectus), 30000);', "Bundled Android app must hide loading after map startup and keep the broad icon refresh outside the interaction window.");
+requireBundledText('hideLoadingScreen();', "Bundled Android app must hide loading after map startup.");
+requireBundledText('window.setTimeout(() => idleTask(refreshMobileSiteIconFieldsFromDirectus), 30000);', "Bundled Android app must keep the broad icon refresh outside the interaction window.");
 requireBundledText('if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {\n          idleTask(() => (state.profile ? ensureProfileStatsSynced() : Promise.resolve(false))', "Bundled Android app must skip Directus-backed profile refresh work in snapshot mode.");
 requireBundledText('function stabilizeAndroidMapPaint()', "Bundled Android app must include the Android map paint stabilizer.");
 requireBundledText('state.map.resize();', "Bundled Android app must resize the map after Android WebView startup.");

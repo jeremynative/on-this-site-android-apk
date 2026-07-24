@@ -58,7 +58,7 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260718-startup-assets-r1";
+    static final String APP_VERSION = "20260723-live-asset-parity-r1";
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
@@ -299,6 +299,10 @@ public class MainActivity extends Activity {
 
     private WebResourceResponse bundledAppResponse(Uri uri) {
         if (uri == null) return null;
+        // Live mode must use the deployed app assets so Android receives the
+        // same sites, geometry, and UI as the website. Packaged assets are
+        // reserved for a real network/server fallback.
+        if (!loadingBundledFallback) return null;
         String host = uri.getHost();
         boolean isArchiveHost = "nativelongisland.com".equalsIgnoreCase(host)
             || "directus.nativelongisland.com".equalsIgnoreCase(host);

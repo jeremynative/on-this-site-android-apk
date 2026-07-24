@@ -54,14 +54,7 @@
       },
       onAuthExpired: () => {
         if (!state.profile?.token && !state.profile?.refreshToken && !state.profile?.refresh_token) return;
-        saveProfile({
-          ...state.profile,
-          token: null,
-          refreshToken: null,
-          refresh_token: null,
-          tokenExpired: true
-        });
-        showBanner("Login needs refreshing before saving changes.");
+        expireProfileSession("Your login expired. Please log back in to continue earning points or contributing.");
       }
     });
     const NEW_CONTENT_ALERT_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -103,6 +96,11 @@
     ]);
     const HEADER_IMAGE_BLUE_PLACEHOLDER_ICON_IDS = new Set(["18979e5a-120e-4af1-b711-9867a67936eb"]);
     const TEXT_ONLY_GREEN_PLACEHOLDER_ICON = "assets/map-icons/acombamack-green-dot-placeholder.png";
+    const FORCE_BLUE_DOT_SITE_SLUGS = new Set([
+      "coopers-beach-shinnecock-access",
+      "watermill-center",
+    ]);
+    const FORCE_BLUE_DOT_LOCAL_ICON = "assets/map-icons/blue-dot-placeholder.png";
     const APK_LOCAL_MAP_ICON_OVERRIDES = Object.freeze({
       "1eb120bb-fff6-4bd5-9c6e-062d18454856": "assets/map-icons/historicalsite-marker.png",
       "02e1cfbf-55b7-4276-abe0-fb5fa18352d4": "assets/map-icons/fishingsite-marker.png",
@@ -151,7 +149,7 @@
     const FALLBACK_STYLE = "mapbox://styles/mapbox/outdoors-v12";
     const KNOWLEDGEBASE_CATEGORIES = [
       { label: "Biography", slugs: ["mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "quashawam", "elizabeth-thunder-bird-haile-shinnecock", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "sachem-warawakmy-of-the-setauket", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "john-a-strong", "nathan-jeffrey-cuffee", "samson-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "penhawitz-sachem-of-the-canarsie", "stephen-talkhouse-pharoah", "nasseconset-sachem-of-the-nissequogue", "keeossechok-sachem-of-the-secatogue", "sunksquaws-and-indigenous-womens-leadership"] },
-      { label: "Tribal Nations and Communities", entries: [["wiki", "native-long-island-overview"], ["wiki", "continued-indigenous-presence-today"], ["wiki", "the-tribes-of-long-island"], ["wiki", "western-long-island-native-communities"], ["wiki", "central-long-island-native-communities"], ["wiki", "eastern-long-island-native-communities"], ["wiki", "myth-of-the-thirteen-tribes"], ["site", "montaukett"], ["site", "shinnecock-indian-reservation"], ["site", "unkechaug-indian-reservation"], ["site", "corchaug-tribe"], ["site", "manhansack-aqua-quash-awamock"], ["site", "setauket-ancestral-land"], ["site", "nissaquogue"], ["site", "matinecock"], ["site", "secatogues"], ["site", "massapequas"], ["site", "merricks"], ["site", "rockaways"], ["site", "canarsie"]] },
+      { label: "Tribal Nations and Communities", entries: [["wiki", "native-long-island-overview"], ["wiki", "continued-indigenous-presence-today"], ["wiki", "the-tribes-of-long-island"], ["wiki", "western-long-island-native-communities"], ["wiki", "central-long-island-native-communities"], ["wiki", "eastern-long-island-native-communities"], ["wiki", "myth-of-the-thirteen-tribes"], ["site", "montaukett-ancestral-land"], ["site", "shinnecock-indian-reservation"], ["site", "unkechaug-indian-reservation"], ["site", "corchaug-tribe"], ["site", "manhansack-aqua-quash-awamock"], ["site", "setauket-ancestral-land"], ["site", "nissaquogue"], ["site", "matinecock"], ["site", "secatogues"], ["site", "massapequas"], ["site", "merricks"], ["site", "rockaways"], ["site", "canarsie"]] },
       { label: "History", slugs: ["native-long-island-overview", "slavery", "indian-missions-on-long-island", "colonial-descriptions-of-indians", "indian-forts", "13-tribes-of-long-island-david-martine", "early-contact-period-1600-ad-1700-ad", "post-contact", "creation-of-long-island", "land-deeds-and-dispossession", "myth-of-extinction-and-survivance", "myth-of-the-thirteen-tribes", "historic-preservation", "history-and-place-names", "merrick-people-in-early-land-records"] },
       { label: "Sovereignty and Governance", slugs: ["tribal-trustees", "sovereignty-recognition-and-detribalization", "land-deeds-and-dispossession", "continued-indigenous-presence-today"] },
       { label: "Culture, Ceremony, and Lifeways", slugs: ["sweat-lodge", "nunnowa", "wampum", "burial", "powwow", "spirituality-ceremony-cosmology", "language", "algonquian-language-and-place-names", "dog-ceremonialism", "spring", "summer", "fall", "winter", "food", "fishing", "whaling", "indigenous-whaling-and-maritime-labor", "ecology-and-flexible-sedentism"] },
@@ -546,9 +544,9 @@
     const SITE_INDEX_FIELDS = SHARED_FIELDS.mobileSiteIndex;
     const SITE_INDEX_RUNTIME_FIELDS = String(SITE_INDEX_FIELDS || "").split(",").filter(field => !["geojson", "display_geojson"].includes(field)).join(",");
     const SITE_INDEX_URL = "assets/data/mobile-site-index.json";
-    const SITE_INDEX_VERSION = "20260705-site-index-v1";
+    const SITE_INDEX_VERSION = "20260723-site-index-v2";
     const SITE_GEOMETRY_URL = "assets/data/mobile-site-geometry.json";
-    const SITE_GEOMETRY_VERSION = "20260717-martine-divider-layout-v4";
+    const SITE_GEOMETRY_VERSION = "20260723-site-geometry-v2";
     const SITE_DETAIL_FIELDS = SHARED_FIELDS.mobileSiteDetail;
     const WIKI_INDEX_FIELDS = SHARED_FIELDS.mobileWikiIndex;
     const WIKI_INDEX_URL = "assets/data/mobile-wiki-index.json";
@@ -1038,13 +1036,7 @@
 
     function expireProfileSession(message = "Your login expired. Please log back in.") {
       if (!state.profile) return;
-      saveProfile({
-        ...state.profile,
-        token: null,
-        refreshToken: null,
-        refresh_token: null,
-        tokenExpired: true
-      });
+      saveProfile(null);
       showBanner(message);
       if (registerPanelEl) registerPanelEl.hidden = true;
       if (state.selectedSite?.slug) openSite(state.selectedSite.slug, { focus: false });
@@ -1155,25 +1147,19 @@
       const loginRecords = remoteLoginRewardRecords(profile);
       const currentStats = loginRewardStats(profile);
       if (PROFILE_UTILS.loginRewardRecentlyAwarded(loginRecords, { minHours: 24 })) {
+        await refreshRemotePointEventsForProfileId(profileId).catch(() => []);
         return { earned: false, recentlyAwarded: true, ...currentStats };
       }
       const reward = PROFILE_UTILS.nextDailyLoginReward(profileId, currentStats, loginRecords.map(item => item.login_date));
       if (!reward?.earned) return reward;
       const payload = reward.payload;
-      const created = await postDirectusItem("mobile_profile_logins", payload, { requireAuth: true });
-      const record = created?.data ? { ...payload, ...created.data } : payload;
-      state.profileLoginRewards.push(record);
-      await recordProfilePointEvent({
-        event_key: `daily_open:${profileId}:${payload.login_date}`,
-        event_type: "daily_open",
-        points: PROFILE_UTILS.POINT_RULES.daily_open,
-        member_profile: profileId,
-        source_collection: "mobile_profile_logins",
-        source_id: record.id,
-        source_title: "Daily signed-in visit",
-        created_at: record.created_at || payload.created_at
-      });
-      return reward;
+      const committed = await commitEngagementAction("daily_open", payload);
+      const record = committed?.source || null;
+      const pointEvent = committed?.data || null;
+      if (committed?.recently_awarded) return { earned: false, recentlyAwarded: true, ...loginRewardStats(profile) };
+      if (!record) throw new Error("The daily visit could not be confirmed.");
+      if (!pointEvent) throw new Error("The daily point could not be confirmed.");
+      return { ...reward, earned: committed?.earned !== false };
     }
 
     async function awardDailyLoginReward(options = {}) {
@@ -1241,32 +1227,21 @@
     }
 
     async function syncLanguageAttempt(contentKey, word, correct) {
-      const profile = currentContributorProfile();
-      const profileId = activeContributorProfileId();
-      if (!profile?.id || !profileId || Number(relationId(profile.id)) !== profileId) return;
-      const payload = PROFILE_UTILS.languageAttemptPayload(profileId, contentKey, word, { correct });
-      if (!payload) return;
-      const existing = await refreshRemoteLanguageAttempt(profileId, contentKey, word.id, String(payload.answered_at || "").slice(0, 10)).catch(() => null);
-      if (existing || languageRemoteAttemptExists(profileId, contentKey, word.id)) {
-        const record = existing || state.languageQuizAttempts.find(item =>
-          Number(relationId(item.member_profile)) === Number(profileId) &&
-          String(item.content_key || "") === String(contentKey || "") &&
-          String(item.word_id || "") === String(word.id || "") &&
-          String(item.answered_at || "").slice(0, 10) === String(payload.answered_at || "").slice(0, 10)
-        );
-        const pointEvent = await recordLanguagePointForAttempt(profileId, contentKey, word, record);
-        return record ? { ...record, _existingAttempt: true, _languagePointEvent: pointEvent || null } : null;
-      }
-      const languageAuthMessage = PROFILE_UTILS.contributorWriteSessionMessage("save language progress");
-      const created = await postDirectusItem("mobile_language_quiz_progress", payload, {
-        requireAuth: true,
-        missingAuthMessage: languageAuthMessage,
-        authExpiredMessage: languageAuthMessage
+      return PROFILE_UTILS.syncLanguageAttempt({
+        profile: currentContributorProfile(),
+        profileId: activeContributorProfileId(),
+        contentKey,
+        word,
+        correct,
+        attempts: state.languageQuizAttempts,
+        relationId,
+        refreshRemoteAttempt: refreshRemoteLanguageAttempt,
+        remoteAttemptExists: languageRemoteAttemptExists,
+        recordPointForAttempt: recordLanguagePointForAttempt,
+        commitEngagementAction,
+        refreshRemotePointEvents: refreshRemotePointEventsForProfileId,
+        mergePointEventRecords
       });
-      const record = created?.data ? { ...payload, ...created.data } : payload;
-      mergeLanguageAttemptRecords([record]);
-      const pointEvent = await recordLanguagePointForAttempt(profileId, contentKey, word, record);
-      return { ...record, _createdAttempt: true, _languagePointEvent: pointEvent || null };
     }
 
     function siteVisitRecord(profile, site) {
@@ -1325,53 +1300,35 @@
       if (!payload) return null;
       if (existing?.id && wantsCheckin) {
         try {
-          const updated = await patchDirectusItem("mobile_site_visits", existing.id, {
+          const committed = await commitEngagementAction("site_checkin", {
             distance_miles: payload.distance_miles,
-            visited_at: payload.visited_at,
             public_activity: true
-          });
-          Object.assign(existing, updated?.data || payload);
-          await recordProfilePointEvent({
-            event_key: `site_checkin:${profile.id}:${site.slug}`,
-            event_type: "site_checkin",
-            points: PROFILE_UTILS.POINT_RULES.site_checkin,
-            member_profile: profile.id,
-            source_collection: "mobile_site_visits",
-            source_id: existing.id,
-            source_slug: site.slug,
-            source_title: site.title || site.slug,
-            created_at: existing.visited_at || payload.visited_at
-          });
+          }, existing.id);
+          Object.assign(existing, committed?.source || payload);
+          const pointEvent = committed?.data || null;
+          if (!pointEvent) throw new Error("The check-in point could not be confirmed.");
+          renderProfile();
+          renderRewards();
           return { earned: true, checkin: true, record: existing };
-        } catch {}
+        } catch (error) {
+          throw error;
+        }
       }
-      const created = await postDirectusItem("mobile_site_visits", payload, { requireAuth: true });
-      const record = created?.data ? { ...payload, ...created.data } : payload;
-      mergeVisitRecords([record]);
-      await recordProfilePointEvent({
-        event_key: `site_visit:${profile.id}:${site.slug}`,
-        event_type: "site_visit",
-        points: PROFILE_UTILS.POINT_RULES.site_visit,
-        member_profile: profile.id,
-        source_collection: "mobile_site_visits",
-        source_id: record.id,
-        source_slug: site.slug,
-        source_title: site.title || site.slug,
-        created_at: record.visited_at || payload.visited_at
-      });
+      const committed = await commitEngagementAction("site_visit", payload);
+      const record = committed?.source || null;
+      const visitPoint = committed?.data || null;
+      if (!record) throw new Error("The visit could not be confirmed.");
+      if (!visitPoint) throw new Error("The visit point could not be confirmed.");
       if (wantsCheckin) {
-        await recordProfilePointEvent({
-          event_key: `site_checkin:${profile.id}:${site.slug}`,
-          event_type: "site_checkin",
-          points: PROFILE_UTILS.POINT_RULES.site_checkin,
-          member_profile: profile.id,
-          source_collection: "mobile_site_visits",
-          source_id: record.id,
-          source_slug: site.slug,
-          source_title: site.title || site.slug,
-          created_at: record.visited_at || payload.visited_at
-        });
+        const checkin = await commitEngagementAction("site_checkin", {
+          distance_miles: payload.distance_miles,
+          public_activity: true
+        }, record.id);
+        const checkinPoint = checkin?.data || null;
+        if (!checkinPoint) throw new Error("The check-in point could not be confirmed.");
       }
+      renderProfile();
+      renderRewards();
       return { earned: true, checkin: wantsCheckin, record };
     }
 
@@ -1385,22 +1342,13 @@
       });
     }
 
-    const randomSalt = PROFILE_UTILS.randomSalt;
-    const hashPassword = PROFILE_UTILS.hashPassword;
     const normalizeAccountEmail = PROFILE_UTILS.normalizeAccountEmail;
     const profileSlugFromEmail = PROFILE_UTILS.profileSlugFromEmail;
-
-    const existingRegistrationMessage = PROFILE_UTILS.existingRegistrationMessage;
-    const strongestRegistrationRecord = PROFILE_UTILS.strongestRegistrationRecord;
 
     async function registerLocalAccount({ displayName, email, password, inviteCode = "" }) {
       const normalizedEmail = normalizeAccountEmail(email);
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalizedEmail)) throw new Error("Enter a valid email address.");
-      if (String(password || "").length < 8) throw new Error("Password must be at least 8 characters.");
-      const existingRegistration = strongestRegistrationRecord(await fetchRegistrationReviews(normalizedEmail));
-      if (existingRegistration) throw new Error(existingRegistrationMessage(existingRegistration));
-      const salt = randomSalt();
-      const passwordHash = await hashPassword(password, salt);
+      if (String(password || "").length < 10) throw new Error("Password must be at least 10 characters.");
       const profile = {
         display_name: displayName || normalizedEmail,
         email: normalizedEmail,
@@ -1412,21 +1360,15 @@
         local: true,
         registrationSynced: false
       };
-      const registrationRecord = await postDirectusItem("mobile_account_registrations", {
-        email: normalizedEmail,
-        email_normalized: normalizedEmail,
-        username: normalizedEmail,
-        display_name: profile.display_name,
-        password_hash: passwordHash,
-        password_salt: salt,
-        created_at: new Date().toISOString()
-      }, { timeout: 9000 });
-      profile.registrationSynced = !!registrationRecord;
+      const response = await fetch("https://nativelongisland.com/account-registration.php", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail, password, display_name: profile.display_name })
+      });
+      const registrationRecord = await response.json().catch(() => ({}));
+      if (!response.ok || !registrationRecord?.ok) throw new Error(registrationRecord?.error || "Could not create contributor account request.");
+      profile.registrationSynced = true;
       profile.registrationId = registrationRecord?.data?.id || null;
-      if (profile.registrationSynced && !profile.registrationId) {
-        const registrationReview = await fetchRegistrationReview(normalizedEmail);
-        profile.registrationId = registrationReview?.id || null;
-      }
       if (profile.registrationSynced) {
         try {
           await FEEDBACK_UTILS.sendAccountSignupEmail(
@@ -1455,103 +1397,8 @@
         }
       }
       profile.reviewTodoSynced = profile.registrationSynced;
-      profile.memberProfileSynced = profile.registrationSynced
-        ? await createPendingMemberProfile(profile).then(() => true).catch(() => false)
-        : false;
-      saveProfile(profile);
+      profile.memberProfileSynced = true;
       return profile;
-    }
-
-    async function createPendingMemberProfile(profile) {
-      const slug = profileSlugFromEmail(profile.email);
-      return postDirectusItem("mobile_member_profiles", {
-        account_registration: profile.registrationId || null,
-        account_enabled: false,
-        account_banned: false,
-        profile_status: "hidden",
-        public_profile: false,
-        username: profile.email,
-        display_name: profile.display_name || profile.email,
-        slug,
-        role_label: "Account awaiting review",
-        headline: "Contributor account request pending review.",
-        bio: "",
-        joined_at: new Date().toISOString()
-      }, { timeout: 9000 });
-    }
-
-    async function loginRegistrationStatus(email, password) {
-      const normalizedEmail = String(email || "").trim().toLowerCase();
-      const registration = await fetchRegistrationReview(normalizedEmail, true);
-      if (registration?.status === "declined") {
-        throw new Error(registration.review_note || "This account request was declined.");
-      }
-      if (registration?.account_banned === true || registration?.status === "banned") {
-        throw new Error(registration.ban_reason || registration.review_note || "This account has been banned.");
-      }
-      const existingProfile = profileForLogin(normalizedEmail)
-        || bestContributorProfile(state.contributorProfiles.filter(profile => String(profile.username || "").toLowerCase() === normalizedEmail));
-      if (isProfileBanned(existingProfile)) {
-        throw new Error(existingProfile.ban_reason || "This account has been banned.");
-      }
-      const salt = registration?.password_salt;
-      const savedHash = registration?.password_hash;
-      if (!salt || !savedHash) return null;
-      const passwordHash = await hashPassword(password, salt);
-      if (passwordHash !== savedHash) return null;
-      const accountEnabled = registration?.account_enabled === true || registration?.account_enabled === "true" || registration?.account_enabled === 1;
-      const accountApproved = accountEnabled || registration?.status === "approved";
-      if (accountApproved) return null;
-      return {
-        display_name: existingProfile?.display_name || registration?.display_name || normalizedEmail,
-        email: normalizedEmail,
-        username: normalizedEmail,
-        profileId: existingProfile?.id || null,
-        headline: existingProfile?.headline || "",
-        location_label: existingProfile?.location_label || "",
-        website_url: existingProfile?.website_url || "",
-        bio: existingProfile?.bio || "",
-        role: "Account awaiting review",
-        local: true,
-        pending: true,
-        approved: false,
-        reviewNote: registration?.review_note || ""
-      };
-    }
-
-    async function fetchRegistrationReview(email, includePassword = false) {
-      const records = await fetchRegistrationReviews(email, includePassword);
-      return strongestRegistrationRecord(records);
-    }
-
-    async function fetchRegistrationReviews(email, includePassword = false) {
-      const normalized = normalizeAccountEmail(email);
-      if (!normalized) return [];
-      try {
-        const fields = includePassword
-          ? "id,email,email_normalized,status,account_enabled,account_banned,ban_reason,display_name,review_note,reviewed_at,password_hash,password_salt"
-          : "id,email,email_normalized,status,account_enabled,account_banned,ban_reason,display_name,review_note,reviewed_at,created_at";
-        const response = await fetchJson(`/items/mobile_account_registrations?limit=-1&filter[email_normalized][_eq]=${encodeURIComponent(normalized)}&sort=-created_at&fields=${fields}`, {
-          cacheKey: `registration-${normalized}-${includePassword ? "full" : "review"}`,
-          ttl: 0,
-          fresh: true
-        });
-        return response.data || [];
-      } catch {
-        try {
-          const fields = includePassword
-            ? "id,email,email_normalized,status,account_enabled,account_banned,ban_reason,display_name,review_note,reviewed_at,password_hash,password_salt"
-            : "id,email,email_normalized,status,account_enabled,account_banned,ban_reason,display_name,review_note,reviewed_at,created_at";
-          const response = await fetchJson(`/items/mobile_account_registrations?limit=-1&filter[email][_eq]=${encodeURIComponent(normalized)}&sort=-created_at&fields=${fields}`, {
-            cacheKey: `registration-email-${normalized}-${includePassword ? "full" : "review"}`,
-            ttl: 0,
-            fresh: true
-          });
-          return response.data || [];
-        } catch {
-          return [];
-        }
-      }
     }
 
     async function requestPasswordReset({ email }) {
@@ -1757,6 +1604,7 @@
       }
       try {
         const saved = await saveLanguageAttempt(contentKey, word, correct);
+        if (correct && !saved?._languagePointEvent) throw new Error("Your answer was saved, but the language point could not be confirmed. Please try again.");
         if (result) {
           result.textContent = correct
             ? (saved?._existingAttempt ? "Language point is saved. Word is on your profile." : "+1 point. Word added to your Language profile.")
@@ -1887,7 +1735,7 @@
                   <div class="timeline-body">${bodyHtml}</div>
                   ${sourceNote ? `
                     <button class="timeline-source-info" type="button" data-timeline-source-info data-source-reference="${escapeHtml(sourceNote)}" aria-label="Show source reference" aria-expanded="false" title="${escapeHtml(sourceNote)}">i</button>
-                    <div class="timeline-source-popover" role="note"><div>${escapeHtml(sourceNote)}</div><div class="timeline-source-copy-hint">Source reference.</div></div>
+                    <div class="timeline-source-popover" role="note"><div>${HTML_UTILS.sourceReferenceTextHtml(sourceNote, { escapeHtml })}</div><div class="timeline-source-copy-hint">Source reference.</div></div>
                   ` : ""}
                 </article>
               `;
@@ -1942,7 +1790,7 @@
           <div class="section-content">${html}</div>
           ${sourceNote ? `
             <button class="timeline-source-info" type="button" data-timeline-source-info data-source-reference="${escapeHtml(sourceNote)}" aria-label="Show source reference" aria-expanded="false" title="${escapeHtml(sourceNote)}">i</button>
-            <div class="timeline-source-popover" role="note"><div>${escapeHtml(sourceNote)}</div><div class="timeline-source-copy-hint">Source reference.</div></div>
+            <div class="timeline-source-popover" role="note"><div>${HTML_UTILS.sourceReferenceTextHtml(sourceNote, { escapeHtml })}</div><div class="timeline-source-copy-hint">Source reference.</div></div>
           ` : ""}
         </section>
       `;
@@ -2603,7 +2451,7 @@
                   ${isAdminContributor() ? `<div class="actions"><button class="action secondary" type="button" data-open-frontend-editor="timeline" data-editor-slug="${escapeHtml(event.id)}">Edit moment</button></div>` : ""}
                   ${sourceNote ? `
                     <button class="timeline-source-info" type="button" data-timeline-source-info data-source-reference="${escapeHtml(sourceNote)}" aria-label="Show source reference" aria-expanded="false" title="${escapeHtml(sourceNote)}">i</button>
-                    <div class="timeline-source-popover" role="note"><div>${escapeHtml(sourceNote)}</div><div class="timeline-source-copy-hint">Source reference.</div></div>
+                    <div class="timeline-source-popover" role="note"><div>${HTML_UTILS.sourceReferenceTextHtml(sourceNote, { escapeHtml })}</div><div class="timeline-source-copy-hint">Source reference.</div></div>
                   ` : ""}
                 </article>
               `;
@@ -2796,6 +2644,7 @@
     function mergePointEventRecords(records = []) {
       PROFILE_UTILS.mergeProfilePointEvents(state.profilePointEvents, records);
       state.profileActivityCache = null;
+      updateProfileMenuButton();
     }
 
     function localPointEventForKey(eventKey, profileId = null) {
@@ -2854,6 +2703,27 @@
       return PROFILE_UTILS.activeContributorProfileId(profile, state.profile?.profileId, { relationId });
     }
 
+    async function commitEngagementAction(eventType, activity = {}, sourceId = "") {
+      const response = await directusClient.fetchAuthenticated("https://nativelongisland.com/engagement-action.php", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ event_type: eventType, source_id: sourceId || undefined, activity })
+      }, {
+        authExpiredMessage: "Your login expired. Please log in again to save points."
+      });
+      const result = await response.json();
+      if (result?.source) {
+        if (eventType === "daily_open") state.profileLoginRewards = PROFILE_UTILS.mergeLoginRewardRecords(state.profileLoginRewards, [result.source]);
+        if (eventType === "vocab_guess") mergeLanguageAttemptRecords([result.source]);
+        if (eventType === "site_visit" || eventType === "site_checkin") mergeVisitRecords([result.source]);
+      }
+      if (result?.data?.id) mergePointEventRecords([result.data]);
+      state.profileActivityCache = null;
+      updateProfileMenuButton();
+      if (loginSheetEl?.classList.contains("open")) renderProfile();
+      return result;
+    }
+
     async function recordProfilePointEvent(event = {}) {
       const profileId = Number(relationId(event.member_profile));
       const eventType = String(event.event_type || "");
@@ -2868,16 +2738,17 @@
       const remoteExisting = await refreshRemotePointEventForKey(event.event_key, profileId).catch(() => null);
       if (remoteExisting) return remoteExisting;
       try {
-        const created = await postDirectusItem("mobile_point_events", payload, { requireAuth: true, timeout: 6000 });
-        const record = created?.data ? { ...payload, ...created.data } : payload;
+        const created = await commitEngagementAction(eventType, {}, payload.source_id);
+        const record = created?.data ? { ...payload, ...created.data } : null;
+        if (!record?.id) throw new Error("The points record could not be confirmed.");
         mergePointEventRecords([record]);
-        await refreshRemotePointEventsForProfileId(profileId).catch(() => []);
-        return record;
+        const confirmed = await refreshRemotePointEventForKey(event.event_key, profileId).catch(() => null);
+        if (!confirmed) throw new Error("The points record could not be confirmed.");
+        return confirmed;
       } catch (error) {
         const latest = await refreshRemotePointEventForKey(event.event_key, profileId).catch(() => null);
         if (latest) return latest;
-        await refreshRemotePointEventsForProfileId(profileId).catch(() => []);
-        return localPointEventForKey(event.event_key, profileId);
+        throw error;
       }
     }
 
@@ -2940,7 +2811,7 @@
 
     async function fetchMobileSiteIndexRows() {
       try {
-        const response = await fetch(`${SITE_INDEX_URL}?v=${SITE_INDEX_VERSION}`, { cache: "force-cache" });
+        const response = await fetch(`${SITE_INDEX_URL}?v=${SITE_INDEX_VERSION}`, { cache: "no-cache" });
         if (!response.ok) throw new Error(`Mobile site index unavailable: ${response.status}`);
         const json = await response.json();
         if (Array.isArray(json?.rows) && json.rows.length) return json.rows;
@@ -2958,7 +2829,7 @@
 
     async function fetchMobileSiteGeometryRows() {
       try {
-        const response = await fetch(`${SITE_GEOMETRY_URL}?v=${SITE_GEOMETRY_VERSION}`, { cache: "force-cache" });
+        const response = await fetch(`${SITE_GEOMETRY_URL}?v=${SITE_GEOMETRY_VERSION}`, { cache: "no-cache" });
         if (!response.ok) throw new Error(`Mobile site geometry unavailable: ${response.status}`);
         const json = await response.json();
         if (Array.isArray(json?.rows) && json.rows.length) return json.rows;
@@ -3637,7 +3508,11 @@
         })
         .filter(site => site.title);
       state.siteBySlug = new Map(state.sites.map(site => [site.slug || "", site]));
-      state.mapSites = state.sites.filter(site => site.center && !site.map_geometry_alias_of);
+      state.mapSites = state.sites.filter(site => (
+        site.center &&
+        site.slug !== WHALING_FEATURE_SLUG &&
+        !site.map_geometry_alias_of
+      ));
       invalidateMapSourceCache();
       prepareExhibits();
       updateMobileHeaderInstruction();
@@ -4622,7 +4497,7 @@
     }
 
     function timelineSortValue(event) {
-      return TIMELINE_UTILS.sortValue(event, {
+      const options = {
         fallback: 9999,
         candidates: ["sort_key", "start_year", "date_label", "period"],
         keywordYears: [
@@ -4632,7 +4507,11 @@
         ],
         parseRanges: false,
         yearPattern: /\b(1[5-9]\d{2}|20\d{2})\b/
-      });
+      };
+      const chronological = TIMELINE_UTILS.chronologicalSortValue
+        ? TIMELINE_UTILS.chronologicalSortValue(event, { ...options, fallback: NaN })
+        : NaN;
+      return Number.isFinite(chronological) ? chronological : TIMELINE_UTILS.sortValue(event, options);
     }
 
     function sortedTimelineEvents() {
@@ -4767,7 +4646,7 @@
           <span class="source">${escapeHtml(sourceName)}</span>
           <button class="timeline-source-info" type="button" data-timeline-source-info data-source-reference="${escapeHtml(sourceNote)}" aria-label="Show source reference" aria-expanded="false" title="${escapeHtml(sourceNote)}">i</button>
         </span>
-        <span class="timeline-source-popover"><span>${escapeHtml(sourceNote)}</span><span class="timeline-source-copy-hint">Source reference.</span></span>
+        <span class="timeline-source-popover"><span>${HTML_UTILS.sourceReferenceTextHtml(sourceNote, { escapeHtml })}</span><span class="timeline-source-copy-hint">Source reference.</span></span>
         <p class="teaser">${escapeHtml(timelineTeaser(event))}</p>
         <span class="timeline-actions">
           <button type="button" data-timeline-map>Map</button>
@@ -6229,11 +6108,14 @@
 
     function siteMapIconUrl(site) {
       const rawIcon = String(site?.map_icon || "").trim();
+      const forceBlueDot = FORCE_BLUE_DOT_SITE_SLUGS.has(String(site?.slug || "").trim());
       if (isApkSnapshotMode()) {
+        if (forceBlueDot) return FORCE_BLUE_DOT_LOCAL_ICON;
         const localIcon = APK_LOCAL_MAP_ICON_OVERRIDES[rawIcon] || (SITE_UTILS.isExhibitSite(site) ? EXHIBIT_MARKER_ICON : "");
         return localIcon || "";
       }
-      if (HEADER_IMAGE_BLUE_PLACEHOLDER_ICON_IDS.has(rawIcon) && !siteHasHeaderImage(site)) return TEXT_ONLY_GREEN_PLACEHOLDER_ICON;
+      if (forceBlueDot) return FORCE_BLUE_DOT_LOCAL_ICON;
+      if (HEADER_IMAGE_BLUE_PLACEHOLDER_ICON_IDS.has(rawIcon) && !siteHasHeaderImage(site) && !forceBlueDot) return TEXT_ONLY_GREEN_PLACEHOLDER_ICON;
       const iconUrl = MEDIA_UTILS.siteMapIconUrl(site, { directusAssetUrl }) || "";
       return MEDIA_UTILS.optimizedMapIconUrl?.(iconUrl, { width: 128, height: 128 }) || iconUrl;
     }
@@ -7699,7 +7581,10 @@
         id: state.profile.profileId || null,
         slug: "",
         display_name: state.profile.display_name || state.profile.email || "Contributor",
-        username: state.profile.email || ""
+        username: state.profile.email || "",
+        account_enabled: state.profile.account_enabled,
+        profile_status: state.profile.profile_status,
+        public_profile: state.profile.public_profile
       };
     }
 
@@ -7795,7 +7680,8 @@
     function canShowContributorProgress(profile = currentContributorProfile()) {
       if (!state.profile || state.profile.pending || state.profile.approved === false || !profile?.id) return false;
       if (isProfileBanned(profile)) return false;
-      return profile.account_enabled !== false && profile.profile_status !== "hidden";
+      // Public-profile visibility is a privacy choice, not an account-approval state.
+      return profile.account_enabled !== false;
     }
 
     function isAdminContributor() {
@@ -9380,7 +9266,7 @@
                 ${isAdminContributor() && entry.event?.id ? `<div class="actions"><button class="action secondary" type="button" data-open-frontend-editor="timeline" data-editor-slug="${escapeHtml(entry.event.id)}">Edit moment</button></div>` : ""}
                 ${entry.sourceNote ? `
                   <button class="timeline-source-info" type="button" data-timeline-source-info data-source-reference="${escapeHtml(entry.sourceNote)}" aria-label="Show source reference" aria-expanded="false" title="${escapeHtml(entry.sourceNote)}">i</button>
-                  <div class="timeline-source-popover" role="note"><div>${escapeHtml(entry.sourceNote)}</div><div class="timeline-source-copy-hint">Source reference.</div></div>
+                  <div class="timeline-source-popover" role="note"><div>${HTML_UTILS.sourceReferenceTextHtml(entry.sourceNote, { escapeHtml })}</div><div class="timeline-source-copy-hint">Source reference.</div></div>
                 ` : ""}
               </article>
             `).join("")}
@@ -9789,6 +9675,13 @@
       `;
     }
 
+    function mobileMovingWhaleCenter() {
+      const point = state.mobileMovingWhaleMarker?.getLngLat?.();
+      return point && Number.isFinite(point.lng) && Number.isFinite(point.lat)
+        ? [point.lng, point.lat]
+        : [...MOBILE_WHALE_ROUTE[0]];
+    }
+
     function ensureMobileMovingWhaleMarker() {
       if (!state.map || !window.mapboxgl?.Marker || state.mobileMovingWhaleMarker) return;
       const element = document.createElement("div");
@@ -9799,8 +9692,7 @@
         .addTo(state.map);
       const button = element.querySelector(".mobile-moving-whale-marker");
       bindMobileMovingMarkerButton(button, () => {
-        const point = state.mobileMovingWhaleMarker?.getLngLat?.();
-        const mapCenter = point ? [point.lng, point.lat] : null;
+        const mapCenter = mobileMovingWhaleCenter();
         if (state.siteBySlug.has(WHALING_FEATURE_SLUG)) openSite(WHALING_FEATURE_SLUG, { focus: false, mapCenter });
         else openWikiArticle(WHALING_FEATURE_SLUG, { focus: false, mapCenter });
       });
@@ -9845,6 +9737,15 @@
       updateMobileMovingFeatureMarkers();
       startMobileMovingFeatureAnimation();
     }
+
+    function mobileDetailLoadingHtml(item = {}) {
+      const summary = publicCleanText(item?.summary);
+      return `
+        ${summary ? `<p class="summary">${escapeHtml(summary)}</p>` : ""}
+        <p class="detail-loading-status" role="status">Loading full article...</p>
+      `;
+    }
+
     async function openWikiArticle(articleOrSlug, options = {}) {
       clearMobileBiographyPathOverlay();
       const slug = typeof articleOrSlug === "string" ? articleOrSlug : articleOrSlug?.slug;
@@ -9861,7 +9762,7 @@
         <h2>${escapeHtml(article?.title || options.timelineEvent?.source_title || "Knowledgebase article")}</h2>
         <p class="detail-meta">Knowledgebase</p>
       `;
-      detailBodyEl.innerHTML = `<p class="summary">Loading article details...</p>`;
+      detailBodyEl.innerHTML = mobileDetailLoadingHtml(article);
       detailEl.classList.add("open");
       syncMobilePanelAccessibility();
       resetMobilePanelScroll(detailEl);
@@ -10567,20 +10468,23 @@
       }
       let site = state.sites.find(item => item.slug === slug);
       if (!site) return;
+      const selectedMapCenter = slug === WHALING_FEATURE_SLUG
+        ? (options.mapCenter || mobileMovingWhaleCenter())
+        : (options.mapCenter || site.center);
       state.selectedSlug = slug;
       state.selectedSite = site;
       state.selectedWikiSlug = "";
       syncActiveSiteMapLabel(site);
       renderList();
       detailTitleEl.innerHTML = mobileSiteTitleHtml(site);
-      detailBodyEl.innerHTML = `<p class="summary">Loading article details...</p>`;
+      detailBodyEl.innerHTML = mobileDetailLoadingHtml(site);
       detailEl.classList.add("open");
       setDetailDrawerState(options.drawerState || "half");
       syncMobilePanelAccessibility();
       resetMobilePanelScroll(detailEl);
       window.requestAnimationFrame(() => focusSite(site, {
         forPanel: true,
-        center: options.mapCenter || site.center,
+        center: selectedMapCenter,
         preserveZoom: options.focus === false,
         duration: options.focus === false ? 360 : 520
       }));
@@ -11093,6 +10997,7 @@
     function addPolygonLayers() {
       if (!state.map || state.map.getSource("mobile-sites")) return;
       const sourceData = cachedMobileMapSourceData();
+      CALENDAR_UTILS.addOnThisDayMapImage?.(state.map, "mobile-on-this-day-calendar");
       state.map.addSource("mobile-sites", { type: "geojson", data: sourceData.sites });
       state.map.addSource("mobile-site-attention", { type: "geojson", data: sourceData.attention });
       state.map.addSource("mobile-place-name-area-labels", { type: "geojson", data: sourceData.placeNameAreaLabels });
@@ -11153,6 +11058,7 @@
         id: "mobile-site-attention-outer",
         type: "circle",
         source: "mobile-site-attention",
+        filter: ["==", ["get", "attention_kind"], "urgent"],
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 24, 10, 34, 14, 50],
           "circle-color": "#d71920",
@@ -11165,6 +11071,7 @@
         id: "mobile-site-attention-core",
         type: "circle",
         source: "mobile-site-attention",
+        filter: ["==", ["get", "attention_kind"], "urgent"],
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 10, 10, 15, 14, 22],
           "circle-color": "#d71920",
@@ -11211,6 +11118,39 @@
           "icon-allow-overlap": true,
           "icon-ignore-placement": true,
           "icon-optional": true
+        }
+      });
+      state.map.addLayer({
+        id: "mobile-site-attention-history-badge",
+        type: "circle",
+        source: "mobile-site-attention",
+        filter: ["==", ["get", "attention_kind"], "on-this-day"],
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 12, 10, 17, 14, 21],
+          "circle-color": "#315c48",
+          "circle-opacity": 0.12,
+          "circle-blur": 0.2,
+          "circle-translate": [0, -16],
+          "circle-stroke-color": "#315c48",
+          "circle-stroke-width": 1,
+          "circle-stroke-opacity": 0.18
+        }
+      });
+      state.map.addLayer({
+        id: "mobile-site-attention-history-icon",
+        type: "symbol",
+        source: "mobile-site-attention",
+        filter: ["==", ["get", "attention_kind"], "on-this-day"],
+        layout: {
+          "icon-image": "mobile-on-this-day-calendar",
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 6, 0.72, 10, 0.92, 14, 1.08],
+          "icon-anchor": "center",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true
+        },
+        paint: {
+          "icon-opacity": 1,
+          "icon-translate": [0, -16]
         }
       });
       state.map.addLayer({
@@ -11884,7 +11824,7 @@
 
     function syncActiveSiteMapLabel(site = state.selectedSite) {
       clearActiveSiteMapLabel();
-      if (!state.map || !site?.center || typeof mapboxgl === "undefined") return;
+      if (!state.map || !site?.center || site.slug === WHALING_FEATURE_SLUG || typeof mapboxgl === "undefined") return;
       const element = document.createElement("div");
       element.className = "selected-site-map-label";
       element.textContent = site.title || "Selected site";
@@ -12799,6 +12739,7 @@
         syncMobilePanelAccessibility();
       }
       if (state.profile) {
+        state.profileActivitySynced = false;
         ensureProfileStatsSynced()
           .then(() => renderProfile())
           .catch(error => console.warn("Profile sync will retry later.", error));
@@ -12824,6 +12765,13 @@
       feedbackSubmitBtn.textContent = "Sending...";
       const screenshotFile = state.feedbackScreenshotFile || feedbackScreenshotEl?.files?.[0] || null;
       try {
+        let accessToken = state.profile?.token || "";
+        if (accessToken) {
+          accessToken = await directusClient.ensureAuthSession({
+            requireAuth: true,
+            authExpiredMessage: "Your login expired. Please log in again before sending signed-in feedback."
+          });
+        }
         let screenshotId = null;
         let screenshotNote = screenshotFile ? "Screenshot capture/upload was requested." : "No screenshot.";
         if (screenshotFile) {
@@ -12849,7 +12797,11 @@
           screenshotId,
           screenshotNote
         });
-        await FEEDBACK_UTILS.submitFeedbackReview(feedbackPayload, { platform: "mobile", appUrl: window.location.href });
+        await FEEDBACK_UTILS.submitFeedbackReview(feedbackPayload, {
+          platform: "mobile",
+          appUrl: window.location.href,
+          accessToken
+        });
       } finally {
         feedbackSubmitBtn.disabled = false;
         feedbackSubmitBtn.textContent = "Send feedback";
@@ -14219,6 +14171,7 @@
         return;
       }
       if (event.target.closest("[data-profile-logout]")) {
+        directusClient.logout().catch(() => false);
         saveProfile(null);
         registerPanelEl.hidden = true;
         showBanner("Logged out.");
@@ -14340,7 +14293,8 @@
         renderPasswordResetPanelMode();
       }
     });
-    logoutSubmitBtn.addEventListener("click", () => {
+    logoutSubmitBtn.addEventListener("click", async () => {
+      await directusClient.logout?.({ revokeServerSession: true }).catch(() => null);
       saveProfile(null);
       registerPanelEl.hidden = true;
       showBanner("Logged out.");
@@ -14363,36 +14317,6 @@
       loginSubmitBtn.textContent = "Checking...";
       showLoginStatus("Checking account...");
       try {
-        const localProfile = await loginRegistrationStatus(loginEmailEl.value.trim(), loginPasswordEl.value);
-        if (localProfile) {
-          saveProfile(localProfile);
-          scheduleMemberProfileActivityTracking({ login: true, force: true });
-          await ensureProfileStatsSynced();
-          if (!localProfile.approved) {
-            showLoginStatus("Account found. Your account is still waiting for review.", "error");
-            showBanner("Account still waiting for review.");
-          } else {
-            showLoginStatus("Logged in.", "success");
-            showBanner("Logged in.");
-          }
-          if (state.selectedSite?.slug) openSite(state.selectedSite.slug, { focus: false });
-          loginSubmitBtn.disabled = false;
-          loginSubmitBtn.textContent = originalLabel;
-          return;
-        }
-      } catch (localError) {
-        const message = localError.message || "This account cannot be used yet.";
-        const canTryDirectus = /waiting for approval|pending review|waiting for review/i.test(message);
-        if (!canTryDirectus) {
-          showLoginStatus(message, "error");
-          showBanner(message);
-          loginSubmitBtn.disabled = false;
-          loginSubmitBtn.textContent = originalLabel;
-          return;
-        }
-        showLoginStatus("Checking account approval...");
-      }
-      try {
         const data = await directusClient.loginWithPassword(loginEmailEl.value.trim(), loginPasswordEl.value);
         const profile = await contributorProfileForToken(data?.access_token, loginEmailEl.value.trim());
         if (isProfileBanned(profile)) {
@@ -14402,6 +14326,11 @@
           display_name: profile?.display_name || loginEmailEl.value.trim(),
           email: loginEmailEl.value.trim(),
           role: profile?.role_label || "Contributor",
+          approved: profile?.account_enabled !== false,
+          pending: false,
+          account_enabled: profile?.account_enabled !== false,
+          profile_status: profile?.profile_status || "hidden",
+          public_profile: profile?.public_profile === true,
           headline: profile?.headline || "",
           location_label: profile?.location_label || "",
           website_url: profile?.website_url || "",
@@ -14412,9 +14341,13 @@
           tokenExpires: data?.expires || null,
           profileId: profile?.id || null
         });
-        scheduleMemberProfileActivityTracking({ login: true, force: true });
+        await directusClient.ensureAuthSession({
+          requireAuth: true,
+          authExpiredMessage: "Login could not establish a secure contributor session. Please try again."
+        });
+        await recordDailyLoginReward();
         await ensureProfileStatsSynced();
-        await awardDailyLoginReward();
+        scheduleMemberProfileActivityTracking({ login: true, force: true });
         showLoginStatus("Logged in.", "success");
         showBanner("Logged in.");
         if (state.selectedSite?.slug) openSite(state.selectedSite.slug, { focus: false });
@@ -14550,8 +14483,26 @@
         scheduleMemberProfileActivityTracking({ force: true, throttleMs: 0 });
       } else {
         scheduleMemberProfileActivityTracking();
+        if (state.profile) {
+          state.profileActivitySynced = false;
+          ensureProfileStatsSynced().then(() => {
+            renderProfile();
+            renderRewards();
+          }).catch(() => null);
+        }
         refreshAndroidMapAfterSettle("android-app-visible");
       }
+    });
+    window.addEventListener("storage", event => {
+      if (!["nli-contributor-session", "nli-contributor-profile", "nli-mobile-profile"].includes(event.key || "")) return;
+      state.profile = loadProfile();
+      state.profileActivitySynced = false;
+      state.profileActivityCache = null;
+      renderProfile();
+      if (state.profile) ensureProfileStatsSynced().then(() => {
+        renderProfile();
+        renderRewards();
+      }).catch(() => null);
     });
     window.addEventListener("pagehide", () => {
       captureAndroidLifecycleSnapshot();
@@ -14622,6 +14573,17 @@
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
         });
         hideLoadingScreen();
+        window.NLI_RESEARCH_QUESTION_UTILS?.init?.({
+          platform: "mobile",
+          getIdentity: currentContributorIdentity,
+          getAccessToken: () => state.profile?.token || "",
+          isUiBusy: () => Boolean(
+            detailEl?.classList.contains("open")
+            || document.querySelector(".sheet.open")
+            || document.querySelector("#language-quiz-modal:not([hidden])")
+            || document.querySelector("#plant-photo-viewer:not([hidden])")
+          )
+        });
         if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {
           window.setTimeout(() => idleTask(refreshMobileSiteIconFieldsFromDirectus), 30000);
         }
