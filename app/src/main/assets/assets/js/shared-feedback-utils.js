@@ -3,6 +3,7 @@
   const SHARED_DIRECTUS = window.NLI_DIRECTUS_CLIENT || {};
   const HTML2CANVAS_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
   let html2canvasRuntimePromise = null;
+  const FEEDBACK_ENDPOINT = "https://nativelongisland.com/feedback-email.php";
 
   const PLATFORM_COPY = {
     desktop: {
@@ -69,7 +70,7 @@
     const profile = options.profile || null;
     const fallbackEmail = options.fallbackEmail || "";
     const payload = {
-      status: options.status || "approved",
+      status: options.status || "pending",
       public_activity: false,
       source_type: "feedback",
       source_slug: copy.slug,
@@ -89,10 +90,12 @@
   }
 
   async function submitFeedbackReview(record = {}, options = {}) {
-    const endpoint = new URL("feedback-email.php", window.location.href);
-    const response = await fetch(endpoint.toString(), {
+    const token = options.accessToken || "";
+    const response = await fetch(FEEDBACK_ENDPOINT, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: token
+        ? { "content-type": "application/json", authorization: `Bearer ${token}` }
+        : { "content-type": "application/json" },
       body: JSON.stringify({
         type: "feedback_submission",
         app_url: options.appUrl || window.location.href,
@@ -103,6 +106,27 @@
     const text = await response.text();
     const body = text ? JSON.parse(text) : null;
     if (!response.ok || body?.error) throw new Error(body?.error || `Feedback submission failed ${response.status}`);
+    return body;
+  }
+
+  async function submitResearchQuestion(question = {}, options = {}) {
+    const token = options.accessToken || "";
+    const response = await fetch(FEEDBACK_ENDPOINT, {
+      method: "POST",
+      headers: token
+        ? { "content-type": "application/json", authorization: `Bearer ${token}` }
+        : { "content-type": "application/json" },
+      body: JSON.stringify({
+        type: "research_question",
+        app_url: options.appUrl || window.location.href,
+        platform: options.platform || "desktop",
+        website: question.website || "",
+        record: question
+      })
+    });
+    const text = await response.text();
+    const body = text ? JSON.parse(text) : null;
+    if (!response.ok || body?.error) throw new Error(body?.error || `Question submission failed ${response.status}`);
     return body;
   }
 
@@ -195,8 +219,7 @@
     const id = record?.id || record?.data?.id || options.id;
     if (!id) return null;
     const directus = "https://directus.nativelongisland.com";
-    const endpoint = new URL("feedback-email.php", window.location.href);
-    const response = await fetch(endpoint.toString(), {
+    const response = await fetch(FEEDBACK_ENDPOINT, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -224,8 +247,7 @@
   async function sendAccountSignupEmail(record = {}, options = {}) {
     const id = record?.id || record?.data?.id || options.id;
     if (!id) return null;
-    const endpoint = new URL("feedback-email.php", window.location.href);
-    const response = await fetch(endpoint.toString(), {
+    const response = await fetch(FEEDBACK_ENDPOINT, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -253,8 +275,7 @@
   async function sendCommentSubmissionEmail(record = {}, options = {}) {
     const id = record?.id || record?.data?.id || options.id;
     if (!id) return null;
-    const endpoint = new URL("feedback-email.php", window.location.href);
-    const response = await fetch(endpoint.toString(), {
+    const response = await fetch(FEEDBACK_ENDPOINT, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -272,8 +293,7 @@
   }
 
   async function sendAccountInviteEmail(invite = {}, options = {}) {
-    const endpoint = new URL("feedback-email.php", window.location.href);
-    const response = await fetch(endpoint.toString(), {
+    const response = await fetch(FEEDBACK_ENDPOINT, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -297,8 +317,7 @@
   async function redeemAccountInviteCode(invite = {}, options = {}) {
     const code = String(invite.code || "").trim();
     if (!code) return null;
-    const endpoint = new URL("feedback-email.php", window.location.href);
-    const response = await fetch(endpoint.toString(), {
+    const response = await fetch(FEEDBACK_ENDPOINT, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -324,6 +343,7 @@
     loadHtml2canvasRuntime,
     uploadFeedbackScreenshot,
     submitFeedbackReview,
+    submitResearchQuestion,
     sendFeedbackReviewEmail,
     sendAccountSignupEmail,
     sendCommentSubmissionEmail,

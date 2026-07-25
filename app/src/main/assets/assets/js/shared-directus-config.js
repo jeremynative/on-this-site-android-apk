@@ -4,9 +4,8 @@
   }
 
   const profileFields = fields([
-    "id", "username", "display_name", "slug", "role_label", "headline", "bio", "location_label", "website_url", "avatar", "joined_at",
-    "public_profile", "profile_status", "account_enabled", "account_banned", "ban_reason",
-    "is_monthly_supporter", "support_started_at", "support_monthly_amount"
+    "id", "display_name", "slug", "role_label", "headline", "bio", "location_label", "website_url", "avatar", "joined_at",
+    "public_profile", "profile_status", "account_enabled", "account_banned", "is_monthly_supporter"
   ]);
 
   const publicVisitFields = fields(["id", "member_profile", "site", "site_slug", "site_title", "visited_at", "distance_miles", "public_activity"]);

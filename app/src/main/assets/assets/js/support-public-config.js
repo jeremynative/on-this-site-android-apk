@@ -1,6 +1,6 @@
 (function () {
   const workerUrl = "https://on-this-site-support.onthissiteny.workers.dev";
-  const publishableKey = "";
+  const publishableKey = "pk_live_51TZGQxAkpq699T4Icb8edN1IFX44qqq3aeLuKrqgLH6Ga0XlrLJIqM76Edp8w5jvCCldfXPEfGHmpSf4VcnQ8eSs00lsCYoXSn";
   const endpoint = workerUrl.replace(/\/+$/, "");
   window.NLI_SUPPORT_CONFIG = {
     ...(window.NLI_SUPPORT_CONFIG || {}),

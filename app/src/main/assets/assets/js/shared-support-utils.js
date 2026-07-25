@@ -74,6 +74,7 @@
       note: cleanText(form.querySelector("[data-support-note]")?.value, 1000),
       connection: cleanText(form.querySelector("[data-support-connection]")?.value, 500),
       artworkTitle: cleanText(form.querySelector("[data-support-artwork-title]")?.value, 180),
+      researchQuestionId: cleanText(form.querySelector("[data-support-research-question-id]")?.value, 120),
       sourceUrl: pageUrl,
       createdAt: new Date().toISOString()
     };
@@ -355,7 +356,7 @@
     return sanitized;
   }
 
-  async function completeEmbeddedCheckout(form) {
+  async function completeEmbeddedCheckout(form, options = {}) {
     if (!form) return false;
     const checkout = form.__supportEmbeddedCheckout;
     form.__supportEmbeddedCheckout = null;
@@ -382,13 +383,15 @@
       status.textContent = "Payment approved. Thank you for supporting On This Site.";
       status.className = "form-status success";
     }
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.set("page", "support");
-      url.searchParams.set("support", "success");
-      window.history?.replaceState?.(window.history.state, "", url.toString());
-    } catch {
-      // The in-panel thank-you state is enough if the URL cannot be updated.
+    if (options.updateUrl !== false) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set("page", "support");
+        url.searchParams.set("support", "success");
+        window.history?.replaceState?.(window.history.state, "", url.toString());
+      } catch {
+        // The in-panel thank-you state is enough if the URL cannot be updated.
+      }
     }
     return true;
   }
@@ -430,7 +433,7 @@
           container.innerHTML = "";
           let checkout;
           const handleComplete = async () => {
-            await completeEmbeddedCheckout(form);
+            await completeEmbeddedCheckout(form, options);
             if (typeof options.onComplete === "function") options.onComplete(form);
           };
           checkout = await stripe.initEmbeddedCheckout({
@@ -441,8 +444,14 @@
           form.__supportEmbeddedCheckout = checkout;
           return { embedded: true, clientSecret: data.clientSecret };
         } catch (error) {
+          if (options.redirectFallback === false) {
+            throw new Error("The secure payment form could not load here. Please try again.");
+          }
           console.warn("Embedded checkout unavailable; falling back to redirect checkout.", error);
         }
+      }
+      if (options.redirectFallback === false) {
+        throw new Error("The secure payment form could not load here. Please try again.");
       }
       const data = await createSession(false);
       if (!data.url) throw new Error(data.message || "Payment checkout could not start.");

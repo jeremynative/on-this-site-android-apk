@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260724-apk-daily-promos-r2";
+const expectedBuild = "20260725-offline-startup-r1";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -99,6 +99,13 @@ requireText("&refresh=", "Android shell must use a refresh token when loading th
 requireText("Cache-Control", "Android shell must request a fresh copy of the mobile web app.");
 requireText("shouldInterceptRequest", "Android shell must be able to serve the bundled app fallback inside the APK WebView.");
 requireText("loadBundledFallback", "Android shell must keep the bundled archive as a fallback path.");
+if (!manifest.includes("ACCESS_NETWORK_STATE")) {
+  throw new Error("Android shell must be able to detect a true offline launch.");
+}
+requireText("hasUsableNetwork()", "Android shell must route no-network launches directly to the bundled archive.");
+requireText("APP_READINESS_MAX_ATTEMPTS", "Android shell must wait for usable content instead of accepting an empty title shell.");
+requireText("document.querySelector('.offline-map-index')", "Android readiness must verify that the offline place index rendered.");
+requireText("app-readiness-timeout", "Android shell must fall back when the live page never produces usable content.");
 requireText("if (!loadingBundledFallback) return null;", "Android live mode must use deployed assets instead of stale APK-packaged site data.");
 requireText("onReceivedHttpError", "Android shell must fall back when the live mobile archive returns an HTTP error.");
 requireText("isSiteGroundChallengeUrl", "Android shell must detect SiteGround challenge redirects and use the bundled fallback.");
@@ -559,7 +566,7 @@ requireBundledText('searchDataVersion: 0', "Bundled Android app must track searc
 requireBundledText('lastSearchDataVersion: -1', "Bundled Android app must remember the last processed search data version.");
 requireBundledText('state.searchDataVersion += 1;', "Bundled Android app must mark rebuilt site data for search refresh.");
 requireBundledText('value === state.lastSearchValue && state.lastSearchDataVersion === state.searchDataVersion', "Bundled Android app must not skip same-text searches after data changes.");
-requireBundledPattern(/const\s+startupLandMask\s*=\s*ensureLandMask\(\);[\s\S]*?await\s+loadData\(\);[\s\S]*?await\s+startupLandMask;[\s\S]*?prepareSites\(\);/, "Bundled Android app must apply the land mask before preparing searchable site data.");
+requireBundledPattern(/const\s+startupLandMask\s*=\s*isOfflineTextMode\(\)\s*\?\s*Promise\.resolve\(null\)\s*:\s*ensureLandMask\(\);[\s\S]*?await\s+loadData\(\);[\s\S]*?await\s+startupLandMask;[\s\S]*?prepareSites\(\);/, "Bundled Android app must skip the network land mask offline while retaining the normal startup order online.");
 requireBundledText('enterkeyhint="search"', "Bundled Android app must request the Android keyboard search action.");
 requireBundledText('autocomplete="off"', "Bundled Android app must keep the mobile search input from fighting app results.");
 requireBundledText('function openMobileSearchResultsPage()', "Bundled Android app must include an explicit mobile search results page.");

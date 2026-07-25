@@ -94,6 +94,42 @@
     return target;
   }
 
+  function mergeStoryRecords(current = [], remote = [], options = {}) {
+    const now = Number(options.now || Date.now());
+    const localGraceMs = Math.max(0, Number(options.localGraceMs || 2 * 60 * 1000));
+    const remoteById = new Map();
+    (remote || []).filter(Boolean).forEach(story => {
+      const id = String(story.id || "");
+      if (id) remoteById.set(id, story);
+    });
+    const merged = Array.from(remoteById.values());
+    const mergedIds = new Set(remoteById.keys());
+
+    (current || []).filter(Boolean).forEach(story => {
+      const id = String(story.id || "");
+      if (id && mergedIds.has(id)) return;
+      const createdAt = Date.parse(story.created_at || "") || 0;
+      const pendingUntil = Number(story._pendingServerSyncUntil || 0);
+      const locallyRecent = Boolean(
+        story._pendingServerSync
+        || id.startsWith("local-")
+        || pendingUntil > now
+        || (createdAt && now - createdAt <= localGraceMs)
+      );
+      if (locallyRecent && isActive(story, [], options)) merged.push(story);
+    });
+
+    return merged.map(story => {
+      const id = String(story.id || "");
+      if (!id || !remoteById.has(id)) return story;
+      const previous = (current || []).find(item => String(item?.id || "") === id);
+      const next = { ...(previous || {}), ...story };
+      delete next._pendingServerSync;
+      delete next._pendingServerSyncUntil;
+      return next;
+    });
+  }
+
   function authorName(story, fallback = "Contributor") {
     return story?.author_name || fallback;
   }
@@ -128,6 +164,7 @@
     memberVoteKey,
     hasVisitorVote,
     hasMemberVote,
+    mergeStoryRecords,
     mergeVoteRecords,
     authorName,
     quotedText,

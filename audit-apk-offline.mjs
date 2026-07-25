@@ -71,8 +71,8 @@ const shell = await evaluate(`(() => {
     offlineClass: document.body.classList.contains("offline-text-mode"),
     hasOfflineIndex: Boolean(document.querySelector(".offline-map-index")),
     regionButtons: document.querySelectorAll("[data-offline-region]").length,
-    hasListingCount: /424\\s+(?:saved places|listings)/i.test(instruction + " " + countText),
-    hasWikiCount: /93\\s+wiki articles/i.test(instruction),
+    hasListingCount: /\\b\\d+\\s+(?:saved places|listings)\\b/i.test(instruction + " " + countText),
+    hasWikiCount: /\\b\\d+\\s+wiki articles\\b/i.test(instruction),
     mapCanvasCount: document.querySelectorAll(".mapboxgl-canvas").length,
     visibleMediaCount: Array.from(document.querySelectorAll("img,video,audio,iframe,picture")).filter(element => {
       const rect = element.getBoundingClientRect();

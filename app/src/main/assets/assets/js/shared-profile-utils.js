@@ -858,6 +858,56 @@
     return target;
   }
 
+  async function syncLanguageAttempt(options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    const profile = options.profile;
+    const profileId = Number(options.profileId);
+    const contentKey = options.contentKey;
+    const word = options.word || {};
+    if (!profile?.id || !profileId || Number(relationId(profile.id)) !== profileId) return;
+
+    const payload = languageAttemptPayload(profileId, contentKey, word, { correct: options.correct });
+    if (!payload) return;
+
+    const dateKey = String(payload.answered_at || "").slice(0, 10);
+    const existing = typeof options.refreshRemoteAttempt === "function"
+      ? await options.refreshRemoteAttempt(profileId, contentKey, word.id, dateKey).catch(() => null)
+      : null;
+    const existsRemotely = existing || (
+      typeof options.remoteAttemptExists === "function" &&
+      options.remoteAttemptExists(profileId, contentKey, word.id)
+    );
+    if (existsRemotely) {
+      const record = existing || (options.attempts || []).find(item =>
+        Number(relationId(item.member_profile)) === profileId &&
+        String(item.content_key || "") === String(contentKey || "") &&
+        String(item.word_id || "") === String(word.id || "") &&
+        String(item.answered_at || "").slice(0, 10) === dateKey
+      );
+      const pointEvent = typeof options.recordPointForAttempt === "function"
+        ? await options.recordPointForAttempt(profileId, contentKey, word, record)
+        : null;
+      return record ? { ...record, _existingAttempt: true, _languagePointEvent: pointEvent || null } : null;
+    }
+
+    if (typeof options.commitEngagementAction !== "function") {
+      throw new Error("Language progress synchronization is not configured.");
+    }
+    const committed = await options.commitEngagementAction("vocab_guess", payload);
+    const record = committed?.source || null;
+    if (!record) throw new Error("Language progress could not be confirmed.");
+    const pointEvent = committed?.data || null;
+    if (typeof options.refreshRemotePointEvents === "function") {
+      await options.refreshRemotePointEvents(profileId).catch(() => []);
+    }
+    // A replica/cache can briefly return the pre-write ledger. Keep the
+    // server-confirmed event authoritative so the visible total never rolls back.
+    if (pointEvent && typeof options.mergePointEventRecords === "function") {
+      options.mergePointEventRecords([pointEvent]);
+    }
+    return { ...record, _createdAttempt: true, _languagePointEvent: pointEvent || null };
+  }
+
   function uniqueVisitRecords(visits = []) {
     const uniqueVisits = new Map();
     (visits || []).forEach(visit => {
@@ -1564,6 +1614,7 @@
     languageWordForText,
     languageAttemptPayload,
     mergeLanguageAttemptRecords,
+    syncLanguageAttempt,
     isPublishedPublicSite,
     publicVisitAccessStatus,
     isEligiblePublicVisitSite,

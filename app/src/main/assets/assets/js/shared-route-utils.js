@@ -22,6 +22,7 @@
 
   function listingSlugAlias(slug) {
     return ({
+      montaukett: "montaukett-ancestral-land",
       nissaquogues: "nissaquogue",
       setaukets: "setauket-ancestral-land"
     })[slug] || slug || "";
@@ -55,7 +56,7 @@
         const allowedHost = options.allowedHostPattern || /(^|\.)nativelongisland\.com$/i;
         if (!allowedHost.test(parsed.hostname)) return "";
         const siteParam = parsed.searchParams.get("site");
-        if (siteParam) return normalize(`#listing/${decodeSlug(siteParam)}`);
+        if (siteParam) return normalize(`#listing/${listingSlugAlias(decodeSlug(siteParam))}`);
         const wikiParam = parsed.searchParams.get("wiki");
         if (wikiParam) return normalize(`#wiki/${decodeSlug(wikiParam)}`);
         const pageParam = parsed.searchParams.get("page");
@@ -67,7 +68,7 @@
     const wikiSlug = slugFromWikiUrl(href);
     if (wikiSlug) return normalize(`#wiki/${wikiSlug}`);
     const listingSlug = slugFromListingUrl(href);
-    if (listingSlug) return normalize(`#listing/${listingSlug}`);
+    if (listingSlug) return normalize(`#listing/${listingSlugAlias(listingSlug)}`);
     const pageSlug = slugFromPageUrl(href, options);
     if (!pageSlug) return "";
     if (typeof options.isBlogSlug === "function" && options.isBlogSlug(pageSlug)) return normalize(`#blog/${pageSlug}`);

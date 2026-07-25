@@ -49,12 +49,87 @@
       .filter(event => event.title && event.center);
   }
 
+  function onThisDayNumber(date = new Date()) {
+    const day = Number(date?.getDate?.());
+    return Number.isFinite(day) && day >= 1 && day <= 31 ? String(day) : "";
+  }
+
+  function onThisDayCalendarMarkup(date = new Date()) {
+    return `<span class="on-this-day-badge" aria-hidden="true"><span class="on-this-day-badge-date">${onThisDayNumber(date)}</span></span>`;
+  }
+
+  function roundedRectPath(context, x, y, width, height, radius) {
+    const safeRadius = Math.max(0, Math.min(radius, width / 2, height / 2));
+    context.beginPath();
+    context.moveTo(x + safeRadius, y);
+    context.lineTo(x + width - safeRadius, y);
+    context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+    context.lineTo(x + width, y + height - safeRadius);
+    context.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+    context.lineTo(x + safeRadius, y + height);
+    context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+    context.lineTo(x, y + safeRadius);
+    context.quadraticCurveTo(x, y, x + safeRadius, y);
+    context.closePath();
+  }
+
+  function addOnThisDayMapImage(map, id = "on-this-day-calendar", date = new Date()) {
+    if (!map?.addImage || map.hasImage?.(id) || typeof document === "undefined") return false;
+    const pixelRatio = 2;
+    const size = 38;
+    const canvas = document.createElement("canvas");
+    canvas.width = size * pixelRatio;
+    canvas.height = size * pixelRatio;
+    const context = canvas.getContext("2d");
+    if (!context) return false;
+    context.scale(pixelRatio, pixelRatio);
+
+    context.shadowColor = "rgba(23, 38, 29, 0.28)";
+    context.shadowBlur = 4;
+    context.shadowOffsetY = 2;
+    context.fillStyle = "#fbf7e9";
+    context.strokeStyle = "#315c48";
+    context.lineWidth = 2;
+    roundedRectPath(context, 4, 5, 30, 29, 5);
+    context.fill();
+    context.shadowColor = "transparent";
+    context.stroke();
+
+    context.save();
+    roundedRectPath(context, 4, 5, 30, 29, 5);
+    context.clip();
+    context.fillStyle = "#315c48";
+    context.fillRect(4, 5, 30, 8);
+    context.restore();
+
+    context.strokeStyle = "#315c48";
+    context.lineWidth = 2;
+    context.lineCap = "round";
+    [12, 26].forEach(x => {
+      context.beginPath();
+      context.moveTo(x, 3);
+      context.lineTo(x, 8);
+      context.stroke();
+    });
+
+    context.fillStyle = "#315c48";
+    context.font = "700 15px Arial, sans-serif";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(onThisDayNumber(date), 19, 24);
+    map.addImage(id, context.getImageData(0, 0, canvas.width, canvas.height), { pixelRatio });
+    return true;
+  }
+
   window.NLI_CALENDAR_UTILS = {
+    addOnThisDayMapImage,
     eventTypeLabel,
     eventDateRange,
     exhibitDateLabel: eventDateRange,
     isCalendarEventActive,
     isExhibitActive: isCalendarEventActive,
-    normalizeCalendarEvents
+    normalizeCalendarEvents,
+    onThisDayCalendarMarkup,
+    onThisDayNumber
   };
 }());

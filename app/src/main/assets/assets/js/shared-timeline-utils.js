@@ -29,18 +29,26 @@
       .replace(/\[(\d+)(?:[.)])?\s+([^\]]{8,500})\]/gi, "");
   }
 
+  function sourceUrl(event = {}) {
+    const value = String(event.research_source_url || event.source_url || "").trim();
+    return /^https?:\/\/\S+$/i.test(value) ? value : "";
+  }
+
   function sourceText(event = {}, options = {}) {
     const citation = cleanText(options, event.citation || "");
-    if (citation) return citation;
     const excerpt = cleanText(options, event.source_excerpt || "");
-    if (excerpt) return excerpt.length > 240 ? `${excerpt.slice(0, 237).trim()}...` : excerpt;
     const footnotes = footnoteSources(event, options);
-    if (footnotes) return footnotes;
     const section = cleanText(options, event.source_section || "");
     const source = cleanText(options, event.source_title || "");
-    if (source && section) return `${source} - ${section}`;
-    if (source) return `Connected source: ${source}`;
-    return options.fallback || "Source details are being restored for this historic moment.";
+    const reference = citation ||
+      (excerpt ? (excerpt.length > 240 ? `${excerpt.slice(0, 237).trim()}...` : excerpt) : "") ||
+      footnotes ||
+      (source && section ? `${source} - ${section}` : "") ||
+      (source ? `Connected source: ${source}` : "") ||
+      options.fallback ||
+      "Source details are being restored for this historic moment.";
+    const url = sourceUrl(event);
+    return url && !reference.includes(url) ? `${reference}\n${url}` : reference;
   }
 
   function periodLabel(period) {
@@ -388,6 +396,7 @@
   window.NLI_TIMELINE_UTILS = {
     footnoteSources,
     displayDescription,
+    sourceUrl,
     sourceText,
     periodLabel,
     rangeLabel,

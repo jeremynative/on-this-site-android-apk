@@ -11,9 +11,15 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.Log;
@@ -58,7 +64,10 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260724-apk-daily-promos-r2";
+    static final String APP_VERSION = "20260725-offline-startup-r1";
+    private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 20000;
+    private static final long APP_READINESS_RETRY_DELAY_MS = 350;
+    private static final int APP_READINESS_MAX_ATTEMPTS = 60;
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
@@ -86,6 +95,13 @@ public class MainActivity extends Activity {
     private long webTouchStartedAt;
     private boolean loadingBundledFallback;
     private boolean appShellLoaded;
+    private int appReadinessProbeAttempts;
+    private final Handler startupHandler = new Handler(Looper.getMainLooper());
+    private final Runnable startupFallback = () -> {
+        if (webView != null && !appShellLoaded && !loadingBundledFallback) {
+            loadBundledFallback("live-startup-timeout");
+        }
+    };
     Uri lastStoryVideoUri;
     String lastStoryVideoMimeType = "video/webm";
 
@@ -260,13 +276,14 @@ public class MainActivity extends Activity {
             }
         });
 
-        if (savedInstanceState != null) {
+        if (savedInstanceState != null && hasUsableNetwork()) {
             restorePendingPlantCameraUri();
             android.webkit.WebBackForwardList restoredState = webView.restoreState(savedInstanceState);
             lastRefreshAt = System.currentTimeMillis();
             suppressResumeRefreshAfterPermissionPrompt();
             if (restoredState != null && restoredState.getSize() > 0) {
-                appShellLoaded = true;
+                appShellLoaded = false;
+                scheduleLiveStartupFallback();
             } else {
                 Log.w(LOG_TAG, "Saved WebView state was empty after restore; loading app shell.");
                 refreshApp();
@@ -291,6 +308,7 @@ public class MainActivity extends Activity {
     }
 
     private void hideLoadingCover() {
+        startupHandler.removeCallbacks(startupFallback);
         if (loadingCover == null || loadingCover.getVisibility() != View.VISIBLE) return;
         loadingCover.animate()
             .alpha(0f)
@@ -410,21 +428,51 @@ public class MainActivity extends Activity {
     }
 
     private void validateLoadedAppShell(String url) {
+        appReadinessProbeAttempts = 0;
+        probeLoadedAppReadiness(url);
+    }
+
+    private void probeLoadedAppReadiness(String url) {
         if (webView == null) return;
         webView.evaluateJavascript(
-            "(function(){try{var hasShell=!!(document.getElementById('map')||document.querySelector('.app')||document.querySelector('.mobile-app')||document.querySelector('[data-mobile-app]'));var text=(document.body&&document.body.innerText||'').slice(0,240);return hasShell||/On This Site|listings loaded|Search/i.test(text)?'ready':'empty';}catch(error){return 'empty:'+String(error&&error.message||error);}})();",
+            "(function(){try{"
+                + "var shell=!!(document.getElementById('map')&&document.querySelector('.app'));"
+                + "var loader=document.getElementById('loading-screen');"
+                + "var loaderHidden=!loader||loader.hidden||loader.classList.contains('hidden');"
+                + "var offline=document.body&&document.body.classList.contains('offline-text-mode');"
+                + "var offlineReady=offline&&!!document.querySelector('.offline-map-index')&&!!document.querySelector('.site-card[data-slug],.site-card[data-wiki-slug]');"
+                + "var onlineReady=!offline&&loaderHidden&&!!document.querySelector('.site-card[data-slug],.site-card[data-wiki-slug]')&&!!document.querySelector('#map');"
+                + "return offlineReady||onlineReady?'ready':shell?'starting':'empty';"
+                + "}catch(error){return 'empty:'+String(error&&error.message||error);}})();",
             value -> {
                 if (BuildConfig.DEBUG) logLoadedAppState();
-                if (value == null || !value.contains("ready")) {
-                    Log.w(LOG_TAG, "WebView finished without archive UI: " + url);
-                    if (!loadingBundledFallback && isNativeLongIslandUrl(url)) {
-                        loadBundledFallback("empty-app-shell");
-                        return;
-                    }
+                if (value != null && value.contains("ready")) {
+                    appShellLoaded = true;
+                    applyApkTimelineTrayFix();
+                    dispatchPendingPlantPhoto();
+                    hideLoadingCover();
+                    return;
                 }
-                appShellLoaded = true;
-                applyApkTimelineTrayFix();
-                dispatchPendingPlantPhoto();
+
+                if (value != null
+                    && value.contains("starting")
+                    && appReadinessProbeAttempts < APP_READINESS_MAX_ATTEMPTS) {
+                    appReadinessProbeAttempts += 1;
+                    startupHandler.postDelayed(
+                        () -> probeLoadedAppReadiness(url),
+                        APP_READINESS_RETRY_DELAY_MS
+                    );
+                    return;
+                }
+
+                Log.w(LOG_TAG, "WebView did not produce usable archive content: " + url + " probe=" + value);
+                if (!loadingBundledFallback && isNativeLongIslandUrl(url)) {
+                    loadBundledFallback("app-readiness-timeout");
+                    return;
+                }
+
+                // Reveal the bundled page's own error state instead of leaving
+                // visitors trapped behind the native title cover.
                 hideLoadingCover();
             }
         );
@@ -434,6 +482,31 @@ public class MainActivity extends Activity {
         if (url == null) return false;
         Uri uri = Uri.parse(url);
         return "nativelongisland.com".equalsIgnoreCase(uri.getHost());
+    }
+
+    private boolean hasUsableNetwork() {
+        ConnectivityManager manager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (manager == null) return false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Network network = manager.getActiveNetwork();
+            if (network == null) return false;
+            NetworkCapabilities capabilities = manager.getNetworkCapabilities(network);
+            return capabilities != null
+                && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                && (
+                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                    || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                    || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                    || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                );
+        }
+        NetworkInfo networkInfo = manager.getActiveNetworkInfo();
+        return networkInfo != null && networkInfo.isConnected();
+    }
+
+    private void scheduleLiveStartupFallback() {
+        startupHandler.removeCallbacks(startupFallback);
+        startupHandler.postDelayed(startupFallback, LIVE_STARTUP_FALLBACK_DELAY_MS);
     }
 
     private String androidApkStartupScript() {
@@ -707,10 +780,17 @@ public class MainActivity extends Activity {
         lastRefreshAt = System.currentTimeMillis();
         appShellLoaded = false;
         loadingBundledFallback = false;
+        appReadinessProbeAttempts = 0;
+        startupHandler.removeCallbacks(startupFallback);
+        if (!hasUsableNetwork()) {
+            loadBundledFallback("offline-at-launch");
+            return;
+        }
         String url = freshAppUrl();
         Map<String, String> headers = new HashMap<>();
         headers.put("Cache-Control", "no-cache");
         webView.loadUrl(url, headers);
+        scheduleLiveStartupFallback();
     }
 
     private boolean shouldIgnoreLifecycleMainFrameReload(String reason) {
@@ -723,7 +803,9 @@ public class MainActivity extends Activity {
 
     private void loadBundledFallback(String reason) {
         if (webView == null || loadingBundledFallback) return;
+        startupHandler.removeCallbacks(startupFallback);
         loadingBundledFallback = true;
+        appReadinessProbeAttempts = 0;
         Log.w(LOG_TAG, "Loading bundled mobile archive fallback: " + reason);
         webView.stopLoading();
         String appUrl = freshAppUrl();
@@ -855,6 +937,12 @@ public class MainActivity extends Activity {
             webView.onPause();
         }
         super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        startupHandler.removeCallbacksAndMessages(null);
+        super.onDestroy();
     }
 
     @Override

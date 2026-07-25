@@ -271,6 +271,22 @@
       `;
   }
 
+  function sourceReferenceTextHtml(value, options = {}) {
+    const escape = options.escapeHtml || (text => String(text ?? ""));
+    const text = String(value || "");
+    const urlPattern = /(https?:\/\/[^\s<>"']+)/gi;
+    let cursor = 0;
+    let html = "";
+    for (const match of text.matchAll(urlPattern)) {
+      html += escape(text.slice(cursor, match.index)).replace(/\r?\n/g, "<br>");
+      const url = match[0];
+      html += `<a class="timeline-source-link" href="${escape(url)}" target="_blank" rel="noreferrer">${escape(url)}</a>`;
+      cursor = Number(match.index) + url.length;
+    }
+    html += escape(text.slice(cursor)).replace(/\r?\n/g, "<br>");
+    return html;
+  }
+
   function sourcesEvidenceHtml(item = {}, options = {}) {
     const escape = options.escapeHtml || (value => String(value ?? ""));
     const sources = Array.isArray(options.sources) ? options.sources : sourceReferences(item);
@@ -305,6 +321,7 @@
     publicFacingWorkflowTextCleanup,
     sourceReferences,
     sourceReferenceHtml,
+    sourceReferenceTextHtml,
     sourcesEvidenceHtml,
     shouldRenderSectionTimeline,
     cleanHtml

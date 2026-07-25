@@ -567,7 +567,7 @@
     const SITE_SUGGESTION_FIELDS = SHARED_FIELDS.siteSuggestion;
     const ACCOUNT_REGISTRATION_FIELDS = [
       "id", "email", "email_normalized", "display_name", "status", "account_enabled", "account_banned",
-      "review_note", "created_at", "date_created", "reviewed_at"
+      "review_note", "created_at", "reviewed_at"
     ].join(",");
     const LANGUAGE_PROGRESS_FIELDS = SHARED_FIELDS.languageProgress;
     const LOGIN_REWARD_FIELDS = SHARED_FIELDS.loginReward;
@@ -1695,14 +1695,14 @@
     function decodeImportedText(value) {
       const textarea = document.createElement("textarea");
       textarea.innerHTML = String(value || "")
-        .replace(/Ãƒâ€šÃ‚Â /g, " ")
-        .replace(/Ãƒâ€š/g, "")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢|&#8217;|&rsquo;/g, "'")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“|&#8216;|&lsquo;/g, "'")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8220;|&ldquo;/g, "\"")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8221;|&rdquo;/g, "\"")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“|&#8211;/g, "-")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â|&#8212;/g, "-")
+        .replace(/Ã‚Â /g, " ")
+        .replace(/Ã‚/g, "")
+        .replace(/Ã¢â‚¬â„¢|&#8217;|&rsquo;/g, "'")
+        .replace(/Ã¢â‚¬Ëœ|&#8216;|&lsquo;/g, "'")
+        .replace(/Ã¢â‚¬Å“|&#8220;|&ldquo;/g, "\"")
+        .replace(/Ã¢â‚¬Â|&#8221;|&rdquo;/g, "\"")
+        .replace(/Ã¢â‚¬â€œ|&#8211;/g, "-")
+        .replace(/Ã¢â‚¬â€|&#8212;/g, "-")
         .replace(/&nbsp;/gi, " ");
       return textarea.value.replace(/\s+/g, " ").trim();
     }
@@ -3237,7 +3237,7 @@
       state.publicVisits = preserveActiveProfileRows(visitsResponse.data, state.publicVisits);
       state.siteSuggestions = preserveActiveProfileRows(suggestionsResponse.data, state.siteSuggestions, ["author_profile"]);
       state.accountRegistrations = registrationsResponse.data || [];
-      state.mapStories = storyResponse.data || [];
+      state.mapStories = MAP_STORY_UTILS.mergeStoryRecords(state.mapStories, storyResponse.data || []);
       state.mapStoryVotes = storyVotesResponse.data || [];
       state.languageQuizAttempts = preserveActiveProfileRows(languageResponse.data, state.languageQuizAttempts);
       state.profileFollows = preserveActiveProfileRows(followsResponse.data, state.profileFollows, ["follower_profile", "following_profile"]);
@@ -3355,14 +3355,14 @@
       state.profileFollows = preserveActiveProfileRows(followsResponse.data, state.profileFollows, ["follower_profile", "following_profile"]);
       state.profileLoginRewards = preserveActiveProfileRows(loginRewardsResponse.data, state.profileLoginRewards);
       state.profileActivityCache = null;
+      // Admin-only review data is useful in the account sheet, but it must not
+      // leave an otherwise healthy contributor profile in a permanent loading state.
       state.profileActivitySynced = allResponsesFresh([
         profilesResponse,
         commentsResponse,
         commentVotesResponse,
         pointEventsResponse,
         visitsResponse,
-        suggestionsResponse,
-        registrationsResponse,
         languageResponse,
         followsResponse,
         loginRewardsResponse
@@ -3418,7 +3418,7 @@
           fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 0, fresh: true }).catch(() => ({ data: state.mapStories || [] })),
           fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 0, fresh: true }).catch(() => ({ data: state.mapStoryVotes || [] }))
         ]);
-        state.mapStories = storyResponse.data || state.mapStories || [];
+        state.mapStories = MAP_STORY_UTILS.mergeStoryRecords(state.mapStories, storyResponse.data || []);
         state.mapStoryVotes = voteResponse.data || state.mapStoryVotes || [];
         syncMapStoryMarkers();
         if (activitySheetEl?.classList.contains("open")) renderMobileActivitySheet();
@@ -6646,6 +6646,8 @@
         state.mapStories.push({
           id: created.data?.id || `local-${Date.now()}`,
           ...payload,
+          _pendingServerSync: true,
+          _pendingServerSyncUntil: Date.now() + 2 * 60 * 1000,
           status: created.data?.status || "active",
           member_profile: profile?.id || null,
           author_name: profile?.display_name || state.profile?.display_name || state.profile?.email || "Contributor",
@@ -6658,6 +6660,7 @@
         });
         mapStorySheetEl.classList.remove("open");
         syncMapStoryMarkers();
+        refreshMapStories();
         if (activitySheetEl?.classList.contains("open")) renderMobileActivitySheet();
         updateMobileActivityUnreadBadge();
         showBanner(attachedSite ? `Story attached to ${attachedSite.title}.` : "Story added to the map.");
@@ -7348,7 +7351,7 @@
             const confidence = Number(match?.confidence || 0);
             const score = confidence ? `${Math.round(confidence * 100)}%` : "score unavailable";
             const source = match?.source || "Pl@ntNet";
-            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} Â· ${escapeHtml(source)}</em></div>`;
+            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} · ${escapeHtml(source)}</em></div>`;
           }).join("")}</div>`
         : "";
       const exactWarning = analysis?.safetyWarning || "Automated plant identification can be wrong. Verify with a field guide or expert before touching, eating, or using any plant.";
@@ -9058,7 +9061,7 @@
       const candidates = [place.place, place.label].filter(Boolean);
       for (const candidate of candidates) {
         let text = stripHtml(candidate)
-          .replace(/^\s*\d{3,4}\s*[-â€“â€”]\s*/g, "")
+          .replace(/^\s*\d{3,4}\s*[-–—]\s*/g, "")
           .replace(/\([^)]*\)/g, " ")
           .replace(/\s+/g, " ")
           .trim();
@@ -11850,10 +11853,10 @@
           </div>
         ` : `<p class="summary">Add a biography and website so people can learn more from your profile.</p>`}
         <div class="profile-stats">
-          <div class="profile-stat"><strong>${escapeHtml(String(totalPoints))}</strong><span class="detail-meta">profile points</span></div>
-          <div class="profile-stat"><strong>${visits.length}</strong><span class="detail-meta">${escapeHtml(publicSiteCount ? `of ${publicSiteCount} places` : "places visited")}</span></div>
-          <div class="profile-stat"><strong>${comments.length}</strong><span class="detail-meta">community notes</span></div>
-          <div class="profile-stat"><strong>${loginRewards.currentStreak}</strong><span class="detail-meta">day streak</span></div>
+          <button class="profile-stat" type="button" data-show-mobile-profile-progress aria-expanded="false"><strong>${escapeHtml(String(totalPoints))}</strong><span class="detail-meta">profile points</span></button>
+          <button class="profile-stat" type="button" data-show-mobile-profile-progress aria-expanded="false"><strong>${visits.length}</strong><span class="detail-meta">${escapeHtml(publicSiteCount ? `of ${publicSiteCount} places` : "places visited")}</span></button>
+          <button class="profile-stat" type="button" data-show-mobile-profile-progress aria-expanded="false"><strong>${comments.length}</strong><span class="detail-meta">community notes</span></button>
+          <button class="profile-stat" type="button" data-show-mobile-profile-progress aria-expanded="false"><strong>${loginRewards.currentStreak}</strong><span class="detail-meta">day streak</span></button>
         </div>
         ${stats.pointsSyncing ? `<p class="detail-meta">Refreshing latest point activity...</p>` : ""}
         ${showProgress ? mobileContributorTierProgressHtml(stats) : ""}
@@ -11861,7 +11864,7 @@
         ${mobileProfileTrackersHtml(activeProfile, stats)}
         <p class="detail-meta">${escapeHtml(visitProgress)}</p>
         ${showProgress ? `<p class="detail-meta">Daily signed-in visit: +1 point after 24 hours${loginRewards.bestStreak ? ` - best streak ${loginRewards.bestStreak}` : ""}. Language points: ${languagePoints}.</p>` : `<p class="detail-meta">Points and streaks unlock after this contributor account is approved.</p>`}
-        ${showProgress ? mobileProfilePointsBreakdownHtml(stats) : ""}
+        ${showProgress ? mobileProfilePointsBreakdownHtml(stats, activeProfile, true) : ""}
         ${mobileAccountInviteHtml(activeProfile)}
         ${mobileProfileActivityFeedHtml(activeProfile)}
         ${mobileProfileLanguageHtml(activeProfile, true)}
@@ -12094,7 +12097,7 @@
         <div class="profile-badges" aria-label="Profile badges">
           ${badges.map(badge => badge.type === "language"
             ? `<button class="profile-badge profile-badge-button" type="button" data-show-profile-language aria-expanded="false">${escapeHtml(badge.label)}</button>`
-            : `<span class="profile-badge">${escapeHtml(badge.label)}</span>`).join("")}
+            : `<button class="profile-badge profile-badge-button" type="button" data-show-mobile-profile-progress aria-expanded="false">${escapeHtml(badge.label)}</button>`).join("")}
         </div>
       ` : "";
     }
@@ -12104,7 +12107,7 @@
       const rows = PROFILE_UTILS.profileTrackerRowsFromStats(stats);
       return rows.length ? `
         <div class="profile-trackers" aria-label="Profile trackers">
-          ${rows.map(row => `<span class="profile-tracker">${escapeHtml(row.text)}</span>`).join("")}
+          ${rows.map(row => `<button class="profile-tracker" type="button" data-show-mobile-profile-progress aria-expanded="false">${escapeHtml(row.text)}</button>`).join("")}
         </div>
       ` : "";
     }
@@ -12166,13 +12169,43 @@
       return PROFILE_UTILS.profilePointTotal(stats);
     }
 
-    function mobileProfilePointsBreakdownHtml(stats = {}) {
+    function mobileProfilePointsBreakdownHtml(stats = {}, profile = {}, hidden = true) {
       const rows = PROFILE_UTILS.profilePointBreakdownRows(stats);
+      const achievements = PROFILE_UTILS.profileAchievementsFromStats(stats);
+      const details = [
+        ["Places visited", stats.visitsCount, "Distinct map places saved as visited."],
+        ["Nearby check-ins", stats.checkinsCount, "Visits confirmed while near a mapped place."],
+        ["Approved comments", stats.commentsCount, "Community notes approved for public display."],
+        ["Language work", stats.languageLearned, "Distinct language words answered correctly."],
+        ["Signed-in visit streak", stats.loginStreak, "Consecutive eligible days after the 24-hour interval."],
+        ["Helpful votes", stats.commentUpvotes, "Positive votes received on approved comments."],
+        ["Suggested sites", stats.suggestionsCount, "Site suggestions connected to this profile."],
+        ["Homelands explored", stats.homelandsCount, "Distinct ancestral homelands represented by visited places."]
+      ];
       return `
-        <section class="visit-preview profile-points-detail">
+        <section class="visit-preview profile-points-detail" data-mobile-profile-progress ${hidden ? "hidden aria-hidden=\"true\"" : "aria-hidden=\"false\""}>
+          <strong>Progress details</strong>
+          <p class="detail-meta">Counts update from approved activity and saved account progress.</p>
+          <div class="profile-progress-grid">
+            ${details.map(([label, value, explanation]) => `
+              <div class="profile-progress-row">
+                <span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(explanation)}</small></span>
+                <strong>${Number(value) || 0}</strong>
+              </div>
+            `).join("")}
+          </div>
           <strong>Points</strong>
           ${rows.length ? rows.map(([label, value]) => `<div class="points-breakdown-row"><span>${escapeHtml(label)}</span><strong>${Number(value) || 0}</strong></div>`).join("") : `<p class="detail-meta">Points appear after daily opens, visits, check-ins, language quizzes, and community activity.</p>`}
           <div class="points-breakdown-row"><span>Total</span><strong>${mobileProfilePointTotal(stats)}</strong></div>
+          <strong>Achievements</strong>
+          <div class="profile-achievement-list">
+            ${achievements.map(achievement => `
+              <div class="profile-progress-row${achievement.earned ? " earned" : ""}">
+                <span><strong>${escapeHtml(achievement.label)}</strong><small>${achievement.earned ? "Completed" : `${achievement.target - achievement.value} remaining`}</small></span>
+                <strong>${escapeHtml(achievement.progressLabel)}</strong>
+              </div>
+            `).join("")}
+          </div>
         </section>
       `;
     }
@@ -12816,10 +12849,18 @@
               ${userSinceLine ? `<p class="detail-meta">${escapeHtml(userSinceLine)}</p>` : ""}
               ${profile.headline ? `<p class="summary">${escapeHtml(profile.headline)}</p>` : ""}
               ${profile.bio ? `<p>${escapeHtml(profile.bio)}</p>` : ""}
-              <p class="detail-meta">${activity.comments.length} comments - ${activity.visits.length} visits - ${languageWords.length} language words - ${stats.loginStreak} day streak - ${totalPoints}</p>
+              <div class="profile-stats profile-stats-compact">
+                <button class="profile-stat" type="button" data-show-mobile-profile-progress aria-expanded="false"><strong>${activity.comments.length}</strong><span class="detail-meta">comments</span></button>
+                <button class="profile-stat" type="button" data-show-mobile-profile-progress aria-expanded="false"><strong>${activity.visits.length}</strong><span class="detail-meta">visits</span></button>
+                <button class="profile-stat" type="button" data-show-profile-language aria-expanded="false"><strong>${languageWords.length}</strong><span class="detail-meta">language words</span></button>
+                <button class="profile-stat" type="button" data-show-mobile-profile-progress aria-expanded="false"><strong>${stats.loginStreak}</strong><span class="detail-meta">day streak</span></button>
+              </div>
+              <button class="profile-total-points" type="button" data-show-mobile-profile-progress aria-expanded="false">${escapeHtml(totalPoints)} - view details</button>
               <p class="detail-meta">${escapeHtml(milestoneText(profile))}</p>
               ${supporterLine(profile) ? `<p class="detail-meta">${escapeHtml(supporterLine(profile))}</p>` : ""}
               ${mobileProfileBadgesHtml(profile)}
+              ${mobileProfileTrackersHtml(profile, stats)}
+              ${mobileProfilePointsBreakdownHtml(stats, profile, true)}
               ${mobileProfileActivityFeedHtml(profile, 6)}
               ${mobileProfileLanguageHtml(profile, true)}
               ${currentProfileId() && Number(currentProfileId()) !== Number(profile.id) ? `<button class="action secondary" type="button" data-follow-profile="${escapeHtml(profile.id)}">${isFriend(profile.id) ? "Friend" : isFollowing(profile.id) ? "Following" : "Follow"}</button>` : ""}
@@ -13712,6 +13753,21 @@
         }
         return;
       }
+      const progressToggle = event.target.closest("[data-show-mobile-profile-progress]");
+      if (progressToggle) {
+        const scope = progressToggle.closest("[data-mobile-profile-card]") || profilesListEl;
+        const progress = scope.querySelector("[data-mobile-profile-progress]");
+        if (progress) {
+          const show = progress.hasAttribute("hidden");
+          progress.hidden = !show;
+          progress.setAttribute("aria-hidden", show ? "false" : "true");
+          scope.querySelectorAll("[data-show-mobile-profile-progress]").forEach(button => {
+            button.setAttribute("aria-expanded", show ? "true" : "false");
+          });
+          if (show) progress.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+        return;
+      }
       const follow = event.target.closest("[data-follow-profile]");
       if (follow?.dataset.followProfile) {
         const profile = state.contributorProfiles.find(item => Number(item.id) === Number(follow.dataset.followProfile));
@@ -14397,6 +14453,20 @@
         }
         return;
       }
+      const progressToggle = event.target.closest("[data-show-mobile-profile-progress]");
+      if (progressToggle) {
+        const progress = profileCardEl.querySelector("[data-mobile-profile-progress]");
+        if (progress) {
+          const show = progress.hasAttribute("hidden");
+          progress.hidden = !show;
+          progress.setAttribute("aria-hidden", show ? "false" : "true");
+          profileCardEl.querySelectorAll("[data-show-mobile-profile-progress]").forEach(button => {
+            button.setAttribute("aria-expanded", show ? "true" : "false");
+          });
+          if (show) progress.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+        return;
+      }
       const visitLink = event.target.closest("[data-profile-site]");
       if (visitLink?.dataset.profileSite) {
         openSite(visitLink.dataset.profileSite);
@@ -14583,7 +14653,9 @@
           requireAuth: true,
           authExpiredMessage: "Login could not establish a secure contributor session. Please try again."
         });
-        await recordDailyLoginReward();
+        // A points or optional activity request must not turn a valid account
+        // login into a failed login.
+        await awardDailyLoginReward({ silent: true });
         await ensureProfileStatsSynced();
         scheduleMemberProfileActivityTracking({ login: true, force: true });
         showLoginStatus("Logged in.", "success");
@@ -14755,7 +14827,7 @@
         const nativeAndroid = isNativeAndroidApp();
         state.mobileStartupRendering = true;
         setLoadingMessage("Loading sites and nearby tools.");
-        const startupLandMask = ensureLandMask();
+        const startupLandMask = isOfflineTextMode() ? Promise.resolve(null) : ensureLandMask();
         await loadData();
         await startupLandMask;
         setLoadingMessage("Preparing the mobile interface.");

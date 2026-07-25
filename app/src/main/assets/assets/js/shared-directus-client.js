@@ -20,6 +20,8 @@
     const fetchErrorPrefix = options.fetchErrorPrefix || "Directus request failed";
     const fetchErrorSeparator = options.fetchErrorSeparator ?? ": ";
     const inFlightFetches = new Map();
+    let refreshPromise = null;
+    let expireAfterRefreshFailure = false;
 
     async function readErrorBody(response) {
       const text = await response.text().catch(() => "");
@@ -51,32 +53,74 @@
     }
 
     async function refreshAuthToken(options = {}) {
-      const expireOnAuthFailure = options.expireOnAuthFailure !== false;
+      expireAfterRefreshFailure ||= options.expireOnAuthFailure !== false;
+      if (refreshPromise) return refreshPromise;
+      const attemptedRefreshToken = refreshTokenProvider();
+      if (!attemptedRefreshToken) return "";
+      refreshPromise = (async () => {
+        const response = await fetch(`${baseUrl}/auth/refresh`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ refresh_token: attemptedRefreshToken, mode: "json" })
+        }).catch(() => null);
+        if (!response) return "";
+        if (!response.ok) {
+          const tokenIsCurrent = refreshTokenProvider() === attemptedRefreshToken;
+          if (expireAfterRefreshFailure && tokenIsCurrent && isAuthFailure(response)) onAuthExpired();
+          return "";
+        }
+        const data = await response.json();
+        const next = data?.data || {};
+        const accessToken = next.access_token || "";
+        if (!accessToken) {
+          const tokenIsCurrent = refreshTokenProvider() === attemptedRefreshToken;
+          if (expireAfterRefreshFailure && tokenIsCurrent) onAuthExpired();
+          return "";
+        }
+        onTokenRefresh({
+          token: accessToken,
+          refreshToken: next.refresh_token || attemptedRefreshToken,
+          expires: next.expires || null
+        });
+        return accessToken;
+      })();
+      try {
+        return await refreshPromise;
+      } finally {
+        refreshPromise = null;
+        expireAfterRefreshFailure = false;
+      }
+    }
+
+    async function logout() {
       const refreshToken = refreshTokenProvider();
-      if (!refreshToken) return "";
-      const response = await fetch(`${baseUrl}/auth/refresh`, {
+      if (!refreshToken) return true;
+      const response = await fetch(`${baseUrl}/auth/logout`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ refresh_token: refreshToken, mode: "json" })
       }).catch(() => null);
-      if (!response) return "";
+      return Boolean(response?.ok);
+    }
+
+    async function fetchAuthenticated(url, fetchOptions = {}, requestOptions = {}) {
+      const response = await withAuthRetry(token => fetch(url, {
+        ...fetchOptions,
+        headers: authHeaders(token, fetchOptions.headers || {})
+      }), { ...requestOptions, requireAuth: true });
       if (!response.ok) {
-        if (expireOnAuthFailure && isAuthFailure(response)) onAuthExpired();
-        return "";
+        const body = await readErrorBody(response);
+        if (responseLooksExpired(response, body)) {
+          onAuthExpired();
+          throw expiredAuthError(requestOptions.authExpiredMessage || authExpiredMessage());
+        }
+        let message = body;
+        try {
+          message = JSON.parse(body)?.error || body;
+        } catch {}
+        throw new Error(message || `${fetchErrorPrefix}${fetchErrorSeparator}${response.status}`);
       }
-      const data = await response.json();
-      const next = data?.data || {};
-      const accessToken = next.access_token || "";
-      if (!accessToken) {
-        if (expireOnAuthFailure) onAuthExpired();
-        return "";
-      }
-      onTokenRefresh({
-        token: accessToken,
-        refreshToken: next.refresh_token || refreshToken,
-        expires: next.expires || null
-      });
-      return accessToken;
+      return response;
     }
 
     async function withAuthRetry(send, requestOptions = {}) {
@@ -305,6 +349,27 @@
       const userFields = requestOptions.userFields || "id,email,first_name,last_name";
       const profileFields = requestOptions.profileFields || "";
       const profileCollection = requestOptions.profileCollection || "mobile_member_profiles";
+      const sessionProfileEndpoint = requestOptions.sessionProfileEndpoint === false
+        ? ""
+        : (requestOptions.sessionProfileEndpoint || "https://nativelongisland.com/engagement-action.php");
+      if (sessionProfileEndpoint) {
+        try {
+          const sessionResponse = await fetch(sessionProfileEndpoint, {
+            method: "POST",
+            headers: { ...authHeaders(token), "content-type": "application/json" },
+            body: JSON.stringify({ event_type: "session_profile" }),
+            cache: "no-store"
+          });
+          if (sessionResponse.ok) {
+            const sessionData = await sessionResponse.json();
+            if (sessionData?.user?.id && sessionData?.profile?.id) {
+              return { user: sessionData.user, profile: sessionData.profile };
+            }
+          }
+        } catch (error) {
+          console.warn("Secure profile session lookup failed; trying Directus permissions.", error);
+        }
+      }
       const userResponse = await fetch(`${baseUrl}/users/me?fields=${userFields}`, {
         headers: authHeaders(token),
         cache: "no-store"
@@ -347,7 +412,7 @@
       return normalizeUploadFileId(data);
     }
 
-    return { fetchJson, postItem, patchItem, deleteItem, filterValue, fetchFirstItem, triggerFlow, triggerReviewAction, loginWithPassword, fetchProfileForToken, uploadFile, ensureAuthSession };
+    return { fetchJson, postItem, patchItem, deleteItem, filterValue, fetchFirstItem, triggerFlow, triggerReviewAction, loginWithPassword, fetchProfileForToken, uploadFile, ensureAuthSession, fetchAuthenticated, logout };
   }
 
   window.NLI_DIRECTUS_CLIENT = { createDirectusClient, normalizeUploadFileId, uploadDirectusFile };
