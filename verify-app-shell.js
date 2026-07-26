@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260725-lightweight-offline-r4";
+const expectedBuild = "20260726-runtime-connectivity-r5";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";

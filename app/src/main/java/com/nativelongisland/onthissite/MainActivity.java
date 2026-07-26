@@ -65,7 +65,7 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260725-lightweight-offline-r4";
+    static final String APP_VERSION = "20260726-runtime-connectivity-r5";
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 20000;
     private static final long APP_READINESS_RETRY_DELAY_MS = 350;
     private static final int APP_READINESS_MAX_ATTEMPTS = 60;
