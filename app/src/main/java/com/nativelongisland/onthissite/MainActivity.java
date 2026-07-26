@@ -65,17 +65,20 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260726-runtime-connectivity-r5";
+    static final String APP_VERSION = "20260726-offline-startup-r6";
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 20000;
     private static final long APP_READINESS_RETRY_DELAY_MS = 350;
     private static final int APP_READINESS_MAX_ATTEMPTS = 60;
     private static final long VALIDATED_NETWORK_STABLE_DELAY_MS = 1500;
     private static final long NETWORK_LOSS_GRACE_DELAY_MS = 4000;
     private static final long ACTIVE_WORK_RECHECK_DELAY_MS = 15000;
+    private static final long OFFLINE_COVER_REVEAL_DELAY_MS = 900;
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
         "https://directus.nativelongisland.com/app/mobile-app-live.html";
+    private static final String OFFLINE_BASE_URL =
+        "https://directus.nativelongisland.com/app/";
 
     private WebView webView;
     private View loadingCover;
@@ -130,6 +133,9 @@ public class MainActivity extends Activity {
     private final Runnable unusableNetworkFallback = () -> {
         if (webView == null || hasUsableNetwork() || loadingBundledFallback) return;
         requestBundledFallbackPreservingActiveWork("validated-network-unavailable");
+    };
+    private final Runnable revealBundledFallback = () -> {
+        if (webView != null && loadingBundledFallback) hideLoadingCover();
     };
     Uri lastStoryVideoUri;
     String lastStoryVideoMimeType = "video/webm";
@@ -301,6 +307,7 @@ public class MainActivity extends Activity {
                     loadBundledFallback("siteground-challenge");
                     return;
                 }
+                if (loadingBundledFallback) hideLoadingCover();
                 validateLoadedAppShell(url);
             }
         });
@@ -961,6 +968,7 @@ public class MainActivity extends Activity {
         startupHandler.removeCallbacks(startupFallback);
         startupHandler.removeCallbacks(validatedNetworkRecovery);
         startupHandler.removeCallbacks(unusableNetworkFallback);
+        startupHandler.removeCallbacks(revealBundledFallback);
         if (!hasUsableNetwork()) {
             loadBundledFallback("offline-at-launch");
             return;
@@ -985,12 +993,26 @@ public class MainActivity extends Activity {
         startupHandler.removeCallbacks(startupFallback);
         startupHandler.removeCallbacks(validatedNetworkRecovery);
         startupHandler.removeCallbacks(unusableNetworkFallback);
+        startupHandler.removeCallbacks(revealBundledFallback);
         loadingBundledFallback = true;
         appShellLoaded = false;
         appReadinessProbeAttempts = 0;
         Log.w(LOG_TAG, "Loading bundled mobile archive fallback: " + reason);
         webView.stopLoading();
-        webView.loadUrl("https://directus.nativelongisland.com/app/offline-app.html?app-version=" + APP_VERSION);
+        try {
+            String offlineHtml = readBundledTextAsset("offline-app.html");
+            webView.loadDataWithBaseURL(
+                OFFLINE_BASE_URL,
+                offlineHtml,
+                "text/html",
+                "UTF-8",
+                null
+            );
+            startupHandler.postDelayed(revealBundledFallback, OFFLINE_COVER_REVEAL_DELAY_MS);
+        } catch (IOException error) {
+            Log.e(LOG_TAG, "Lightweight offline archive could not be opened.", error);
+            hideLoadingCover();
+        }
     }
 
     private void applyApkTimelineTrayFix() {

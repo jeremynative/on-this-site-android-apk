@@ -6351,6 +6351,7 @@ body.research-question-dialog-open .research-question-prompt,
         <input id="feedback-screenshot" type="file" accept="image/*" hidden>
         <button class="action secondary" id="feedback-capture" type="button">Capture current screen</button>
         <button class="action secondary" id="feedback-upload" type="button">Upload screenshot</button>
+        <button class="action secondary" id="feedback-remove-screenshot" type="button" hidden>Remove screenshot</button>
         <p class="detail-meta" id="feedback-screenshot-status">Optional screenshot helps explain what happened.</p>
       </div>
       <button class="action" id="feedback-submit" type="button">Send feedback</button>
@@ -15298,6 +15299,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const feedbackScreenshotEl = document.getElementById("feedback-screenshot");
     const feedbackCaptureBtn = document.getElementById("feedback-capture");
     const feedbackUploadBtn = document.getElementById("feedback-upload");
+    const feedbackRemoveScreenshotBtn = document.getElementById("feedback-remove-screenshot");
     const feedbackScreenshotStatusEl = document.getElementById("feedback-screenshot-status");
     const feedbackSubmitBtn = document.getElementById("feedback-submit");
 
@@ -17270,6 +17272,22 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         basename: "mobile-feedback-screenshot",
         ignoreElementId: "notifications-sheet"
       });
+      syncFeedbackScreenshotControls();
+    }
+
+    function syncFeedbackScreenshotControls() {
+      const screenshotFile = state.feedbackScreenshotFile || feedbackScreenshotEl?.files?.[0] || null;
+      if (feedbackRemoveScreenshotBtn) feedbackRemoveScreenshotBtn.hidden = !screenshotFile;
+      if (!screenshotFile && feedbackScreenshotStatusEl) {
+        feedbackScreenshotStatusEl.textContent = "Optional screenshot helps explain what happened.";
+      }
+    }
+
+    function removeFeedbackScreenshot() {
+      state.feedbackScreenshotFile = null;
+      if (feedbackScreenshotEl) feedbackScreenshotEl.value = "";
+      syncFeedbackScreenshotControls();
+      showBanner("Screenshot removed. Your feedback text is still here.");
     }
 
     async function uploadFeedbackScreenshot(file, title) {
@@ -27375,8 +27393,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             screenshotId = await uploadFeedbackScreenshot(screenshotFile, `mobile-feedback-${Date.now()}`);
             screenshotNote = screenshotId ? "Screenshot attached." : "Screenshot was not attached.";
           } catch (uploadError) {
-            screenshotNote = `Screenshot could not be uploaded: ${uploadError.message || "permission denied"}.`;
-            console.warn("Feedback screenshot upload failed; sending text feedback without it.", uploadError);
+            const attachmentError = new Error("The screenshot could not be uploaded, so the feedback was not sent. Remove the screenshot to send text only, or try the upload again.");
+            attachmentError.isFeedbackScreenshotUploadError = true;
+            attachmentError.cause = uploadError;
+            throw attachmentError;
           }
         }
         feedbackSubmitBtn.textContent = "Sending...";
@@ -27404,7 +27424,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       feedbackMessageEl.value = "";
       state.feedbackScreenshotFile = null;
       if (feedbackScreenshotEl) feedbackScreenshotEl.value = "";
-      if (feedbackScreenshotStatusEl) feedbackScreenshotStatusEl.textContent = "Optional screenshot helps explain what happened.";
+      syncFeedbackScreenshotControls();
       feedbackSheetEl.classList.remove("open");
       syncMobilePanelAccessibility();
       showBanner("Feedback sent. Thank you.");
@@ -28694,6 +28714,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       field?.addEventListener("focus", keepFeedbackFieldVisible);
     });
     feedbackUploadBtn?.addEventListener("click", () => feedbackScreenshotEl?.click());
+    feedbackRemoveScreenshotBtn?.addEventListener("click", removeFeedbackScreenshot);
     feedbackCaptureBtn?.addEventListener("click", () => {
       captureFeedbackScreenshot().catch(error => {
         if (feedbackScreenshotStatusEl) feedbackScreenshotStatusEl.textContent = error.message || "Could not capture screenshot. Upload one instead.";
@@ -28705,6 +28726,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (feedbackScreenshotStatusEl) feedbackScreenshotStatusEl.textContent = feedbackScreenshotEl.files?.[0]
         ? `Screenshot selected: ${feedbackScreenshotEl.files[0].name}`
         : "Optional screenshot helps explain what happened.";
+      syncFeedbackScreenshotControls();
     });
     storyOpenBtn.addEventListener("click", () => openSheet(storySheetEl));
     mapStoryOpenBtn?.addEventListener("click", openContributionSheet);

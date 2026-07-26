@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260726-runtime-connectivity-r5";
+const expectedBuild = "20260726-offline-startup-r6";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -87,6 +87,14 @@ function requireBundledText(text, message) {
   }
 }
 
+function forbidBundledText(text, message) {
+  const haystack = bundledApp.replace(/\r\n/g, "\n");
+  const needle = text.replace(/\r\n/g, "\n");
+  if (haystack.includes(needle)) {
+    throw new Error(message);
+  }
+}
+
 function requireBundledPattern(pattern, message) {
   if (!pattern.test(bundledApp)) {
     throw new Error(message);
@@ -105,7 +113,11 @@ if (!manifest.includes("ACCESS_NETWORK_STATE")) {
   throw new Error("Android shell must be able to detect a true offline launch.");
 }
 requireText("hasUsableNetwork()", "Android shell must route no-network launches directly to the bundled archive.");
-requireText('webView.loadUrl("https://directus.nativelongisland.com/app/offline-app.html?app-version=" + APP_VERSION);', "Android shell must use the lightweight same-origin archive for no-network launches.");
+requireText("webView.loadDataWithBaseURL(", "Android shell must open the lightweight offline archive without a network navigation.");
+requireText("OFFLINE_BASE_URL", "Android shell must keep a stable same-origin base URL for bundled offline data files.");
+requireText('readBundledTextAsset("offline-app.html")', "Android shell must load the lightweight offline document directly from APK assets.");
+requireText("OFFLINE_COVER_REVEAL_DELAY_MS", "Android shell must reveal the offline interface on a bounded timer.");
+requireText("revealBundledFallback", "Android shell must not leave the native title cover over a ready offline archive.");
 requireText("registerConnectivityMonitoring();", "Android shell must start runtime connectivity monitoring.");
 requireText("registerDefaultNetworkCallback(connectivityCallback)", "Android shell must monitor the active network on Android 7 and newer.");
 requireText("connectivityManager.registerNetworkCallback(request, connectivityCallback)", "Android shell must monitor connectivity on Android 6.");
@@ -291,10 +303,13 @@ if (!source.includes('currentUrl == null || currentUrl.isEmpty() || "about:blank
   throw new Error("Android shell must not block fallback when the current WebView URL is blank.");
 }
 const fallbackMatch = source.match(/private void loadBundledFallback\(String reason\) \{[\s\S]*?\n    \}/);
-if (!fallbackMatch || !fallbackMatch[0].includes('https://directus.nativelongisland.com/app/offline-app.html')) {
-  throw new Error("Android shell must open the lightweight same-origin archive directly during no-signal startup.");
+if (!fallbackMatch
+    || !fallbackMatch[0].includes('readBundledTextAsset("offline-app.html")')
+    || !fallbackMatch[0].includes("webView.loadDataWithBaseURL(")
+    || !fallbackMatch[0].includes("OFFLINE_BASE_URL")) {
+  throw new Error("No-signal startup must open the lightweight APK archive without waiting on a network URL.");
 }
-if (/Thread loader|bundledMobileHtml\(\)|loadDataWithBaseURL/.test(fallbackMatch[0])) {
+if (/Thread loader|bundledMobileHtml\(\)/.test(fallbackMatch[0])) {
   throw new Error("No-signal startup must not parse the full bundled online application before showing saved content.");
 }
 requireText("dispatchTouchEvent", "Android shell must forward app taps into the mobile map.");
@@ -533,6 +548,22 @@ requireBundledText('source_type: "feedback"', "Bundled Android app feedback must
 requireBundledText('if (hiddenEl) hiddenEl.style.visibility = "hidden"', "Bundled Android app must hide the feedback sheet before screenshot capture.");
 requireBundledText('hiddenEl: feedbackSheetEl', "Bundled Android app must pass the feedback sheet to screenshot capture.");
 requireBundledText('sendFeedbackReviewEmail', "Bundled Android app must notify review email after feedback saves.");
+requireBundledText(
+  "The screenshot could not be uploaded, so the feedback was not sent.",
+  "Bundled Android feedback must preserve the submission when an attachment upload fails."
+);
+requireBundledText(
+  'id="feedback-remove-screenshot"',
+  "Bundled Android feedback must let the visitor remove a screenshot before retrying."
+);
+requireBundledText(
+  "feedbackRemoveScreenshotBtn?.addEventListener",
+  "Bundled Android feedback must wire the screenshot removal control."
+);
+forbidBundledText(
+  "sending text feedback without it",
+  "Bundled Android feedback must not silently discard a failed screenshot attachment."
+);
 requireBundledText('data-take-comment-photo', "Bundled Android app must expose comment camera capture controls.");
 requireBundledText('prepareSelectedCommentPhoto(section)', "Bundled Android app must compress oversized comment photos before upload.");
 requireBundledText('prepareJpegUploadImage(rawFile, "plant-observation")', "Bundled Android app must route selected comment photos through the shared JPEG preparation helper.");

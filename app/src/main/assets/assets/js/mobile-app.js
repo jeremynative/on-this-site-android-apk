@@ -990,6 +990,7 @@
     const feedbackScreenshotEl = document.getElementById("feedback-screenshot");
     const feedbackCaptureBtn = document.getElementById("feedback-capture");
     const feedbackUploadBtn = document.getElementById("feedback-upload");
+    const feedbackRemoveScreenshotBtn = document.getElementById("feedback-remove-screenshot");
     const feedbackScreenshotStatusEl = document.getElementById("feedback-screenshot-status");
     const feedbackSubmitBtn = document.getElementById("feedback-submit");
 
@@ -2962,6 +2963,22 @@
         basename: "mobile-feedback-screenshot",
         ignoreElementId: "notifications-sheet"
       });
+      syncFeedbackScreenshotControls();
+    }
+
+    function syncFeedbackScreenshotControls() {
+      const screenshotFile = state.feedbackScreenshotFile || feedbackScreenshotEl?.files?.[0] || null;
+      if (feedbackRemoveScreenshotBtn) feedbackRemoveScreenshotBtn.hidden = !screenshotFile;
+      if (!screenshotFile && feedbackScreenshotStatusEl) {
+        feedbackScreenshotStatusEl.textContent = "Optional screenshot helps explain what happened.";
+      }
+    }
+
+    function removeFeedbackScreenshot() {
+      state.feedbackScreenshotFile = null;
+      if (feedbackScreenshotEl) feedbackScreenshotEl.value = "";
+      syncFeedbackScreenshotControls();
+      showBanner("Screenshot removed. Your feedback text is still here.");
     }
 
     async function uploadFeedbackScreenshot(file, title) {
@@ -13067,8 +13084,10 @@
             screenshotId = await uploadFeedbackScreenshot(screenshotFile, `mobile-feedback-${Date.now()}`);
             screenshotNote = screenshotId ? "Screenshot attached." : "Screenshot was not attached.";
           } catch (uploadError) {
-            screenshotNote = `Screenshot could not be uploaded: ${uploadError.message || "permission denied"}.`;
-            console.warn("Feedback screenshot upload failed; sending text feedback without it.", uploadError);
+            const attachmentError = new Error("The screenshot could not be uploaded, so the feedback was not sent. Remove the screenshot to send text only, or try the upload again.");
+            attachmentError.isFeedbackScreenshotUploadError = true;
+            attachmentError.cause = uploadError;
+            throw attachmentError;
           }
         }
         feedbackSubmitBtn.textContent = "Sending...";
@@ -13096,7 +13115,7 @@
       feedbackMessageEl.value = "";
       state.feedbackScreenshotFile = null;
       if (feedbackScreenshotEl) feedbackScreenshotEl.value = "";
-      if (feedbackScreenshotStatusEl) feedbackScreenshotStatusEl.textContent = "Optional screenshot helps explain what happened.";
+      syncFeedbackScreenshotControls();
       feedbackSheetEl.classList.remove("open");
       syncMobilePanelAccessibility();
       showBanner("Feedback sent. Thank you.");
@@ -14386,6 +14405,7 @@
       field?.addEventListener("focus", keepFeedbackFieldVisible);
     });
     feedbackUploadBtn?.addEventListener("click", () => feedbackScreenshotEl?.click());
+    feedbackRemoveScreenshotBtn?.addEventListener("click", removeFeedbackScreenshot);
     feedbackCaptureBtn?.addEventListener("click", () => {
       captureFeedbackScreenshot().catch(error => {
         if (feedbackScreenshotStatusEl) feedbackScreenshotStatusEl.textContent = error.message || "Could not capture screenshot. Upload one instead.";
@@ -14397,6 +14417,7 @@
       if (feedbackScreenshotStatusEl) feedbackScreenshotStatusEl.textContent = feedbackScreenshotEl.files?.[0]
         ? `Screenshot selected: ${feedbackScreenshotEl.files[0].name}`
         : "Optional screenshot helps explain what happened.";
+      syncFeedbackScreenshotControls();
     });
     storyOpenBtn.addEventListener("click", () => openSheet(storySheetEl));
     mapStoryOpenBtn?.addEventListener("click", openContributionSheet);
