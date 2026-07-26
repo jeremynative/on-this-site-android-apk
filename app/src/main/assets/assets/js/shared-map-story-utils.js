@@ -17,11 +17,16 @@
     return { up, down, score: up - down };
   }
 
+  function currentTime(options = {}) {
+    const value = Number(options.now);
+    return Number.isFinite(value) && value > 0 ? value : Date.now();
+  }
+
   function effectiveExpiresAt(story, votes = [], options = {}) {
     if (story?.permanent || story?.admin_permanent) return null;
     const baseLifetimeMs = Number(options.baseLifetimeMs || 24 * 60 * 60 * 1000);
     const voteHourMs = Number(options.voteHourMs || 60 * 60 * 1000);
-    const created = Date.parse(story?.created_at || "") || Date.now();
+    const created = Date.parse(story?.created_at || "") || currentTime(options);
     const original = Date.parse(story?.expires_original_at || story?.expires_at || "") || (created + baseLifetimeMs);
     const counts = storyVoteCounts(story, votes);
     return new Date(original + (counts.up - counts.down) * voteHourMs);
@@ -36,7 +41,7 @@
     if (!story || story.status === "rejected" || story.status === "archived") return false;
     if (isPermanent(story, votes, options)) return true;
     const expiry = effectiveExpiresAt(story, votes, options);
-    return !expiry || expiry.getTime() > Date.now();
+    return !expiry || expiry.getTime() > currentTime(options);
   }
 
   function activeStories(stories = [], votes = [], options = {}) {
@@ -48,7 +53,7 @@
     const expiry = effectiveExpiresAt(story, votes, options);
     if (!expiry) return "Story";
     const voteHourMs = Number(options.voteHourMs || 60 * 60 * 1000);
-    const hours = Math.max(0, Math.ceil((expiry.getTime() - Date.now()) / voteHourMs));
+    const hours = Math.max(0, Math.ceil((expiry.getTime() - currentTime(options)) / voteHourMs));
     return hours > 1 ? `${hours} hours left` : `${hours || 1} hour left`;
   }
 
