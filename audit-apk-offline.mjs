@@ -51,7 +51,15 @@ const readiness = await evaluate(`new Promise(resolve => {
       return;
     }
     if (Date.now() - startedAt >= 30000) {
-      resolve({ ready: false, elapsedMs: Date.now() - startedAt });
+      resolve({
+        ready: false,
+        elapsedMs: Date.now() - startedAt,
+        title: document.title,
+        bodyClass: document.body?.className || "",
+        summary: document.querySelector("#offline-summary")?.textContent || "",
+        resultCount: document.querySelector("#result-count")?.textContent || "",
+        bodyText: (document.body?.innerText || "").slice(0, 500),
+      });
       return;
     }
     setTimeout(check, 150);
@@ -64,15 +72,17 @@ if (!readiness.ready) {
 }
 
 const shell = await evaluate(`(() => {
-  const instruction = document.querySelector(".mobile-header-instruction")?.textContent || "";
-  const countText = document.querySelector("#nearby-count")?.textContent || document.body.innerText;
+  const summary = document.querySelector("#offline-summary")?.textContent || "";
+  const countText = document.querySelector("#result-count")?.textContent || "";
   return {
     offlineFlag: window.NLI_APK_OFFLINE_TEXT_MODE === true,
     offlineClass: document.body.classList.contains("offline-text-mode"),
     hasOfflineIndex: Boolean(document.querySelector(".offline-map-index")),
     regionButtons: document.querySelectorAll("[data-offline-region]").length,
-    hasListingCount: /\\b\\d+\\s+(?:saved places|listings)\\b/i.test(instruction + " " + countText),
-    hasWikiCount: /\\b\\d+\\s+wiki articles\\b/i.test(instruction),
+    hasListingCount: /\\b\\d+\\s+listings\\b/i.test(summary),
+    hasWikiCount: /\\b\\d+\\s+wiki articles\\b/i.test(summary),
+    hasSavedResultCount: /\\b\\d+\\s+saved\\b/i.test(countText),
+    hasOfflineCanvas: Boolean(document.querySelector("#offline-map")),
     mapCanvasCount: document.querySelectorAll(".mapboxgl-canvas").length,
     visibleMediaCount: Array.from(document.querySelectorAll("img,video,audio,iframe,picture")).filter(element => {
       const rect = element.getBoundingClientRect();
@@ -102,7 +112,7 @@ for (const region of ["west", "central", "east", "all"]) {
       resolve({
         region: "${region}",
         missing: false,
-        active: button.classList.contains("active") && button.getAttribute("aria-pressed") === "true",
+        active: button.getAttribute("aria-pressed") === "true",
         visibleCards: cards.length,
       });
     }, 400);
@@ -131,9 +141,9 @@ const search = await evaluate(`new Promise(resolve => {
         inputValue: input.value,
         resultCount: cards.length,
         found: Boolean(match),
-        nearbyCount: document.querySelector("#nearby-count")?.textContent?.trim() || "",
-        listText: (document.querySelector("#nearby-list")?.innerText || "").trim().slice(0, 220),
-        detailOpen: Boolean(detail?.classList.contains("open")),
+        savedCount: document.querySelector("#result-count")?.textContent?.trim() || "",
+        listText: (document.querySelector("#site-list")?.innerText || "").trim().slice(0, 220),
+        detailOpen: Boolean(detail && !detail.hidden),
         detailTitle: document.querySelector("#detail-title")?.textContent?.trim() || "",
         detailTextLength: (document.querySelector("#detail-body")?.innerText || "").trim().length,
         detailVisibleMedia: detail
@@ -153,7 +163,7 @@ socket.close();
 const failures = [
   ...Object.entries(shell)
     .filter(([key, value]) => (
-      ["offlineFlag", "offlineClass", "hasOfflineIndex", "hasListingCount", "hasWikiCount"].includes(key) && value !== true
+      ["offlineFlag", "offlineClass", "hasOfflineIndex", "hasListingCount", "hasWikiCount", "hasSavedResultCount", "hasOfflineCanvas"].includes(key) && value !== true
     ) || (
       ["mapCanvasCount", "visibleMediaCount", "onlineOnlyVisible"].includes(key) && value !== 0
     ) || (key === "regionButtons" && value !== 4))

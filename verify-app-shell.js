@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260726-offline-startup-r6";
+const expectedBuild = "20260726-offline-startup-r7";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -118,6 +118,8 @@ requireText("OFFLINE_BASE_URL", "Android shell must keep a stable same-origin ba
 requireText('readBundledTextAsset("offline-app.html")', "Android shell must load the lightweight offline document directly from APK assets.");
 requireText("OFFLINE_COVER_REVEAL_DELAY_MS", "Android shell must reveal the offline interface on a bounded timer.");
 requireText("revealBundledFallback", "Android shell must not leave the native title cover over a ready offline archive.");
+requireText("LIVE_STARTUP_FALLBACK_DELAY_MS = 8000", "Android shell must escape a stale/dead validated connection within eight seconds.");
+requireText('showLoadingCover("Opening saved map...")', "Android shell must identify the saved-map fallback while it opens.");
 requireText("registerConnectivityMonitoring();", "Android shell must start runtime connectivity monitoring.");
 requireText("registerDefaultNetworkCallback(connectivityCallback)", "Android shell must monitor the active network on Android 7 and newer.");
 requireText("connectivityManager.registerNetworkCallback(request, connectivityCallback)", "Android shell must monitor connectivity on Android 6.");

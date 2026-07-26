@@ -65,8 +65,8 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260726-offline-startup-r6";
-    private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 20000;
+    static final String APP_VERSION = "20260726-offline-startup-r7";
+    private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 8000;
     private static final long APP_READINESS_RETRY_DELAY_MS = 350;
     private static final int APP_READINESS_MAX_ATTEMPTS = 60;
     private static final long VALIDATED_NETWORK_STABLE_DELAY_MS = 1500;
@@ -352,6 +352,18 @@ public class MainActivity extends Activity {
             .setDuration(180)
             .withEndAction(() -> loadingCover.setVisibility(View.GONE))
             .start();
+    }
+
+    private void showLoadingCover(String message) {
+        if (loadingCover == null) return;
+        if (loadingCover instanceof TextView) {
+            ((TextView) loadingCover).setText(message == null || message.trim().isEmpty()
+                ? "On This Site"
+                : message);
+        }
+        loadingCover.animate().cancel();
+        loadingCover.setAlpha(1f);
+        loadingCover.setVisibility(View.VISIBLE);
     }
 
     private WebResourceResponse bundledAppResponse(Uri uri) {
@@ -961,6 +973,7 @@ public class MainActivity extends Activity {
 
     void refreshApp() {
         if (webView == null) return;
+        showLoadingCover("On This Site");
         lastRefreshAt = System.currentTimeMillis();
         appShellLoaded = false;
         loadingBundledFallback = false;
@@ -997,6 +1010,7 @@ public class MainActivity extends Activity {
         loadingBundledFallback = true;
         appShellLoaded = false;
         appReadinessProbeAttempts = 0;
+        showLoadingCover("Opening saved map...");
         Log.w(LOG_TAG, "Loading bundled mobile archive fallback: " + reason);
         webView.stopLoading();
         try {
