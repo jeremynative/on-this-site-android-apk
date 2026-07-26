@@ -6259,7 +6259,7 @@ body.research-question-dialog-open .research-question-prompt,
         <p class="story-camera-status" id="story-camera-status" hidden></p>
         <div class="story-save-panel" id="story-save-panel" role="dialog" aria-live="polite" aria-label="Story video saved">
           <strong>Story video saved</strong>
-          <p>Your recording was saved locally by this device/browser. On Android, check Downloads or Files, then share it to social media from there.</p>
+          <p>Your recording is stored in Downloads or Files on Android. Open it there to review or share it with another app.</p>
           <div class="story-save-actions">
             <a class="action" id="story-download-link" href="#" download="on-this-site-ar-story.webm">Open video</a>
             <button class="action secondary" id="story-share" type="button">Share</button>
@@ -14453,6 +14453,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const LONG_ISLAND_VIEW_BOUNDS = [[-74.35, 40.32], [-71.48, 41.36]];
     const STARTUP_LOCATION_CENTER_BOUNDS = [[-74.25, 40.45], [-71.65, 41.25]];
     const FALLBACK_CENTER = [-72.95, 40.86];
+    const MOBILE_LONG_ISLAND_START_VIEWS = [
+      { center: [-73.72, 40.72], zoom: 9.25 },
+      { center: [-73.36, 40.76], zoom: 9.25 },
+      { center: [-73.02, 40.82], zoom: 9.2 },
+      { center: [-72.68, 40.84], zoom: 9.2 },
+      { center: [-72.34, 40.88], zoom: 9.15 },
+      { center: [-72.02, 40.93], zoom: 9.1 },
+      { center: [-71.82, 41.02], zoom: 9.05 }
+    ];
+    const MOBILE_STARTUP_VIEW = randomMobileLongIslandStartupView();
     const FALLBACK_STYLE = "mapbox://styles/mapbox/outdoors-v12";
     const KNOWLEDGEBASE_CATEGORIES = [
       { label: "Biography", slugs: ["mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "quashawam", "elizabeth-thunder-bird-haile-shinnecock", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "sachem-warawakmy-of-the-setauket", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "john-a-strong", "nathan-jeffrey-cuffee", "samson-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "penhawitz-sachem-of-the-canarsie", "stephen-talkhouse-pharoah", "nasseconset-sachem-of-the-nissequogue", "keeossechok-sachem-of-the-secatogue", "sunksquaws-and-indigenous-womens-leadership"] },
@@ -25121,14 +25131,36 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function fitLongIslandMapView(reason = "long-island-view") {
-      if (!state.map?.fitBounds) return;
-      state.map.fitBounds(LONG_ISLAND_VIEW_BOUNDS, {
-        padding: { top: 48, right: 22, bottom: 220, left: 22 },
-        maxZoom: 7.9,
+      if (!state.map?.easeTo) return;
+      state.map.easeTo({
+        center: MOBILE_STARTUP_VIEW.center,
+        zoom: MOBILE_STARTUP_VIEW.zoom,
         duration: 850,
         essential: true
       });
       refreshAndroidMapAfterSettle(reason);
+    }
+
+    function randomMobileLongIslandStartupView() {
+      const views = MOBILE_LONG_ISLAND_START_VIEWS.length
+        ? MOBILE_LONG_ISLAND_START_VIEWS
+        : [{ center: FALLBACK_CENTER, zoom: 9.2 }];
+      const randomUnit = () => window.crypto?.getRandomValues
+        ? window.crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296
+        : Math.random();
+      if (views.length < 2) return views[0];
+      const scaled = randomUnit() * (views.length - 1);
+      const index = Math.min(views.length - 2, Math.floor(scaled));
+      const local = scaled - index;
+      const start = views[index];
+      const end = views[index + 1] || start;
+      return {
+        center: [
+          Number(start.center[0]) + (Number(end.center[0]) - Number(start.center[0])) * local,
+          Number(start.center[1]) + (Number(end.center[1]) - Number(start.center[1])) * local + (randomUnit() - 0.5) * 0.025
+        ],
+        zoom: Number(start.zoom) + (Number(end.zoom) - Number(start.zoom)) * local
+      };
     }
 
     function mobileStartupSpotlightText(site) {
@@ -27810,8 +27842,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.map = new mapboxgl.Map({
         container: "map",
         style: savedBasemap === "streets" ? (styleJson.styleUrl || FALLBACK_STYLE) : MOBILE_BASEMAPS[savedBasemap],
-        center: FALLBACK_CENTER,
-        zoom: 7.45,
+        center: MOBILE_STARTUP_VIEW.center,
+        zoom: MOBILE_STARTUP_VIEW.zoom,
         minZoom: 7,
         maxBounds: LONG_ISLAND_VIEW_BOUNDS,
         attributionControl: false
