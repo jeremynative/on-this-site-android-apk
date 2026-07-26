@@ -15,6 +15,7 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
+import android.net.NetworkRequest;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Build;
@@ -64,10 +65,13 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260725-offline-startup-r1";
+    static final String APP_VERSION = "20260725-lightweight-offline-r4";
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 20000;
     private static final long APP_READINESS_RETRY_DELAY_MS = 350;
     private static final int APP_READINESS_MAX_ATTEMPTS = 60;
+    private static final long VALIDATED_NETWORK_STABLE_DELAY_MS = 1500;
+    private static final long NETWORK_LOSS_GRACE_DELAY_MS = 4000;
+    private static final long ACTIVE_WORK_RECHECK_DELAY_MS = 15000;
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String APP_BASE_URL =
@@ -96,11 +100,36 @@ public class MainActivity extends Activity {
     private boolean loadingBundledFallback;
     private boolean appShellLoaded;
     private int appReadinessProbeAttempts;
+    private ConnectivityManager connectivityManager;
+    private ConnectivityManager.NetworkCallback connectivityCallback;
+    private boolean connectivityCallbackRegistered;
+    private boolean lastValidatedNetworkState;
+    private boolean networkStateInitialized;
+    private boolean liveRecoveryAttemptedForCurrentNetwork;
     private final Handler startupHandler = new Handler(Looper.getMainLooper());
     private final Runnable startupFallback = () -> {
         if (webView != null && !appShellLoaded && !loadingBundledFallback) {
             loadBundledFallback("live-startup-timeout");
         }
+    };
+    private final Runnable validatedNetworkRecovery = () -> {
+        if (webView == null
+            || !hasUsableNetwork()
+            || !loadingBundledFallback
+            || liveRecoveryAttemptedForCurrentNetwork) return;
+        captureRuntimeStateThen(() -> {
+            if (webView == null
+                || !hasUsableNetwork()
+                || !loadingBundledFallback
+                || liveRecoveryAttemptedForCurrentNetwork) return;
+            liveRecoveryAttemptedForCurrentNetwork = true;
+            Log.i(LOG_TAG, "Validated network is stable; recovering the live app shell.");
+            refreshApp();
+        });
+    };
+    private final Runnable unusableNetworkFallback = () -> {
+        if (webView == null || hasUsableNetwork() || loadingBundledFallback) return;
+        requestBundledFallbackPreservingActiveWork("validated-network-unavailable");
     };
     Uri lastStoryVideoUri;
     String lastStoryVideoMimeType = "video/webm";
@@ -276,6 +305,7 @@ public class MainActivity extends Activity {
             }
         });
 
+        registerConnectivityMonitoring();
         if (savedInstanceState != null && hasUsableNetwork()) {
             restorePendingPlantCameraUri();
             android.webkit.WebBackForwardList restoredState = webView.restoreState(savedInstanceState);
@@ -336,6 +366,9 @@ public class MainActivity extends Activity {
         } else if (path != null && path.startsWith("/app/assets/") && !path.contains("..")) {
             assetName = path.substring("/app/".length());
             mimeType = mimeTypeForAsset(assetName);
+        } else if (loadingBundledFallback && "/app/offline-app.html".equals(path)) {
+            assetName = "offline-app.html";
+            mimeType = "text/html";
         } else if (loadingBundledFallback && "/mobile-app-live.html".equals(path)) {
             assetName = "mobile-app-live.html";
             mimeType = "text/html";
@@ -451,6 +484,15 @@ public class MainActivity extends Activity {
                     applyApkTimelineTrayFix();
                     dispatchPendingPlantPhoto();
                     hideLoadingCover();
+                    if (loadingBundledFallback
+                        && hasUsableNetwork()
+                        && !liveRecoveryAttemptedForCurrentNetwork) {
+                        startupHandler.removeCallbacks(validatedNetworkRecovery);
+                        startupHandler.postDelayed(
+                            validatedNetworkRecovery,
+                            VALIDATED_NETWORK_STABLE_DELAY_MS
+                        );
+                    }
                     return;
                 }
 
@@ -503,6 +545,140 @@ public class MainActivity extends Activity {
         }
         NetworkInfo networkInfo = manager.getActiveNetworkInfo();
         return networkInfo != null && networkInfo.isConnected();
+    }
+
+    private void registerConnectivityMonitoring() {
+        connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (connectivityManager == null || connectivityCallbackRegistered) return;
+        lastValidatedNetworkState = hasUsableNetwork();
+        networkStateInitialized = true;
+        connectivityCallback = new ConnectivityManager.NetworkCallback() {
+            @Override
+            public void onAvailable(Network network) {
+                scheduleNetworkStateEvaluation("available");
+            }
+
+            @Override
+            public void onCapabilitiesChanged(Network network, NetworkCapabilities capabilities) {
+                scheduleNetworkStateEvaluation("capabilities-changed");
+            }
+
+            @Override
+            public void onLost(Network network) {
+                scheduleNetworkStateEvaluation("lost");
+            }
+
+            @Override
+            public void onUnavailable() {
+                scheduleNetworkStateEvaluation("unavailable");
+            }
+        };
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                connectivityManager.registerDefaultNetworkCallback(connectivityCallback);
+            } else {
+                NetworkRequest request = new NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .build();
+                connectivityManager.registerNetworkCallback(request, connectivityCallback);
+            }
+            connectivityCallbackRegistered = true;
+        } catch (RuntimeException error) {
+            connectivityCallback = null;
+            Log.w(LOG_TAG, "Runtime connectivity monitoring could not be registered.", error);
+        }
+    }
+
+    private void unregisterConnectivityMonitoring() {
+        if (!connectivityCallbackRegistered || connectivityManager == null || connectivityCallback == null) return;
+        try {
+            connectivityManager.unregisterNetworkCallback(connectivityCallback);
+        } catch (RuntimeException error) {
+            Log.w(LOG_TAG, "Runtime connectivity monitoring was already unavailable.", error);
+        } finally {
+            connectivityCallbackRegistered = false;
+            connectivityCallback = null;
+        }
+    }
+
+    private void scheduleNetworkStateEvaluation(String reason) {
+        startupHandler.postDelayed(() -> handleNetworkStateChange(reason), 250);
+    }
+
+    private void handleNetworkStateChange(String reason) {
+        if (webView == null) return;
+        boolean validated = hasUsableNetwork();
+        if (networkStateInitialized && validated == lastValidatedNetworkState) {
+            if (validated && loadingBundledFallback && !liveRecoveryAttemptedForCurrentNetwork) {
+                startupHandler.removeCallbacks(validatedNetworkRecovery);
+                startupHandler.postDelayed(validatedNetworkRecovery, VALIDATED_NETWORK_STABLE_DELAY_MS);
+            } else if (!validated && !loadingBundledFallback) {
+                startupHandler.removeCallbacks(unusableNetworkFallback);
+                startupHandler.postDelayed(unusableNetworkFallback, NETWORK_LOSS_GRACE_DELAY_MS);
+            }
+            return;
+        }
+        networkStateInitialized = true;
+        lastValidatedNetworkState = validated;
+        startupHandler.removeCallbacks(validatedNetworkRecovery);
+        startupHandler.removeCallbacks(unusableNetworkFallback);
+        Log.i(LOG_TAG, "Validated network state changed to " + validated + " (" + reason + ").");
+        if (validated) {
+            liveRecoveryAttemptedForCurrentNetwork = false;
+            startupHandler.postDelayed(validatedNetworkRecovery, VALIDATED_NETWORK_STABLE_DELAY_MS);
+        } else {
+            liveRecoveryAttemptedForCurrentNetwork = false;
+            startupHandler.postDelayed(unusableNetworkFallback, NETWORK_LOSS_GRACE_DELAY_MS);
+        }
+    }
+
+    private void requestBundledFallbackPreservingActiveWork(String reason) {
+        if (webView == null || hasUsableNetwork() || loadingBundledFallback) return;
+        if (!appShellLoaded) {
+            loadBundledFallback(reason);
+            return;
+        }
+        captureRuntimeStateThen(activeWork -> {
+            if (webView == null || hasUsableNetwork() || loadingBundledFallback) return;
+            if (activeWork) {
+                Log.i(LOG_TAG, "Keeping the live shell open while active user work is present offline.");
+                startupHandler.removeCallbacks(unusableNetworkFallback);
+                startupHandler.postDelayed(unusableNetworkFallback, ACTIVE_WORK_RECHECK_DELAY_MS);
+                return;
+            }
+            loadBundledFallback(reason);
+        });
+    }
+
+    private void captureRuntimeStateThen(Runnable continuation) {
+        captureRuntimeStateThen(activeWork -> continuation.run());
+    }
+
+    private void captureRuntimeStateThen(ActiveWorkCallback callback) {
+        if (webView == null) {
+            callback.onResult(false);
+            return;
+        }
+        webView.evaluateJavascript(
+            "(function(){try{"
+                + "if(window.__nliCaptureAndroidLifecycleSnapshot)window.__nliCaptureAndroidLifecycleSnapshot();"
+                + "var fields=Array.prototype.slice.call(document.querySelectorAll('input,textarea,select,[contenteditable=\"true\"]'));"
+                + "var active=fields.some(function(el){"
+                    + "if(el.disabled||el.readOnly||el.type==='hidden'||el.type==='button'||el.type==='submit'||el.type==='reset'||el.type==='search'||el.hasAttribute('data-mobile-search'))return false;"
+                    + "if(el.type==='file')return !!(el.files&&el.files.length);"
+                    + "if(el.type==='checkbox'||el.type==='radio')return el.checked!==el.defaultChecked;"
+                    + "if(el.tagName==='SELECT')return Array.prototype.some.call(el.options,function(option){return option.selected!==option.defaultSelected;});"
+                    + "if(el.isContentEditable)return String(el.textContent||'').trim().length>0;"
+                    + "return String(el.value||'')!==String(el.defaultValue||'');"
+                + "});"
+                + "return active?'active-work':'idle';"
+            + "}catch(error){return 'idle';}})();",
+            value -> callback.onResult(value != null && value.contains("active-work"))
+        );
+    }
+
+    private interface ActiveWorkCallback {
+        void onResult(boolean activeWork);
     }
 
     private void scheduleLiveStartupFallback() {
@@ -783,6 +959,8 @@ public class MainActivity extends Activity {
         loadingBundledFallback = false;
         appReadinessProbeAttempts = 0;
         startupHandler.removeCallbacks(startupFallback);
+        startupHandler.removeCallbacks(validatedNetworkRecovery);
+        startupHandler.removeCallbacks(unusableNetworkFallback);
         if (!hasUsableNetwork()) {
             loadBundledFallback("offline-at-launch");
             return;
@@ -805,29 +983,14 @@ public class MainActivity extends Activity {
     private void loadBundledFallback(String reason) {
         if (webView == null || loadingBundledFallback) return;
         startupHandler.removeCallbacks(startupFallback);
+        startupHandler.removeCallbacks(validatedNetworkRecovery);
+        startupHandler.removeCallbacks(unusableNetworkFallback);
         loadingBundledFallback = true;
+        appShellLoaded = false;
         appReadinessProbeAttempts = 0;
         Log.w(LOG_TAG, "Loading bundled mobile archive fallback: " + reason);
         webView.stopLoading();
-        String appUrl = freshAppUrl();
-        Thread loader = new Thread(() -> {
-            String html;
-            try {
-                html = bundledMobileHtml();
-            } catch (IOException error) {
-                Log.e(LOG_TAG, "Bundled mobile archive could not be prepared.", error);
-                runOnUiThread(() -> {
-                    if (webView != null && loadingBundledFallback) webView.loadUrl(appUrl);
-                });
-                return;
-            }
-            runOnUiThread(() -> {
-                if (webView == null || !loadingBundledFallback) return;
-                webView.stopLoading();
-                webView.loadDataWithBaseURL(appUrl, html, "text/html", "UTF-8", appUrl);
-            });
-        }, "ots-bundled-mobile-loader");
-        loader.start();
+        webView.loadUrl("https://directus.nativelongisland.com/app/offline-app.html?app-version=" + APP_VERSION);
     }
 
     private void applyApkTimelineTrayFix() {
@@ -925,7 +1088,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (webView != null) webView.onResume();
+        if (webView != null) {
+            webView.onResume();
+            scheduleNetworkStateEvaluation("resume");
+        }
     }
 
     @Override
@@ -942,6 +1108,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        unregisterConnectivityMonitoring();
         startupHandler.removeCallbacksAndMessages(null);
         super.onDestroy();
     }

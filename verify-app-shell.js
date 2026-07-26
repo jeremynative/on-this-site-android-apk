@@ -1,11 +1,12 @@
 const fs = require("fs");
 
-const expectedBuild = "20260725-offline-startup-r1";
+const expectedBuild = "20260725-lightweight-offline-r4";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
 const bundledAppPath = "app/src/main/assets/mobile-app.html";
 const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
+const lightweightOfflineAppPath = "app/src/main/assets/offline-app.html";
 const bundledMobileJsPath = "app/src/main/assets/assets/js/mobile-app.js";
 const stylesPath = "app/src/main/res/values/styles.xml";
 const launchBackgroundPath = "app/src/main/res/drawable/launch_background.xml";
@@ -20,6 +21,7 @@ const bundledMobileIndexPaths = [
 
 const bundledAppBytes = fs.readFileSync(bundledAppPath);
 const bundledLiveAppBytes = fs.readFileSync(bundledLiveAppPath);
+const lightweightOfflineApp = fs.readFileSync(lightweightOfflineAppPath, "utf8");
 const source = fs.readFileSync(mainActivityPath, "utf8");
 const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
 const manifest = fs.readFileSync(manifestPath, "utf8");
@@ -103,6 +105,22 @@ if (!manifest.includes("ACCESS_NETWORK_STATE")) {
   throw new Error("Android shell must be able to detect a true offline launch.");
 }
 requireText("hasUsableNetwork()", "Android shell must route no-network launches directly to the bundled archive.");
+requireText('webView.loadUrl("https://directus.nativelongisland.com/app/offline-app.html?app-version=" + APP_VERSION);', "Android shell must use the lightweight same-origin archive for no-network launches.");
+requireText("registerConnectivityMonitoring();", "Android shell must start runtime connectivity monitoring.");
+requireText("registerDefaultNetworkCallback(connectivityCallback)", "Android shell must monitor the active network on Android 7 and newer.");
+requireText("connectivityManager.registerNetworkCallback(request, connectivityCallback)", "Android shell must monitor connectivity on Android 6.");
+requireText("NET_CAPABILITY_VALIDATED", "Android shell must require a validated network before loading the live shell.");
+requireText("unregisterConnectivityMonitoring();", "Android shell must release its network callback when destroyed.");
+requireText("validated == lastValidatedNetworkState", "Android shell must deduplicate repeated network callback events.");
+requireText("liveRecoveryAttemptedForCurrentNetwork", "Android shell must bound live recovery to one attempt per validated network connection.");
+requireText("VALIDATED_NETWORK_STABLE_DELAY_MS", "Android shell must debounce validated-network recovery.");
+requireText("NETWORK_LOSS_GRACE_DELAY_MS", "Android shell must allow brief Wi-Fi/cellular handoffs before falling back.");
+requireText("|| !loadingBundledFallback", "Android shell must only recover live from an active fallback after validation.");
+requireText("requestBundledFallbackPreservingActiveWork", "Android shell must preserve active work before replacing a live shell.");
+requireText("__nliCaptureAndroidLifecycleSnapshot", "Android shell must capture the current app state before a connectivity transition.");
+requireText("active-work", "Android shell must defer offline fallback while a form has unsaved changes.");
+requireText("ACTIVE_WORK_RECHECK_DELAY_MS", "Android shell must recheck deferred fallback without a reload loop.");
+requireText("scheduleNetworkStateEvaluation(\"resume\");", "Android shell must reconcile connectivity changes that occurred while its WebView was paused.");
 requireText("APP_READINESS_MAX_ATTEMPTS", "Android shell must wait for usable content instead of accepting an empty title shell.");
 requireText("document.querySelector('.offline-map-index')", "Android readiness must verify that the offline place index rendered.");
 requireText("app-readiness-timeout", "Android shell must fall back when the live page never produces usable content.");
@@ -119,9 +137,20 @@ requireText('"/app/long-island-land-mask.geojson".equals(path)', "Android shell 
 requireText('"/app/long-island-land-mask-lite.json".equals(path)', "Android shell must serve the compressible lightweight VPS land mask from the bundled APK.");
 requireText("loadingBundledFallback && \"/mobile-app-live.html\".equals(path)", "Android shell must not intercept the live mobile archive unless the fallback is active.");
 requireText("loadingBundledFallback && \"/mobile-app.html\".equals(path)", "Android shell must serve the full bundled archive when live Directus startup falls back.");
+requireText("loadingBundledFallback && \"/app/offline-app.html\".equals(path)", "Android shell must serve the lightweight offline archive through its bundled HTTPS origin.");
 requireText('assetName = "mobile-app.html";', "Android shell must serve embedded mobile data for the full archive fallback.");
 requireText("mobile-app.html", "Android shell must include the bundled mobile app fallback asset.");
 requireText("mobile-app-live.html", "Android shell must include the lightweight Directus-backed mobile app fallback asset.");
+if (!lightweightOfflineApp.includes("offline-text-mode")
+    || !lightweightOfflineApp.includes("offline-map-index")
+    || !lightweightOfflineApp.includes("mobile-site-index.json")
+    || !lightweightOfflineApp.includes("mobile-site-geometry.json")
+    || !lightweightOfflineApp.includes("mobile-wiki-index.json")) {
+  throw new Error("Lightweight APK fallback must render the saved map and text indexes without online application startup.");
+}
+if (lightweightOfflineApp.length > 180000) {
+  throw new Error("Lightweight APK fallback must remain small enough for fast no-signal startup.");
+}
 requireText("long-island-land-mask.geojson", "Android shell must include the bundled land mask fallback asset.");
 requireText("long-island-land-mask-lite.json", "Android shell must include the lightweight land mask asset.");
 requireText("BuildConfig.MAPBOX_TOKEN", "Android shell must inject the Mapbox token from build configuration.");
@@ -215,6 +244,33 @@ if (!onResumeMatch || !onResumeMatch[0].includes("webView.onResume();")) {
 if (/protected void onResume\(\) \{[\s\S]*?(refreshApp\(|loadBundledFallback\(|loadUrl\(|loadDataWithBaseURL\()/m.test(onResumeMatch[0])) {
   throw new Error("Android shell must not reload the app when returning from another window.");
 }
+if (!onResumeMatch[0].includes("scheduleNetworkStateEvaluation(\"resume\");")) {
+  throw new Error("Android shell must debounce a connectivity reconciliation when returning from another window.");
+}
+const connectivityCallbackMatch = source.match(/connectivityCallback = new ConnectivityManager\.NetworkCallback\(\) \{[\s\S]*?\n        \};/);
+if (!connectivityCallbackMatch) {
+  throw new Error("Android shell must define one bounded runtime network callback.");
+}
+if (/(refreshApp\(|loadBundledFallback\(|loadUrl\(|loadDataWithBaseURL\()/.test(connectivityCallbackMatch[0])) {
+  throw new Error("Network callback methods must debounce state evaluation instead of reloading the WebView directly.");
+}
+const networkStateMatch = source.match(/private void handleNetworkStateChange\(String reason\) \{[\s\S]*?\n    \}/);
+if (!networkStateMatch
+    || !networkStateMatch[0].includes("startupHandler.removeCallbacks(validatedNetworkRecovery);")
+    || !networkStateMatch[0].includes("startupHandler.removeCallbacks(unusableNetworkFallback);")
+    || !networkStateMatch[0].includes("liveRecoveryAttemptedForCurrentNetwork = false;")) {
+  throw new Error("Runtime network transitions must cancel stale opposite-direction work before scheduling a switch.");
+}
+if (!source.includes("loadingBundledFallback\n                        && hasUsableNetwork()\n                        && !liveRecoveryAttemptedForCurrentNetwork")) {
+  throw new Error("A ready fallback must schedule one live retry when the existing network is already validated.");
+}
+const activeWorkFallbackMatch = source.match(/private void requestBundledFallbackPreservingActiveWork\(String reason\) \{[\s\S]*?\n    \}/);
+if (!activeWorkFallbackMatch
+    || !activeWorkFallbackMatch[0].includes("if (activeWork)")
+    || !activeWorkFallbackMatch[0].includes("ACTIVE_WORK_RECHECK_DELAY_MS")
+    || !activeWorkFallbackMatch[0].includes("loadBundledFallback(reason);")) {
+  throw new Error("Offline fallback must defer for active form work and retry without dropping it.");
+}
 const lifecycleReloadGuardMatch = source.match(/private boolean shouldIgnoreLifecycleMainFrameReload\(String reason\) \{[\s\S]*?\n    \}/);
 if (!lifecycleReloadGuardMatch || !lifecycleReloadGuardMatch[0].includes("if (!appShellLoaded) return false;")) {
   throw new Error("Android shell must allow fallback only before the app shell has loaded.");
@@ -235,14 +291,11 @@ if (!source.includes('currentUrl == null || currentUrl.isEmpty() || "about:blank
   throw new Error("Android shell must not block fallback when the current WebView URL is blank.");
 }
 const fallbackMatch = source.match(/private void loadBundledFallback\(String reason\) \{[\s\S]*?\n    \}/);
-if (!fallbackMatch || !fallbackMatch[0].includes('Thread loader = new Thread(() ->') || !fallbackMatch[0].includes('html = bundledMobileHtml();')) {
-  throw new Error("Android shell must prepare the bundled startup shell off the UI thread.");
+if (!fallbackMatch || !fallbackMatch[0].includes('https://directus.nativelongisland.com/app/offline-app.html')) {
+  throw new Error("Android shell must open the lightweight same-origin archive directly during no-signal startup.");
 }
-if (!fallbackMatch || !fallbackMatch[0].includes('webView.loadDataWithBaseURL(appUrl, html, "text/html", "UTF-8", appUrl);')) {
-  throw new Error("Android shell must load the prepared bundled startup shell directly with the live base URL.");
-}
-if (!fallbackMatch || !fallbackMatch[0].includes('webView.loadUrl(appUrl);')) {
-  throw new Error("Android shell must keep URL-intercept fallback if direct bundled startup preparation fails.");
+if (/Thread loader|bundledMobileHtml\(\)|loadDataWithBaseURL/.test(fallbackMatch[0])) {
+  throw new Error("No-signal startup must not parse the full bundled online application before showing saved content.");
 }
 requireText("dispatchTouchEvent", "Android shell must forward app taps into the mobile map.");
 requireText("window.onAndroidMapTap", "Android shell must call the mobile map tap bridge.");
