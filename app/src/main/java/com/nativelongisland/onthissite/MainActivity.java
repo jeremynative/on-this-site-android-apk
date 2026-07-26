@@ -493,6 +493,7 @@ public class MainActivity extends Activity {
             NetworkCapabilities capabilities = manager.getNetworkCapabilities(network);
             return capabilities != null
                 && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                 && (
                     capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
                     || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)

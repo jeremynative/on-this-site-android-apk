@@ -3443,7 +3443,8 @@
           fetchJson(`/items/mobile_comments?limit=-1&filter[status][_eq]=approved&filter[public_activity][_eq]=true&fields=${PUBLIC_COMMENT_FIELDS}`, { fresh: true }),
           fetchJson(`/items/mobile_plant_observations?limit=-1&filter[status][_eq]=approved&fields=${PLANT_OBSERVATION_FIELDS}`, { fresh: true }).catch(() => ({ data: state.plantObservations || [] }))
         ]);
-        state.publicComments = mergeSeededComments(preserveActiveProfileRows(response.data, state.publicComments));
+        const refreshedComments = COMMENT_UTILS.mergeFetchedCommentsPreservingPending(response.data, state.publicComments);
+        state.publicComments = mergeSeededComments(preserveActiveProfileRows(refreshedComments, state.publicComments));
         state.plantObservations = plantResponse.data || [];
         state.profileActivityCache = null;
         if (rerender) {
@@ -5423,6 +5424,28 @@
       return bestMobilePointHitFeature(rendered, event);
     }
 
+    function bestMobileRenderedBiographyFeature(event) {
+      if (!state.map || !event?.point) {
+        return bestClickableFeature((event?.features || []).filter(isMobileBiographyPathFeature));
+      }
+      const rendered = MAP_UTILS.queryRenderedFeaturesAround(
+        state.map,
+        event.point,
+        [
+          "mobile-biography-place-labels",
+          "mobile-biography-place-points",
+          "mobile-biography-place-path",
+          "mobile-biography-path-labels",
+          "mobile-biography-path-point-numbers",
+          "mobile-biography-path-points",
+          "mobile-biography-path-lines"
+        ],
+        8,
+        { fallback: event?.features || [] }
+      );
+      return bestClickableFeature(rendered.filter(isMobileBiographyPathFeature));
+    }
+
     function isMobileBiographyPathFeature(feature) {
       const layerId = feature?.layer?.id || "";
       return layerId === "mobile-biography-place-labels" ||
@@ -5663,6 +5686,44 @@
       };
     }
 
+    function nearestMobileMovingFeature(event, radius = 18) {
+      if (!state.map || !event?.point) return null;
+      let best = null;
+      const consider = (marker, properties) => {
+        const point = marker?.getLngLat?.();
+        const element = marker?.getElement?.();
+        if (!point || !element || !element.getClientRects().length) return;
+        const projected = state.map.project([point.lng, point.lat]);
+        const distance = Math.hypot(projected.x - event.point.x, projected.y - event.point.y);
+        if (distance > radius || (best && distance >= best.distance)) return;
+        best = {
+          distance,
+          feature: {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [point.lng, point.lat] },
+            properties
+          }
+        };
+      };
+      for (const entry of state.mobileMovingBiographyMarkers.values()) {
+        consider(entry.marker, {
+          wiki_slug: entry.item?.slug || "",
+          title: entry.item?.person || "Biography",
+          feature_kind: "moving-biography"
+        });
+      }
+      consider(state.mobileMovingDogMarker, {
+        wiki_slug: MOVING_DOG_WIKI_SLUG,
+        title: "Dog",
+        feature_kind: "moving-dog"
+      });
+      const whalingProperties = state.siteBySlug.has(WHALING_FEATURE_SLUG)
+        ? { slug: WHALING_FEATURE_SLUG, title: "Whaling", feature_kind: "moving-whale" }
+        : { wiki_slug: WHALING_FEATURE_SLUG, title: "Whaling", feature_kind: "moving-whale" };
+      consider(state.mobileMovingWhaleMarker, whalingProperties);
+      return best?.feature || null;
+    }
+
     function openMobileMapTap(event) {
       const androidWebViewTap = event?.source === "android-webview";
       const now = performance.now();
@@ -5676,6 +5737,8 @@
         : `${Math.round((lngLat?.lng || 0) * 10000)}:${Math.round((lngLat?.lat || 0) * 10000)}`;
       if (androidWebViewTap && state.lastMobileMapTapAt > 0 && now - state.lastMobileMapTapAt < 650) return true;
       if (tapKey && state.lastMobileMapTapKey === tapKey && now - state.lastMobileMapTapAt < 300) return true;
+      const movingFeature = nearestMobileMovingFeature(event, androidWebViewTap ? 20 : 18);
+      const biographyFeature = bestMobileRenderedBiographyFeature(event);
       const renderedPointFeature = bestMobileRenderedPointHitFeature(event);
       const preciseMarkerFeature = nearestMobileMarkerFeature(event, mobileMarkerTapRadius(androidWebViewTap));
       const polygonFeature = androidWebViewTap
@@ -5684,7 +5747,9 @@
       const layerEventFeature = androidWebViewTap
         ? null
         : bestMobileLayerEventFeature(event);
-      const feature = renderedPointFeature ||
+      const feature = movingFeature ||
+        biographyFeature ||
+        renderedPointFeature ||
         preciseMarkerFeature ||
         polygonFeature ||
         layerEventFeature ||
@@ -8763,7 +8828,7 @@
           ...payload,
           status: created?.data?.status || payload.status,
           author_email: state.profile?.email || "",
-          _local_pending: false
+          _local_pending: true
         };
         state.publicComments.push(visibleComment);
         if (Number(profile.id)) {
@@ -8777,6 +8842,13 @@
             source_slug: sourceSlug,
             source_title: sourceTitle,
             created_at: visibleComment.created_at || payload.created_at
+          }).then(() => {
+            state.profileActivityCache = null;
+            renderProfile();
+            renderRewards();
+          }).catch(error => {
+            console.warn("Comment posted, but its point will retry later.", error);
+            return null;
           });
         }
         if (replyToProfile && profile.id && Number(replyToProfile) !== Number(profile.id)) {
@@ -11734,7 +11806,7 @@
       const activeProfile = currentContributorProfile() || state.profile;
       const resolvedStats = stats || mobileProfileStats(activeProfile, { syncRemote: false });
       const pointsSyncing = !state.profileActivitySynced || resolvedStats.pointsSyncing;
-      const points = pointsSyncing ? "..." : mobileProfilePointTotal(resolvedStats);
+      const points = mobileProfilePointTotal(resolvedStats);
       const displayName = activeProfile?.display_name || state.profile.display_name || state.profile.email || "Profile";
       loginOpenBtn.textContent = `${displayName} (${points})`;
       loginOpenBtn.title = pointsSyncing ? `${displayName}: refreshing profile points` : `${displayName}: ${points} profile ${points === 1 ? "point" : "points"}`;
@@ -11835,7 +11907,7 @@
       const loginRewards = showProgress ? loginRewardStats(activeProfile) : { totalDays: 0, currentStreak: 0, bestStreak: 0, lastLoginDate: "" };
       const publicSiteCount = PROFILE_UTILS.publicSiteTotal(state.sites);
       const visitProgress = PROFILE_UTILS.visitProgressLabel(visits.length, publicSiteCount);
-      const totalPoints = profileSyncing || stats.pointsSyncing ? "..." : mobileProfilePointTotal(stats);
+      const totalPoints = mobileProfilePointTotal(stats);
       updateProfileMenuButton(stats);
       const recentVisits = visits.slice(0, 3);
       profileCardEl.innerHTML = `
@@ -14653,15 +14725,23 @@
           requireAuth: true,
           authExpiredMessage: "Login could not establish a secure contributor session. Please try again."
         });
-        // A points or optional activity request must not turn a valid account
-        // login into a failed login.
-        await awardDailyLoginReward({ silent: true });
-        await ensureProfileStatsSynced();
-        scheduleMemberProfileActivityTracking({ login: true, force: true });
         showLoginStatus("Logged in.", "success");
         showBanner("Logged in.");
         if (state.selectedSite?.slug) openSite(state.selectedSite.slug, { focus: false });
         renderFollowing();
+        void awardDailyLoginReward({ silent: true }).then(() => {
+          renderProfile();
+          renderRewards();
+        });
+        void ensureProfileStatsSynced().then(() => {
+          renderProfile();
+          renderRewards();
+          if (profilesSheetEl?.classList.contains("open")) renderProfiles();
+        }).catch(error => {
+          console.warn("Contributor profile activity will retry after login.", error);
+          return false;
+        });
+        scheduleMemberProfileActivityTracking({ login: true, force: true });
       } catch (error) {
         showLoginStatus(error.message || "Login did not work. Check the email/password or request account approval.", "error");
         showBanner(error.message || "Login did not work. Check the email/password or request account approval.");

@@ -174,6 +174,19 @@
     return [...existing, ...seeded];
   }
 
+  function mergeFetchedCommentsPreservingPending(nextRows = [], currentRows = []) {
+    const incoming = (Array.isArray(nextRows) ? nextRows : []).map(row => ({
+      ...row,
+      _local_pending: false
+    }));
+    const incomingIds = new Set(incoming.map(row => String(row?.id || "")).filter(Boolean));
+    const pending = (Array.isArray(currentRows) ? currentRows : []).filter(row =>
+      row?._local_pending === true &&
+      (!row.id || !incomingIds.has(String(row.id)))
+    );
+    return pending.length ? [...incoming, ...pending] : incoming;
+  }
+
   function mergeRecordsByIdOrKey(target = [], records = [], keyField = "vote_key") {
     (records || []).forEach(record => {
       if (!record) return;
@@ -268,6 +281,7 @@
     matchesSource,
     commentsForSource,
     mergeSeededComments,
+    mergeFetchedCommentsPreservingPending,
     mergeRecordsByIdOrKey,
     mergeCommentVoteRecords,
     refreshRemoteCommentVote,
