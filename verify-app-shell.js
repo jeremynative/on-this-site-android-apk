@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260727-apk-interaction-r10";
+const expectedBuild = "20260727-activity-feed-r11";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";

@@ -745,6 +745,7 @@
       deferredDataLoaded: false,
       deferredDataLoading: false,
       deferredCommunityDataLoaded: false,
+      mobileActivityRenderedSignature: "",
       profileActivitySynced: false,
       profileActivitySyncPromise: null,
       mobileStartupRendering: false,
@@ -12818,9 +12819,27 @@
       updateMobileNotificationUnreadBadge();
     }
 
+    function mobileActivityFeedSignature(feed = []) {
+      return feed.map(item => [
+        item.type,
+        item.sourceType,
+        item.activityId,
+        item.id,
+        item.slug,
+        item.label,
+        activityDateLabel(item.date),
+        item.title,
+        item.preview,
+        item.pinned ? "1" : "0"
+      ].map(value => String(value || "")).join("\u001f")).join("\u001e");
+    }
+
     function renderMobileActivitySheet() {
       if (!mobileActivityListEl) return;
       const feed = latestMobileActivity();
+      const signature = mobileActivityFeedSignature(feed);
+      if (signature === state.mobileActivityRenderedSignature && mobileActivityListEl.hasChildNodes()) return;
+      const preservedScrollTop = mobileActivityListEl.scrollTop;
       mobileActivityListEl.innerHTML = `
         <p class="summary">Most recent public activity from the archive, newest first.</p>
         ${feed.map((item, index) => `
@@ -12831,6 +12850,8 @@
           </button>
         `).join("") || `<p class="summary">No public activity has loaded yet.</p>`}
       `;
+      state.mobileActivityRenderedSignature = signature;
+      mobileActivityListEl.scrollTop = Math.min(preservedScrollTop, Math.max(0, mobileActivityListEl.scrollHeight - mobileActivityListEl.clientHeight));
     }
 
     function mobileActivityPinIconHtml() {
@@ -12865,7 +12886,6 @@
       if (!state.deferredCommunityDataLoaded && !window.NLI_MOBILE_DATA) {
         await loadDeferredData({ includeCommunity: true });
       }
-      renderMobileActivitySheet();
       markMobileActivitySeen();
     }
 
