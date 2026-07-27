@@ -5870,6 +5870,11 @@
       state.mobilePanelTapBlockUntil = Math.max(state.mobilePanelTapBlockUntil || 0, now + durationMs);
     }
 
+    function markAndroidUiOverlayTap(durationMs = 650) {
+      state.lastAndroidUiOverlayTapAt = performance.now();
+      blockMobileMapTaps(durationMs);
+    }
+
     function isMobileMapTapBlocked() {
       return performance.now() < (state.mobilePanelTapBlockUntil || 0);
     }
@@ -5945,11 +5950,11 @@
     function blockAndroidUiOverlayMapTapStart(event) {
       const target = event?.target;
       if (!target?.closest || isAndroidMapMarkerElement(target)) return;
-      if (target.closest(ANDROID_UI_TAP_OVERLAY_SELECTOR)) blockMobileMapTaps(240);
+      if (target.closest(ANDROID_UI_TAP_OVERLAY_SELECTOR)) markAndroidUiOverlayTap();
     }
 
     function consumePanelCloseEvent(event) {
-      blockMobileMapTaps();
+      markAndroidUiOverlayTap();
       event?.preventDefault?.();
       event?.stopPropagation?.();
       event?.stopImmediatePropagation?.();
@@ -6016,8 +6021,7 @@
       const isOverlayTap = androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight)
         .some(candidate => isAndroidUiOverlayTap(candidate.clientX, candidate.clientY));
       if (isOverlayTap) {
-        state.lastAndroidUiOverlayTapAt = performance.now();
-        blockMobileMapTaps(240);
+        markAndroidUiOverlayTap();
       }
       return isOverlayTap;
     };

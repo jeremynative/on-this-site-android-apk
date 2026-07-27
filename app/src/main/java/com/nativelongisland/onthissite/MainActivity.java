@@ -65,7 +65,7 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260727-timeline-integrity-r9";
+    static final String APP_VERSION = "20260727-apk-interaction-r10";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -1046,7 +1046,7 @@ public class MainActivity extends Activity {
                 + "max-height:76px!important;font-size:20px!important;"
             + "}"
             + "html.android-apk-timeline-fix .timeline-current{"
-                + "position:relative!important;grid-template-rows:auto auto minmax(0,1fr) auto!important;"
+                + "position:relative!important;grid-template-rows:auto auto auto minmax(0,1fr) auto!important;"
                 + "gap:3px!important;min-height:0!important;max-height:100%!important;"
                 + "overflow:hidden!important;padding:7px 8px!important;box-sizing:border-box!important;"
             + "}"
@@ -1072,10 +1072,13 @@ public class MainActivity extends Activity {
             + "html.android-apk-timeline-fix .timeline-toggle{display:none!important;}"
             + "html.android-apk-timeline-fix.panel-timeline .mobile-timeline,"
             + "html.android-apk-timeline-fix .app.panel-timeline .mobile-timeline{"
-                + "grid-template-columns:36px minmax(0,1fr) 36px!important;max-height:none!important;overflow:auto!important;"
+                + "grid-template-columns:36px minmax(0,1fr) 36px!important;max-height:none!important;"
+                + "height:100%!important;min-height:0!important;overflow:hidden!important;"
             + "}"
             + "html.android-apk-timeline-fix.panel-timeline .timeline-current,"
-            + "html.android-apk-timeline-fix .app.panel-timeline .timeline-current{overflow:auto!important;}"
+            + "html.android-apk-timeline-fix .app.panel-timeline .timeline-current{"
+                + "height:100%!important;min-height:0!important;overflow:hidden!important;"
+            + "}"
             + "html.android-apk-timeline-fix.panel-timeline .timeline-source-row .source,"
             + "html.android-apk-timeline-fix .app.panel-timeline .timeline-source-row .source{display:block!important;}"
             + "html.android-apk-timeline-fix.panel-timeline .timeline-current .teaser,"

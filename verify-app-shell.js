@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260727-timeline-integrity-r9";
+const expectedBuild = "20260727-apk-interaction-r10";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -329,6 +329,8 @@ requireText("boolean isArchiveApp = \"nativelongisland.com\".equalsIgnoreCase(ho
 requireText("applyApkTimelineTrayFix", "Android shell must apply the APK timeline tray override after the live app loads.");
 requireText("android-apk-timeline-tray-fix", "Android shell must inject the APK timeline tray CSS override.");
 requireText("Full article", "Android shell must shorten the timeline action label inside the APK WebView.");
+requireText("grid-template-rows:auto auto auto minmax(0,1fr) auto!important", "Android timeline tray must reserve an explicit final row for its actions.");
+requireText("height:100%!important;min-height:0!important;overflow:hidden!important", "Android timeline mode must keep the action row inside the visible tray.");
 
 if (!releaseWorkflow.includes("GITHUB_RUN_NUMBER") || !releaseWorkflow.includes("latest_apk") || !releaseWorkflow.includes("version_code=\"$run_number\"")) {
   throw new Error("Android release workflow must keep versionCode monotonic across testing and tagged releases.");
