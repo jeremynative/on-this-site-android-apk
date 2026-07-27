@@ -60,11 +60,12 @@
   const timelineFields = fields([
     "id", "title", "description", "date_label", "period", "start_year", "end_year", "sort_key",
     "source_type", "source_id", "source_slug", "source_title", "source_section", "source_section_key",
-    "location_label", "citation", "source_excerpt", "research_source_id", "latitude", "longitude"
+    "location_label", "citation", "source_excerpt", "research_source_id", "site", "wiki_article", "latitude", "longitude"
   ]);
   const basicTimelineFields = fields([
     "id", "title", "description", "date_label", "period", "start_year", "end_year", "sort_key",
-    "source_type", "source_id", "source_slug", "source_title", "source_section", "location_label", "latitude", "longitude"
+    "source_type", "source_id", "source_slug", "source_title", "source_section", "location_label",
+    "site", "wiki_article", "latitude", "longitude"
   ]);
   const todoMapFields = fields([
     "id", "title", "connected_site", "todo_geojson", "todo_map_geometry_type", "todo_map_icon", "todo_map_notes", "ready_to_apply"

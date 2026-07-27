@@ -681,14 +681,18 @@
     const state = {
       map: null,
       sites: [],
+      siteById: new Map(),
       siteBySlug: new Map(),
       wikiArticles: [],
+      wikiById: new Map(),
       wikiBySlug: new Map(),
       filtered: [],
       mapSites: [],
       timelineEvents: [],
       timelineById: new Map(),
       exhibits: [],
+      eventById: new Map(),
+      eventBySlug: new Map(),
       contributorProfiles: [],
       publicComments: [],
       commentVotes: [],
@@ -3003,6 +3007,7 @@
       if (window.NLI_MOBILE_DATA) {
         state.sites = repairSiteTitles((window.NLI_MOBILE_DATA.sites || []).map(SITE_UTILS.sanitizePublicSiteContent));
         state.wikiArticles = (window.NLI_MOBILE_DATA.wikiArticles || []).map(sanitizePublicWikiArticle);
+        state.wikiById = new Map(state.wikiArticles.map(article => [Number(article.id), article]));
         state.wikiBySlug = new Map(state.wikiArticles.map(article => [article.slug, article]));
         state.layers = window.NLI_MOBILE_DATA.layers || [];
         state.timelineEvents = window.NLI_MOBILE_DATA.timelineEvents || [];
@@ -3069,7 +3074,7 @@
       const blogPosts = Number(window.NLI_MOBILE_DATA?.blogPosts?.length || headerEls[0].dataset.blogCount || 10);
       const calendarEvents = state.exhibits?.length || 0;
       const text = isOfflineTextMode()
-        ? `Offline archive: ${listings} listings and ${wikiArticles} wiki articles are saved on this device. Search or browse text below; maps, media, accounts, and submissions return when online.`
+        ? `Offline archive: ${listings} listings and ${wikiArticles} wiki articles are available offline. Search or browse text below; maps, media, accounts, and submissions return when online.`
         : isApkSnapshotMode()
           ? `${listings} listings loaded from the APK snapshot. Click a pin or colored territory to read its article.`
         : `${listings} listings, ${wikiArticles} wiki articles, ${blogPosts} blog posts, and ${calendarEvents} calendar events loaded. Click a pin or colored territory to read its article.`;
@@ -3212,6 +3217,7 @@
         .then(data => ({ data }))
         .then(response => {
           state.wikiArticles = (response.data || []).map(sanitizePublicWikiArticle);
+          state.wikiById = new Map(state.wikiArticles.map(article => [Number(article.id), article]));
           state.wikiBySlug = new Map(state.wikiArticles.map(article => [article.slug, article]));
           clearRelatedSiteCaches();
           updateMobileHeaderInstruction();
@@ -3253,6 +3259,7 @@
       state.timelineById = new Map(state.timelineEvents.map(item => [String(item.id), item]));
       rebuildSortedTimelineEvents();
       state.wikiArticles = (wikiResponse.data || []).map(sanitizePublicWikiArticle);
+      state.wikiById = new Map(state.wikiArticles.map(article => [Number(article.id), article]));
       state.wikiBySlug = new Map(state.wikiArticles.map(article => [article.slug, article]));
       clearRelatedSiteCaches();
       state.exhibits = mergeCalendarEvents(eventResponse.data || [], legacyExhibitResponse.data || []);
@@ -3556,6 +3563,7 @@
         })
         .filter(site => site.title);
       state.siteBySlug = new Map(state.sites.map(site => [site.slug || "", site]));
+      state.siteById = new Map(state.sites.map(site => [Number(site.id), site]));
       state.mapSites = state.sites.filter(site => (
         site.center &&
         site.slug !== WHALING_FEATURE_SLUG &&
@@ -3573,9 +3581,12 @@
     }
 
     function prepareExhibits() {
-      state.exhibits = state.exhibits
+      const prepared = state.exhibits
         .map(exhibit => ({ ...exhibit, center: geometryCenter(exhibit.geojson) }))
-        .filter(exhibit => exhibit.center && exhibit.title);
+        .filter(exhibit => exhibit.title);
+      state.eventById = new Map(prepared.map(exhibit => [Number(exhibit.id), exhibit]));
+      state.eventBySlug = new Map(prepared.map(exhibit => [exhibit.slug || "", exhibit]));
+      state.exhibits = prepared.filter(exhibit => exhibit.center);
     }
 
     function visitableSites() {
@@ -4711,6 +4722,7 @@
       }
       state.activeTimelineIndex = Math.max(0, Math.min(events.length - 1, state.activeTimelineIndex || 0));
       const event = events[state.activeTimelineIndex];
+      const contentTarget = mobileTimelineContentTarget(event);
       const sourceName = cleanPlainText(event.source_title) || `${state.activeTimelineIndex + 1} of ${events.length}`;
       const sourceNote = timelineSourceText(event);
       mobileTimelinePrevBtn.disabled = state.activeTimelineIndex <= 0;
@@ -4727,21 +4739,10 @@
         <p class="teaser">${escapeHtml(timelineTeaser(event))}</p>
         <span class="timeline-actions">
           <button type="button" data-timeline-map>Map</button>
-          <button class="primary" type="button" data-timeline-open>Full article</button>
+          ${contentTarget ? `<button class="primary" type="button" data-timeline-open>Full article</button>` : ""}
           <button type="button" data-timeline-hide>Hide</button>
         </span>
       `;
-    }
-
-    function mobileTimelineExhibit(event = {}) {
-      if (!event || event.source_type !== "calendar_event") return null;
-      if (event.source_slug) {
-        const bySlug = state.exhibits.find(item => item.slug === event.source_slug);
-        if (bySlug) return bySlug;
-      }
-      const sourceId = Number(event.source_id);
-      if (Number.isFinite(sourceId)) return state.exhibits.find(item => Number(item.id) === sourceId) || null;
-      return null;
     }
 
     function mobileTimelineExhibitSite(exhibit = {}) {
@@ -4749,9 +4750,33 @@
       return slug ? state.sites.find(item => item.slug === slug) || null : null;
     }
 
+    function mobileTimelineContentTarget(event = {}) {
+      return TIMELINE_UTILS.contentTarget(event, {
+        siteById: state.siteById,
+        siteBySlug: state.siteBySlug,
+        wikiById: state.wikiById,
+        wikiBySlug: state.wikiBySlug,
+        calendarById: state.eventById,
+        calendarBySlug: state.eventBySlug
+      });
+    }
+
+    function mobileTimelineHasMapTarget(event = {}) {
+      const target = mobileTimelineContentTarget(event);
+      if (target?.type === "site" && target.record?.center) return true;
+      if (target?.type === "calendar_event") {
+        if (target.record?.center) return true;
+        if (mobileTimelineExhibitSite(target.record)?.center) return true;
+      }
+      const longitude = String(event.longitude ?? "").trim();
+      const latitude = String(event.latitude ?? "").trim();
+      return Boolean(longitude && latitude && Number.isFinite(Number(longitude)) && Number.isFinite(Number(latitude)));
+    }
+
     function focusMobileTimelineEvent(event) {
       if (!event) return;
-      const exhibit = mobileTimelineExhibit(event);
+      const target = mobileTimelineContentTarget(event);
+      const exhibit = target?.type === "calendar_event" ? target.record : null;
       if (exhibit) {
         const site = mobileTimelineExhibitSite(exhibit);
         if (site) {
@@ -4770,17 +4795,15 @@
           return;
         }
       }
-      if (event.source_slug) {
-        const site = state.sites.find(item => item.slug === event.source_slug);
-        if (site) {
-          state.selectedSlug = site.slug;
-          state.selectedSite = site;
-          syncActiveSiteMapLabel(site);
-          focusSite(site, { timeline: true });
-          window.setTimeout(() => animateMobileSiteMarker(site), 2400);
-          showBanner(event.source_title || site.title || "Site located on the map.");
-          return;
-        }
+      const site = target?.type === "site" ? target.record : null;
+      if (site) {
+        state.selectedSlug = site.slug;
+        state.selectedSite = site;
+        syncActiveSiteMapLabel(site);
+        focusSite(site, { timeline: true });
+        window.setTimeout(() => animateMobileSiteMarker(site), 2400);
+        showBanner(event.source_title || site.title || "Site located on the map.");
+        return;
       }
       if (event.latitude && event.longitude && state.map) {
         const coordinates = [Number(event.longitude), Number(event.latitude)];
@@ -4813,21 +4836,17 @@
 
     function openMobileTimelineEvent(event) {
       if (!event) return;
-      const exhibit = mobileTimelineExhibit(event);
-      if (exhibit) {
-        openExhibit(exhibit);
+      const target = mobileTimelineContentTarget(event);
+      if (target?.type === "calendar_event") {
+        openExhibit(target.record);
         return;
       }
-      const slug = event.source_slug;
-      const title = normalizeText(event.source_title || event.title);
-      const site = slug ? state.sites.find(item => item.slug === slug) : state.sites.find(item => normalizeText(item.title) === title);
-      if (site) {
-        openSite(site.slug);
+      if (target?.type === "site") {
+        openSite(target.record.slug);
         return;
       }
-      const wiki = slug ? state.wikiBySlug.get(slug) : state.wikiArticles.find(item => normalizeText(item.title) === title);
-      if (wiki) {
-        openWikiArticle(wiki.slug, { timelineEventId: event.id, timelineEvent: event });
+      if (target?.type === "wiki") {
+        openWikiArticle(target.record.slug, { timelineEventId: event.id, timelineEvent: event });
         return;
       }
       if (event.latitude && event.longitude) {
@@ -8276,8 +8295,15 @@
       }
       const move = () => {
         hero.classList.remove("is-compact");
-        if (detailHeroHomeNode?.parentNode) detailHeroHomeNode.replaceWith(hero);
-        else detailBodyEl.prepend(hero);
+        if (detailHeroHomeNode?.parentNode) {
+          detailHeroHomeNode.replaceWith(hero);
+        } else if (detailHeroHomeNode) {
+          // The detail body was replaced while its hero was docked. Discard the
+          // detached article's hero instead of inserting it into the new article.
+          hero.remove();
+        } else {
+          detailBodyEl.prepend(hero);
+        }
         detailHeroHomeNode = null;
         detailHeroDockEl.setAttribute("aria-hidden", "true");
         detailEl.classList.remove("hero-docked");
@@ -10906,24 +10932,26 @@
       if (kind === "on-this-date") {
         const event = mobileOnThisDateMoment();
         if (!event) return null;
+        const hasContent = Boolean(mobileTimelineContentTarget(event));
         return {
           kind,
           label: `On This Date - ${timelineLabel(event)}`,
           title: timelineTitle(event),
           summary: timelineTeaser(event),
-          actionLabel: "Read history",
+          actionLabel: hasContent ? "Read history" : (mobileTimelineHasMapTarget(event) ? "Show on map" : ""),
           event
         };
       }
       if (kind === "did-you-know") {
         const event = mobileDidYouKnowMoment();
         if (!event) return null;
+        const hasContent = Boolean(mobileTimelineContentTarget(event));
         return {
           kind,
           label: "Did You Know?",
           title: timelineTitle(event),
           summary: timelineTeaser(event),
-          actionLabel: "Learn more",
+          actionLabel: hasContent ? "Learn more" : (mobileTimelineHasMapTarget(event) ? "Show on map" : ""),
           event
         };
       }
@@ -10983,7 +11011,10 @@
       if (mobileStartupSpotlightLabelEl) mobileStartupSpotlightLabelEl.textContent = payload.label;
       if (mobileStartupSpotlightTitleEl) mobileStartupSpotlightTitleEl.textContent = payload.title;
       if (mobileStartupSpotlightSummaryEl) mobileStartupSpotlightSummaryEl.textContent = payload.summary;
-      if (mobileStartupSpotlightLearnBtn) mobileStartupSpotlightLearnBtn.textContent = payload.actionLabel;
+      if (mobileStartupSpotlightLearnBtn) {
+        mobileStartupSpotlightLearnBtn.textContent = payload.actionLabel;
+        mobileStartupSpotlightLearnBtn.hidden = !payload.actionLabel;
+      }
       mobileStartupSpotlightEl.hidden = false;
       mobileStartupSpotlightEl.classList.add("show");
       mobilePromoButtons.forEach(button => {
@@ -14380,7 +14411,7 @@
       setMobilePanelMode("nearby");
     });
     mobileTimelineCurrentBtn.addEventListener("click", event => {
-      const current = sortedTimelineEvents()[state.activeTimelineIndex || 0];
+      const current = visibleMobileTimelineEvents()[state.activeTimelineIndex || 0];
       if (event.target.closest("[data-timeline-source-info]")) {
         event.preventDefault();
         event.stopPropagation();

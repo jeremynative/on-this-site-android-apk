@@ -252,6 +252,48 @@
     return Number.isFinite(numericSourceId) && Number(event.source_id) === numericSourceId;
   }
 
+  function relatedRecordId(value) {
+    if (value && typeof value === "object") return value.id ?? value.value ?? "";
+    return value;
+  }
+
+  function recordFromIndex(index, value) {
+    if (!index || !hasValue(value) || typeof index.get !== "function") return null;
+    const candidates = [value, String(value)];
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) candidates.push(numeric);
+    for (const candidate of candidates) {
+      const record = index.get(candidate);
+      if (record) return record;
+    }
+    return null;
+  }
+
+  function contentTarget(event = {}, options = {}) {
+    const relatedSite = recordFromIndex(options.siteById, relatedRecordId(event.site));
+    if (relatedSite) return { type: "site", record: relatedSite };
+
+    const relatedWiki = recordFromIndex(options.wikiById, relatedRecordId(event.wiki_article));
+    if (relatedWiki) return { type: "wiki", record: relatedWiki };
+
+    if (event.source_type === "site") {
+      const site = recordFromIndex(options.siteBySlug, event.source_slug)
+        || recordFromIndex(options.siteById, event.source_id);
+      if (site) return { type: "site", record: site };
+    }
+    if (event.source_type === "wiki") {
+      const wiki = recordFromIndex(options.wikiBySlug, event.source_slug)
+        || recordFromIndex(options.wikiById, event.source_id);
+      if (wiki) return { type: "wiki", record: wiki };
+    }
+    if (event.source_type === "calendar_event") {
+      const calendarEvent = recordFromIndex(options.calendarBySlug, event.source_slug)
+        || recordFromIndex(options.calendarById, event.source_id);
+      if (calendarEvent) return { type: "calendar_event", record: calendarEvent };
+    }
+    return null;
+  }
+
   function eventsForSource(events = [], sourceType = "", sourceId = "", sourceSlug = "", options = {}) {
     const valueForSort = typeof options.sortValue === "function" ? options.sortValue : event => sortValue(event, options.sortOptions || {});
     return [...(events || [])]
@@ -407,6 +449,7 @@
     eraYearValue,
     eraForEvent,
     eventMatchesSource,
+    contentTarget,
     eventsForSource,
     locationLabel,
     teaser,
