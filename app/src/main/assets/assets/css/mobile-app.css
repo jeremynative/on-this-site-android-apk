@@ -974,6 +974,17 @@
       display: inline-flex;
     }
 
+    body.native-android-app .mobile-map-locate,
+    body.native-android-app .mobile-promo-dock {
+      bottom: 44px;
+    }
+
+    @media (min-height: 700px) {
+      body.native-android-app {
+        --map-height: 41vh;
+      }
+    }
+
     body:has(.research-question-shell-mobile .research-question-prompt:not([hidden])) .mobile-map-locate {
       bottom: 136px;
     }
@@ -1032,6 +1043,12 @@
     body.mobile-content-open .mobile-promo-dock,
     body.research-question-dialog-open .mobile-promo-dock {
       display: none;
+      pointer-events: none;
+    }
+
+    body:has(.mobile-startup-spotlight:not([hidden])) .mobile-promo-dock,
+    body:has(.mobile-startup-spotlight:not([hidden])) .mobile-map-locate {
+      visibility: hidden;
       pointer-events: none;
     }
 
@@ -1689,6 +1706,29 @@
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
         gap: 6px;
         padding-bottom: 2px;
+      }
+
+      body.native-android-app .mobile-map-shell,
+      body.native-android-app #map {
+        min-height: 0;
+      }
+
+      body.native-android-app .mobile-activity-button,
+      body.native-android-app .mobile-notification-button {
+        top: var(--mobile-map-actions-top, calc(var(--app-top-safe) + 190px));
+        left: auto;
+      }
+
+      body.native-android-app .mobile-activity-button {
+        right: max(128px, var(--app-right-safe));
+      }
+
+      body.native-android-app .mobile-notification-button {
+        right: max(76px, var(--app-right-safe));
+      }
+
+      body.native-android-app .mobile-map-locate {
+        bottom: 12px;
       }
     }
 

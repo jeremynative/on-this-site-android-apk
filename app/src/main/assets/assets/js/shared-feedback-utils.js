@@ -4,6 +4,7 @@
   const HTML2CANVAS_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
   let html2canvasRuntimePromise = null;
   const FEEDBACK_ENDPOINT = "https://nativelongisland.com/feedback-email.php";
+  const FEEDBACK_SUBMISSION_ENDPOINT = "https://directus.nativelongisland.com/flows/trigger/5ff12770-f45c-4df1-b0e4-1420229b46af";
 
   const PLATFORM_COPY = {
     desktop: {
@@ -91,13 +92,15 @@
 
   async function submitFeedbackReview(record = {}, options = {}) {
     const token = options.accessToken || "";
-    const response = await fetch(FEEDBACK_ENDPOINT, {
+    const response = await fetch(FEEDBACK_SUBMISSION_ENDPOINT, {
       method: "POST",
       headers: token
         ? { "content-type": "application/json", authorization: `Bearer ${token}` }
         : { "content-type": "application/json" },
       body: JSON.stringify({
         type: "feedback_submission",
+        client: "on-this-site-20260728",
+        website: "",
         app_url: options.appUrl || window.location.href,
         platform: options.platform || record.platform || "desktop",
         record

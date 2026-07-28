@@ -3008,6 +3008,8 @@
       if (window.NLI_MOBILE_DATA) {
         state.sites = repairSiteTitles((window.NLI_MOBILE_DATA.sites || []).map(SITE_UTILS.sanitizePublicSiteContent));
         state.wikiArticles = (window.NLI_MOBILE_DATA.wikiArticles || []).map(sanitizePublicWikiArticle);
+        state.blogPosts = (window.NLI_MOBILE_DATA.blogPosts || []).map(normalizeBlogPost);
+        state.blogPostsLoaded = state.blogPosts.length > 0;
         state.wikiById = new Map(state.wikiArticles.map(article => [Number(article.id), article]));
         state.wikiBySlug = new Map(state.wikiArticles.map(article => [article.slug, article]));
         state.layers = window.NLI_MOBILE_DATA.layers || [];
@@ -10304,14 +10306,36 @@
     async function fetchBlogPosts() {
       if (state.blogPostsLoaded) return state.blogPosts;
       try {
-        const response = await fetch("https://nativelongisland.com/wp-json/wp/v2/posts?per_page=12&_embed=1", { cache: "no-store" });
-        if (!response.ok) throw new Error("Blog unavailable");
-        state.blogPosts = await response.json();
+        const response = await fetchJson(
+          "/items/blog_posts?limit=12&sort=-published_at,title&filter[status][_eq]=published&fields=id,title,slug,summary,content,published_at,featured_image_url,source_url",
+          { cacheKey: "mobile-blog-posts", ttl: 300000, fresh: false }
+        );
+        state.blogPosts = (response.data || []).map(normalizeBlogPost);
+        if (!state.blogPosts.length) throw new Error("Directus blog unavailable");
       } catch {
-        state.blogPosts = [];
+        try {
+          const response = await fetch("https://nativelongisland.com/wp-json/wp/v2/posts?per_page=12&_embed=1", { cache: "no-store" });
+          if (!response.ok) throw new Error("WordPress blog unavailable");
+          state.blogPosts = (await response.json()).map(normalizeBlogPost);
+        } catch {
+          state.blogPosts = [];
+        }
       }
       state.blogPostsLoaded = true;
       return state.blogPosts;
+    }
+
+    function normalizeBlogPost(post = {}) {
+      if (post?.title?.rendered) return post;
+      const image = post.featured_image_url || "";
+      return {
+        ...post,
+        title: { rendered: post.title || "Blog post" },
+        excerpt: { rendered: post.summary || "" },
+        content: { rendered: post.content || post.summary || "" },
+        date: post.published_at || post.date || "",
+        _embedded: image ? { "wp:featuredmedia": [{ source_url: image }] } : {}
+      };
     }
 
     async function openBlogPanel() {
@@ -10901,7 +10925,7 @@
       const rect = mapEl?.getBoundingClientRect();
       if (!rect?.height) return;
       const cardHeight = mobileStartupSpotlightEl.offsetHeight || 104;
-      const bottomInset = 58;
+      const bottomInset = isNativeAndroidApp() ? 96 : 58;
       const top = Math.max(rect.top + 8, rect.bottom - cardHeight - bottomInset);
       mobileStartupSpotlightEl.style.top = `${Math.round(top)}px`;
     }
@@ -14544,7 +14568,7 @@
     mobileLearnOpenBtn?.addEventListener("click", () => {
       localStorage.removeItem("nli-kid-mode");
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
-      openPage("knowledgebase");
+      openAppPage("knowledgebase");
       showBanner("Learning articles opened.");
     });
     suggestSiteOpenBtn.addEventListener("click", () => {

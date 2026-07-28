@@ -1,6 +1,8 @@
 package com.nativelongisland.onthissite;
 
 import android.Manifest;
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -25,12 +27,16 @@ import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.Log;
 import android.graphics.Color;
+import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.webkit.ConsoleMessage;
 import android.webkit.GeolocationPermissions;
@@ -65,7 +71,7 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260727-activity-feed-r11";
+    static final String APP_VERSION = "20260728-apk-ui-audit-r12";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -84,6 +90,8 @@ public class MainActivity extends Activity {
 
     private WebView webView;
     private View loadingCover;
+    private TextView loadingCoverLabel;
+    private ObjectAnimator loadingOutlinePulse;
     private GeolocationPermissions.Callback pendingLocationCallback;
     private String pendingLocationOrigin;
     private PermissionRequest pendingCameraRequest;
@@ -279,6 +287,14 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public void onPageCommitVisible(WebView view, String url) {
+                super.onPageCommitVisible(view, url);
+                if (!isSiteGroundChallengeUrl(url) && isNativeLongIslandUrl(url)) {
+                    hideLoadingCover();
+                }
+            }
+
+            @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
                 if (request != null && request.isForMainFrame()) {
@@ -309,7 +325,7 @@ public class MainActivity extends Activity {
                     loadBundledFallback("siteground-challenge");
                     return;
                 }
-                if (loadingBundledFallback) hideLoadingCover();
+                hideLoadingCover();
                 validateLoadedAppShell(url);
             }
         });
@@ -335,15 +351,62 @@ public class MainActivity extends Activity {
     }
 
     private View createLoadingCover() {
-        TextView cover = new TextView(this);
-        cover.setText("On This Site");
-        cover.setTextColor(Color.rgb(18, 34, 25));
-        cover.setTextSize(28);
-        cover.setTypeface(Typeface.DEFAULT_BOLD);
-        cover.setGravity(Gravity.CENTER);
+        FrameLayout cover = new FrameLayout(this);
         cover.setBackgroundColor(Color.rgb(238, 243, 237));
         cover.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setGravity(Gravity.CENTER);
+        int cardPadding = dp(22);
+        card.setPadding(cardPadding, cardPadding, cardPadding, cardPadding);
+        GradientDrawable cardBackground = new GradientDrawable();
+        cardBackground.setColor(Color.WHITE);
+        cardBackground.setCornerRadius(dp(18));
+        cardBackground.setStroke(dp(1), Color.rgb(207, 218, 208));
+        card.setBackground(cardBackground);
+        card.setElevation(dp(8));
+
+        ImageView outline = new ImageView(this);
+        outline.setAdjustViewBounds(true);
+        outline.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        try (InputStream stream = getAssets().open("assets/images/long-island-loading-outline.png")) {
+            outline.setImageBitmap(BitmapFactory.decodeStream(stream));
+        } catch (IOException error) {
+            Log.w(LOG_TAG, "Native Long Island loading outline could not be opened.", error);
+        }
+        card.addView(outline, new LinearLayout.LayoutParams(dp(240), dp(116)));
+
+        loadingCoverLabel = new TextView(this);
+        loadingCoverLabel.setText("Loading On This Site");
+        loadingCoverLabel.setTextColor(Color.rgb(18, 34, 25));
+        loadingCoverLabel.setTextSize(22);
+        loadingCoverLabel.setTypeface(Typeface.DEFAULT_BOLD);
+        loadingCoverLabel.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        labelParams.topMargin = dp(8);
+        card.addView(loadingCoverLabel, labelParams);
+
+        FrameLayout.LayoutParams cardParams = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.CENTER
+        );
+        cover.addView(card, cardParams);
+
+        loadingOutlinePulse = ObjectAnimator.ofFloat(outline, View.ALPHA, 0.48f, 1f);
+        loadingOutlinePulse.setDuration(720);
+        loadingOutlinePulse.setRepeatMode(ValueAnimator.REVERSE);
+        loadingOutlinePulse.setRepeatCount(ValueAnimator.INFINITE);
+        outline.post(() -> loadingOutlinePulse.start());
         return cover;
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     private void hideLoadingCover() {
@@ -352,17 +415,19 @@ public class MainActivity extends Activity {
         loadingCover.animate()
             .alpha(0f)
             .setDuration(180)
-            .withEndAction(() -> loadingCover.setVisibility(View.GONE))
+            .withEndAction(() -> {
+                loadingCover.setVisibility(View.GONE);
+                if (loadingOutlinePulse != null) loadingOutlinePulse.cancel();
+            })
             .start();
     }
 
     private void showLoadingCover(String message) {
         if (loadingCover == null) return;
-        if (loadingCover instanceof TextView) {
-            ((TextView) loadingCover).setText(message == null || message.trim().isEmpty()
-                ? "On This Site"
-                : message);
-        }
+        if (loadingCoverLabel != null) loadingCoverLabel.setText(message == null || message.trim().isEmpty()
+            ? "Loading On This Site"
+            : message);
+        if (loadingOutlinePulse != null && !loadingOutlinePulse.isStarted()) loadingOutlinePulse.start();
         loadingCover.animate().cancel();
         loadingCover.setAlpha(1f);
         loadingCover.setVisibility(View.VISIBLE);
@@ -975,7 +1040,7 @@ public class MainActivity extends Activity {
 
     void refreshApp() {
         if (webView == null) return;
-        showLoadingCover("On This Site");
+        showLoadingCover("Loading On This Site");
         lastRefreshAt = System.currentTimeMillis();
         appShellLoaded = false;
         loadingBundledFallback = false;

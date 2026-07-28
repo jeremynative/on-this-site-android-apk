@@ -75,6 +75,11 @@ if (!readiness.ready) {
   throw new Error(`APK WebView did not become interactive: ${JSON.stringify(readiness)}`);
 }
 
+if (process.env.AUDIT_CLOSE_SPOTLIGHT === "1") {
+  await evaluate(`document.querySelector("#mobile-startup-spotlight-close")?.click()`);
+  await wait(180);
+}
+
 await evaluate(`(() => {
   document.querySelector("#close-detail")?.click();
   document.querySelectorAll(".sheet.open [data-close-sheet]").forEach(button => button.click());
@@ -135,7 +140,7 @@ for (const [name, openSelector, panelSelector, closeSelector] of panelTests) {
     button.click();
     return { missing: false };
   })()`);
-  await wait(180);
+  await wait(650);
   const state = await evaluate(`(() => {
     const panel = document.querySelector(${JSON.stringify(panelSelector)});
     if (!panel) return { missingPanel: true };
@@ -144,7 +149,12 @@ for (const [name, openSelector, panelSelector, closeSelector] of panelTests) {
       missingPanel: false,
       open: panel.classList.contains("open"),
       visible: rect.width > 0 && rect.height > 0 && getComputedStyle(panel).display !== "none",
+      left: Math.round(rect.left),
       top: Math.round(rect.top),
+      right: Math.round(rect.right),
+      bottom: Math.round(rect.bottom),
+      viewport: [innerWidth, innerHeight],
+      inBounds: rect.left >= -1 && rect.top >= -1 && rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1,
       detailPanels: document.querySelectorAll("#detail.open").length,
       openSheets: document.querySelectorAll(".sheet.open").length
     };
@@ -170,6 +180,31 @@ for (const [name, selector] of [
   menus.push({ name, ...state });
 }
 
+const contentPages = [];
+for (const [name, selector, expectedTitle, expectedItems] of [
+  ["learn", "#mobile-learn-open", "Knowledgebase", "[data-wiki-slug]"],
+  ["blog", "[data-app-page='blog']", "Blog", "[data-blog-index]"],
+]) {
+  await evaluate(`document.querySelector(${JSON.stringify(selector)})?.click()`);
+  await wait(name === "blog" ? 850 : 350);
+  const state = await evaluate(`(() => {
+    const panel = document.querySelector("#detail");
+    const rect = panel?.getBoundingClientRect();
+    const title = document.querySelector("#detail-title")?.textContent?.trim().replace(/\\s+/g, " ") || "";
+    const bodyText = document.querySelector("#detail-body")?.textContent?.trim().replace(/\\s+/g, " ") || "";
+    return {
+      open: Boolean(panel?.classList.contains("open")),
+      visible: Boolean(rect && rect.width > 0 && rect.height > 0),
+      title,
+      itemCount: document.querySelectorAll(${JSON.stringify(expectedItems)}).length,
+      loadFailed: /could not be loaded|not available/i.test(bodyText)
+    };
+  })()`);
+  contentPages.push({ name, ...state, expectedTitle });
+  await evaluate(`document.querySelector("#close-detail")?.click()`);
+  await wait(120);
+}
+
 const timeline = await evaluate(`(() => {
   const button = document.querySelector("#mobile-tab-timeline");
   button?.click();
@@ -185,6 +220,8 @@ const timeline = await evaluate(`(() => {
 })()`);
 
 const promos = await evaluate(`(() => {
+  const card = document.querySelector("#mobile-startup-spotlight");
+  const cardVisible = Boolean(card && !card.hidden && card.getBoundingClientRect().height > 0);
   const buttons = [...document.querySelectorAll("[data-mobile-promo-kind]")].map(button => {
     const rect = button.getBoundingClientRect();
     const style = getComputedStyle(button);
@@ -196,11 +233,10 @@ const promos = await evaluate(`(() => {
       height: Math.round(rect.height)
     };
   });
-  const card = document.querySelector("#mobile-startup-spotlight");
   return {
     buttons,
     availableKinds: typeof availableMobilePromoKinds === "function" ? availableMobilePromoKinds() : [],
-    cardVisible: Boolean(card && !card.hidden && card.getBoundingClientRect().height > 0),
+    cardVisible,
     cardLabel: document.querySelector("#mobile-startup-spotlight-label")?.textContent?.trim() || ""
   };
 })()`);
@@ -210,6 +246,9 @@ const overlapAudit = await evaluate(`(() => {
     "#mobile-activity-open",
     "#mobile-notifications-open",
     "#mobile-map-locate",
+    ".mobile-promo-dock",
+    ".mapboxgl-ctrl-logo",
+    ".mobile-tabs",
     ".mapboxgl-ctrl-zoom-in",
     ".mapboxgl-ctrl-zoom-out",
     ".research-question-shell-mobile .research-question-prompt:not([hidden])"
@@ -239,10 +278,16 @@ socket.close();
 
 const failures = [
   ...controls.filter(item => item.missing || (item.visible && (item.width < 40 || item.height < 40)) || (item.visible && !item.hitOk)),
-  ...panels.filter(item => item.missing || item.missingPanel || !item.open || !item.visible || item.openSheets !== 1),
+  ...panels.filter(item => item.missing || item.missingPanel || !item.open || !item.visible || !item.inBounds || item.openSheets !== 1),
   ...menus.filter(item => item.missing || !item.opened || !item.closed),
+  ...contentPages.filter(item => !item.open || !item.visible || !item.title.includes(item.expectedTitle) || item.itemCount < 1 || item.loadFailed),
   ...(timeline.buttonMissing || !timeline.visible || !timeline.previousExists || !timeline.nextExists ? [timeline] : []),
-  ...promos.buttons.filter(item => !item.hidden && (!item.visible || item.width < 36 || item.height < 36)),
+  ...promos.buttons.filter(item => promos.cardVisible
+    ? item.visible
+    : (!item.hidden && (!item.visible || item.width < 36 || item.height < 36))),
+  ...(promos.cardVisible && controls.find(item => item.selector === "#mobile-map-locate")?.visible
+    ? [{ selector: "#mobile-map-locate", issue: "visible beneath startup spotlight" }]
+    : []),
   ...overlapAudit.overlaps,
 ];
 
@@ -252,6 +297,7 @@ console.log(JSON.stringify({
   controls,
   panels,
   menus,
+  contentPages,
   timeline,
   promos,
   overlaps: overlapAudit.overlaps,

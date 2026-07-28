@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260727-activity-feed-r11";
+const expectedBuild = "20260728-apk-ui-audit-r12";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -231,7 +231,16 @@ requireText("FrameLayout root = new FrameLayout(this);", "Android shell must lay
 requireText("webView.setBackgroundColor(Color.rgb(238, 243, 237));", "Android shell must use the app theme color behind the WebView during startup.");
 requireText("createLoadingCover", "Android shell must create a visible native loading cover before WebView content is ready.");
 requireText("hideLoadingCover", "Android shell must hide the native loading cover after the app page finishes.");
-requireText('cover.setText("On This Site");', "Android shell must show branded loading text instead of a blank white screen.");
+requireText("onPageCommitVisible", "Android shell must reveal the page loader as soon as WebView content is visible.");
+if (!/onPageCommitVisible\(WebView view, String url\)[\s\S]*?!isSiteGroundChallengeUrl\(url\)[\s\S]*?isNativeLongIslandUrl\(url\)[\s\S]*?hideLoadingCover\(\)/.test(source)) {
+  throw new Error("Android shell must reveal the animated page loader after a valid app page commits.");
+}
+if (!/onPageFinished\(WebView view, String url\)[\s\S]*?isSiteGroundChallengeUrl\(url\)[\s\S]*?hideLoadingCover\(\);[\s\S]*?validateLoadedAppShell\(url\)/.test(source)) {
+  throw new Error("Android shell must reveal the animated page loader no later than normal page completion.");
+}
+requireText('getAssets().open("assets/images/long-island-loading-outline.png")', "Android shell must show the Long Island loading outline during cold startup.");
+requireText('loadingCoverLabel.setText("Loading On This Site");', "Android shell must label the animated Long Island loading screen.");
+requireText("ObjectAnimator.ofFloat(outline, View.ALPHA", "Android shell must animate the Long Island loading outline.");
 if (!styles.includes('<item name="android:windowBackground">@drawable/launch_background</item>')) {
   throw new Error("Android theme must show a branded launch background while WebView starts.");
 }
