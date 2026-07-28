@@ -781,6 +781,10 @@
 
     .app.nearby-expanded .mobile-activity-button,
     .app.mobile-search-results .mobile-notification-button,
+    body:has(.mobile-more-menu[open]) .mobile-activity-button,
+    body:has(.mobile-more-menu[open]) .mobile-notification-button,
+    body:has(.mobile-layer-menu[open]) .mobile-activity-button,
+    body:has(.mobile-layer-menu[open]) .mobile-notification-button,
     body.mobile-content-open .mobile-activity-button,
     body.mobile-content-open .mobile-notification-button {
       display: none;

@@ -174,8 +174,21 @@ for (const [name, selector] of [
     if (!menu) return { missing: true };
     menu.querySelector("summary")?.click();
     const opened = menu.open;
+    const floatingControlsHidden = [
+      "#mobile-activity-open",
+      "#mobile-notifications-open"
+    ].every(controlSelector => {
+      const control = document.querySelector(controlSelector);
+      if (!control) return true;
+      const rect = control.getBoundingClientRect();
+      const style = getComputedStyle(control);
+      return !rect.width
+        || !rect.height
+        || style.display === "none"
+        || style.visibility === "hidden";
+    });
     menu.querySelector("summary")?.click();
-    return { missing: false, opened, closed: !menu.open };
+    return { missing: false, opened, floatingControlsHidden, closed: !menu.open };
   })()`);
   menus.push({ name, ...state });
 }
@@ -279,7 +292,7 @@ socket.close();
 const failures = [
   ...controls.filter(item => item.missing || (item.visible && (item.width < 40 || item.height < 40)) || (item.visible && !item.hitOk)),
   ...panels.filter(item => item.missing || item.missingPanel || !item.open || !item.visible || !item.inBounds || item.openSheets !== 1),
-  ...menus.filter(item => item.missing || !item.opened || !item.closed),
+  ...menus.filter(item => item.missing || !item.opened || !item.floatingControlsHidden || !item.closed),
   ...contentPages.filter(item => !item.open || !item.visible || !item.title.includes(item.expectedTitle) || item.itemCount < 1 || item.loadFailed),
   ...(timeline.buttonMissing || !timeline.visible || !timeline.previousExists || !timeline.nextExists ? [timeline] : []),
   ...promos.buttons.filter(item => promos.cardVisible
