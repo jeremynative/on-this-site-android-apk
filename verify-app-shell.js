@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260728-apk-location-zoom-r14";
+const expectedBuild = "20260728-mas-house-library-r15";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -71,6 +71,9 @@ for (const slug of ["coopers-beach-shinnecock-access", "watermill-center"]) {
   if (!bundledIndexSlugs.has(slug)) {
     throw new Error(`Bundled Android fallback is missing recently published site: ${slug}`);
   }
+}
+if (!bundledApp.includes("John Jermain Memorial Library donates more than 400 Native American books")) {
+  throw new Error("Bundled Android fallback is missing the Ma's House 2022 library-donation historic moment.");
 }
 
 function requireText(text, message) {
