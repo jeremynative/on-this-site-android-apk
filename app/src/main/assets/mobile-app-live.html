@@ -25528,6 +25528,27 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileMapLocateBtn.setAttribute("aria-busy", busy ? "true" : "false");
     }
 
+    function mapIsCenteredOnLocation(location, tolerancePixels = 12) {
+      if (!state.map || !Array.isArray(location) || location.length < 2) return false;
+      const longitude = Number(location[0]);
+      const latitude = Number(location[1]);
+      if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return false;
+      try {
+        const centerPoint = state.map.project(state.map.getCenter());
+        const locationPoint = state.map.project([longitude, latitude]);
+        return Math.hypot(centerPoint.x - locationPoint.x, centerPoint.y - locationPoint.y) <= tolerancePixels;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function nextLocationControlZoom() {
+      const currentZoom = Number(state.map?.getZoom?.());
+      const maximumZoom = Number(state.map?.getMaxZoom?.());
+      if (!Number.isFinite(currentZoom)) return NEAR_ME_ZOOM;
+      return Math.min(currentZoom + 1, Number.isFinite(maximumZoom) ? maximumZoom : currentZoom + 1);
+    }
+
     function applyUserLocation(position, { centerMap = false, mapZoom = NEAR_ME_ZOOM, centerBounds = null } = {}) {
       const nextLocation = [position.coords.longitude, position.coords.latitude];
       const moved = locationMovedEnough(nextLocation);
@@ -25551,7 +25572,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       startLocationWatch();
     }
 
-    async function requestUserLocation({ centerMap = false, silent = false, mapZoom = NEAR_ME_ZOOM, centerBounds = null } = {}) {
+    async function requestUserLocation({
+      centerMap = false,
+      silent = false,
+      mapZoom = NEAR_ME_ZOOM,
+      centerBounds = null,
+      zoomIfAlreadyCentered = false
+    } = {}) {
       if (!navigator.geolocation) {
         if (!silent) showBanner("Location is not available on this device.");
         return false;
@@ -25559,7 +25586,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       setLocationControlsBusy(true);
       return new Promise(resolve => {
         navigator.geolocation.getCurrentPosition(position => {
-          applyUserLocation(position, { centerMap, mapZoom, centerBounds });
+          const nextLocation = [position.coords.longitude, position.coords.latitude];
+          const resolvedMapZoom = zoomIfAlreadyCentered && mapIsCenteredOnLocation(nextLocation)
+            ? nextLocationControlZoom()
+            : mapZoom;
+          applyUserLocation(position, { centerMap, mapZoom: resolvedMapZoom, centerBounds });
           resolve(true);
       }, () => {
         state.settings.locationEnabled = false;
@@ -25583,7 +25614,32 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     async function locateMapUser() {
-      return requestUserLocation({ centerMap: true, silent: false, mapZoom: NEAR_ME_ZOOM });
+      return requestUserLocation({
+        centerMap: true,
+        silent: false,
+        mapZoom: NEAR_ME_ZOOM,
+        zoomIfAlreadyCentered: isNativeAndroidApp()
+      });
+    }
+
+    function installApkLocationControlDebugHook() {
+      if (!isNativeAndroidApp() || window.AndroidApp?.isDebugBuild?.() !== true) return;
+      const snapshot = () => ({
+        ready: Boolean(state.map && state.userLocation),
+        centered: mapIsCenteredOnLocation(state.userLocation),
+        zoom: Number(state.map?.getZoom?.())
+      });
+      window.NLI_APK_LOCATION_CONTROL_AUDIT = Object.freeze({
+        snapshot,
+        moveAway() {
+          if (!state.map || !state.userLocation) return snapshot();
+          state.map.jumpTo({
+            center: [state.userLocation[0] + 0.18, state.userLocation[1]],
+            zoom: state.map.getZoom()
+          });
+          return snapshot();
+        }
+      });
     }
 
     async function requestStartupLocation() {
@@ -28818,6 +28874,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       event.stopPropagation();
       locateMapUser();
     });
+    installApkLocationControlDebugHook();
     const blockPanelControlMapTap = event => {
       blockMobileMapTaps();
       event?.stopPropagation?.();

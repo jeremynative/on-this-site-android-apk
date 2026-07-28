@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260728-apk-menu-overlap-r13";
+const expectedBuild = "20260728-apk-location-zoom-r14";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -224,6 +224,9 @@ requireText("showNearbyNotification", "Android shell must expose native nearby n
 if (!appBridge.includes("showNotification") || !appBridge.includes("showNearbyNotification")) {
   throw new Error("Android app bridge must expose native notifications to the mobile web app.");
 }
+if (!appBridge.includes("public boolean isDebugBuild()") || !appBridge.includes("return BuildConfig.DEBUG;")) {
+  throw new Error("Android app bridge must expose the debug-only location-control audit guard.");
+}
 requireText("CookieManager.getInstance()", "Android shell must explicitly enable WebView cookies for SiteGround and app sessions.");
 requireText("setAcceptThirdPartyCookies(webView, true)", "Android shell must allow web session cookies inside the APK WebView.");
 requireText("settings.setCacheMode(WebSettings.LOAD_DEFAULT)", "Android shell must allow WebView to cache remote Mapbox/static resources between launches.");
@@ -373,6 +376,12 @@ if ((bundledMobileJs.match(/(?:^|[^A-Za-z0-9_-])[ps]k\.[A-Za-z0-9._-]+/g) || [])
 }
 if (!bundledMobileJs.includes('const MAPBOX_PUBLIC_TOKEN = "__NLI_MAPBOX_TOKEN__";')) {
   throw new Error("Bundled Android JavaScript is missing the Mapbox build-time placeholder.");
+}
+if (!bundledMobileJs.includes("function mapIsCenteredOnLocation(location, tolerancePixels = 12)")) {
+  throw new Error("Bundled mobile JavaScript must detect when the map is centered on the user.");
+}
+if (!bundledMobileJs.includes("zoomIfAlreadyCentered: isNativeAndroidApp()")) {
+  throw new Error("Bundled mobile JavaScript must enable repeated location zoom only in the APK.");
 }
 const archiveTestRoot = "https://nativelongisland.com/" + "archive-test/";
 if (source.includes("archive-test") || bundledApp.includes(archiveTestRoot) || bundledLiveApp.includes(archiveTestRoot)) {

@@ -30,6 +30,11 @@ class AppBridge {
     }
 
     @JavascriptInterface
+    public boolean isDebugBuild() {
+        return BuildConfig.DEBUG;
+    }
+
+    @JavascriptInterface
     public void refreshNow() {
         activity.runOnUiThread(activity::refreshApp);
     }
