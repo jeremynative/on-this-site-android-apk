@@ -822,12 +822,15 @@ public class MainActivity extends Activity {
             webTouchStartY = event.getY();
             webTouchStartedAt = System.currentTimeMillis();
             cacheAndroidUiOverlayTap(event);
+            // Claim fixed promo actions before WebView dispatches the click.
+            // Otherwise a dismiss can remove the card before the delayed map
+            // bridge runs, letting that same touch activate the map underneath.
+            cacheAndroidMobilePromoActionTap(event);
             cacheAndroidSearchResultTap(event);
             return;
         }
         if (event.getActionMasked() != MotionEvent.ACTION_UP) return;
         cacheAndroidUiOverlayTap(event);
-        cacheAndroidMobilePromoActionTap(event);
         float dx = event.getX() - webTouchStartX;
         float dy = event.getY() - webTouchStartY;
         if ((dx * dx + dy * dy) > 144f) return;
