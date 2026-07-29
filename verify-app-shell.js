@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260729-diverse-place-name-quotes-r17";
+const expectedBuild = "20260729-activity-map-controls-r18";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";

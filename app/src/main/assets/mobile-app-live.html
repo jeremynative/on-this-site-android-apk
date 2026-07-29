@@ -27719,7 +27719,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function positionMobileMapActionButtons() {
       const mapRect = document.getElementById("map")?.getBoundingClientRect?.();
       if (!mapRect?.height) return;
-      document.documentElement.style.setProperty("--mobile-map-actions-top", `${Math.round(mapRect.top + 10)}px`);
+      const insideMapOffset = isNativeAndroidApp() ? 28 : 10;
+      document.documentElement.style.setProperty("--mobile-map-actions-top", `${Math.round(mapRect.top + insideMapOffset)}px`);
       document.documentElement.style.setProperty("--mobile-map-prompt-bottom", `${Math.round(Math.max(10, window.innerHeight - mapRect.bottom + 10))}px`);
     }
 
