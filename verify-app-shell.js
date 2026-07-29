@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260728-mas-house-library-r15";
+const expectedBuild = "20260728-general-place-name-quotes-r16";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -75,6 +75,60 @@ for (const slug of ["coopers-beach-shinnecock-access", "watermill-center"]) {
 if (!bundledApp.includes("John Jermain Memorial Library donates more than 400 Native American books")) {
   throw new Error("Bundled Android fallback is missing the Ma's House 2022 library-donation historic moment.");
 }
+
+function decodeQuoteHtml(value) {
+  return String(value || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&ldquo;|&rdquo;|&quot;/g, '"')
+    .replace(/&lsquo;|&rsquo;|&#39;/g, "'")
+    .replace(/&ndash;/g, "–")
+    .replace(/&mdash;/g, "—")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function verifyGeneralPlaceNameQuotes(document, label) {
+  const match = document.match(/window\.NLI_MOBILE_DATA\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
+  if (!match) {
+    throw new Error(`${label} is missing its embedded mobile data payload.`);
+  }
+  const payload = JSON.parse(match[1]);
+  const placeNames = (Array.isArray(payload.sites) ? payload.sites : [])
+    .filter(site => site.site_type === "placename");
+  if (placeNames.length !== 307) {
+    throw new Error(`${label} must contain 307 place-name listings; found ${placeNames.length}.`);
+  }
+
+  const quotes = placeNames.map(site => {
+    const quoteMatch = String(site.translation_content || "")
+      .match(/<blockquote class="place-name-quote">\s*<p>([\s\S]*?)<\/p>/);
+    if (!quoteMatch) {
+      throw new Error(`${label} is missing a place-name quotation for ${site.slug}.`);
+    }
+    return { slug: site.slug, text: decodeQuoteHtml(quoteMatch[1]) };
+  });
+  const normalized = quotes.map(({ text }) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim());
+  if (new Set(normalized).size !== 307) {
+    throw new Error(`${label} must contain 307 distinct place-name quotations.`);
+  }
+
+  const subjectPattern = /\b(?:geographic(?:al)? names?|place[- ]names?|toponym\w*|names?|named|namer|naming|nomenclature|gazetteer)\b/i;
+  const outsidePlacePattern = /\b(?:Tsilhqot|Shinnecock|Montauk|Algonkian|Algonquian|Gaelic|Armenia|Australia|Austria|Belgium|Brunei|Botswana|Canada|China|Crimea|Cyprus|Denmark|Finland|France|Germany|Greece|Hungary|Iceland|Indonesia|Ireland|Israel|Italy|Japan|Jordan|Korea|Lithuania|Madagascar|Mexico|Mozambique|Netherlands|New Zealand|Nordic|Norway|Poland|Romania|Russia|South Africa|Spain|Sweden|Switzerland|Tunisia|Ukraine|United Kingdom|United States|Vietnam)\b/i;
+  const territoryClaimPattern = /\b(?:homeland|homelands|territory|territories|our people|our language|ancestors)\b/i;
+  for (const quote of quotes) {
+    if (!subjectPattern.test(quote.text)) {
+      throw new Error(`${label} quotation for ${quote.slug} is not explicitly about place names or naming.`);
+    }
+    if (outsidePlacePattern.test(quote.text) || territoryClaimPattern.test(quote.text)) {
+      throw new Error(`${label} quotation for ${quote.slug} makes an outside-place or territory-specific claim.`);
+    }
+  }
+}
+
+verifyGeneralPlaceNameQuotes(bundledApp, "Bundled Android fallback");
 
 function requireText(text, message) {
   if (!source.includes(text)) {
