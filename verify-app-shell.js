@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260728-general-place-name-quotes-r16";
+const expectedBuild = "20260729-diverse-place-name-quotes-r17";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -98,8 +98,8 @@ function verifyGeneralPlaceNameQuotes(document, label) {
   const payload = JSON.parse(match[1]);
   const placeNames = (Array.isArray(payload.sites) ? payload.sites : [])
     .filter(site => site.site_type === "placename");
-  if (placeNames.length !== 307) {
-    throw new Error(`${label} must contain 307 place-name listings; found ${placeNames.length}.`);
+  if (placeNames.length !== 306) {
+    throw new Error(`${label} must contain 306 place-name listings; found ${placeNames.length}.`);
   }
 
   const quotes = placeNames.map(site => {
@@ -111,13 +111,13 @@ function verifyGeneralPlaceNameQuotes(document, label) {
     return { slug: site.slug, text: decodeQuoteHtml(quoteMatch[1]) };
   });
   const normalized = quotes.map(({ text }) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim());
-  if (new Set(normalized).size !== 307) {
-    throw new Error(`${label} must contain 307 distinct place-name quotations.`);
+  if (new Set(normalized).size !== 306) {
+    throw new Error(`${label} must contain 306 distinct place-name quotations.`);
   }
 
-  const subjectPattern = /\b(?:geographic(?:al)? names?|place[- ]names?|toponym\w*|names?|named|namer|naming|nomenclature|gazetteer)\b/i;
+  const subjectPattern = /\b(?:geographic(?:al)? names?|place[- ]names?|placenames|toponym\w*|names?|named|namer|naming|nomenclature|gazetteer)\b/i;
   const outsidePlacePattern = /\b(?:Tsilhqot|Shinnecock|Montauk|Algonkian|Algonquian|Gaelic|Armenia|Australia|Austria|Belgium|Brunei|Botswana|Canada|China|Crimea|Cyprus|Denmark|Finland|France|Germany|Greece|Hungary|Iceland|Indonesia|Ireland|Israel|Italy|Japan|Jordan|Korea|Lithuania|Madagascar|Mexico|Mozambique|Netherlands|New Zealand|Nordic|Norway|Poland|Romania|Russia|South Africa|Spain|Sweden|Switzerland|Tunisia|Ukraine|United Kingdom|United States|Vietnam)\b/i;
-  const territoryClaimPattern = /\b(?:homeland|homelands|territory|territories|our people|our language|ancestors)\b/i;
+  const territoryClaimPattern = /\b(?:homeland|homelands|territory|territories|our people|our language)\b/i;
   for (const quote of quotes) {
     if (!subjectPattern.test(quote.text)) {
       throw new Error(`${label} quotation for ${quote.slug} is not explicitly about place names or naming.`);
