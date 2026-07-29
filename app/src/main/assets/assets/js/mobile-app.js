@@ -4624,7 +4624,10 @@
 
     function rebuildSortedTimelineEvents() {
       state.sortedTimelineEvents = [...state.timelineEvents]
-        .filter(event => event.source_type && (event.source_slug || event.source_id))
+        // Keep public source-record moments even when they have no linked
+        // site/wiki article.  Their card correctly renders without a dead
+        // Full article action, rather than disappearing from the timeline.
+        .filter(event => event && (event.title || event.description || event.date_label || event.sort_key))
         .sort((a, b) =>
           timelineSortValue(a) - timelineSortValue(b) ||
           String(a.date_label || "").localeCompare(String(b.date_label || "")) ||
@@ -6516,6 +6519,18 @@
       return MAP_STORY_UTILS.activeStories(state.mapStories, state.mapStoryVotes, MAP_STORY_RULES);
     }
 
+    // A story attached to a listing should visually sit at the listing, not a
+    // slightly drifted device coordinate. The original GPS coordinates remain
+    // stored with the story for provenance.
+    function mapStoryDisplayCoordinates(story) {
+      const attachedSlug = String(story?.attached_site_slug || "").trim();
+      const attachedSite = attachedSlug ? state.siteBySlug.get(attachedSlug) : null;
+      const attachedCoordinates = attachedSite && !isBroadTerritory(attachedSite)
+        ? (attachedSite.center || geometryCenter(siteDisplayGeometry(attachedSite)))
+        : null;
+      return attachedCoordinates || MAP_STORY_UTILS.coordinates(story);
+    }
+
     function storyAttachmentSite(coords) {
       if (!coords) return null;
       return activeMapSites()
@@ -6553,7 +6568,7 @@
     }
 
     function focusMapStory(story, options = {}) {
-      const coords = MAP_STORY_UTILS.coordinates(story);
+      const coords = mapStoryDisplayCoordinates(story);
       if (!coords || !state.map?.easeTo) return;
       const zoom = Math.max(Number(state.map.getZoom?.() || 0), 13);
       const duration = Number.isFinite(Number(options.duration)) ? Number(options.duration) : 850;
@@ -6572,14 +6587,14 @@
           continue;
         }
         const story = storyById.get(id);
-        const coords = MAP_STORY_UTILS.coordinates(story);
+        const coords = mapStoryDisplayCoordinates(story);
         if (coords) marker.setLngLat(coords);
         marker.setOffset(mapStoryMarkerOffset(story));
       }
       stories.forEach(story => {
         const key = String(story.id);
         if (state.storyMarkers.has(key)) return;
-        const coords = MAP_STORY_UTILS.coordinates(story);
+        const coords = mapStoryDisplayCoordinates(story);
         if (!coords) return;
         state.storyMarkers.set(key, new mapboxgl.Marker({ element: mapStoryMarkerElement(story), anchor: "bottom", offset: mapStoryMarkerOffset(story) }).setLngLat(coords).addTo(state.map));
       });
@@ -9698,8 +9713,13 @@
         .map((slug, index) => {
           const article = state.wikiBySlug.get(slug) || { slug, title: BIOGRAPHY_PLACE_PATHS[slug]?.title || slug };
           const path = mobileBiographyTimelineData(article, timelineEventsForSource("wiki", article.id, slug)) || mobileBiographyPathData(article);
+          // Associated biography places are not evidence of a literal journey.
+          // Only an explicitly documented travel route may animate a person.
+          if (path?.animate !== true) return null;
           if (!path?.places?.length || path.places.length < 2) return null;
-          const route = path.places.map(place => place.coordinates).filter(coords => Array.isArray(coords) && coords.every(Number.isFinite));
+          const route = (path.routePlaces?.length ? path.routePlaces : path.places)
+            .map(place => Array.isArray(place) ? place : place?.coordinates)
+            .filter(coords => Array.isArray(coords) && coords.every(Number.isFinite));
           if (route.length < 2) return null;
           return {
             slug,
@@ -13314,7 +13334,8 @@
     function positionMobileMapActionButtons() {
       const mapRect = document.getElementById("map")?.getBoundingClientRect?.();
       if (!mapRect?.height) return;
-      document.documentElement.style.setProperty("--mobile-map-actions-top", `${Math.round(mapRect.top + 10)}px`);
+      const insideMapOffset = isNativeAndroidApp() ? 28 : 10;
+      document.documentElement.style.setProperty("--mobile-map-actions-top", `${Math.round(mapRect.top + insideMapOffset)}px`);
       document.documentElement.style.setProperty("--mobile-map-prompt-bottom", `${Math.round(Math.max(10, window.innerHeight - mapRect.bottom + 10))}px`);
     }
 
@@ -15171,6 +15192,9 @@
         if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {
           window.setTimeout(() => idleTask(refreshMobileSiteIconFieldsFromDirectus), 30000);
         }
+        // Do not make a just-added visitor story wait for the deferred archive
+        // pass or the polling timer before its marker is eligible to appear.
+        if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) refreshMapStories();
         state.mobileStartupRendering = false;
         updateMobileHeaderInstruction();
         if (nativeAndroid) {
