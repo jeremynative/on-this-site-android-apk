@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260729-map-regression-audit-r19";
+const expectedBuild = "20260729-timeline-source-records-r20";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -129,6 +129,23 @@ function verifyGeneralPlaceNameQuotes(document, label) {
 }
 
 verifyGeneralPlaceNameQuotes(bundledApp, "Bundled Android fallback");
+
+function bundledTimelineEvents(document, label) {
+  const match = document.match(/window\.NLI_MOBILE_DATA\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
+  if (!match) throw new Error(`${label} is missing its embedded mobile data payload.`);
+  const events = JSON.parse(match[1]).timelineEvents;
+  if (!Array.isArray(events)) throw new Error(`${label} is missing its historic timeline.`);
+  return events;
+}
+
+const bundledTimeline = bundledTimelineEvents(bundledApp, "Bundled Android fallback");
+if (bundledTimeline.length !== 1375) {
+  throw new Error(`Bundled Android fallback must contain all 1,375 public timeline moments; found ${bundledTimeline.length}.`);
+}
+const bundledSourceRecords = bundledTimeline.filter(event => !(event?.source_type && (event?.source_slug || event?.source_id)));
+if (bundledSourceRecords.length !== 288) {
+  throw new Error(`Bundled Android fallback must retain 288 unlinked public source records; found ${bundledSourceRecords.length}.`);
+}
 
 function requireText(text, message) {
   if (!source.includes(text)) {
@@ -815,6 +832,8 @@ requireBundledText('Content editing needs the editor password.', "Bundled Androi
 requireBundledText('frontendEditorPayload', "Bundled Android app must include the current mobile admin editor payload path.");
 requireBundledText('mobileBiographyPathMapPinLabel(place, order)', "Bundled Android biography travel map pins must use numbered map labels.");
 requireBundledText('id: "mobile-biography-place-labels"', "Bundled Android biography travel map pins must use collision-aware map labels.");
+requireBundledText('event && (event.title || event.description || event.date_label || event.sort_key)', "Bundled Android timeline must retain public source records without a site/wiki link.");
+forbidBundledText('event.source_type && (event.source_slug || event.source_id))', "Bundled Android timeline must not hide unlinked public source records.");
 
 console.log(`Android shell verifier passed: ${expectedBuild}`);
 
