@@ -772,6 +772,10 @@ requireBundledText('state.lastSearchValue = "";\n      scheduleSearchSync();\n  
 requireBundledText('state.nativeAndroidSearchWatchTimer = window.setInterval(scheduleSearchSync, 350);', "Bundled Android app must persistently sync native Android search input.");
 requireBundledText('Profile activity sync will retry later.', "Bundled Android app must keep profile activity sync retry logging.");
 requireBundledText('state.profileActivitySynced = false;\n          return false;', "Bundled Android app must leave failed profile sync retryable.");
+requireBundledPattern(/state\.profileActivitySynced\s*=\s*includeCommunity\s*&&\s*allResponsesFresh\(\[/, "Bundled Android public activity must mark a completed anonymous load as synced.");
+if (/profileActivitySynced\s*=\s*includeCommunity\s*&&\s*Boolean\(state\.profile\s*&&\s*allResponsesFresh\(/.test(bundledApp) || /profileActivitySynced\s*=\s*includeCommunity\s*&&\s*Boolean\(state\.profile\s*&&\s*allResponsesFresh\(/.test(bundledLiveApp)) {
+  throw new Error("Bundled Android app must not schedule a second public activity sync just because the visitor is logged out.");
+}
 requireBundledText('sorted by proximity', "Bundled Android app must label nearby results as proximity sorted.");
 requireBundledText('const STARTUP_LOCATION_ZOOM = NEAR_ME_ZOOM;', "Bundled Android app must open with the Near me zoom level.");
 requireBundledText('if (nativeAndroid && !isOfflineTextMode()) await requestStartupLocation();', "Bundled Android app must request location before the first nearby list render while online and skip the prompt in offline text mode.");

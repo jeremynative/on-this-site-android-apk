@@ -17684,7 +17684,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.languageQuizAttempts = preserveActiveProfileRows(languageResponse.data, state.languageQuizAttempts);
       state.profileFollows = preserveActiveProfileRows(followsResponse.data, state.profileFollows, ["follower_profile", "following_profile"]);
       state.profileLoginRewards = preserveActiveProfileRows(loginRewardsResponse.data, state.profileLoginRewards);
-      state.profileActivitySynced = includeCommunity && Boolean(state.profile && allResponsesFresh([
+      // Public community activity is complete for anonymous visitors too. Do
+      // not schedule a second fetch/render merely because there is no profile.
+      state.profileActivitySynced = includeCommunity && allResponsesFresh([
         profilesResponse,
         commentsResponse,
         commentVotesResponse,
@@ -17695,7 +17697,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         languageResponse,
         followsResponse,
         loginRewardsResponse
-      ]));
+      ]);
       state.profileActivityCache = null;
       state.deferredDataLoaded = true;
       if (includeCommunity) state.deferredCommunityDataLoaded = true;
