@@ -20966,10 +20966,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function mapStoryMarkerOffset(story) {
       if (!story?.attached_site_slug) return [0, -12];
       const zoom = Number(state.map?.getZoom?.() || 0);
-      if (zoom >= 15) return [0, -12];
-      if (zoom >= 13.5) return [0, -28];
-      if (zoom >= 11) return [0, -44];
-      return [0, -58];
+      // Keep an attached story close enough to its listing that it reads as
+      // one location, including on the wide overview used at mobile startup.
+      if (zoom >= 15) return [0, -10];
+      if (zoom >= 13.5) return [0, -16];
+      if (zoom >= 11) return [0, -22];
+      return [0, -28];
     }
 
     function focusMapStory(story, options = {}) {
