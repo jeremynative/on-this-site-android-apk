@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260729-immediate-map-stories-r21";
+const expectedBuild = "20260729-biography-motion-r22";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -176,6 +176,21 @@ function requireBundledPattern(pattern, message) {
 }
 
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
+for (const [label, document] of [
+  ["bundled fallback", bundledApp],
+  ["bundled live fallback", bundledLiveApp],
+  ["bundled mobile runtime", bundledMobileJs]
+]) {
+  if (!document.includes("if (path?.animate === false) return null;")) {
+    throw new Error(`${label} must animate reviewed multi-stop biographies unless they explicitly opt out.`);
+  }
+  if (!document.includes("!state.landMaskData?.geometry) return false;")) {
+    throw new Error(`${label} must show the safe canoe state until land data is available.`);
+  }
+  if (document.includes("if (path?.animate !== true) return null;")) {
+    throw new Error(`${label} still contains the obsolete explicit-travel-only biography animation rule.`);
+  }
+}
 requireText(expectedUrl, `Android shell must load ${expectedUrl}.`);
 requireText("?app-version=", "Android shell must pass the app build id to the mobile web app.");
 requireText("&apk-version=", "Android shell must pass the APK version to the mobile web app.");

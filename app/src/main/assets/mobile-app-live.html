@@ -24107,13 +24107,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function mobileMovingPointIsOnLand(coordinates = []) {
-      if (!coordinates.every(Number.isFinite) || !state.landMaskData?.geometry) return true;
+      // Before the land mask arrives, use the safe canoe state.
+      if (!coordinates.every(Number.isFinite) || !state.landMaskData?.geometry) return false;
       try {
         return mobileMovingLandSamples(coordinates).some(sample =>
           pointInGeometry(sample, state.landMaskData.geometry)
         );
       } catch {
-        return true;
+        return false;
       }
     }
 
@@ -24122,9 +24123,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         .map((slug, index) => {
           const article = state.wikiBySlug.get(slug) || { slug, title: BIOGRAPHY_PLACE_PATHS[slug]?.title || slug };
           const path = mobileBiographyTimelineData(article, timelineEventsForSource("wiki", article.id, slug)) || mobileBiographyPathData(article);
-          // Associated biography places are not evidence of a literal journey.
-          // Only an explicitly documented travel route may animate a person.
-          if (path?.animate !== true) return null;
+          // The animation is a visual guide through associated places. A record
+          // can still opt out after review with animate: false.
+          if (path?.animate === false) return null;
           if (!path?.places?.length || path.places.length < 2) return null;
           const route = (path.routePlaces?.length ? path.routePlaces : path.places)
             .map(place => Array.isArray(place) ? place : place?.coordinates)
