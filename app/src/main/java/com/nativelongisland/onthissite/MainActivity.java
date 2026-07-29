@@ -827,6 +827,7 @@ public class MainActivity extends Activity {
         }
         if (event.getActionMasked() != MotionEvent.ACTION_UP) return;
         cacheAndroidUiOverlayTap(event);
+        cacheAndroidMobilePromoActionTap(event);
         float dx = event.getX() - webTouchStartX;
         float dy = event.getY() - webTouchStartY;
         if ((dx * dx + dy * dy) > 144f) return;
@@ -892,6 +893,20 @@ public class MainActivity extends Activity {
             + "));"
             + "}catch(error){return 'ui-overlay-tap-error:'+(error&&error.message?error.message:String(error));}})()";
         webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "UI overlay tap bridge result: " + value));
+    }
+
+    private void cacheAndroidMobilePromoActionTap(MotionEvent event) {
+        if (webView == null || event == null) return;
+        String script = "(function(){try{"
+            + "if(!window.onAndroidMobilePromoActionTap)return 'missing-mobile-promo-tap-bridge';"
+            + "return String(window.onAndroidMobilePromoActionTap("
+            + event.getX() + ","
+            + event.getY() + ","
+            + webView.getWidth() + ","
+            + webView.getHeight()
+            + "));"
+            + "}catch(error){return 'mobile-promo-tap-error:'+(error&&error.message?error.message:String(error));}})()";
+        webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "Mobile promo tap bridge result: " + value));
     }
 
     @Override

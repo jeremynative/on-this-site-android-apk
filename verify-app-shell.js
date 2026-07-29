@@ -404,6 +404,8 @@ requireText("dispatchTouchEvent", "Android shell must forward app taps into the 
 requireText("window.onAndroidMapTap", "Android shell must call the mobile map tap bridge.");
 requireText("cacheAndroidUiOverlayTap(event);", "Android shell must pre-cache UI overlay taps before delayed map forwarding.");
 requireText("window.onAndroidUiOverlayTapStart", "Android shell must call the UI overlay tap bridge.");
+requireText("cacheAndroidMobilePromoActionTap(event);", "Android shell must forward Android touch releases to fixed promo-card actions.");
+requireText("window.onAndroidMobilePromoActionTap", "Android shell must call the promo-card action bridge.");
 requireText("missing-map-tap-bridge", "Android shell must log when the mobile map tap bridge is missing.");
 requireText("MAP_TAP_BRIDGE_DELAY_MS", "Android shell must delay the native map bridge until WebView UI clicks run.");
 requireText("postDelayed", "Android shell must post-delay map tap forwarding to prevent panel click-through.");
