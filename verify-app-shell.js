@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260730-place-name-insights-r23";
+const expectedBuild = "20260730-single-introduction-r24";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -8,6 +8,7 @@ const bundledAppPath = "app/src/main/assets/mobile-app.html";
 const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
 const lightweightOfflineAppPath = "app/src/main/assets/offline-app.html";
 const bundledMobileJsPath = "app/src/main/assets/assets/js/mobile-app.js";
+const bundledSharedSiteUtilsPath = "app/src/main/assets/assets/js/shared-site-utils.js";
 const stylesPath = "app/src/main/res/values/styles.xml";
 const launchBackgroundPath = "app/src/main/res/drawable/launch_background.xml";
 const manifestPath = "app/src/main/AndroidManifest.xml";
@@ -29,6 +30,7 @@ const appBridge = fs.readFileSync(appBridgePath, "utf8");
 const bundledApp = bundledAppBytes.toString("utf8");
 const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
 const bundledMobileJs = fs.readFileSync(bundledMobileJsPath, "utf8");
+const bundledSharedSiteUtils = fs.readFileSync(bundledSharedSiteUtilsPath, "utf8");
 const styles = fs.readFileSync(stylesPath, "utf8");
 const launchBackground = fs.readFileSync(launchBackgroundPath, "utf8");
 
@@ -179,11 +181,25 @@ function requireBundledPattern(pattern, message) {
 }
 
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
+if (!bundledSharedSiteUtils.includes("function siteIntroductionPresentation(site = {}, sections = [], options = {})")
+    || !bundledSharedSiteUtils.includes("section?.[2]?.content === introductionField")
+    || !bundledSharedSiteUtils.includes("siteIntroductionPresentation,")) {
+  throw new Error("Bundled Android site utilities must expose the deterministic single-introduction decision.");
+}
 for (const [label, document] of [
   ["bundled fallback", bundledApp],
   ["bundled live fallback", bundledLiveApp],
   ["bundled mobile runtime", bundledMobileJs]
 ]) {
+  if (!document.includes("SITE_UTILS.siteIntroductionPresentation(site, sectionEntries, {")
+      || !document.includes("summary: site.summary")
+      || !document.includes('data-site-introduction="section"')
+      || !document.includes('data-site-introduction="summary"')) {
+    throw new Error(`${label} must render exactly one deterministic listing introduction.`);
+  }
+  if (document.includes('${publicCleanText(site.summary) ? `<p class="summary">${escapeHtml(publicCleanText(site.summary))}</p>` : ""}')) {
+    throw new Error(`${label} still renders the obsolete unconditional summary above Introduction.`);
+  }
   if (!document.includes("if (path?.animate === false) return null;")) {
     throw new Error(`${label} must animate reviewed multi-stop biographies unless they explicitly opt out.`);
   }

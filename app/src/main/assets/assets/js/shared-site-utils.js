@@ -231,6 +231,24 @@
     return next;
   }
 
+  // Full listing articles use the structured Introduction when present; the
+  // shorter summary remains the single fallback and continues to serve cards.
+  function siteIntroductionPresentation(site = {}, sections = [], options = {}) {
+    const cleanText = typeof options.cleanText === "function"
+      ? options.cleanText
+      : plainPublicSiteText;
+    const summaryValue = options.summary !== undefined ? options.summary : site?.summary;
+    const summary = cleanText(summaryValue || "");
+    const introductionField = options.introductionField || "introduction_content";
+    const hasStructuredIntroduction = (sections || []).some(section =>
+      section?.[2]?.content === introductionField
+    );
+    return {
+      hasStructuredIntroduction,
+      leadSummary: hasStructuredIntroduction ? "" : summary
+    };
+  }
+
   function siteDisplayType(site, options = {}) {
     if (!site) return "";
     const overrides = options.overrides || {};
@@ -476,6 +494,7 @@
     isInternalPublicSiteNoteSection,
     siteUsesDefaultBluePin,
     sanitizePublicSiteContent,
+    siteIntroductionPresentation,
     stripInternalPublicSiteSections,
     siteWithContentOverrides,
     siteTerritoryFillColor

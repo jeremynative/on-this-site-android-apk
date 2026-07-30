@@ -638,6 +638,7 @@
     const MIN_ANDROID_APP_BUILD_ID = "20260524-plant-camera-analysis-7";
     const ANDROID_APK_UPDATE_URL = "https://github.com/jeremynative/on-this-site-android-apk/releases/latest/download/on-this-site-latest.apk";
     const LANGUAGE_QUIZ_WORDS = window.NLI_LANGUAGE_QUIZ_WORDS || [];
+    const LANGUAGE_QUIZ_WORD_BY_ID = new Map(LANGUAGE_QUIZ_WORDS.map(word => [String(word.id), word]));
     const PLANT_OBSERVATION_SPECIES = PLANT_UTILS.plantObservationSpecies || [];
 
     function syncSystemSafeArea() {
@@ -933,6 +934,10 @@
     const feedbackSheetEl = document.getElementById("feedback-sheet");
     const storySheetEl = document.getElementById("story-sheet");
     const suggestSiteSheetEl = document.getElementById("suggest-site-sheet");
+    // Register sheet dismissal before the optional feature setup below. A
+    // missing optional control must never leave a visible sheet without a
+    // working close button on Android WebView.
+    document.addEventListener("pointerup", closeMobileSheetFromControl);
     const loginEmailEl = document.getElementById("login-email");
     const loginPasswordEl = document.getElementById("login-password");
     const loginSubmitBtn = document.getElementById("login-submit");
@@ -1210,7 +1215,7 @@
     }
 
     function learnedLanguageWords(profile = state.profile || currentContributorProfile()) {
-      return PROFILE_UTILS.learnedLanguageWordsFromAttempts(state.languageQuizAttempts, profileIdentityIds(profile), { relationId });
+      return PROFILE_UTILS.learnedLanguageWordsFromAttempts(state.languageQuizAttempts, profileIdentityIds(profile), { relationId, wordById: LANGUAGE_QUIZ_WORD_BY_ID });
     }
 
     function languageCorrectAttemptCount(profile = state.profile || currentContributorProfile()) {
@@ -1812,11 +1817,11 @@
       return { ...article, summary, content, why_this_matters: whyThisMatters };
     }
 
-    function sourceAwareSectionHtml(title, content) {
+    function sourceAwareSectionHtml(title, content, options = {}) {
       const sourceNote = importedFootnoteSources(content).join("; ");
       const html = removeFootnoteReferenceMarkers(formatSectionContent(title, content));
       return `
-        <section class="section${sourceNote ? " has-source" : ""}">
+        <section class="section${sourceNote ? " has-source" : ""}"${options.introduction ? ` data-site-introduction="section"` : ""}>
           <h3>${escapeHtml(title)}</h3>
           <div class="section-content">${html}</div>
           ${sourceNote ? `
@@ -3279,7 +3284,9 @@
       state.languageQuizAttempts = preserveActiveProfileRows(languageResponse.data, state.languageQuizAttempts);
       state.profileFollows = preserveActiveProfileRows(followsResponse.data, state.profileFollows, ["follower_profile", "following_profile"]);
       state.profileLoginRewards = preserveActiveProfileRows(loginRewardsResponse.data, state.profileLoginRewards);
-      state.profileActivitySynced = includeCommunity && Boolean(state.profile && allResponsesFresh([
+      // Public community activity is complete for anonymous visitors too. Do
+      // not schedule a second fetch/render merely because there is no profile.
+      state.profileActivitySynced = includeCommunity && allResponsesFresh([
         profilesResponse,
         commentsResponse,
         commentVotesResponse,
@@ -3290,7 +3297,7 @@
         languageResponse,
         followsResponse,
         loginRewardsResponse
-      ]));
+      ]);
       state.profileActivityCache = null;
       state.deferredDataLoaded = true;
       if (includeCommunity) state.deferredCommunityDataLoaded = true;
@@ -3993,11 +4000,14 @@
     }
 
     function handleMobileSearchInput() {
+      // Search results must remain immediately readable and tappable.
+      hideMobileStartupSpotlight();
       closeDetailForSearchResults();
       scheduleSearchSync();
     }
 
     function handleMobileSearchFocus() {
+      hideMobileStartupSpotlight();
       closeDetailForSearchResults();
       startSearchValueWatch();
     }
@@ -6032,6 +6042,23 @@
       return isOverlayTap;
     };
 
+    // Some Android WebView builds identify a fixed, animated card as a UI
+    // overlay yet fail to dispatch its synthetic click. The native shell calls
+    // this only on touch release, after ordinary browser delivery has had the
+    // same chance to handle the gesture.
+    window.onAndroidMobilePromoActionTap = function onAndroidMobilePromoActionTap(viewX, viewY, viewWidth, viewHeight) {
+      for (const candidate of androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight)) {
+        const target = document.elementFromPoint(candidate.clientX, candidate.clientY);
+        const action = target?.closest?.("#mobile-startup-spotlight-learn, #mobile-startup-spotlight-dismiss, #mobile-startup-spotlight-close");
+        if (!action || mobileStartupSpotlightEl?.hidden) continue;
+        if (action === mobileStartupSpotlightLearnBtn) activateMobilePromo();
+        else hideMobileStartupSpotlight();
+        markAndroidUiOverlayTap();
+        return true;
+      }
+      return false;
+    };
+
     window.onAndroidSearchResultTapStart = function onAndroidSearchResultTapStart(viewX, viewY, viewWidth, viewHeight) {
       state.pendingAndroidSearchResultTap = null;
       if (!searchEl?.value?.trim() || !listEl) return false;
@@ -6561,10 +6588,12 @@
     function mapStoryMarkerOffset(story) {
       if (!story?.attached_site_slug) return [0, -12];
       const zoom = Number(state.map?.getZoom?.() || 0);
-      if (zoom >= 15) return [0, -12];
-      if (zoom >= 13.5) return [0, -28];
-      if (zoom >= 11) return [0, -44];
-      return [0, -58];
+      // Keep an attached story close enough to its listing that it reads as
+      // one location, including on the wide overview used at mobile startup.
+      if (zoom >= 15) return [0, -10];
+      if (zoom >= 13.5) return [0, -16];
+      if (zoom >= 11) return [0, -22];
+      return [0, -28];
     }
 
     function focusMapStory(story, options = {}) {
@@ -9282,29 +9311,40 @@
     function mobileBiographyPathLabelCoordinates(places = [], index = 0) {
       const place = places[index] || {};
       const coordinates = Array.isArray(place.coordinates) ? place.coordinates : null;
-      if (!coordinates?.every(Number.isFinite)) return coordinates;
-      const closeIndexes = places
-        .map((candidate, candidateIndex) => {
-          const coords = Array.isArray(candidate?.coordinates) ? candidate.coordinates : null;
-          if (!coords?.every(Number.isFinite)) return null;
-          const lngDelta = Math.abs(coords[0] - coordinates[0]);
-          const latDelta = Math.abs(coords[1] - coordinates[1]);
-          return lngDelta <= 0.16 && latDelta <= 0.07 ? candidateIndex : null;
-        })
-        .filter(Number.isFinite);
-      if (closeIndexes.length <= 1) return coordinates;
-      const localIndex = Math.max(0, closeIndexes.indexOf(index));
-      const lane = localIndex - ((closeIndexes.length - 1) / 2);
-      const radiusLat = Math.max(0.0135, Math.min(0.024, 0.09 / Math.max(2, closeIndexes.length)));
-      const radiusLng = (localIndex % 2 === 0 ? -0.006 : 0.006) * (Math.floor(localIndex / 2) + 1);
-      return [
-        Number((coordinates[0] + radiusLng).toFixed(6)),
-        Number((coordinates[1] + lane * radiusLat).toFixed(6))
-      ];
+      // Keep the callout at its dotted-line endpoint, not an invented location.
+      return coordinates?.every(Number.isFinite) ? coordinates : null;
     }
 
     function mobileBiographyPathsEnabled() {
       return state.settings.showBiographyPaths === true;
+    }
+
+    // Keep the mobile map's visual route faithful to the reviewed desktop route:
+    // routePlaces can add travel detail, while break flags deliberately prevent a
+    // line from implying a journey that the source does not document.
+    function mobileBiographyRoutePlaces(path) {
+      return (path?.routePlaces?.length >= 2 ? path.routePlaces : path?.places) || [];
+    }
+
+    function mobileBiographyRouteLineGeometry(path) {
+      const places = mobileBiographyRoutePlaces(path);
+      const lines = [];
+      let current = [];
+      places.forEach((place, index) => {
+        const coordinates = Array.isArray(place) ? place : place?.coordinates;
+        if (!Array.isArray(coordinates) || !coordinates.every(Number.isFinite)) return;
+        const previous = places[index - 1];
+        const breaksFromPrevious = index > 0 && (previous?.skipToNext || place?.skipFromPrevious);
+        if (breaksFromPrevious) {
+          if (current.length >= 2) lines.push(current);
+          current = [coordinates];
+        } else {
+          current.push(coordinates);
+        }
+      });
+      if (current.length >= 2) lines.push(current);
+      if (lines.length > 1) return { type: "MultiLineString", coordinates: lines };
+      return { type: "LineString", coordinates: lines[0] || places.map(place => Array.isArray(place) ? place : place?.coordinates).filter(Boolean) };
     }
 
     function allMobileBiographyPathFeatureCollection({ enabled = false } = {}) {
@@ -9313,11 +9353,12 @@
       for (const slug of Object.keys(BIOGRAPHY_PLACE_PATHS)) {
         const article = state.wikiBySlug.get(slug) || { slug, title: BIOGRAPHY_PLACE_PATHS[slug]?.title || "" };
         const path = mobileBiographyTimelineData(article, timelineEventsForSource("wiki", article.id, slug)) || mobileBiographyPathData(article);
+        if (path?.hidePath) continue;
         if (!path?.places?.length) continue;
         const person = mobileBiographyPathPersonName(article, slug);
         features.push({
           type: "Feature",
-          geometry: { type: "LineString", coordinates: path.places.map(place => place.coordinates) },
+          geometry: mobileBiographyRouteLineGeometry(path),
           properties: { kind: "path", person, wiki_slug: slug, title: `${person} learning path` }
         });
         path.places.forEach((place, index) => {
@@ -9483,7 +9524,7 @@
         features: [
           {
             type: "Feature",
-            geometry: { type: "LineString", coordinates: path.places.map(place => place.coordinates) },
+            geometry: mobileBiographyRouteLineGeometry(path),
             properties: { kind: "path", title: `${person || path.title || "Biography"} path`, person, wiki_slug: article?.slug || "" }
           },
           ...path.places.map((place, index) => {
@@ -9698,7 +9739,7 @@
     }
 
     function mobileMovingPointIsOnLand(coordinates = []) {
-      // Before the land mask arrives, use the safe canoe state.
+      // Before land data arrives, use the safe canoe state.
       if (!coordinates.every(Number.isFinite) || !state.landMaskData?.geometry) return false;
       try {
         return mobileMovingLandSamples(coordinates).some(sample =>
@@ -9714,8 +9755,7 @@
         .map((slug, index) => {
           const article = state.wikiBySlug.get(slug) || { slug, title: BIOGRAPHY_PLACE_PATHS[slug]?.title || slug };
           const path = mobileBiographyTimelineData(article, timelineEventsForSource("wiki", article.id, slug)) || mobileBiographyPathData(article);
-          // The animation is a visual guide through associated places. A record
-          // can still opt out after review with animate: false.
+          // Source review can opt a visual guide out.
           if (path?.animate === false) return null;
           if (!path?.places?.length || path.places.length < 2) return null;
           const route = (path.routePlaces?.length ? path.routePlaces : path.places)
@@ -10730,18 +10770,25 @@
         if (sourceList.length) site = { ...site, source_list: sourceList };
       }
       let renderedMoments = false;
-      const sections = contentSections(site).map(([title, content]) => {
-        if (/^history$/i.test(title) && moments.length) {
+      const sectionEntries = contentSections(site);
+      const introductionPresentation = SITE_UTILS.siteIntroductionPresentation(site, sectionEntries, {
+        cleanText: publicCleanText,
+        summary: site.summary
+      });
+      const sections = sectionEntries.map(([title, content, field]) => {
+        if (field?.content === "history_content" && moments.length) {
           renderedMoments = true;
           return `${sourceAwareSectionHtml(title, content)}${historicMomentsHtml(moments, { showLocations: false })}`;
         }
-        return sourceAwareSectionHtml(title, content);
+        return sourceAwareSectionHtml(title, content, {
+          introduction: field?.content === "introduction_content"
+        });
       }).join("");
       const historyHtml = moments.length && !renderedMoments ? historicMomentsHtml(moments, { showLocations: false }) : "";
       detailTitleEl.innerHTML = mobileSiteTitleHtml(site);
       detailBodyEl.innerHTML = `
         ${image ? `<img class="hero article-sticky-hero" src="${escapeHtml(image)}" alt="${escapeHtml(site.listing_image_alt || site.title)}" loading="lazy" decoding="async" onerror="${imageErrorAction(imageFallback)}">` : ""}
-        ${publicCleanText(site.summary) ? `<p class="summary">${escapeHtml(publicCleanText(site.summary))}</p>` : ""}
+        ${introductionPresentation.leadSummary ? `<p class="summary" data-site-introduction="summary">${escapeHtml(introductionPresentation.leadSummary)}</p>` : ""}
         ${siteTagsHtml(site)}
         ${sections}
         ${historyHtml}
@@ -12113,7 +12160,7 @@
         <div class="profile-stats">
           <button class="profile-stat" type="button" data-show-mobile-profile-progress aria-expanded="false"><strong>${escapeHtml(String(totalPoints))}</strong><span class="detail-meta">profile points</span></button>
           <button class="profile-stat" type="button" data-show-mobile-profile-progress aria-expanded="false"><strong>${visits.length}</strong><span class="detail-meta">${escapeHtml(publicSiteCount ? `of ${publicSiteCount} places` : "places visited")}</span></button>
-          <button class="profile-stat" type="button" data-show-mobile-profile-progress aria-expanded="false"><strong>${comments.length}</strong><span class="detail-meta">community notes</span></button>
+          <button class="profile-stat" type="button" data-show-mobile-profile-comments aria-expanded="false"><strong>${comments.length}</strong><span class="detail-meta">community notes</span></button>
           <button class="profile-stat" type="button" data-show-mobile-profile-progress aria-expanded="false"><strong>${loginRewards.currentStreak}</strong><span class="detail-meta">day streak</span></button>
         </div>
         ${stats.pointsSyncing ? `<p class="detail-meta">Refreshing latest point activity...</p>` : ""}
@@ -12126,6 +12173,7 @@
         ${mobileAccountInviteHtml(activeProfile)}
         ${mobileProfileActivityFeedHtml(activeProfile)}
         ${mobileProfileLanguageHtml(activeProfile, true)}
+        ${mobileProfileCommentsHtml(activeProfile, true)}
         <div class="visit-preview">
           <strong>Sites visited</strong>
           ${recentVisits.length ? recentVisits.map(visit => `
@@ -12433,10 +12481,10 @@
       const details = [
         ["Places visited", stats.visitsCount, "Distinct map places saved as visited."],
         ["Nearby check-ins", stats.checkinsCount, "Visits confirmed while near a mapped place."],
-        ["Approved comments", stats.commentsCount, "Community notes approved for public display."],
+        ["Approved comments", stats.commentsCount, "Community notes approved for public display.", "comments"],
         ["Language work", stats.languageLearned, "Distinct language words answered correctly."],
         ["Signed-in visit streak", stats.loginStreak, "Consecutive eligible days after the 24-hour interval."],
-        ["Helpful votes", stats.commentUpvotes, "Positive votes received on approved comments."],
+        ["Helpful votes", stats.commentUpvotes, "Positive votes received on approved comments.", "helpful"],
         ["Suggested sites", stats.suggestionsCount, "Site suggestions connected to this profile."],
         ["Homelands explored", stats.homelandsCount, "Distinct ancestral homelands represented by visited places."]
       ];
@@ -12445,11 +12493,11 @@
           <strong>Progress details</strong>
           <p class="detail-meta">Counts update from approved activity and saved account progress.</p>
           <div class="profile-progress-grid">
-            ${details.map(([label, value, explanation]) => `
-              <div class="profile-progress-row">
+            ${details.map(([label, value, explanation, review]) => `
+              <${review ? "button" : "div"} class="profile-progress-row" ${review ? `type="button" data-show-mobile-profile-${review === "helpful" ? "helpful" : "comments"}` : ""}>
                 <span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(explanation)}</small></span>
                 <strong>${Number(value) || 0}</strong>
-              </div>
+              </${review ? "button" : "div"}>
             `).join("")}
           </div>
           <strong>Points</strong>
@@ -12457,13 +12505,32 @@
           <div class="points-breakdown-row"><span>Total</span><strong>${mobileProfilePointTotal(stats)}</strong></div>
           <strong>Achievements</strong>
           <div class="profile-achievement-list">
-            ${achievements.map(achievement => `
-              <div class="profile-progress-row${achievement.earned ? " earned" : ""}">
+            ${achievements.map(achievement => {
+              const review = achievement.metric === "commentsCount" ? "comments" : achievement.metric === "commentUpvotes" ? "helpful" : "";
+              return `
+              <${review ? "button" : "div"} class="profile-progress-row${achievement.earned ? " earned" : ""}" ${review ? `type="button" data-show-mobile-profile-${review}` : ""}>
                 <span><strong>${escapeHtml(achievement.label)}</strong><small>${achievement.earned ? "Completed" : `${achievement.target - achievement.value} remaining`}</small></span>
                 <strong>${escapeHtml(achievement.progressLabel)}</strong>
-              </div>
-            `).join("")}
+              </${review ? "button" : "div"}>
+            `;
+            }).join("")}
           </div>
+        </section>
+      `;
+    }
+
+    function mobileProfileCommentsHtml(profile, hidden = true) {
+      const comments = profileActivity(profile || {}).comments.slice().reverse();
+      return `
+        <section class="visit-preview profile-comments-section" data-mobile-profile-comments ${hidden ? "hidden aria-hidden=\"true\"" : "aria-hidden=\"false\""}>
+          <strong>Approved Comments</strong>
+          ${comments.length ? comments.map(comment => `
+            <article class="profile-activity-item">
+              <span class="detail-meta">${escapeHtml(formatDate(comment.created_at || ""))}</span>
+              <button class="action secondary" type="button" data-profile-site="${escapeHtml(comment.site_slug || comment.source_slug || "")}">View on ${escapeHtml(comment.site_title || comment.source_title || "article")}</button>
+              <p>${escapeHtml(comment.comment || "")}</p>
+            </article>
+          `).join("") : `<p class="detail-meta">No approved comments yet.</p>`}
         </section>
       `;
     }
@@ -14683,6 +14750,8 @@
       menu.addEventListener("toggle", () => {
         if (menu.open) {
           document.querySelector(".mobile-layer-menu[open]")?.removeAttribute("open");
+          // A full promo card must never sit over the actionable top menu.
+          hideMobileStartupSpotlight();
           window.history.pushState({ nliMenu: true }, "", window.location.href);
         }
         fitMobileMoreMenu(menu);
@@ -14692,6 +14761,8 @@
       menu.addEventListener("toggle", () => {
         if (menu.open) {
           document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
+          // Layer controls are also a full-screen interaction surface.
+          hideMobileStartupSpotlight();
           window.history.pushState({ nliLayerMenu: true }, "", window.location.href);
         }
         fitMobileLayerMenu(menu);
@@ -14703,18 +14774,35 @@
       const layerMenu = document.querySelector(".mobile-layer-menu[open]");
       if (layerMenu) fitMobileLayerMenu(layerMenu);
     });
+    function closeMobileSheetFromControl(event) {
+      const button = event.target?.closest?.("[data-close-sheet]");
+      if (!button) return;
+      const sheet = button.closest(".sheet");
+      if (sheet === storySheetEl) {
+        closeStoryMode();
+        return;
+      }
+      sheet?.classList.remove("open");
+      if (sheet && mobileSheetRouteKey(sheet)) clearMobileRoute();
+      syncMobilePanelAccessibility();
+    }
     document.querySelectorAll("[data-close-sheet]").forEach(button => {
-      button.addEventListener("click", () => {
-        const sheet = button.closest(".sheet");
-        if (sheet === storySheetEl) {
-          closeStoryMode();
-          return;
-        }
-        sheet?.classList.remove("open");
-        if (sheet && mobileSheetRouteKey(sheet)) clearMobileRoute();
-        syncMobilePanelAccessibility();
-      });
+      button.addEventListener("click", closeMobileSheetFromControl);
     });
+    function showMobileProfileReview(scope, kind) {
+      const comments = scope?.querySelector("[data-mobile-profile-comments]");
+      const progress = scope?.querySelector("[data-mobile-profile-progress]");
+      if (kind === "helpful" && progress) {
+        progress.hidden = false;
+        progress.setAttribute("aria-hidden", "false");
+      }
+      if (comments) {
+        comments.hidden = false;
+        comments.setAttribute("aria-hidden", "false");
+        comments.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+    }
+
     profileCardEl.addEventListener("click", event => {
       if (event.target.closest("[data-save-profile]")) {
         saveEditedProfile();
@@ -14734,6 +14822,16 @@
           languageToggle.setAttribute("aria-expanded", show ? "true" : "false");
           if (show) language.scrollIntoView({ block: "nearest", behavior: "smooth" });
         }
+        return;
+      }
+      const profileComments = event.target.closest("[data-show-mobile-profile-comments]");
+      if (profileComments) {
+        showMobileProfileReview(profileCardEl, "comments");
+        return;
+      }
+      const helpfulComments = event.target.closest("[data-show-mobile-profile-helpful]");
+      if (helpfulComments) {
+        showMobileProfileReview(profileCardEl, "helpful");
         return;
       }
       const progressToggle = event.target.closest("[data-show-mobile-profile-progress]");
@@ -15003,9 +15101,26 @@
     mobileLayerEraInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("era", true)));
     mobilePinsToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("pins", state.settings.showPins === false));
     mobileShapesToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("shapes", state.settings.showShapes === false));
-    mobileStartupSpotlightLearnBtn?.addEventListener("click", activateMobilePromo);
-    mobileStartupSpotlightDismissBtn?.addEventListener("click", hideMobileStartupSpotlight);
-    mobileStartupSpotlightCloseBtn?.addEventListener("click", hideMobileStartupSpotlight);
+    function bindMobileStartupSpotlightAction(button, action) {
+      if (!button) return;
+      let touchHandledAt = 0;
+      button.addEventListener("pointerup", event => {
+        if (event.pointerType !== "touch") return;
+        event.preventDefault();
+        touchHandledAt = Date.now();
+        action();
+      });
+      button.addEventListener("click", event => {
+        if (Date.now() - touchHandledAt < 700) {
+          event.preventDefault();
+          return;
+        }
+        action();
+      });
+    }
+    bindMobileStartupSpotlightAction(mobileStartupSpotlightLearnBtn, activateMobilePromo);
+    bindMobileStartupSpotlightAction(mobileStartupSpotlightDismissBtn, hideMobileStartupSpotlight);
+    bindMobileStartupSpotlightAction(mobileStartupSpotlightCloseBtn, hideMobileStartupSpotlight);
     mobilePromoButtons.forEach(button => button.addEventListener("click", () => {
       const kind = button.dataset.mobilePromoKind || "";
       if (state.mobilePromoKind === kind && !mobileStartupSpotlightEl?.hidden) {
