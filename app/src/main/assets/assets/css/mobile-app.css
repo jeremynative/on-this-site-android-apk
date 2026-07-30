@@ -407,7 +407,8 @@
       z-index: 5;
     }
 
-    header:has(.mobile-more-menu[open]) {
+    header:has(.mobile-more-menu[open]),
+    header:has(.mobile-layer-menu[open]) {
       z-index: 40;
     }
 
@@ -705,6 +706,41 @@
       border-radius: 10px;
       background: rgba(251, 252, 250, 0.99);
       box-shadow: 0 14px 34px rgba(20, 31, 23, 0.18);
+    }
+
+    .mobile-layer-bulk-actions {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      padding-bottom: 2px;
+      background: rgba(251, 252, 250, 0.99);
+    }
+
+    .mobile-layer-bulk-actions button {
+      min-width: 0;
+      min-height: 44px;
+      padding: 8px 10px;
+      border: 1px solid var(--accent-strong);
+      border-radius: 8px;
+      background: var(--accent-strong);
+      color: #fff;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 850;
+      line-height: 1.15;
+      touch-action: manipulation;
+    }
+
+    .mobile-layer-bulk-actions button:last-child {
+      background: #fff;
+      color: var(--accent-strong);
+    }
+
+    .mobile-layer-bulk-actions button:disabled {
+      opacity: 0.48;
     }
 
     .mobile-layer-option {
@@ -1095,7 +1131,9 @@
       left: max(12px, var(--app-left-safe));
       right: max(12px, var(--app-right-safe));
       top: calc(var(--app-top-safe) + 192px);
-      z-index: 11;
+      /* Sit above map, list, and floating map controls while the card is
+         actionable. Dialog drawers still use the higher 200+ range. */
+      z-index: 120;
       display: grid;
       gap: 4px;
       box-sizing: border-box;
@@ -1135,6 +1173,13 @@
     .mobile-startup-spotlight.show {
       transform: translateY(0);
       opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* Android WebView can paint a newly shown card before its transition
+       class is observable to hit-testing. A visible card must never remain
+       touch-transparent while it is on screen. */
+    .mobile-startup-spotlight:not([hidden]) {
       pointer-events: auto;
     }
 
@@ -1186,6 +1231,7 @@
       color: var(--accent-strong);
       font-size: 12px;
       font-weight: 820;
+      touch-action: manipulation;
     }
 
     .mobile-startup-spotlight-actions button:first-child {

@@ -428,7 +428,8 @@
       z-index: 5;
     }
 
-    header:has(.mobile-more-menu[open]) {
+    header:has(.mobile-more-menu[open]),
+    header:has(.mobile-layer-menu[open]) {
       z-index: 40;
     }
 
@@ -726,6 +727,41 @@
       border-radius: 10px;
       background: rgba(251, 252, 250, 0.99);
       box-shadow: 0 14px 34px rgba(20, 31, 23, 0.18);
+    }
+
+    .mobile-layer-bulk-actions {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      padding-bottom: 2px;
+      background: rgba(251, 252, 250, 0.99);
+    }
+
+    .mobile-layer-bulk-actions button {
+      min-width: 0;
+      min-height: 44px;
+      padding: 8px 10px;
+      border: 1px solid var(--accent-strong);
+      border-radius: 8px;
+      background: var(--accent-strong);
+      color: #fff;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 850;
+      line-height: 1.15;
+      touch-action: manipulation;
+    }
+
+    .mobile-layer-bulk-actions button:last-child {
+      background: #fff;
+      color: var(--accent-strong);
+    }
+
+    .mobile-layer-bulk-actions button:disabled {
+      opacity: 0.48;
     }
 
     .mobile-layer-option {
@@ -5885,6 +5921,10 @@ body.research-question-dialog-open .research-question-prompt,
         <details class="mobile-layer-menu" id="mobile-layer-menu">
           <summary>Labels</summary>
           <div class="mobile-layer-panel" role="group" aria-label="Map layers">
+            <div class="mobile-layer-bulk-actions" role="group" aria-label="All map labels">
+              <button id="mobile-layer-enable-all" type="button">Enable all</button>
+              <button id="mobile-layer-disable-all" type="button">Disable all</button>
+            </div>
             <label class="mobile-layer-option" for="mobile-layer-exhibits">
               <span>Exhibits</span>
               <input id="mobile-layer-exhibits" type="checkbox" checked>
@@ -15306,6 +15346,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const mobileShapesToggleBtn = document.getElementById("mobile-shapes-toggle");
     const exhibitsToggleBtn = document.getElementById("exhibits-toggle");
     const mobileLayerMenu = document.getElementById("mobile-layer-menu");
+    const mobileLayerEnableAllBtn = document.getElementById("mobile-layer-enable-all");
+    const mobileLayerDisableAllBtn = document.getElementById("mobile-layer-disable-all");
     const mobileLayerExhibitsInput = document.getElementById("mobile-layer-exhibits");
     const mobileLayerPinsInput = document.getElementById("mobile-layer-pins");
     const mobileLayerShapesInput = document.getElementById("mobile-layer-shapes");
@@ -28332,6 +28374,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const activeLayerCount = primaryCount + categoryCount + eraCount;
         const allOn = activeLayerCount === totalLayerCount;
         mobileLayerMenu.querySelector("summary").textContent = allOn ? "Labels" : `Labels ${activeLayerCount}/${totalLayerCount}`;
+        if (mobileLayerEnableAllBtn) mobileLayerEnableAllBtn.disabled = allOn;
+        if (mobileLayerDisableAllBtn) mobileLayerDisableAllBtn.disabled = activeLayerCount === 0;
       }
       if (exhibitsToggleBtn) {
         exhibitsToggleBtn.textContent = state.settings.exhibits === false ? "Exhibits off" : "Exhibits";
@@ -28371,6 +28415,28 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       syncMobileBiographyPathLayers();
       syncMarkers();
       if (kind === "era") renderMobileTimeline();
+    }
+
+    function setAllMobileLayerVisibility(visible) {
+      const nextVisible = visible === true;
+      state.settings.exhibits = nextVisible;
+      state.settings.showPins = nextVisible;
+      state.settings.showShapes = nextVisible;
+      state.settings.showBiographyPaths = nextVisible;
+      state.settings.layerCategories = {};
+      mobileLayerCategoryInputs.forEach(input => {
+        state.settings.layerCategories[input.value] = nextVisible;
+      });
+      state.settings.eraCategories = {};
+      mobileLayerEraInputs.forEach(input => {
+        state.settings.eraCategories[input.value] = nextVisible;
+      });
+      saveSettings();
+      invalidateMapSourceCache();
+      syncMobileLayerButtons();
+      syncMobileBiographyPathLayers();
+      syncMarkers();
+      renderMobileTimeline();
     }
 
     function setMobileBasemap(value) {
@@ -29535,6 +29601,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     mobileLayerBiographyPathsInput?.addEventListener("change", () => setMobileLayerVisibility("biographyPaths", mobileLayerBiographyPathsInput.checked));
     mobileLayerCategoryInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("category", true)));
     mobileLayerEraInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("era", true)));
+    mobileLayerEnableAllBtn?.addEventListener("click", () => setAllMobileLayerVisibility(true));
+    mobileLayerDisableAllBtn?.addEventListener("click", () => setAllMobileLayerVisibility(false));
     mobilePinsToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("pins", state.settings.showPins === false));
     mobileShapesToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("shapes", state.settings.showShapes === false));
     function bindMobileStartupSpotlightAction(button, action) {

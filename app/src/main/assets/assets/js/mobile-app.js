@@ -870,6 +870,8 @@
     const mobileShapesToggleBtn = document.getElementById("mobile-shapes-toggle");
     const exhibitsToggleBtn = document.getElementById("exhibits-toggle");
     const mobileLayerMenu = document.getElementById("mobile-layer-menu");
+    const mobileLayerEnableAllBtn = document.getElementById("mobile-layer-enable-all");
+    const mobileLayerDisableAllBtn = document.getElementById("mobile-layer-disable-all");
     const mobileLayerExhibitsInput = document.getElementById("mobile-layer-exhibits");
     const mobileLayerPinsInput = document.getElementById("mobile-layer-pins");
     const mobileLayerShapesInput = document.getElementById("mobile-layer-shapes");
@@ -13896,6 +13898,8 @@
         const activeLayerCount = primaryCount + categoryCount + eraCount;
         const allOn = activeLayerCount === totalLayerCount;
         mobileLayerMenu.querySelector("summary").textContent = allOn ? "Labels" : `Labels ${activeLayerCount}/${totalLayerCount}`;
+        if (mobileLayerEnableAllBtn) mobileLayerEnableAllBtn.disabled = allOn;
+        if (mobileLayerDisableAllBtn) mobileLayerDisableAllBtn.disabled = activeLayerCount === 0;
       }
       if (exhibitsToggleBtn) {
         exhibitsToggleBtn.textContent = state.settings.exhibits === false ? "Exhibits off" : "Exhibits";
@@ -13935,6 +13939,28 @@
       syncMobileBiographyPathLayers();
       syncMarkers();
       if (kind === "era") renderMobileTimeline();
+    }
+
+    function setAllMobileLayerVisibility(visible) {
+      const nextVisible = visible === true;
+      state.settings.exhibits = nextVisible;
+      state.settings.showPins = nextVisible;
+      state.settings.showShapes = nextVisible;
+      state.settings.showBiographyPaths = nextVisible;
+      state.settings.layerCategories = {};
+      mobileLayerCategoryInputs.forEach(input => {
+        state.settings.layerCategories[input.value] = nextVisible;
+      });
+      state.settings.eraCategories = {};
+      mobileLayerEraInputs.forEach(input => {
+        state.settings.eraCategories[input.value] = nextVisible;
+      });
+      saveSettings();
+      invalidateMapSourceCache();
+      syncMobileLayerButtons();
+      syncMobileBiographyPathLayers();
+      syncMarkers();
+      renderMobileTimeline();
     }
 
     function setMobileBasemap(value) {
@@ -15099,6 +15125,8 @@
     mobileLayerBiographyPathsInput?.addEventListener("change", () => setMobileLayerVisibility("biographyPaths", mobileLayerBiographyPathsInput.checked));
     mobileLayerCategoryInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("category", true)));
     mobileLayerEraInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("era", true)));
+    mobileLayerEnableAllBtn?.addEventListener("click", () => setAllMobileLayerVisibility(true));
+    mobileLayerDisableAllBtn?.addEventListener("click", () => setAllMobileLayerVisibility(false));
     mobilePinsToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("pins", state.settings.showPins === false));
     mobileShapesToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("shapes", state.settings.showShapes === false));
     function bindMobileStartupSpotlightAction(button, action) {

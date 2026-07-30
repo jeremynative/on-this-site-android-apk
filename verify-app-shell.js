@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260730-single-introduction-r24";
+const expectedBuild = "20260730-mobile-layer-menu-r25";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -8,6 +8,7 @@ const bundledAppPath = "app/src/main/assets/mobile-app.html";
 const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
 const lightweightOfflineAppPath = "app/src/main/assets/offline-app.html";
 const bundledMobileJsPath = "app/src/main/assets/assets/js/mobile-app.js";
+const bundledMobileCssPath = "app/src/main/assets/assets/css/mobile-app.css";
 const bundledSharedSiteUtilsPath = "app/src/main/assets/assets/js/shared-site-utils.js";
 const stylesPath = "app/src/main/res/values/styles.xml";
 const launchBackgroundPath = "app/src/main/res/drawable/launch_background.xml";
@@ -30,6 +31,7 @@ const appBridge = fs.readFileSync(appBridgePath, "utf8");
 const bundledApp = bundledAppBytes.toString("utf8");
 const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
 const bundledMobileJs = fs.readFileSync(bundledMobileJsPath, "utf8");
+const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8");
 const bundledSharedSiteUtils = fs.readFileSync(bundledSharedSiteUtilsPath, "utf8");
 const styles = fs.readFileSync(stylesPath, "utf8");
 const launchBackground = fs.readFileSync(launchBackgroundPath, "utf8");
@@ -209,6 +211,30 @@ for (const [label, document] of [
   if (document.includes("if (path?.animate !== true) return null;")) {
     throw new Error(`${label} still contains the obsolete explicit-travel-only biography animation rule.`);
   }
+}
+for (const [label, document] of [
+  ["bundled fallback", bundledApp],
+  ["bundled live fallback", bundledLiveApp]
+]) {
+  if (!document.includes('id="mobile-layer-enable-all"')
+      || !document.includes('id="mobile-layer-disable-all"')
+      || !document.includes("function setAllMobileLayerVisibility(visible)")
+      || !document.includes('mobileLayerEnableAllBtn?.addEventListener("click", () => setAllMobileLayerVisibility(true));')
+      || !document.includes('mobileLayerDisableAllBtn?.addEventListener("click", () => setAllMobileLayerVisibility(false));')) {
+    throw new Error(`${label} must include working Enable all and Disable all label controls.`);
+  }
+}
+if (!bundledMobileCss.includes("header:has(.mobile-more-menu[open]),")
+    || !bundledMobileCss.includes("header:has(.mobile-layer-menu[open])")
+    || !bundledMobileCss.includes(".mobile-layer-bulk-actions")
+    || !bundledMobileCss.includes("grid-template-columns: repeat(2, minmax(0, 1fr));")) {
+  throw new Error("Bundled Android label panel must stay above the map tabs and keep its two bulk actions side by side.");
+}
+if (!bundledMobileJs.includes("function setAllMobileLayerVisibility(visible)")
+    || !bundledMobileJs.includes("state.settings.showBiographyPaths = nextVisible;")
+    || !bundledMobileJs.includes("state.settings.layerCategories = {};")
+    || !bundledMobileJs.includes("state.settings.eraCategories = {};")) {
+  throw new Error("Bundled Android mobile runtime must update every primary, category, and era label in one bulk action.");
 }
 requireText(expectedUrl, `Android shell must load ${expectedUrl}.`);
 requireText("?app-version=", "Android shell must pass the app build id to the mobile web app.");
