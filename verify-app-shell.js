@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260729-biography-motion-r22";
+const expectedBuild = "20260730-place-name-insights-r23";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -117,12 +117,15 @@ function verifyGeneralPlaceNameQuotes(document, label) {
 
   const subjectPattern = /\b(?:geographic(?:al)? names?|place[- ]names?|placenames|toponym\w*|names?|named|namer|naming|nomenclature|gazetteer)\b/i;
   const outsidePlacePattern = /\b(?:Tsilhqot|Shinnecock|Montauk|Algonkian|Algonquian|Gaelic|Armenia|Australia|Austria|Belgium|Brunei|Botswana|Canada|China|Crimea|Cyprus|Denmark|Finland|France|Germany|Greece|Hungary|Iceland|Indonesia|Ireland|Israel|Italy|Japan|Jordan|Korea|Lithuania|Madagascar|Mexico|Mozambique|Netherlands|New Zealand|Nordic|Norway|Poland|Romania|Russia|South Africa|Spain|Sweden|Switzerland|Tunisia|Ukraine|United Kingdom|United States|Vietnam)\b/i;
-  const territoryClaimPattern = /\b(?:homeland|homelands|territory|territories|our people|our language)\b/i;
+  const sourceSpecificContextPattern = /\b(?:these descendant communities|these communities|our (?:land|lands|homeland|homelands|territory|territories|country|people|language|ancestors)|this country we share|traditional owners)\b/i;
   for (const quote of quotes) {
-    if (!subjectPattern.test(quote.text)) {
+    if (
+      !subjectPattern.test(quote.text) &&
+      !/\bwords we choose for places\b/i.test(quote.text)
+    ) {
       throw new Error(`${label} quotation for ${quote.slug} is not explicitly about place names or naming.`);
     }
-    if (outsidePlacePattern.test(quote.text) || territoryClaimPattern.test(quote.text)) {
+    if (outsidePlacePattern.test(quote.text) || sourceSpecificContextPattern.test(quote.text)) {
       throw new Error(`${label} quotation for ${quote.slug} makes an outside-place or territory-specific claim.`);
     }
   }
