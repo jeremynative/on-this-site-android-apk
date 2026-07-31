@@ -13,12 +13,16 @@
       --viewport-bottom-safe: 0px;
       --viewport-left-safe: 0px;
       --viewport-right-safe: 0px;
-      --app-top-safe: max(env(safe-area-inset-top), var(--viewport-top-safe), var(--minimum-top-safe));
-      --app-bottom-safe: max(env(safe-area-inset-bottom), var(--viewport-bottom-safe), var(--minimum-bottom-safe));
+      --native-top-safe: 0px;
+      --native-bottom-safe: 0px;
+      --native-left-safe: 0px;
+      --native-right-safe: 0px;
+      --app-top-safe: max(env(safe-area-inset-top), var(--viewport-top-safe), var(--native-top-safe), var(--minimum-top-safe));
+      --app-bottom-safe: max(env(safe-area-inset-bottom), var(--viewport-bottom-safe), var(--native-bottom-safe), var(--minimum-bottom-safe));
       --minimum-left-safe: 0px;
       --minimum-right-safe: 0px;
-      --app-left-safe: max(env(safe-area-inset-left), var(--viewport-left-safe), var(--minimum-left-safe));
-      --app-right-safe: max(env(safe-area-inset-right), var(--viewport-right-safe), var(--minimum-right-safe));
+      --app-left-safe: max(env(safe-area-inset-left), var(--viewport-left-safe), var(--native-left-safe), var(--minimum-left-safe));
+      --app-right-safe: max(env(safe-area-inset-right), var(--viewport-right-safe), var(--native-right-safe), var(--minimum-right-safe));
     }
 
     * {
@@ -70,10 +74,10 @@
       align-content: center;
       padding: 22px;
       padding:
-        max(22px, env(safe-area-inset-top))
-        max(22px, env(safe-area-inset-right))
-        max(22px, env(safe-area-inset-bottom))
-        max(22px, env(safe-area-inset-left));
+        max(22px, var(--app-top-safe))
+        max(22px, var(--app-right-safe))
+        max(22px, var(--app-bottom-safe))
+        max(22px, var(--app-left-safe));
       box-sizing: border-box;
       background: linear-gradient(180deg, #e8f4ee 0%, #f7faf6 58%, #d9edf3 100%);
       color: var(--ink);
@@ -338,6 +342,11 @@
 
     .app.panel-timeline .timeline-current {
       min-height: 0;
+    }
+
+    .app.panel-timeline .timeline-toggle,
+    .app.panel-timeline .timeline-actions [data-timeline-hide] {
+      display: none;
     }
 
     .app.panel-timeline .timeline-current strong,
@@ -693,10 +702,10 @@
       display: none;
       gap: 8px;
       box-sizing: border-box;
-      width: var(--mobile-layer-width, calc(100vw - 16px));
-      width: var(--mobile-layer-width, calc(100dvw - 16px));
-      max-width: calc(100vw - 16px);
-      max-width: calc(100dvw - 16px);
+      width: var(--mobile-layer-width, calc(100vw - max(8px, var(--app-left-safe)) - max(8px, var(--app-right-safe))));
+      width: var(--mobile-layer-width, calc(100dvw - max(8px, var(--app-left-safe)) - max(8px, var(--app-right-safe))));
+      max-width: calc(100vw - max(8px, var(--app-left-safe)) - max(8px, var(--app-right-safe)));
+      max-width: calc(100dvw - max(8px, var(--app-left-safe)) - max(8px, var(--app-right-safe)));
       padding: 10px;
       max-height: calc(100dvh - var(--mobile-layer-top, 112px) - var(--app-bottom-safe) - 10px);
       overflow-y: auto;
@@ -911,8 +920,8 @@
       box-sizing: border-box;
       grid-template-columns: 1fr;
       gap: 6px;
-      width: calc(100vw - 16px);
-      width: calc(100dvw - 16px);
+      width: calc(100vw - max(8px, var(--app-left-safe)) - max(8px, var(--app-right-safe)));
+      width: calc(100dvw - max(8px, var(--app-left-safe)) - max(8px, var(--app-right-safe)));
       max-width: none;
       padding: 8px;
       max-height: calc(100dvh - var(--mobile-more-top, 112px) - var(--app-bottom-safe) - 10px);
@@ -955,8 +964,8 @@
       left: var(--mobile-more-left, max(8px, var(--app-left-safe))) !important;
       right: auto !important;
       z-index: 1000 !important;
-      width: var(--mobile-more-width, calc(100vw - 16px)) !important;
-      width: var(--mobile-more-width, calc(100dvw - 16px)) !important;
+      width: var(--mobile-more-width, calc(100vw - max(8px, var(--app-left-safe)) - max(8px, var(--app-right-safe)))) !important;
+      width: var(--mobile-more-width, calc(100dvw - max(8px, var(--app-left-safe)) - max(8px, var(--app-right-safe)))) !important;
       max-width: var(--mobile-more-width, none) !important;
       transform: none !important;
       grid-template-columns: 1fr !important;
@@ -1138,7 +1147,10 @@
       gap: 4px;
       box-sizing: border-box;
       max-width: 520px;
+      max-height: calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe) - 204px);
       margin: 0 auto;
+      overflow-y: auto;
+      overscroll-behavior: contain;
       padding: 10px 12px 11px;
       border: 1px solid rgba(47, 90, 73, 0.18);
       border-radius: 10px;
@@ -1153,19 +1165,19 @@
 
     .mobile-startup-spotlight-close {
       position: absolute;
-      top: 7px;
-      right: 7px;
+      top: 6px;
+      right: 6px;
       display: grid;
       place-items: center;
-      width: 28px;
-      height: 28px;
+      width: 40px;
+      height: 40px;
       min-height: 0;
       padding: 0;
       border: 1px solid rgba(45, 61, 52, 0.2);
-      border-radius: 7px;
+      border-radius: 9px;
       background: rgba(255, 255, 255, 0.92);
       color: var(--ink);
-      font-size: 15px;
+      font-size: 18px;
       font-weight: 800;
       cursor: pointer;
     }
@@ -1188,7 +1200,7 @@
     }
 
     .mobile-startup-spotlight span {
-      padding-right: 30px;
+      padding-right: 44px;
       color: var(--accent-strong);
       font-size: 10px;
       font-weight: 860;
@@ -1198,7 +1210,7 @@
 
     .mobile-startup-spotlight strong {
       display: block;
-      padding-right: 30px;
+      padding-right: 44px;
       font-size: 15px;
       line-height: 1.18;
     }
@@ -1223,7 +1235,7 @@
     }
 
     .mobile-startup-spotlight-actions button {
-      min-height: 34px;
+      min-height: 40px;
       padding: 0 12px;
       border: 1px solid #b9c9bd;
       border-radius: 8px;
@@ -1779,6 +1791,78 @@
 
       body.native-android-app .mobile-map-locate {
         bottom: 12px;
+      }
+
+      body.native-android-app .app.panel-timeline {
+        grid-template-rows: auto minmax(56px, 14vh) auto minmax(0, 1fr);
+      }
+
+      body.native-android-app .app.panel-timeline .mobile-map-shell,
+      body.native-android-app .app.panel-timeline #map {
+        min-height: 0;
+      }
+
+      body.native-android-app .app.panel-timeline .mobile-timeline {
+        grid-template-columns: 40px minmax(0, 1fr) 40px;
+        gap: 6px;
+        align-items: stretch;
+        padding: 4px 10px;
+        min-height: 0;
+        max-height: none;
+        overflow: hidden;
+      }
+
+      body.native-android-app .app.panel-timeline .timeline-step {
+        width: 40px;
+        min-height: 40px;
+        max-height: none;
+      }
+
+      body.native-android-app .app.panel-timeline .timeline-current {
+        grid-template-columns: minmax(0, 1fr) minmax(168px, auto);
+        grid-template-rows: minmax(0, 1fr);
+        align-items: center;
+        gap: 6px;
+        height: 100%;
+        min-height: 0;
+        max-height: 100%;
+        padding: 4px 6px;
+        overflow: hidden;
+      }
+
+      body.native-android-app .app.panel-timeline .timeline-current .date,
+      body.native-android-app .app.panel-timeline .timeline-source-row,
+      body.native-android-app .app.panel-timeline .timeline-source-popover,
+      body.native-android-app .app.panel-timeline .timeline-current .teaser {
+        display: none;
+      }
+
+      body.native-android-app .app.panel-timeline .timeline-current strong {
+        display: -webkit-box;
+        grid-column: 1;
+        grid-row: 1;
+        margin: 0;
+        overflow: hidden;
+        white-space: normal;
+        line-height: 1.15;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }
+
+      body.native-android-app .app.panel-timeline .timeline-actions {
+        display: grid;
+        grid-column: 2;
+        grid-row: 1;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 5px;
+        min-width: 0;
+      }
+
+      body.native-android-app .app.panel-timeline .timeline-actions button {
+        min-width: 0;
+        min-height: 40px;
+        padding: 0 8px;
+        white-space: nowrap;
       }
     }
 
@@ -2631,7 +2715,11 @@
       z-index: 1100;
       display: grid;
       place-items: center;
-      padding: calc(18px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));
+      padding:
+        calc(18px + var(--app-top-safe))
+        calc(18px + var(--app-right-safe))
+        calc(18px + var(--app-bottom-safe))
+        calc(18px + var(--app-left-safe));
       background: rgba(23, 32, 27, 0.36);
     }
 
@@ -2641,6 +2729,9 @@
 
     .language-quiz-card {
       width: min(420px, 100%);
+      max-height: 100%;
+      overflow-y: auto;
+      overscroll-behavior: contain;
       padding: 16px;
       border: 1px solid rgba(73, 111, 93, 0.2);
       border-radius: 8px;
@@ -3172,7 +3263,11 @@
       z-index: 1200;
       display: grid;
       place-items: center;
-      padding: calc(env(safe-area-inset-top, 0px) + 18px) 18px calc(env(safe-area-inset-bottom, 0px) + 18px);
+      padding:
+        calc(var(--app-top-safe) + 18px)
+        calc(var(--app-right-safe) + 18px)
+        calc(var(--app-bottom-safe) + 18px)
+        calc(var(--app-left-safe) + 18px);
       background: rgba(15, 24, 18, 0.88);
     }
 
@@ -3191,9 +3286,9 @@
 
     .plant-photo-viewer-caption {
       position: fixed;
-      left: 18px;
-      right: 18px;
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+      left: calc(var(--app-left-safe) + 18px);
+      right: calc(var(--app-right-safe) + 18px);
+      bottom: calc(var(--app-bottom-safe) + 18px);
       display: flex;
       gap: 10px;
       align-items: center;
@@ -3602,7 +3697,11 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
-      padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+      padding:
+        max(14px, var(--app-top-safe))
+        max(14px, var(--app-right-safe))
+        max(18px, var(--app-bottom-safe))
+        max(14px, var(--app-left-safe));
       background: rgba(16, 21, 16, 0.9);
     }
 
@@ -5426,9 +5525,9 @@
 
     .banner {
       position: fixed;
-      right: 12px;
+      right: max(12px, var(--app-right-safe));
       bottom: calc(14px + var(--app-bottom-safe));
-      left: 12px;
+      left: max(12px, var(--app-left-safe));
       z-index: 30;
       display: none;
       padding: 10px 12px;

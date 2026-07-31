@@ -641,6 +641,16 @@
     const LANGUAGE_QUIZ_WORD_BY_ID = new Map(LANGUAGE_QUIZ_WORDS.map(word => [String(word.id), word]));
     const PLANT_OBSERVATION_SPECIES = PLANT_UTILS.plantObservationSpecies || [];
 
+    function androidBridgeCssPixel(methodName) {
+      const bridge = window.AndroidApp;
+      if (!bridge || typeof bridge[methodName] !== "function") return 0;
+      try {
+        return Math.max(0, Number(bridge[methodName]()) || 0);
+      } catch {
+        return 0;
+      }
+    }
+
     function syncSystemSafeArea() {
       const isAndroid = /Android/i.test(navigator.userAgent);
       const isNativeAndroid = isAndroid && Boolean(window.AndroidApp || window.AndroidStory);
@@ -653,15 +663,34 @@
       const bottomGap = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
       const leftGap = viewport ? Math.max(0, viewport.offsetLeft) : 0;
       const rightGap = viewport ? Math.max(0, window.innerWidth - viewport.width - viewport.offsetLeft) : 0;
+      const nativeTop = isNativeAndroid ? Math.ceil(androidBridgeCssPixel("getSafeInsetTop")) : 0;
+      const nativeBottom = isNativeAndroid ? Math.ceil(androidBridgeCssPixel("getSafeInsetBottom")) : 0;
+      const nativeLeft = isNativeAndroid ? Math.ceil(androidBridgeCssPixel("getSafeInsetLeft")) : 0;
+      const nativeRight = isNativeAndroid ? Math.ceil(androidBridgeCssPixel("getSafeInsetRight")) : 0;
       document.documentElement.style.setProperty("--viewport-top-safe", `${Math.round(topGap)}px`);
       document.documentElement.style.setProperty("--viewport-bottom-safe", `${Math.round(bottomGap)}px`);
       document.documentElement.style.setProperty("--viewport-left-safe", `${Math.round(leftGap)}px`);
       document.documentElement.style.setProperty("--viewport-right-safe", `${Math.round(rightGap)}px`);
+      document.documentElement.style.setProperty("--native-top-safe", `${nativeTop}px`);
+      document.documentElement.style.setProperty("--native-bottom-safe", `${nativeBottom}px`);
+      document.documentElement.style.setProperty("--native-left-safe", `${nativeLeft}px`);
+      document.documentElement.style.setProperty("--native-right-safe", `${nativeRight}px`);
     }
 
     syncSystemSafeArea();
     window.visualViewport?.addEventListener("resize", syncSystemSafeArea);
     window.visualViewport?.addEventListener("scroll", syncSystemSafeArea);
+    window.addEventListener("nli-native-insets-changed", () => {
+      syncSystemSafeArea();
+      window.requestAnimationFrame(() => {
+        positionMobileMapActionButtons();
+        positionMobileStartupSpotlight();
+        const moreMenu = document.querySelector(".mobile-more-menu[open]");
+        if (moreMenu) fitMobileMoreMenu(moreMenu);
+        const layerMenu = document.querySelector(".mobile-layer-menu[open]");
+        if (layerMenu) fitMobileLayerMenu(layerMenu);
+      });
+    });
     window.addEventListener("orientationchange", () => window.setTimeout(syncSystemSafeArea, 250));
 
     function isNativeAndroidApp() {
@@ -5082,7 +5111,7 @@
 
     function detailDrawerLimits() {
       const viewport = Math.max(window.innerHeight || 0, 420);
-      const reserved = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--app-top-safe")) || 0;
+      const reserved = cssPixelValue("--app-top-safe", 0) + cssPixelValue("--app-bottom-safe", 0);
       const max = Math.max(240, viewport - reserved - 12);
       return {
         collapsed: Math.min(max, Math.max(190, Math.round(viewport * 0.34))),
@@ -8426,8 +8455,22 @@
       popup.dataset.quote = quote;
       popup.dataset.context = quoteSelectionContext();
       popup.hidden = false;
-      popup.style.left = `${Math.min(window.innerWidth - 116, Math.max(10, popupRect.left + popupRect.width / 2 - 52))}px`;
-      popup.style.top = `${Math.max(10, popupRect.top - 42)}px`;
+      const popupBounds = popup.getBoundingClientRect();
+      const safeLeft = cssPixelValue("--app-left-safe", 0) + 10;
+      const safeRight = cssPixelValue("--app-right-safe", 0) + 10;
+      const safeTop = cssPixelValue("--app-top-safe", 0) + 10;
+      const safeBottom = cssPixelValue("--app-bottom-safe", 0) + 10;
+      const popupWidth = Math.max(104, popupBounds.width || 0);
+      const popupHeight = Math.max(34, popupBounds.height || 0);
+      const preferredLeft = popupRect.left + popupRect.width / 2 - (popupWidth / 2);
+      popup.style.left = `${Math.min(
+        window.innerWidth - safeRight - popupWidth,
+        Math.max(safeLeft, preferredLeft)
+      )}px`;
+      popup.style.top = `${Math.min(
+        window.innerHeight - safeBottom - popupHeight,
+        Math.max(safeTop, popupRect.top - popupHeight - 8)
+      )}px`;
     }
 
     function startQuoteCommentFromSelection(quote, context = "") {
@@ -14006,9 +14049,11 @@
       const viewportTop = Math.round(viewport?.offsetTop || 0);
       const pad = options.pad ?? 8;
       const bottomSafe = cssPixelValue("--app-bottom-safe", 0);
+      const leftSafe = Math.max(pad, cssPixelValue("--app-left-safe", 0));
+      const rightSafe = Math.max(pad, cssPixelValue("--app-right-safe", 0));
       const top = Math.max(viewportTop + pad, Math.min(viewportTop + viewportHeight - 120, Math.round(viewportTop + (summaryRect?.bottom || 74) + 6)));
-      const left = viewportLeft + pad;
-      const width = Math.max(options.minWidth || 160, viewportWidth - (pad * 2));
+      const left = viewportLeft + leftSafe;
+      const width = Math.max(0, viewportWidth - leftSafe - rightSafe);
       const maxHeight = Math.max(options.minHeight || 160, viewportTop + viewportHeight - top - bottomSafe - pad);
       panel.style.setProperty(options.topVar, `${top}px`);
       panel.style.setProperty(options.leftVar, `${left}px`);

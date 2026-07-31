@@ -363,9 +363,9 @@ body.research-question-dialog-open .research-question-prompt,
 
 @media (max-width: 760px) {
   .research-question-shell-mobile .research-question-prompt {
-    left: 16px;
-    right: 16px;
-    bottom: var(--mobile-map-prompt-bottom, calc(118px + env(safe-area-inset-bottom)));
+    left: max(16px, var(--app-left-safe, env(safe-area-inset-left)));
+    right: max(16px, var(--app-right-safe, env(safe-area-inset-right)));
+    bottom: var(--mobile-map-prompt-bottom, calc(118px + var(--app-bottom-safe, env(safe-area-inset-bottom))));
     width: auto;
     padding: 10px 42px 10px 12px;
     transform: none;
@@ -379,25 +379,29 @@ body.research-question-dialog-open .research-question-prompt,
   body:not(.timeline-collapsed) .research-question-shell-desktop .research-question-restore,
   body.timeline-large .research-question-shell-desktop .research-question-restore {
     right: auto;
-    bottom: calc(8px + env(safe-area-inset-bottom));
-    left: 12px;
+    bottom: calc(8px + var(--app-bottom-safe, env(safe-area-inset-bottom)));
+    left: max(12px, var(--app-left-safe, env(safe-area-inset-left)));
   }
 
   body:has(.research-question-restore:not([hidden])) .timeline-dock:not(.large) {
-    right: 8px;
-    left: 64px;
+    right: max(8px, var(--app-right-safe, env(safe-area-inset-right)));
+    left: calc(64px + var(--app-left-safe, env(safe-area-inset-left)));
     width: auto;
   }
 
   .research-question-dialog {
     align-items: end;
-    padding: 0;
+    padding:
+      var(--app-top-safe, env(safe-area-inset-top))
+      var(--app-right-safe, env(safe-area-inset-right))
+      0
+      var(--app-left-safe, env(safe-area-inset-left));
   }
 
   .research-question-card {
     width: 100%;
-    max-height: min(84dvh, 760px);
-    padding: 19px 18px calc(20px + env(safe-area-inset-bottom));
+    max-height: min(84dvh, calc(100dvh - var(--app-top-safe, env(safe-area-inset-top)) - var(--app-bottom-safe, env(safe-area-inset-bottom))), 760px);
+    padding: 19px 18px calc(20px + var(--app-bottom-safe, env(safe-area-inset-bottom)));
     border-radius: 8px 8px 0 0;
   }
 
@@ -414,12 +418,44 @@ body.research-question-dialog-open .research-question-prompt,
   .research-question-shell-mobile .research-question-prompt {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 6px;
-    right: 16px;
+    right: max(16px, var(--app-right-safe, env(safe-area-inset-right)));
     width: auto;
     padding-right: 42px;
   }
 
   .research-question-shell-mobile .research-question-prompt-action {
     width: fit-content;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 560px) {
+  body.native-android-app .research-question-shell-mobile .research-question-prompt {
+    left: max(16px, var(--app-left-safe, env(safe-area-inset-left)));
+    right: max(16px, var(--app-right-safe, env(safe-area-inset-right)));
+    bottom: var(--mobile-map-prompt-bottom, calc(72px + var(--app-bottom-safe, env(safe-area-inset-bottom))));
+    width: auto;
+    transform: none;
+  }
+
+  body.native-android-app .research-question-restore {
+    right: auto;
+    bottom: calc(8px + var(--app-bottom-safe, env(safe-area-inset-bottom)));
+    left: max(12px, var(--app-left-safe, env(safe-area-inset-left)));
+  }
+
+  body.native-android-app .research-question-dialog {
+    align-items: end;
+    padding:
+      var(--app-top-safe, env(safe-area-inset-top))
+      var(--app-right-safe, env(safe-area-inset-right))
+      0
+      var(--app-left-safe, env(safe-area-inset-left));
+  }
+
+  body.native-android-app .research-question-card {
+    width: 100%;
+    max-height: calc(100dvh - var(--app-top-safe, env(safe-area-inset-top)) - var(--app-bottom-safe, env(safe-area-inset-bottom)));
+    padding-bottom: calc(20px + var(--app-bottom-safe, env(safe-area-inset-bottom)));
+    border-radius: 8px 8px 0 0;
   }
 }

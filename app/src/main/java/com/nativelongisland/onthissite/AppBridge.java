@@ -35,6 +35,26 @@ class AppBridge {
     }
 
     @JavascriptInterface
+    public float getSafeInsetTop() {
+        return activity.safeInsetTopCss();
+    }
+
+    @JavascriptInterface
+    public float getSafeInsetRight() {
+        return activity.safeInsetRightCss();
+    }
+
+    @JavascriptInterface
+    public float getSafeInsetBottom() {
+        return activity.safeInsetBottomCss();
+    }
+
+    @JavascriptInterface
+    public float getSafeInsetLeft() {
+        return activity.safeInsetLeftCss();
+    }
+
+    @JavascriptInterface
     public void refreshNow() {
         activity.runOnUiThread(activity::refreshApp);
     }

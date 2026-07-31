@@ -75,10 +75,107 @@ if (!readiness.ready) {
   throw new Error(`APK WebView did not become interactive: ${JSON.stringify(readiness)}`);
 }
 
-if (process.env.AUDIT_CLOSE_SPOTLIGHT === "1") {
-  await evaluate(`document.querySelector("#mobile-startup-spotlight-close")?.click()`);
-  await wait(180);
-}
+const safeArea = await evaluate(`(() => {
+  const bridgeValue = name => {
+    try {
+      return Math.max(0, Number(window.AndroidApp?.[name]?.()) || 0);
+    } catch {
+      return 0;
+    }
+  };
+  const cssValue = name => {
+    if (typeof cssPixelValue === "function") return cssPixelValue(name, 0);
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(name);
+    const values = String(raw || "").match(/-?\\d+(?:\\.\\d+)?px/g) || [];
+    return Math.max(0, ...values.map(value => Number.parseFloat(value)).filter(Number.isFinite));
+  };
+  const native = {
+    top: bridgeValue("getSafeInsetTop"),
+    right: bridgeValue("getSafeInsetRight"),
+    bottom: bridgeValue("getSafeInsetBottom"),
+    left: bridgeValue("getSafeInsetLeft")
+  };
+  const app = {
+    top: cssValue("--app-top-safe"),
+    right: cssValue("--app-right-safe"),
+    bottom: cssValue("--app-bottom-safe"),
+    left: cssValue("--app-left-safe")
+  };
+  return {
+    native,
+    app,
+    viewport: [innerWidth, innerHeight],
+    rect: {
+      left: app.left,
+      top: app.top,
+      right: innerWidth - app.right,
+      bottom: innerHeight - app.bottom
+    },
+    propagated: ["top", "right", "bottom", "left"].every(side => app[side] + 0.5 >= native[side])
+  };
+})()`);
+
+// Startup promos resolve 1.6 seconds after the app becomes idle. Inspect the
+// card and dismiss it before auditing controls that are intentionally covered
+// by the card while it is open.
+await wait(1900);
+const startupSpotlight = await evaluate(`(() => {
+  const safe = ${JSON.stringify(safeArea.rect)};
+  const card = document.querySelector("#mobile-startup-spotlight");
+  const cardRect = card?.getBoundingClientRect();
+  const cardStyle = card ? getComputedStyle(card) : null;
+  const visible = Boolean(
+    card
+    && !card.hidden
+    && cardRect
+    && cardRect.width > 0
+    && cardRect.height > 0
+    && cardStyle
+    && cardStyle.display !== "none"
+    && cardStyle.visibility !== "hidden"
+  );
+  const close = document.querySelector("#mobile-startup-spotlight-close");
+  const closeRect = close?.getBoundingClientRect();
+  const locate = document.querySelector("#mobile-map-locate");
+  const locateRect = locate?.getBoundingClientRect();
+  const locateStyle = locate ? getComputedStyle(locate) : null;
+  const result = {
+    visible,
+    bounds: cardRect
+      ? [Math.round(cardRect.left), Math.round(cardRect.top), Math.round(cardRect.right), Math.round(cardRect.bottom)]
+      : null,
+    cardSafe: !visible || Boolean(
+      cardRect
+      && cardRect.left >= safe.left - 1
+      && cardRect.top >= safe.top - 1
+      && cardRect.right <= safe.right + 1
+      && cardRect.bottom <= safe.bottom + 1
+    ),
+    closeSafe: !visible || Boolean(
+      closeRect
+      && closeRect.width >= 40
+      && closeRect.height >= 40
+      && closeRect.left >= safe.left - 1
+      && closeRect.top >= safe.top - 1
+      && closeRect.right <= safe.right + 1
+      && closeRect.bottom <= safe.bottom + 1
+    ),
+    locateVisible: Boolean(
+      visible
+      && locate
+      && !locate.hidden
+      && locateRect
+      && locateRect.width > 0
+      && locateRect.height > 0
+      && locateStyle
+      && locateStyle.display !== "none"
+      && locateStyle.visibility !== "hidden"
+    )
+  };
+  if (visible) close?.click();
+  return result;
+})()`);
+if (startupSpotlight.visible) await wait(220);
 
 await evaluate(`(() => {
   document.querySelector("#close-detail")?.click();
@@ -89,6 +186,7 @@ await evaluate(`(() => {
 await wait(220);
 
 const controls = await evaluate(`(() => {
+  const safe = ${JSON.stringify(safeArea.rect)};
   const selectors = [
     "#login-open",
     "#locate",
@@ -117,10 +215,18 @@ const controls = await evaluate(`(() => {
       visible: rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none",
       width: Math.round(rect.width),
       height: Math.round(rect.height),
+      left: Math.round(rect.left),
+      top: Math.round(rect.top),
+      right: Math.round(rect.right),
+      bottom: Math.round(rect.bottom),
       centerCss: [Math.round(centerX), Math.round(centerY)],
       centerDevice: [Math.round(centerX * devicePixelRatio), Math.round(centerY * devicePixelRatio)],
       hit: hit ? (hit.id ? "#" + hit.id : hit.tagName.toLowerCase()) : null,
       hitOk: Boolean(hit && (hit === element || element.contains(hit))),
+      safeBoundsOk: rect.left >= safe.left - 1
+        && rect.top >= safe.top - 1
+        && rect.right <= safe.right + 1
+        && rect.bottom <= safe.bottom + 1,
     };
   });
 })()`);
@@ -140,11 +246,22 @@ for (const [name, openSelector, panelSelector, closeSelector] of panelTests) {
     button.click();
     return { missing: false };
   })()`);
-  await wait(650);
+  await wait(1100);
   const state = await evaluate(`(() => {
+    const safe = ${JSON.stringify(safeArea.rect)};
     const panel = document.querySelector(${JSON.stringify(panelSelector)});
     if (!panel) return { missingPanel: true };
     const rect = panel.getBoundingClientRect();
+    const body = panel.querySelector(".sheet-body");
+    if (body) body.scrollTop = body.scrollHeight;
+    const lastContent = body
+      ? [...body.children].reverse().find(element => {
+          const bounds = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return bounds.width > 0 && bounds.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+        })
+      : null;
+    const lastContentRect = lastContent?.getBoundingClientRect();
     return {
       missingPanel: false,
       open: panel.classList.contains("open"),
@@ -156,7 +273,23 @@ for (const [name, openSelector, panelSelector, closeSelector] of panelTests) {
       viewport: [innerWidth, innerHeight],
       inBounds: rect.left >= -1 && rect.top >= -1 && rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1,
       detailPanels: document.querySelectorAll("#detail.open").length,
-      openSheets: document.querySelectorAll(".sheet.open").length
+      openSheets: document.querySelectorAll(".sheet.open").length,
+      scrollProbe: body ? {
+        reachedBottom: body.scrollHeight - body.scrollTop - body.clientHeight <= 2,
+        lastContent: lastContent
+          ? (lastContent.textContent || lastContent.getAttribute("aria-label") || lastContent.tagName).trim().replace(/\\s+/g, " ").slice(0, 80)
+          : null,
+        lastBounds: lastContentRect ? {
+          left: Math.round(lastContentRect.left),
+          top: Math.round(lastContentRect.top),
+          right: Math.round(lastContentRect.right),
+          bottom: Math.round(lastContentRect.bottom)
+        } : null,
+        lastBottomSafe: Boolean(lastContentRect
+          && lastContentRect.left >= safe.left - 1
+          && lastContentRect.right <= safe.right + 1
+          && lastContentRect.bottom <= safe.bottom + 1)
+      } : null
     };
   })()`);
   panels.push({ name, ...opened, ...state });
@@ -170,10 +303,24 @@ for (const [name, selector] of [
   ["more", ".mobile-more-menu"],
 ]) {
   const state = await evaluate(`(() => {
+    const safe = ${JSON.stringify(safeArea.rect)};
     const menu = document.querySelector(${JSON.stringify(selector)});
     if (!menu) return { missing: true };
     menu.querySelector("summary")?.click();
     const opened = menu.open;
+    const panel = menu.querySelector(${JSON.stringify(name === "labels" ? ".mobile-layer-panel" : ".mobile-more-grid")});
+    const panelRect = panel?.getBoundingClientRect();
+    if (panel) panel.scrollTop = panel.scrollHeight;
+    const interactive = panel
+      ? [...panel.querySelectorAll("button, a[href], input, select")].filter(element => {
+          const rect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+        })
+      : [];
+    const lastControl = interactive.at(-1);
+    const lastControlTarget = lastControl?.closest("label") || lastControl;
+    const lastControlRect = lastControlTarget?.getBoundingClientRect();
     const floatingControlsHidden = [
       "#mobile-activity-open",
       "#mobile-notifications-open"
@@ -188,7 +335,37 @@ for (const [name, selector] of [
         || style.visibility === "hidden";
     });
     menu.querySelector("summary")?.click();
-    return { missing: false, opened, floatingControlsHidden, closed: !menu.open };
+    return {
+      missing: false,
+      opened,
+      floatingControlsHidden,
+      panelBounds: panelRect ? {
+        left: Math.round(panelRect.left),
+        top: Math.round(panelRect.top),
+        right: Math.round(panelRect.right),
+        bottom: Math.round(panelRect.bottom)
+      } : null,
+      panelSafeBounds: Boolean(panelRect
+        && panelRect.left >= safe.left - 1
+        && panelRect.top >= safe.top - 1
+        && panelRect.right <= safe.right + 1
+        && panelRect.bottom <= safe.bottom + 1),
+      lastControl: lastControl
+        ? (lastControl.textContent || lastControl.getAttribute("aria-label") || lastControl.getAttribute("name") || lastControl.tagName).trim().replace(/\\s+/g, " ")
+        : null,
+      lastControlBounds: lastControlRect ? {
+        left: Math.round(lastControlRect.left),
+        top: Math.round(lastControlRect.top),
+        right: Math.round(lastControlRect.right),
+        bottom: Math.round(lastControlRect.bottom)
+      } : null,
+      lastControlSafe: Boolean(lastControlRect
+        && lastControlRect.left >= safe.left - 1
+        && lastControlRect.top >= safe.top - 1
+        && lastControlRect.right <= safe.right + 1
+        && lastControlRect.bottom <= safe.bottom + 1),
+      closed: !menu.open
+    };
   })()`);
   menus.push({ name, ...state });
 }
@@ -219,22 +396,139 @@ for (const [name, selector, expectedTitle, expectedItems] of [
 }
 
 const timeline = await evaluate(`(() => {
+  const safe = ${JSON.stringify(safeArea.rect)};
   const button = document.querySelector("#mobile-tab-timeline");
   button?.click();
   const panel = document.querySelector(".mobile-timeline");
+  const navigationControls = [
+    document.querySelector("#mobile-timeline-prev"),
+    document.querySelector("#mobile-timeline-next")
+  ].filter(Boolean).filter(element => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+  });
+  const panelRect = panel?.getBoundingClientRect();
+  const boundsFor = element => {
+    const rect = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(
+      rect.left + (rect.width / 2),
+      rect.top + (rect.height / 2)
+    );
+    const hitOk = hit === element || element.contains(hit);
+    const insidePanel = !panelRect || (
+      rect.left >= panelRect.left - 1
+      && rect.top >= panelRect.top - 1
+      && rect.right <= panelRect.right + 1
+      && rect.bottom <= panelRect.bottom + 1
+    );
+    return {
+      id: element.id || element.textContent?.trim() || element.tagName,
+      left: Math.round(rect.left),
+      top: Math.round(rect.top),
+      right: Math.round(rect.right),
+      bottom: Math.round(rect.bottom),
+      hitOk,
+      insidePanel,
+      safe: hitOk
+        && insidePanel
+        && rect.left >= safe.left - 1
+        && rect.top >= safe.top - 1
+        && rect.right <= safe.right + 1
+        && rect.bottom <= safe.bottom + 1
+    };
+  };
+  const navigationBounds = navigationControls.map(boundsFor);
+  if (panel) panel.scrollTop = panel.scrollHeight;
+  const actionBounds = [...document.querySelectorAll(".mobile-timeline .timeline-actions button")]
+    .filter(element => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+    })
+    .map(boundsFor);
+  const controlBounds = [...navigationBounds, ...actionBounds];
+  const panelStyle = panel ? getComputedStyle(panel) : null;
+  const app = document.querySelector(".app");
+  const appRect = app?.getBoundingClientRect();
+  const appStyle = app ? getComputedStyle(app) : null;
   const result = {
     buttonMissing: !button,
     visible: panel ? panel.getBoundingClientRect().height > 0 : false,
     previousExists: Boolean(document.querySelector("#mobile-timeline-prev")),
-    nextExists: Boolean(document.querySelector("#mobile-timeline-next"))
+    nextExists: Boolean(document.querySelector("#mobile-timeline-next")),
+    panel: panelRect ? {
+      bounds: [
+        Math.round(panelRect.left),
+        Math.round(panelRect.top),
+        Math.round(panelRect.right),
+        Math.round(panelRect.bottom)
+      ],
+      clientHeight: panel.clientHeight,
+      scrollHeight: panel.scrollHeight,
+      scrollTop: panel.scrollTop,
+      overflowY: panelStyle?.overflowY || ""
+    } : null,
+    app: appRect ? {
+      bounds: [
+        Math.round(appRect.left),
+        Math.round(appRect.top),
+        Math.round(appRect.right),
+        Math.round(appRect.bottom)
+      ],
+      gridTemplateRows: appStyle?.gridTemplateRows || "",
+      overflowY: appStyle?.overflowY || ""
+    } : null,
+    controlBounds,
+    controlsSafe: navigationBounds.length === 2
+      && actionBounds.length > 0
+      && controlBounds.every(item => item.safe)
   };
   document.querySelector("#mobile-tab-nearby")?.click();
   return result;
 })()`);
 
+const nearbyHidden = await evaluate(`(() => {
+  const safe = ${JSON.stringify(safeArea.rect)};
+  document.querySelector("#mobile-tab-nearby")?.click();
+  const collapse = document.querySelector("#collapse-list");
+  collapse?.click();
+  const app = document.querySelector(".app");
+  const controls = ["#mobile-tab-timeline", "#mobile-tab-nearby", "#collapse-list"].map(selector => {
+    const element = document.querySelector(selector);
+    const rect = element?.getBoundingClientRect();
+    return {
+      selector,
+      missing: !element,
+      bounds: rect ? [Math.round(rect.left), Math.round(rect.top), Math.round(rect.right), Math.round(rect.bottom)] : null,
+      safe: Boolean(rect
+        && rect.left >= safe.left - 1
+        && rect.top >= safe.top - 1
+        && rect.right <= safe.right + 1
+        && rect.bottom <= safe.bottom + 1)
+    };
+  });
+  const hidden = Boolean(app?.classList.contains("nearby-hidden"));
+  collapse?.click();
+  return { hidden, controls, controlsSafe: controls.every(item => !item.missing && item.safe) };
+})()`);
+
 const promos = await evaluate(`(() => {
   const card = document.querySelector("#mobile-startup-spotlight");
   const cardVisible = Boolean(card && !card.hidden && card.getBoundingClientRect().height > 0);
+  const locate = document.querySelector("#mobile-map-locate");
+  const locateRect = locate?.getBoundingClientRect();
+  const locateStyle = locate ? getComputedStyle(locate) : null;
+  const locateVisible = Boolean(
+    locate
+    && !locate.hidden
+    && locateRect
+    && locateRect.width > 0
+    && locateRect.height > 0
+    && locateStyle
+    && locateStyle.display !== "none"
+    && locateStyle.visibility !== "hidden"
+  );
   const buttons = [...document.querySelectorAll("[data-mobile-promo-kind]")].map(button => {
     const rect = button.getBoundingClientRect();
     const style = getComputedStyle(button);
@@ -250,6 +544,7 @@ const promos = await evaluate(`(() => {
     buttons,
     availableKinds: typeof availableMobilePromoKinds === "function" ? availableMobilePromoKinds() : [],
     cardVisible,
+    locateVisible,
     cardLabel: document.querySelector("#mobile-startup-spotlight-label")?.textContent?.trim() || ""
   };
 })()`);
@@ -289,16 +584,27 @@ const overlapAudit = await evaluate(`(() => {
 
 socket.close();
 
+const landscape = safeArea.viewport[0] > safeArea.viewport[1];
+const nativeInsetsValid = landscape
+  ? safeArea.native.top > 0 && (safeArea.native.right > 0 || safeArea.native.bottom > 0 || safeArea.native.left > 0)
+  : safeArea.native.top > 0 && safeArea.native.bottom > 0;
 const failures = [
-  ...controls.filter(item => item.missing || (item.visible && (item.width < 40 || item.height < 40)) || (item.visible && !item.hitOk)),
-  ...panels.filter(item => item.missing || item.missingPanel || !item.open || !item.visible || !item.inBounds || item.openSheets !== 1),
-  ...menus.filter(item => item.missing || !item.opened || !item.floatingControlsHidden || !item.closed),
+  ...(!safeArea.propagated || !nativeInsetsValid ? [{ safeArea, landscape, nativeInsetsValid }] : []),
+  ...(!startupSpotlight.cardSafe || !startupSpotlight.closeSafe || startupSpotlight.locateVisible
+    ? [startupSpotlight]
+    : []),
+  ...controls.filter(item => item.missing || (item.visible && (item.width < 40 || item.height < 40)) || (item.visible && (!item.hitOk || !item.safeBoundsOk))),
+  ...panels.filter(item => item.missing || item.missingPanel || !item.open || !item.visible || !item.inBounds || item.openSheets !== 1
+    || !item.scrollProbe?.reachedBottom || !item.scrollProbe?.lastBottomSafe),
+  ...menus.filter(item => item.missing || !item.opened || !item.floatingControlsHidden || !item.panelSafeBounds
+    || !item.lastControlSafe || !item.closed),
   ...contentPages.filter(item => !item.open || !item.visible || !item.title.includes(item.expectedTitle) || item.itemCount < 1 || item.loadFailed),
-  ...(timeline.buttonMissing || !timeline.visible || !timeline.previousExists || !timeline.nextExists ? [timeline] : []),
+  ...(timeline.buttonMissing || !timeline.visible || !timeline.previousExists || !timeline.nextExists || !timeline.controlsSafe ? [timeline] : []),
+  ...(!nearbyHidden.hidden || !nearbyHidden.controlsSafe ? [nearbyHidden] : []),
   ...promos.buttons.filter(item => promos.cardVisible
     ? item.visible
     : (!item.hidden && (!item.visible || item.width < 36 || item.height < 36))),
-  ...(promos.cardVisible && controls.find(item => item.selector === "#mobile-map-locate")?.visible
+  ...(promos.cardVisible && promos.locateVisible
     ? [{ selector: "#mobile-map-locate", issue: "visible beneath startup spotlight" }]
     : []),
   ...overlapAudit.overlaps,
@@ -307,11 +613,14 @@ const failures = [
 console.log(JSON.stringify({
   url: target.url,
   readiness,
+  safeArea,
+  startupSpotlight,
   controls,
   panels,
   menus,
   contentPages,
   timeline,
+  nearbyHidden,
   promos,
   overlaps: overlapAudit.overlaps,
   pass: failures.length === 0,

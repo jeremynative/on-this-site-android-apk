@@ -71,7 +71,7 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260730-mobile-layer-menu-r26";
+    static final String APP_VERSION = "20260730-native-safe-area-r29";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -119,6 +119,10 @@ public class MainActivity extends Activity {
     private boolean lastValidatedNetworkState;
     private boolean networkStateInitialized;
     private boolean liveRecoveryAttemptedForCurrentNetwork;
+    private volatile float safeInsetTopCss;
+    private volatile float safeInsetRightCss;
+    private volatile float safeInsetBottomCss;
+    private volatile float safeInsetLeftCss;
     private final Handler startupHandler = new Handler(Looper.getMainLooper());
     private final Runnable startupFallback = () -> {
         if (webView != null && !appShellLoaded && !loadingBundledFallback) {
@@ -161,7 +165,7 @@ public class MainActivity extends Activity {
         webView.setBackgroundColor(Color.rgb(238, 243, 237));
         webView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         webView.setOnApplyWindowInsetsListener((view, insets) -> {
-            view.setPadding(0, insets.getSystemWindowInsetTop(), 0, insets.getSystemWindowInsetBottom());
+            updateNativeSafeInsets(insets);
             return insets;
         });
         root.addView(webView, new FrameLayout.LayoutParams(
@@ -174,6 +178,7 @@ public class MainActivity extends Activity {
             FrameLayout.LayoutParams.MATCH_PARENT
         ));
         setContentView(root);
+        webView.post(webView::requestApplyInsets);
         createNotificationChannel();
 
         WebSettings settings = webView.getSettings();
@@ -407,6 +412,74 @@ public class MainActivity extends Activity {
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void updateNativeSafeInsets(WindowInsets windowInsets) {
+        if (windowInsets == null) return;
+        int left;
+        int top;
+        int right;
+        int bottom;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            android.graphics.Insets insets = windowInsets.getInsets(
+                WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()
+            );
+            left = insets.left;
+            top = insets.top;
+            right = insets.right;
+            bottom = insets.bottom;
+        } else {
+            left = windowInsets.getSystemWindowInsetLeft();
+            top = windowInsets.getSystemWindowInsetTop();
+            right = windowInsets.getSystemWindowInsetRight();
+            bottom = windowInsets.getSystemWindowInsetBottom();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && windowInsets.getDisplayCutout() != null) {
+                android.view.DisplayCutout cutout = windowInsets.getDisplayCutout();
+                left = Math.max(left, cutout.getSafeInsetLeft());
+                top = Math.max(top, cutout.getSafeInsetTop());
+                right = Math.max(right, cutout.getSafeInsetRight());
+                bottom = Math.max(bottom, cutout.getSafeInsetBottom());
+            }
+        }
+
+        float density = Math.max(1f, getResources().getDisplayMetrics().density);
+        float nextLeft = left / density;
+        float nextTop = top / density;
+        float nextRight = right / density;
+        float nextBottom = bottom / density;
+        boolean changed = Math.abs(safeInsetLeftCss - nextLeft) > 0.1f
+            || Math.abs(safeInsetTopCss - nextTop) > 0.1f
+            || Math.abs(safeInsetRightCss - nextRight) > 0.1f
+            || Math.abs(safeInsetBottomCss - nextBottom) > 0.1f;
+        safeInsetLeftCss = nextLeft;
+        safeInsetTopCss = nextTop;
+        safeInsetRightCss = nextRight;
+        safeInsetBottomCss = nextBottom;
+        if (!changed || webView == null) return;
+        webView.post(() -> {
+            if (webView == null) return;
+            webView.evaluateJavascript(
+                "window.dispatchEvent(new Event('nli-native-insets-changed'));",
+                null
+            );
+        });
+    }
+
+    float safeInsetTopCss() {
+        return safeInsetTopCss;
+    }
+
+    float safeInsetRightCss() {
+        return safeInsetRightCss;
+    }
+
+    float safeInsetBottomCss() {
+        return safeInsetBottomCss;
+    }
+
+    float safeInsetLeftCss() {
+        return safeInsetLeftCss;
     }
 
     private void hideLoadingCover() {
@@ -1118,14 +1191,14 @@ public class MainActivity extends Activity {
         if (webView == null) return;
         String css =
             "html.android-apk-timeline-fix .mobile-timeline{"
-                + "grid-template-columns:34px minmax(0,1fr) 34px!important;"
+                + "grid-template-columns:40px minmax(0,1fr) 40px!important;"
                 + "gap:6px!important;align-items:stretch!important;"
                 + "padding:7px 10px calc(7px + min(env(safe-area-inset-bottom),8px))!important;"
                 + "min-height:0!important;max-height:clamp(92px,17dvh,132px)!important;"
                 + "overflow:visible!important;box-sizing:border-box!important;"
             + "}"
             + "html.android-apk-timeline-fix .timeline-step{"
-                + "align-self:stretch!important;width:34px!important;min-height:0!important;"
+                + "align-self:stretch!important;width:40px!important;min-height:40px!important;"
                 + "max-height:76px!important;font-size:20px!important;"
             + "}"
             + "html.android-apk-timeline-fix .timeline-current{"
@@ -1149,13 +1222,13 @@ public class MainActivity extends Activity {
                 + "gap:5px!important;"
             + "}"
             + "html.android-apk-timeline-fix .timeline-actions button{"
-                + "min-width:0!important;min-height:34px!important;padding:0 8px!important;"
+                + "min-width:0!important;min-height:40px!important;padding:0 8px!important;"
             + "}"
             + "html.android-apk-timeline-fix .timeline-actions [data-timeline-hide],"
             + "html.android-apk-timeline-fix .timeline-toggle{display:none!important;}"
             + "html.android-apk-timeline-fix.panel-timeline .mobile-timeline,"
             + "html.android-apk-timeline-fix .app.panel-timeline .mobile-timeline{"
-                + "grid-template-columns:36px minmax(0,1fr) 36px!important;max-height:none!important;"
+                + "grid-template-columns:40px minmax(0,1fr) 40px!important;max-height:none!important;"
                 + "height:100%!important;min-height:0!important;overflow:hidden!important;"
             + "}"
             + "html.android-apk-timeline-fix.panel-timeline .timeline-current,"
@@ -1167,6 +1240,30 @@ public class MainActivity extends Activity {
             + "html.android-apk-timeline-fix.panel-timeline .timeline-current .teaser,"
             + "html.android-apk-timeline-fix .app.panel-timeline .timeline-current .teaser{"
                 + "display:-webkit-box!important;-webkit-line-clamp:3!important;"
+            + "}"
+            + "@media (orientation:landscape) and (max-height:560px){"
+                + "html.android-apk-timeline-fix .app.panel-timeline .mobile-timeline{"
+                    + "gap:6px!important;align-items:stretch!important;padding:4px 10px!important;"
+                + "}"
+                + "html.android-apk-timeline-fix .app.panel-timeline .timeline-current{"
+                    + "display:grid!important;"
+                    + "grid-template-columns:minmax(0,1fr) minmax(168px,auto)!important;"
+                    + "grid-template-rows:minmax(0,1fr)!important;"
+                    + "align-items:center!important;gap:6px!important;"
+                    + "padding:4px 6px!important;"
+                + "}"
+                + "html.android-apk-timeline-fix .app.panel-timeline .timeline-current .date,"
+                + "html.android-apk-timeline-fix .app.panel-timeline .timeline-source-row,"
+                + "html.android-apk-timeline-fix .app.panel-timeline .timeline-source-popover,"
+                + "html.android-apk-timeline-fix .app.panel-timeline .timeline-current .teaser{"
+                    + "display:none!important;"
+                + "}"
+                + "html.android-apk-timeline-fix .app.panel-timeline .timeline-current strong{"
+                    + "grid-column:1!important;grid-row:1!important;margin:0!important;"
+                + "}"
+                + "html.android-apk-timeline-fix .app.panel-timeline .timeline-actions{"
+                    + "grid-column:2!important;grid-row:1!important;min-width:0!important;"
+                + "}"
             + "}";
         String script = "(function(){try{"
             + "document.documentElement.classList.add('android-apk-timeline-fix');"

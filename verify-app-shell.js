@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260730-mobile-layer-menu-r26";
+const expectedBuild = "20260730-native-safe-area-r29";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -9,11 +9,13 @@ const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
 const lightweightOfflineAppPath = "app/src/main/assets/offline-app.html";
 const bundledMobileJsPath = "app/src/main/assets/assets/js/mobile-app.js";
 const bundledMobileCssPath = "app/src/main/assets/assets/css/mobile-app.css";
+const bundledResearchQuestionCssPath = "app/src/main/assets/assets/css/shared-research-question.css";
 const bundledSharedSiteUtilsPath = "app/src/main/assets/assets/js/shared-site-utils.js";
 const stylesPath = "app/src/main/res/values/styles.xml";
 const launchBackgroundPath = "app/src/main/res/drawable/launch_background.xml";
 const manifestPath = "app/src/main/AndroidManifest.xml";
 const appBridgePath = "app/src/main/java/com/nativelongisland/onthissite/AppBridge.java";
+const offlineInsetAuditPath = "audit-apk-offline-insets.mjs";
 const bundledMobileIndexPaths = [
   "app/src/main/assets/assets/data/mobile-site-geometry.json",
   "app/src/main/assets/assets/data/mobile-site-index.json",
@@ -28,10 +30,12 @@ const source = fs.readFileSync(mainActivityPath, "utf8");
 const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
 const manifest = fs.readFileSync(manifestPath, "utf8");
 const appBridge = fs.readFileSync(appBridgePath, "utf8");
+const offlineInsetAudit = fs.readFileSync(offlineInsetAuditPath, "utf8");
 const bundledApp = bundledAppBytes.toString("utf8");
 const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
 const bundledMobileJs = fs.readFileSync(bundledMobileJsPath, "utf8");
 const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8");
+const bundledResearchQuestionCss = fs.readFileSync(bundledResearchQuestionCssPath, "utf8");
 const bundledSharedSiteUtils = fs.readFileSync(bundledSharedSiteUtilsPath, "utf8");
 const styles = fs.readFileSync(stylesPath, "utf8");
 const launchBackground = fs.readFileSync(launchBackgroundPath, "utf8");
@@ -183,6 +187,17 @@ function requireBundledPattern(pattern, message) {
 }
 
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
+requireText("updateNativeSafeInsets(insets);", "Android shell must capture current window insets instead of padding the WebView.");
+requireText("WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()", "Android shell must include system bars and display cutouts in its safe boundary.");
+requireText("window.dispatchEvent(new Event('nli-native-insets-changed'))", "Android shell must notify the web layout when native insets change.");
+if (source.includes("view.setPadding(0, insets.getSystemWindowInsetTop()")) {
+  throw new Error("Android shell must not apply ineffective system-bar padding to the full-height WebView.");
+}
+for (const side of ["Top", "Right", "Bottom", "Left"]) {
+  if (!appBridge.includes(`public float getSafeInset${side}()`)) {
+    throw new Error(`Android bridge must expose the native ${side.toLowerCase()} safe inset.`);
+  }
+}
 if (!bundledSharedSiteUtils.includes("function siteIntroductionPresentation(site = {}, sections = [], options = {})")
     || !bundledSharedSiteUtils.includes("section?.[2]?.content === introductionField")
     || !bundledSharedSiteUtils.includes("siteIntroductionPresentation,")) {
@@ -229,6 +244,41 @@ if (!bundledMobileCss.includes("header:has(.mobile-more-menu[open]),")
     || !bundledMobileCss.includes(".mobile-layer-bulk-actions")
     || !bundledMobileCss.includes("grid-template-columns: repeat(2, minmax(0, 1fr));")) {
   throw new Error("Bundled Android label panel must stay above the map tabs and keep its two bulk actions side by side.");
+}
+if (!/\.mobile-startup-spotlight-close\s*\{[\s\S]*?width:\s*40px;[\s\S]*?height:\s*40px;/.test(bundledMobileCss)
+    || !/\.mobile-startup-spotlight-actions button\s*\{[\s\S]*?min-height:\s*40px;/.test(bundledMobileCss)) {
+  throw new Error("Bundled Android startup card controls must preserve the audited 40px touch targets.");
+}
+for (const side of ["top", "right", "bottom", "left"]) {
+  if (!bundledMobileCss.includes(`--native-${side}-safe: 0px;`)
+      || !new RegExp(`--app-${side}-safe:\\s*max\\([^;]*var\\(--native-${side}-safe\\)`).test(bundledMobileCss)) {
+    throw new Error(`Bundled Android CSS must include the native ${side} inset in its shared safe boundary.`);
+  }
+}
+for (const side of ["Top", "Right", "Bottom", "Left"]) {
+  if (!bundledMobileJs.includes(`androidBridgeCssPixel("getSafeInset${side}")`)) {
+    throw new Error(`Bundled Android runtime must read the native ${side.toLowerCase()} safe inset.`);
+  }
+}
+if (!bundledMobileJs.includes('window.addEventListener("nli-native-insets-changed", () => {')
+    || !bundledMobileJs.includes("fitMobileMoreMenu(moreMenu);")
+    || !bundledMobileJs.includes("fitMobileLayerMenu(layerMenu);")
+    || !bundledMobileJs.includes('const reserved = cssPixelValue("--app-top-safe", 0) + cssPixelValue("--app-bottom-safe", 0);')) {
+  throw new Error("Bundled Android runtime must refresh native insets and reserve both vertical edges for detail drawers.");
+}
+if (!bundledMobileJs.includes('const leftSafe = Math.max(pad, cssPixelValue("--app-left-safe", 0));')
+    || !bundledMobileJs.includes('const rightSafe = Math.max(pad, cssPixelValue("--app-right-safe", 0));')
+    || !bundledMobileJs.includes("viewportWidth - leftSafe - rightSafe")) {
+  throw new Error("Bundled Android menu fitting must reserve side navigation bars and display cutouts.");
+}
+if (!bundledMobileJs.includes('const safeLeft = cssPixelValue("--app-left-safe", 0) + 10;')
+    || !bundledMobileJs.includes('const safeBottom = cssPixelValue("--app-bottom-safe", 0) + 10;')) {
+  throw new Error("Bundled Android quote action must stay inside all four safe-area edges.");
+}
+if (!bundledResearchQuestionCss.includes("left: max(16px, var(--app-left-safe, env(safe-area-inset-left)));")
+    || !bundledResearchQuestionCss.includes("right: max(16px, var(--app-right-safe, env(safe-area-inset-right)));")
+    || !bundledResearchQuestionCss.includes("@media (orientation: landscape) and (max-height: 560px)")) {
+  throw new Error("Bundled Android research-question controls must reserve portrait and landscape system bars.");
 }
 if (!bundledMobileJs.includes("function setAllMobileLayerVisibility(visible)")
     || !bundledMobileJs.includes("state.settings.showBiographyPaths = false;")
@@ -298,6 +348,22 @@ if (!lightweightOfflineApp.includes("offline-text-mode")
     || !lightweightOfflineApp.includes("mobile-site-geometry.json")
     || !lightweightOfflineApp.includes("mobile-wiki-index.json")) {
   throw new Error("Lightweight APK fallback must render the saved map and text indexes without online application startup.");
+}
+for (const side of ["Top", "Right", "Bottom", "Left"]) {
+  if (!lightweightOfflineApp.includes(`getSafeInset${side}`)
+      || !lightweightOfflineApp.includes(`--native-${side.toLowerCase()}-safe`)
+      || !lightweightOfflineApp.includes(`--app-${side.toLowerCase()}-safe`)) {
+    throw new Error(`Lightweight APK fallback must reserve the native ${side.toLowerCase()} safe inset.`);
+  }
+}
+if (!lightweightOfflineApp.includes('addEventListener("nli-native-insets-changed",syncNativeInsets)')
+    || !lightweightOfflineApp.includes("inset:var(--app-top-safe) var(--app-right-safe) var(--app-bottom-safe) var(--app-left-safe)")) {
+  throw new Error("Lightweight APK fallback must refresh native insets and keep its detail dialog inside them.");
+}
+if (!offlineInsetAudit.includes("getSafeInsetBottom")
+    || !offlineInsetAudit.includes("result.detail.safe")
+    || !offlineInsetAudit.includes("nativeInsetsValid")) {
+  throw new Error("Android regression tooling must exercise the offline archive against native system bars.");
 }
 if (lightweightOfflineApp.length > 180000) {
   throw new Error("Lightweight APK fallback must remain small enough for fast no-signal startup.");
@@ -482,6 +548,10 @@ requireText("android-apk-timeline-tray-fix", "Android shell must inject the APK 
 requireText("Full article", "Android shell must shorten the timeline action label inside the APK WebView.");
 requireText("grid-template-rows:auto auto auto minmax(0,1fr) auto!important", "Android timeline tray must reserve an explicit final row for its actions.");
 requireText("height:100%!important;min-height:0!important;overflow:hidden!important", "Android timeline mode must keep the action row inside the visible tray.");
+requireText("@media (orientation:landscape) and (max-height:560px)", "Android timeline tray must include a short-landscape layout.");
+requireText("grid-template-columns:minmax(0,1fr) minmax(168px,auto)!important", "Android short-landscape timeline must place its title and actions side by side.");
+requireText("grid-column:2!important;grid-row:1!important;min-width:0!important", "Android short-landscape timeline actions must stay in the visible row.");
+requireText("min-width:0!important;min-height:40px!important", "Android timeline action controls must retain the audited touch height.");
 
 if (!releaseWorkflow.includes("GITHUB_RUN_NUMBER") || !releaseWorkflow.includes("latest_apk") || !releaseWorkflow.includes("version_code=\"$run_number\"")) {
   throw new Error("Android release workflow must keep versionCode monotonic across testing and tagged releases.");
@@ -680,12 +750,13 @@ for (const [label, html] of [
       !html.includes("const totalLayerCount = primaryStates.length + mobileLayerCategoryInputs.length + mobileLayerEraInputs.length;")) {
     throw new Error(`Bundled Android ${label} must summarize all visible mobile layer controls.`);
   }
-  if (html.includes("right: max(8px, var(--app-right-safe));") ||
-      html.includes("Math.min(288") ||
-      !html.includes("calc(100dvw - 16px)") ||
+  if (html.includes("Math.min(288") ||
+      !html.includes("calc(100dvw - max(8px, var(--app-left-safe)) - max(8px, var(--app-right-safe)))") ||
       !html.includes("function fitFixedMobilePanel(menu, panel, options = {})") ||
-      !html.includes("const width = Math.max(options.minWidth || 160, viewportWidth - (pad * 2));") ||
-      !html.includes("const left = viewportLeft + pad;") ||
+      !html.includes('const leftSafe = Math.max(pad, cssPixelValue("--app-left-safe", 0));') ||
+      !html.includes('const rightSafe = Math.max(pad, cssPixelValue("--app-right-safe", 0));') ||
+      !html.includes("const width = Math.max(0, viewportWidth - leftSafe - rightSafe);") ||
+      !html.includes("const left = viewportLeft + leftSafe;") ||
       !html.includes("fitFixedMobilePanel(menu, grid,") ||
       !html.includes("fitFixedMobilePanel(menu, panel,") ||
       !html.includes('panel.style.setProperty("right", "auto", "important")')) {
