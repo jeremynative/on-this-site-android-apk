@@ -3099,6 +3099,8 @@
         state.profileFollows = window.NLI_MOBILE_DATA.profileFollows || [];
       state.profileLoginRewards = window.NLI_MOBILE_DATA.profileLoginRewards || [];
       state.profileActivitySynced = false;
+      state.deferredDataLoaded = true;
+      state.deferredCommunityDataLoaded = false;
       state.supportSettings = window.NLI_MOBILE_DATA.supportSettings || null;
       state.placeNameAreas = window.NLI_MOBILE_DATA.placeNameAreas || window.NLI_PLACE_NAME_AREAS || { type: "FeatureCollection", features: [] };
       state.mediaMap = { ...(window.NLI_MOBILE_MEDIA_MAP || {}), ...(window.NLI_MOBILE_DATA.mediaMap || {}) };
@@ -3261,6 +3263,7 @@
       try {
       runDeferredUpdate("Mobile timeline", renderMobileTimeline);
       const loadCoreData = !state.deferredDataLoaded;
+      const signedInCommunity = Boolean(state.profile?.token);
       const loadTimelineEvents = () =>
         loadCoreData ? fetchMobileTimelineIndexRows()
           .then(data => ({ data }))
@@ -3312,18 +3315,18 @@
         eventRequest,
         legacyExhibitsRequest,
         communityRequest(() => fetchJson(`/items/mobile_member_profiles?limit=-1&sort=display_name&fields=${PROFILE_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.contributorProfiles)), state.contributorProfiles),
-        communityRequest(() => fetchJson(`/items/mobile_comments?limit=-1&filter[status][_eq]=approved&filter[public_activity][_eq]=true&fields=${PUBLIC_COMMENT_FIELDS}`, { cacheKey: "mobile-comments", ttl: 45000, fresh: false }).catch(() => currentRowsFallback(state.publicComments)), state.publicComments),
+        communityRequest(() => fetchJson(`/items/mobile_comments?limit=80&filter[status][_eq]=approved&filter[public_activity][_eq]=true&sort=-created_at&fields=${PUBLIC_COMMENT_FIELDS}`, { cacheKey: "mobile-comments", ttl: 45000, fresh: false }).catch(() => currentRowsFallback(state.publicComments)), state.publicComments),
         communityRequest(() => fetchJson(`/items/mobile_comment_votes?limit=-1&fields=${COMMENT_VOTE_FIELDS}`, { cacheKey: "mobile-comment-votes", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.commentVotes)), state.commentVotes),
-        communityRequest(() => fetchJson(`/items/mobile_point_events?limit=-1&fields=${POINT_EVENT_FIELDS}`, { cacheKey: "mobile-point-events", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.profilePointEvents)), state.profilePointEvents),
-        communityRequest(() => fetchJson(`/items/mobile_plant_observations?limit=-1&filter[status][_eq]=approved&fields=${PLANT_OBSERVATION_FIELDS}`, { cacheKey: "mobile-plant-observations", ttl: 45000, fresh: false }).catch(() => ({ data: [] })), state.plantObservations),
-        communityRequest(() => fetchJson(`/items/mobile_site_visits?limit=-1&fields=${PUBLIC_VISIT_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.publicVisits)), state.publicVisits),
+        signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_point_events?limit=-1&fields=${POINT_EVENT_FIELDS}`, { cacheKey: "mobile-point-events", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.profilePointEvents)), state.profilePointEvents) : Promise.resolve({ ...currentRowsFallback(state.profilePointEvents), _skipped: true }),
+        signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_plant_observations?limit=-1&filter[status][_eq]=approved&fields=${PLANT_OBSERVATION_FIELDS}`, { cacheKey: "mobile-plant-observations", ttl: 45000, fresh: false }).catch(() => ({ data: [] })), state.plantObservations) : Promise.resolve({ ...currentRowsFallback(state.plantObservations), _skipped: true }),
+        communityRequest(() => fetchJson(`/items/mobile_site_visits?limit=80&sort=-visited_at&fields=${PUBLIC_VISIT_FIELDS}`, { cacheKey: "mobile-site-visits", ttl: 45000, fresh: false }).catch(() => currentRowsFallback(state.publicVisits)), state.publicVisits),
         siteSuggestionsRequest,
         communityRequest(() => adminAccountRegistrationsRequest().catch(() => currentRowsFallback(state.accountRegistrations)), state.accountRegistrations),
-        loadCoreData ? fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 30000, fresh: false }).catch(() => ({ data: [] })) : Promise.resolve({ data: state.mapStories }),
-        loadCoreData ? fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 30000, fresh: false }).catch(() => ({ data: [] })) : Promise.resolve({ data: state.mapStoryVotes }),
-        communityRequest(() => fetchJson(`/items/mobile_language_quiz_progress?limit=-1&fields=${LANGUAGE_PROGRESS_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.languageQuizAttempts)), state.languageQuizAttempts),
-        communityRequest(() => fetchJson(`/items/mobile_profile_follows?limit=-1&fields=${FOLLOW_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileFollows)), state.profileFollows),
-        communityRequest(() => fetchJson(`/items/mobile_profile_logins?limit=-1&fields=${LOGIN_REWARD_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileLoginRewards)), state.profileLoginRewards)
+        loadCoreData || includeCommunity ? fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.mapStories)) : Promise.resolve({ data: state.mapStories }),
+        loadCoreData || includeCommunity ? fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.mapStoryVotes)) : Promise.resolve({ data: state.mapStoryVotes }),
+        signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_language_quiz_progress?limit=-1&fields=${LANGUAGE_PROGRESS_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.languageQuizAttempts)), state.languageQuizAttempts) : Promise.resolve({ ...currentRowsFallback(state.languageQuizAttempts), _skipped: true }),
+        signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_profile_follows?limit=-1&fields=${FOLLOW_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileFollows)), state.profileFollows) : Promise.resolve({ ...currentRowsFallback(state.profileFollows), _skipped: true }),
+        signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_profile_logins?limit=-1&fields=${LOGIN_REWARD_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileLoginRewards)), state.profileLoginRewards) : Promise.resolve({ ...currentRowsFallback(state.profileLoginRewards), _skipped: true })
       ]);
       const existingTimelineById = new Map(state.timelineEvents.map(item => [String(item.id), item]));
       state.timelineEvents = (timelineResponse.data || []).map(item => ({ ...item, ...(existingTimelineById.get(String(item.id)) || {}) }));
@@ -4614,12 +4617,14 @@
       };
     }
 
-    function learningCardImageHtml(card, actionAttribute = "", alt = "") {
+    function learningCardImageHtml(card, actionAttribute = "", alt = "", options = {}) {
       if (!card?.imageUrl) return `<span class="learning-card-media learning-card-media-empty" aria-hidden="true">${escapeHtml((card?.title || "?").slice(0, 1))}</span>`;
       const fallback = mobileSnapshotImageUrl(card.imageFallbackUrl || "");
+      const priority = options.priority === true;
+      const eager = options.eager === true || priority;
       return `
         <button class="learning-card-media" type="button" ${actionAttribute} aria-label="${escapeHtml(`Open ${card.title}`)}">
-          <img src="${escapeHtml(mobileSnapshotImageUrl(card.imageUrl))}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" onerror="${imageErrorAction(fallback)}">
+          <img class="learning-card-image" src="${escapeHtml(mobileSnapshotImageUrl(card.imageUrl))}" alt="${escapeHtml(alt)}" loading="${eager ? "eager" : "lazy"}"${priority ? ' fetchpriority="high"' : ""} decoding="async" onload="this.classList.add('is-loaded')" onerror="${imageErrorAction(fallback)}">
         </button>
       `;
     }
@@ -9316,7 +9321,7 @@
         const key = card?.dataset.mobileActivityKey || "";
         if (key) {
           state.mobileActivityDrafts.delete(key);
-          state.mobileActivityDiscussionKeys.delete(key);
+          state.mobileActivityDiscussionKeys.add(key);
         }
         state.mobileActivityRenderedSignature = "";
         renderMobileActivitySheet();
@@ -13125,7 +13130,7 @@
             ? state.wikiArticles.find(article => article.slug === moment.source_slug || Number(article.id) === Number(moment.source_id))
             : null;
           if (sourceWiki && ACTIVITY_UTILS.wikiActivityLabel(sourceWiki) === "New Article") return null;
-          const date = ACTIVITY_UTILS.siteEditedDate(sourceSite || sourceWiki, { extended: true });
+          const date = ACTIVITY_UTILS.contentUpdateDate(sourceSite || sourceWiki);
           return {
             type: "historic-moment",
             sourceType: moment.source_type === "wiki" ? "wiki" : "site",
@@ -13133,8 +13138,9 @@
             slug: moment.source_slug || "",
             title: moment.title || moment.source_title || "Historic moment",
             label: "Historic moment updated",
-            preview: publicCleanText(moment.description || moment.source_excerpt || moment.citation || ""),
-            date
+             preview: publicCleanText(moment.description || moment.source_excerpt || moment.citation || ""),
+             sourceTitle: (sourceSite || sourceWiki)?.title || moment.source_title || "",
+             date
           };
         })
         .filter(Boolean)
@@ -13161,30 +13167,50 @@
         .filter(site => site.slug !== "address-result")
         .map(site => {
           const pinned = ACTIVITY_UTILS.activityIsPinned(site);
+          const label = pinned ? ACTIVITY_UTILS.activityPinLabel(site) : ACTIVITY_UTILS.siteActivityLabel(site);
+          const activityMedia = mobileActivitySiteMedia(site);
+          const date = pinned
+            ? ACTIVITY_UTILS.siteEditedDate(site, { extended: true })
+            : ACTIVITY_UTILS.siteActivityDate(site);
           return {
             type: "site",
             slug: site.slug,
             title: pinned && site.activity_pin_title ? site.activity_pin_title : site.title,
-            label: pinned ? ACTIVITY_UTILS.activityPinLabel(site) : ACTIVITY_UTILS.siteActivityLabel(site),
-            preview: publicCleanText(pinned && site.activity_pin_preview ? site.activity_pin_preview : site.summary || site.introduction_content || siteSubtitle(site)),
-            image: listingImage(site),
-            imageFallback: listingImageFallback(site),
-            date: ACTIVITY_UTILS.siteEditedDate(site, { extended: true }),
+            label,
+            preview: pinned && site.activity_pin_preview
+              ? publicCleanText(site.activity_pin_preview)
+              : ACTIVITY_UTILS.activityNewsPreview(site, {
+                  type: "site",
+                  timelineEvents: state.timelineEvents,
+                  cleanText: publicCleanText,
+                  isNew: label === "Site added"
+                }),
+            image: activityMedia.image,
+            imageFallback: activityMedia.fallback,
+            date,
             pinUntil: site.activity_pin_until,
             pinned
           };
         })
-        .filter(item => item.pinned || activityDateValue(item.date));
-      const wikis = state.wikiArticles.map(article => ({
-        type: "wiki",
-        slug: article.slug,
-        title: article.title || "Knowledgebase article",
-        label: ACTIVITY_UTILS.wikiActivityLabel(article),
-        preview: publicCleanText(article.summary || article.introduction || article.content),
-        image: firstContentImage(article.content),
-        date: ACTIVITY_UTILS.wikiActivityDate(article),
-        activityPriority: ACTIVITY_UTILS.wikiActivityPriority(article)
-      })).filter(item => activityDateValue(item.date));
+        .filter(item => item.pinned || (activityDateValue(item.date) && item.preview));
+      const wikis = state.wikiArticles.map(article => {
+        const label = ACTIVITY_UTILS.wikiActivityLabel(article);
+        return {
+          type: "wiki",
+          slug: article.slug,
+          title: article.title || "Knowledgebase article",
+          label,
+          preview: ACTIVITY_UTILS.activityNewsPreview(article, {
+            type: "wiki",
+            timelineEvents: state.timelineEvents,
+            cleanText: publicCleanText,
+            isNew: label === "New Article"
+          }),
+          image: firstContentImage(article.content),
+          date: ACTIVITY_UTILS.wikiActivityDate(article),
+          activityPriority: ACTIVITY_UTILS.wikiActivityPriority(article)
+        };
+      }).filter(item => activityDateValue(item.date) && item.preview);
       const events = state.exhibits.map(exhibit => {
         const pinned = ACTIVITY_UTILS.activityIsPinned(exhibit);
         const eventTargetSlug = exhibit.related_site_slug || exhibit.source_slug || String(exhibit.slug || exhibit.id || "");
@@ -13229,6 +13255,33 @@
       return null;
     }
 
+    function mobileActivitySiteMedia(record) {
+      if (!record) return { image: "", fallback: "" };
+      const thumbnail = MEDIA_UTILS.listingImage(record, { directusAssetUrl, rewriteMediaUrl });
+      const hero = listingImage(record);
+      return {
+        image: thumbnail || hero,
+        fallback: hero && hero !== thumbnail ? hero : listingImageFallback(record)
+      };
+    }
+
+    function mobileActivitySourceMedia(sourceType, record) {
+      if (!record) return { image: "", fallback: "" };
+      if (sourceType === "site") {
+        return mobileActivitySiteMedia(record);
+      }
+      if (sourceType === "wiki") {
+        const raw = MEDIA_UTILS.cleanImageUrl(record.activity_image_url || "");
+        const image = raw ? rewriteMediaUrl(raw) : firstContentImage(record.content || "");
+        const absolute = raw ? MEDIA_UTILS.absoluteMediaUrl(raw, window.location.href) : "";
+        return {
+          image,
+          fallback: absolute && absolute !== image ? absolute : ""
+        };
+      }
+      return { image: "", fallback: "" };
+    }
+
     function mobileActivityCardModel(item, index) {
       const type = String(item.type || "");
       const comment = type === "comment"
@@ -13265,13 +13318,13 @@
       const storyCounts = story ? MAP_STORY_UTILS.storyVoteCounts(story, state.mapStoryVotes) : null;
       const sourceTitle = canonicalTarget?.title || item.title || "On This Site";
       const cardType = type === "map-story" ? "user-story" : type;
-      const imageUrl = item.image ||
-        (canonicalType === "site" ? listingImage(canonicalTarget) : canonicalType === "wiki" ? firstContentImage(canonicalTarget?.content) : "");
-      const imageFallbackUrl = item.imageFallback || (canonicalType === "site" ? listingImageFallback(canonicalTarget) : "");
+      const canonicalMedia = mobileActivitySourceMedia(canonicalType, canonicalTarget);
+      const imageUrl = item.image || canonicalMedia.image;
+      const imageFallbackUrl = item.imageFallback || canonicalMedia.fallback;
       const supportsVote = Boolean(comment?.id || story?.id);
       const supportsComment = Boolean(canonicalTarget && ["site", "wiki"].includes(canonicalType));
       const normalized = normalizeMobileLearningCard({
-        key: `activity:${type}:${item.commentId || item.activityId || item.id || item.slug || index}`,
+         key: item.activityGroupKey || `activity:${type}:${item.commentId || item.activityId || item.id || item.slug || index}`,
         id: item.commentId || item.activityId || item.id || item.slug || index,
         type: cardType,
         title: type === "map-story"
@@ -13315,9 +13368,10 @@
         canonicalType,
         canonicalSlug,
         comment,
-        story,
-        authorName,
-        hasVoted: Boolean(commentReactionState?.active || (story && MAP_STORY_UTILS.hasMemberVote(story, state.mapStoryVotes, currentContributorProfile()?.id)))
+         story,
+         authorName,
+         updates: Array.isArray(item.updates) ? item.updates : [],
+         hasVoted: Boolean(commentReactionState?.active || (story && MAP_STORY_UTILS.hasMemberVote(story, state.mapStoryVotes, currentContributorProfile()?.id)))
       };
     }
 
@@ -13486,11 +13540,47 @@
       ].join("\u001f")).join("\u001e")}`;
     }
 
-    function mobileActivityComposerHtml(card) {
+    function mobileActivityCommentThreadHtml(card) {
+      const comments = card.canonicalTarget ? commentsForSource(card.canonicalType, card.canonicalTarget) : [];
+      const roots = comments.filter(comment => !comment.parent_comment);
+      const repliesFor = parentId => comments.filter(comment => Number(comment.parent_comment) === Number(parentId));
+      const renderComment = (comment, depth = 0) => {
+        const author = state.contributorProfiles.find(profile => Number(profile.id) === Number(comment.member_profile));
+        const name = author?.display_name || comment.author_name || "Contributor";
+        const avatar = directusAssetUrl(author?.avatar);
+        const initial = (name || "?").trim().slice(0, 1) || "?";
+        const parsed = QUOTE_COMMENT_UTILS.parseCommentRecord(comment);
+        const body = parsed.body || (!parsed.quote ? comment.comment || "" : "");
+        return `
+          <article class="activity-thread-comment${depth ? " is-reply" : ""}">
+            <span class="comment-avatar" aria-hidden="true">${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : escapeHtml(initial)}</span>
+            <div class="activity-thread-comment-copy">
+              <div class="activity-thread-bubble">
+                <strong>${escapeHtml(name)}</strong>
+                ${parsed.quote ? `<blockquote>${escapeHtml(parsed.quote)}</blockquote>` : ""}
+                ${body ? `<p>${escapeHtml(body)}</p>` : ""}
+              </div>
+              <time>${comment.created_at ? escapeHtml(new Date(comment.created_at).toLocaleString()) : "Approved comment"}</time>
+            </div>
+          </article>
+          ${repliesFor(comment.id).map(reply => renderComment(reply, depth + 1)).join("")}
+        `;
+      };
+      return `
+        <div class="activity-comment-thread" aria-label="Existing comments">
+          <div class="activity-comment-thread-heading">
+            <strong>${comments.length} comment${comments.length === 1 ? "" : "s"}</strong>
+            <span>${comments.length ? "Join the conversation below." : "Start the conversation."}</span>
+          </div>
+          ${roots.length ? `<div class="activity-thread-list">${roots.map(comment => renderComment(comment)).join("")}</div>` : `<p class="activity-thread-empty">No comments yet.</p>`}
+        </div>
+      `;
+    }
+
+    function mobileActivityDiscussionHtml(card) {
       if (!card.capabilities.comment || !card.canonicalTarget) return "";
       const open = state.mobileActivityDiscussionKeys.has(card.key);
       const draft = state.mobileActivityDrafts.get(card.key) || "";
-      if (!card.permissions.canComment) return "";
       const profile = currentContributorProfile();
       const currentName = profile?.display_name || profile?.username || "Contributor";
       const target = card.canonicalTarget;
@@ -13499,15 +13589,32 @@
       const inputId = `activity-comment-${String(card.key).replace(/[^a-z0-9_-]+/gi, "-")}`;
       return `
         <section class="activity-inline-discussion discussion-section" data-activity-inline="true" data-discussion-type="${escapeHtml(card.canonicalType)}" data-discussion-id="${escapeHtml(target.id || "")}" data-discussion-slug="${escapeHtml(target.slug || "")}" data-discussion-title="${escapeHtml(target.title || card.sourceName)}"${open ? "" : " hidden"}>
-          <label for="${escapeHtml(inputId)}">${parentComment ? `Reply to ${escapeHtml(card.authorName || "this contributor")}` : `Comment as ${escapeHtml(currentName)}`}</label>
-          <textarea id="${escapeHtml(inputId)}" data-discussion-input data-mobile-activity-draft="${escapeHtml(card.key)}" placeholder="${parentComment ? "Write a respectful reply..." : "Add context, a memory, correction, or question..."}">${escapeHtml(draft)}</textarea>
-          <input type="hidden" data-parent-comment value="${escapeHtml(parentComment)}">
-          <input type="hidden" data-reply-to-profile value="${escapeHtml(replyProfile)}">
-          <div class="activity-inline-discussion-actions">
-            <button class="action secondary" type="button" data-submit-discussion>Post ${parentComment ? "reply" : "comment"}</button>
-            <button class="learning-card-action" type="button" data-mobile-activity-comment-cancel="${escapeHtml(card.key)}">Cancel</button>
-          </div>
+          ${mobileActivityCommentThreadHtml(card)}
+          ${card.permissions.canComment ? `
+            <div class="activity-comment-composer">
+              <label for="${escapeHtml(inputId)}">${parentComment ? `Reply to ${escapeHtml(card.authorName || "this contributor")}` : `Comment as ${escapeHtml(currentName)}`}</label>
+              <textarea id="${escapeHtml(inputId)}" data-discussion-input data-mobile-activity-draft="${escapeHtml(card.key)}" placeholder="${parentComment ? "Write a respectful reply..." : "Add context, a memory, correction, or question..."}">${escapeHtml(draft)}</textarea>
+              <input type="hidden" data-parent-comment value="${escapeHtml(parentComment)}">
+              <input type="hidden" data-reply-to-profile value="${escapeHtml(replyProfile)}">
+              <div class="activity-inline-discussion-actions">
+                <button class="action secondary" type="button" data-submit-discussion>Post ${parentComment ? "reply" : "comment"}</button>
+                <button class="learning-card-action" type="button" data-mobile-activity-comment-cancel="${escapeHtml(card.key)}">Close</button>
+              </div>
+            </div>
+          ` : `
+            <button class="learning-card-action activity-comment-login" type="button" data-mobile-activity-comment-login>Log in to add a comment</button>
+          `}
         </section>
+      `;
+    }
+
+    function mobileActivityUpdatesHtml(card) {
+      if (!Array.isArray(card.updates) || !card.updates.length) return "";
+      return `
+        <div class="activity-update-summary">
+          <strong>Updated content</strong>
+          <ul>${card.updates.map(update => `<li>${update.title ? `<strong>${escapeHtml(update.title)}</strong>` : ""}${update.detail ? `<span>${escapeHtml(update.detail)}</span>` : ""}</li>`).join("")}</ul>
+        </div>
       `;
     }
 
@@ -13526,12 +13633,13 @@
             <time datetime="${escapeHtml(card.date || "")}">${escapeHtml(activityDateLabel(card.date))}</time>
           </header>
           <div class="learning-card-layout">
-            ${learningCardImageHtml(card, canOpen ? openAttributes : "", "")}
+            ${learningCardImageHtml(card, canOpen ? openAttributes : "", "", { eager: index < MOBILE_ACTIVITY_INITIAL_LIMIT, priority: index < 2 })}
             <div class="learning-card-body">
               ${canOpen ? `<button class="learning-card-title" type="button" ${openAttributes}>${escapeHtml(card.title || "Archive activity")}</button>` : `<h3 class="learning-card-title-static">${escapeHtml(card.title || "Archive activity")}</h3>`}
               <p class="learning-card-source">Source: <strong>${escapeHtml(sourceLabel || "On This Site")}</strong></p>
-              ${card.authorName ? `<p class="learning-card-author">By ${escapeHtml(card.authorName)}</p>` : ""}
-              ${learningCardExcerptHtml(card)}
+               ${card.authorName ? `<p class="learning-card-author">By ${escapeHtml(card.authorName)}</p>` : ""}
+               ${mobileActivityUpdatesHtml(card)}
+               ${learningCardExcerptHtml(card)}
               <p class="learning-card-counts" aria-label="${card.counts.upvotes} helpful votes and ${card.counts.comments} comments">
                 <span>${card.counts.upvotes} helpful</span>
                 <span>${card.counts.comments} comment${card.counts.comments === 1 ? "" : "s"}</span>
@@ -13540,9 +13648,9 @@
           </div>
           <div class="learning-card-actions" aria-label="Activity actions">
             ${card.capabilities.vote ? `<button class="learning-card-action${card.hasVoted ? " is-active" : ""}" type="button" data-mobile-activity-helpful="${escapeHtml(card.key)}"${card.hasVoted ? " disabled" : ""}>${card.permissions.canVote ? "Helpful" : `${actionPrompt}vote`} ${card.counts.upvotes}</button>` : ""}
-            ${card.capabilities.comment ? `<button class="learning-card-action" type="button" data-mobile-activity-comment="${escapeHtml(card.key)}" aria-expanded="${state.mobileActivityDiscussionKeys.has(card.key) ? "true" : "false"}">${card.permissions.canComment ? commentLabel : `${actionPrompt}comment`} ${card.counts.comments}</button>` : ""}
+            ${card.capabilities.comment ? `<button class="learning-card-action" type="button" data-mobile-activity-comment="${escapeHtml(card.key)}" aria-expanded="${state.mobileActivityDiscussionKeys.has(card.key) ? "true" : "false"}"><span>${commentLabel}</span><span class="learning-card-action-count">${card.counts.comments}</span></button>` : ""}
           </div>
-          ${mobileActivityComposerHtml(card)}
+          ${mobileActivityDiscussionHtml(card)}
         </article>
       `;
     }
@@ -13597,9 +13705,19 @@
     }
 
     async function openMobileActivitySheet() {
-      renderMobileActivitySheet();
+      const activityReady = state.deferredCommunityDataLoaded;
+      if (activityReady) renderMobileActivitySheet();
       openSheet(activitySheetEl);
-      if (!state.deferredCommunityDataLoaded && !window.NLI_MOBILE_DATA) {
+      if (!activityReady) {
+        state.mobileActivityRenderedSignature = "";
+        if (mobileActivityListEl) {
+          mobileActivityListEl.innerHTML = `
+            <div class="mobile-activity-loading" role="status" aria-live="polite" aria-busy="true">
+              <span></span><span></span>
+              <p>Loading the latest community activity...</p>
+            </div>
+          `;
+        }
         await loadDeferredData({ includeCommunity: true });
       }
       markMobileActivitySeen();
@@ -14843,18 +14961,18 @@
       }
       const commentButton = event.target.closest("[data-mobile-activity-comment]");
       if (commentButton && card) {
-        if (!card.permissions.canComment) {
-          showBanner(contributorWritePrompt());
-          openSheet(loginSheetEl);
-          return;
-        }
         const open = !state.mobileActivityDiscussionKeys.has(card.key);
         if (open) state.mobileActivityDiscussionKeys.add(card.key);
         else state.mobileActivityDiscussionKeys.delete(card.key);
         const composer = cardElement.querySelector(".activity-inline-discussion");
         if (composer) composer.hidden = !open;
         commentButton.setAttribute("aria-expanded", String(open));
-        if (open) composer?.querySelector("[data-discussion-input]")?.focus();
+        if (open) composer?.focus?.({ preventScroll: true });
+        return;
+      }
+      if (event.target.closest("[data-mobile-activity-comment-login]")) {
+        showBanner(contributorWritePrompt());
+        openSheet(loginSheetEl);
         return;
       }
       const helpfulButton = event.target.closest("[data-mobile-activity-helpful]");
@@ -16094,7 +16212,7 @@
             })
             .catch(() => null));
         }
-        idleTask(() => loadDeferredData()
+        idleTask(() => loadDeferredData({ includeCommunity: true })
           .then(() => state.profile && !state.profileActivitySynced ? ensureProfileActivitySynced() : true)
           .then(() => {
             if (state.profile) {

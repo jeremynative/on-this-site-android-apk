@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260731-learning-feeds-safe-ui-r35";
+const expectedBuild = "20260731-stable-activity-media-r36";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";

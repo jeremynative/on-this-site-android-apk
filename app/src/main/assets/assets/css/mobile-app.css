@@ -1568,6 +1568,42 @@
       object-fit: cover;
     }
 
+    .learning-card-image {
+      opacity: 0;
+      transition: opacity 160ms ease-out;
+    }
+
+    .learning-card-image.is-loaded {
+      opacity: 1;
+    }
+
+    .mobile-activity-loading {
+      display: grid;
+      gap: 12px;
+      padding: 4px 0;
+    }
+
+    .mobile-activity-loading > span {
+      display: block;
+      min-height: 164px;
+      border: 1px solid #dce5da;
+      border-radius: 12px;
+      background: linear-gradient(100deg, #e7efe6 20%, #f8faf6 42%, #e7efe6 64%);
+      background-size: 220% 100%;
+      animation: mobile-activity-loading-sheen 1.2s ease-in-out infinite;
+    }
+
+    .mobile-activity-loading p {
+      margin: 0;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @keyframes mobile-activity-loading-sheen {
+      from { background-position: 100% 0; }
+      to { background-position: -100% 0; }
+    }
+
     .learning-card-media-empty {
       background: linear-gradient(135deg, #e7efe6, #f7f3df);
     }
@@ -5053,6 +5089,54 @@
       background: #e5f0e7;
     }
 
+    .activity-learning-card .learning-card-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+    }
+
+    .learning-card-action-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 21px;
+      height: 21px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: #e4eee6;
+      color: var(--accent-strong);
+      font-size: 10px;
+      line-height: 1;
+    }
+
+    .activity-update-summary {
+      display: grid;
+      gap: 5px;
+      color: #34463a;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .activity-update-summary > strong {
+      color: var(--accent-strong);
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .activity-update-summary ul {
+      display: grid;
+      gap: 7px;
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .activity-update-summary li strong,
+    .activity-update-summary li span {
+      display: block;
+    }
+
     .activity-inline-discussion {
       display: grid;
       gap: 8px;
@@ -5061,6 +5145,93 @@
       border: 1px solid #d8e3d7;
       border-radius: 9px;
       background: #f7faf6;
+    }
+
+    .activity-comment-thread,
+    .activity-thread-list,
+    .activity-comment-composer {
+      display: grid;
+      gap: 9px;
+    }
+
+    .activity-comment-thread-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .activity-comment-thread-heading strong {
+      color: #17241a;
+      font-size: 13px;
+    }
+
+    .activity-comment-thread-heading span {
+      color: var(--muted);
+      font-size: 10px;
+      text-align: right;
+    }
+
+    .activity-thread-comment {
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr);
+      gap: 7px;
+      align-items: start;
+    }
+
+    .activity-thread-comment.is-reply {
+      margin-left: 20px;
+    }
+
+    .activity-thread-comment-copy {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .activity-thread-bubble {
+      padding: 8px 10px;
+      border-radius: 13px;
+      background: #e7efe7;
+    }
+
+    .activity-thread-bubble strong {
+      display: block;
+      color: #17241a;
+      font-size: 11px;
+    }
+
+    .activity-thread-bubble p,
+    .activity-thread-bubble blockquote {
+      margin: 2px 0 0;
+      color: #29382f;
+      font-size: 12px;
+      line-height: 1.38;
+    }
+
+    .activity-thread-bubble blockquote {
+      padding-left: 7px;
+      border-left: 2px solid rgba(42, 88, 70, 0.35);
+      font-style: italic;
+    }
+
+    .activity-thread-comment-copy > time {
+      color: var(--muted);
+      font-size: 9px;
+    }
+
+    .activity-thread-empty {
+      margin: 0;
+      padding: 9px 10px;
+      border-radius: 9px;
+      background: #eaf1eb;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .activity-comment-login {
+      width: 100%;
+      min-height: 42px;
     }
 
     .activity-inline-discussion[hidden] {
