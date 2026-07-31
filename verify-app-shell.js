@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260730-native-safe-area-r29";
+const expectedBuild = "20260730-mobile-more-menu-r30";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -244,6 +244,11 @@ if (!bundledMobileCss.includes("header:has(.mobile-more-menu[open]),")
     || !bundledMobileCss.includes(".mobile-layer-bulk-actions")
     || !bundledMobileCss.includes("grid-template-columns: repeat(2, minmax(0, 1fr));")) {
   throw new Error("Bundled Android label panel must stay above the map tabs and keep its two bulk actions side by side.");
+}
+if (!/\.mobile-more-menu\[open\] \.mobile-more-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)\s*!important;[\s\S]*?touch-action:\s*pan-y;/.test(bundledMobileCss)
+    || !/@media \(max-width: 339px\)[\s\S]*?\.mobile-more-menu\[open\] \.mobile-more-grid\s*\{[\s\S]*?grid-template-columns:\s*1fr\s*!important;/.test(bundledMobileCss)
+    || !/@media \(orientation: landscape\) and \(max-height: 560px\)[\s\S]*?body\.native-android-app \.mobile-more-menu\[open\] \.mobile-more-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6,\s*minmax\(0,\s*1fr\)\)\s*!important;/.test(bundledMobileCss)) {
+  throw new Error("Bundled Android More menu must fit portrait and short-landscape safe areas without relying on nested scrolling.");
 }
 if (!/\.mobile-startup-spotlight-close\s*\{[\s\S]*?width:\s*40px;[\s\S]*?height:\s*40px;/.test(bundledMobileCss)
     || !/\.mobile-startup-spotlight-actions button\s*\{[\s\S]*?min-height:\s*40px;/.test(bundledMobileCss)) {

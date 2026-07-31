@@ -968,11 +968,18 @@
       width: var(--mobile-more-width, calc(100dvw - max(8px, var(--app-left-safe)) - max(8px, var(--app-right-safe)))) !important;
       max-width: var(--mobile-more-width, none) !important;
       transform: none !important;
-      grid-template-columns: 1fr !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       max-height: calc(100dvh - var(--mobile-more-top, 112px) - var(--app-bottom-safe) - 10px);
       overflow-y: auto;
       overscroll-behavior: contain;
+      touch-action: pan-y;
       -webkit-overflow-scrolling: touch;
+    }
+
+    @media (max-width: 339px) {
+      .mobile-more-menu[open] .mobile-more-grid {
+        grid-template-columns: 1fr !important;
+      }
     }
 
     .search {
@@ -1863,6 +1870,22 @@
         min-height: 40px;
         padding: 0 8px;
         white-space: nowrap;
+      }
+    }
+
+    @media (orientation: landscape) and (max-height: 560px) {
+      body.native-android-app .mobile-more-menu[open] .mobile-more-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+        gap: 4px;
+        padding: 6px;
+      }
+
+      body.native-android-app .mobile-more-grid .ghost-button,
+      body.native-android-app .mobile-more-grid .map-style-select,
+      body.native-android-app .mobile-more-grid .mobile-admin-menu > summary {
+        min-height: 40px;
+        padding-inline: 4px;
+        font-size: 11px;
       }
     }
 

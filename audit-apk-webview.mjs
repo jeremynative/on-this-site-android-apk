@@ -309,18 +309,46 @@ for (const [name, selector] of [
     menu.querySelector("summary")?.click();
     const opened = menu.open;
     const panel = menu.querySelector(${JSON.stringify(name === "labels" ? ".mobile-layer-panel" : ".mobile-more-grid")});
+    const isMore = ${JSON.stringify(name === "more")};
+    const adminMenu = isMore ? panel?.querySelector("#mobile-admin-menu") : null;
+    const adminWasHidden = Boolean(adminMenu?.hidden);
+    if (adminMenu) {
+      adminMenu.hidden = false;
+      adminMenu.open = true;
+    }
+    const adminAvailable = Boolean(adminMenu);
+    const adminExpanded = Boolean(adminMenu?.open);
     const panelRect = panel?.getBoundingClientRect();
-    if (panel) panel.scrollTop = panel.scrollHeight;
-    const interactive = panel
-      ? [...panel.querySelectorAll("button, a[href], input, select")].filter(element => {
+    const visibleInteractive = () => panel
+      ? [...panel.querySelectorAll("button, a[href], input, select, summary")].filter(element => {
           const rect = element.getBoundingClientRect();
           const style = getComputedStyle(element);
           return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
         })
       : [];
+    const targetRect = element => (element?.closest("label") || element)?.getBoundingClientRect();
+    const initialInteractive = visibleInteractive();
+    const initialRects = initialInteractive.map(targetRect).filter(Boolean);
+    const initialControlsSafe = Boolean(panelRect
+      && initialRects.length
+      && initialRects.every(rect => (
+        rect.left >= safe.left - 1
+        && rect.top >= safe.top - 1
+        && rect.right <= safe.right + 1
+        && rect.bottom <= safe.bottom + 1
+        && rect.left >= panelRect.left - 1
+        && rect.top >= panelRect.top - 1
+        && rect.right <= panelRect.right + 1
+        && rect.bottom <= panelRect.bottom + 1
+      )));
+    const initialScrollRange = panel ? Math.max(0, panel.scrollHeight - panel.clientHeight) : null;
+    const gridColumnCount = panel
+      ? getComputedStyle(panel).gridTemplateColumns.split(/\\s+/).filter(Boolean).length
+      : 0;
+    if (panel) panel.scrollTop = panel.scrollHeight;
+    const interactive = visibleInteractive();
     const lastControl = interactive.at(-1);
-    const lastControlTarget = lastControl?.closest("label") || lastControl;
-    const lastControlRect = lastControlTarget?.getBoundingClientRect();
+    const lastControlRect = targetRect(lastControl);
     const floatingControlsHidden = [
       "#mobile-activity-open",
       "#mobile-notifications-open"
@@ -334,10 +362,19 @@ for (const [name, selector] of [
         || style.display === "none"
         || style.visibility === "hidden";
     });
+    if (adminMenu) {
+      adminMenu.open = false;
+      adminMenu.hidden = adminWasHidden;
+    }
     menu.querySelector("summary")?.click();
     return {
       missing: false,
       opened,
+      adminAvailable,
+      adminExpanded,
+      initialControlsSafe,
+      initialScrollRange,
+      gridColumnCount,
       floatingControlsHidden,
       panelBounds: panelRect ? {
         left: Math.round(panelRect.left),
@@ -597,7 +634,9 @@ const failures = [
   ...panels.filter(item => item.missing || item.missingPanel || !item.open || !item.visible || !item.inBounds || item.openSheets !== 1
     || !item.scrollProbe?.reachedBottom || !item.scrollProbe?.lastBottomSafe),
   ...menus.filter(item => item.missing || !item.opened || !item.floatingControlsHidden || !item.panelSafeBounds
-    || !item.lastControlSafe || !item.closed),
+    || !item.lastControlSafe || !item.closed
+    || (item.name === "more" && (!item.initialControlsSafe || item.initialScrollRange > 1 || item.gridColumnCount < 2
+      || (item.adminAvailable && !item.adminExpanded)))),
   ...contentPages.filter(item => !item.open || !item.visible || !item.title.includes(item.expectedTitle) || item.itemCount < 1 || item.loadFailed),
   ...(timeline.buttonMissing || !timeline.visible || !timeline.previousExists || !timeline.nextExists || !timeline.controlsSafe ? [timeline] : []),
   ...(!nearbyHidden.hidden || !nearbyHidden.controlsSafe ? [nearbyHidden] : []),
