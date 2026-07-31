@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260730-mobile-layer-menu-r25";
+const expectedBuild = "20260730-mobile-layer-menu-r26";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -219,8 +219,8 @@ for (const [label, document] of [
   if (!document.includes('id="mobile-layer-enable-all"')
       || !document.includes('id="mobile-layer-disable-all"')
       || !document.includes("function setAllMobileLayerVisibility(visible)")
-      || !document.includes('mobileLayerEnableAllBtn?.addEventListener("click", () => setAllMobileLayerVisibility(true));')
-      || !document.includes('mobileLayerDisableAllBtn?.addEventListener("click", () => setAllMobileLayerVisibility(false));')) {
+      || !document.includes('mobileLayerEnableAllBtn?.addEventListener("click", () => runMobileLayerBulkAction(true));')
+      || !document.includes('mobileLayerDisableAllBtn?.addEventListener("click", () => runMobileLayerBulkAction(false));')) {
     throw new Error(`${label} must include working Enable all and Disable all label controls.`);
   }
 }
@@ -231,10 +231,13 @@ if (!bundledMobileCss.includes("header:has(.mobile-more-menu[open]),")
   throw new Error("Bundled Android label panel must stay above the map tabs and keep its two bulk actions side by side.");
 }
 if (!bundledMobileJs.includes("function setAllMobileLayerVisibility(visible)")
-    || !bundledMobileJs.includes("state.settings.showBiographyPaths = nextVisible;")
+    || !bundledMobileJs.includes("state.settings.showBiographyPaths = false;")
     || !bundledMobileJs.includes("state.settings.layerCategories = {};")
-    || !bundledMobileJs.includes("state.settings.eraCategories = {};")) {
-  throw new Error("Bundled Android mobile runtime must update every primary, category, and era label in one bulk action.");
+    || !bundledMobileJs.includes("state.settings.eraCategories = {};")
+    || !bundledMobileJs.includes("primaryStates.slice(0, 3).every(Boolean)")
+    || !bundledMobileJs.includes("Date.now() < mobileLayerBulkReadyAt")
+    || !bundledMobileJs.includes("mobileLayerBulkReadyAt = Date.now() + 400;")) {
+  throw new Error("Bundled Android bulk labels must exclude biography paths and reject the Labels-menu opening touch.");
 }
 requireText(expectedUrl, `Android shell must load ${expectedUrl}.`);
 requireText("?app-version=", "Android shell must pass the app build id to the mobile web app.");

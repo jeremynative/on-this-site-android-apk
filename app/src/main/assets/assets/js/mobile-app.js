@@ -872,6 +872,7 @@
     const mobileLayerMenu = document.getElementById("mobile-layer-menu");
     const mobileLayerEnableAllBtn = document.getElementById("mobile-layer-enable-all");
     const mobileLayerDisableAllBtn = document.getElementById("mobile-layer-disable-all");
+    let mobileLayerBulkReadyAt = 0;
     const mobileLayerExhibitsInput = document.getElementById("mobile-layer-exhibits");
     const mobileLayerPinsInput = document.getElementById("mobile-layer-pins");
     const mobileLayerShapesInput = document.getElementById("mobile-layer-shapes");
@@ -13897,9 +13898,13 @@
         const totalLayerCount = primaryStates.length + mobileLayerCategoryInputs.length + mobileLayerEraInputs.length;
         const activeLayerCount = primaryCount + categoryCount + eraCount;
         const allOn = activeLayerCount === totalLayerCount;
+        const allBulkLabelsOn = primaryStates.slice(0, 3).every(Boolean)
+          && categoryCount === mobileLayerCategoryInputs.length
+          && eraCount === mobileLayerEraInputs.length;
+        const bulkActionsReady = !mobileLayerMenu.open || Date.now() >= mobileLayerBulkReadyAt;
         mobileLayerMenu.querySelector("summary").textContent = allOn ? "Labels" : `Labels ${activeLayerCount}/${totalLayerCount}`;
-        if (mobileLayerEnableAllBtn) mobileLayerEnableAllBtn.disabled = allOn;
-        if (mobileLayerDisableAllBtn) mobileLayerDisableAllBtn.disabled = activeLayerCount === 0;
+        if (mobileLayerEnableAllBtn) mobileLayerEnableAllBtn.disabled = allBulkLabelsOn || !bulkActionsReady;
+        if (mobileLayerDisableAllBtn) mobileLayerDisableAllBtn.disabled = activeLayerCount === 0 || !bulkActionsReady;
       }
       if (exhibitsToggleBtn) {
         exhibitsToggleBtn.textContent = state.settings.exhibits === false ? "Exhibits off" : "Exhibits";
@@ -13946,7 +13951,10 @@
       state.settings.exhibits = nextVisible;
       state.settings.showPins = nextVisible;
       state.settings.showShapes = nextVisible;
-      state.settings.showBiographyPaths = nextVisible;
+      // Biography paths are a separate guided-story overlay, not a label.
+      // Keep them off during either bulk label action so "Enable all" cannot
+      // cover the map with every biography route.
+      state.settings.showBiographyPaths = false;
       state.settings.layerCategories = {};
       mobileLayerCategoryInputs.forEach(input => {
         state.settings.layerCategories[input.value] = nextVisible;
@@ -14789,6 +14797,14 @@
           document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
           // Layer controls are also a full-screen interaction surface.
           hideMobileStartupSpotlight();
+          // The fixed panel moves into place as the native <details> gesture
+          // finishes. Briefly arm its bulk buttons so that opening Labels
+          // cannot also activate the button that appears under the same touch.
+          mobileLayerBulkReadyAt = Date.now() + 400;
+          syncMobileLayerButtons();
+          window.setTimeout(() => {
+            if (menu.open) syncMobileLayerButtons();
+          }, 425);
           window.history.pushState({ nliLayerMenu: true }, "", window.location.href);
         }
         fitMobileLayerMenu(menu);
@@ -15125,8 +15141,12 @@
     mobileLayerBiographyPathsInput?.addEventListener("change", () => setMobileLayerVisibility("biographyPaths", mobileLayerBiographyPathsInput.checked));
     mobileLayerCategoryInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("category", true)));
     mobileLayerEraInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("era", true)));
-    mobileLayerEnableAllBtn?.addEventListener("click", () => setAllMobileLayerVisibility(true));
-    mobileLayerDisableAllBtn?.addEventListener("click", () => setAllMobileLayerVisibility(false));
+    function runMobileLayerBulkAction(visible) {
+      if (mobileLayerMenu?.open && Date.now() < mobileLayerBulkReadyAt) return;
+      setAllMobileLayerVisibility(visible);
+    }
+    mobileLayerEnableAllBtn?.addEventListener("click", () => runMobileLayerBulkAction(true));
+    mobileLayerDisableAllBtn?.addEventListener("click", () => runMobileLayerBulkAction(false));
     mobilePinsToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("pins", state.settings.showPins === false));
     mobileShapesToggleBtn?.addEventListener("click", () => setMobileLayerVisibility("shapes", state.settings.showShapes === false));
     function bindMobileStartupSpotlightAction(button, action) {
