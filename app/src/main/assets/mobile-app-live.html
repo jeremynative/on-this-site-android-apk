@@ -314,23 +314,16 @@
       grid-template-rows: auto var(--map-height) auto minmax(0, 1fr);
     }
 
-    .app.panel-nearby.nearby-expanded {
-      grid-template-rows: auto 0 auto minmax(0, 1fr);
+    .app.panel-maximized {
+      grid-template-rows: auto clamp(110px, 22dvh, 180px) auto minmax(0, 1fr);
     }
 
-    .app.panel-nearby.nearby-hidden {
+    .app.panel-collapsed {
       grid-template-rows: auto minmax(0, 1fr) auto 0px !important;
-      padding-bottom: var(--app-bottom-safe);
     }
 
-    .app.nearby-expanded .mobile-map-shell,
-    .app.nearby-expanded #map {
-      min-height: 0;
-      overflow: hidden;
-    }
-
-    .app.nearby-hidden .list-panel {
-      display: block;
+    .app.panel-collapsed .mobile-timeline,
+    .app.panel-collapsed .list-panel {
       visibility: hidden;
       height: 0 !important;
       min-height: 0 !important;
@@ -343,40 +336,13 @@
       pointer-events: none;
     }
 
-    .app.nearby-hidden .mobile-view-tabs {
-      display: grid;
-      position: relative;
-      z-index: 8;
-    }
-
     .app.panel-timeline .list-panel,
     .app.panel-nearby .mobile-timeline {
       display: none;
     }
 
     .app.panel-timeline .mobile-timeline {
-      grid-template-columns: 38px minmax(0, 1fr) 38px;
-      align-content: start;
       min-height: 0;
-      overflow: auto;
-    }
-
-    .app.panel-timeline .timeline-current {
-      min-height: 0;
-    }
-
-    .app.panel-timeline .timeline-toggle,
-    .app.panel-timeline .timeline-actions [data-timeline-hide] {
-      display: none;
-    }
-
-    .app.panel-timeline .timeline-current strong,
-    .app.panel-timeline .timeline-current .source {
-      white-space: normal;
-    }
-
-    .app.panel-timeline .timeline-current .teaser {
-      -webkit-line-clamp: 5;
     }
 
     .app.panel-nearby .list-panel {
@@ -385,45 +351,6 @@
     }
 
     .app.panel-nearby #show-timeline {
-      display: none;
-    }
-
-    .app.list-collapsed {
-      grid-template-rows: auto minmax(0, 1fr) auto 50px;
-    }
-
-    .app.list-expanded {
-      grid-template-rows: auto minmax(120px, 22vh) auto minmax(0, 1fr);
-    }
-
-    .app.timeline-hidden {
-      grid-template-rows: auto var(--map-height) minmax(0, 1fr);
-    }
-
-    .app.timeline-hidden.list-collapsed {
-      grid-template-rows: auto minmax(0, 1fr) 50px;
-    }
-
-    .app.timeline-hidden.list-expanded {
-      grid-template-rows: auto minmax(120px, 24vh) minmax(0, 1fr);
-    }
-
-    .app.list-collapsed .mobile-timeline {
-      min-height: 76px;
-      padding-top: 6px;
-      padding-bottom: 6px;
-    }
-
-    .app.timeline-hidden .mobile-timeline {
-      display: none;
-    }
-
-    .app.list-collapsed .timeline-current {
-      min-height: 62px;
-    }
-
-    .app.list-collapsed .timeline-current .source,
-    .app.list-collapsed .timeline-current .teaser {
       display: none;
     }
 
@@ -452,7 +379,7 @@
 
     .mobile-view-tabs {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 64px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 58px 54px;
       gap: 6px;
       padding: 8px 12px;
       border-top: 1px solid rgba(31, 39, 31, 0.12);
@@ -481,6 +408,13 @@
     .mobile-panel-hide {
       border-color: var(--accent-strong);
       background: #eef5f0;
+      color: var(--accent-strong);
+    }
+
+    .mobile-panel-size {
+      padding-inline: 4px;
+      border-color: #b7c8ba;
+      background: #f8faf7;
       color: var(--accent-strong);
     }
 
@@ -734,7 +668,7 @@
       -webkit-overflow-scrolling: touch;
       border: 1px solid rgba(31, 39, 31, 0.15);
       border-radius: 10px;
-      background: rgba(251, 252, 250, 0.99);
+      background: #fbfcfa;
       box-shadow: 0 14px 34px rgba(20, 31, 23, 0.18);
     }
 
@@ -746,7 +680,7 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
       padding-bottom: 2px;
-      background: rgba(251, 252, 250, 0.99);
+      background: #fbfcfa;
     }
 
     .mobile-layer-bulk-actions button {
@@ -782,6 +716,7 @@
       padding: 6px 8px;
       border: 1px solid rgba(73, 111, 93, 0.16);
       border-radius: 8px;
+      background: #ffffff;
       color: var(--accent-strong);
       font-size: 13px;
       font-weight: 800;
@@ -824,7 +759,10 @@
       top: calc(var(--mobile-map-actions-top, calc(var(--app-top-safe) + 190px)) + 52px);
     }
 
-    .app.nearby-expanded .mobile-activity-button,
+    .app.panel-maximized .mobile-activity-button,
+    .app.panel-maximized .mobile-notification-button,
+    .app.mobile-map-actions-hidden .mobile-activity-button,
+    .app.mobile-map-actions-hidden .mobile-notification-button,
     .app.mobile-search-results .mobile-notification-button,
     body:has(.mobile-more-menu[open]) .mobile-activity-button,
     body:has(.mobile-more-menu[open]) .mobile-notification-button,
@@ -1378,11 +1316,9 @@
 
     .mobile-timeline {
       display: grid;
-      grid-template-columns: 36px minmax(0, 1fr) 36px auto;
-      gap: 8px;
-      align-items: center;
-      padding: 8px 12px 10px;
-      min-height: 106px;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-height: 0;
+      overflow: hidden;
       border-top: 1px solid rgba(31, 39, 31, 0.12);
       border-bottom: 1px solid rgba(31, 39, 31, 0.12);
       background: rgba(251, 252, 250, 0.98);
@@ -1390,52 +1326,40 @@
       box-shadow: 0 8px 18px rgba(23, 31, 25, 0.08);
     }
 
-    .timeline-step {
-      width: 36px;
-      min-height: 44px;
-      border: 1px solid #c9d3c8;
-      border-radius: 8px;
-      background: white;
-      color: var(--accent-strong);
-      font-size: 24px;
-      line-height: 1;
-      font-weight: 800;
+    .mobile-feed-head {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 14px 9px;
+      border-bottom: 1px solid #edf1ec;
+      background: rgba(251, 252, 250, 0.98);
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
     }
 
-    .timeline-current {
-      display: grid;
-      gap: 5px;
+    .mobile-feed-head::before {
+      content: "";
+      position: absolute;
+      top: 4px;
+      left: 50%;
+      width: 38px;
+      height: 4px;
+      border-radius: 999px;
+      background: #c9d3c8;
+      transform: translateX(-50%);
+    }
+
+    .mobile-learning-feed {
       min-width: 0;
-      min-height: 88px;
-      padding: 8px 10px;
-      border: 1px solid #dfe8dd;
-      border-radius: 8px;
-      background: #f8faf7;
-      color: inherit;
-      text-align: left;
-    }
-
-    .timeline-current .date {
-      color: var(--accent-strong);
-      font-size: 11px;
-      font-weight: 820;
-      text-transform: uppercase;
-    }
-
-    .timeline-current strong {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-size: 14px;
-      line-height: 1.16;
-    }
-
-    .timeline-current .source {
-      overflow: hidden;
-      color: var(--muted);
-      font-size: 12px;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 8px 10px 24px;
+      overscroll-behavior: contain;
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: touch;
     }
 
     .timeline-source-row {
@@ -1467,10 +1391,7 @@
 
     .timeline-source-popover {
       display: none;
-      position: absolute;
-      right: 0;
-      bottom: 38px;
-      width: min(300px, calc(100vw - 40px));
+      margin-top: 6px;
       padding: 8px 10px;
       border: 1px solid #c8d3c7;
       border-radius: 8px;
@@ -1497,55 +1418,30 @@
       overflow-wrap: anywhere;
     }
 
-    .timeline-current.show-source .timeline-source-popover {
+    .timeline-feed-card.show-source .timeline-source-popover {
       display: block;
     }
 
-    .timeline-current .teaser {
-      display: -webkit-box;
-      margin: 0;
-      overflow: hidden;
-      color: #344136;
-      font-size: 12px;
-      line-height: 1.32;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
+    .learning-feed-empty,
+    .learning-feed-more,
+    .learning-feed-end {
+      display: grid;
+      gap: 5px;
+      place-items: center;
+      padding: 20px 12px;
+      color: var(--muted);
+      text-align: center;
     }
 
-    .timeline-actions {
-      display: flex;
-      gap: 7px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .timeline-actions button {
+    .learning-feed-more button {
       min-height: 44px;
-      padding: 0 10px;
-      border: 1px solid #c9d3c8;
-      border-radius: 7px;
-      background: white;
-      color: var(--accent-strong);
-      font-size: 12px;
-      font-weight: 800;
-    }
-
-    .timeline-actions button.primary {
-      border-color: var(--accent);
-      background: var(--accent);
-      color: white;
-    }
-
-    .timeline-toggle {
-      min-width: 44px;
-      min-height: 44px;
-      padding: 0 8px;
-      border: 1px solid #c9d3c8;
+      padding: 0 16px;
+      border: 1px solid var(--accent);
       border-radius: 8px;
-      background: white;
+      background: #fff;
       color: var(--accent-strong);
-      font-size: 12px;
-      font-weight: 900;
+      font: inherit;
+      font-weight: 850;
     }
 
     .list-panel {
@@ -1560,23 +1456,9 @@
       transition: transform 180ms ease;
     }
 
-    .app.nearby-dragging {
+    .app.mobile-panel-dragging {
       transition: none;
       user-select: none;
-    }
-
-    .list-panel.expanded {
-      border-radius: 12px 12px 0 0;
-    }
-
-    .list-panel.collapsed {
-      border-radius: 0;
-      transform: none;
-      box-shadow: none;
-    }
-
-    .list-panel.collapsed .site-list {
-      display: none;
     }
 
     .list-head {
@@ -1664,6 +1546,160 @@
     .site-card.active {
       border-color: var(--accent);
       box-shadow: 0 0 0 2px rgba(73, 111, 93, 0.14);
+    }
+
+    .learning-card,
+    .site-card.learning-card {
+      position: relative;
+      display: block;
+      width: 100%;
+      min-height: 0;
+      margin: 0 0 12px;
+      padding: 0;
+      overflow: hidden;
+      border: 1px solid #dce5da;
+      border-radius: 12px;
+      background: #fff;
+      color: inherit;
+      text-align: left;
+      box-shadow: 0 4px 16px rgba(24, 33, 26, 0.08);
+      touch-action: pan-y;
+    }
+
+    .learning-card-media {
+      display: grid;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      min-height: 156px;
+      max-height: 260px;
+      padding: 0;
+      overflow: hidden;
+      place-items: center;
+      border: 0;
+      border-radius: 0;
+      background: #e6eee5;
+      color: var(--accent-strong);
+      font-size: 40px;
+      font-weight: 850;
+    }
+
+    .learning-card-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .learning-card-media-empty {
+      background: linear-gradient(135deg, #e7efe6, #f7f3df);
+    }
+
+    .learning-card-body {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+    }
+
+    .learning-card-meta {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+      text-transform: uppercase;
+    }
+
+    .learning-card-meta strong {
+      color: var(--accent-strong);
+    }
+
+    .learning-card h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .learning-card h2 button {
+      width: 100%;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      font-weight: 850;
+      text-align: left;
+    }
+
+    .learning-card-tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .learning-card-tags span {
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #edf4ed;
+      color: var(--accent-strong);
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .learning-card-excerpt {
+      display: -webkit-box;
+      margin: 0;
+      overflow: hidden;
+      color: #344136;
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 4;
+    }
+
+    .learning-card-excerpt.is-expanded {
+      display: block;
+      overflow: visible;
+      -webkit-line-clamp: unset;
+    }
+
+    .learning-card-see-more {
+      width: fit-content;
+      min-height: 36px;
+      padding: 0 2px;
+      border: 0;
+      background: transparent;
+      color: var(--accent-strong);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 850;
+      text-decoration: underline;
+    }
+
+    .learning-card-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+      margin-top: 2px;
+    }
+
+    .learning-card-actions button {
+      min-width: 0;
+      min-height: 44px;
+      padding: 0 8px;
+      border: 1px solid #c9d3c8;
+      border-radius: 8px;
+      background: #fff;
+      color: var(--accent-strong);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .learning-card-actions button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
     }
 
     .thumb {
@@ -1773,24 +1809,6 @@
         min-height: 155px;
       }
 
-      .mobile-timeline {
-        padding: 6px 10px;
-        min-height: 92px;
-      }
-
-      .timeline-current {
-        padding: 6px 8px;
-        min-height: 76px;
-      }
-
-      .timeline-current .source {
-        display: none;
-      }
-
-      .timeline-current .teaser {
-        -webkit-line-clamp: 1;
-      }
-
       .quick-actions {
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
@@ -1810,91 +1828,84 @@
       }
 
       body.native-android-app .mobile-activity-button {
-        right: max(128px, var(--app-right-safe));
+        right: max(144px, var(--app-right-safe));
       }
 
       body.native-android-app .mobile-notification-button {
-        right: max(76px, var(--app-right-safe));
+        right: max(92px, var(--app-right-safe));
       }
 
       body.native-android-app .mobile-map-locate {
-        bottom: 12px;
+        right: 12px;
+        bottom: 6px;
       }
 
-      body.native-android-app .app.panel-timeline {
-        grid-template-rows: auto minmax(56px, 14vh) auto minmax(0, 1fr);
+      body.native-android-app .mobile-map-shell .mapboxgl-ctrl-top-right {
+        display: none;
       }
 
-      body.native-android-app .app.panel-timeline .mobile-map-shell,
-      body.native-android-app .app.panel-timeline #map {
+      body.native-android-app .mobile-promo-dock {
+        bottom: 6px;
+      }
+
+      body.native-android-app .app.panel-maximized {
+        grid-template-rows: auto minmax(72px, 16dvh) auto minmax(0, 1fr);
+      }
+
+      body.native-android-app .app.panel-maximized .mobile-map-shell,
+      body.native-android-app .app.panel-maximized #map {
         min-height: 0;
       }
 
       body.native-android-app .app.panel-timeline .mobile-timeline {
-        grid-template-columns: 40px minmax(0, 1fr) 40px;
-        gap: 6px;
-        align-items: stretch;
-        padding: 4px 10px;
         min-height: 0;
         max-height: none;
         overflow: hidden;
       }
 
-      body.native-android-app .app.panel-timeline .timeline-step {
-        width: 40px;
-        min-height: 40px;
-        max-height: none;
-      }
-
-      body.native-android-app .app.panel-timeline .timeline-current {
-        grid-template-columns: minmax(0, 1fr) minmax(168px, auto);
-        grid-template-rows: minmax(0, 1fr);
-        align-items: center;
-        gap: 6px;
-        height: 100%;
-        min-height: 0;
-        max-height: 100%;
-        padding: 4px 6px;
-        overflow: hidden;
-      }
-
-      body.native-android-app .app.panel-timeline .timeline-current .date,
-      body.native-android-app .app.panel-timeline .timeline-source-row,
-      body.native-android-app .app.panel-timeline .timeline-source-popover,
-      body.native-android-app .app.panel-timeline .timeline-current .teaser {
-        display: none;
-      }
-
-      body.native-android-app .app.panel-timeline .timeline-current strong {
-        display: -webkit-box;
-        grid-column: 1;
-        grid-row: 1;
-        margin: 0;
-        overflow: hidden;
-        white-space: normal;
-        line-height: 1.15;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
-      }
-
-      body.native-android-app .app.panel-timeline .timeline-actions {
-        display: grid;
-        grid-column: 2;
-        grid-row: 1;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 5px;
-        min-width: 0;
-      }
-
-      body.native-android-app .app.panel-timeline .timeline-actions button {
-        min-width: 0;
-        min-height: 40px;
-        padding: 0 8px;
-        white-space: nowrap;
+      body.native-android-app .learning-card-media {
+        min-height: 120px;
+        max-height: 190px;
       }
     }
 
     @media (orientation: landscape) and (max-height: 560px) {
+      body.native-android-app {
+        --map-height: clamp(96px, 24dvh, 120px);
+      }
+
+      body.native-android-app header {
+        gap: 4px;
+        padding-top: max(5px, var(--app-top-safe));
+        padding-bottom: 5px;
+      }
+
+      body.native-android-app .mobile-header-instruction,
+      body.native-android-app .territory-subtitle {
+        display: none;
+      }
+
+      body.native-android-app .app:not(.panel-collapsed) header .search {
+        display: none;
+      }
+
+      body.native-android-app .search,
+      body.native-android-app .locate,
+      body.native-android-app .ghost-button,
+      body.native-android-app .mobile-layer-menu > summary,
+      body.native-android-app .mobile-more-menu > summary {
+        min-height: 40px;
+      }
+
+      body.native-android-app .mobile-view-tabs {
+        padding-top: 5px;
+        padding-bottom: 5px;
+      }
+
+      body.native-android-app .mobile-feed-head {
+        padding: 10px 12px 6px;
+      }
+
       body.native-android-app .mobile-more-menu[open] .mobile-more-grid {
         grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
         gap: 4px;
@@ -4978,6 +4989,140 @@
       font-weight: 800;
     }
 
+    .activity-feed-item.activity-learning-card {
+      display: block;
+      gap: 0;
+      padding: 0;
+    }
+
+    .activity-learning-card .learning-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 11px;
+      border-bottom: 1px solid #e2e9e0;
+      background: #f6f9f5;
+      color: var(--accent-strong);
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: 0.035em;
+      text-transform: uppercase;
+    }
+
+    .activity-learning-card .learning-card-header > span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .activity-learning-card .learning-card-header time {
+      flex: 0 0 auto;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    .activity-learning-card .learning-card-title,
+    .activity-learning-card .learning-card-title-static {
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #17241a;
+      font: inherit;
+      font-size: 17px;
+      font-weight: 850;
+      line-height: 1.24;
+      text-align: left;
+    }
+
+    .activity-learning-card .learning-card-title {
+      min-height: 40px;
+      color: var(--accent-strong);
+      text-decoration: underline;
+      text-decoration-color: rgba(42, 88, 70, 0.28);
+      text-underline-offset: 3px;
+    }
+
+    .activity-learning-card .learning-card-source,
+    .activity-learning-card .learning-card-author,
+    .activity-learning-card .learning-card-counts {
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .activity-learning-card .learning-card-counts {
+      display: flex;
+      gap: 12px;
+      padding-top: 2px;
+      font-weight: 760;
+    }
+
+    .activity-learning-card > .learning-card-actions {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin: 0;
+      padding: 0 12px 12px;
+    }
+
+    .activity-learning-card .learning-card-action.is-active {
+      border-color: var(--accent);
+      background: #e5f0e7;
+    }
+
+    .activity-inline-discussion {
+      display: grid;
+      gap: 8px;
+      margin: 0 12px 12px;
+      padding: 10px;
+      border: 1px solid #d8e3d7;
+      border-radius: 9px;
+      background: #f7faf6;
+    }
+
+    .activity-inline-discussion[hidden] {
+      display: none;
+    }
+
+    .activity-inline-discussion label {
+      color: var(--accent-strong);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .activity-inline-discussion textarea {
+      width: 100%;
+      min-height: 88px;
+      resize: vertical;
+    }
+
+    .activity-inline-discussion-actions {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+    }
+
+    .activity-inline-discussion-actions button {
+      min-height: 42px;
+    }
+
+    .learning-card-load-more {
+      width: 100%;
+      min-height: 46px;
+      padding: 10px 14px;
+      border: 1px solid #c8d6c7;
+      border-radius: 9px;
+      background: #f7faf6;
+      color: var(--accent-strong);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 850;
+    }
+
     .activity-pin-icon {
       display: inline-flex;
       align-items: center;
@@ -6245,17 +6390,15 @@ body.research-question-dialog-open .research-question-prompt,
     <div class="mobile-view-tabs" role="group" aria-label="Mobile section">
       <button class="mobile-view-tab" id="mobile-tab-timeline" type="button" aria-pressed="false">Timeline</button>
       <button class="mobile-view-tab" id="mobile-tab-nearby" type="button" aria-pressed="true">Nearby sites</button>
-      <button class="mobile-view-tab mobile-panel-hide" id="collapse-list" type="button" aria-label="Collapse nearby list">Hide</button>
+      <button class="mobile-view-tab mobile-panel-hide" id="collapse-list" type="button" aria-label="Collapse bottom panel">Hide</button>
+      <button class="mobile-view-tab mobile-panel-size" id="mobile-panel-size-toggle" type="button" aria-label="Maximize bottom panel" aria-expanded="false">Max</button>
     </div>
     <section class="mobile-timeline" aria-label="Historic timeline">
-      <button class="timeline-step" id="mobile-timeline-prev" type="button" aria-label="Previous historic moment"><</button>
-      <div class="timeline-current" id="mobile-timeline-current" role="group" aria-live="polite">
-        <span class="date">Timeline</span>
-        <strong>Loading historic moments...</strong>
-        <span class="source">Use arrows to browse one by one</span>
+      <div class="mobile-feed-head">
+        <strong>Historic timeline</strong>
+        <span class="status" id="mobile-timeline-status">Loading...</span>
       </div>
-      <button class="timeline-step" id="mobile-timeline-next" type="button" aria-label="Next historic moment">></button>
-      <button class="timeline-toggle" id="mobile-timeline-toggle" type="button" aria-label="Hide timeline">Hide</button>
+      <div class="mobile-learning-feed" id="mobile-timeline-current" role="feed" aria-live="polite"></div>
     </section>
     <section class="list-panel">
       <div class="list-head">
@@ -9648,6 +9791,546 @@ window.NLI_PLACE_NAME_AREAS = {"type":"FeatureCollection","name":"Reviewed Indig
     promptForKey
   };
 }());
+  </script>
+  <script data-inline-source="assets/js/shared-learning-card-utils.js">
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === "object" && module.exports) module.exports = api;
+  if (root) root.NLI_LEARNING_CARD_UTILS = api;
+}(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  const GENERIC_PUBLIC_LABELS = new Set([
+    "",
+    "article",
+    "historic moment",
+    "knowledgebase article",
+    "listing",
+    "record",
+    "story",
+    "this article",
+    "untitled",
+    "user story",
+    "wiki article"
+  ]);
+
+  function plainText(value) {
+    return String(value == null ? "" : value)
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;|&#160;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&quot;|&#34;/gi, "\"")
+      .replace(/&#39;|&apos;/gi, "'")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function normalizedLabel(value) {
+    return plainText(value).toLowerCase().replace(/[.:;,!?]+$/g, "").trim();
+  }
+
+  function meaningfulLabel(value) {
+    const text = plainText(value);
+    return GENERIC_PUBLIC_LABELS.has(normalizedLabel(text)) ? "" : text;
+  }
+
+  function firstMeaningful(values) {
+    for (const value of values) {
+      const text = meaningfulLabel(value);
+      if (text) return text;
+    }
+    return "";
+  }
+
+  function firstText(values) {
+    for (const value of values) {
+      const text = plainText(value);
+      if (text) return text;
+    }
+    return "";
+  }
+
+  function compactText(value, limit = 0) {
+    const text = plainText(value);
+    if (!limit || text.length <= limit) return text;
+    const clipped = text.slice(0, limit + 1);
+    const boundary = clipped.lastIndexOf(" ");
+    return `${clipped.slice(0, boundary > Math.floor(limit * 0.55) ? boundary : limit).trim()}...`;
+  }
+
+  function normalizeType(value) {
+    const type = String(value || "").trim().toLowerCase().replace(/[\s_]+/g, "-");
+    if (["map-story", "visitor-story", "community-story"].includes(type)) return "user-story";
+    if (["timeline", "timeline-event", "historic-event"].includes(type)) return "historic-moment";
+    if (["knowledgebase", "knowledge-base", "wiki-article"].includes(type)) return "wiki";
+    if (["place", "listing"].includes(type)) return "site";
+    return type || "learning";
+  }
+
+  function normalizeAuthor(input = {}) {
+    const authorInput = input.author && typeof input.author === "object" ? input.author : {};
+    const displayName = firstMeaningful([
+      authorInput.displayName,
+      authorInput.display_name,
+      authorInput.name,
+      input.authorName,
+      input.author_name,
+      input.displayName,
+      input.display_name
+    ]);
+    const id = firstText([
+      authorInput.id,
+      authorInput.profileId,
+      input.authorId,
+      input.author_id,
+      input.memberProfile,
+      input.member_profile
+    ]);
+    return { id, displayName };
+  }
+
+  function fallbackTitle(type, authorName) {
+    if (type === "site") return "Explore this place";
+    if (type === "wiki") return "Explore this history";
+    if (type === "historic-moment") return "A moment in local history";
+    if (type === "user-story") return authorName
+      ? `${authorName} shared a story`
+      : "A community member shared a story";
+    if (type === "comment") return authorName
+      ? `Community note from ${authorName}`
+      : "A community note";
+    if (type === "event") return "A community event";
+    return "Explore local history";
+  }
+
+  function resolveNames(input, type, author) {
+    const sourceCandidate = firstMeaningful([
+      input.source,
+      input.sourceName,
+      input.source_name,
+      input.pageName,
+      input.page_name,
+      input.sourceTitle,
+      input.source_title,
+      input.relatedTitle,
+      input.related_title,
+      input.attachedSiteTitle,
+      input.attached_site_title
+    ]);
+    const titleCandidate = firstMeaningful([
+      input.title,
+      input.headline,
+      input.cardTitle,
+      input.card_title
+    ]);
+    const title = titleCandidate ||
+      ((type === "site" || type === "wiki" || type === "comment") ? sourceCandidate : "") ||
+      fallbackTitle(type, author.displayName);
+
+    let source = sourceCandidate;
+    if (type === "user-story") source = author.displayName || sourceCandidate;
+    if (!source && type === "comment") source = author.displayName || "Community discussion";
+    if (!source) source = title;
+
+    const pageName = firstMeaningful([input.pageName, input.page_name]) || source;
+    return { title, source, pageName };
+  }
+
+  function cleanUrl(value) {
+    const url = String(value || "").trim();
+    if (!url || /^(?:javascript|vbscript):/i.test(url)) return "";
+    return url;
+  }
+
+  function relationId(value) {
+    if (value == null) return "";
+    if (typeof value === "object") return firstText([value.id, value.value, value.slug]);
+    return firstText([value]);
+  }
+
+  function firstRelationId(values) {
+    for (const value of values) {
+      const id = relationId(value);
+      if (id) return id;
+    }
+    return "";
+  }
+
+  function normalizeTarget(input = {}, type = "") {
+    const targetInput = input.target && typeof input.target === "object"
+      ? input.target
+      : input.deepTarget && typeof input.deepTarget === "object"
+        ? input.deepTarget
+        : {};
+    const targetType = normalizeType(firstText([
+      targetInput.type,
+      input.targetType,
+      input.target_type,
+      type
+    ]));
+    const id = firstRelationId([
+      targetInput.id,
+      input.targetId,
+      input.target_id,
+      input.sourceId,
+      input.source_id
+    ]);
+    const slug = firstText([
+      targetInput.slug,
+      input.targetSlug,
+      input.target_slug,
+      input.slug,
+      input.sourceSlug,
+      input.source_slug
+    ]);
+    const url = cleanUrl(firstText([
+      targetInput.url,
+      targetInput.fullUrl,
+      input.fullUrl,
+      input.full_url,
+      input.url,
+      input.articleUrl,
+      input.article_url
+    ]));
+    if (!id && !slug && !url) return null;
+    return { type: targetType, id, slug, url };
+  }
+
+  function normalizeCoordinates(value, input = {}) {
+    let longitude;
+    let latitude;
+    if (Array.isArray(value)) {
+      [longitude, latitude] = value;
+    } else if (value && typeof value === "object") {
+      longitude = value.longitude ?? value.lng ?? value.lon ?? value.x;
+      latitude = value.latitude ?? value.lat ?? value.y;
+    } else {
+      longitude = input.longitude ?? input.lng ?? input.lon;
+      latitude = input.latitude ?? input.lat;
+    }
+
+    function coordinateNumber(coordinate) {
+      if (coordinate == null) return null;
+      if (typeof coordinate === "string" && !coordinate.trim()) return null;
+      const number = Number(coordinate);
+      return Number.isFinite(number) ? number : null;
+    }
+
+    longitude = coordinateNumber(longitude);
+    latitude = coordinateNumber(latitude);
+    if (longitude == null || latitude == null) return null;
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return null;
+    if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) return null;
+    return [longitude, latitude];
+  }
+
+  function normalizeMapTarget(input = {}) {
+    const mapInput = input.map && typeof input.map === "object"
+      ? input.map
+      : input.relatedMapItem && typeof input.relatedMapItem === "object"
+        ? input.relatedMapItem
+        : input.mapItem && typeof input.mapItem === "object"
+          ? input.mapItem
+          : {};
+    const coordinates = normalizeCoordinates(
+      input.coordinates || input.mapCoordinates || input.map_coordinates || mapInput.coordinates,
+      { ...input, ...mapInput }
+    );
+    const itemType = normalizeType(firstText([
+      mapInput.itemType,
+      mapInput.item_type,
+      mapInput.type,
+      input.mapItemType,
+      input.map_item_type
+    ]));
+    const itemId = firstRelationId([
+      mapInput.itemId,
+      mapInput.item_id,
+      mapInput.id,
+      input.mapItemId,
+      input.map_item_id
+    ]);
+    const slug = firstText([mapInput.slug, input.mapSlug, input.map_slug]);
+    if (!coordinates && !itemId && !slug) return null;
+    return { itemType, itemId, slug, coordinates };
+  }
+
+  function finiteCount(value) {
+    const count = Number(value);
+    return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+  }
+
+  function normalizeCounts(input = {}) {
+    const counts = input.counts && typeof input.counts === "object" ? input.counts : {};
+    return {
+      upvotes: finiteCount(
+        counts.upvotes ?? counts.upVotes ?? counts.likes ??
+        input.upvoteCount ?? input.upvote_count ?? input.upvotes ?? input.likeCount
+      ),
+      comments: finiteCount(
+        counts.comments ?? counts.commentCount ??
+        input.commentCount ?? input.comment_count ?? input.commentsCount
+      )
+    };
+  }
+
+  function explicitBoolean(values, fallback = false) {
+    for (const value of values) {
+      if (typeof value === "boolean") return value;
+    }
+    return fallback;
+  }
+
+  function normalizeAccess(input = {}, target, mapTarget) {
+    const capabilitiesInput = input.capabilities && typeof input.capabilities === "object"
+      ? input.capabilities
+      : {};
+    const permissionsInput = input.permissions && typeof input.permissions === "object"
+      ? input.permissions
+      : {};
+    const capabilities = {
+      open: explicitBoolean(
+        [capabilitiesInput.open, capabilitiesInput.canOpen, input.supportsOpen],
+        Boolean(target)
+      ),
+      map: explicitBoolean(
+        [capabilitiesInput.map, capabilitiesInput.canMap, input.supportsMap],
+        Boolean(mapTarget)
+      ),
+      vote: explicitBoolean(
+        [capabilitiesInput.vote, capabilitiesInput.canVote, input.supportsVote],
+        false
+      ),
+      comment: explicitBoolean(
+        [capabilitiesInput.comment, capabilitiesInput.canComment, input.supportsComment],
+        false
+      )
+    };
+    const loggedIn = explicitBoolean([
+      permissionsInput.loggedIn,
+      permissionsInput.logged_in,
+      input.loggedIn,
+      input.logged_in
+    ], false);
+    const permissions = {
+      loggedIn,
+      canOpen: capabilities.open && explicitBoolean([
+        permissionsInput.canOpen,
+        permissionsInput.open
+      ], true),
+      canMap: capabilities.map && explicitBoolean([
+        permissionsInput.canMap,
+        permissionsInput.map
+      ], true),
+      canVote: loggedIn && capabilities.vote && explicitBoolean([
+        permissionsInput.canVote,
+        permissionsInput.vote
+      ], true),
+      canComment: loggedIn && capabilities.comment && explicitBoolean([
+        permissionsInput.canComment,
+        permissionsInput.comment
+      ], true)
+    };
+    return { capabilities, permissions };
+  }
+
+  function shortHash(value) {
+    const text = String(value || "");
+    let hash = 2166136261;
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
+  function stableCardKey(input, type, id, target, title, date) {
+    const explicit = firstText([input.key, input.cardKey, input.card_key]);
+    if (explicit) return explicit;
+    if (id) return `${type}:${id}`;
+    if (target?.id) return `${type}:${target.type}:${target.id}`;
+    if (target?.slug) return `${type}:${target.type}:${target.slug}`;
+    if (target?.url) return `${type}:url:${shortHash(target.url)}`;
+    return `${type}:generated:${shortHash([title, date].join("|"))}`;
+  }
+
+  function normalizeLearningCard(input = {}, options = {}) {
+    const type = normalizeType(input.type || input.kind || options.type);
+    const author = normalizeAuthor(input);
+    const names = resolveNames(input, type, author);
+    const id = firstRelationId([
+      input.id,
+      input.cardId,
+      input.card_id,
+      input.activityId,
+      input.activity_id
+    ]);
+    const date = firstText([
+      input.date,
+      input.dateTime,
+      input.date_time,
+      input.createdAt,
+      input.created_at,
+      input.updatedAt,
+      input.updated_at
+    ]);
+    const target = normalizeTarget(input, type);
+    const map = normalizeMapTarget(input);
+    const access = normalizeAccess(input, target, map);
+    const imageUrl = cleanUrl(firstText([
+      input.imageUrl,
+      input.image_url,
+      input.image,
+      input.photo,
+      input.featuredImage,
+      input.featured_image
+    ]));
+    const imageFallbackUrl = cleanUrl(firstText([
+      input.imageFallbackUrl,
+      input.image_fallback_url,
+      input.imageFallback,
+      input.image_fallback,
+      input.fallbackImage,
+      input.fallback_image
+    ]));
+    const excerpt = compactText(firstText([
+      input.excerpt,
+      input.preview,
+      input.description,
+      input.summary,
+      input.storyText,
+      input.story_text,
+      input.message,
+      input.comment,
+      input.caption
+    ]), Number(options.excerptLimit || 0));
+    const fullUrl = cleanUrl(firstText([
+      input.fullUrl,
+      input.full_url,
+      target?.url
+    ]));
+    const pinned = explicitBoolean([input.pinned, input.isPinned, input.is_pinned], false);
+    const error = compactText(
+      typeof input.error === "object" && input.error
+        ? input.error.message
+        : input.error,
+      240
+    );
+    const card = {
+      key: "",
+      id,
+      type,
+      title: names.title,
+      source: names.source,
+      sourceName: names.source,
+      pageName: names.pageName,
+      date,
+      imageUrl,
+      imageFallbackUrl,
+      excerpt,
+      fullUrl,
+      target,
+      relatedMapItem: map,
+      coordinates: map?.coordinates || null,
+      counts: normalizeCounts(input),
+      author,
+      permissions: access.permissions,
+      capabilities: access.capabilities,
+      loading: Boolean(input.loading),
+      error,
+      pinned
+    };
+    card.key = stableCardKey(input, type, id, target, card.title, date);
+    return card;
+  }
+
+  function stableValue(value) {
+    if (Array.isArray(value)) return value.map(stableValue);
+    if (value && typeof value === "object") {
+      return Object.keys(value).sort().reduce((result, key) => {
+        result[key] = stableValue(value[key]);
+        return result;
+      }, {});
+    }
+    if (typeof value === "number" && !Number.isFinite(value)) return null;
+    return value;
+  }
+
+  function learningCardSignature(card) {
+    return JSON.stringify(stableValue(normalizeLearningCard(card)));
+  }
+
+  function learningCardsSignature(cards = []) {
+    return (cards || []).map(learningCardSignature).join("\u001e");
+  }
+
+  function learningCardsEqual(first = [], second = []) {
+    return learningCardsSignature(first) === learningCardsSignature(second);
+  }
+
+  function createActionGuard() {
+    const activeKeys = new Set();
+
+    function normalizeActionKey(key) {
+      return String(key == null ? "" : key).trim();
+    }
+
+    function has(key) {
+      const normalizedKey = normalizeActionKey(key);
+      return Boolean(normalizedKey && activeKeys.has(normalizedKey));
+    }
+
+    function begin(key) {
+      const normalizedKey = normalizeActionKey(key);
+      if (!normalizedKey || activeKeys.has(normalizedKey)) return false;
+      activeKeys.add(normalizedKey);
+      return true;
+    }
+
+    function end(key) {
+      const normalizedKey = normalizeActionKey(key);
+      return Boolean(normalizedKey && activeKeys.delete(normalizedKey));
+    }
+
+    function run(key, action) {
+      if (typeof action !== "function") {
+        throw new TypeError("Action guard requires a function.");
+      }
+      if (!begin(key)) return null;
+
+      try {
+        return Promise.resolve(action()).finally(() => {
+          end(key);
+        });
+      } catch (error) {
+        end(key);
+        return Promise.reject(error);
+      }
+    }
+
+    return {
+      begin,
+      has,
+      end,
+      run
+    };
+  }
+
+  return {
+    GENERIC_PUBLIC_LABELS,
+    plainText,
+    meaningfulLabel,
+    normalizeType,
+    normalizeCoordinates,
+    normalizeLearningCard,
+    learningCardSignature,
+    learningCardsSignature,
+    learningCardsEqual,
+    createActionGuard
+  };
+}));
   </script>
   <script data-inline-source="assets/js/shared-activity-utils.js">
 (function () {
@@ -14641,6 +15324,21 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const SHARED_DIRECTUS = window.NLI_DIRECTUS_CLIENT || {};
     const PROFILE_UTILS = window.NLI_PROFILE_UTILS || {};
     const MAP_STORY_UTILS = window.NLI_MAP_STORY_UTILS || {};
+    const LEARNING_CARD_UTILS = window.NLI_LEARNING_CARD_UTILS || {};
+    const mobileLearningActionGuard = LEARNING_CARD_UTILS.createActionGuard?.() || (() => {
+      const pending = new Set();
+      return {
+        begin(key) {
+          const normalized = String(key || "");
+          if (!normalized || pending.has(normalized)) return false;
+          pending.add(normalized);
+          return true;
+        },
+        end(key) {
+          pending.delete(String(key || ""));
+        }
+      };
+    })();
     const ACTIVITY_UTILS = window.NLI_ACTIVITY_UTILS || {};
     const COMMENT_UTILS = window.NLI_COMMENT_UTILS || {};
     const QUOTE_COMMENT_UTILS = window.NLI_QUOTE_COMMENT_UTILS || {};
@@ -15263,11 +15961,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       november: "11",
       december: "12"
     };
-    const NEARBY_LIST_DESKTOP_LIMIT = 24;
-    const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 18;
-    const NEARBY_LIST_ANDROID_DEFAULT_LIMIT = 40;
+    const NEARBY_LIST_DESKTOP_LIMIT = 18;
+    const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 8;
+    const NEARBY_LIST_ANDROID_DEFAULT_LIMIT = 12;
     const NEARBY_LIST_SEARCH_LIMIT = 60;
-    const NEARBY_LIST_INCREMENT = 40;
+    const NEARBY_LIST_INCREMENT = 12;
+    const TIMELINE_FEED_INITIAL_LIMIT = 10;
+    const TIMELINE_FEED_INCREMENT = 10;
+    const MOBILE_ACTIVITY_INITIAL_LIMIT = 8;
+    const MOBILE_ACTIVITY_INCREMENT = 8;
+    const MOBILE_PANEL_STATE_KEY = "nli-mobile-bottom-panel-state";
     const MOBILE_APP_BUILD_ID = "20260603-label-threshold-quieter";
     const MIN_ANDROID_APP_BUILD_ID = "20260524-plant-camera-analysis-7";
     const ANDROID_APK_UPDATE_URL = "https://github.com/jeremynative/on-this-site-android-apk/releases/latest/download/on-this-site-latest.apk";
@@ -15410,10 +16113,22 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       deferredDataLoading: false,
       deferredCommunityDataLoaded: false,
       mobileActivityRenderedSignature: "",
+      mobileActivityRenderLimit: MOBILE_ACTIVITY_INITIAL_LIMIT,
+      mobileActivityDiscussionKeys: new Set(),
+      mobileActivityDrafts: new Map(),
       profileActivitySynced: false,
       profileActivitySyncPromise: null,
       mobileStartupRendering: false,
       mobileTimelineRendered: false,
+      timelineRenderLimit: TIMELINE_FEED_INITIAL_LIMIT,
+      timelineFeedSignature: "",
+      timelineFeedObserver: null,
+      nearbyFeedObserver: null,
+      expandedLearningCardKeys: new Set(),
+      mobilePanelState: "normal",
+      mobilePanelPreviousOpenState: "normal",
+      timelineScrollTop: 0,
+      nearbyScrollTop: 0,
       mobileStartupSpotlightSite: null,
       mobileStartupSpotlightShown: false,
       mobileStartupSpotlightReturnOnDetailClose: false,
@@ -15543,12 +16258,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const mobileLayerCategoryInputs = [...document.querySelectorAll(".mobile-layer-category")];
     const mobileLayerEraInputs = [...document.querySelectorAll(".mobile-layer-era")];
     const collapseListBtn = document.getElementById("collapse-list");
+    const mobilePanelSizeBtn = document.getElementById("mobile-panel-size-toggle");
     const mobileTimelineEl = document.querySelector(".mobile-timeline");
-    const mobileTimelineToggleBtn = document.getElementById("mobile-timeline-toggle");
     const showTimelineBtn = document.getElementById("show-timeline");
-    const mobileTimelinePrevBtn = document.getElementById("mobile-timeline-prev");
-    const mobileTimelineNextBtn = document.getElementById("mobile-timeline-next");
     const mobileTimelineCurrentBtn = document.getElementById("mobile-timeline-current");
+    const mobileTimelineStatusEl = document.getElementById("mobile-timeline-status");
     const listPanelEl = document.querySelector(".list-panel");
     const mobileTabTimelineBtn = document.getElementById("mobile-tab-timeline");
     const mobileTabNearbyBtn = document.getElementById("mobile-tab-nearby");
@@ -18511,8 +19225,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function defaultNearbyRenderLimit() {
       const query = searchEl.value.trim();
-      if (state.addressSearchMode) return 20;
-      if (query) return isNativeAndroidApp() ? Math.min(18, NEARBY_LIST_SEARCH_LIMIT) : NEARBY_LIST_SEARCH_LIMIT;
+      if (state.addressSearchMode) return 12;
+      if (query) return Math.min(18, NEARBY_LIST_SEARCH_LIMIT);
       if (isNativeAndroidApp()) {
         return state.mobileStartupRendering ? NEARBY_LIST_ANDROID_INITIAL_LIMIT : NEARBY_LIST_ANDROID_DEFAULT_LIMIT;
       }
@@ -18547,8 +19261,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function showAndroidSearchPreviewPanel() {
       if (!isNativeAndroidApp() || !searchEl?.value.trim()) return;
       setMobilePanelMode("nearby");
-      setNearbyPanelState("expanded");
-      setNearbyExpanded(true);
+      setMobileBottomPanelState("maximized");
       listEl?.scrollTo?.({ top: 0, behavior: "auto" });
     }
 
@@ -18645,11 +19358,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         setNearbyPanelState("default");
         return;
       }
-      state.nearbyRenderLimit = Math.min(NEARBY_LIST_SEARCH_LIMIT, Math.max(NEARBY_LIST_SEARCH_LIMIT, state.filtered.length));
+      state.nearbyRenderLimit = Math.min(NEARBY_LIST_SEARCH_LIMIT, Math.max(18, defaultNearbyRenderLimit()));
       renderList();
       setMobilePanelMode("nearby");
-      setNearbyPanelState("expanded");
-      setNearbyExpanded(true);
+      setMobileBottomPanelState("maximized");
       listEl?.scrollTo?.({ top: 0, behavior: "smooth" });
       searchEl.blur();
       if (state.filtered.length) showBanner(`${state.filtered.length} search result${state.filtered.length === 1 ? "" : "s"}.`);
@@ -19197,14 +19909,162 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       setMobileContentRoute({ tag: tagKey }, options);
     }
 
-    function renderList() {
+    function normalizeMobileLearningCard(input = {}, options = {}) {
+      if (typeof LEARNING_CARD_UTILS.normalizeLearningCard === "function") {
+        return LEARNING_CARD_UTILS.normalizeLearningCard(input, options);
+      }
+      return {
+        key: `${input.type || "learning"}:${input.id || input.slug || input.title || "card"}`,
+        id: String(input.id || ""),
+        type: input.type || "learning",
+        title: cleanPlainText(input.title || "Explore local history"),
+        sourceName: cleanPlainText(input.sourceName || input.source || input.title || ""),
+        date: cleanPlainText(input.date || ""),
+        imageUrl: cleanImageUrl(input.imageUrl || ""),
+        imageFallbackUrl: cleanImageUrl(input.imageFallbackUrl || ""),
+        excerpt: cleanPlainText(input.excerpt || input.summary || ""),
+        target: input.target || null,
+        relatedMapItem: input.map || null,
+        capabilities: input.capabilities || {},
+        permissions: input.permissions || {},
+        counts: input.counts || { upvotes: 0, comments: 0 }
+      };
+    }
+
+    function learningCardImageHtml(card, actionAttribute = "", alt = "") {
+      if (!card?.imageUrl) return `<span class="learning-card-media learning-card-media-empty" aria-hidden="true">${escapeHtml((card?.title || "?").slice(0, 1))}</span>`;
+      const fallback = mobileSnapshotImageUrl(card.imageFallbackUrl || "");
+      return `
+        <button class="learning-card-media" type="button" ${actionAttribute} aria-label="${escapeHtml(`Open ${card.title}`)}">
+          <img src="${escapeHtml(mobileSnapshotImageUrl(card.imageUrl))}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" onerror="${imageErrorAction(fallback)}">
+        </button>
+      `;
+    }
+
+    function learningCardExcerptHtml(card) {
+      const excerpt = cleanPlainText(card?.excerpt || "");
+      if (!excerpt) return "";
+      const expandable = excerpt.length > 220;
+      const expanded = state.expandedLearningCardKeys.has(card.key);
+      return `
+        <p class="learning-card-excerpt${expanded ? " is-expanded" : ""}" data-learning-card-excerpt>${escapeHtml(excerpt)}</p>
+        ${expandable ? `<button class="learning-card-see-more" type="button" data-learning-see-more="${escapeHtml(card.key)}" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "See less" : "See more"}</button>` : ""}
+      `;
+    }
+
+    function learningCardTagsHtml(tags = []) {
+      const visible = tags.map(tag => cleanPlainText(tag?.label || tag)).filter(Boolean).slice(0, 3);
+      return visible.length ? `<div class="learning-card-tags">${visible.map(tag => `<span>${escapeHtml(tag)}</span>`).join("")}</div>` : "";
+    }
+
+    function learningCardCommentCount(sourceType, item) {
+      if (!item || !["site", "wiki"].includes(sourceType)) return 0;
+      return commentsForSource(sourceType, item).length;
+    }
+
+    function nearbyFeedCardModel(item, index, options = {}) {
+      const isWiki = item.resultType === "wiki";
+      const sourceType = isWiki ? "wiki" : "site";
+      const image = isWiki ? "" : mobileSnapshotImageUrl(listingImage(item));
+      const fallback = isWiki ? "" : mobileSnapshotImageUrl(listingImageFallback(item));
+      const summary = isWiki
+        ? stripHtml(item.summary || item.content || "")
+        : stripHtml(item.summary || item.introduction_content || item.why_this_matters || "");
+      const distance = options.showingAddressResults && Number.isFinite(item?._addressDistance)
+        ? distanceLabel(item)
+        : state.userLocation
+          ? distanceLabel(item, { source: "user" })
+          : "";
+      const map = !isWiki && Array.isArray(item.center)
+        ? { itemType: "site", itemId: item.id, slug: item.slug, coordinates: item.center }
+        : null;
+      const card = normalizeMobileLearningCard({
+        id: item.id,
+        type: sourceType,
+        title: item.title,
+        sourceName: isWiki ? "Knowledgebase" : siteSubtitle(item),
+        imageUrl: image,
+        imageFallbackUrl: fallback,
+        excerpt: summary,
+        target: { type: sourceType, id: item.id, slug: item.slug },
+        map,
+        counts: { comments: learningCardCommentCount(sourceType, item) },
+        capabilities: { open: true, map: Boolean(map), comment: true },
+        permissions: { loggedIn: Boolean(currentContributorProfile()) }
+      }, { excerptLimit: 520 });
+      return {
+        ...card,
+        item,
+        sourceType,
+        index,
+        distance,
+        tags: isWiki ? ["Knowledgebase"] : siteCategoryTags(item)
+      };
+    }
+
+    function nearbyFeedCardHtml(card) {
+      const isWiki = card.sourceType === "wiki";
+      const buttonAttrs = isWiki
+        ? `data-wiki-slug="${escapeHtml(card.item.slug)}"`
+        : `data-slug="${escapeHtml(card.item.slug)}"`;
+      const resultAttrs = `data-result-index="${card.index}" data-result-kind="${isWiki ? "wiki" : "site"}" data-result-slug="${escapeHtml(card.item.slug || "")}"`;
+      const mapAction = card.capabilities.map
+        ? `<button type="button" data-nearby-map="${escapeHtml(card.item.slug)}">Map</button>`
+        : "";
+      const commentCount = Number(card.counts?.comments || 0);
+      return `
+        <article class="site-card learning-card nearby-feed-card${!isWiki && card.item.slug === state.selectedSlug ? " active" : ""}" ${buttonAttrs} ${resultAttrs} data-learning-card-key="${escapeHtml(card.key)}">
+          ${learningCardImageHtml(card, isWiki ? `data-nearby-open-wiki="${escapeHtml(card.item.slug)}"` : `data-nearby-open="${escapeHtml(card.item.slug)}"`, card.item.listing_image_alt || "")}
+          <div class="learning-card-body">
+            <div class="learning-card-meta">
+              <span>${escapeHtml(card.sourceName)}</span>
+              ${card.distance ? `<strong>${escapeHtml(card.distance)}</strong>` : ""}
+            </div>
+            <h2><button type="button" ${isWiki ? `data-nearby-open-wiki="${escapeHtml(card.item.slug)}"` : `data-nearby-open="${escapeHtml(card.item.slug)}"`}>${escapeHtml(card.title)}</button></h2>
+            ${learningCardTagsHtml(card.tags)}
+            ${learningCardExcerptHtml(card)}
+            <div class="learning-card-actions">
+              ${mapAction}
+              <button class="primary" type="button" ${isWiki ? `data-nearby-open-wiki="${escapeHtml(card.item.slug)}"` : `data-nearby-open="${escapeHtml(card.item.slug)}"`}>${isWiki ? "Read" : "Open"}</button>
+              <button type="button" data-learning-discuss="${escapeHtml(card.sourceType)}" data-learning-slug="${escapeHtml(card.item.slug)}">Discuss${commentCount ? ` ${commentCount}` : ""}</button>
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    function installLearningFeedObserver(kind, root, loadMore) {
+      const observerKey = kind === "timeline" ? "timelineFeedObserver" : "nearbyFeedObserver";
+      state[observerKey]?.disconnect?.();
+      state[observerKey] = null;
+      const sentinel = root?.querySelector?.(`[data-learning-feed-sentinel="${kind}"]`);
+      if (!sentinel || typeof IntersectionObserver !== "function") return;
+      state[observerKey] = new IntersectionObserver(entries => {
+        if (entries.some(entry => entry.isIntersecting)) loadMore();
+      }, { root, rootMargin: "180px 0px", threshold: 0.01 });
+      state[observerKey].observe(sentinel);
+    }
+
+    function loadMoreNearbyCards() {
+      const current = Number(state.nearbyRenderLimit || defaultNearbyRenderLimit());
+      if (current >= state.filtered.length) return;
+      state.nearbyRenderLimit = Math.min(state.filtered.length, current + NEARBY_LIST_INCREMENT);
+      renderList({ preserveScroll: true });
+    }
+
+    function renderList(options = {}) {
+      const previousScrollTop = options.preserveScroll ? listEl.scrollTop : 0;
+      state.nearbyFeedObserver?.disconnect?.();
+      state.nearbyFeedObserver = null;
       const count = state.filtered.length;
       const query = searchEl.value.trim();
       const showingSearch = Boolean(query);
       const showingAddressResults = state.filtered.some(site => site?.slug === "address-result");
       const didYouMean = showingSearch && !state.addressSearchMode ? mobileDidYouMeanSearch(query, state.filtered) : null;
       const renderLimit = Math.max(1, Math.min(count, Number(state.nearbyRenderLimit || defaultNearbyRenderLimit())));
-      const visibleSites = state.filtered.slice(0, renderLimit);
+      const visibleCards = state.filtered.slice(0, renderLimit).map((item, index) =>
+        nearbyFeedCardModel(item, index, { showingAddressResults })
+      );
       appEl?.classList.toggle("mobile-search-results", showingSearch);
       if (listTitleTextEl) listTitleTextEl.textContent = showingSearch ? "Search results" : "Nearby sites";
       statusEl.textContent = state.addressSearchMode
@@ -19226,41 +20086,19 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         `;
         return;
       }
-      listEl.innerHTML = `${visibleSites.map((site, index) => {
-        const isWiki = site.resultType === "wiki";
-        const location = isWiki ? "Article" : siteSubtitle(site);
-        const summary = isWiki
-          ? stripHtml(site.summary || site.content || "").slice(0, 96)
-          : stripHtml(site.summary || site.introduction_content || "").slice(0, 96);
-        const buttonAttrs = isWiki
-          ? `data-wiki-slug="${escapeHtml(site.slug)}"`
-          : `data-slug="${escapeHtml(site.slug)}"`;
-        const resultAttrs = `data-result-index="${index}" data-result-kind="${isWiki ? "wiki" : "site"}" data-result-slug="${escapeHtml(site.slug || "")}"`;
-        const siteDistanceText = showingAddressResults && Number.isFinite(site?._addressDistance)
-          ? distanceLabel(site)
-          : state.userLocation
-            ? distanceLabel(site, { source: "user" })
-            : "Map";
-        return `
-          <button class="site-card${!isWiki && site.slug === state.selectedSlug ? " active" : ""}" type="button" ${buttonAttrs} ${resultAttrs}>
-            ${searchResultThumbHtml(site)}
-            <span class="site-copy">
-              <h2>${escapeHtml(site.title)}</h2>
-              <p>${escapeHtml(location)}</p>
-              <p>${escapeHtml(summary)}</p>
-            </span>
-            <span class="distance">${isWiki ? "Article" : site.slug === "address-result" ? "Map" : escapeHtml(siteDistanceText)}</span>
-          </button>
-        `;
-      }).join("")}${count > renderLimit ? `
-        <button class="site-card site-card-more" type="button" data-nearby-show-more>
-          <span class="site-copy">
-            <h2>Show more places</h2>
-            <p>${count - renderLimit} more place${count - renderLimit === 1 ? "" : "s"} in this nearby list.</p>
-          </span>
-          <span class="distance">More</span>
-        </button>
-      ` : ""}`;
+      const hasMore = count > renderLimit;
+      listEl.innerHTML = `
+        ${visibleCards.map(nearbyFeedCardHtml).join("")}
+        ${hasMore ? `
+          <div class="learning-feed-more" data-learning-feed-sentinel="nearby">
+            <button type="button" data-nearby-show-more>Load more places</button>
+            <span>${count - renderLimit} remaining</span>
+          </div>
+        ` : `<p class="learning-feed-end">End of nearby places</p>`}
+      `;
+      if (options.preserveScroll) listEl.scrollTop = previousScrollTop;
+      state.nearbyScrollTop = listEl.scrollTop;
+      installLearningFeedObserver("nearby", listEl, loadMoreNearbyCards);
     }
 
     function timelineSortValue(event) {
@@ -19360,7 +20198,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function closeTimelineSourceReferences(scope = document) {
-      scope.querySelectorAll?.(".timeline-current.show-source, .timeline-item.show-source, .section.has-source.show-source")
+      scope.querySelectorAll?.(".timeline-current.show-source, .timeline-item.show-source, .timeline-feed-card.show-source, .section.has-source.show-source")
         .forEach(item => item.classList.remove("show-source"));
       scope.querySelectorAll?.("[data-timeline-source-info][aria-expanded=\"true\"]")
         .forEach(button => button.setAttribute("aria-expanded", "false"));
@@ -19386,45 +20224,183 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       };
     }
 
-    function renderMobileTimeline() {
-      state.mobileTimelineRendered = true;
+    function mobileTimelineCardImage(event, contentTarget) {
+      if (contentTarget?.type === "site") {
+        return {
+          imageUrl: mobileSnapshotImageUrl(listingImage(contentTarget.record)),
+          imageFallbackUrl: mobileSnapshotImageUrl(listingImageFallback(contentTarget.record))
+        };
+      }
+      if (contentTarget?.type === "calendar_event") {
+        const relatedSite = mobileTimelineExhibitSite(contentTarget.record);
+        return {
+          imageUrl: mobileSnapshotImageUrl(directusAssetUrl(contentTarget.record?.cover_image) || (relatedSite ? listingImage(relatedSite) : "")),
+          imageFallbackUrl: mobileSnapshotImageUrl(relatedSite ? listingImageFallback(relatedSite) : "")
+        };
+      }
+      return {
+        imageUrl: mobileSnapshotImageUrl(directusAssetUrl(event.cover_image || event.image || event.featured_image)),
+        imageFallbackUrl: ""
+      };
+    }
+
+    function mobileCoordinatePair(longitudeValue, latitudeValue) {
+      const longitudeText = String(longitudeValue ?? "").trim();
+      const latitudeText = String(latitudeValue ?? "").trim();
+      if (!longitudeText || !latitudeText) return null;
+      const longitude = Number(longitudeText);
+      const latitude = Number(latitudeText);
+      return Number.isFinite(longitude) && Number.isFinite(latitude) ? [longitude, latitude] : null;
+    }
+
+    function mobileTimelineCardCoordinates(event, contentTarget) {
+      if (contentTarget?.type === "site" && Array.isArray(contentTarget.record?.center)) {
+        return mobileCoordinatePair(contentTarget.record.center[0], contentTarget.record.center[1]);
+      }
+      if (contentTarget?.type === "calendar_event") {
+        if (Array.isArray(contentTarget.record?.center)) {
+          return mobileCoordinatePair(contentTarget.record.center[0], contentTarget.record.center[1]);
+        }
+        const relatedSite = mobileTimelineExhibitSite(contentTarget.record);
+        if (Array.isArray(relatedSite?.center)) {
+          return mobileCoordinatePair(relatedSite.center[0], relatedSite.center[1]);
+        }
+      }
+      return mobileCoordinatePair(event.longitude, event.latitude);
+    }
+
+    function mobileTimelineFeedCardModel(event, index) {
+      const contentTarget = mobileTimelineContentTarget(event);
+      const image = mobileTimelineCardImage(event, contentTarget);
+      const sourceType = ["site", "wiki"].includes(contentTarget?.type) ? contentTarget.type : "";
+      const targetRecord = contentTarget?.record || null;
+      const coordinates = mobileTimelineCardCoordinates(event, contentTarget);
+      const sourceName = cleanPlainText(event.source_title || targetRecord?.title || "Historic record");
+      const sourceNote = timelineSourceText(event);
+      const excerpt = cleanPlainText(
+        timelineDisplayDescription(event) ||
+        event.excerpt ||
+        event.summary ||
+        targetRecord?.summary ||
+        timelineTeaser(event)
+      );
+      const card = normalizeMobileLearningCard({
+        id: event.id,
+        type: "historic-moment",
+        title: timelineTitle(event),
+        sourceName,
+        date: timelineLabel(event),
+        imageUrl: image.imageUrl,
+        imageFallbackUrl: image.imageFallbackUrl,
+        excerpt,
+        target: contentTarget
+          ? { type: contentTarget.type, id: targetRecord?.id, slug: targetRecord?.slug }
+          : null,
+        map: coordinates
+          ? { itemType: contentTarget?.type || "historic-moment", itemId: targetRecord?.id || event.id, slug: targetRecord?.slug || "", coordinates }
+          : null,
+        counts: { comments: sourceType ? learningCardCommentCount(sourceType, targetRecord) : 0 },
+        capabilities: {
+          open: Boolean(contentTarget),
+          map: Boolean(coordinates),
+          comment: Boolean(sourceType)
+        },
+        permissions: { loggedIn: Boolean(currentContributorProfile()) }
+      }, { excerptLimit: 700 });
+      return {
+        ...card,
+        event,
+        index,
+        contentTarget,
+        targetRecord,
+        sourceType,
+        sourceNote,
+        location: timelineLocationLabel(event),
+        tags: [event.period, event.source_section].filter(Boolean)
+      };
+    }
+
+    function mobileTimelineFeedCardHtml(card) {
+      const eventId = String(card.event.id || card.id || card.index);
+      const commentCount = Number(card.counts?.comments || 0);
+      const mediaAction = card.capabilities.open
+        ? `data-timeline-open="${escapeHtml(eventId)}"`
+        : card.capabilities.map
+          ? `data-timeline-map="${escapeHtml(eventId)}"`
+          : "";
+      return `
+        <article class="learning-card timeline-feed-card" data-timeline-id="${escapeHtml(eventId)}" data-learning-card-key="${escapeHtml(card.key)}">
+          ${learningCardImageHtml(card, mediaAction, card.event.image_alt || "")}
+          <div class="learning-card-body">
+            <div class="learning-card-meta">
+              <strong>${escapeHtml(card.date)}</strong>
+              ${card.location ? `<span>${escapeHtml(card.location)}</span>` : ""}
+            </div>
+            <h2><button type="button" data-timeline-open="${escapeHtml(eventId)}">${escapeHtml(card.title)}</button></h2>
+            <div class="timeline-source-row">
+              <span class="source">${escapeHtml(card.sourceName)}</span>
+              ${card.sourceNote ? `<button class="timeline-source-info" type="button" data-timeline-source-info data-source-reference="${escapeHtml(card.sourceNote)}" aria-label="Show source reference" aria-expanded="false" title="${escapeHtml(card.sourceNote)}">i</button>` : ""}
+            </div>
+            ${card.sourceNote ? `<div class="timeline-source-popover"><span>${HTML_UTILS.sourceReferenceTextHtml(card.sourceNote, { escapeHtml })}</span><span class="timeline-source-copy-hint">Source reference.</span></div>` : ""}
+            ${learningCardTagsHtml(card.tags)}
+            ${learningCardExcerptHtml(card)}
+            <div class="learning-card-actions">
+              ${card.capabilities.map ? `<button type="button" data-timeline-map="${escapeHtml(eventId)}">Map</button>` : ""}
+              ${card.capabilities.open ? `<button class="primary" type="button" data-timeline-open="${escapeHtml(eventId)}">Read</button>` : ""}
+              ${card.capabilities.comment ? `<button type="button" data-learning-discuss="${escapeHtml(card.sourceType)}" data-learning-slug="${escapeHtml(card.targetRecord?.slug || "")}">Discuss${commentCount ? ` ${commentCount}` : ""}</button>` : ""}
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    function loadMoreMobileTimeline() {
       const events = visibleMobileTimelineEvents();
+      const current = Number(state.timelineRenderLimit || TIMELINE_FEED_INITIAL_LIMIT);
+      if (current >= events.length) return;
+      state.timelineRenderLimit = Math.min(events.length, current + TIMELINE_FEED_INCREMENT);
+      renderMobileTimeline({ preserveScroll: true });
+    }
+
+    function renderMobileTimeline(options = {}) {
+      if (!mobileTimelineCurrentBtn) return;
+      state.mobileTimelineRendered = true;
+      const previousScrollTop = options.preserveScroll ? mobileTimelineCurrentBtn.scrollTop : state.timelineScrollTop;
+      state.timelineFeedObserver?.disconnect?.();
+      state.timelineFeedObserver = null;
+      const events = visibleMobileTimelineEvents();
+      const signature = events.map(event => String(event.id || "")).join("|");
+      if (signature !== state.timelineFeedSignature) {
+        state.timelineFeedSignature = signature;
+        state.timelineRenderLimit = TIMELINE_FEED_INITIAL_LIMIT;
+      }
       if (!events.length) {
         const loading = state.deferredDataLoading || !state.deferredDataLoaded;
-        mobileTimelineCurrentBtn.innerHTML = loading
-          ? `<span class="date">Timeline</span><strong>Loading historic moments...</strong><span class="source">Timeline records are being prepared</span>`
-          : `<span class="date">Timeline</span><strong>No historic moments available</strong><span class="source">Historic records will appear here when available</span>`;
-        mobileTimelinePrevBtn.disabled = true;
-        mobileTimelineNextBtn.disabled = true;
+        mobileTimelineCurrentBtn.innerHTML = `
+          <div class="learning-feed-empty" role="status">
+            <strong>${loading ? "Loading historic moments..." : "No historic moments available"}</strong>
+            <span>${loading ? "Timeline records are being prepared." : "Historic records will appear here when available."}</span>
+          </div>
+        `;
+        if (mobileTimelineStatusEl) mobileTimelineStatusEl.textContent = loading ? "Loading..." : "No moments";
         return;
       }
-      if (!state.timelineRandomized) {
-        state.activeTimelineIndex = Math.floor(Math.random() * events.length);
-        state.timelineRandomized = true;
-      }
-      state.activeTimelineIndex = Math.max(0, Math.min(events.length - 1, state.activeTimelineIndex || 0));
-      const event = events[state.activeTimelineIndex];
-      const contentTarget = mobileTimelineContentTarget(event);
-      const sourceName = cleanPlainText(event.source_title) || `${state.activeTimelineIndex + 1} of ${events.length}`;
-      const sourceNote = timelineSourceText(event);
-      mobileTimelinePrevBtn.disabled = state.activeTimelineIndex <= 0;
-      mobileTimelineNextBtn.disabled = state.activeTimelineIndex >= events.length - 1;
-      mobileTimelineCurrentBtn.classList.remove("show-source");
+      const renderLimit = Math.max(1, Math.min(events.length, Number(state.timelineRenderLimit || TIMELINE_FEED_INITIAL_LIMIT)));
+      const cards = events.slice(0, renderLimit).map(mobileTimelineFeedCardModel);
+      const hasMore = events.length > renderLimit;
       mobileTimelineCurrentBtn.innerHTML = `
-        <span class="date">${escapeHtml(timelineLabel(event))}</span>
-        <strong>${escapeHtml(timelineTitle(event))}</strong>
-        <span class="timeline-source-row">
-          <span class="source">${escapeHtml(sourceName)}</span>
-          <button class="timeline-source-info" type="button" data-timeline-source-info data-source-reference="${escapeHtml(sourceNote)}" aria-label="Show source reference" aria-expanded="false" title="${escapeHtml(sourceNote)}">i</button>
-        </span>
-        <span class="timeline-source-popover"><span>${HTML_UTILS.sourceReferenceTextHtml(sourceNote, { escapeHtml })}</span><span class="timeline-source-copy-hint">Source reference.</span></span>
-        <p class="teaser">${escapeHtml(timelineTeaser(event))}</p>
-        <span class="timeline-actions">
-          <button type="button" data-timeline-map>Map</button>
-          ${contentTarget ? `<button class="primary" type="button" data-timeline-open>Full article</button>` : ""}
-          <button type="button" data-timeline-hide>Hide</button>
-        </span>
+        ${cards.map(mobileTimelineFeedCardHtml).join("")}
+        ${hasMore ? `
+          <div class="learning-feed-more" data-learning-feed-sentinel="timeline">
+            <button type="button" data-timeline-show-more>Load more moments</button>
+            <span>${events.length - renderLimit} remaining</span>
+          </div>
+        ` : `<p class="learning-feed-end">End of historic timeline</p>`}
       `;
+      if (mobileTimelineStatusEl) mobileTimelineStatusEl.textContent = `Showing ${renderLimit} of ${events.length}`;
+      mobileTimelineCurrentBtn.scrollTop = Math.max(0, previousScrollTop || 0);
+      state.timelineScrollTop = mobileTimelineCurrentBtn.scrollTop;
+      installLearningFeedObserver("timeline", mobileTimelineCurrentBtn, loadMoreMobileTimeline);
     }
 
     function mobileTimelineExhibitSite(exhibit = {}) {
@@ -19445,14 +20421,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function mobileTimelineHasMapTarget(event = {}) {
       const target = mobileTimelineContentTarget(event);
-      if (target?.type === "site" && target.record?.center) return true;
-      if (target?.type === "calendar_event") {
-        if (target.record?.center) return true;
-        if (mobileTimelineExhibitSite(target.record)?.center) return true;
-      }
-      const longitude = String(event.longitude ?? "").trim();
-      const latitude = String(event.latitude ?? "").trim();
-      return Boolean(longitude && latitude && Number.isFinite(Number(longitude)) && Number.isFinite(Number(latitude)));
+      return Boolean(mobileTimelineCardCoordinates(event, target));
     }
 
     function focusMobileTimelineEvent(event) {
@@ -19541,108 +20510,108 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function setMobilePanelMode(mode) {
       const next = mode === "timeline" ? "timeline" : "nearby";
-      appEl?.classList.remove("timeline-hidden", "list-collapsed", "list-expanded", "nearby-hidden");
-      listPanelEl?.classList.remove("collapsed", "expanded");
-      if (collapseListBtn) {
-        collapseListBtn.textContent = "Hide";
-        collapseListBtn.setAttribute("aria-label", "Collapse nearby list");
-      }
-      if (next === "timeline") appEl?.classList.remove("nearby-expanded");
+      if (appEl?.classList.contains("panel-timeline")) state.timelineScrollTop = mobileTimelineCurrentBtn?.scrollTop || 0;
+      if (appEl?.classList.contains("panel-nearby")) state.nearbyScrollTop = listEl?.scrollTop || 0;
       appEl?.classList.toggle("panel-timeline", next === "timeline");
       appEl?.classList.toggle("panel-nearby", next === "nearby");
       mobileTabTimelineBtn?.setAttribute("aria-pressed", String(next === "timeline"));
       mobileTabNearbyBtn?.setAttribute("aria-pressed", String(next === "nearby"));
-      mobileTimelineEl?.setAttribute("aria-hidden", next === "nearby" ? "true" : "false");
-      listPanelEl?.setAttribute("aria-hidden", next === "timeline" ? "true" : "false");
       if (next === "timeline" && !state.mobileTimelineRendered) renderMobileTimeline();
+      mobileTimelineEl?.setAttribute("aria-hidden", String(next !== "timeline" || state.mobilePanelState === "collapsed"));
+      listPanelEl?.setAttribute("aria-hidden", String(next !== "nearby" || state.mobilePanelState === "collapsed"));
+      window.requestAnimationFrame(() => {
+        if (next === "timeline" && mobileTimelineCurrentBtn) mobileTimelineCurrentBtn.scrollTop = state.timelineScrollTop || 0;
+        if (next === "nearby" && listEl) listEl.scrollTop = state.nearbyScrollTop || 0;
+      });
       try {
         localStorage.setItem("nli-mobile-panel-mode", next);
       } catch {}
       window.setTimeout(() => state.map?.resize?.(), 80);
     }
 
-    function setNearbyExpanded(expanded) {
-      if (appEl?.classList.contains("nearby-hidden") && expanded) return;
-      if (!appEl?.classList.contains("panel-nearby")) setMobilePanelMode("nearby");
-      appEl?.style.removeProperty("--map-height");
-      appEl?.classList.toggle("nearby-expanded", !!expanded);
+    function normalizeMobilePanelState(value) {
+      if (value === "collapsed" || value === "maximized") return value;
+      return "normal";
+    }
+
+    function restoreMobileBottomPanelState() {
+      let saved = "normal";
       try {
-        localStorage.setItem("nli-nearby-expanded", expanded ? "1" : "0");
+        saved = localStorage.getItem(MOBILE_PANEL_STATE_KEY) || "";
+        if (!saved) {
+          const legacy = localStorage.getItem("nli-nearby-panel-state");
+          saved = legacy === "hidden" || legacy === "collapsed"
+            ? "collapsed"
+            : legacy === "expanded" || localStorage.getItem("nli-nearby-expanded") === "1"
+              ? "maximized"
+              : "normal";
+        }
       } catch {}
-      window.setTimeout(() => state.map?.resize?.(), 80);
+      setMobileBottomPanelState(saved, { persist: false });
     }
 
-    function nearbyPanelLayoutBounds() {
-      const viewport = window.visualViewport;
-      const viewportHeight = Math.round(viewport?.height || window.innerHeight || document.documentElement.clientHeight || 720);
-      const headerHeight = Math.round(appEl?.querySelector("header")?.getBoundingClientRect().height || 0);
-      const tabsHeight = Math.round(document.querySelector(".mobile-view-tabs")?.getBoundingClientRect().height || 0);
-      const bottomSafe = cssPixelValue("--app-bottom-safe", 0);
-      const available = Math.max(260, viewportHeight - headerHeight - tabsHeight - bottomSafe);
-      const minMapHeight = Math.max(96, Math.min(170, Math.round(viewportHeight * 0.22)));
-      const minPanelHeight = Math.max(112, Math.min(180, Math.round(viewportHeight * 0.24)));
-      const maxPanelHeight = Math.max(minPanelHeight, available - minMapHeight);
-      return { available, minMapHeight, minPanelHeight, maxPanelHeight };
-    }
-
-    function applyNearbyPanelHeight(panelHeight, options = {}) {
-      if (!appEl?.classList.contains("panel-nearby") || appEl.classList.contains("nearby-hidden")) return;
-      const bounds = nearbyPanelLayoutBounds();
-      const nextPanelHeight = Math.max(bounds.minPanelHeight, Math.min(bounds.maxPanelHeight, Number(panelHeight) || bounds.minPanelHeight));
-      const nextMapHeight = Math.max(bounds.minMapHeight, bounds.available - nextPanelHeight);
-      appEl.classList.remove("nearby-expanded", "list-collapsed", "list-expanded");
+    function setMobileBottomPanelState(nextState, options = {}) {
+      const panelState = normalizeMobilePanelState(nextState);
+      const previous = state.mobilePanelState;
+      if (panelState !== "collapsed") state.mobilePanelPreviousOpenState = panelState;
+      else if (previous && previous !== "collapsed") state.mobilePanelPreviousOpenState = previous;
+      state.mobilePanelState = panelState;
+      appEl?.classList.remove(
+        "timeline-hidden",
+        "nearby-hidden",
+        "nearby-expanded",
+        "list-collapsed",
+        "list-expanded",
+        "panel-collapsed",
+        "panel-normal",
+        "panel-maximized"
+      );
       listPanelEl?.classList.remove("collapsed", "expanded");
-      appEl.style.setProperty("--map-height", `${Math.round(nextMapHeight)}px`);
-      if (options.persist) {
+      appEl?.style.removeProperty("--map-height");
+      appEl?.classList.add(`panel-${panelState}`);
+      const mode = appEl?.classList.contains("panel-timeline") ? "timeline" : "nearby";
+      mobileTimelineEl?.setAttribute("aria-hidden", String(mode !== "timeline" || panelState === "collapsed"));
+      listPanelEl?.setAttribute("aria-hidden", String(mode !== "nearby" || panelState === "collapsed"));
+      if (collapseListBtn) {
+        const collapsed = panelState === "collapsed";
+        collapseListBtn.textContent = collapsed ? "Show" : "Hide";
+        collapseListBtn.setAttribute("aria-label", collapsed ? "Show bottom panel" : "Collapse bottom panel");
+        collapseListBtn.setAttribute("aria-expanded", String(!collapsed));
+      }
+      if (mobilePanelSizeBtn) {
+        const maximized = panelState === "maximized";
+        mobilePanelSizeBtn.textContent = maximized ? "Normal" : "Max";
+        mobilePanelSizeBtn.setAttribute("aria-label", maximized ? "Return bottom panel to normal size" : "Maximize bottom panel");
+        mobilePanelSizeBtn.setAttribute("aria-expanded", String(maximized));
+      }
+      if (options.persist !== false) {
         try {
-          localStorage.setItem("nli-nearby-panel-height", String(Math.round(nextPanelHeight)));
-          localStorage.setItem("nli-nearby-panel-state", "default");
-          localStorage.removeItem("nli-nearby-expanded");
+          localStorage.setItem(MOBILE_PANEL_STATE_KEY, panelState);
         } catch {}
       }
-      window.setTimeout(() => state.map?.resize?.(), 60);
+      window.setTimeout(() => state.map?.resize?.(), 90);
+    }
+
+    function setNearbyExpanded(expanded) {
+      setMobileBottomPanelState(expanded ? "maximized" : "normal");
     }
 
     function restoreNearbyPanelHeight() {
-      try {
-        const savedHeight = Number(localStorage.getItem("nli-nearby-panel-height"));
-        if (Number.isFinite(savedHeight) && savedHeight > 0) applyNearbyPanelHeight(savedHeight);
-      } catch {}
+      restoreMobileBottomPanelState();
     }
 
     function setNearbyPanelState(nextState) {
-      const panelState = ["expanded", "collapsed", "hidden"].includes(nextState) ? nextState : "default";
-      const hidden = panelState === "hidden";
-      const collapsed = panelState === "collapsed" || hidden;
-      const expanded = panelState === "expanded";
-      listPanelEl?.classList.toggle("collapsed", collapsed);
-      listPanelEl?.classList.toggle("expanded", expanded);
-      appEl?.classList.toggle("list-collapsed", collapsed);
-      appEl?.classList.toggle("list-expanded", expanded);
-      appEl?.classList.toggle("nearby-hidden", hidden);
-      listPanelEl?.setAttribute("aria-hidden", hidden ? "true" : "false");
-      if (hidden) {
-        appEl?.classList.remove("nearby-expanded");
-        appEl?.style.removeProperty("--map-height");
-      } else if (panelState !== "default") {
-        try {
-          localStorage.removeItem("nli-nearby-panel-height");
-        } catch {}
+      if (nextState === "hidden" || nextState === "collapsed") {
+        setMobileBottomPanelState("collapsed");
+      } else if (nextState === "expanded") {
+        setMobileBottomPanelState("maximized");
+      } else {
+        setMobileBottomPanelState("normal");
       }
-      if (collapseListBtn) {
-        collapseListBtn.textContent = hidden ? "Show" : "Hide";
-        collapseListBtn.setAttribute("aria-label", hidden ? "Show nearby list" : "Hide nearby list");
-      }
-      try {
-        localStorage.setItem("nli-nearby-panel-state", panelState);
-      } catch {}
-      window.setTimeout(() => state.map?.resize?.(), 180);
     }
 
     function collapseNearbyPanelForSiteOpen() {
-      if (appEl?.classList.contains("nearby-hidden")) return;
-      if (appEl?.classList.contains("nearby-expanded")) setNearbyExpanded(false);
-      if (listPanelEl?.classList.contains("expanded")) setNearbyPanelState("default");
+      if (state.mobilePanelState === "maximized") setMobileBottomPanelState("normal");
     }
 
     function openNearbySiteWithMapPreview(slug) {
@@ -19672,75 +20641,49 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.nearbySiteOpenTimer = window.setTimeout(openAfterMapMove, 1350);
     }
 
+    function installMobileBottomPanelDrag() {
+      const handles = [mobileTimelineEl?.querySelector(".mobile-feed-head"), listPanelEl?.querySelector(".list-head")].filter(Boolean);
+      handles.forEach(handle => {
+        let startY = 0;
+        let dragging = false;
+        let didDrag = false;
+        const finish = event => {
+          if (!dragging) return;
+          const delta = (event?.clientY ?? startY) - startY;
+          dragging = false;
+          appEl?.classList.remove("mobile-panel-dragging");
+          if (!didDrag || Math.abs(delta) < 28) return;
+          if (delta < 0) {
+            setMobileBottomPanelState("maximized");
+          } else if (state.mobilePanelState === "maximized") {
+            setMobileBottomPanelState("normal");
+          } else {
+            setMobileBottomPanelState("collapsed");
+          }
+        };
+        handle.addEventListener("pointerdown", event => {
+          if (event.pointerType === "mouse" && event.button !== 0) return;
+          if (event.target.closest("button, a, input, select, textarea, summary")) return;
+          startY = event.clientY;
+          dragging = true;
+          didDrag = false;
+          appEl?.classList.add("mobile-panel-dragging");
+          handle.setPointerCapture?.(event.pointerId);
+        });
+        handle.addEventListener("pointermove", event => {
+          if (!dragging) return;
+          if (Math.abs(event.clientY - startY) > 8) didDrag = true;
+        });
+        handle.addEventListener("pointerup", finish);
+        handle.addEventListener("pointercancel", () => {
+          dragging = false;
+          appEl?.classList.remove("mobile-panel-dragging");
+        });
+      });
+    }
+
     function installNearbyPanelDrag() {
-      const handle = listPanelEl?.querySelector(".list-head");
-      if (!handle) return;
-      let startY = 0;
-      let startPanelHeight = 0;
-      let latestPanelHeight = 0;
-      let dragging = false;
-      let didDrag = false;
-      let activePointerId = null;
-
-      const finishNearbyDrag = (event, cancelled = false) => {
-        if (!dragging) return;
-        dragging = false;
-        activePointerId = null;
-        appEl?.classList.remove("nearby-dragging");
-        if (cancelled || !didDrag) {
-          window.setTimeout(() => state.map?.resize?.(), 80);
-          return;
-        }
-        applyNearbyPanelHeight(latestPanelHeight, { persist: true });
-      };
-
-      handle.addEventListener("pointerdown", event => {
-        if (appEl?.classList.contains("nearby-hidden")) return;
-        if (event.pointerType === "mouse" && event.button !== 0) return;
-        if (event.target.closest("button, a, input, select, textarea, summary")) return;
-        dragging = true;
-        didDrag = false;
-        activePointerId = event.pointerId;
-        startY = event.clientY;
-        startPanelHeight = listPanelEl?.getBoundingClientRect().height || nearbyPanelLayoutBounds().minPanelHeight;
-        if (appEl?.classList.contains("nearby-expanded")) {
-          startPanelHeight = nearbyPanelLayoutBounds().maxPanelHeight;
-          appEl.classList.remove("nearby-expanded");
-        }
-        latestPanelHeight = startPanelHeight;
-        appEl?.classList.add("nearby-dragging");
-        handle.setPointerCapture?.(event.pointerId);
-      });
-
-      handle.addEventListener("pointermove", event => {
-        if (!dragging) return;
-        const deltaY = event.clientY - startY;
-        if (Math.abs(deltaY) > 4) didDrag = true;
-        const bounds = nearbyPanelLayoutBounds();
-        latestPanelHeight = Math.max(bounds.minPanelHeight, Math.min(bounds.maxPanelHeight, startPanelHeight - deltaY));
-        const latestMapHeight = Math.max(bounds.minMapHeight, bounds.available - latestPanelHeight);
-        appEl?.style.setProperty("--map-height", `${Math.round(latestMapHeight)}px`);
-        if (state.map) window.requestAnimationFrame(() => state.map?.resize?.());
-      });
-
-      handle.addEventListener("pointerup", event => finishNearbyDrag(event));
-
-      handle.addEventListener("click", event => {
-        if (appEl?.classList.contains("nearby-hidden")) return;
-        if (!didDrag) {
-          setNearbyExpanded(!appEl?.classList.contains("nearby-expanded"));
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        window.setTimeout(() => { didDrag = false; }, 0);
-      }, true);
-
-      handle.addEventListener("pointercancel", event => finishNearbyDrag(event, true));
-      handle.addEventListener("lostpointercapture", event => {
-        if (activePointerId === event.pointerId) finishNearbyDrag(event, true);
-      });
-      window.addEventListener("blur", () => finishNearbyDrag(null, true));
+      installMobileBottomPanelDrag();
     }
 
     function detailDrawerLimits() {
@@ -19874,15 +20817,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         event.preventDefault();
         cycleDetailDrawerState();
       });
-    }
-
-    function stepMobileTimeline(direction, options = {}) {
-      const events = visibleMobileTimelineEvents();
-      if (!events.length) return;
-      state.activeTimelineIndex = Math.max(0, Math.min(events.length - 1, (state.activeTimelineIndex || 0) + direction));
-      renderMobileTimeline();
-      if (options.focusMap !== false) focusMobileTimelineEvent(events[state.activeTimelineIndex]);
-      if (options.open) openMobileTimelineEvent(events[state.activeTimelineIndex]);
     }
 
     function mobilePolygonOpacity(site) {
@@ -21318,7 +22252,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       openSheet(mapStoryViewSheetEl);
     }
 
-    async function voteMapStory(storyId, value) {
+    async function voteMapStory(storyId, value, options = {}) {
       const story = state.mapStories.find(item => String(item.id) === String(storyId));
       if (!story) return;
       const profile = currentContributorProfile();
@@ -21327,41 +22261,50 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         openSheet(loginSheetEl);
         return;
       }
-      const remoteVote = await refreshRemoteMapStoryVote(story.id, profile.id).catch(() => null);
-      if (remoteVote) {
-        showBanner("You already voted on this story.");
-        openMapStory(story);
+      const actionKey = `story-vote:${story.id}:${profile.id}`;
+      if (!mobileLearningActionGuard.begin(actionKey)) {
+        showBanner("That helpful vote is already being saved.");
         return;
       }
-      if (MAP_STORY_UTILS.hasMemberVote(story, state.mapStoryVotes, currentContributorProfile()?.id)) {
-        showBanner("You already voted on this story.");
-        return;
-      }
-      const vote = {
-        story: Number(story.id),
-        vote: Number(value) > 0 ? 1 : -1,
-        visitor_key: MAP_STORY_UTILS.memberVoteKey(story?.id, profile?.id),
-        created_at: new Date().toISOString()
-      };
       try {
-        const created = await postDirectusItem("mobile_map_story_votes", vote, { requireAuth: true, timeout: 10000 });
-        mergeMapStoryVoteRecords([{ id: created.data?.id || `local-${Date.now()}`, ...vote, member_profile: Number(profile.id), ...(created.data || {}) }]);
-        const counts = MAP_STORY_UTILS.storyVoteCounts(story, state.mapStoryVotes);
-        const patch = {
-          up_votes: counts.up,
-          down_votes: counts.down,
-          vote_score: counts.score,
-          permanent: Boolean(story.permanent || counts.score >= MAP_STORY_PERMANENT_SCORE)
+        const remoteVote = await refreshRemoteMapStoryVote(story.id, profile.id).catch(() => null);
+        if (remoteVote) {
+          showBanner("You already voted on this story.");
+          if (options.reopen !== false) openMapStory(story);
+          return;
+        }
+        if (MAP_STORY_UTILS.hasMemberVote(story, state.mapStoryVotes, currentContributorProfile()?.id)) {
+          showBanner("You already voted on this story.");
+          return;
+        }
+        const vote = {
+          story: Number(story.id),
+          vote: Number(value) > 0 ? 1 : -1,
+          visitor_key: MAP_STORY_UTILS.memberVoteKey(story?.id, profile?.id),
+          created_at: new Date().toISOString()
         };
-        const expiry = MAP_STORY_UTILS.effectiveExpiresAt(story, state.mapStoryVotes, MAP_STORY_RULES);
-        if (expiry) patch.expires_at = expiry.toISOString();
-        if (expiry && expiry.getTime() <= Date.now()) patch.status = "archived";
+        try {
+          const created = await postDirectusItem("mobile_map_story_votes", vote, { requireAuth: true, timeout: 10000 });
+          mergeMapStoryVoteRecords([{ id: created.data?.id || `local-${Date.now()}`, ...vote, member_profile: Number(profile.id), ...(created.data || {}) }]);
+          const counts = MAP_STORY_UTILS.storyVoteCounts(story, state.mapStoryVotes);
+          const patch = {
+            up_votes: counts.up,
+            down_votes: counts.down,
+            vote_score: counts.score,
+            permanent: Boolean(story.permanent || counts.score >= MAP_STORY_PERMANENT_SCORE)
+          };
+          const expiry = MAP_STORY_UTILS.effectiveExpiresAt(story, state.mapStoryVotes, MAP_STORY_RULES);
+          if (expiry) patch.expires_at = expiry.toISOString();
+          if (expiry && expiry.getTime() <= Date.now()) patch.status = "archived";
 
-        Object.assign(story, patch);
-        openMapStory(story);
-        syncMapStoryMarkers();
-      } catch (error) {
-        showBanner(error.message || "Could not save vote.");
+          Object.assign(story, patch);
+          if (options.reopen !== false) openMapStory(story);
+          syncMapStoryMarkers();
+        } catch (error) {
+          showBanner(error.message || "Could not save vote.");
+        }
+      } finally {
+        mobileLearningActionGuard.end(actionKey);
       }
     }
 
@@ -23304,53 +24247,66 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const profile = currentContributorProfile();
       if (!profile?.id || !isApprovedContributor()) {
         showBanner("Log in to mark comments helpful or report a concern.");
-        return;
+        return false;
       }
       const votedComment = state.publicComments.find(item => String(item.id) === id);
       if (currentViewerOwnsComment(votedComment)) {
         showBanner("You cannot vote on your own comment.");
-        return;
+        return false;
       }
       if (commentReaction(id)) {
         showBanner("Your vote for this comment is already saved.");
-        return;
+        return false;
       }
-      await refreshRemoteCommentVote(id, profile.id).catch(() => null);
-      if (commentReaction(id)) {
-        showBanner("Your vote for this comment is already saved.");
-        return;
+      const actionKey = `comment-vote:${id}:${profile.id}`;
+      if (!mobileLearningActionGuard.begin(actionKey)) {
+        showBanner("That comment vote is already being saved.");
+        return false;
       }
-      const vote = COMMENT_UTILS.votePayload(id, value, profile);
-      let created;
       try {
-        created = await postDirectusItem("mobile_comment_votes", vote, { requireAuth: true });
-      } catch (error) {
         await refreshRemoteCommentVote(id, profile.id).catch(() => null);
         if (commentReaction(id)) {
           showBanner("Your vote for this comment is already saved.");
-          return;
+          return false;
         }
-        showBanner("Comment votes are not available yet. Please try again later.");
-        return;
+        const vote = COMMENT_UTILS.votePayload(id, value, profile);
+        let created;
+        try {
+          created = await postDirectusItem("mobile_comment_votes", vote, { requireAuth: true });
+        } catch (error) {
+          await refreshRemoteCommentVote(id, profile.id).catch(() => null);
+          if (commentReaction(id)) {
+            showBanner("Your vote for this comment is already saved.");
+            return false;
+          }
+          showBanner("Comment votes are not available yet. Please try again later.");
+          return false;
+        }
+        const voteRecord = created?.data ? { ...vote, ...created.data } : vote;
+        mergeCommentVoteRecords([voteRecord]);
+        if (voteRecord.vote === "up" && votedComment?.member_profile) {
+          await recordProfilePointEvent(COMMENT_UTILS.helpfulVotePointEvent({
+            commentId: id,
+            profileId: profile.id,
+            comment: votedComment,
+            voteRecord,
+            points: PROFILE_UTILS.POINT_RULES.helpful_vote,
+            relationId
+          })).catch(error => {
+            console.warn("Comment vote saved, but its point will retry later.", error);
+            return null;
+          });
+        }
+        document.querySelectorAll("[data-comment-actions]").forEach(container => {
+          if (String(container.dataset.commentActions) !== id) return;
+          const comment = state.publicComments.find(item => String(item.id) === id);
+          if (comment) container.innerHTML = commentReactionControls(comment);
+        });
+        showBanner(value === "report" ? "Report saved." : "Comment vote saved.");
+        return true;
+      } finally {
+        mobileLearningActionGuard.end(actionKey);
       }
-      const voteRecord = created?.data ? { ...vote, ...created.data } : vote;
-      mergeCommentVoteRecords([voteRecord]);
-      if (voteRecord.vote === "up" && votedComment?.member_profile) {
-        await recordProfilePointEvent(COMMENT_UTILS.helpfulVotePointEvent({
-          commentId: id,
-          profileId: profile.id,
-          comment: votedComment,
-          voteRecord,
-          points: PROFILE_UTILS.POINT_RULES.helpful_vote,
-          relationId
-        }));
-      }
-      document.querySelectorAll("[data-comment-actions]").forEach(container => {
-        if (String(container.dataset.commentActions) !== id) return;
-        const comment = state.publicComments.find(item => String(item.id) === id);
-        if (comment) container.innerHTML = commentReactionControls(comment);
-      });
-      showBanner(value === "report" ? "Report saved." : "Comment vote saved.");
     }
 
     function currentViewerOwnsComment(comment) {
@@ -23536,6 +24492,17 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         showBanner(moderation.message);
         return;
       }
+      const sourceType = section.dataset.discussionType;
+      const sourceSlug = section.dataset.discussionSlug;
+      const sourceTitle = section.dataset.discussionTitle;
+      const parentComment = section.querySelector("[data-parent-comment]")?.value || null;
+      const replyToProfile = section.querySelector("[data-reply-to-profile]")?.value || null;
+      const actionKey = `comment-submit:${profile.id}:${sourceType}:${section.dataset.discussionId || sourceSlug}:${parentComment || "root"}`;
+      if (!mobileLearningActionGuard.begin(actionKey)) {
+        showBanner("That comment is already being posted.");
+        return;
+      }
+      try {
       let image = section._commentPhotoFile || section.querySelector("[data-discussion-image]")?.files?.[0] || null;
       if (image && image !== section._commentPhotoFile) {
         try {
@@ -23571,11 +24538,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         showBanner("The image could not upload, so the comment will post without it.");
       }
       if (submitButton) submitButton.textContent = "Posting...";
-      const sourceType = section.dataset.discussionType;
-      const sourceSlug = section.dataset.discussionSlug;
-      const sourceTitle = section.dataset.discussionTitle;
-      const parentComment = section.querySelector("[data-parent-comment]")?.value || null;
-      const replyToProfile = section.querySelector("[data-reply-to-profile]")?.value || null;
       const quoteContextFields = QUOTE_COMMENT_UTILS.quoteCommentContextFields(text, {
         source_type: sourceType,
         source_title: sourceTitle
@@ -23666,8 +24628,20 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
       showBanner(commentEmailError || "Your comment is now visible. Thank you.");
       await refreshCommentsNow({ rerender: false });
-      if (sourceType === "site" && sourceSlug) openSite(sourceSlug, { focus: false, skipCommentRefresh: true });
+      if (section.dataset.activityInline === "true") {
+        const card = section.closest("[data-mobile-activity-key]");
+        const key = card?.dataset.mobileActivityKey || "";
+        if (key) {
+          state.mobileActivityDrafts.delete(key);
+          state.mobileActivityDiscussionKeys.delete(key);
+        }
+        state.mobileActivityRenderedSignature = "";
+        renderMobileActivitySheet();
+      } else if (sourceType === "site" && sourceSlug) openSite(sourceSlug, { focus: false, skipCommentRefresh: true });
       else if (sourceType === "wiki" && sourceSlug) openWikiArticle(sourceSlug, { focus: false, skipCommentRefresh: true });
+      } finally {
+        mobileLearningActionGuard.end(actionKey);
+      }
     }
 
     async function submitPlantObservation(section) {
@@ -25243,10 +26217,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function currentNearbyPanelState() {
-      if (appEl?.classList.contains("nearby-hidden")) return "hidden";
-      if (listPanelEl?.classList.contains("expanded")) return "expanded";
-      if (listPanelEl?.classList.contains("collapsed")) return "collapsed";
-      return "default";
+      return state.mobilePanelState;
     }
 
     function activeAndroidLifecycleContent() {
@@ -25273,8 +26244,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         savedAt: Date.now(),
         content: activeContent,
         panelMode: appEl?.classList.contains("panel-timeline") ? "timeline" : "nearby",
-        nearbyPanelState: currentNearbyPanelState(),
-        nearbyExpanded: Boolean(appEl?.classList.contains("nearby-expanded")),
+        panelState: currentNearbyPanelState(),
+        timelineScrollTop: mobileTimelineCurrentBtn?.scrollTop || state.timelineScrollTop || 0,
+        nearbyScrollTop: listEl?.scrollTop || state.nearbyScrollTop || 0,
+        timelineRenderLimit: state.timelineRenderLimit,
+        nearbyRenderLimit: state.nearbyRenderLimit,
         detailDrawerState: currentDetailDrawerState(),
         detailScrollTop: detailBodyEl?.scrollTop || 0,
         search: searchEl?.value || "",
@@ -25308,11 +26282,22 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function restoreAndroidLifecyclePanels(snapshot) {
       if (!snapshot) return;
+      state.timelineScrollTop = Number(snapshot.timelineScrollTop || 0);
+      state.nearbyScrollTop = Number(snapshot.nearbyScrollTop || 0);
+      state.timelineRenderLimit = Math.max(TIMELINE_FEED_INITIAL_LIMIT, Number(snapshot.timelineRenderLimit || TIMELINE_FEED_INITIAL_LIMIT));
+      state.nearbyRenderLimit = Math.max(defaultNearbyRenderLimit(), Number(snapshot.nearbyRenderLimit || defaultNearbyRenderLimit()));
+      state.timelineFeedSignature = visibleMobileTimelineEvents().map(event => String(event.id || "")).join("|");
+      renderMobileTimeline();
+      renderList();
       setMobilePanelMode(snapshot.panelMode === "timeline" ? "timeline" : "nearby");
-      if (snapshot.panelMode !== "timeline") {
-        setNearbyPanelState(snapshot.nearbyPanelState || "default");
-        if (snapshot.nearbyExpanded) setNearbyExpanded(true);
-      }
+      const legacyPanelState = snapshot.nearbyExpanded
+        ? "maximized"
+        : snapshot.nearbyPanelState === "hidden"
+          ? "collapsed"
+          : snapshot.nearbyPanelState === "expanded"
+            ? "maximized"
+            : snapshot.nearbyPanelState;
+      setMobileBottomPanelState(snapshot.panelState || legacyPanelState || "normal");
       if (searchEl && snapshot.search) {
         searchEl.value = snapshot.search;
         filterSites();
@@ -25609,6 +26594,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         closeDetail();
         return true;
       }
+      if (state.mobilePanelState === "maximized") {
+        setMobileBottomPanelState("normal");
+        return true;
+      }
+      if (state.mobilePanelState === "normal") {
+        setMobileBottomPanelState("collapsed");
+        return true;
+      }
       return false;
     };
 
@@ -25673,9 +26666,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const rect = mapEl?.getBoundingClientRect();
       if (!rect?.height) return;
       const cardHeight = mobileStartupSpotlightEl.offsetHeight || 104;
-      const bottomInset = isNativeAndroidApp() ? 96 : 58;
-      const top = Math.max(rect.top + 8, rect.bottom - cardHeight - bottomInset);
+      const compactNative = isNativeAndroidApp() && window.innerHeight <= 560;
+      const bottomInset = compactNative ? 8 : (isNativeAndroidApp() ? 96 : 58);
+      const safeTop = rect.top + 8;
+      const safeBottom = rect.bottom - bottomInset;
+      const availableHeight = Math.max(0, safeBottom - safeTop);
+      if (compactNative && availableHeight < 120) {
+        hideMobileStartupSpotlight();
+        return;
+      }
+      const top = Math.max(safeTop, safeBottom - cardHeight);
       mobileStartupSpotlightEl.style.top = `${Math.round(top)}px`;
+      mobileStartupSpotlightEl.style.maxHeight = `${Math.round(availableHeight)}px`;
     }
 
     function hideMobileStartupSpotlight() {
@@ -25683,6 +26685,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileStartupSpotlightEl.hidden = true;
       mobileStartupSpotlightEl.classList.remove("show");
       mobileStartupSpotlightEl.style.removeProperty("top");
+      mobileStartupSpotlightEl.style.removeProperty("max-height");
       state.mobileStartupSpotlightSite = null;
       state.mobileStartupSpotlightExhibit = null;
       state.mobilePromoKind = "";
@@ -25952,7 +26955,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     async function locateUser() {
       setMobilePanelMode("nearby");
       setNearbyPanelState("default");
-      if (appEl?.classList.contains("nearby-expanded")) setNearbyExpanded(false);
       return requestUserLocation({ centerMap: true, silent: false, mapZoom: NEAR_ME_ZOOM });
     }
 
@@ -27404,15 +28406,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           const plantFields = isPlantObservationComment(comment) ? plantObservationFields(comment) : null;
           const sourceType = normalizeCommentSourceType(comment) || "site";
           return {
-            type: sourceType === "support" ? "support" : sourceType === "wiki" ? "wiki" : "site",
+            type: sourceType === "support" ? "support" : "comment",
             sourceType,
+            commentId: String(comment.id || ""),
             slug: comment.source_slug || comment.site_slug || "",
             title: comment.site_title || comment.source_title || "Community note",
+            authorName: profile?.display_name || comment.author_name || "Contributor",
             label: ACTIVITY_UTILS.commentLabel(sourceType, {
               plantObservation: Boolean(plantFields),
               authorName: profile?.display_name || comment.author_name || "Contributor"
             }),
-            preview: plantFields ? activityPreview(`${plantFields.name} - ${plantFields.vocabulary || plantFields.identification}`) : activityPreview(comment.comment),
+            preview: plantFields ? publicCleanText(`${plantFields.name} - ${plantFields.vocabulary || plantFields.identification}`) : publicCleanText(comment.comment),
+            image: directusAssetUrl(comment.comment_image),
             date: comment.created_at
           };
         });
@@ -27424,7 +28429,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           slug: String(suggestion.id || ""),
           title: suggestion.title || "Suggested site",
           label: ACTIVITY_UTILS.suggestionLabel(suggestion),
-          preview: activityPreview(suggestion.review_note || "A contributor sent information for On This Site."),
+          preview: publicCleanText(suggestion.review_note || "A contributor sent information for On This Site."),
           date: ACTIVITY_UTILS.suggestionDate(suggestion)
         }))
         .filter(item => activityDateValue(item.date));
@@ -27445,7 +28450,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             slug: moment.source_slug || "",
             title: moment.title || moment.source_title || "Historic moment",
             label: "Historic moment updated",
-            preview: activityPreview(moment.description || moment.source_excerpt || moment.citation || ""),
+            preview: publicCleanText(moment.description || moment.source_excerpt || moment.citation || ""),
             date
           };
         })
@@ -27463,8 +28468,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         type: "map-story",
         slug: String(story.id || ""),
         title: story.attached_site_title || "Shared from the map",
+        authorName: MAP_STORY_UTILS.authorName(story),
         label: `${story.author_name || "Contributor"} shared a story`,
-        preview: activityPreview(story.caption || ""),
+        preview: publicCleanText(story.caption || ""),
+        image: directusAssetUrl(story.photo),
         date: story.created_at
       }));
       const sites = state.sites
@@ -27476,7 +28483,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             slug: site.slug,
             title: pinned && site.activity_pin_title ? site.activity_pin_title : site.title,
             label: pinned ? ACTIVITY_UTILS.activityPinLabel(site) : ACTIVITY_UTILS.siteActivityLabel(site),
-            preview: activityPreview(pinned && site.activity_pin_preview ? site.activity_pin_preview : site.summary || site.introduction_content || siteSubtitle(site)),
+            preview: publicCleanText(pinned && site.activity_pin_preview ? site.activity_pin_preview : site.summary || site.introduction_content || siteSubtitle(site)),
+            image: listingImage(site),
+            imageFallback: listingImageFallback(site),
             date: ACTIVITY_UTILS.siteEditedDate(site, { extended: true }),
             pinUntil: site.activity_pin_until,
             pinned
@@ -27488,7 +28497,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         slug: article.slug,
         title: article.title || "Knowledgebase article",
         label: ACTIVITY_UTILS.wikiActivityLabel(article),
-        preview: activityPreview(article.summary || article.introduction || article.content),
+        preview: publicCleanText(article.summary || article.introduction || article.content),
+        image: firstContentImage(article.content),
         date: ACTIVITY_UTILS.wikiActivityDate(article),
         activityPriority: ACTIVITY_UTILS.wikiActivityPriority(article)
       })).filter(item => activityDateValue(item.date));
@@ -27501,7 +28511,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           activityId: String(exhibit.id || ""),
           title: pinned && exhibit.activity_pin_title ? exhibit.activity_pin_title : exhibit.title || "Event",
           label: pinned ? ACTIVITY_UTILS.activityPinLabel(exhibit) : CALENDAR_UTILS.eventTypeLabel(exhibit.event_type),
-          preview: activityPreview(pinned && exhibit.activity_pin_preview ? exhibit.activity_pin_preview : exhibit.summary || exhibit.description || exhibit.venue || ""),
+          preview: publicCleanText(pinned && exhibit.activity_pin_preview ? exhibit.activity_pin_preview : exhibit.summary || exhibit.description || exhibit.venue || ""),
+          image: directusAssetUrl(exhibit.cover_image),
           date: ACTIVITY_UTILS.eventActivityDate(exhibit),
           pinUntil: exhibit.activity_pin_until,
           pinned
@@ -27519,6 +28530,116 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         ], { limit: 80 })
         .filter(item => item.slug || item.type === "event")
         .slice(0, 40);
+    }
+
+    function mobileActivitySourceRecord(sourceType, slug, id = "") {
+      if (sourceType === "wiki") {
+        return state.wikiBySlug.get(slug) ||
+          state.wikiArticles.find(article => String(article.id) === String(id) || article.slug === slug) ||
+          null;
+      }
+      if (sourceType === "site") {
+        return state.siteBySlug.get(slug) ||
+          state.sites.find(site => String(site.id) === String(id) || site.slug === slug) ||
+          null;
+      }
+      return null;
+    }
+
+    function mobileActivityCardModel(item, index) {
+      const type = String(item.type || "");
+      const comment = type === "comment"
+        ? state.publicComments.find(record => String(record.id) === String(item.commentId || item.id))
+        : null;
+      const story = type === "map-story"
+        ? state.mapStories.find(record => String(record.id) === String(item.slug || item.id))
+        : null;
+      const moment = type === "historic-moment"
+        ? state.timelineEvents.find(record => String(record.id) === String(item.activityId || item.id))
+        : null;
+      const exhibit = type === "event"
+        ? state.exhibits.find(record => String(record.id) === String(item.activityId) || String(record.slug || record.id) === String(item.slug))
+        : null;
+      const sourceType = type === "comment"
+        ? normalizeCommentSourceType(comment || { source_type: item.sourceType })
+        : item.sourceType || (type === "wiki" ? "wiki" : type === "site" ? "site" : "");
+      let canonicalTarget = mobileActivitySourceRecord(
+        sourceType,
+        item.slug || comment?.source_slug || comment?.site_slug || moment?.source_slug || "",
+        comment?.source_id || moment?.source_id || ""
+      );
+      if (!canonicalTarget && type === "event") {
+        canonicalTarget = mobileActivitySourceRecord("site", exhibit?.related_site_slug || exhibit?.source_slug || item.slug || "");
+      }
+      const canonicalType = canonicalTarget
+        ? (state.wikiBySlug.has(canonicalTarget.slug) || sourceType === "wiki" ? "wiki" : "site")
+        : "";
+      const canonicalSlug = canonicalTarget?.slug || "";
+      const authorName = item.authorName ||
+        (comment ? state.contributorProfiles.find(profile => Number(profile.id) === Number(comment.member_profile))?.display_name || comment.author_name : "") ||
+        (story ? MAP_STORY_UTILS.authorName(story) : "");
+      const commentReactionState = comment ? currentCommentReactionState(comment) : null;
+      const storyCounts = story ? MAP_STORY_UTILS.storyVoteCounts(story, state.mapStoryVotes) : null;
+      const sourceTitle = canonicalTarget?.title || item.title || "On This Site";
+      const cardType = type === "map-story" ? "user-story" : type;
+      const imageUrl = item.image ||
+        (canonicalType === "site" ? listingImage(canonicalTarget) : canonicalType === "wiki" ? firstContentImage(canonicalTarget?.content) : "");
+      const imageFallbackUrl = item.imageFallback || (canonicalType === "site" ? listingImageFallback(canonicalTarget) : "");
+      const supportsVote = Boolean(comment?.id || story?.id);
+      const supportsComment = Boolean(canonicalTarget && ["site", "wiki"].includes(canonicalType));
+      const normalized = normalizeMobileLearningCard({
+        key: `activity:${type}:${item.commentId || item.activityId || item.id || item.slug || index}`,
+        id: item.commentId || item.activityId || item.id || item.slug || index,
+        type: cardType,
+        title: type === "map-story"
+          ? `${authorName || "A community member"} shared a story${story?.attached_site_title ? ` at ${story.attached_site_title}` : ""}`
+          : item.title,
+        sourceName: type === "map-story" ? (story?.attached_site_title || authorName) : sourceTitle,
+        pageName: sourceTitle,
+        authorName,
+        date: item.date,
+        imageUrl,
+        imageFallbackUrl,
+        excerpt: item.preview,
+        target: canonicalTarget ? { type: canonicalType, id: canonicalTarget.id, slug: canonicalSlug } : (
+          story ? { type: "user-story", id: story.id, slug: String(story.id) } :
+            exhibit ? { type: "event", id: exhibit.id, slug: String(exhibit.slug || exhibit.id) } : null
+        ),
+        counts: {
+          upvotes: commentReactionState?.counts?.up || storyCounts?.up || 0,
+          comments: canonicalTarget ? learningCardCommentCount(canonicalType, canonicalTarget) : 0
+        },
+        capabilities: {
+          open: Boolean(canonicalTarget || story || exhibit || type === "suggestion" || type === "support"),
+          vote: supportsVote,
+          comment: supportsComment
+        },
+        permissions: {
+          loggedIn: isApprovedContributor(),
+          canVote: supportsVote && isApprovedContributor(),
+          canComment: supportsComment && isApprovedContributor()
+        },
+        pinned: item.pinned
+      });
+      return {
+        ...normalized,
+        activityType: type,
+        activityLabel: item.label || "Archive activity",
+        activityId: item.activityId || item.id || "",
+        activitySlug: item.slug || "",
+        sourceType,
+        canonicalTarget,
+        canonicalType,
+        canonicalSlug,
+        comment,
+        story,
+        authorName,
+        hasVoted: Boolean(commentReactionState?.active || (story && MAP_STORY_UTILS.hasMemberVote(story, state.mapStoryVotes, currentContributorProfile()?.id)))
+      };
+    }
+
+    function mobileActivityLearningCards(feed = latestMobileActivity()) {
+      return feed.map(mobileActivityCardModel);
     }
 
     function isCurrentAdminReviewer() {
@@ -27668,38 +28789,102 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function mobileActivityFeedSignature(feed = []) {
-      return feed.map(item => [
-        item.type,
-        item.sourceType,
-        item.activityId,
-        item.id,
-        item.slug,
-        item.label,
-        activityDateLabel(item.date),
-        item.title,
-        item.preview,
-        item.pinned ? "1" : "0"
-      ].map(value => String(value || "")).join("\u001f")).join("\u001e");
+      const cards = mobileActivityLearningCards(feed);
+      const cardSignature = typeof LEARNING_CARD_UTILS.learningCardsSignature === "function"
+        ? LEARNING_CARD_UTILS.learningCardsSignature(cards)
+        : cards.map(card => JSON.stringify(card)).join("\u001e");
+      return `${cardSignature}\u001d${cards.map(card => [
+        card.activityLabel,
+        card.activityType,
+        card.activitySlug,
+        card.activityId,
+        card.authorName,
+        card.hasVoted ? "1" : "0"
+      ].join("\u001f")).join("\u001e")}`;
     }
 
-    function renderMobileActivitySheet() {
+    function mobileActivityComposerHtml(card) {
+      if (!card.capabilities.comment || !card.canonicalTarget) return "";
+      const open = state.mobileActivityDiscussionKeys.has(card.key);
+      const draft = state.mobileActivityDrafts.get(card.key) || "";
+      if (!card.permissions.canComment) return "";
+      const profile = currentContributorProfile();
+      const currentName = profile?.display_name || profile?.username || "Contributor";
+      const target = card.canonicalTarget;
+      const parentComment = card.comment?.id || "";
+      const replyProfile = parentComment ? relationId(card.comment?.member_profile) : "";
+      const inputId = `activity-comment-${String(card.key).replace(/[^a-z0-9_-]+/gi, "-")}`;
+      return `
+        <section class="activity-inline-discussion discussion-section" data-activity-inline="true" data-discussion-type="${escapeHtml(card.canonicalType)}" data-discussion-id="${escapeHtml(target.id || "")}" data-discussion-slug="${escapeHtml(target.slug || "")}" data-discussion-title="${escapeHtml(target.title || card.sourceName)}"${open ? "" : " hidden"}>
+          <label for="${escapeHtml(inputId)}">${parentComment ? `Reply to ${escapeHtml(card.authorName || "this contributor")}` : `Comment as ${escapeHtml(currentName)}`}</label>
+          <textarea id="${escapeHtml(inputId)}" data-discussion-input data-mobile-activity-draft="${escapeHtml(card.key)}" placeholder="${parentComment ? "Write a respectful reply..." : "Add context, a memory, correction, or question..."}">${escapeHtml(draft)}</textarea>
+          <input type="hidden" data-parent-comment value="${escapeHtml(parentComment)}">
+          <input type="hidden" data-reply-to-profile value="${escapeHtml(replyProfile)}">
+          <div class="activity-inline-discussion-actions">
+            <button class="action secondary" type="button" data-submit-discussion>Post ${parentComment ? "reply" : "comment"}</button>
+            <button class="learning-card-action" type="button" data-mobile-activity-comment-cancel="${escapeHtml(card.key)}">Cancel</button>
+          </div>
+        </section>
+      `;
+    }
+
+    function mobileActivityCardHtml(card, index) {
+      const openAttributes = `data-mobile-activity-open data-mobile-activity-index="${index}"`;
+      const canOpen = card.capabilities.open;
+      const actionPrompt = isApprovedContributor() ? "" : "Log in to ";
+      const sourceLabel = card.activityType === "map-story"
+        ? (card.story?.attached_site_title || "Community map")
+        : card.sourceName;
+      const commentLabel = card.comment ? "Reply" : "Comment";
+      return `
+        <article class="activity-feed-item activity-learning-card learning-card${card.pinned ? " is-pinned" : ""}" data-learning-card-key="${escapeHtml(card.key)}" data-mobile-activity-key="${escapeHtml(card.key)}" data-mobile-activity-index="${index}" data-mobile-activity-type="${escapeHtml(card.activityType)}" data-mobile-activity-source-type="${escapeHtml(card.sourceType || "")}" data-mobile-activity-id="${escapeHtml(card.activityId || card.id || "")}" data-mobile-activity-slug="${escapeHtml(card.activitySlug || "")}">
+          <header class="learning-card-header">
+            <span>${card.pinned ? mobileActivityPinIconHtml() : ""}${escapeHtml(card.activityLabel)}</span>
+            <time datetime="${escapeHtml(card.date || "")}">${escapeHtml(activityDateLabel(card.date))}</time>
+          </header>
+          <div class="learning-card-layout">
+            ${learningCardImageHtml(card, canOpen ? openAttributes : "", "")}
+            <div class="learning-card-body">
+              ${canOpen ? `<button class="learning-card-title" type="button" ${openAttributes}>${escapeHtml(card.title || "Archive activity")}</button>` : `<h3 class="learning-card-title-static">${escapeHtml(card.title || "Archive activity")}</h3>`}
+              <p class="learning-card-source">Source: <strong>${escapeHtml(sourceLabel || "On This Site")}</strong></p>
+              ${card.authorName ? `<p class="learning-card-author">By ${escapeHtml(card.authorName)}</p>` : ""}
+              ${learningCardExcerptHtml(card)}
+              <p class="learning-card-counts" aria-label="${card.counts.upvotes} helpful votes and ${card.counts.comments} comments">
+                <span>${card.counts.upvotes} helpful</span>
+                <span>${card.counts.comments} comment${card.counts.comments === 1 ? "" : "s"}</span>
+              </p>
+            </div>
+          </div>
+          <div class="learning-card-actions" aria-label="Activity actions">
+            ${card.capabilities.vote ? `<button class="learning-card-action${card.hasVoted ? " is-active" : ""}" type="button" data-mobile-activity-helpful="${escapeHtml(card.key)}"${card.hasVoted ? " disabled" : ""}>${card.permissions.canVote ? "Helpful" : `${actionPrompt}vote`} ${card.counts.upvotes}</button>` : ""}
+            ${card.capabilities.comment ? `<button class="learning-card-action" type="button" data-mobile-activity-comment="${escapeHtml(card.key)}" aria-expanded="${state.mobileActivityDiscussionKeys.has(card.key) ? "true" : "false"}">${card.permissions.canComment ? commentLabel : `${actionPrompt}comment`} ${card.counts.comments}</button>` : ""}
+          </div>
+          ${mobileActivityComposerHtml(card)}
+        </article>
+      `;
+    }
+
+    function renderMobileActivitySheet(options = {}) {
       if (!mobileActivityListEl) return;
       const feed = latestMobileActivity();
-      const signature = mobileActivityFeedSignature(feed);
+      const cards = mobileActivityLearningCards(feed);
+      const renderLimit = Math.max(1, Math.min(cards.length || 1, Number(state.mobileActivityRenderLimit || MOBILE_ACTIVITY_INITIAL_LIMIT)));
+      const signature = `${mobileActivityFeedSignature(feed)}\u001dlimit:${renderLimit}`;
       if (signature === state.mobileActivityRenderedSignature && mobileActivityListEl.hasChildNodes()) return;
       const preservedScrollTop = mobileActivityListEl.scrollTop;
       mobileActivityListEl.innerHTML = `
-        <p class="summary">Most recent public activity from the archive, newest first.</p>
-        ${feed.map((item, index) => `
-          <button class="activity-feed-item${item.pinned ? " is-pinned" : ""}" type="button" data-mobile-activity-index="${index}" data-mobile-activity-type="${escapeHtml(item.type)}" data-mobile-activity-source-type="${escapeHtml(item.sourceType || "")}" data-mobile-activity-id="${escapeHtml(item.activityId || item.id || "")}" data-mobile-activity-slug="${escapeHtml(item.slug || "")}">
-            <span class="detail-meta">${item.pinned ? mobileActivityPinIconHtml() : ""}${escapeHtml(item.label)} - ${escapeHtml(activityDateLabel(item.date))}</span>
-            <strong>${escapeHtml(item.title || "Archive activity")}</strong>
-            ${item.preview ? `<p>${escapeHtml(item.preview)}</p>` : ""}
-          </button>
-        `).join("") || `<p class="summary">No public activity has loaded yet.</p>`}
+        <p class="summary">Recent public activity from the archive. Open a title or image for the full source; use the actions to respond in place.</p>
+        ${cards.slice(0, renderLimit).map(mobileActivityCardHtml).join("") || `<p class="summary">No public activity has loaded yet.</p>`}
+        ${renderLimit < cards.length ? `<button class="learning-card-load-more" type="button" data-mobile-activity-show-more>Load ${Math.min(MOBILE_ACTIVITY_INCREMENT, cards.length - renderLimit)} more updates</button>` : ""}
       `;
       state.mobileActivityRenderedSignature = signature;
       mobileActivityListEl.scrollTop = Math.min(preservedScrollTop, Math.max(0, mobileActivityListEl.scrollHeight - mobileActivityListEl.clientHeight));
+    }
+
+    function loadMoreMobileActivityCards() {
+      const cards = mobileActivityLearningCards();
+      state.mobileActivityRenderLimit = Math.min(cards.length, Number(state.mobileActivityRenderLimit || MOBILE_ACTIVITY_INITIAL_LIMIT) + MOBILE_ACTIVITY_INCREMENT);
+      renderMobileActivitySheet();
     }
 
     function mobileActivityPinIconHtml() {
@@ -28082,8 +29267,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function positionMobileMapActionButtons() {
       const mapRect = document.getElementById("map")?.getBoundingClientRect?.();
       if (!mapRect?.height) return;
-      const insideMapOffset = isNativeAndroidApp() ? 28 : 10;
-      document.documentElement.style.setProperty("--mobile-map-actions-top", `${Math.round(mapRect.top + insideMapOffset)}px`);
+      const nativeApp = isNativeAndroidApp();
+      const compactRow = nativeApp && window.innerHeight <= 560;
+      const controlHeight = 44;
+      const edgeGap = 6;
+      const requiredHeight = compactRow
+        ? controlHeight + edgeGap * 2
+        : controlHeight * 2 + 8 + edgeGap * 2;
+      const desiredTop = mapRect.top + (nativeApp ? 28 : 10);
+      const maximumTop = mapRect.bottom - controlHeight - edgeGap;
+      const safeTop = Math.max(mapRect.top + edgeGap, Math.min(desiredTop, maximumTop));
+      appEl?.classList.toggle("mobile-map-actions-hidden", mapRect.height < requiredHeight);
+      document.documentElement.style.setProperty("--mobile-map-actions-top", `${Math.round(safeTop)}px`);
       document.documentElement.style.setProperty("--mobile-map-prompt-bottom", `${Math.round(Math.max(10, window.innerHeight - mapRect.bottom + 10))}px`);
     }
 
@@ -28685,10 +29880,17 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const bottomSafe = cssPixelValue("--app-bottom-safe", 0);
       const leftSafe = Math.max(pad, cssPixelValue("--app-left-safe", 0));
       const rightSafe = Math.max(pad, cssPixelValue("--app-right-safe", 0));
-      const top = Math.max(viewportTop + pad, Math.min(viewportTop + viewportHeight - 120, Math.round(viewportTop + (summaryRect?.bottom || 74) + 6)));
+      const topBoundary = viewportTop + pad;
+      const bottomBoundary = viewportTop + viewportHeight - bottomSafe - pad;
+      const preferredMinHeight = Math.max(0, options.minHeight || 160);
+      const preferredTop = Math.round(viewportTop + (summaryRect?.bottom || 74) + 6);
+      let top = Math.max(topBoundary, Math.min(bottomBoundary, preferredTop));
+      if (bottomBoundary - top < preferredMinHeight) {
+        top = Math.max(topBoundary, bottomBoundary - preferredMinHeight);
+      }
       const left = viewportLeft + leftSafe;
       const width = Math.max(0, viewportWidth - leftSafe - rightSafe);
-      const maxHeight = Math.max(options.minHeight || 160, viewportTop + viewportHeight - top - bottomSafe - pad);
+      const maxHeight = Math.max(0, bottomBoundary - top);
       panel.style.setProperty(options.topVar, `${top}px`);
       panel.style.setProperty(options.leftVar, `${left}px`);
       panel.style.setProperty(options.widthVar, `${width}px`);
@@ -28724,6 +29926,30 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       });
     }
 
+    function toggleLearningCardExpansion(button) {
+      const key = button?.dataset?.learningSeeMore;
+      if (!key) return false;
+      const expanded = !state.expandedLearningCardKeys.has(key);
+      if (expanded) state.expandedLearningCardKeys.add(key);
+      else state.expandedLearningCardKeys.delete(key);
+      const card = button.closest("[data-learning-card-key]");
+      card?.querySelector("[data-learning-card-excerpt]")?.classList.toggle("is-expanded", expanded);
+      button.textContent = expanded ? "See less" : "See more";
+      button.setAttribute("aria-expanded", String(expanded));
+      return true;
+    }
+
+    async function openMobileLearningDiscussion(sourceType, slug) {
+      if (!["site", "wiki"].includes(sourceType) || !slug) return;
+      await loadDeferredData({ includeCommunity: true });
+      if (sourceType === "wiki") await openWikiArticle(slug);
+      else await openSite(slug);
+      window.setTimeout(() => {
+        const discussion = detailBodyEl?.querySelector(".discussion-section, [data-discussion]");
+        discussion?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+      }, 80);
+    }
+
     function activateMobileListTarget(target, event) {
       const searchSuggestion = target?.closest?.("[data-search-suggestion]");
       if (searchSuggestion) {
@@ -28738,11 +29964,54 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (more) {
         event?.preventDefault?.();
         event?.stopPropagation?.();
-        state.nearbyRenderLimit = Math.min(
-          state.filtered.length,
-          Math.max(Number(state.nearbyRenderLimit || defaultNearbyRenderLimit()), defaultNearbyRenderLimit()) + NEARBY_LIST_INCREMENT
-        );
-        renderList();
+        loadMoreNearbyCards();
+        return true;
+      }
+      const seeMore = target?.closest?.("[data-learning-see-more]");
+      if (seeMore) {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        toggleLearningCardExpansion(seeMore);
+        return true;
+      }
+      const discuss = target?.closest?.("[data-learning-discuss]");
+      if (discuss) {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        openMobileLearningDiscussion(discuss.dataset.learningDiscuss, discuss.dataset.learningSlug);
+        return true;
+      }
+      const mapAction = target?.closest?.("[data-nearby-map]");
+      if (mapAction) {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        const site = state.siteBySlug.get(mapAction.dataset.nearbyMap) || state.sites.find(item => item.slug === mapAction.dataset.nearbyMap);
+        if (site) {
+          if (state.mobilePanelState === "maximized") setMobileBottomPanelState("normal");
+          state.selectedSlug = site.slug;
+          state.selectedSite = site;
+          renderList({ preserveScroll: true });
+          focusSite(site, { duration: 900, preview: true });
+          animateMobileSiteMarker(site);
+        }
+        return true;
+      }
+      const openWiki = target?.closest?.("[data-nearby-open-wiki]");
+      if (openWiki) {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        clearMobileSearchForResultOpen();
+        searchEl?.blur?.();
+        openWikiArticle(openWiki.dataset.nearbyOpenWiki);
+        return true;
+      }
+      const openSiteAction = target?.closest?.("[data-nearby-open]");
+      if (openSiteAction) {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        clearMobileSearchForResultOpen();
+        searchEl?.blur?.();
+        openNearbySiteWithMapPreview(openSiteAction.dataset.nearbyOpen);
         return true;
       }
       const resultCard = target?.closest?.(".site-card[data-slug], .site-card[data-wiki-slug]");
@@ -28862,9 +30131,78 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
     });
     mobileActivityOpenBtn?.addEventListener("click", openMobileActivitySheet);
-    mobileActivityListEl?.addEventListener("click", event => {
-      const item = event.target.closest("[data-mobile-activity-type]");
-      if (item) openMobileActivityTarget(item);
+    mobileActivityListEl?.addEventListener("input", event => {
+      const draft = event.target.closest("[data-mobile-activity-draft]");
+      if (draft?.dataset.mobileActivityDraft) {
+        state.mobileActivityDrafts.set(draft.dataset.mobileActivityDraft, draft.value);
+      }
+    });
+    mobileActivityListEl?.addEventListener("click", async event => {
+      const showMore = event.target.closest("[data-mobile-activity-show-more]");
+      if (showMore) {
+        loadMoreMobileActivityCards();
+        return;
+      }
+      const seeMore = event.target.closest("[data-learning-see-more]");
+      if (seeMore) {
+        toggleLearningCardExpansion(seeMore);
+        return;
+      }
+      const cardElement = event.target.closest("[data-mobile-activity-key]");
+      const key = cardElement?.dataset.mobileActivityKey || "";
+      const card = key ? mobileActivityLearningCards().find(item => item.key === key) : null;
+      const cancelComment = event.target.closest("[data-mobile-activity-comment-cancel]");
+      if (cancelComment && card) {
+        state.mobileActivityDiscussionKeys.delete(card.key);
+        cardElement.querySelector(".activity-inline-discussion")?.setAttribute("hidden", "");
+        cardElement.querySelector("[data-mobile-activity-comment]")?.setAttribute("aria-expanded", "false");
+        return;
+      }
+      const commentButton = event.target.closest("[data-mobile-activity-comment]");
+      if (commentButton && card) {
+        if (!card.permissions.canComment) {
+          showBanner(contributorWritePrompt());
+          openSheet(loginSheetEl);
+          return;
+        }
+        const open = !state.mobileActivityDiscussionKeys.has(card.key);
+        if (open) state.mobileActivityDiscussionKeys.add(card.key);
+        else state.mobileActivityDiscussionKeys.delete(card.key);
+        const composer = cardElement.querySelector(".activity-inline-discussion");
+        if (composer) composer.hidden = !open;
+        commentButton.setAttribute("aria-expanded", String(open));
+        if (open) composer?.querySelector("[data-discussion-input]")?.focus();
+        return;
+      }
+      const helpfulButton = event.target.closest("[data-mobile-activity-helpful]");
+      if (helpfulButton && card) {
+        if (!card.permissions.canVote) {
+          showBanner("Login as an approved contributor to vote.");
+          openSheet(loginSheetEl);
+          return;
+        }
+        helpfulButton.disabled = true;
+        try {
+          if (card.comment?.id) await setCommentReaction(card.comment.id, "up");
+          else if (card.story?.id) await voteMapStory(card.story.id, 1, { reopen: false });
+        } catch (error) {
+          showBanner(error.message || "Could not save the helpful vote.");
+        } finally {
+          state.mobileActivityRenderedSignature = "";
+          renderMobileActivitySheet();
+        }
+        return;
+      }
+      const discussion = event.target.closest(".activity-inline-discussion");
+      if (event.target.closest("[data-submit-discussion]") && discussion) {
+        const draft = discussion.querySelector("[data-discussion-input]");
+        if (draft && card) state.mobileActivityDrafts.set(card.key, draft.value);
+        submitMobileDiscussion(discussion).catch(error => showBanner(error.message || "Could not submit comment."));
+        return;
+      }
+      if (event.target.closest("[data-mobile-activity-open]") && cardElement) {
+        openMobileActivityTarget(cardElement);
+      }
     });
     mobileNotificationsOpenBtn?.addEventListener("click", openMobileNotificationsSheet);
     mobileNotificationsListEl?.addEventListener("click", event => {
@@ -29278,7 +30616,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     };
     [
       collapseListBtn,
-      mobileTimelineToggleBtn,
+      mobilePanelSizeBtn,
       showTimelineBtn,
       mobileTabTimelineBtn,
       mobileTabNearbyBtn,
@@ -29299,12 +30637,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       consumePanelCloseEvent(event);
       closeDetail({ blockMapTap: false });
     });
-    mobileTimelinePrevBtn.addEventListener("click", () => stepMobileTimeline(-1, { focusMap: true }));
-    mobileTimelineNextBtn.addEventListener("click", () => stepMobileTimeline(1, { focusMap: true }));
-    mobileTimelineToggleBtn?.addEventListener("click", event => {
-      blockPanelControlMapTap(event);
-      setMobilePanelMode("nearby");
-    });
     showTimelineBtn?.addEventListener("click", event => {
       blockPanelControlMapTap(event);
       setMobilePanelMode("timeline");
@@ -29318,27 +30650,44 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       setMobilePanelMode("nearby");
     });
     mobileTimelineCurrentBtn.addEventListener("click", event => {
-      const current = visibleMobileTimelineEvents()[state.activeTimelineIndex || 0];
-      if (event.target.closest("[data-timeline-source-info]")) {
+      const sourceButton = event.target.closest("[data-timeline-source-info]");
+      if (sourceButton) {
         event.preventDefault();
         event.stopPropagation();
-        const sourceButton = event.target.closest("[data-timeline-source-info]");
-        toggleTimelineSourceReference(sourceButton, mobileTimelineCurrentBtn);
+        toggleTimelineSourceReference(sourceButton, sourceButton.closest(".timeline-feed-card"));
         return;
       }
+      const seeMore = event.target.closest("[data-learning-see-more]");
+      if (seeMore) {
+        event.preventDefault();
+        toggleLearningCardExpansion(seeMore);
+        return;
+      }
+      const loadMore = event.target.closest("[data-timeline-show-more]");
+      if (loadMore) {
+        event.preventDefault();
+        loadMoreMobileTimeline();
+        return;
+      }
+      const discuss = event.target.closest("[data-learning-discuss]");
+      if (discuss) {
+        event.preventDefault();
+        openMobileLearningDiscussion(discuss.dataset.learningDiscuss, discuss.dataset.learningSlug);
+        return;
+      }
+      const card = event.target.closest("[data-timeline-id]");
+      const current = card
+        ? state.timelineById.get(String(card.dataset.timelineId)) || visibleMobileTimelineEvents().find(item => String(item.id) === String(card.dataset.timelineId))
+        : null;
       if (event.target.closest("[data-timeline-open]")) {
         openMobileTimelineEvent(current);
         return;
       }
       if (event.target.closest("[data-timeline-map]")) {
+        if (state.mobilePanelState === "maximized") setMobileBottomPanelState("normal");
         focusMobileTimelineEvent(current);
         return;
       }
-      if (event.target.closest("[data-timeline-hide]")) {
-        setMobilePanelMode("nearby");
-        return;
-      }
-      openMobileTimelineEvent(current);
     });
     document.addEventListener("scroll", event => {
       if (!event.target?.closest?.(".timeline-source-popover")) closeTimelineSourceReferences(document);
@@ -29349,10 +30698,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }, { capture: true });
     collapseListBtn.addEventListener("click", event => {
       blockPanelControlMapTap(event);
-      const hidden = appEl?.classList.contains("nearby-hidden");
-      setNearbyPanelState(hidden ? "default" : "hidden");
-      if (hidden) window.setTimeout(restoreNearbyPanelHeight, 0);
-      if (appEl?.classList.contains("nearby-expanded")) setNearbyExpanded(false);
+      const next = state.mobilePanelState === "collapsed"
+        ? state.mobilePanelPreviousOpenState || "normal"
+        : "collapsed";
+      setMobileBottomPanelState(next);
+    });
+    mobilePanelSizeBtn?.addEventListener("click", event => {
+      blockPanelControlMapTap(event);
+      setMobileBottomPanelState(state.mobilePanelState === "maximized" ? "normal" : "maximized");
     });
     loginOpenBtn.addEventListener("click", openContributorAccountSheet);
     rewardsOpenBtn.addEventListener("click", async () => {
@@ -29912,10 +31265,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const target = event.target;
       const editing = target && /input|textarea|select/i.test(target.tagName || "");
       scheduleMemberProfileActivityTracking();
-      if (!editing && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
-        event.preventDefault();
-        stepMobileTimeline(event.key === "ArrowRight" ? 1 : -1);
-      }
     });
     ["click", "touchend"].forEach(type => {
       document.addEventListener(type, () => scheduleMemberProfileActivityTracking(), { passive: true });
@@ -29987,18 +31336,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           restoreAndroidLifecyclePanels(androidLifecycleSnapshot);
         } else {
           setMobilePanelMode("nearby");
-          try {
-            const savedNearbyState = isNativeAndroidApp() ? "default" : localStorage.getItem("nli-nearby-panel-state");
-            if (savedNearbyState === "expanded") setNearbyPanelState("expanded");
-            else if (savedNearbyState === "hidden") setNearbyPanelState("hidden");
-            else setNearbyPanelState("default");
-          } catch {}
-          restoreNearbyPanelHeight();
-          try {
-            if (!appEl?.classList.contains("nearby-hidden") && localStorage.getItem("nli-nearby-expanded") === "1") setNearbyExpanded(true);
-          } catch {}
+          restoreMobileBottomPanelState();
         }
-        installNearbyPanelDrag();
+        installMobileBottomPanelDrag();
         installDetailPanelDrag();
         installNativeAndroidSearchWatch();
         if (nativeAndroid) {

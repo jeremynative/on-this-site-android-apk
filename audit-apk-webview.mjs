@@ -199,6 +199,7 @@ const controls = await evaluate(`(() => {
     "#mobile-tab-timeline",
     "#mobile-tab-nearby",
     "#collapse-list",
+    "#mobile-panel-size-toggle",
     "#mobile-map-locate"
   ];
   return selectors.map(selector => {
@@ -432,20 +433,15 @@ for (const [name, selector, expectedTitle, expectedItems] of [
   await wait(120);
 }
 
+await evaluate(`document.querySelector("#mobile-tab-timeline")?.click()`);
+await wait(350);
 const timeline = await evaluate(`(() => {
   const safe = ${JSON.stringify(safeArea.rect)};
   const button = document.querySelector("#mobile-tab-timeline");
-  button?.click();
   const panel = document.querySelector(".mobile-timeline");
-  const navigationControls = [
-    document.querySelector("#mobile-timeline-prev"),
-    document.querySelector("#mobile-timeline-next")
-  ].filter(Boolean).filter(element => {
-    const rect = element.getBoundingClientRect();
-    const style = getComputedStyle(element);
-    return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
-  });
+  const feed = document.querySelector("#mobile-timeline-current");
   const panelRect = panel?.getBoundingClientRect();
+  const feedRect = feed?.getBoundingClientRect();
   const boundsFor = element => {
     const rect = element.getBoundingClientRect();
     const hit = document.elementFromPoint(
@@ -453,11 +449,11 @@ const timeline = await evaluate(`(() => {
       rect.top + (rect.height / 2)
     );
     const hitOk = hit === element || element.contains(hit);
-    const insidePanel = !panelRect || (
-      rect.left >= panelRect.left - 1
-      && rect.top >= panelRect.top - 1
-      && rect.right <= panelRect.right + 1
-      && rect.bottom <= panelRect.bottom + 1
+    const insideFeed = !feedRect || (
+      rect.left >= feedRect.left - 1
+      && rect.top >= feedRect.top - 1
+      && rect.right <= feedRect.right + 1
+      && rect.bottom <= feedRect.bottom + 1
     );
     return {
       id: element.id || element.textContent?.trim() || element.tagName,
@@ -466,34 +462,60 @@ const timeline = await evaluate(`(() => {
       right: Math.round(rect.right),
       bottom: Math.round(rect.bottom),
       hitOk,
-      insidePanel,
+      insideFeed,
       safe: hitOk
-        && insidePanel
+        && insideFeed
         && rect.left >= safe.left - 1
         && rect.top >= safe.top - 1
         && rect.right <= safe.right + 1
         && rect.bottom <= safe.bottom + 1
     };
   };
-  const navigationBounds = navigationControls.map(boundsFor);
-  if (panel) panel.scrollTop = panel.scrollHeight;
-  const actionBounds = [...document.querySelectorAll(".mobile-timeline .timeline-actions button")]
+  const fullyVisibleActionBounds = selector => [...document.querySelectorAll(selector)]
     .filter(element => {
       const rect = element.getBoundingClientRect();
       const style = getComputedStyle(element);
-      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+      return rect.width > 0
+        && rect.height > 0
+        && style.display !== "none"
+        && style.visibility !== "hidden"
+        && (!feedRect || (
+          rect.left >= feedRect.left - 1
+          && rect.top >= feedRect.top - 1
+          && rect.right <= feedRect.right + 1
+          && rect.bottom <= feedRect.bottom + 1
+        ));
     })
     .map(boundsFor);
-  const controlBounds = [...navigationBounds, ...actionBounds];
+  const firstCardAction = document.querySelector(".mobile-timeline .learning-card-actions button");
+  if (feed && firstCardAction && feedRect) {
+    const actionRect = firstCardAction.getBoundingClientRect();
+    feed.scrollTop += actionRect.top - feedRect.top - ((feed.clientHeight - actionRect.height) / 2);
+  }
+  const cardActionBounds = fullyVisibleActionBounds(".mobile-timeline .learning-card-actions button");
+  if (feed) feed.scrollTop = feed.scrollHeight;
+  const loadMoreBounds = fullyVisibleActionBounds(".mobile-timeline [data-timeline-show-more]");
+  const actionBounds = [...cardActionBounds, ...loadMoreBounds];
   const panelStyle = panel ? getComputedStyle(panel) : null;
+  const feedStyle = feed ? getComputedStyle(feed) : null;
   const app = document.querySelector(".app");
   const appRect = app?.getBoundingClientRect();
   const appStyle = app ? getComputedStyle(app) : null;
+  const cards = [...document.querySelectorAll(".mobile-timeline [data-timeline-id]")];
+  const firstCardRect = cards[0]?.getBoundingClientRect();
   const result = {
     buttonMissing: !button,
     visible: panel ? panel.getBoundingClientRect().height > 0 : false,
-    previousExists: Boolean(document.querySelector("#mobile-timeline-prev")),
-    nextExists: Boolean(document.querySelector("#mobile-timeline-next")),
+    role: feed?.getAttribute("role") || "",
+    cardCount: cards.length,
+    legacyControlsAbsent: !document.querySelector("#mobile-timeline-prev, #mobile-timeline-next, .timeline-step"),
+    loadMoreExists: Boolean(document.querySelector("[data-timeline-show-more]")),
+    firstCard: firstCardRect ? {
+      left: Math.round(firstCardRect.left),
+      top: Math.round(firstCardRect.top),
+      right: Math.round(firstCardRect.right),
+      bottom: Math.round(firstCardRect.bottom)
+    } : null,
     panel: panelRect ? {
       bounds: [
         Math.round(panelRect.left),
@@ -506,6 +528,20 @@ const timeline = await evaluate(`(() => {
       scrollTop: panel.scrollTop,
       overflowY: panelStyle?.overflowY || ""
     } : null,
+    feed: feedRect ? {
+      bounds: [
+        Math.round(feedRect.left),
+        Math.round(feedRect.top),
+        Math.round(feedRect.right),
+        Math.round(feedRect.bottom)
+      ],
+      clientHeight: feed.clientHeight,
+      scrollHeight: feed.scrollHeight,
+      scrollTop: feed.scrollTop,
+      overflowY: feedStyle?.overflowY || "",
+      scrollable: feed.scrollHeight > feed.clientHeight + 1,
+      reachedBottom: feed.scrollTop + feed.clientHeight >= feed.scrollHeight - 2
+    } : null,
     app: appRect ? {
       bounds: [
         Math.round(appRect.left),
@@ -516,10 +552,8 @@ const timeline = await evaluate(`(() => {
       gridTemplateRows: appStyle?.gridTemplateRows || "",
       overflowY: appStyle?.overflowY || ""
     } : null,
-    controlBounds,
-    controlsSafe: navigationBounds.length === 2
-      && actionBounds.length > 0
-      && controlBounds.every(item => item.safe)
+    actionBounds,
+    controlsSafe: actionBounds.length > 0 && actionBounds.every(item => item.safe)
   };
   document.querySelector("#mobile-tab-nearby")?.click();
   return result;
@@ -531,7 +565,7 @@ const nearbyHidden = await evaluate(`(() => {
   const collapse = document.querySelector("#collapse-list");
   collapse?.click();
   const app = document.querySelector(".app");
-  const controls = ["#mobile-tab-timeline", "#mobile-tab-nearby", "#collapse-list"].map(selector => {
+  const controls = ["#mobile-tab-timeline", "#mobile-tab-nearby", "#collapse-list", "#mobile-panel-size-toggle"].map(selector => {
     const element = document.querySelector(selector);
     const rect = element?.getBoundingClientRect();
     return {
@@ -545,7 +579,7 @@ const nearbyHidden = await evaluate(`(() => {
         && rect.bottom <= safe.bottom + 1)
     };
   });
-  const hidden = Boolean(app?.classList.contains("nearby-hidden"));
+  const hidden = Boolean(app?.classList.contains("panel-collapsed"));
   collapse?.click();
   return { hidden, controls, controlsSafe: controls.every(item => !item.missing && item.safe) };
 })()`);
@@ -553,6 +587,7 @@ const nearbyHidden = await evaluate(`(() => {
 const promos = await evaluate(`(() => {
   const card = document.querySelector("#mobile-startup-spotlight");
   const cardVisible = Boolean(card && !card.hidden && card.getBoundingClientRect().height > 0);
+  const mapRect = document.querySelector("#map")?.getBoundingClientRect();
   const locate = document.querySelector("#mobile-map-locate");
   const locateRect = locate?.getBoundingClientRect();
   const locateStyle = locate ? getComputedStyle(locate) : null;
@@ -574,7 +609,14 @@ const promos = await evaluate(`(() => {
       hidden: button.hidden,
       visible: rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden",
       width: Math.round(rect.width),
-      height: Math.round(rect.height)
+      height: Math.round(rect.height),
+      inMapBounds: Boolean(
+        mapRect
+        && rect.left >= mapRect.left - 1
+        && rect.top >= mapRect.top - 1
+        && rect.right <= mapRect.right + 1
+        && rect.bottom <= mapRect.bottom + 1
+      )
     };
   });
   return {
@@ -593,7 +635,7 @@ const overlapAudit = await evaluate(`(() => {
     "#mobile-map-locate",
     ".mobile-promo-dock",
     ".mapboxgl-ctrl-logo",
-    ".mobile-tabs",
+    ".mobile-view-tabs",
     ".mapboxgl-ctrl-zoom-in",
     ".mapboxgl-ctrl-zoom-out",
     ".research-question-shell-mobile .research-question-prompt:not([hidden])"
@@ -607,16 +649,24 @@ const overlapAudit = await evaluate(`(() => {
     return { selector, left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
   }).filter(Boolean);
   const overlaps = [];
+  const intentionalOverlaps = [];
   for (let first = 0; first < items.length; first += 1) {
     for (let second = first + 1; second < items.length; second += 1) {
       const a = items[first];
       const b = items[second];
       const width = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
       const height = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
-      if (width * height > 4) overlaps.push([a.selector, b.selector, Math.round(width * height)]);
+      const area = Math.round(width * height);
+      if (area <= 4) continue;
+      const pair = [a.selector, b.selector].sort();
+      if (pair[0] === ".mapboxgl-ctrl-logo" && pair[1] === ".mobile-promo-dock") {
+        intentionalOverlaps.push([a.selector, b.selector, area]);
+        continue;
+      }
+      overlaps.push([a.selector, b.selector, area]);
     }
   }
-  return { items, overlaps };
+  return { items, overlaps, intentionalOverlaps };
 })()`);
 
 socket.close();
@@ -638,11 +688,22 @@ const failures = [
     || (item.name === "more" && (!item.initialControlsSafe || item.initialScrollRange > 1 || item.gridColumnCount < 2
       || (item.adminAvailable && !item.adminExpanded)))),
   ...contentPages.filter(item => !item.open || !item.visible || !item.title.includes(item.expectedTitle) || item.itemCount < 1 || item.loadFailed),
-  ...(timeline.buttonMissing || !timeline.visible || !timeline.previousExists || !timeline.nextExists || !timeline.controlsSafe ? [timeline] : []),
+  ...(timeline.buttonMissing
+    || !timeline.visible
+    || timeline.role !== "feed"
+    || timeline.cardCount < 1
+    || timeline.cardCount > 50
+    || !timeline.legacyControlsAbsent
+    || !timeline.loadMoreExists
+    || !timeline.feed?.scrollable
+    || !timeline.feed?.reachedBottom
+    || !timeline.controlsSafe
+    ? [timeline]
+    : []),
   ...(!nearbyHidden.hidden || !nearbyHidden.controlsSafe ? [nearbyHidden] : []),
   ...promos.buttons.filter(item => promos.cardVisible
     ? item.visible
-    : (!item.hidden && (!item.visible || item.width < 36 || item.height < 36))),
+    : (!item.hidden && (!item.visible || item.width < 36 || item.height < 36 || !item.inMapBounds))),
   ...(promos.cardVisible && promos.locateVisible
     ? [{ selector: "#mobile-map-locate", issue: "visible beneath startup spotlight" }]
     : []),
@@ -662,6 +723,7 @@ console.log(JSON.stringify({
   nearbyHidden,
   promos,
   overlaps: overlapAudit.overlaps,
+  intentionalOverlaps: overlapAudit.intentionalOverlaps,
   pass: failures.length === 0,
   failures,
 }, null, 2));

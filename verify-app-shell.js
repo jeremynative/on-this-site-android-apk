@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260730-mobile-more-menu-r30";
+const expectedBuild = "20260731-learning-feeds-safe-ui-r35";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -9,6 +9,7 @@ const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
 const lightweightOfflineAppPath = "app/src/main/assets/offline-app.html";
 const bundledMobileJsPath = "app/src/main/assets/assets/js/mobile-app.js";
 const bundledMobileCssPath = "app/src/main/assets/assets/css/mobile-app.css";
+const bundledLearningCardUtilsPath = "app/src/main/assets/assets/js/shared-learning-card-utils.js";
 const bundledResearchQuestionCssPath = "app/src/main/assets/assets/css/shared-research-question.css";
 const bundledSharedSiteUtilsPath = "app/src/main/assets/assets/js/shared-site-utils.js";
 const stylesPath = "app/src/main/res/values/styles.xml";
@@ -35,6 +36,7 @@ const bundledApp = bundledAppBytes.toString("utf8");
 const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
 const bundledMobileJs = fs.readFileSync(bundledMobileJsPath, "utf8");
 const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8");
+const bundledLearningCardUtils = fs.readFileSync(bundledLearningCardUtilsPath, "utf8");
 const bundledResearchQuestionCss = fs.readFileSync(bundledResearchQuestionCssPath, "utf8");
 const bundledSharedSiteUtils = fs.readFileSync(bundledSharedSiteUtilsPath, "utf8");
 const styles = fs.readFileSync(stylesPath, "utf8");
@@ -189,7 +191,11 @@ function requireBundledPattern(pattern, message) {
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
 requireText("updateNativeSafeInsets(insets);", "Android shell must capture current window insets instead of padding the WebView.");
 requireText("WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()", "Android shell must include system bars and display cutouts in its safe boundary.");
+requireText("windowInsets.getInsetsIgnoringVisibility(safeTypes)", "Android shell must preserve stable system-bar bounds when bars are temporarily hidden.");
+requireText("windowInsets.getStableInsetBottom()", "Legacy Android devices must preserve the stable bottom navigation inset.");
 requireText("window.dispatchEvent(new Event('nli-native-insets-changed'))", "Android shell must notify the web layout when native insets change.");
+requireText("public void onConfigurationChanged(Configuration newConfig)", "Android shell must refresh safe insets after a device rotation.");
+requireText("webView.post(webView::requestApplyInsets);", "Android shell must request current insets after resume and configuration changes.");
 if (source.includes("view.setPadding(0, insets.getSystemWindowInsetTop()")) {
   throw new Error("Android shell must not apply ineffective system-bar padding to the full-height WebView.");
 }
@@ -293,6 +299,21 @@ if (!bundledMobileJs.includes("function setAllMobileLayerVisibility(visible)")
     || !bundledMobileJs.includes("Date.now() < mobileLayerBulkReadyAt")
     || !bundledMobileJs.includes("mobileLayerBulkReadyAt = Date.now() + 400;")) {
   throw new Error("Bundled Android bulk labels must exclude biography paths and reject the Labels-menu opening touch.");
+}
+if (!bundledLearningCardUtils.includes("function normalizeLearningCard(input = {}, options = {})")
+    || !bundledLearningCardUtils.includes("function createActionGuard()")
+    || !bundledMobileJs.includes("function mobileActivityCardModel(item, index)")
+    || !bundledMobileJs.includes("function mobileTimelineFeedCardModel(event, index)")
+    || !bundledMobileJs.includes("function nearbyFeedCardModel(item, index, options = {})")) {
+  throw new Error("Bundled Android fallback must include the shared Activity, Timeline, and Nearby learning-card model.");
+}
+if (!bundledApp.includes('id="mobile-panel-size-toggle"')
+    || !bundledLiveApp.includes('id="mobile-panel-size-toggle"')
+    || !bundledMobileCss.includes(".app.panel-maximized")
+    || !bundledMobileCss.includes("padding-bottom: var(--app-bottom-safe);")
+    || !bundledMobileJs.includes('if (state.mobilePanelState === "maximized")')
+    || !bundledMobileJs.includes('setMobileBottomPanelState("normal");')) {
+  throw new Error("Bundled Android panel controls must retain a safe map strip and support maximized-to-normal Back navigation.");
 }
 requireText(expectedUrl, `Android shell must load ${expectedUrl}.`);
 requireText("?app-version=", "Android shell must pass the app build id to the mobile web app.");
@@ -548,15 +569,18 @@ requireText("window.onAndroidSearchResultTapStart", "Android shell must call the
 requireText("MotionEvent.ACTION_UP", "Android shell must only forward completed taps.");
 requireText("action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP", "Android shell must keep map drag move frames out of the tap bridge.");
 requireText("boolean isArchiveApp = \"nativelongisland.com\".equalsIgnoreCase(host);", "Android shell must keep nativelongisland.com navigation inside the APK WebView.");
-requireText("applyApkTimelineTrayFix", "Android shell must apply the APK timeline tray override after the live app loads.");
-requireText("android-apk-timeline-tray-fix", "Android shell must inject the APK timeline tray CSS override.");
-requireText("Full article", "Android shell must shorten the timeline action label inside the APK WebView.");
-requireText("grid-template-rows:auto auto auto minmax(0,1fr) auto!important", "Android timeline tray must reserve an explicit final row for its actions.");
-requireText("height:100%!important;min-height:0!important;overflow:hidden!important", "Android timeline mode must keep the action row inside the visible tray.");
-requireText("@media (orientation:landscape) and (max-height:560px)", "Android timeline tray must include a short-landscape layout.");
-requireText("grid-template-columns:minmax(0,1fr) minmax(168px,auto)!important", "Android short-landscape timeline must place its title and actions side by side.");
-requireText("grid-column:2!important;grid-row:1!important;min-width:0!important", "Android short-landscape timeline actions must stay in the visible row.");
-requireText("min-width:0!important;min-height:40px!important", "Android timeline action controls must retain the audited touch height.");
+if (source.includes("applyApkTimelineTrayFix")
+    || source.includes("android-apk-timeline-tray-fix")
+    || source.includes("android-apk-timeline-fix")) {
+  throw new Error("Android shell must not inject the obsolete single-card Timeline tray override into the vertical feed.");
+}
+const backHandlerMatch = source.match(/public void onBackPressed\(\) \{[\s\S]*?\n    \}/);
+if (!backHandlerMatch
+    || !backHandlerMatch[0].includes("window.onAndroidBackPressed && window.onAndroidBackPressed()")
+    || !backHandlerMatch[0].includes('if ("true".equals(handled)) return;')
+    || !backHandlerMatch[0].includes("if (webView.canGoBack())")) {
+  throw new Error("Android Back must let the web panel reduce its state before navigating WebView history or leaving the app.");
+}
 
 if (!releaseWorkflow.includes("GITHUB_RUN_NUMBER") || !releaseWorkflow.includes("latest_apk") || !releaseWorkflow.includes("version_code=\"$run_number\"")) {
   throw new Error("Android release workflow must keep versionCode monotonic across testing and tagged releases.");
@@ -584,6 +608,21 @@ for (const [label, bytes, html] of [
   if (!html.includes("__NLI_MAPBOX_TOKEN__")) {
     throw new Error(`Bundled Android ${label} is missing the Mapbox token placeholder.`);
   }
+}
+const expectedPlaceholderCounts = new Map([
+  ["embedded fallback", [bundledApp, 2]],
+  ["live fallback", [bundledLiveApp, 1]],
+  ["mobile JavaScript", [bundledMobileJs, 1]],
+]);
+for (const [label, [source, expectedCount]] of expectedPlaceholderCounts) {
+  const count = (source.match(/__NLI_MAPBOX_TOKEN__/g) || []).length;
+  if (count !== expectedCount) {
+    throw new Error(`Bundled Android ${label} must contain exactly ${expectedCount} Mapbox placeholder${expectedCount === 1 ? "" : "s"}, found ${count}.`);
+  }
+}
+if (!bundledApp.includes("ortnamn_och_namnvard_nr6_engelsk\\u002epdf")
+    || bundledApp.includes("engel__NLI_MAPBOX_TOKEN__")) {
+  throw new Error("Bundled Android citation URLs must preserve the authoritative engelsk.pdf source instead of treating sk. as a Mapbox token.");
 }
 if ((bundledMobileJs.match(/(?:^|[^A-Za-z0-9_-])[ps]k\.[A-Za-z0-9._-]+/g) || []).length) {
   throw new Error("Bundled Android JavaScript must keep Mapbox tokens as build-time placeholders.");
@@ -629,14 +668,16 @@ for (const [label, html] of [
   if (!/\.mobile-biography-path-map-number\s*\{[\s\S]*?font-size:\s*9\.5px;[\s\S]*?font-weight:\s*650;/.test(html) || !/\.mobile-biography-path-map-number-label\s*\{[\s\S]*?font-size:\s*9\.5px;[\s\S]*?font-weight:\s*650;/.test(html)) {
     throw new Error(`Bundled Android ${label} must keep fallback biography labels visually lighter.`);
   }
-  if (!html.includes('resultType: "wiki"') || !html.includes('data-wiki-slug="${escapeHtml(site.slug)}"')) {
+  if (!html.includes('resultType: "wiki"')
+      || (!html.includes('data-wiki-slug="${escapeHtml(site.slug)}"')
+        && !html.includes('data-wiki-slug="${escapeHtml(card.item.slug)}"'))) {
     throw new Error(`Bundled Android ${label} is missing mobile wiki article search results.`);
   }
   if (!/const\s+labels\s*=\s*new Set\(\);[\s\S]*?labels\.has\(labelKey\)/.test(html)) {
     throw new Error(`Bundled Android ${label} is missing visible site tag label dedupe.`);
   }
 }
-if (bundledLiveAppBytes.length > 1500000 || /window\.NLI_MOBILE_DATA\s*=/.test(bundledLiveApp)) {
+if (bundledLiveAppBytes.length > 1560000 || /window\.NLI_MOBILE_DATA\s*=/.test(bundledLiveApp)) {
   throw new Error("Bundled Android live fallback should stay lightweight and Directus-backed, not embed the full data payload.");
 }
 
@@ -704,7 +745,7 @@ requireBundledText('function nearestAndroidSearchResultCardFromRawPoint(viewX, v
 requireBundledText('return rawY > rawHeight * 0.32 && rawY < rawHeight * 0.66 ? cards[0] : null;', "Bundled Android raw search fallback must stay inside the visible result band.");
 requireBundledText('function cacheAndroidSearchResultCard(card)', "Bundled Android app must let the real touched search card override coordinate fallback.");
 requireBundledText('function mobileListCardTarget(card)', "Bundled Android app must recover a result target from the visible card title when a live card has an empty slug.");
-requireBundledText('data-result-index="${index}" data-result-kind="${isWiki ? "wiki" : "site"}" data-result-slug="${escapeHtml(site.slug || "")}"', "Bundled Android app must render stable result target metadata on search cards.");
+requireBundledText('data-result-index="${card.index}" data-result-kind="${isWiki ? "wiki" : "site"}" data-result-slug="${escapeHtml(card.item.slug || "")}"', "Bundled Android app must render stable result target metadata on search cards.");
 requireBundledText('function mobileListCardTargetFromData(card)', "Bundled Android app must use rendered result metadata before coordinate or title fallbacks.");
 requireBundledText('function mobileListCardTargetByIndex(card)', "Bundled Android app must recover a result target from the visible card index.");
 requireBundledText('const dataItem = state.filtered[dataIndex];', "Bundled Android app must map data-result-index back to the filtered result list.");
@@ -892,8 +933,7 @@ requireBundledPattern(/const\s+startupLandMask\s*=\s*isOfflineTextMode\(\)\s*\?\
 requireBundledText('enterkeyhint="search"', "Bundled Android app must request the Android keyboard search action.");
 requireBundledText('autocomplete="off"', "Bundled Android app must keep the mobile search input from fighting app results.");
 requireBundledText('function openMobileSearchResultsPage()', "Bundled Android app must include an explicit mobile search results page.");
-requireBundledText('setNearbyPanelState("expanded")', "Bundled Android app must expand the nearby tray for submitted search results.");
-requireBundledText('setNearbyExpanded(true)', "Bundled Android app must make submitted search results use the full results view.");
+requireBundledText('setMobileBottomPanelState("maximized")', "Bundled Android app must expand the nearby tray for submitted search results.");
 requireBundledText('searchEl.addEventListener("keydown", handleMobileSearchKeydown);', "Bundled Android app must open search results on Enter.");
 requireBundledText('searchEl.addEventListener("search", handleMobileSearchCommand);', "Bundled Android app must open search results from the Android search keyboard action.");
 requireBundledText('listTitleTextEl.textContent = showingSearch ? "Search results" : "Nearby sites";', "Bundled Android app must label the results view clearly.");
@@ -929,7 +969,8 @@ requireBundledText('const SITE_CHECKIN_RADIUS_MILES = 0.25;', "Bundled Android a
 requireBundledText('const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;', "Bundled Android app must alert within half a mile of a site.");
 requireBundledText('window.AndroidApp.showNotification', "Bundled Android app must use the native notification bridge.");
 requireBundledText('localStorage.getItem("nli-proximity-alert-date") === todayKey', "Bundled Android app must limit nearby site notifications to once per day.");
-requireBundledText('const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 18;', "Bundled Android app must keep the first nearby tray render small.");
+requireBundledText('const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 8;', "Bundled Android app must keep the first nearby tray render small.");
+requireBundledText('const NEARBY_LIST_ANDROID_DEFAULT_LIMIT = 12;', "Bundled Android app must keep the normal nearby tray render bounded.");
 requireBundledText('data-nearby-show-more', "Bundled Android app must let users reveal more nearby places after the startup cap.");
 requireBundledText('const nativeAndroid = isNativeAndroidApp();', "Bundled Android app must cache native Android startup state.");
 requireBundledText('function waitForMapbox(timeout = 12000)', "Bundled Android app must give Mapbox enough time to load inside WebView before falling back.");

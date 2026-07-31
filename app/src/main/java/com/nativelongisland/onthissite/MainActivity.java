@@ -12,6 +12,7 @@ import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.Network;
@@ -71,7 +72,7 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260730-mobile-more-menu-r30";
+    static final String APP_VERSION = "20260731-learning-feeds-safe-ui-r35";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -422,18 +423,18 @@ public class MainActivity extends Activity {
         int right;
         int bottom;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            android.graphics.Insets insets = windowInsets.getInsets(
-                WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()
-            );
-            left = insets.left;
-            top = insets.top;
-            right = insets.right;
-            bottom = insets.bottom;
+            int safeTypes = WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout();
+            android.graphics.Insets visibleInsets = windowInsets.getInsets(safeTypes);
+            android.graphics.Insets stableInsets = windowInsets.getInsetsIgnoringVisibility(safeTypes);
+            left = Math.max(visibleInsets.left, stableInsets.left);
+            top = Math.max(visibleInsets.top, stableInsets.top);
+            right = Math.max(visibleInsets.right, stableInsets.right);
+            bottom = Math.max(visibleInsets.bottom, stableInsets.bottom);
         } else {
-            left = windowInsets.getSystemWindowInsetLeft();
-            top = windowInsets.getSystemWindowInsetTop();
-            right = windowInsets.getSystemWindowInsetRight();
-            bottom = windowInsets.getSystemWindowInsetBottom();
+            left = Math.max(windowInsets.getSystemWindowInsetLeft(), windowInsets.getStableInsetLeft());
+            top = Math.max(windowInsets.getSystemWindowInsetTop(), windowInsets.getStableInsetTop());
+            right = Math.max(windowInsets.getSystemWindowInsetRight(), windowInsets.getStableInsetRight());
+            bottom = Math.max(windowInsets.getSystemWindowInsetBottom(), windowInsets.getStableInsetBottom());
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && windowInsets.getDisplayCutout() != null) {
                 android.view.DisplayCutout cutout = windowInsets.getDisplayCutout();
                 left = Math.max(left, cutout.getSafeInsetLeft());
@@ -640,7 +641,6 @@ public class MainActivity extends Activity {
                 if (BuildConfig.DEBUG) logLoadedAppState();
                 if (value != null && value.contains("ready")) {
                     appShellLoaded = true;
-                    applyApkTimelineTrayFix();
                     dispatchPendingPlantPhoto();
                     hideLoadingCover();
                     if (loadingBundledFallback
@@ -1187,102 +1187,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void applyApkTimelineTrayFix() {
-        if (webView == null) return;
-        String css =
-            "html.android-apk-timeline-fix .mobile-timeline{"
-                + "grid-template-columns:40px minmax(0,1fr) 40px!important;"
-                + "gap:6px!important;align-items:stretch!important;"
-                + "padding:7px 10px calc(7px + min(env(safe-area-inset-bottom),8px))!important;"
-                + "min-height:0!important;max-height:clamp(92px,17dvh,132px)!important;"
-                + "overflow:visible!important;box-sizing:border-box!important;"
-            + "}"
-            + "html.android-apk-timeline-fix .timeline-step{"
-                + "align-self:stretch!important;width:40px!important;min-height:40px!important;"
-                + "max-height:76px!important;font-size:20px!important;"
-            + "}"
-            + "html.android-apk-timeline-fix .timeline-current{"
-                + "position:relative!important;grid-template-rows:auto auto auto minmax(0,1fr) auto!important;"
-                + "gap:3px!important;min-height:0!important;max-height:100%!important;"
-                + "overflow:hidden!important;padding:7px 8px!important;box-sizing:border-box!important;"
-            + "}"
-            + "html.android-apk-timeline-fix .timeline-current strong{"
-                + "display:-webkit-box!important;white-space:normal!important;line-height:1.15!important;"
-                + "-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;overflow:hidden!important;"
-            + "}"
-            + "html.android-apk-timeline-fix .timeline-source-row{min-height:22px!important;}"
-            + "html.android-apk-timeline-fix .timeline-source-row .source{display:none!important;}"
-            + "html.android-apk-timeline-fix .timeline-source-popover{"
-                + "right:8px!important;bottom:34px!important;z-index:6!important;"
-                + "width:min(260px,calc(100vw - 40px))!important;max-width:calc(100% - 16px)!important;"
-            + "}"
-            + "html.android-apk-timeline-fix .timeline-current .teaser{display:none!important;}"
-            + "html.android-apk-timeline-fix .timeline-actions{"
-                + "display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;"
-                + "gap:5px!important;"
-            + "}"
-            + "html.android-apk-timeline-fix .timeline-actions button{"
-                + "min-width:0!important;min-height:40px!important;padding:0 8px!important;"
-            + "}"
-            + "html.android-apk-timeline-fix .timeline-actions [data-timeline-hide],"
-            + "html.android-apk-timeline-fix .timeline-toggle{display:none!important;}"
-            + "html.android-apk-timeline-fix.panel-timeline .mobile-timeline,"
-            + "html.android-apk-timeline-fix .app.panel-timeline .mobile-timeline{"
-                + "grid-template-columns:40px minmax(0,1fr) 40px!important;max-height:none!important;"
-                + "height:100%!important;min-height:0!important;overflow:hidden!important;"
-            + "}"
-            + "html.android-apk-timeline-fix.panel-timeline .timeline-current,"
-            + "html.android-apk-timeline-fix .app.panel-timeline .timeline-current{"
-                + "height:100%!important;min-height:0!important;overflow:hidden!important;"
-            + "}"
-            + "html.android-apk-timeline-fix.panel-timeline .timeline-source-row .source,"
-            + "html.android-apk-timeline-fix .app.panel-timeline .timeline-source-row .source{display:block!important;}"
-            + "html.android-apk-timeline-fix.panel-timeline .timeline-current .teaser,"
-            + "html.android-apk-timeline-fix .app.panel-timeline .timeline-current .teaser{"
-                + "display:-webkit-box!important;-webkit-line-clamp:3!important;"
-            + "}"
-            + "@media (orientation:landscape) and (max-height:560px){"
-                + "html.android-apk-timeline-fix .app.panel-timeline .mobile-timeline{"
-                    + "gap:6px!important;align-items:stretch!important;padding:4px 10px!important;"
-                + "}"
-                + "html.android-apk-timeline-fix .app.panel-timeline .timeline-current{"
-                    + "display:grid!important;"
-                    + "grid-template-columns:minmax(0,1fr) minmax(168px,auto)!important;"
-                    + "grid-template-rows:minmax(0,1fr)!important;"
-                    + "align-items:center!important;gap:6px!important;"
-                    + "padding:4px 6px!important;"
-                + "}"
-                + "html.android-apk-timeline-fix .app.panel-timeline .timeline-current .date,"
-                + "html.android-apk-timeline-fix .app.panel-timeline .timeline-source-row,"
-                + "html.android-apk-timeline-fix .app.panel-timeline .timeline-source-popover,"
-                + "html.android-apk-timeline-fix .app.panel-timeline .timeline-current .teaser{"
-                    + "display:none!important;"
-                + "}"
-                + "html.android-apk-timeline-fix .app.panel-timeline .timeline-current strong{"
-                    + "grid-column:1!important;grid-row:1!important;margin:0!important;"
-                + "}"
-                + "html.android-apk-timeline-fix .app.panel-timeline .timeline-actions{"
-                    + "grid-column:2!important;grid-row:1!important;min-width:0!important;"
-                + "}"
-            + "}";
-        String script = "(function(){try{"
-            + "document.documentElement.classList.add('android-apk-timeline-fix');"
-            + "var style=document.getElementById('android-apk-timeline-tray-fix');"
-            + "if(!style){style=document.createElement('style');style.id='android-apk-timeline-tray-fix';document.head.appendChild(style);}"
-            + "style.textContent=" + jsString(css) + ";"
-            + "function shortenTimelineButtons(){document.querySelectorAll('[data-timeline-open]').forEach(function(button){"
-                + "if(button.textContent&&button.textContent.trim()==='Full article')button.textContent='Read';"
-            + "});}"
-            + "shortenTimelineButtons();"
-            + "if(!window.__androidApkTimelineTrayObserver&&document.body){"
-                + "window.__androidApkTimelineTrayObserver=new MutationObserver(shortenTimelineButtons);"
-                + "window.__androidApkTimelineTrayObserver.observe(document.body,{childList:true,subtree:true});"
-            + "}"
-            + "return true;"
-            + "}catch(error){return false;}})();";
-        webView.evaluateJavascript(script, null);
-    }
-
     void suppressResumeRefreshAfterPermissionPrompt() {
         Log.d(LOG_TAG, "Permission prompt resume will not reload the app shell.");
     }
@@ -1311,7 +1215,16 @@ public class MainActivity extends Activity {
         super.onResume();
         if (webView != null) {
             webView.onResume();
+            webView.post(webView::requestApplyInsets);
             scheduleNetworkStateEvaluation("resume");
+        }
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (webView != null) {
+            webView.post(webView::requestApplyInsets);
         }
     }
 
