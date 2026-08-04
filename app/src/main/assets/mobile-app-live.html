@@ -16484,6 +16484,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       storyCanvasLoop: null,
       storyRecordingStartedAt: 0,
       storyDiscardRecording: false,
+      pendingCommentPhotoDiscussion: null,
       suggestionMarker: null,
       mediaMap: window.NLI_MOBILE_MEDIA_MAP || {},
       blogPosts: [],
@@ -23192,10 +23193,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       MEDIA_UTILS.setFilePreview(section, preview, file, { key: "_commentPhotoPreviewUrl" });
     }
 
-    async function prepareSelectedCommentPhoto(section) {
+    async function prepareCommentPhotoFile(section, rawFile) {
       if (!section) return null;
-      const input = section.querySelector("[data-discussion-image]");
-      const rawFile = input?.files?.[0] || null;
       section._commentPhotoFile = null;
       setCommentPhotoPreview(section, null);
       if (!rawFile) {
@@ -23217,6 +23216,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       setCommentPhotoPreview(section, prepared);
       setCommentPhotoStatus(section, `Photo ready (${MEDIA_UTILS.formatImageSize(prepared.size)}${changedSize}).`);
       return prepared;
+    }
+
+    async function prepareSelectedCommentPhoto(section) {
+      const input = section?.querySelector("[data-discussion-image]");
+      return prepareCommentPhotoFile(section, input?.files?.[0] || null);
     }
 
     function plantIdentificationEndpoint() {
@@ -23691,6 +23695,25 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
       const file = fileFromBase64(base64, mimeType, filename);
       processPlantPhotoFile(section, file).catch(error => showBanner(error.message || "Could not analyze that plant photo."));
+      return true;
+    };
+
+    window.onAndroidCommentPhoto = (ok, message, base64, mimeType, filename) => {
+      const section = state.pendingCommentPhotoDiscussion || document.querySelector(".discussion-section");
+      if (!ok) {
+        state.pendingCommentPhotoDiscussion = null;
+        if (section) setCommentPhotoStatus(section, message || "Photo was cancelled.", "error");
+        showBanner(message || "Photo was cancelled.");
+        return true;
+      }
+      if (!section || !base64) return false;
+      state.pendingCommentPhotoDiscussion = null;
+      setCommentPhotoStatus(section, "Preparing captured photo...");
+      const file = fileFromBase64(base64, mimeType, filename || `comment-photo-${Date.now()}.jpg`);
+      prepareCommentPhotoFile(section, file).catch(error => {
+        setCommentPhotoStatus(section, error.message || "Could not prepare that comment photo.", "error");
+        showBanner(error.message || "Could not prepare that comment photo.");
+      });
       return true;
     };
 
@@ -26568,6 +26591,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           return true;
         }
       }
+      return false;
+    }
+
+    function nativeTakeCommentPhoto() {
+      try {
+        if (window.AndroidApp?.takeCommentPhoto) {
+          window.AndroidApp.takeCommentPhoto();
+          return true;
+        }
+      } catch {}
       return false;
     }
 
@@ -30885,9 +30918,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
       if (event.target.closest("[data-take-comment-photo]") && discussion) {
         event.preventDefault();
+        state.pendingCommentPhotoDiscussion = discussion;
+        setCommentPhotoStatus(discussion, "Opening camera...");
+        if (nativeTakeCommentPhoto()) return;
         const input = discussion.querySelector("[data-discussion-image]");
         if (input) {
-          setCommentPhotoStatus(discussion, "Opening camera...");
           input.setAttribute("capture", "environment");
           input.value = "";
           try {
@@ -30900,6 +30935,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
       if (event.target.closest("[data-choose-comment-photo]") && discussion) {
         event.preventDefault();
+        state.pendingCommentPhotoDiscussion = null;
         const input = discussion.querySelector("[data-discussion-image]");
         if (input) {
           setCommentPhotoStatus(discussion, "Opening photo library...");

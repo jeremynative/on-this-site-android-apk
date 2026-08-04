@@ -92,4 +92,19 @@ class AppBridge {
             activity.launchPlantBridgeCamera();
         });
     }
+
+    @JavascriptInterface
+    public void takeCommentPhoto() {
+        activity.runOnUiThread(() -> {
+            activity.suppressResumeRefreshAfterPermissionPrompt();
+            if (!activity.hasCameraPermission()) {
+                activity.requestPermissions(
+                    new String[] { Manifest.permission.CAMERA },
+                    MainActivity.COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST
+                );
+                return;
+            }
+            activity.launchCommentBridgeCamera();
+        });
+    }
 }

@@ -70,6 +70,8 @@ public class MainActivity extends Activity {
     private static final int PLANT_BRIDGE_CAMERA_REQUEST = 45;
     static final int PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST = 46;
     private static final int NOTIFICATION_REQUEST = 47;
+    private static final int COMMENT_BRIDGE_CAMERA_REQUEST = 48;
+    static final int COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST = 49;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
     static final String APP_VERSION = "20260731-stable-activity-media-r36";
@@ -84,6 +86,7 @@ public class MainActivity extends Activity {
     private static final long OFFLINE_COVER_REVEAL_DELAY_MS = 900;
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
+    private static final String PREF_PENDING_COMMENT_URI = "pending_comment_camera_uri";
     private static final String APP_BASE_URL =
         "https://directus.nativelongisland.com/app/mobile-app-live.html";
     private static final String OFFLINE_BASE_URL =
@@ -99,12 +102,19 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraCaptureUri;
     private Uri pendingPlantBridgeCameraUri;
+    private Uri pendingCommentBridgeCameraUri;
     private boolean pendingPlantPhotoOk;
     private String pendingPlantPhotoMessage;
     private String pendingPlantPhotoBase64;
     private String pendingPlantPhotoMimeType;
     private String pendingPlantPhotoFilename;
     private boolean hasPendingPlantPhotoDelivery;
+    private boolean pendingCommentPhotoOk;
+    private String pendingCommentPhotoMessage;
+    private String pendingCommentPhotoBase64;
+    private String pendingCommentPhotoMimeType;
+    private String pendingCommentPhotoFilename;
+    private boolean hasPendingCommentPhotoDelivery;
     private boolean pendingPhotoCaptureAfterPermission;
     private boolean created;
     private long lastRefreshAt;
@@ -1356,6 +1366,86 @@ public class MainActivity extends Activity {
         );
     }
 
+    void launchCommentBridgeCamera() {
+        try {
+            pendingCommentBridgeCameraUri = MediaStorePhotoHelper.createPlantPhotoUri(this);
+            if (pendingCommentBridgeCameraUri == null) {
+                queueCommentPhoto(false, "Could not create a local photo file.", "", "", "");
+                return;
+            }
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putString(PREF_PENDING_COMMENT_URI, pendingCommentBridgeCameraUri.toString()).apply();
+            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, pendingCommentBridgeCameraUri);
+            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                for (android.content.pm.ResolveInfo activity : getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)) {
+                    grantUriPermission(activity.activityInfo.packageName, pendingCommentBridgeCameraUri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                }
+            }
+            startActivityForResult(intent, COMMENT_BRIDGE_CAMERA_REQUEST);
+        } catch (Exception error) {
+            if (pendingCommentBridgeCameraUri != null) getContentResolver().delete(pendingCommentBridgeCameraUri, null, null);
+            pendingCommentBridgeCameraUri = null;
+            clearPendingCommentCameraUri();
+            queueCommentPhoto(false, "Could not open the camera.", "", "", "");
+        }
+    }
+
+    private void deliverCommentBridgePhoto(Uri uri) {
+        try {
+            MediaStorePhotoHelper.markPlantPhotoReady(this, uri);
+            byte[] bytes = MediaStorePhotoHelper.compressedJpegBytes(this, uri);
+            clearPendingCommentCameraUri();
+            queueCommentPhoto(true, "", Base64.encodeToString(bytes, Base64.NO_WRAP), "image/jpeg", "comment-photo-" + System.currentTimeMillis() + ".jpg");
+        } catch (Exception error) {
+            clearPendingCommentCameraUri();
+            queueCommentPhoto(false, error.getMessage(), "", "", "");
+        }
+    }
+
+    private void restorePendingCommentCameraUri() {
+        String uri = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(PREF_PENDING_COMMENT_URI, "");
+        if (uri != null && !uri.isEmpty()) pendingCommentBridgeCameraUri = Uri.parse(uri);
+    }
+
+    private void clearPendingCommentCameraUri() {
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().remove(PREF_PENDING_COMMENT_URI).apply();
+    }
+
+    private void queueCommentPhoto(boolean ok, String message, String base64, String mimeType, String filename) {
+        pendingCommentPhotoOk = ok;
+        pendingCommentPhotoMessage = message == null ? "" : message;
+        pendingCommentPhotoBase64 = base64 == null ? "" : base64;
+        pendingCommentPhotoMimeType = mimeType == null ? "" : mimeType;
+        pendingCommentPhotoFilename = filename == null ? "" : filename;
+        hasPendingCommentPhotoDelivery = true;
+        dispatchPendingCommentPhoto();
+        if (webView != null) {
+            webView.postDelayed(this::dispatchPendingCommentPhoto, 500);
+            webView.postDelayed(this::dispatchPendingCommentPhoto, 1500);
+            webView.postDelayed(this::dispatchPendingCommentPhoto, 3000);
+        }
+    }
+
+    private void dispatchPendingCommentPhoto() {
+        if (!hasPendingCommentPhotoDelivery || webView == null) return;
+        webView.evaluateJavascript(
+            "window.onAndroidCommentPhoto && window.onAndroidCommentPhoto("
+                + pendingCommentPhotoOk + ","
+                + jsString(pendingCommentPhotoMessage) + ","
+                + jsString(pendingCommentPhotoBase64) + ","
+                + jsString(pendingCommentPhotoMimeType) + ","
+                + jsString(pendingCommentPhotoFilename) + ")",
+            value -> {
+                if ("true".equals(value)) {
+                    hasPendingCommentPhotoDelivery = false;
+                    pendingCommentPhotoBase64 = "";
+                }
+            }
+        );
+    }
+
     private boolean openExternallyWhenNeeded(Uri uri) {
         String host = uri.getHost();
         String path = uri.getPath();
@@ -1472,11 +1562,31 @@ public class MainActivity extends Activity {
             suppressResumeRefreshAfterPermissionPrompt();
             if (granted) launchPlantBridgeCamera();
             else queuePlantPhoto(false, "Camera permission is needed to take a plant photo.", "", "", "");
+            return;
+        }
+
+        if (requestCode == COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST) {
+            suppressResumeRefreshAfterPermissionPrompt();
+            if (granted) launchCommentBridgeCamera();
+            else queueCommentPhoto(false, "Camera permission is needed to take a comment photo.", "", "", "");
         }
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == COMMENT_BRIDGE_CAMERA_REQUEST) {
+            suppressResumeRefreshAfterPermissionPrompt();
+            if (pendingCommentBridgeCameraUri == null) restorePendingCommentCameraUri();
+            if (resultCode == RESULT_OK && pendingCommentBridgeCameraUri != null) {
+                deliverCommentBridgePhoto(pendingCommentBridgeCameraUri);
+            } else {
+                if (pendingCommentBridgeCameraUri != null) getContentResolver().delete(pendingCommentBridgeCameraUri, null, null);
+                clearPendingCommentCameraUri();
+                queueCommentPhoto(false, "Comment photo was cancelled.", "", "", "");
+            }
+            pendingCommentBridgeCameraUri = null;
+            return;
+        }
         if (requestCode == PLANT_BRIDGE_CAMERA_REQUEST) {
             suppressResumeRefreshAfterPermissionPrompt();
             if (pendingPlantBridgeCameraUri == null) restorePendingPlantCameraUri();

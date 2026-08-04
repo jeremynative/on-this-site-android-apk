@@ -189,6 +189,11 @@ function requireBundledPattern(pattern, message) {
 }
 
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
+requireText("COMMENT_BRIDGE_CAMERA_REQUEST", "Android shell must reserve a dedicated result path for comment-camera captures.");
+requireText("window.onAndroidCommentPhoto", "Android shell must return a captured comment photo to the WebView draft.");
+if (!appBridge.includes("public void takeCommentPhoto()") || !appBridge.includes("COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST")) {
+  throw new Error("Android bridge must expose the dedicated comment-camera action.");
+}
 requireText("updateNativeSafeInsets(insets);", "Android shell must capture current window insets instead of padding the WebView.");
 requireText("WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()", "Android shell must include system bars and display cutouts in its safe boundary.");
 requireText("windowInsets.getInsetsIgnoringVisibility(safeTypes)", "Android shell must preserve stable system-bar bounds when bars are temporarily hidden.");
