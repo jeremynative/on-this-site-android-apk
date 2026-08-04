@@ -1577,7 +1577,13 @@ public class MainActivity extends Activity {
         if (requestCode == COMMENT_BRIDGE_CAMERA_REQUEST) {
             suppressResumeRefreshAfterPermissionPrompt();
             if (pendingCommentBridgeCameraUri == null) restorePendingCommentCameraUri();
-            if (resultCode == RESULT_OK && pendingCommentBridgeCameraUri != null) {
+            // Samsung Camera can return RESULT_CANCELED after successfully writing
+            // an ACTION_IMAGE_CAPTURE/EXTRA_OUTPUT photo. Trust the persisted URI
+            // when it contains bytes; trust the result code only when no output
+            // was produced.
+            boolean hasCapturedPhoto = pendingCommentBridgeCameraUri != null
+                && MediaStorePhotoHelper.hasPhotoData(this, pendingCommentBridgeCameraUri);
+            if (hasCapturedPhoto) {
                 deliverCommentBridgePhoto(pendingCommentBridgeCameraUri);
             } else {
                 if (pendingCommentBridgeCameraUri != null) getContentResolver().delete(pendingCommentBridgeCameraUri, null, null);

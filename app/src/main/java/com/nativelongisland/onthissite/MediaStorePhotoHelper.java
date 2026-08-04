@@ -33,6 +33,15 @@ class MediaStorePhotoHelper {
         context.getContentResolver().update(uri, ready, null, null);
     }
 
+    static boolean hasPhotoData(Context context, Uri uri) {
+        if (uri == null) return false;
+        try (InputStream input = context.getContentResolver().openInputStream(uri)) {
+            return input != null && input.read() >= 0;
+        } catch (Exception error) {
+            return false;
+        }
+    }
+
     static byte[] compressedJpegBytes(Context context, Uri uri) throws Exception {
         BitmapFactory.Options bounds = new BitmapFactory.Options();
         bounds.inJustDecodeBounds = true;
