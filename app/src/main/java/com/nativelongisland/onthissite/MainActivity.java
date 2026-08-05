@@ -183,11 +183,9 @@ public class MainActivity extends Activity {
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
         ));
-        loadingCover = createLoadingCover();
-        root.addView(loadingCover, new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ));
+        // The WebView owns the single startup screen. It includes the animated
+        // Long Island loader; adding a second native cover here duplicated the
+        // logo/text and hid that left-to-right animation.
         setContentView(root);
         webView.post(webView::requestApplyInsets);
         createNotificationChannel();
