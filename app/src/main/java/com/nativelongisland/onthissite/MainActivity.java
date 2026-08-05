@@ -427,7 +427,7 @@ public class MainActivity extends Activity {
                 + "if(document.getElementById('ots-native-panel-exclusivity'))return;"
                 + "var s=document.createElement('style');"
                 + "s.id='ots-native-panel-exclusivity';"
-                + "s.textContent='body.mobile-detail-open .mobile-view-tabs,body.mobile-detail-open .mobile-timeline,body.mobile-detail-open .list-panel{display:none!important;}';"
+                + "s.textContent='body.mobile-detail-open .app{grid-template-rows:auto minmax(0,1fr) 0 0!important;}body.mobile-detail-open .mobile-view-tabs,body.mobile-detail-open .mobile-timeline,body.mobile-detail-open .list-panel{display:none!important;}';"
                 + "(document.head||document.documentElement).appendChild(s);"
                 + "})();",
             null
