@@ -1596,7 +1596,11 @@ public class MainActivity extends Activity {
             // was produced.
             boolean hasCapturedPhoto = pendingCommentBridgeCameraUri != null
                 && MediaStorePhotoHelper.hasPhotoData(this, pendingCommentBridgeCameraUri);
-            if (hasCapturedPhoto) {
+            // Samsung's camera can report RESULT_CANCELED and leave the
+            // MediaStore stream temporarily unreadable even though the output
+            // photo is valid. Let the JPEG read be the final validation in
+            // that case instead of discarding the URI prematurely.
+            if (hasCapturedPhoto || (resultCode == RESULT_CANCELED && pendingCommentBridgeCameraUri != null)) {
                 deliverCommentBridgePhoto(pendingCommentBridgeCameraUri);
             } else {
                 if (pendingCommentBridgeCameraUri != null) getContentResolver().delete(pendingCommentBridgeCameraUri, null, null);
