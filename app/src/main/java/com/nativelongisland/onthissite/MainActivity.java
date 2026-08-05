@@ -340,6 +340,7 @@ public class MainActivity extends Activity {
                     return;
                 }
                 hideLoadingCover();
+                enforceExclusiveMobilePanels(view);
                 validateLoadedAppShell(url);
             }
         });
@@ -417,6 +418,20 @@ public class MainActivity extends Activity {
         loadingOutlinePulse.setRepeatCount(ValueAnimator.INFINITE);
         outline.post(() -> loadingOutlinePulse.start());
         return cover;
+    }
+
+    private void enforceExclusiveMobilePanels(WebView view) {
+        if (view == null) return;
+        view.evaluateJavascript(
+            "(function(){"
+                + "if(document.getElementById('ots-native-panel-exclusivity'))return;"
+                + "var s=document.createElement('style');"
+                + "s.id='ots-native-panel-exclusivity';"
+                + "s.textContent='body.mobile-detail-open .mobile-view-tabs,body.mobile-detail-open .mobile-timeline,body.mobile-detail-open .list-panel{display:none!important;}';"
+                + "(document.head||document.documentElement).appendChild(s);"
+                + "})();",
+            null
+        );
     }
 
     private int dp(int value) {
