@@ -42,6 +42,13 @@ const bundledSharedSiteUtils = fs.readFileSync(bundledSharedSiteUtilsPath, "utf8
 const styles = fs.readFileSync(stylesPath, "utf8");
 const launchBackground = fs.readFileSync(launchBackgroundPath, "utf8");
 
+if (!lightweightOfflineApp.includes('class="brand-row"')
+    || !lightweightOfflineApp.includes('class="offline-pill">Offline')
+    || !lightweightOfflineApp.includes('data-offline-jump="map"')
+    || !lightweightOfflineApp.includes('data-offline-jump="archive"')) {
+  throw new Error("Lightweight offline archive must retain the compact On This Site header and Map/Browse navigation.");
+}
+
 for (const file of bundledMobileIndexPaths) {
   if (!fs.existsSync(file) || fs.statSync(file).size < 100) {
     throw new Error(`Bundled Android fallback is missing required mobile index: ${file}`);

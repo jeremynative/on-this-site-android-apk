@@ -8,10 +8,10 @@
   <style>
     :root{--ink:#172119;--muted:#647068;--line:#d3ddd4;--panel:#fbfcfa;--accent:#386a55;--soft:#e5efe9;--water:#b9dce7;--native-top-safe:0px;--native-right-safe:0px;--native-bottom-safe:0px;--native-left-safe:0px;--app-top-safe:max(env(safe-area-inset-top),var(--native-top-safe));--app-right-safe:max(env(safe-area-inset-right),var(--native-right-safe));--app-bottom-safe:max(env(safe-area-inset-bottom),var(--native-bottom-safe));--app-left-safe:max(env(safe-area-inset-left),var(--native-left-safe))}
     *{box-sizing:border-box}html,body{margin:0;min-height:100%;color:var(--ink);background:#eef3ed;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:0}
-    button,input{font:inherit}button{color:inherit}.app{min-height:100vh;padding:max(18px,var(--app-top-safe)) max(14px,var(--app-right-safe)) max(28px,var(--app-bottom-safe)) max(14px,var(--app-left-safe))}
-    .shell{width:min(920px,100%);margin:auto}.masthead{display:grid;gap:11px;margin-bottom:14px}h1,h2,h3,p{margin:0}h1{font-size:clamp(27px,8vw,36px);line-height:1.05}.note{color:var(--muted);font-size:15px;line-height:1.45}
+    button,input{font:inherit}button{color:inherit}.app{min-height:100vh;padding:var(--app-top-safe) var(--app-right-safe) var(--app-bottom-safe) var(--app-left-safe)}
+    .shell{width:min(920px,100%);margin:auto;padding:0 12px 22px}.masthead{position:sticky;top:0;z-index:4;display:grid;gap:10px;margin:0 -12px 14px;padding:10px 12px 12px;background:#eef3edf5;border-bottom:1px solid var(--line);backdrop-filter:blur(12px)}h1,h2,h3,p{margin:0}.brand-row{display:flex;align-items:center;justify-content:space-between;gap:10px}.brand-copy{display:grid;gap:2px;min-width:0}h1{font-size:23px;line-height:1.05;letter-spacing:-.035em}.brand-copy small{color:var(--muted);font-size:11px;font-weight:750;letter-spacing:.06em;text-transform:uppercase}.offline-pill{display:inline-flex;align-items:center;min-height:32px;padding:0 10px;border:1px solid #8ca894;border-radius:999px;background:#e5efe9;color:#285b47;font-size:12px;font-weight:800;white-space:nowrap}.note{color:var(--muted);font-size:13px;line-height:1.35}.offline-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.offline-tabs button{min-height:40px;border:1px solid #bdc9bf;border-radius:9px;background:#fff;font-size:13px;font-weight:800}.offline-tabs button:active{background:var(--soft);border-color:var(--accent)}
     #search{width:100%;min-height:52px;padding:0 15px;border:1px solid #bdcabe;border-radius:8px;background:#fff;color:var(--ink);outline:0}#search:focus{border-color:var(--accent);box-shadow:0 0 0 3px #386a552e}
-    .offline-map-index,.archive{overflow:hidden;border:1px solid var(--line);border-radius:8px;background:var(--panel);box-shadow:0 6px 20px #23382c19}.head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;border-bottom:1px solid var(--line)}.head h2{font-size:17px}.status{color:var(--muted);font-size:13px;text-align:right}
+    .offline-map-index,.archive{scroll-margin-top:134px;overflow:hidden;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:0 6px 20px #23382c19}.head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;border-bottom:1px solid var(--line)}.head h2{font-size:17px}.status{color:var(--muted);font-size:13px;text-align:right}
     #map{position:relative;min-height:245px;background:var(--water)}#offline-map{display:block;width:100%;height:245px;touch-action:manipulation}.map-help{position:absolute;left:10px;bottom:9px;max-width:calc(100% - 20px);padding:5px 8px;border:1px solid #1721192e;border-radius:6px;background:#fbfcfae8;color:#475248;font-size:12px;pointer-events:none}
     .regions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;padding:11px;border-top:1px solid var(--line)}.regions button{min-height:42px;padding:7px 5px;border:1px solid #bdc9bf;border-radius:7px;background:#fff;font-size:13px;font-weight:750}.regions button[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:#fff}
     .archive{margin-top:14px}#site-list{display:grid;gap:1px;background:var(--line)}.site-card{display:grid;gap:5px;width:100%;min-height:84px;padding:13px 15px;border:0;background:#fff;text-align:left}.site-card:active{background:var(--soft)}.site-card strong{font-size:16px;line-height:1.25}.site-card span{color:var(--muted);font-size:13px;line-height:1.35}#load-more{width:100%;min-height:50px;border:0;border-top:1px solid var(--line);background:#f6f9f6;color:var(--accent);font-weight:800}#load-more[hidden]{display:none}
@@ -22,11 +22,12 @@
 <body class="offline-text-mode">
   <main class="app"><div class="shell">
     <header class="masthead">
-      <h1>On This Site</h1>
+      <div class="brand-row"><div class="brand-copy"><h1>On This Site</h1><small>Native Long Island</small></div><span class="offline-pill">Offline</span></div>
       <p class="note" id="offline-summary">Opening the saved offline archive...</p>
+      <nav class="offline-tabs" aria-label="Offline archive navigation"><button type="button" data-offline-jump="map">Map</button><button type="button" data-offline-jump="archive">Browse saved places</button></nav>
       <input id="search" type="search" autocomplete="off" placeholder="Search saved places and histories" aria-label="Search saved places and histories">
     </header>
-    <section class="offline-map-index" aria-label="Offline place map">
+    <section class="offline-map-index" id="offline-map-section" aria-label="Offline place map">
       <div class="head"><h2>Saved place map</h2><span class="status" id="status" role="status">Loading saved places...</span></div>
       <div id="map" aria-label="Simplified offline map of saved places"><canvas id="offline-map"></canvas><p class="map-help">Tap a dot to open the nearest saved place.</p></div>
       <div class="regions" aria-label="Saved areas">
@@ -36,7 +37,7 @@
         <button type="button" data-offline-region="east" aria-pressed="false">East End</button>
       </div>
     </section>
-    <section class="archive" aria-label="Saved text archive">
+    <section class="archive" id="offline-archive-section" aria-label="Saved text archive">
       <div class="head"><h2>Saved places and articles</h2><span class="status" id="result-count"></span></div>
       <div id="site-list"><button class="site-card" type="button" disabled><strong>Loading the saved archive...</strong><span>No internet connection is required.</span></button></div>
       <button id="load-more" type="button" hidden>Show more</button>
@@ -91,6 +92,11 @@
       }catch(error){summary.textContent="The saved archive could not be opened. Reconnect and reopen the app to refresh its offline copy.";status.textContent="Offline archive unavailable";list.innerHTML=`<button class="site-card" type="button" disabled><strong>Saved content could not load</strong><span>${esc(error?.message||"Unknown offline error")}</span></button>`}
     }
     search.addEventListener("input",()=>{state.query=search.value.trim();state.visible=LIMIT;render()});
+    document.querySelectorAll("[data-offline-jump]").forEach(button=>button.addEventListener("click",()=>{
+      const target=$(button.dataset.offlineJump==="map"?"offline-map-section":"offline-archive-section");
+      target?.scrollIntoView({behavior:"smooth",block:"start"});
+      if(button.dataset.offlineJump!=="map") window.setTimeout(()=>search.focus({preventScroll:true}),260);
+    }));
     document.querySelectorAll("[data-offline-region]").forEach(b=>b.addEventListener("click",()=>{state.region=b.dataset.offlineRegion||"all";state.visible=LIMIT;document.querySelectorAll("[data-offline-region]").forEach(x=>x.setAttribute("aria-pressed",x===b?"true":"false"));render()}));
     list.addEventListener("click",e=>{const b=e.target.closest("[data-result-index]");if(b)open(state.filtered[Number(b.dataset.resultIndex)])});
     more.addEventListener("click",()=>{state.visible+=LIMIT;render()});
