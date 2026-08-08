@@ -84,6 +84,8 @@ public class MainActivity extends Activity {
     private static final long NETWORK_LOSS_GRACE_DELAY_MS = 4000;
     private static final long ACTIVE_WORK_RECHECK_DELAY_MS = 15000;
     private static final long OFFLINE_COVER_REVEAL_DELAY_MS = 900;
+    private static final int COMMENT_PHOTO_READ_MAX_ATTEMPTS = 3;
+    private static final long COMMENT_PHOTO_READ_RETRY_DELAY_MS = 350;
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String PREF_PENDING_COMMENT_URI = "pending_comment_camera_uri";
@@ -1411,12 +1413,26 @@ public class MainActivity extends Activity {
     }
 
     private void deliverCommentBridgePhoto(Uri uri) {
+        deliverCommentBridgePhoto(uri, 0);
+    }
+
+    private void deliverCommentBridgePhoto(Uri uri, int attempt) {
         try {
             MediaStorePhotoHelper.markPlantPhotoReady(this, uri);
             byte[] bytes = MediaStorePhotoHelper.compressedJpegBytes(this, uri);
             clearPendingCommentCameraUri();
             queueCommentPhoto(true, "", Base64.encodeToString(bytes, Base64.NO_WRAP), "image/jpeg", "comment-photo-" + System.currentTimeMillis() + ".jpg");
         } catch (Exception error) {
+            // Samsung Camera can hand control back before its EXTRA_OUTPUT image is
+            // readable. Keep the persisted URI and retry briefly before treating a
+            // completed capture as cancelled or failed.
+            if (uri != null && attempt < COMMENT_PHOTO_READ_MAX_ATTEMPTS) {
+                startupHandler.postDelayed(
+                    () -> deliverCommentBridgePhoto(uri, attempt + 1),
+                    COMMENT_PHOTO_READ_RETRY_DELAY_MS * (attempt + 1)
+                );
+                return;
+            }
             clearPendingCommentCameraUri();
             queueCommentPhoto(false, error.getMessage(), "", "", "");
         }

@@ -191,6 +191,8 @@ function requireBundledPattern(pattern, message) {
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
 requireText("COMMENT_BRIDGE_CAMERA_REQUEST", "Android shell must reserve a dedicated result path for comment-camera captures.");
 requireText("window.onAndroidCommentPhoto", "Android shell must return a captured comment photo to the WebView draft.");
+requireText("COMMENT_PHOTO_READ_MAX_ATTEMPTS", "Android shell must briefly retry a Samsung comment-camera output before reporting failure.");
+requireText("deliverCommentBridgePhoto(uri, attempt + 1)", "Android shell must retry a temporarily unreadable captured comment photo.");
 if (!appBridge.includes("public void takeCommentPhoto()") || !appBridge.includes("COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST")) {
   throw new Error("Android bridge must expose the dedicated comment-camera action.");
 }
