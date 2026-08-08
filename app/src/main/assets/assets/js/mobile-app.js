@@ -3947,7 +3947,9 @@
     function showAndroidSearchPreviewPanel() {
       if (!isNativeAndroidApp() || !searchEl?.value.trim()) return;
       setMobilePanelMode("nearby");
-      setMobileBottomPanelState("maximized");
+      // Full mode hides the header and focused search field. While typing,
+      // reveal results at normal height so Android keeps the IME open.
+      if (state.mobilePanelState === "collapsed") setMobileBottomPanelState("normal");
       listEl?.scrollTo?.({ top: 0, behavior: "auto" });
     }
 
@@ -3970,10 +3972,11 @@
         .filter(article => String(article.searchText || "").includes(query) || String(article.normalizedSearchText || "").includes(normalizedQuery));
       const matches = [...siteMatches, ...wikiMatches];
       const placeSearch = isPlaceSearchCandidate(query, matches);
-      if (placeSearch && !matches.length) {
+      if (placeSearch) {
         state.addressSearchMode = true;
         state.addressSearchPending = query;
-        state.filtered = [];
+        state.filtered = matches;
+        sortSearchMatches(query);
         resetNearbyRenderLimit();
         renderList();
         showAndroidSearchPreviewPanel();
@@ -3986,10 +3989,9 @@
       resetNearbyRenderLimit();
       renderList();
       showAndroidSearchPreviewPanel();
-      clearAddressSearch();
       scheduleSearchRenderSettle();
       scheduleSearchMapSync();
-      if (placeSearch && matches.length < 3) updateAddressSearch(query);
+      clearAddressSearch();
     }
 
     function closeDetailForSearchResults() {
@@ -4057,10 +4059,6 @@
       if (event.key !== "Enter") return;
       event.preventDefault();
       openMobileSearchResultsPage();
-    }
-
-    function handleMobileSearchCommand() {
-      window.setTimeout(() => openMobileSearchResultsPage(), 0);
     }
 
     function handleMobileSearchInput() {
@@ -15417,7 +15415,6 @@
     searchEl.addEventListener("keyup", handleMobileSearchInput);
     searchEl.addEventListener("change", handleMobileSearchInput);
     searchEl.addEventListener("search", handleMobileSearchInput);
-    searchEl.addEventListener("search", handleMobileSearchCommand);
     searchEl.addEventListener("keydown", handleMobileSearchKeydown);
     searchEl.addEventListener("compositionend", handleMobileSearchInput);
     searchEl.addEventListener("focus", handleMobileSearchFocus);
