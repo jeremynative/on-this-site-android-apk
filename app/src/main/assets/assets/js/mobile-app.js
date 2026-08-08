@@ -10186,7 +10186,11 @@
 
     function ensureMobileMovingBiographyMarkers() {
       if (!state.map || !window.mapboxgl?.Marker) return;
-      const items = mobileMovingBiographyItems();
+      if (!mobileBiographyPathsEnabled() && state.mobileMovingBiographyMarkerQueueTimer) {
+        window.clearTimeout(state.mobileMovingBiographyMarkerQueueTimer);
+        state.mobileMovingBiographyMarkerQueueTimer = null;
+      }
+      const items = mobileBiographyPathsEnabled() ? mobileMovingBiographyItems() : [];
       const wanted = new Set(items.map(item => item.slug));
       for (const [slug, entry] of state.mobileMovingBiographyMarkers) {
         if (!wanted.has(slug)) {
@@ -10198,6 +10202,10 @@
       if (!missing.length) return;
       let index = 0;
       const addNext = () => {
+        if (!mobileBiographyPathsEnabled()) {
+          state.mobileMovingBiographyMarkerQueueTimer = null;
+          return;
+        }
         const item = missing[index++];
         if (!item || !state.map || state.mobileMovingBiographyMarkers.has(item.slug)) return;
         const element = document.createElement("div");
@@ -14447,7 +14455,21 @@
       });
       bindMobileMapTouchFallback();
       return new Promise(resolve => {
+        let settled = false;
+        let errorTimer = null;
+        const fallbackToOfflineIndex = () => {
+          if (settled) return;
+          settled = true;
+          if (errorTimer) window.clearTimeout(errorTimer);
+          try { state.map?.remove(); } catch {}
+          state.map = null;
+          renderOfflineMapIndex();
+          statusEl.textContent = `${state.filtered.length || state.sites.length} saved places`;
+          showBanner("The map could not load, so saved places are still available below.");
+          resolve(false);
+        };
         state.map.on("load", () => {
+          if (settled) return;
           addPolygonLayers();
           syncMarkers();
           syncUserLocationMarker({ centerMap: false });
@@ -14460,9 +14482,16 @@
             syncMapStoryMarkers();
           });
           state.map.on("moveend", loadMobileSiteIconImages);
-          window.setTimeout(() => resolve(true), 160);
+          window.setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            resolve(true);
+          }, 160);
         });
-        state.map.on("error", () => window.setTimeout(() => resolve(false), 800));
+        state.map.on("error", () => {
+          if (settled || errorTimer) return;
+          errorTimer = window.setTimeout(fallbackToOfflineIndex, 800);
+        });
       });
     }
 
@@ -14616,6 +14645,7 @@
       syncMobileLayerButtons();
       syncMobileBiographyPathLayers();
       syncMarkers();
+      ensureMobileMovingBiographyMarkers();
       if (kind === "era") renderMobileTimeline();
     }
 
@@ -14641,6 +14671,7 @@
       syncMobileLayerButtons();
       syncMobileBiographyPathLayers();
       syncMarkers();
+      ensureMobileMovingBiographyMarkers();
       renderMobileTimeline();
     }
 

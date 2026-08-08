@@ -300,12 +300,23 @@ if (!bundledResearchQuestionCss.includes("left: max(16px, var(--app-left-safe, e
 }
 if (!bundledMobileJs.includes("function setAllMobileLayerVisibility(visible)")
     || !bundledMobileJs.includes("state.settings.showBiographyPaths = false;")
+    || !bundledMobileJs.includes("const items = mobileBiographyPathsEnabled() ? mobileMovingBiographyItems() : [];")
+    || !bundledMobileJs.includes("ensureMobileMovingBiographyMarkers();")
     || !bundledMobileJs.includes("state.settings.layerCategories = {};")
     || !bundledMobileJs.includes("state.settings.eraCategories = {};")
     || !bundledMobileJs.includes("primaryStates.slice(0, 3).every(Boolean)")
     || !bundledMobileJs.includes("Date.now() < mobileLayerBulkReadyAt")
     || !bundledMobileJs.includes("mobileLayerBulkReadyAt = Date.now() + 400;")) {
   throw new Error("Bundled Android bulk labels must exclude biography paths and reject the Labels-menu opening touch.");
+}
+for (const [label, document] of [
+  ["bundled fallback", bundledApp],
+  ["bundled live fallback", bundledLiveApp]
+]) {
+  if (!document.includes("Biography paths &amp; icons")
+      || !document.includes("const items = mobileBiographyPathsEnabled() ? mobileMovingBiographyItems() : [];")) {
+    throw new Error(`${label} must hide moving biography icons with the Biography paths & icons control.`);
+  }
 }
 if (!bundledLearningCardUtils.includes("function normalizeLearningCard(input = {}, options = {})")
     || !bundledLearningCardUtils.includes("function createActionGuard()")
