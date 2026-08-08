@@ -936,6 +936,11 @@ public class MainActivity extends Activity {
         final int viewWidth = webView.getWidth();
         final int viewHeight = webView.getHeight();
         String script = "(function(){try{"
+            + "if(window.onAndroidUiOverlayTapStart&&window.onAndroidUiOverlayTapStart("
+            + tapX + ","
+            + tapY + ","
+            + viewWidth + ","
+            + viewHeight + "))return 'ui-overlay-tap';"
             + "if(!window.onAndroidMapTap)return 'missing-map-tap-bridge';"
             + "return String(window.onAndroidMapTap("
             + tapX + ","
