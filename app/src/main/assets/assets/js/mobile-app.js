@@ -4061,7 +4061,20 @@
       openMobileSearchResultsPage();
     }
 
+    function handleMobileSearchCommand() {
+      if (!searchEl?.value.trim()) return;
+      // Android WebView can emit a search event immediately after text input.
+      // Treat it as a submission only after the user has paused typing.
+      if (Date.now() - Number(state.lastSearchInputAt || 0) < 450) return;
+      window.setTimeout(() => {
+        if (!searchEl?.value.trim()) return;
+        if (Date.now() - Number(state.lastSearchInputAt || 0) < 450) return;
+        openMobileSearchResultsPage();
+      }, 0);
+    }
+
     function handleMobileSearchInput() {
+      state.lastSearchInputAt = Date.now();
       // Search results must remain immediately readable and tappable.
       hideMobileStartupSpotlight();
       closeDetailForSearchResults();
@@ -15411,10 +15424,10 @@
         languageQuizModalEl.hidden = true;
       }
     });
+    searchEl.addEventListener("search", handleMobileSearchCommand);
     searchEl.addEventListener("input", handleMobileSearchInput);
     searchEl.addEventListener("keyup", handleMobileSearchInput);
     searchEl.addEventListener("change", handleMobileSearchInput);
-    searchEl.addEventListener("search", handleMobileSearchInput);
     searchEl.addEventListener("keydown", handleMobileSearchKeydown);
     searchEl.addEventListener("compositionend", handleMobileSearchInput);
     searchEl.addEventListener("focus", handleMobileSearchFocus);
