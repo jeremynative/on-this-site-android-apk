@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260808-punctuation-search-r38";
+const expectedBuild = "20260808-live-autocomplete-r39";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -36,6 +36,7 @@ const bundledApp = bundledAppBytes.toString("utf8");
 const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
 const bundledMobileJs = fs.readFileSync(bundledMobileJsPath, "utf8");
 const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8");
+const bundledLiveRuntime = `${bundledLiveApp}\n${bundledMobileJs}\n${bundledMobileCss}`;
 const bundledLearningCardUtils = fs.readFileSync(bundledLearningCardUtilsPath, "utf8");
 const bundledResearchQuestionCss = fs.readFileSync(bundledResearchQuestionCssPath, "utf8");
 const bundledSharedSiteUtils = fs.readFileSync(bundledSharedSiteUtilsPath, "utf8");
@@ -428,10 +429,10 @@ requireText("window.NLI_DISABLE_DIRECTUS_RUNTIME=true;", "Android shell must dis
 requireText("directus.nativelongisland.com", "Android shell must block Directus requests while the APK snapshot is offline.");
 requireText("window.__nliAllowGeoUntil=Date.now()+120000;", "Android shell must allow the app's startup Near me location request.");
 requireText("#locate,#mobile-map-locate,#suggest-use-location", "Android shell must allow the dedicated map location control through the geolocation gate.");
-if (!bundledLiveApp.includes("function isApkSnapshotMode()") || !bundledApp.includes("function isApkSnapshotMode()")) {
+if (!bundledMobileJs.includes("function isApkSnapshotMode()") || !bundledApp.includes("function isApkSnapshotMode()")) {
   throw new Error("Bundled mobile shells must distinguish live Android mode from offline APK snapshot mode.");
 }
-if (!bundledLiveApp.includes("const text = isOfflineTextMode()")) {
+if (!bundledMobileJs.includes("const text = isOfflineTextMode()")) {
   throw new Error("The live Android shell must not label every Android WebView as an APK snapshot.");
 }
 for (const [needle, message] of [
@@ -443,7 +444,7 @@ for (const [needle, message] of [
   ["limit: options.limit || 3", "APK related sites must be capped at three."],
   ["const MOBILE_CANOE_LAND_SAMPLE_RADIUS_DEG = 0.00022", "APK canoe state must sample the moving icon footprint near narrow land."],
   ["mobileMovingLandSamples(coordinates).some", "APK canoe state must hide when any sampled point touches land."],
-  ["Marker originals are already map-sized", "APK map markers must preserve original transparent PNG artwork."],
+  ["MEDIA_UTILS.optimizedMapIconUrl", "APK map markers must preserve optimized transparent artwork."],
   ["id=\"mobile-map-locate\"", "APK map must include a dedicated current-location control."],
   ["id=\"mobile-map-locate\" type=\"button\" data-allow-geolocation", "APK current-location control must pass the Android geolocation gate."],
   [".native-android-app .mobile-map-locate", "APK current-location control must only appear in the native Android app."],
@@ -454,13 +455,13 @@ for (const [needle, message] of [
   ["data-offline-region=\"west\"", "APK fallback must allow browsing saved sites by Long Island area."],
   [".offline-text-mode img", "APK fallback must suppress media while offline."]
 ]) {
-  if (!bundledLiveApp.includes(needle) || !bundledApp.includes(needle)) throw new Error(message);
+  if (!bundledLiveRuntime.includes(needle) || !bundledApp.includes(needle)) throw new Error(message);
 }
-if (bundledLiveApp.includes("fit=inside&format=webp") || bundledApp.includes("fit=inside&format=webp")) {
+if (bundledLiveRuntime.includes("fit=inside&format=webp") || bundledApp.includes("fit=inside&format=webp")) {
   throw new Error("APK map markers must not use Directus WebP transforms that add dark edge bars.");
 }
-if (!bundledLiveApp.includes("if (isApkSnapshotMode()) {")
-    || !bundledLiveApp.includes("const localIcon = APK_LOCAL_MAP_ICON_OVERRIDES")) {
+if (!bundledLiveRuntime.includes("if (isApkSnapshotMode()) {")
+    || !bundledLiveRuntime.includes("const localIcon = APK_LOCAL_MAP_ICON_OVERRIDES")) {
   throw new Error("The live Android shell must allow VPS-hosted icon URLs outside offline snapshot mode.");
 }
 if (!manifest.includes("android.permission.POST_NOTIFICATIONS")) {
@@ -614,9 +615,9 @@ if (!releaseWorkflow.includes("grep -oE 'pk\\.ey") || !releaseWorkflow.includes(
   throw new Error("Android release workflow must only allow public pk Mapbox tokens.");
 }
 
-for (const [label, bytes, html] of [
-  ["embedded fallback", bundledAppBytes, bundledApp],
-  ["live fallback", bundledLiveAppBytes, bundledLiveApp],
+for (const [label, bytes, html, runtime] of [
+  ["embedded fallback", bundledAppBytes, bundledApp, bundledApp],
+  ["live fallback", bundledLiveAppBytes, bundledLiveApp, bundledLiveRuntime],
 ]) {
   if ((html.match(/(?:^|[^A-Za-z0-9_-])[ps]k\.[A-Za-z0-9._-]+/g) || []).length) {
     throw new Error(`Bundled Android ${label} must keep Mapbox tokens as build-time placeholders.`);
@@ -627,13 +628,13 @@ for (const [label, bytes, html] of [
   if (!/^<!doctype html>/i.test(html.trimStart())) {
     throw new Error(`Bundled Android ${label} must start with an HTML doctype.`);
   }
-  if (!html.includes("__NLI_MAPBOX_TOKEN__")) {
+  if (!runtime.includes("__NLI_MAPBOX_TOKEN__")) {
     throw new Error(`Bundled Android ${label} is missing the Mapbox token placeholder.`);
   }
 }
 const expectedPlaceholderCounts = new Map([
   ["embedded fallback", [bundledApp, 2]],
-  ["live fallback", [bundledLiveApp, 1]],
+  ["live fallback", [bundledLiveApp, 0]],
   ["mobile JavaScript", [bundledMobileJs, 1]],
 ]);
 for (const [label, [source, expectedCount]] of expectedPlaceholderCounts) {
@@ -666,10 +667,7 @@ if (source.includes("archive-test") || bundledApp.includes(archiveTestRoot) || b
 if (!bundledApp.includes("window.NLI_MOBILE_DATA")) {
   throw new Error("Bundled Android app is missing embedded mobile data.");
 }
-for (const [label, html] of [
-  ["embedded fallback", bundledApp],
-  ["live fallback", bundledLiveApp],
-]) {
+for (const [label, html] of [["embedded fallback", bundledApp]]) {
   if (!html.includes('"wyandanch": {') || !html.includes("mobile-biography-place-path") || !html.includes("data-mobile-biography-path-index")) {
     throw new Error(`Bundled Android ${label} is missing the mobile Wyandanch biography path.`);
   }
@@ -783,7 +781,7 @@ requireBundledText('state.listTouchActivationUntil = performance.now() + 650;', 
 requireBundledText('"text-allow-overlap": false', "Bundled Android app must keep close-zoom point labels readable with collision handling.");
 for (const [label, html] of [
   ["embedded fallback", bundledApp],
-  ["live fallback", bundledLiveApp],
+  ["live fallback", bundledLiveRuntime],
 ]) {
   for (const expected of [
     'id="mobile-layer-pins"',
@@ -959,7 +957,8 @@ requireBundledText('setMobileBottomPanelState("maximized")', "Bundled Android ap
 requireBundledText('searchEl.addEventListener("keydown", handleMobileSearchKeydown);', "Bundled Android app must open search results on Enter.");
 requireBundledText('searchEl.addEventListener("search", handleMobileSearchCommand);', "Bundled Android app must open search results from the Android search keyboard action.");
 requireBundledText('listTitleTextEl.textContent = showingSearch ? "Search results" : "Nearby sites";', "Bundled Android app must label the results view clearly.");
-requireBundledPattern(/function\s+installNativeAndroidSearchWatch\(\)[\s\S]*?\/Android\/i\.test\(navigator\.userAgent\)[\s\S]*?setInterval\(scheduleSearchSync,\s*350\)/, "Bundled Android app must poll search value changes on Android even if the native bridge is delayed.");
+requireBundledPattern(/function\s+installNativeAndroidSearchWatch\(\)[\s\S]*?\/Android\/i\.test\(navigator\.userAgent\)[\s\S]*?setInterval\(\(\)\s*=>\s*\{[\s\S]*?refreshMobileSearchSuggestions\(\);[\s\S]*?scheduleSearchSync\(\);[\s\S]*?\},\s*180\)/, "Bundled Android app must poll and refresh autocomplete from native field changes.");
+requireBundledText('function mobileAutocompleteCandidates(rawQuery)', "Bundled Android app must derive autocomplete candidates from the current field query.");
 requireBundledText('normalizedSearchText: normalizeText', "Bundled Android app must include normalized mobile search text.");
 requireBundledText('function scheduleSearchSync()', "Bundled Android app must watch mobile search value changes.");
 requireBundledText('function closeDetailForSearchResults()', "Bundled Android app must close open detail sheets before search results take over.");
@@ -971,8 +970,8 @@ requireBundledText('state.filtered = browsableSites();', "Bundled Android result
 requireBundledText('searchEl.addEventListener("keyup", handleMobileSearchInput);', "Bundled Android app must filter search after Android keyboard events.");
 requireBundledText('searchEl.addEventListener("focus", handleMobileSearchFocus);', "Bundled Android app must poll focused search values for WebView text changes.");
 requireBundledText('function installNativeAndroidSearchWatch()', "Bundled Android app must keep polling native Android search values.");
-requireBundledText('state.lastSearchValue = "";\n      scheduleSearchSync();\n      state.nativeAndroidSearchWatchTimer = window.setInterval(scheduleSearchSync, 350);', "Bundled Android app must process search text typed before native polling starts.");
-requireBundledText('state.nativeAndroidSearchWatchTimer = window.setInterval(scheduleSearchSync, 350);', "Bundled Android app must persistently sync native Android search input.");
+requireBundledPattern(/state\.lastSearchValue\s*=\s*"";[\s\S]*?scheduleSearchSync\(\);[\s\S]*?state\.nativeAndroidSearchWatchTimer\s*=\s*window\.setInterval/, "Bundled Android app must process search text typed before native polling starts.");
+requireBundledText('refreshMobileSearchSuggestions();', "Bundled Android app must persistently refresh native Android autocomplete.");
 requireBundledText('Profile activity sync will retry later.', "Bundled Android app must keep profile activity sync retry logging.");
 requireBundledText('state.profileActivitySynced = false;\n          return false;', "Bundled Android app must leave failed profile sync retryable.");
 requireBundledPattern(/state\.profileActivitySynced\s*=\s*includeCommunity\s*&&\s*allResponsesFresh\(\[/, "Bundled Android public activity must mark a completed anonymous load as synced.");

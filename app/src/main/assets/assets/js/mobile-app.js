@@ -844,6 +844,8 @@
       searchRenderSettledTimer: null,
       searchDataVersion: 0,
       lastSearchDataVersion: -1,
+      lastAutocompleteQuery: null,
+      lastAutocompleteDataVersion: -1,
       layers: [],
       markers: new Map(),
       mapSourceCache: null,
@@ -4209,6 +4211,7 @@
       // local index immediately so every character updates its prediction.
       state.lastSearchValue = searchEl?.value || "";
       state.lastSearchDataVersion = state.searchDataVersion;
+      refreshMobileSearchSuggestions();
       window.clearTimeout(state.searchTimer);
       filterSites();
     }
@@ -4238,7 +4241,13 @@
       if (!/Android/i.test(navigator.userAgent) || state.nativeAndroidSearchWatchTimer || !searchEl) return;
       state.lastSearchValue = "";
       scheduleSearchSync();
-      state.nativeAndroidSearchWatchTimer = window.setInterval(scheduleSearchSync, 350);
+      // Some Samsung WebView/IME combinations mutate input.value without
+      // dispatching a later input event. Keep autocomplete independent from
+      // the heavier map/list filter so each actual field value is rendered.
+      state.nativeAndroidSearchWatchTimer = window.setInterval(() => {
+        refreshMobileSearchSuggestions();
+        scheduleSearchSync();
+      }, 180);
     }
 
     function isPlaceSearchCandidate(query, matches = []) {
@@ -4938,6 +4947,32 @@
       renderSearchSuggestions();
     }
 
+    function mobileAutocompleteCandidates(rawQuery) {
+      const query = String(rawQuery || "").trim().toLowerCase();
+      const normalizedQuery = normalizeText(rawQuery);
+      const compactQuery = mobileCompactSearchKey(rawQuery);
+      if (!query) return [];
+      const includesSearch = item => String(item.searchText || "").includes(query)
+        || String(item.normalizedSearchText || "").includes(normalizedQuery)
+        || (compactQuery.length >= 2 && mobileCompactSearchKey(item.normalizedSearchText || "").includes(compactQuery));
+      return [
+        ...state.sites.filter(includesSearch),
+        ...(state.wikiArticles || []).map(mobileWikiSearchResult).filter(includesSearch)
+      ].sort((left, right) =>
+        mobileSearchResultScore(right, rawQuery) - mobileSearchResultScore(left, rawQuery)
+        || String(left.title || "").localeCompare(String(right.title || ""))
+      );
+    }
+
+    function refreshMobileSearchSuggestions() {
+      if (!searchEl) return;
+      const value = searchEl.value || "";
+      if (value === state.lastAutocompleteQuery && state.lastAutocompleteDataVersion === state.searchDataVersion) return;
+      state.lastAutocompleteQuery = value;
+      state.lastAutocompleteDataVersion = state.searchDataVersion;
+      renderSearchSuggestions();
+    }
+
     function renderSearchSuggestions() {
       if (!searchSuggestionsEl || !searchEl) return;
       const query = searchEl.value.trim();
@@ -4948,7 +4983,7 @@
       };
       if (!query || state.mobilePanelState === "maximized") return hide();
       const seen = new Set();
-      const suggestions = (state.filtered || [])
+      const suggestions = mobileAutocompleteCandidates(query)
         .filter(item => item && item.slug !== "address-result" && item.title)
         .filter(item => {
           const key = String(item.title).trim().toLowerCase();
