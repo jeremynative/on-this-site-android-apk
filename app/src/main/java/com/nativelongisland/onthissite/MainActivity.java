@@ -79,7 +79,7 @@ public class MainActivity extends Activity {
     static final int COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST = 49;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260809-comment-photo-carousel-r48";
+    static final String APP_VERSION = "20260809-comment-photo-carousel-r49";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -292,9 +292,14 @@ public class MainActivity extends Activity {
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
         ));
-        // The WebView owns the single startup screen. It includes the animated
-        // Long Island loader; adding a second native cover here duplicated the
-        // logo/text and hid that left-to-right animation.
+        // Keep one native branded cover above the WebView until the archive is
+        // actually interactive. The WebView's own loader remains behind it, so
+        // slow cold starts never expose a blank frame or duplicate the logo.
+        loadingCover = createLoadingCover();
+        root.addView(loadingCover, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ));
         setContentView(root);
         webView.post(webView::requestApplyInsets);
         createNotificationChannel();
@@ -412,9 +417,6 @@ public class MainActivity extends Activity {
             @Override
             public void onPageCommitVisible(WebView view, String url) {
                 super.onPageCommitVisible(view, url);
-                if (!isSiteGroundChallengeUrl(url) && isNativeLongIslandUrl(url)) {
-                    hideLoadingCover();
-                }
             }
 
             @Override
@@ -448,7 +450,6 @@ public class MainActivity extends Activity {
                     loadBundledFallback("siteground-challenge");
                     return;
                 }
-                hideLoadingCover();
                 enforceExclusiveMobilePanels(view);
                 validateLoadedAppShell(url);
             }

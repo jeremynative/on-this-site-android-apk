@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260809-comment-photo-carousel-r48";
+const expectedBuild = "20260809-comment-photo-carousel-r49";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -491,13 +491,15 @@ requireText("settings.setCacheMode(WebSettings.LOAD_DEFAULT)", "Android shell mu
 requireText("FrameLayout root = new FrameLayout(this);", "Android shell must layer a native startup cover over slow cold WebView startup.");
 requireText("webView.setBackgroundColor(Color.rgb(238, 243, 237));", "Android shell must use the app theme color behind the WebView during startup.");
 requireText("createLoadingCover", "Android shell must create a visible native loading cover before WebView content is ready.");
+requireText("loadingCover = createLoadingCover();", "Android shell must attach the native cover during every cold start.");
+requireText("root.addView(loadingCover", "Android shell must layer the native cover above the WebView.");
 requireText("hideLoadingCover", "Android shell must hide the native loading cover after the app page finishes.");
-requireText("onPageCommitVisible", "Android shell must reveal the page loader as soon as WebView content is visible.");
-if (!/onPageCommitVisible\(WebView view, String url\)[\s\S]*?!isSiteGroundChallengeUrl\(url\)[\s\S]*?isNativeLongIslandUrl\(url\)[\s\S]*?hideLoadingCover\(\)/.test(source)) {
-  throw new Error("Android shell must reveal the animated page loader after a valid app page commits.");
+requireText("onPageCommitVisible", "Android shell must observe the first committed WebView frame.");
+if (/onPageCommitVisible\(WebView view, String url\)[\s\S]{0,300}?hideLoadingCover\(\)/.test(source)) {
+  throw new Error("Android shell must keep the native cover until the app is interactive, not merely committed.");
 }
-if (!/onPageFinished\(WebView view, String url\)[\s\S]*?isSiteGroundChallengeUrl\(url\)[\s\S]*?hideLoadingCover\(\);[\s\S]*?validateLoadedAppShell\(url\)/.test(source)) {
-  throw new Error("Android shell must reveal the animated page loader no later than normal page completion.");
+if (/onPageFinished\(WebView view, String url\)[\s\S]{0,1000}?hideLoadingCover\(\);[\s\S]*?validateLoadedAppShell\(url\)/.test(source)) {
+  throw new Error("Android shell must not uncover a partially initialized app at page completion.");
 }
 requireText('getAssets().open("assets/images/long-island-loading-outline.png")', "Android shell must show the Long Island loading outline during cold startup.");
 requireText('loadingCoverLabel.setText("Loading On This Site");', "Android shell must label the animated Long Island loading screen.");
