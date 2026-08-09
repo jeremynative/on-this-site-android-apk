@@ -846,6 +846,7 @@
       lastSearchDataVersion: -1,
       lastAutocompleteQuery: null,
       lastAutocompleteDataVersion: -1,
+      androidImeSearchDraft: "",
       layers: [],
       markers: new Map(),
       mapSourceCache: null,
@@ -4039,7 +4040,7 @@
     }
 
     function defaultNearbyRenderLimit() {
-      const query = searchEl.value.trim();
+      const query = activeMobileSearchValue().trim();
       if (state.addressSearchMode) return 12;
       if (query) return Math.min(18, NEARBY_LIST_SEARCH_LIMIT);
       if (isNativeAndroidApp()) {
@@ -4066,7 +4067,7 @@
       window.clearTimeout(state.searchRenderSettledTimer);
       state.searchRenderSettledTimer = window.setTimeout(() => {
         state.searchRenderSettledTimer = null;
-        const query = searchEl.value.trim();
+        const query = activeMobileSearchValue().trim();
         if (!query || state.nearbyRenderLimit >= Math.min(NEARBY_LIST_SEARCH_LIMIT, 36)) return;
         state.nearbyRenderLimit = Math.min(NEARBY_LIST_SEARCH_LIMIT, 36, state.filtered.length || 36);
         renderList();
@@ -4074,7 +4075,7 @@
     }
 
     function showAndroidSearchPreviewPanel() {
-      if (!isNativeAndroidApp() || !searchEl?.value.trim()) return;
+      if (!isNativeAndroidApp() || !activeMobileSearchValue().trim()) return;
       setMobilePanelMode("nearby");
       // Full mode hides the header, including the focused search field. While
       // typing, reveal a normal-height results tray instead of dismissing the
@@ -4084,7 +4085,7 @@
     }
 
     function filterSites() {
-      const rawQuery = searchEl.value.trim();
+      const rawQuery = activeMobileSearchValue().trim();
       const query = rawQuery.toLowerCase();
       const normalizedQuery = normalizeText(rawQuery);
       const compactQuery = mobileCompactSearchKey(rawQuery);
@@ -4171,7 +4172,7 @@
 
     function openMobileSearchResultsPage() {
       if (!searchEl) return;
-      const query = searchEl.value.trim();
+      const query = activeMobileSearchValue().trim();
       window.clearTimeout(state.searchTimer);
       if (detailEl?.classList.contains("open")) closeDetail({ skipRoute: true, blockMapTap: false });
       filterSites();
@@ -4202,21 +4203,46 @@
       openMobileSearchResultsPage();
     }
 
-    function handleMobileSearchInput() {
+    function activeMobileSearchValue() {
+      return state.androidImeSearchDraft || searchEl?.value || "";
+    }
+
+    function handleMobileSearchInput(nativeDraft = null) {
+      const domValue = searchEl?.value || "";
+      const priorDraft = state.androidImeSearchDraft || "";
+      // Android can emit a stale input event that still exposes the first
+      // committed character after the IME has sent a longer composing string.
+      state.androidImeSearchDraft = nativeDraft == null
+        ? (isNativeAndroidApp() && priorDraft.length > domValue.length && priorDraft.startsWith(domValue)
+          ? priorDraft
+          : domValue)
+        : String(nativeDraft);
       state.lastSearchInputAt = Date.now();
       // Search results must remain immediately readable and tappable.
       hideMobileStartupSpotlight();
       closeDetailForSearchResults();
       // Android can defer timer work while the IME is open. Filter the small
       // local index immediately so every character updates its prediction.
-      state.lastSearchValue = searchEl?.value || "";
+      state.lastSearchValue = activeMobileSearchValue();
       state.lastSearchDataVersion = state.searchDataVersion;
       refreshMobileSearchSuggestions();
       window.clearTimeout(state.searchTimer);
       filterSites();
     }
 
+    // Native WebView input can update the visible field without delivering a
+    // usable DOM event. Expose the same closure-bound handler for Android.
+    window.__nliRefreshMobileSearchInput = handleMobileSearchInput;
+    // Android's composing text can advance before Chromium updates input.value.
+    // MainActivity forwards it here so every character drives the local search.
+    window.__nliSetNativeSearchDraft = value => handleMobileSearchInput(value);
+    window.__nliAppendNativeSearchText = value => {
+      const fragment = String(value || "");
+      if (fragment) handleMobileSearchInput(`${activeMobileSearchValue()}${fragment}`);
+    };
+
     function handleMobileSearchFocus() {
+      state.androidImeSearchDraft = searchEl?.value || "";
       hideMobileStartupSpotlight();
       closeDetailForSearchResults();
       startSearchValueWatch();
@@ -4901,7 +4927,7 @@
       state.nearbyFeedObserver?.disconnect?.();
       state.nearbyFeedObserver = null;
       const count = state.filtered.length;
-      const query = searchEl.value.trim();
+      const query = activeMobileSearchValue().trim();
       const showingSearch = Boolean(query);
       const showingAddressResults = state.filtered.some(site => site?.slug === "address-result");
       const didYouMean = showingSearch && !state.addressSearchMode ? mobileDidYouMeanSearch(query, state.filtered) : null;
@@ -4947,6 +4973,22 @@
       renderSearchSuggestions();
     }
 
+    function handleAndroidSearchBeforeInput(event) {
+      if (!isNativeAndroidApp() || !searchEl) return;
+      const committed = searchEl.value || "";
+      const prior = state.androidImeSearchDraft || committed;
+      const text = String(event.data || "");
+      if (event.inputType === "deleteContentBackward") {
+        state.androidImeSearchDraft = prior.slice(0, -1);
+      } else if (event.inputType?.startsWith("insert")) {
+        state.androidImeSearchDraft = prior + text;
+      } else {
+        state.androidImeSearchDraft = committed;
+      }
+      state.lastAutocompleteQuery = null;
+      renderSearchSuggestions(state.androidImeSearchDraft);
+    }
+
     function mobileAutocompleteCandidates(rawQuery) {
       const query = String(rawQuery || "").trim().toLowerCase();
       const normalizedQuery = normalizeText(rawQuery);
@@ -4966,16 +5008,16 @@
 
     function refreshMobileSearchSuggestions() {
       if (!searchEl) return;
-      const value = searchEl.value || "";
+      const value = activeMobileSearchValue();
       if (value === state.lastAutocompleteQuery && state.lastAutocompleteDataVersion === state.searchDataVersion) return;
       state.lastAutocompleteQuery = value;
       state.lastAutocompleteDataVersion = state.searchDataVersion;
       renderSearchSuggestions();
     }
 
-    function renderSearchSuggestions() {
+    function renderSearchSuggestions(queryOverride = null) {
       if (!searchSuggestionsEl || !searchEl) return;
-      const query = searchEl.value.trim();
+      const query = String(queryOverride == null ? (state.androidImeSearchDraft || searchEl.value) : queryOverride).trim();
       const hide = () => {
         searchSuggestionsEl.hidden = true;
         searchSuggestionsEl.replaceChildren();
@@ -15871,6 +15913,7 @@
     });
     searchEl.addEventListener("search", handleMobileSearchCommand);
     searchEl.addEventListener("input", handleMobileSearchInput);
+    searchEl.addEventListener("beforeinput", handleAndroidSearchBeforeInput);
     searchEl.addEventListener("keyup", handleMobileSearchInput);
     searchEl.addEventListener("change", handleMobileSearchInput);
     searchEl.addEventListener("search", handleMobileSearchInput);

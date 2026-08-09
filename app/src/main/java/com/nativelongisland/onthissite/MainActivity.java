@@ -32,6 +32,9 @@ import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.InputConnectionWrapper;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
@@ -74,7 +77,7 @@ public class MainActivity extends Activity {
     static final int COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST = 49;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260808-native-search-sync-r40";
+    static final String APP_VERSION = "20260808-native-search-ime-r41";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -164,18 +167,76 @@ public class MainActivity extends Activity {
     private final Runnable revealBundledFallback = () -> {
         if (webView != null && loadingBundledFallback) hideLoadingCover();
     };
-    private final Runnable nativeSearchValueRefresh = new Runnable() {
-        @Override public void run() {
-            if (webView == null) return;
-            if (appShellLoaded) webView.evaluateJavascript(
-                "(function(){try{var el=document.getElementById('search');if(!el)return;var value=String(el.value||'');if(window.__nliNativeSearchInputValue===value)return;window.__nliNativeSearchInputValue=value;el.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}})();",
-                null
-            );
-            startupHandler.postDelayed(this, 120);
-        }
-    };
     Uri lastStoryVideoUri;
     String lastStoryVideoMimeType = "video/webm";
+
+    /**
+     * Android's WebView can expose only the first committed character through
+     * JavaScript while its IME is still composing the rest of a search term.
+     * Forward the IME composition itself to the page; polling input.value is
+     * too late and reproduces the first-letter autocomplete bug.
+     */
+    private final class SearchAwareWebView extends WebView {
+        private String composingSearchText = "";
+
+        SearchAwareWebView(Context context) {
+            super(context);
+        }
+
+        @Override
+        public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+            InputConnection target = super.onCreateInputConnection(outAttrs);
+            if (target == null) return null;
+            return new InputConnectionWrapper(target, false) {
+                @Override
+                public boolean setComposingText(CharSequence text, int newCursorPosition) {
+                    composingSearchText = text == null ? "" : text.toString();
+                    dispatchNativeSearchDraft(composingSearchText);
+                    return super.setComposingText(text, newCursorPosition);
+                }
+
+                @Override
+                public boolean commitText(CharSequence text, int newCursorPosition) {
+                    String committed = text == null ? "" : text.toString();
+                    if (composingSearchText.isEmpty()) {
+                        dispatchNativeSearchTextAppend(committed);
+                    } else {
+                        dispatchNativeSearchDraft(composingSearchText);
+                    }
+                    composingSearchText = "";
+                    return super.commitText(text, newCursorPosition);
+                }
+
+                @Override
+                public boolean deleteSurroundingText(int beforeLength, int afterLength) {
+                    if (beforeLength > 0 && !composingSearchText.isEmpty()) {
+                        composingSearchText = composingSearchText.substring(
+                            0,
+                            Math.max(0, composingSearchText.length() - beforeLength)
+                        );
+                        dispatchNativeSearchDraft(composingSearchText);
+                    }
+                    return super.deleteSurroundingText(beforeLength, afterLength);
+                }
+            };
+        }
+    }
+
+    private void dispatchNativeSearchDraft(String value) {
+        if (webView == null) return;
+        webView.post(() -> webView.evaluateJavascript(
+            "window.__nliSetNativeSearchDraft&&window.__nliSetNativeSearchDraft(" + jsString(value) + ")",
+            null
+        ));
+    }
+
+    private void dispatchNativeSearchTextAppend(String value) {
+        if (webView == null || value == null || value.isEmpty()) return;
+        webView.post(() -> webView.evaluateJavascript(
+            "window.__nliAppendNativeSearchText&&window.__nliAppendNativeSearchText(" + jsString(value) + ")",
+            null
+        ));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -184,7 +245,7 @@ public class MainActivity extends Activity {
         if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true);
 
         FrameLayout root = new FrameLayout(this);
-        webView = new WebView(this);
+        webView = new SearchAwareWebView(this);
         webView.setBackgroundColor(Color.rgb(238, 243, 237));
         webView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         webView.setOnApplyWindowInsetsListener((view, insets) -> {
@@ -354,8 +415,6 @@ public class MainActivity extends Activity {
                 hideLoadingCover();
                 enforceExclusiveMobilePanels(view);
                 validateLoadedAppShell(url);
-                startupHandler.removeCallbacks(nativeSearchValueRefresh);
-                startupHandler.postDelayed(nativeSearchValueRefresh, 180);
             }
         });
 
