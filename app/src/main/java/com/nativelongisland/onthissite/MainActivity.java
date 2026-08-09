@@ -209,6 +209,7 @@ public class MainActivity extends Activity {
 
                 @Override
                 public boolean deleteSurroundingText(int beforeLength, int afterLength) {
+                    if (beforeLength > 0) dispatchNativeSearchTextDelete(beforeLength);
                     if (beforeLength > 0 && !composingSearchText.isEmpty()) {
                         composingSearchText = composingSearchText.substring(
                             0,
@@ -234,6 +235,14 @@ public class MainActivity extends Activity {
         if (webView == null || value == null || value.isEmpty()) return;
         webView.post(() -> webView.evaluateJavascript(
             "window.__nliAppendNativeSearchText&&window.__nliAppendNativeSearchText(" + jsString(value) + ")",
+            null
+        ));
+    }
+
+    private void dispatchNativeSearchTextDelete(int count) {
+        if (webView == null || count < 1) return;
+        webView.post(() -> webView.evaluateJavascript(
+            "window.__nliDeleteNativeSearchText&&window.__nliDeleteNativeSearchText(" + count + ")",
             null
         ));
     }

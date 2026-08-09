@@ -4240,6 +4240,10 @@
       const fragment = String(value || "");
       if (fragment) handleMobileSearchInput(`${activeMobileSearchValue()}${fragment}`);
     };
+    window.__nliDeleteNativeSearchText = count => {
+      const amount = Math.max(1, Number(count) || 1);
+      handleMobileSearchInput(activeMobileSearchValue().slice(0, -amount));
+    };
 
     function handleMobileSearchFocus() {
       state.androidImeSearchDraft = searchEl?.value || "";
