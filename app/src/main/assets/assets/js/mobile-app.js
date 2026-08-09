@@ -171,7 +171,6 @@
       { center: [-71.82, 41.02], zoom: 9.05 }
     ];
     const MOBILE_STARTUP_VIEW = randomMobileLongIslandStartupView();
-    const FALLBACK_STYLE = "mapbox://styles/mapbox/outdoors-v12";
     const KNOWLEDGEBASE_CATEGORIES = [
       { label: "Biography", slugs: ["mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "quashawam", "elizabeth-thunder-bird-haile-shinnecock", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "sachem-warawakmy-of-the-setauket", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "john-a-strong", "nathan-jeffrey-cuffee", "samson-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "penhawitz-sachem-of-the-canarsie", "stephen-talkhouse-pharoah", "nasseconset-sachem-of-the-nissequogue", "keeossechok-sachem-of-the-secatogue", "sunksquaws-and-indigenous-womens-leadership"] },
       { label: "Tribal Nations and Communities", entries: [["wiki", "native-long-island-overview"], ["wiki", "continued-indigenous-presence-today"], ["wiki", "the-tribes-of-long-island"], ["wiki", "western-long-island-native-communities"], ["wiki", "central-long-island-native-communities"], ["wiki", "eastern-long-island-native-communities"], ["wiki", "myth-of-the-thirteen-tribes"], ["site", "montaukett-ancestral-land"], ["site", "shinnecock-indian-reservation"], ["site", "unkechaug-indian-reservation"], ["site", "corchaug-tribe"], ["site", "manhansack-aqua-quash-awamock"], ["site", "setauket-ancestral-land"], ["site", "nissaquogue"], ["site", "matinecock"], ["site", "secatogues"], ["site", "massapequas"], ["site", "merricks"], ["site", "rockaways"], ["site", "canarsie"]] },
@@ -560,11 +559,21 @@
       }
     };
     const MOBILE_BASEMAPS = {
-      streets: "mapbox://styles/mapbox/streets-v12",
-      satellite: "mapbox://styles/mapbox/satellite-streets-v12",
-      outdoors: "mapbox://styles/mapbox/outdoors-v12",
-      blank: "mapbox://styles/mapbox/light-v11"
+      streets: { tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: "© OpenStreetMap contributors" },
+      satellite: { tileUrl: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attribution: "Tiles © Esri" },
+      outdoors: { tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: "© OpenStreetMap contributors" },
+      blank: null
     };
+
+    function mobileBasemapStyle(value) {
+      const base = MOBILE_BASEMAPS[value];
+      if (!base) return { version: 8, sources: {}, layers: [{ id: "mobile-blank-background", type: "background", paint: { "background-color": "#eef3ef" } }] };
+      return {
+        version: 8,
+        sources: { "mobile-raster-basemap": { type: "raster", tiles: [base.tileUrl], tileSize: 256, attribution: base.attribution } },
+        layers: [{ id: "mobile-raster-basemap", type: "raster", source: "mobile-raster-basemap", paint: { "raster-saturation": value === "satellite" ? 0.08 : -0.24, "raster-brightness-max": value === "satellite" ? 0.9 : 1 } }]
+      };
+    }
     const MAPBOX_PUBLIC_TOKEN = "__NLI_MAPBOX_TOKEN__";
     const SITE_INDEX_FIELDS = SHARED_FIELDS.mobileSiteIndex;
     const SITE_INDEX_RUNTIME_FIELDS = String(SITE_INDEX_FIELDS || "").split(",").filter(field => !["geojson", "display_geojson"].includes(field)).join(",");
@@ -618,7 +627,7 @@
     };
     const NEAR_ME_ZOOM = 10.5;
     const STARTUP_LOCATION_ZOOM = NEAR_ME_ZOOM;
-    const SITE_CHECKIN_RADIUS_MILES = 0.25;
+    const SITE_CHECKIN_RADIUS_MILES = 0.05;
     const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;
     const SITE_LABEL_MIN_ZOOM = 10.75;
     const SITE_POINT_LABEL_MIN_ZOOM = 13.35;
@@ -651,6 +660,7 @@
     const NEARBY_LIST_INCREMENT = 12;
     const TIMELINE_FEED_INITIAL_LIMIT = 10;
     const TIMELINE_FEED_INCREMENT = 10;
+    const TIMELINE_SCRUBBER_WINDOW = 30;
     const MOBILE_ACTIVITY_INITIAL_LIMIT = 8;
     const MOBILE_ACTIVITY_INCREMENT = 8;
     const MOBILE_PANEL_STATE_KEY = "nli-mobile-bottom-panel-state";
@@ -736,6 +746,7 @@
       wikiArticles: [],
       wikiById: new Map(),
       wikiBySlug: new Map(),
+      linkTerms: [],
       filtered: [],
       mapSites: [],
       timelineEvents: [],
@@ -783,6 +794,7 @@
       storyCanvasLoop: null,
       storyRecordingStartedAt: 0,
       storyDiscardRecording: false,
+      pendingCommentPhotoDiscussion: null,
       suggestionMarker: null,
       mediaMap: window.NLI_MOBILE_MEDIA_MAP || {},
       blogPosts: [],
@@ -804,6 +816,13 @@
       mobileStartupRendering: false,
       mobileTimelineRendered: false,
       timelineRenderLimit: TIMELINE_FEED_INITIAL_LIMIT,
+      timelineWindowStart: 0,
+      timelineScrubberIndex: 0,
+      timelineLastRenderedScrubberIndex: 0,
+      timelineScrubberPendingIndex: 0,
+      timelineScrubberJumpTimer: null,
+      timelineScrubberScrollFrame: null,
+      timelineScrubberDragging: false,
       timelineFeedSignature: "",
       timelineFeedObserver: null,
       nearbyFeedObserver: null,
@@ -900,6 +919,7 @@
     const loadingScreenEl = document.getElementById("loading-screen");
     const loadingMessageEl = document.getElementById("loading-message");
     const searchEl = document.getElementById("search");
+    const searchSuggestionsEl = document.getElementById("search-suggestions");
     const territorySubtitleEl = document.getElementById("territory-subtitle");
     const locateBtn = document.getElementById("locate");
     const mobileMapLocateBtn = document.getElementById("mobile-map-locate");
@@ -946,6 +966,10 @@
     const showTimelineBtn = document.getElementById("show-timeline");
     const mobileTimelineCurrentBtn = document.getElementById("mobile-timeline-current");
     const mobileTimelineStatusEl = document.getElementById("mobile-timeline-status");
+    const mobileTimelineScrubberEl = document.getElementById("mobile-timeline-scrubber");
+    const mobileTimelineScrubberRangeEl = document.getElementById("mobile-timeline-scrubber-range");
+    const mobileTimelineScrubberLabelEl = document.getElementById("mobile-timeline-scrubber-label");
+    const mobileTimelineScrubberScaleEl = document.getElementById("mobile-timeline-scrubber-scale");
     const listPanelEl = document.querySelector(".list-panel");
     const mobileTabTimelineBtn = document.getElementById("mobile-tab-timeline");
     const mobileTabNearbyBtn = document.getElementById("mobile-tab-nearby");
@@ -1373,6 +1397,22 @@
       });
     }
 
+    function siteHasRecordedCheckin(profile, site) {
+      if (siteHasCheckin(profile, site)) return true;
+      const profileId = Number(relationId(profile?.id || profile?.profileId || state.profile?.profileId));
+      if (!profileId || !site?.slug) return false;
+      const matchingVisits = (state.publicVisits || [])
+        .filter(visit => Number(relationId(visit.member_profile)) === profileId && String(visit.site_slug || "") === String(site.slug))
+      const visitIds = new Set(matchingVisits.map(visit => String(visit.id || "")).filter(Boolean));
+      const hasLegacyCommunityCheckin = String(site.site_type || "").trim().toLowerCase() === "community_resource" &&
+        matchingVisits.some(visit => !PROFILE_UTILS.hasSavedCheckinDistance(visit.distance_miles));
+      return hasLegacyCommunityCheckin || (state.profilePointEvents || []).some(event =>
+        Number(relationId(event.member_profile)) === profileId &&
+        String(event.event_type || "") === "site_checkin" &&
+        (String(event.source_slug || "") === String(site.slug) || visitIds.has(String(event.source_id || "")))
+      );
+    }
+
     function siteVisitPayload(profile, site, options = {}) {
       return PROFILE_UTILS.siteVisitPayload(profile, site, {
         ...options,
@@ -1390,11 +1430,11 @@
         throw new Error(`Check-ins unlock within ${SITE_CHECKIN_RADIUS_MILES.toFixed(2)} mi of this site.`);
       }
       let existing = siteVisitRecord(profile, site);
-      if (!existing || (wantsCheckin && !siteHasCheckin(profile, site))) {
+      if (!existing || (wantsCheckin && !siteHasRecordedCheckin(profile, site))) {
         await refreshRemoteSiteVisitsForProfileSite(profile, site).catch(() => []);
         existing = siteVisitRecord(profile, site);
       }
-      if (existing && (!wantsCheckin || siteHasCheckin(profile, site))) return { earned: false, record: existing };
+      if (existing && (!wantsCheckin || siteHasRecordedCheckin(profile, site))) return { earned: false, record: existing };
       const payload = siteVisitPayload(profile, site, options);
       if (!payload) return null;
       if (existing?.id && wantsCheckin) {
@@ -1812,11 +1852,76 @@
       return src ? rewriteMediaUrl(src) : "";
     }
 
-    function formatSectionContent(title, content) {
+    function formatSectionContent(title, content, options = {}) {
       const html = cleanHtml(content);
       const shouldRenderTimeline = HTML_UTILS.shouldRenderSectionTimeline(title);
-      if (!shouldRenderTimeline) return html;
-      return sectionTimelineHtml(html) || html;
+      const rendered = shouldRenderTimeline ? (sectionTimelineHtml(html) || html) : html;
+      return autoLinkHtml(rendered, options);
+    }
+
+    function buildInternalLinkTerms() {
+      const terms = new Map();
+      const add = (title, href, priority) => {
+        const label = String(title || "").replace(/^Private:\s*/i, "").replace(/\s+/g, " ").trim();
+        if (label.length < 4 || /^[0-9\s.,-]+$/.test(label)) return;
+        const key = label.toLowerCase();
+        if (!terms.has(key) || priority < terms.get(key).priority) terms.set(key, { label, href, priority });
+      };
+      state.sites.forEach(site => add(site.title, `#listing/${site.slug}`, 1));
+      state.wikiArticles.forEach(article => add(article.title, `#wiki/${article.slug}`, 2));
+      return [...terms.values()]
+        .filter(item => !["home", "about", "blog", "map", "maps", "page"].includes(item.label.toLowerCase()))
+        .sort((a, b) => b.label.length - a.label.length || a.priority - b.priority);
+    }
+
+    function autoLinkHtml(html, options = {}) {
+      const template = document.createElement("template");
+      template.innerHTML = html || "";
+      const used = options.used || new Set();
+      const excludeHref = options.excludeHref || "";
+      const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          const parent = node.parentElement;
+          if (!parent || !node.nodeValue.trim() || parent.closest("a, button, h1, h2, h3, h4, .timeline-year")) return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      });
+      const textNodes = [];
+      while (walker.nextNode()) textNodes.push(walker.currentNode);
+      for (const node of textNodes) linkFirstAvailableTerm(node, used, excludeHref);
+      return template.innerHTML;
+    }
+
+    function linkFirstAvailableTerm(node, used, excludeHref) {
+      const value = node.nodeValue;
+      for (const term of state.linkTerms) {
+        if (used.has(term.href) || term.href === excludeHref) continue;
+        const index = indexOfInternalLinkTerm(value, term.label);
+        if (index < 0) continue;
+        const fragment = document.createDocumentFragment();
+        if (index) fragment.appendChild(document.createTextNode(value.slice(0, index)));
+        const link = document.createElement("a");
+        link.href = term.href;
+        link.textContent = value.slice(index, index + term.label.length);
+        fragment.appendChild(link);
+        if (index + term.label.length < value.length) fragment.appendChild(document.createTextNode(value.slice(index + term.label.length)));
+        node.replaceWith(fragment);
+        used.add(term.href);
+        return;
+      }
+    }
+
+    function indexOfInternalLinkTerm(value, term) {
+      const text = String(value || "").toLowerCase();
+      const needle = String(term || "").toLowerCase();
+      let index = text.indexOf(needle);
+      while (index >= 0) {
+        const before = index ? text[index - 1] : "";
+        const after = text[index + needle.length] || "";
+        if (!/[a-z0-9]/i.test(before) && !/[a-z0-9]/i.test(after)) return index;
+        index = text.indexOf(needle, index + 1);
+      }
+      return -1;
     }
 
     function sectionTimelineHtml(html) {
@@ -1882,7 +1987,10 @@
 
     function sourceAwareSectionHtml(title, content, options = {}) {
       const sourceNote = importedFootnoteSources(content).join("; ");
-      const html = removeFootnoteReferenceMarkers(formatSectionContent(title, content));
+      const html = removeFootnoteReferenceMarkers(formatSectionContent(title, content, {
+        used: options.linked,
+        excludeHref: options.excludeHref
+      }));
       return `
         <section class="section${sourceNote ? " has-source" : ""}"${options.introduction ? ` data-site-introduction="section"` : ""}>
           <h3>${escapeHtml(title)}</h3>
@@ -3640,6 +3748,7 @@
         .filter(site => site.title);
       state.siteBySlug = new Map(state.sites.map(site => [site.slug || "", site]));
       state.siteById = new Map(state.sites.map(site => [Number(site.id), site]));
+      state.linkTerms = buildInternalLinkTerms();
       state.mapSites = state.sites.filter(site => (
         site.center &&
         site.slug !== WHALING_FEATURE_SLUG &&
@@ -3947,8 +4056,9 @@
     function showAndroidSearchPreviewPanel() {
       if (!isNativeAndroidApp() || !searchEl?.value.trim()) return;
       setMobilePanelMode("nearby");
-      // Full mode hides the header and focused search field. While typing,
-      // reveal results at normal height so Android keeps the IME open.
+      // Full mode hides the header, including the focused search field. While
+      // typing, reveal a normal-height results tray instead of dismissing the
+      // keyboard after the first character.
       if (state.mobilePanelState === "collapsed") setMobileBottomPanelState("normal");
       listEl?.scrollTo?.({ top: 0, behavior: "auto" });
     }
@@ -3989,9 +4099,9 @@
       resetNearbyRenderLimit();
       renderList();
       showAndroidSearchPreviewPanel();
+      clearAddressSearch();
       scheduleSearchRenderSettle();
       scheduleSearchMapSync();
-      clearAddressSearch();
     }
 
     function closeDetailForSearchResults() {
@@ -4063,14 +4173,9 @@
 
     function handleMobileSearchCommand() {
       if (!searchEl?.value.trim()) return;
-      // Android WebView can emit a search event immediately after text input.
-      // Treat it as a submission only after the user has paused typing.
-      if (Date.now() - Number(state.lastSearchInputAt || 0) < 450) return;
-      window.setTimeout(() => {
-        if (!searchEl?.value.trim()) return;
-        if (Date.now() - Number(state.lastSearchInputAt || 0) < 450) return;
-        openMobileSearchResultsPage();
-      }, 0);
+      // The Android keyboard's Search action is delivered as this event and
+      // may arrive immediately after the final character.  Always honor it.
+      openMobileSearchResultsPage();
     }
 
     function handleMobileSearchInput() {
@@ -4078,7 +4183,12 @@
       // Search results must remain immediately readable and tappable.
       hideMobileStartupSpotlight();
       closeDetailForSearchResults();
-      scheduleSearchSync();
+      // Android can defer timer work while the IME is open. Filter the small
+      // local index immediately so every character updates its prediction.
+      state.lastSearchValue = searchEl?.value || "";
+      state.lastSearchDataVersion = state.searchDataVersion;
+      window.clearTimeout(state.searchTimer);
+      filterSites();
     }
 
     function handleMobileSearchFocus() {
@@ -4629,7 +4739,11 @@
     }
 
     function learningCardImageHtml(card, actionAttribute = "", alt = "", options = {}) {
-      if (!card?.imageUrl) return `<span class="learning-card-media learning-card-media-empty" aria-hidden="true">${escapeHtml((card?.title || "?").slice(0, 1))}</span>`;
+      if (!card?.imageUrl) {
+        return options.hideWhenMissing === true
+          ? ""
+          : `<span class="learning-card-media learning-card-media-empty" aria-hidden="true">${escapeHtml((card?.title || "?").slice(0, 1))}</span>`;
+      }
       const fallback = mobileSnapshotImageUrl(card.imageFallbackUrl || "");
       const priority = options.priority === true;
       const eager = options.eager === true || priority;
@@ -4713,7 +4827,7 @@
       const commentCount = Number(card.counts?.comments || 0);
       return `
         <article class="site-card learning-card nearby-feed-card${!isWiki && card.item.slug === state.selectedSlug ? " active" : ""}" ${buttonAttrs} ${resultAttrs} data-learning-card-key="${escapeHtml(card.key)}">
-          ${learningCardImageHtml(card, isWiki ? `data-nearby-open-wiki="${escapeHtml(card.item.slug)}"` : `data-nearby-open="${escapeHtml(card.item.slug)}"`, card.item.listing_image_alt || "")}
+          ${learningCardImageHtml(card, isWiki ? `data-nearby-open-wiki="${escapeHtml(card.item.slug)}"` : `data-nearby-open="${escapeHtml(card.item.slug)}"`, card.item.listing_image_alt || "", { hideWhenMissing: true })}
           <div class="learning-card-body">
             <div class="learning-card-meta">
               <span>${escapeHtml(card.sourceName)}</span>
@@ -4783,6 +4897,7 @@
             </span>
           </div>
         `;
+        renderSearchSuggestions();
         return;
       }
       const hasMore = count > renderLimit;
@@ -4798,6 +4913,37 @@
       if (options.preserveScroll) listEl.scrollTop = previousScrollTop;
       state.nearbyScrollTop = listEl.scrollTop;
       installLearningFeedObserver("nearby", listEl, loadMoreNearbyCards);
+      renderSearchSuggestions();
+    }
+
+    function renderSearchSuggestions() {
+      if (!searchSuggestionsEl || !searchEl) return;
+      const query = searchEl.value.trim();
+      const hide = () => {
+        searchSuggestionsEl.hidden = true;
+        searchSuggestionsEl.replaceChildren();
+        searchEl.setAttribute("aria-expanded", "false");
+      };
+      if (!query || state.mobilePanelState === "maximized") return hide();
+      const seen = new Set();
+      const suggestions = (state.filtered || [])
+        .filter(item => item && item.slug !== "address-result" && item.title)
+        .filter(item => {
+          const key = String(item.title).trim().toLowerCase();
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .slice(0, 5);
+      if (!suggestions.length) return hide();
+      searchSuggestionsEl.innerHTML = suggestions.map(item => `
+        <button class="search-suggestion" type="button" role="option" data-search-suggestion="${escapeHtml(item.title)}">
+          <strong>${escapeHtml(item.title)}</strong>
+          <span>${escapeHtml(item.resultType === "wiki" ? "Knowledgebase" : item.site_type ? formatLabel(item.site_type) : "Map entry")}</span>
+        </button>
+      `).join("");
+      searchSuggestionsEl.hidden = false;
+      searchEl.setAttribute("aria-expanded", "true");
     }
 
     function timelineSortValue(event) {
@@ -4856,15 +5002,24 @@
     function timelineTitleLooksWeak(title) {
       const value = cleanPlainText(title || "").trim();
       if (!value) return true;
-      if (/^(a|an|the|and|or|but|then|there|this|that|where|which|who|in|on|at|to|from|with|for)\b/i.test(value) && value.split(/\s+/).length <= 7) return true;
+      const hasAction = /\b(is|are|was|were|became|dies|died|records?|describes?|documented|included|built|opened|closed|signed|founded|connected|lived|served|worked|spoke|held|established|removed|renamed|returned|arrived|departed|occurred|began|ended)\b/i.test(value);
+      if (/^(a|an|the|and|or|but|then|there|this|that|where|which|who|in|on|at|to|from|with|for)\b/i.test(value) && value.split(/\s+/).length <= 7 && !hasAction) return true;
       if (/\b(leads to a|leads to an|part of a|located at a|known as a)$/i.test(value)) return true;
       if (!/[A-Z0-9]/.test(value)) return true;
+      if (value.split(/\s+/).length <= 8 && !hasAction) return true;
       return false;
     }
 
     function timelineTitle(event) {
+      const headline = cleanPlainText(event.timeline_headline || "");
+      if (headline) return headline;
       const title = cleanPlainText(event.title || "");
       if (!timelineTitleLooksWeak(title)) return title;
+      if (event.description || event.summary) {
+        const descriptionHeadline = timelineTeaser(event);
+        if (descriptionHeadline) return descriptionHeadline;
+      }
+      if (title) return title.replace(/^([a-z])/, (_, character) => character.toUpperCase());
       const source = cleanPlainText(event.source_title || "");
       const section = cleanPlainText(event.source_section || "");
       const date = timelineLabel(event);
@@ -5028,8 +5183,8 @@
           ? `data-timeline-map="${escapeHtml(eventId)}"`
           : "";
       return `
-        <article class="learning-card timeline-feed-card" data-timeline-id="${escapeHtml(eventId)}" data-learning-card-key="${escapeHtml(card.key)}">
-          ${learningCardImageHtml(card, mediaAction, card.event.image_alt || "")}
+        <article class="learning-card timeline-feed-card" data-timeline-id="${escapeHtml(eventId)}" data-timeline-index="${escapeHtml(card.index)}" data-learning-card-key="${escapeHtml(card.key)}">
+          ${learningCardImageHtml(card, mediaAction, card.event.image_alt || "", { hideWhenMissing: true })}
           <div class="learning-card-body">
             <div class="learning-card-meta">
               <strong>${escapeHtml(card.date)}</strong>
@@ -5053,11 +5208,111 @@
       `;
     }
 
+    function mobileTimelineScrubberLabel(event, index, total) {
+      const date = event ? timelineLabel(event) : "Beginning";
+      return `${date || "Historic moment"} - ${index + 1} of ${total}`;
+    }
+
+    function ensureMobileTimelineScrubberScale() {
+      if (!mobileTimelineScrubberScaleEl || mobileTimelineScrubberScaleEl.childElementCount) return;
+      const tickCount = 27;
+      mobileTimelineScrubberScaleEl.innerHTML = `${Array.from({ length: tickCount }, (_, index) => (
+        `<span class="mobile-timeline-scrubber-tick" data-timeline-scrubber-tick="${index}"></span>`
+      )).join("")}<span class="mobile-timeline-scrubber-cursor"></span>`;
+    }
+
+    function renderMobileTimelineScrubberScale(progress = 0) {
+      if (!mobileTimelineScrubberEl || !mobileTimelineScrubberScaleEl) return;
+      ensureMobileTimelineScrubberScale();
+      const focus = Math.max(0, Math.min(1, Number(progress) || 0));
+      const ticks = [...mobileTimelineScrubberScaleEl.querySelectorAll("[data-timeline-scrubber-tick]")];
+      ticks.forEach((tick, index) => {
+        const position = ticks.length > 1 ? index / (ticks.length - 1) : 0;
+        const distance = Math.abs(position - focus);
+        const influence = Math.pow(Math.max(0, 1 - Math.min(1, distance / 0.48)), 1.45);
+        tick.style.setProperty("--timeline-tick-top", `${Math.round(position * 1000) / 10}%`);
+        tick.style.setProperty("--timeline-tick-width", `${Math.round(5 + (34 * influence))}px`);
+        tick.style.setProperty("--timeline-tick-opacity", String((0.24 + (0.7 * influence)).toFixed(2)));
+      });
+      mobileTimelineScrubberEl.style.setProperty("--timeline-scrubber-progress", `${Math.round(focus * 1000) / 10}%`);
+    }
+
+    function syncMobileTimelineScrubber(index = state.timelineScrubberIndex, events = visibleMobileTimelineEvents()) {
+      if (!mobileTimelineScrubberEl || !mobileTimelineScrubberRangeEl || !mobileTimelineScrubberLabelEl) return;
+      const total = events.length;
+      mobileTimelineScrubberEl.hidden = total < 2;
+      if (total < 2) return;
+      const targetIndex = Math.max(0, Math.min(total - 1, Number(index) || 0));
+      state.timelineScrubberIndex = targetIndex;
+      mobileTimelineScrubberRangeEl.max = String(total - 1);
+      mobileTimelineScrubberRangeEl.value = String(targetIndex);
+      mobileTimelineScrubberRangeEl.setAttribute("aria-valuetext", mobileTimelineScrubberLabel(events[targetIndex], targetIndex, total));
+      mobileTimelineScrubberLabelEl.textContent = mobileTimelineScrubberLabel(events[targetIndex], targetIndex, total);
+      const progress = total > 1 ? targetIndex / (total - 1) : 0;
+      mobileTimelineScrubberEl.style.setProperty("--timeline-scrubber-label-top", `calc(${Math.round(progress * 100)}% - ${Math.round(progress * 34)}px)`);
+      renderMobileTimelineScrubberScale(progress);
+    }
+
+    function jumpMobileTimelineToIndex(index) {
+      const events = visibleMobileTimelineEvents();
+      if (!events.length) return;
+      const targetIndex = Math.max(0, Math.min(events.length - 1, Number(index) || 0));
+      const windowSize = Math.min(events.length, TIMELINE_SCRUBBER_WINDOW);
+      state.timelineWindowStart = Math.max(0, Math.min(targetIndex - 5, events.length - windowSize));
+      state.timelineRenderLimit = windowSize;
+      state.timelineScrubberIndex = targetIndex;
+      state.timelineLastRenderedScrubberIndex = targetIndex;
+      renderMobileTimeline({ jumpIndex: targetIndex });
+    }
+
+    function scheduleMobileTimelineJump(index, immediate = false) {
+      const targetIndex = Number(index) || 0;
+      syncMobileTimelineScrubber(targetIndex);
+      state.timelineScrubberPendingIndex = targetIndex;
+      if (immediate) {
+        window.clearTimeout(state.timelineScrubberJumpTimer);
+        state.timelineScrubberJumpTimer = null;
+        jumpMobileTimelineToIndex(targetIndex);
+        return;
+      }
+      if (state.timelineScrubberJumpTimer) return;
+      state.timelineScrubberJumpTimer = window.setTimeout(() => {
+        state.timelineScrubberJumpTimer = null;
+        const pendingIndex = Number(state.timelineScrubberPendingIndex) || 0;
+        const lastRendered = Number(state.timelineLastRenderedScrubberIndex) || 0;
+        if (Math.abs(pendingIndex - lastRendered) >= 3) jumpMobileTimelineToIndex(pendingIndex);
+      }, 32);
+    }
+
+    function mobileTimelineScrubberIndexAtClientY(clientY) {
+      if (!mobileTimelineScrubberEl || !mobileTimelineScrubberRangeEl) return 0;
+      const bounds = mobileTimelineScrubberEl.getBoundingClientRect();
+      const height = Math.max(1, bounds.height);
+      const progress = Math.max(0, Math.min(1, (Number(clientY) - bounds.top) / height));
+      const maximum = Math.max(0, Number(mobileTimelineScrubberRangeEl.max) || 0);
+      return Math.round(progress * maximum);
+    }
+
+    function updateMobileTimelineScrubberFromPointer(event, immediate = false) {
+      const targetIndex = mobileTimelineScrubberIndexAtClientY(event.clientY);
+      scheduleMobileTimelineJump(targetIndex, immediate);
+    }
+
+    function loadEarlierMobileTimeline() {
+      const previousStart = Math.max(0, Number(state.timelineWindowStart) || 0);
+      if (!previousStart) return;
+      const nextStart = Math.max(0, previousStart - TIMELINE_FEED_INCREMENT);
+      state.timelineWindowStart = nextStart;
+      state.timelineRenderLimit += previousStart - nextStart;
+      renderMobileTimeline({ preserveScroll: true, preserveEventIndex: previousStart });
+    }
+
     function loadMoreMobileTimeline() {
       const events = visibleMobileTimelineEvents();
+      const start = Math.max(0, Number(state.timelineWindowStart) || 0);
       const current = Number(state.timelineRenderLimit || TIMELINE_FEED_INITIAL_LIMIT);
-      if (current >= events.length) return;
-      state.timelineRenderLimit = Math.min(events.length, current + TIMELINE_FEED_INCREMENT);
+      if (start + current >= events.length) return;
+      state.timelineRenderLimit = Math.min(events.length - start, current + TIMELINE_FEED_INCREMENT);
       renderMobileTimeline({ preserveScroll: true });
     }
 
@@ -5072,6 +5327,8 @@
       if (signature !== state.timelineFeedSignature) {
         state.timelineFeedSignature = signature;
         state.timelineRenderLimit = TIMELINE_FEED_INITIAL_LIMIT;
+        state.timelineWindowStart = 0;
+        state.timelineScrubberIndex = 0;
       }
       if (!events.length) {
         const loading = state.deferredDataLoading || !state.deferredDataLoaded;
@@ -5082,23 +5339,42 @@
           </div>
         `;
         if (mobileTimelineStatusEl) mobileTimelineStatusEl.textContent = loading ? "Loading..." : "No moments";
+        if (mobileTimelineScrubberEl) mobileTimelineScrubberEl.hidden = true;
         return;
       }
-      const renderLimit = Math.max(1, Math.min(events.length, Number(state.timelineRenderLimit || TIMELINE_FEED_INITIAL_LIMIT)));
-      const cards = events.slice(0, renderLimit).map(mobileTimelineFeedCardModel);
-      const hasMore = events.length > renderLimit;
+      const windowStart = Math.max(0, Math.min(events.length - 1, Number(state.timelineWindowStart) || 0));
+      const renderLimit = Math.max(1, Math.min(events.length - windowStart, Number(state.timelineRenderLimit || TIMELINE_FEED_INITIAL_LIMIT)));
+      const windowEnd = windowStart + renderLimit;
+      const cards = events.slice(windowStart, windowEnd).map((event, index) => mobileTimelineFeedCardModel(event, windowStart + index));
+      const hasEarlier = windowStart > 0;
+      const hasMore = windowEnd < events.length;
       mobileTimelineCurrentBtn.innerHTML = `
+        ${hasEarlier ? `
+          <div class="learning-feed-more is-earlier">
+            <button type="button" data-timeline-show-earlier>Load earlier moments</button>
+            <span>${windowStart} before this point</span>
+          </div>
+        ` : ""}
         ${cards.map(mobileTimelineFeedCardHtml).join("")}
         ${hasMore ? `
           <div class="learning-feed-more" data-learning-feed-sentinel="timeline">
             <button type="button" data-timeline-show-more>Load more moments</button>
-            <span>${events.length - renderLimit} remaining</span>
+            <span>${events.length - windowEnd} remaining</span>
           </div>
         ` : `<p class="learning-feed-end">End of historic timeline</p>`}
       `;
-      if (mobileTimelineStatusEl) mobileTimelineStatusEl.textContent = `Showing ${renderLimit} of ${events.length}`;
-      mobileTimelineCurrentBtn.scrollTop = Math.max(0, previousScrollTop || 0);
+      if (mobileTimelineStatusEl) mobileTimelineStatusEl.textContent = `Showing ${windowStart + 1}-${windowEnd} of ${events.length}`;
+      if (Number.isFinite(options.jumpIndex)) {
+        const targetCard = mobileTimelineCurrentBtn.querySelector(`[data-timeline-index="${options.jumpIndex}"]`);
+        mobileTimelineCurrentBtn.scrollTop = targetCard ? Math.max(0, targetCard.offsetTop - mobileTimelineCurrentBtn.offsetTop - 8) : 0;
+      } else if (Number.isFinite(options.preserveEventIndex)) {
+        const preservedCard = mobileTimelineCurrentBtn.querySelector(`[data-timeline-index="${options.preserveEventIndex}"]`);
+        mobileTimelineCurrentBtn.scrollTop = preservedCard ? Math.max(0, preservedCard.offsetTop - mobileTimelineCurrentBtn.offsetTop - 8) : Math.max(0, previousScrollTop || 0);
+      } else {
+        mobileTimelineCurrentBtn.scrollTop = Math.max(0, previousScrollTop || 0);
+      }
       state.timelineScrollTop = mobileTimelineCurrentBtn.scrollTop;
+      syncMobileTimelineScrubber(Number.isFinite(options.jumpIndex) ? options.jumpIndex : state.timelineScrubberIndex, events);
       installLearningFeedObserver("timeline", mobileTimelineCurrentBtn, loadMoreMobileTimeline);
     }
 
@@ -5228,6 +5504,12 @@
       window.setTimeout(() => state.map?.resize?.(), 80);
     }
 
+    function selectMobilePanelTab(mode) {
+      const openFull = state.mobilePanelState === "collapsed";
+      setMobilePanelMode(mode);
+      if (openFull) setMobileBottomPanelState("maximized");
+    }
+
     function normalizeMobilePanelState(value) {
       if (value === "collapsed" || value === "maximized") return value;
       return "normal";
@@ -5255,6 +5537,13 @@
       if (panelState !== "collapsed") state.mobilePanelPreviousOpenState = panelState;
       else if (previous && previous !== "collapsed") state.mobilePanelPreviousOpenState = previous;
       state.mobilePanelState = panelState;
+      if (panelState === "maximized") {
+        document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
+        document.querySelector(".mobile-layer-menu[open]")?.removeAttribute("open");
+        hideMobileStartupSpotlight();
+        hideQuoteSelectionPopup();
+        closeTimelineSourceReferences(document);
+      }
       appEl?.classList.remove(
         "timeline-hidden",
         "nearby-hidden",
@@ -5273,14 +5562,15 @@
       listPanelEl?.setAttribute("aria-hidden", String(mode !== "nearby" || panelState === "collapsed"));
       if (collapseListBtn) {
         const collapsed = panelState === "collapsed";
-        collapseListBtn.textContent = collapsed ? "Show" : "Hide";
-        collapseListBtn.setAttribute("aria-label", collapsed ? "Show bottom panel" : "Collapse bottom panel");
+        collapseListBtn.hidden = panelState === "maximized";
+        collapseListBtn.textContent = collapsed ? "Open" : "Collapse";
+        collapseListBtn.setAttribute("aria-label", collapsed ? "Open bottom panel" : "Collapse bottom panel");
         collapseListBtn.setAttribute("aria-expanded", String(!collapsed));
       }
       if (mobilePanelSizeBtn) {
         const maximized = panelState === "maximized";
-        mobilePanelSizeBtn.textContent = maximized ? "Normal" : "Max";
-        mobilePanelSizeBtn.setAttribute("aria-label", maximized ? "Return bottom panel to normal size" : "Maximize bottom panel");
+        mobilePanelSizeBtn.textContent = maximized ? "Map view" : "Full";
+        mobilePanelSizeBtn.setAttribute("aria-label", maximized ? "Return to the map and bottom panel" : "Open full-screen bottom panel");
         mobilePanelSizeBtn.setAttribute("aria-expanded", String(maximized));
       }
       if (options.persist !== false) {
@@ -7370,7 +7660,7 @@
         showBanner("Location is not available on this device.");
         return;
       }
-      const center = site.checkinCenter || getGeometryCenter(site.geojson || site.display_geojson || null);
+      const center = site.center || site.checkinCenter || getGeometryCenter(site.geojson || site.display_geojson || null);
       if (!center) {
         showBanner("This site does not have a public check-in location.");
         return;
@@ -7383,12 +7673,13 @@
           return;
         }
         if (miles > SITE_CHECKIN_RADIUS_MILES) {
-          showBanner(`Check-in not saved. You are about ${miles.toFixed(1)} mi from this site.`);
+          showBanner(`Move closer to this site's map icon to check in. You are about ${miles.toFixed(2)} mi away; check-in unlocks within ${SITE_CHECKIN_RADIUS_MILES.toFixed(2)} mi.`);
           return;
         }
         recordSiteVisit(site, { distanceMiles: miles })
           .then(result => {
             showBanner(result?.earned ? `Check-in saved: ${site.title}` : "You already checked in here.");
+            refreshMobileVisitActions(site);
             renderRewards();
             renderProfile();
             renderProfiles();
@@ -7502,10 +7793,8 @@
       MEDIA_UTILS.setFilePreview(section, preview, file, { key: "_commentPhotoPreviewUrl" });
     }
 
-    async function prepareSelectedCommentPhoto(section) {
+    async function prepareCommentPhotoFile(section, rawFile) {
       if (!section) return null;
-      const input = section.querySelector("[data-discussion-image]");
-      const rawFile = input?.files?.[0] || null;
       section._commentPhotoFile = null;
       setCommentPhotoPreview(section, null);
       if (!rawFile) {
@@ -7527,6 +7816,11 @@
       setCommentPhotoPreview(section, prepared);
       setCommentPhotoStatus(section, `Photo ready (${MEDIA_UTILS.formatImageSize(prepared.size)}${changedSize}).`);
       return prepared;
+    }
+
+    async function prepareSelectedCommentPhoto(section) {
+      const input = section?.querySelector("[data-discussion-image]");
+      return prepareCommentPhotoFile(section, input?.files?.[0] || null);
     }
 
     function plantIdentificationEndpoint() {
@@ -8001,6 +8295,25 @@
       }
       const file = fileFromBase64(base64, mimeType, filename);
       processPlantPhotoFile(section, file).catch(error => showBanner(error.message || "Could not analyze that plant photo."));
+      return true;
+    };
+
+    window.onAndroidCommentPhoto = (ok, message, base64, mimeType, filename) => {
+      const section = state.pendingCommentPhotoDiscussion || document.querySelector(".discussion-section");
+      if (!ok) {
+        state.pendingCommentPhotoDiscussion = null;
+        if (section) setCommentPhotoStatus(section, message || "Photo was cancelled.", "error");
+        showBanner(message || "Photo was cancelled.");
+        return true;
+      }
+      if (!section || !base64) return false;
+      state.pendingCommentPhotoDiscussion = null;
+      setCommentPhotoStatus(section, "Preparing captured photo...");
+      const file = fileFromBase64(base64, mimeType, filename || `comment-photo-${Date.now()}.jpg`);
+      prepareCommentPhotoFile(section, file).catch(error => {
+        setCommentPhotoStatus(section, error.message || "Could not prepare that comment photo.", "error");
+        showBanner(error.message || "Could not prepare that comment photo.");
+      });
       return true;
     };
 
@@ -10201,6 +10514,9 @@
         window.clearTimeout(state.mobileMovingBiographyMarkerQueueTimer);
         state.mobileMovingBiographyMarkerQueueTimer = null;
       }
+      // The Biography paths & icons control owns the moving biography markers
+      // as well as the Mapbox route layers. Otherwise Disable all leaves a
+      // visible, interactive biography icon behind.
       const items = mobileBiographyPathsEnabled() ? mobileMovingBiographyItems() : [];
       const wanted = new Set(items.map(item => item.slug));
       for (const [slug, entry] of state.mobileMovingBiographyMarkers) {
@@ -10391,7 +10707,10 @@
       const rawArticleContentHtml = article.content ? (articleTimelineHtml || cleanHtml(article.content)) : "";
       const articleContentHtml = cleanupBiographyArticleHtml(
         article,
-        isBiographyWikiArticle(article) ? rawArticleContentHtml : removeFootnoteReferenceMarkers(rawArticleContentHtml)
+        autoLinkHtml(isBiographyWikiArticle(article) ? rawArticleContentHtml : removeFootnoteReferenceMarkers(rawArticleContentHtml), {
+          used: new Set(),
+          excludeHref: `#wiki/${article.slug}`
+        })
       );
       const showArticleSummary = Boolean(publicCleanText(article.summary)) && !articleContentHtml;
       const wikiMoments = timelineEventsForSource("wiki", article.id, article.slug);
@@ -10889,6 +11208,16 @@
       return false;
     }
 
+    function nativeTakeCommentPhoto() {
+      try {
+        if (window.AndroidApp?.takeCommentPhoto) {
+          window.AndroidApp.takeCommentPhoto();
+          return true;
+        }
+      } catch {}
+      return false;
+    }
+
     function setMobileContentRoute(params, options = {}) {
       if (options.skipRoute) return;
       const url = new URL(window.location.href);
@@ -10955,6 +11284,8 @@
         timelineScrollTop: mobileTimelineCurrentBtn?.scrollTop || state.timelineScrollTop || 0,
         nearbyScrollTop: listEl?.scrollTop || state.nearbyScrollTop || 0,
         timelineRenderLimit: state.timelineRenderLimit,
+        timelineWindowStart: state.timelineWindowStart,
+        timelineScrubberIndex: state.timelineScrubberIndex,
         nearbyRenderLimit: state.nearbyRenderLimit,
         detailDrawerState: currentDetailDrawerState(),
         detailScrollTop: detailBodyEl?.scrollTop || 0,
@@ -10992,6 +11323,8 @@
       state.timelineScrollTop = Number(snapshot.timelineScrollTop || 0);
       state.nearbyScrollTop = Number(snapshot.nearbyScrollTop || 0);
       state.timelineRenderLimit = Math.max(TIMELINE_FEED_INITIAL_LIMIT, Number(snapshot.timelineRenderLimit || TIMELINE_FEED_INITIAL_LIMIT));
+      state.timelineWindowStart = Math.max(0, Number(snapshot.timelineWindowStart || 0));
+      state.timelineScrubberIndex = Math.max(0, Number(snapshot.timelineScrubberIndex || state.timelineWindowStart || 0));
       state.nearbyRenderLimit = Math.max(defaultNearbyRenderLimit(), Number(snapshot.nearbyRenderLimit || defaultNearbyRenderLimit()));
       state.timelineFeedSignature = visibleMobileTimelineEvents().map(event => String(event.id || "")).join("|");
       renderMobileTimeline();
@@ -11130,6 +11463,14 @@
       }));
       site = await fetchSiteDetail(site);
       if (state.selectedSlug !== slug) return;
+      if (isApprovedContributor()) {
+        const profile = currentContributorProfile();
+        await Promise.all([
+          refreshRemoteSiteVisitsForProfileSite(profile, site),
+          refreshRemotePointEventsForProfileId(relationId(profile?.id || profile?.profileId || state.profile?.profileId))
+        ]).catch(() => []);
+      }
+      if (state.selectedSlug !== slug) return;
       state.selectedSite = site;
       syncActiveSiteMapLabel(site);
       const image = mobileSnapshotImageUrl(listingImage(site));
@@ -11143,6 +11484,8 @@
       }
       let renderedMoments = false;
       const sectionEntries = contentSections(site);
+      const linked = new Set();
+      const excludeHref = `#listing/${site.slug}`;
       const introductionPresentation = SITE_UTILS.siteIntroductionPresentation(site, sectionEntries, {
         cleanText: publicCleanText,
         summary: site.summary
@@ -11150,9 +11493,11 @@
       const sections = sectionEntries.map(([title, content, field]) => {
         if (field?.content === "history_content" && moments.length) {
           renderedMoments = true;
-          return `${sourceAwareSectionHtml(title, content)}${historicMomentsHtml(moments, { showLocations: false })}`;
+          return `${sourceAwareSectionHtml(title, content, { linked, excludeHref })}${historicMomentsHtml(moments, { showLocations: false })}`;
         }
         return sourceAwareSectionHtml(title, content, {
+          linked,
+          excludeHref,
           introduction: field?.content === "introduction_content"
         });
       }).join("");
@@ -11171,7 +11516,7 @@
         ${discussionHtml("site", site)}
         <div class="actions">
           <a class="action" href="${escapeHtml(googleMapsUrl(site))}" target="_blank" rel="noreferrer">Directions</a>
-          ${mobileVisitActionsHtml(site)}
+          <span class="mobile-visit-actions" data-mobile-visit-actions>${mobileVisitActionsHtml(site)}</span>
           <button class="action secondary" type="button" id="open-story-current">AR story</button>
           <a class="action secondary" href="${escapeHtml(ROUTE_UTILS.publicArchiveUrl({ site: site.slug }, { baseUrl: PUBLIC_ARCHIVE_BASE }))}" target="_blank" rel="noreferrer">Full page</a>
           ${isAdminContributor() ? `<button class="action secondary" type="button" data-open-frontend-editor="site" data-editor-slug="${escapeHtml(site.slug)}">Edit site</button>` : ""}
@@ -11489,7 +11834,7 @@
 
     function showMobilePromo(kind) {
       const payload = mobilePromoPayload(kind);
-      if (!payload || !mobileStartupSpotlightEl) return false;
+      if (!payload || !mobileStartupSpotlightEl || appEl?.classList.contains("panel-maximized")) return false;
       state.mobilePromoKind = kind;
       state.mobilePromoPayload = payload;
       state.mobileStartupSpotlightSite = payload.site || null;
@@ -11542,6 +11887,7 @@
     function mobilePromoUiBusy() {
       return Boolean(
         detailEl?.classList.contains("open")
+        || appEl?.classList.contains("panel-maximized")
         || document.querySelector(".sheet.open")
         || document.querySelector("#language-quiz-modal:not([hidden])")
         || document.querySelector("#plant-photo-viewer:not([hidden])")
@@ -11736,8 +12082,10 @@
       if (hour < 9 || hour > 17) return;
       const todayKey = localDateKey();
       if (localStorage.getItem("nli-proximity-alert-date") === todayKey) return;
+      const profile = currentContributorProfile();
       const nearby = visitableSites()
         .filter(site => !isBroadTerritory(site))
+        .filter(site => !profile || !siteHasRecordedCheckin(profile, site))
         .map(site => ({ site, miles: milesBetween(state.userLocation, site.center) }))
         .filter(item => Number.isFinite(item.miles) && item.miles <= SITE_VISIT_ALERT_RADIUS_MILES)
         .sort((a, b) => a.miles - b.miles)[0];
@@ -11770,6 +12118,10 @@
     }
 
     function mobileVisitActionsHtml(site) {
+      const profile = currentContributorProfile();
+      if (profile && siteHasRecordedCheckin(profile, site)) {
+        return `<button class="action secondary checkin-complete" type="button" disabled aria-disabled="true">Checked In!</button>`;
+      }
       if (PROFILE_UTILS.isEligiblePublicVisitSite(site)) {
         return `
           <button class="action secondary" type="button" id="mark-visited">Mark visited</button>
@@ -11777,6 +12129,11 @@
         `;
       }
       return `<p class="detail-meta">Learn from this map entry; public visits or check-ins are not encouraged here.</p>`;
+    }
+
+    function refreshMobileVisitActions(site = state.selectedSite) {
+      const container = detailBodyEl?.querySelector?.("[data-mobile-visit-actions]");
+      if (container && site) container.innerHTML = mobileVisitActionsHtml(site);
     }
 
     function newContentAlertCandidates() {
@@ -11880,7 +12237,7 @@
         filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["==", ["get", "broad"], true]],
         paint: {
           "fill-color": ["coalesce", ["get", "fillcolor"], "#496f5d"],
-          "fill-opacity": ["coalesce", ["to-number", ["get", "opacity"]], 0.18]
+          "fill-opacity": ["min", ["coalesce", ["to-number", ["get", "opacity"]], 0.18], 0.28]
         }
       });
       state.map.addLayer({
@@ -11890,7 +12247,7 @@
         filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["==", ["get", "place_name_area_overlay"], true]],
         paint: {
           "fill-color": ["coalesce", ["get", "fillcolor"], "#15988f"],
-          "fill-opacity": ["coalesce", ["to-number", ["get", "opacity"]], 0.42]
+          "fill-opacity": ["min", ["coalesce", ["to-number", ["get", "opacity"]], 0.42], 0.32]
         }
       });
       state.map.addLayer({
@@ -11911,7 +12268,7 @@
         filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["!=", ["get", "broad"], true], ["!=", ["get", "place_name_area_overlay"], true]],
         paint: {
           "fill-color": ["coalesce", ["get", "fillcolor"], "#7b9b68"],
-          "fill-opacity": ["coalesce", ["to-number", ["get", "opacity"]], 0.2]
+          "fill-opacity": ["min", ["coalesce", ["to-number", ["get", "opacity"]], 0.2], 0.28]
         }
       });
       state.map.addLayer({
@@ -13124,7 +13481,6 @@
               authorName: profile?.display_name || comment.author_name || "Contributor"
             }),
             preview: plantFields ? publicCleanText(`${plantFields.name} - ${plantFields.vocabulary || plantFields.identification}`) : publicCleanText(comment.comment),
-            image: directusAssetUrl(comment.comment_image),
             date: comment.created_at
           };
         });
@@ -13570,6 +13926,8 @@
         const initial = (name || "?").trim().slice(0, 1) || "?";
         const parsed = QUOTE_COMMENT_UTILS.parseCommentRecord(comment);
         const body = parsed.body || (!parsed.quote ? comment.comment || "" : "");
+        const attachment = directusAssetUrl(comment.comment_image);
+        const attachmentTitle = body ? `${name}: ${body}` : `${name} comment photo`;
         return `
           <article class="activity-thread-comment${depth ? " is-reply" : ""}">
             <span class="comment-avatar" aria-hidden="true">${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : escapeHtml(initial)}</span>
@@ -13578,6 +13936,11 @@
                 <strong>${escapeHtml(name)}</strong>
                 ${parsed.quote ? `<blockquote>${escapeHtml(parsed.quote)}</blockquote>` : ""}
                 ${body ? `<p>${escapeHtml(body)}</p>` : ""}
+                ${attachment ? `
+                  <button class="comment-image-button" type="button" data-comment-photo-view="${escapeHtml(attachment)}" data-comment-photo-title="${escapeHtml(attachmentTitle)}" aria-label="Open image attached to ${escapeHtml(name)}'s comment">
+                    <img class="comment-image activity-thread-image" src="${escapeHtml(attachment)}" alt="" loading="lazy" decoding="async">
+                  </button>
+                ` : ""}
               </div>
               <time>${comment.created_at ? escapeHtml(new Date(comment.created_at).toLocaleString()) : "Approved comment"}</time>
             </div>
@@ -13652,7 +14015,7 @@
             <time datetime="${escapeHtml(card.date || "")}">${escapeHtml(activityDateLabel(card.date))}</time>
           </header>
           <div class="learning-card-layout">
-            ${learningCardImageHtml(card, canOpen ? openAttributes : "", "", { eager: index < MOBILE_ACTIVITY_INITIAL_LIMIT, priority: index < 2 })}
+            ${learningCardImageHtml(card, canOpen ? openAttributes : "", "", { eager: index < MOBILE_ACTIVITY_INITIAL_LIMIT, priority: index < 2, hideWhenMissing: true })}
             <div class="learning-card-body">
               ${canOpen ? `<button class="learning-card-title" type="button" ${openAttributes}>${escapeHtml(card.title || "Archive activity")}</button>` : `<h3 class="learning-card-title-static">${escapeHtml(card.title || "Archive activity")}</h3>`}
               <p class="learning-card-source">Source: <strong>${escapeHtml(sourceLabel || "On This Site")}</strong></p>
@@ -14448,12 +14811,12 @@
       const baseLayer = (state.layers || []).find(layer => layer.slug === "native-long-island-base-map");
       const styleJson = baseLayer?.style_json || {};
       mapboxgl.accessToken = styleJson.publicToken || MAPBOX_PUBLIC_TOKEN;
-      const savedBasemap = MOBILE_BASEMAPS[state.settings.basemap] ? state.settings.basemap : "outdoors";
+      const savedBasemap = Object.prototype.hasOwnProperty.call(MOBILE_BASEMAPS, state.settings.basemap) ? state.settings.basemap : "outdoors";
       state.settings.basemap = savedBasemap;
       if (mobileBasemapSelect) mobileBasemapSelect.value = savedBasemap;
       state.map = new mapboxgl.Map({
         container: "map",
-        style: savedBasemap === "streets" ? (styleJson.styleUrl || FALLBACK_STYLE) : MOBILE_BASEMAPS[savedBasemap],
+        style: mobileBasemapStyle(savedBasemap),
         center: MOBILE_STARTUP_VIEW.center,
         zoom: MOBILE_STARTUP_VIEW.zoom,
         minZoom: 7,
@@ -14465,13 +14828,15 @@
         handleSuggestionMapPickClick(event);
       });
       bindMobileMapTouchFallback();
-      return new Promise(resolve => {
-        let settled = false;
-        let errorTimer = null;
-        const fallbackToOfflineIndex = () => {
-          if (settled) return;
-          settled = true;
-          if (errorTimer) window.clearTimeout(errorTimer);
+        return new Promise(resolve => {
+          let settled = false;
+          let errorTimer = null;
+          let postLoadRecoveryTimer = null;
+          const fallbackToOfflineIndex = (allowAfterLoad = false) => {
+            if (settled && !allowAfterLoad) return;
+            settled = true;
+            if (errorTimer) window.clearTimeout(errorTimer);
+            if (postLoadRecoveryTimer) window.clearTimeout(postLoadRecoveryTimer);
           try { state.map?.remove(); } catch {}
           state.map = null;
           renderOfflineMapIndex();
@@ -14498,11 +14863,23 @@
             settled = true;
             resolve(true);
           }, 160);
-        });
-        state.map.on("error", () => {
-          if (settled || errorTimer) return;
-          errorTimer = window.setTimeout(fallbackToOfflineIndex, 800);
-        });
+          });
+          state.map.on("error", () => {
+            if (!settled) {
+              if (!errorTimer) errorTimer = window.setTimeout(fallbackToOfflineIndex, 800);
+              return;
+            }
+            // Mapbox can emit a tile error after `load` in Android WebView. Do
+            // not leave a live shell surrounding a blank map when it never
+            // recovers; replace only an still-unpainted canvas after a grace period.
+            if (postLoadRecoveryTimer) return;
+            postLoadRecoveryTimer = window.setTimeout(() => {
+              postLoadRecoveryTimer = null;
+              if (!state.map) return;
+              const tilesReady = !state.map.areTilesLoaded || state.map.areTilesLoaded();
+              if (!tilesReady) fallbackToOfflineIndex(true);
+            }, 1600);
+          });
       });
     }
 
@@ -14687,15 +15064,13 @@
     }
 
     function setMobileBasemap(value) {
-      const next = MOBILE_BASEMAPS[value] ? value : "outdoors";
+      const next = Object.prototype.hasOwnProperty.call(MOBILE_BASEMAPS, value) ? value : "outdoors";
       state.settings.basemap = next;
       state.settings.basemapUserSet = true;
       saveSettings();
       if (mobileBasemapSelect) mobileBasemapSelect.value = next;
       if (!state.map) return;
-      const baseLayer = (state.layers || []).find(layer => layer.slug === "native-long-island-base-map");
-      const styleJson = baseLayer?.style_json || {};
-      const style = next === "streets" ? (styleJson.styleUrl || FALLBACK_STYLE) : MOBILE_BASEMAPS[next];
+      const style = mobileBasemapStyle(next);
       state.mapSourceAppliedKey = "";
       state.mobileSiteIconImagesLoaded.clear();
       state.mobileSiteIconImagesLoading = false;
@@ -14799,6 +15174,9 @@
         event?.preventDefault?.();
         event?.stopPropagation?.();
         searchEl.value = searchSuggestion.dataset.searchSuggestion || "";
+        searchSuggestionsEl?.replaceChildren();
+        if (searchSuggestionsEl) searchSuggestionsEl.hidden = true;
+        searchEl.setAttribute("aria-expanded", "false");
         scheduleSearchSync();
         searchEl.focus();
         return true;
@@ -14899,6 +15277,13 @@
         event.preventDefault();
         return;
       }
+      activateMobileListTarget(event.target, event);
+    });
+    searchSuggestionsEl?.addEventListener("pointerdown", event => {
+      // Keep the keyboard and search focus stable while choosing a suggestion.
+      event.preventDefault();
+    });
+    searchSuggestionsEl?.addEventListener("click", event => {
       activateMobileListTarget(event.target, event);
     });
     profilesListEl.addEventListener("click", event => {
@@ -15226,9 +15611,11 @@
       }
       if (event.target.closest("[data-take-comment-photo]") && discussion) {
         event.preventDefault();
+        state.pendingCommentPhotoDiscussion = discussion;
+        setCommentPhotoStatus(discussion, "Opening camera...");
+        if (nativeTakeCommentPhoto()) return;
         const input = discussion.querySelector("[data-discussion-image]");
         if (input) {
-          setCommentPhotoStatus(discussion, "Opening camera...");
           input.setAttribute("capture", "environment");
           input.value = "";
           try {
@@ -15241,6 +15628,7 @@
       }
       if (event.target.closest("[data-choose-comment-photo]") && discussion) {
         event.preventDefault();
+        state.pendingCommentPhotoDiscussion = null;
         const input = discussion.querySelector("[data-discussion-image]");
         if (input) {
           setCommentPhotoStatus(discussion, "Opening photo library...");
@@ -15428,6 +15816,7 @@
     searchEl.addEventListener("input", handleMobileSearchInput);
     searchEl.addEventListener("keyup", handleMobileSearchInput);
     searchEl.addEventListener("change", handleMobileSearchInput);
+    searchEl.addEventListener("search", handleMobileSearchInput);
     searchEl.addEventListener("keydown", handleMobileSearchKeydown);
     searchEl.addEventListener("compositionend", handleMobileSearchInput);
     searchEl.addEventListener("focus", handleMobileSearchFocus);
@@ -15462,7 +15851,8 @@
       showTimelineBtn,
       mobileTabTimelineBtn,
       mobileTabNearbyBtn,
-      mobileMapLocateBtn
+      mobileMapLocateBtn,
+      mobileTimelineScrubberRangeEl
     ].forEach(control => {
       control?.addEventListener("pointerdown", blockPanelControlMapTap, { capture: true });
       control?.addEventListener("touchstart", blockPanelControlMapTap, { capture: true, passive: true });
@@ -15485,11 +15875,11 @@
     });
     mobileTabTimelineBtn?.addEventListener("click", event => {
       blockPanelControlMapTap(event);
-      setMobilePanelMode("timeline");
+      selectMobilePanelTab("timeline");
     });
     mobileTabNearbyBtn?.addEventListener("click", event => {
       blockPanelControlMapTap(event);
-      setMobilePanelMode("nearby");
+      selectMobilePanelTab("nearby");
     });
     mobileTimelineCurrentBtn.addEventListener("click", event => {
       const sourceButton = event.target.closest("[data-timeline-source-info]");
@@ -15509,6 +15899,12 @@
       if (loadMore) {
         event.preventDefault();
         loadMoreMobileTimeline();
+        return;
+      }
+      const loadEarlier = event.target.closest("[data-timeline-show-earlier]");
+      if (loadEarlier) {
+        event.preventDefault();
+        loadEarlierMobileTimeline();
         return;
       }
       const discuss = event.target.closest("[data-learning-discuss]");
@@ -15531,6 +15927,53 @@
         return;
       }
     });
+    mobileTimelineCurrentBtn.addEventListener("scroll", () => {
+      state.timelineScrollTop = mobileTimelineCurrentBtn.scrollTop;
+      if (state.timelineScrubberDragging) return;
+      window.cancelAnimationFrame(state.timelineScrubberScrollFrame);
+      state.timelineScrubberScrollFrame = window.requestAnimationFrame(() => {
+        const cards = [...mobileTimelineCurrentBtn.querySelectorAll("[data-timeline-index]")];
+        if (!cards.length) return;
+        const threshold = mobileTimelineCurrentBtn.scrollTop + 24;
+        let current = cards[0];
+        cards.forEach(card => {
+          if (card.offsetTop - mobileTimelineCurrentBtn.offsetTop <= threshold) current = card;
+        });
+        syncMobileTimelineScrubber(Number(current.dataset.timelineIndex) || 0);
+      });
+    }, { passive: true });
+    mobileTimelineScrubberEl?.addEventListener("pointerdown", event => {
+      if (event.button !== undefined && event.button !== 0) return;
+      blockPanelControlMapTap(event);
+      state.timelineScrubberDragging = true;
+      mobileTimelineScrubberEl?.classList.add("is-active");
+      mobileTimelineScrubberEl?.setPointerCapture?.(event.pointerId);
+      updateMobileTimelineScrubberFromPointer(event);
+    });
+    mobileTimelineScrubberEl?.addEventListener("pointermove", event => {
+      if (!state.timelineScrubberDragging) return;
+      event.preventDefault();
+      updateMobileTimelineScrubberFromPointer(event);
+    });
+    mobileTimelineScrubberRangeEl?.addEventListener("input", event => {
+      scheduleMobileTimelineJump(event.currentTarget.value);
+    });
+    const finishTimelineScrub = event => {
+      if (!state.timelineScrubberDragging && event.type !== "change") return;
+      if (state.timelineScrubberDragging && event.type !== "pointercancel" && Number.isFinite(event.clientY)) {
+        updateMobileTimelineScrubberFromPointer(event, true);
+      } else {
+        scheduleMobileTimelineJump(event.currentTarget?.value || state.timelineScrubberIndex, true);
+      }
+      state.timelineScrubberDragging = false;
+      if (event.pointerId !== undefined && mobileTimelineScrubberEl?.hasPointerCapture?.(event.pointerId)) {
+        mobileTimelineScrubberEl.releasePointerCapture(event.pointerId);
+      }
+      mobileTimelineScrubberEl?.classList.remove("is-active");
+    };
+    mobileTimelineScrubberEl?.addEventListener("pointerup", finishTimelineScrub);
+    mobileTimelineScrubberEl?.addEventListener("pointercancel", finishTimelineScrub);
+    mobileTimelineScrubberRangeEl?.addEventListener("change", finishTimelineScrub);
     document.addEventListener("scroll", event => {
       if (!event.target?.closest?.(".timeline-source-popover")) closeTimelineSourceReferences(document);
     }, { passive: true, capture: true });
@@ -16174,11 +16617,14 @@
           renderMobileTimeline();
         }
         renderList();
-        if (androidLifecycleSnapshot) {
+        // A cold launch should always reveal the map first.  Only restore a
+        // panel mode/size when Android is returning the user to content that
+        // was already open (for example after taking a photo in a draft).
+        if (androidLifecycleSnapshot?.content) {
           restoreAndroidLifecyclePanels(androidLifecycleSnapshot);
         } else {
           setMobilePanelMode("nearby");
-          restoreMobileBottomPanelState();
+          setMobileBottomPanelState("normal", { persist: false });
         }
         installMobileBottomPanelDrag();
         installDetailPanelDrag();
@@ -16193,11 +16639,13 @@
           androidLifecycleContentRestored = await restoreAndroidLifecycleContent(androidLifecycleSnapshot);
         }
         if (state.passwordResetToken) openSheet(loginSheetEl);
+        // The searchable local index is ready at this point.  Let people use
+        // the app while the slower map initializes in the background.
+        hideLoadingScreen();
         await initMap().catch(error => {
           console.warn("Map did not initialize yet.", error);
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
         });
-        hideLoadingScreen();
         if (!isOfflineTextMode()) {
           state.researchQuestionInstance = window.NLI_RESEARCH_QUESTION_UTILS?.init?.({
             platform: "mobile",

@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260731-stable-activity-media-r36";
+const expectedBuild = "20260808-search-submit-startup-r37";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -225,7 +225,6 @@ if (!bundledSharedSiteUtils.includes("function siteIntroductionPresentation(site
 }
 for (const [label, document] of [
   ["bundled fallback", bundledApp],
-  ["bundled live fallback", bundledLiveApp],
   ["bundled mobile runtime", bundledMobileJs]
 ]) {
   if (!document.includes("SITE_UTILS.siteIntroductionPresentation(site, sectionEntries, {")
@@ -248,8 +247,7 @@ for (const [label, document] of [
   }
 }
 for (const [label, document] of [
-  ["bundled fallback", bundledApp],
-  ["bundled live fallback", bundledLiveApp]
+  ["bundled fallback", bundledApp]
 ]) {
   if (!document.includes('id="mobile-layer-enable-all"')
       || !document.includes('id="mobile-layer-disable-all"')
@@ -317,8 +315,7 @@ if (!bundledMobileJs.includes("function setAllMobileLayerVisibility(visible)")
   throw new Error("Bundled Android bulk labels must exclude biography paths and reject the Labels-menu opening touch.");
 }
 for (const [label, document] of [
-  ["bundled fallback", bundledApp],
-  ["bundled live fallback", bundledLiveApp]
+  ["bundled fallback", bundledApp]
 ]) {
   if (!document.includes("Biography paths &amp; icons")
       || !document.includes("const items = mobileBiographyPathsEnabled() ? mobileMovingBiographyItems() : [];")) {
@@ -541,7 +538,7 @@ if (!networkStateMatch
     || !networkStateMatch[0].includes("liveRecoveryAttemptedForCurrentNetwork = false;")) {
   throw new Error("Runtime network transitions must cancel stale opposite-direction work before scheduling a switch.");
 }
-if (!source.includes("loadingBundledFallback\n                        && hasUsableNetwork()\n                        && !liveRecoveryAttemptedForCurrentNetwork")) {
+if (!/loadingBundledFallback\s*\n\s*&& hasUsableNetwork\(\)\s*\n\s*&& !liveRecoveryAttemptedForCurrentNetwork/.test(source)) {
   throw new Error("A ready fallback must schedule one live retry when the existing network is already validated.");
 }
 const activeWorkFallbackMatch = source.match(/private void requestBundledFallbackPreservingActiveWork\(String reason\) \{[\s\S]*?\n    \}/);
@@ -990,7 +987,7 @@ requireBundledText('mobile-startup-spotlight', "Bundled Android app must include
 requireBundledText('showRandomMobileStartupSpotlight()', "Bundled Android app must resolve the randomized daily feature after startup.");
 requireBundledText('scheduleMobilePromoStartup();', "Bundled Android app must schedule the daily feature after the map is interactive.");
 requireBundledText('fitLongIslandMapView("android-startup-outside-long-island")', "Bundled Android app must use the Long Island overview when startup location is outside the project area.");
-requireBundledText('const SITE_CHECKIN_RADIUS_MILES = 0.25;', "Bundled Android app must require check-ins within a quarter mile.");
+requireBundledText('const SITE_CHECKIN_RADIUS_MILES = 0.05;', "Bundled Android app must require check-ins within about 260 feet.");
 requireBundledText('const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;', "Bundled Android app must alert within half a mile of a site.");
 requireBundledText('window.AndroidApp.showNotification', "Bundled Android app must use the native notification bridge.");
 requireBundledText('localStorage.getItem("nli-proximity-alert-date") === todayKey', "Bundled Android app must limit nearby site notifications to once per day.");
