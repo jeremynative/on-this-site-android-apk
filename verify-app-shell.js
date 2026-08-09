@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260809-native-search-full-value-r45";
+const expectedBuild = "20260809-long-island-place-search-r46";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -964,6 +964,11 @@ requireBundledText('searchEl.addEventListener("keydown", handleMobileSearchKeydo
 requireBundledText('searchEl.addEventListener("search", handleMobileSearchCommand);', "Bundled Android app must open search results from the Android search keyboard action.");
 requireBundledText('window.__nliSubmitMobileSearch = handleMobileSearchCommand;', "Bundled Android app must expose a native keyboard Search submit bridge.");
 requireBundledText('function mobileSearchResultTypeLabel(value)', "Bundled Android autocomplete must format map-entry types without an undefined global helper.");
+requireBundledPattern(/function\s+schedulePlaceAutocomplete\(rawQuery\)[\s\S]*?query\.length\s*<\s*3[\s\S]*?loadPlaceAutocomplete\(query,\s*requestId\)/, "Bundled Android search must debounce external Long Island predictions.");
+requireBundledPattern(/function\s+loadPlaceAutocomplete\(rawQuery,\s*requestId\)[\s\S]*?search\/searchbox\/v1\/suggest[\s\S]*?bbox=\$\{bbox\}[\s\S]*?state\.placeAutocompleteResults/, "Bundled Android search must fetch bounded business, address, and place predictions.");
+requireBundledPattern(/const\s+localLimit\s*=\s*placeSuggestions\.length\s*\?\s*Math\.min\(3,\s*localSuggestions\.length\)\s*:\s*5[\s\S]*?data-place-suggestion/, "Bundled Android search must keep project results ahead of external map results.");
+requireBundledPattern(/function\s+openPlaceAutocompleteSuggestion\(index\)[\s\S]*?retrieveSearchboxSuggestion\(suggestion,\s*tokenValue\)[\s\S]*?applyAddressSearchFeature\(feature\)[\s\S]*?setMobileBottomPanelState\("maximized"\)/, "Bundled Android search must map an exact external prediction with nearby project context.");
+requireBundledPattern(/function\s+nearbyFeedCardModel\(item,\s*index,[^)]*\)[\s\S]*?isExternalMapResult\s*=\s*item\.slug\s*===\s*"address-result"[\s\S]*?comment:\s*!isExternalMapResult[\s\S]*?isExternalMapResult\s*\?\s*"Show"\s*:\s*"Open"/, "Bundled Android external results must show map context without project discussion controls.");
 requireBundledText('`${leadingTitleTerms[0]}${leadingTitleTerms[1]}` === compactQuery) score += 2600;', "Bundled Android autocomplete must prioritize punctuation-free possessive title matches such as Ma's House.");
 forbidBundledText('formatLabel(item.site_type)', "Bundled Android autocomplete must not crash when a site enters the suggestions.");
 requireBundledText('if (searchEl.value !== query) searchEl.value = query;', "Bundled Android search must commit the full native composition into the DOM before submitting.");
