@@ -79,7 +79,7 @@ public class MainActivity extends Activity {
     static final int COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST = 49;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260809-long-island-place-search-r46";
+    static final String APP_VERSION = "20260809-compact-site-header-r47";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;

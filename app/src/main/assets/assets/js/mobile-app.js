@@ -989,6 +989,9 @@
     const detailHeroDockEl = document.createElement("div");
     detailHeroDockEl.className = "detail-hero-dock";
     detailHeroDockEl.setAttribute("aria-hidden", "true");
+    detailHeroDockEl.setAttribute("role", "button");
+    detailHeroDockEl.setAttribute("tabindex", "-1");
+    detailHeroDockEl.setAttribute("aria-label", "Show the full site image");
     detailHeadEl?.appendChild(detailHeroDockEl);
     let detailHeroHomeNode = null;
     const bannerEl = document.getElementById("banner");
@@ -9168,6 +9171,7 @@
           hero.replaceWith(detailHeroHomeNode);
           detailHeroDockEl.appendChild(hero);
           detailHeroDockEl.removeAttribute("aria-hidden");
+          detailHeroDockEl.setAttribute("tabindex", "0");
           detailEl.classList.add("hero-docked");
           hero.classList.add("is-compact");
         });
@@ -9208,6 +9212,7 @@
       if (!hero) {
         detailEl.classList.remove("hero-docked");
         detailHeroDockEl.setAttribute("aria-hidden", "true");
+        detailHeroDockEl.setAttribute("tabindex", "-1");
         return;
       }
       const move = () => {
@@ -9223,6 +9228,7 @@
         }
         detailHeroHomeNode = null;
         detailHeroDockEl.setAttribute("aria-hidden", "true");
+        detailHeroDockEl.setAttribute("tabindex", "-1");
         detailEl.classList.remove("hero-docked");
       };
       if (animate) animateDetailHeroMove(hero, move);
@@ -9234,8 +9240,21 @@
       detailHeroDockEl.querySelector(".article-sticky-hero")?.remove();
       detailHeroHomeNode = null;
       detailHeroDockEl.setAttribute("aria-hidden", "true");
+      detailHeroDockEl.setAttribute("tabindex", "-1");
       detailEl.classList.remove("hero-docked");
     }).observe(detailBodyEl, { childList: true });
+
+    function showFullDetailHero() {
+      if (!detailHeroDockEl.querySelector(".article-sticky-hero")) return;
+      detailBodyEl.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    detailHeroDockEl.addEventListener("click", showFullDetailHero);
+    detailHeroDockEl.addEventListener("keydown", event => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      showFullDetailHero();
+    });
 
     function canOfferQuoteSelection() {
       const profile = currentContributorProfile();
