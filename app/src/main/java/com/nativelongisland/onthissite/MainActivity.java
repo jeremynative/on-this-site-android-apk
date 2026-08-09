@@ -81,13 +81,14 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260809-private-comment-camera-r52";
+    static final String APP_VERSION = "20260809-permission-search-stability-r53";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
     private static final long APP_READINESS_RETRY_DELAY_MS = 350;
     private static final int APP_READINESS_MAX_ATTEMPTS = 60;
     private static final long VALIDATED_NETWORK_STABLE_DELAY_MS = 1500;
+    private static final long LIVE_RECOVERY_RETRY_DELAY_MS = 30000;
     private static final long NETWORK_LOSS_GRACE_DELAY_MS = 4000;
     private static final long ACTIVE_WORK_RECHECK_DELAY_MS = 15000;
     private static final long OFFLINE_COVER_REVEAL_DELAY_MS = 900;
@@ -132,6 +133,8 @@ public class MainActivity extends Activity {
     private long webTouchStartedAt;
     private boolean loadingBundledFallback;
     private boolean appShellLoaded;
+    private boolean runtimePermissionPromptActive;
+    private boolean locationPermissionDeniedForSession;
     private int appReadinessProbeAttempts;
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback connectivityCallback;
@@ -145,6 +148,10 @@ public class MainActivity extends Activity {
     private volatile float safeInsetLeftCss;
     private final Handler startupHandler = new Handler(Looper.getMainLooper());
     private final Runnable startupFallback = () -> {
+        if (runtimePermissionPromptActive) {
+            Log.i(LOG_TAG, "Deferring live startup fallback while a runtime permission prompt is open.");
+            return;
+        }
         if (webView != null && !appShellLoaded && !loadingBundledFallback) {
             loadBundledFallback("live-startup-timeout");
         }
@@ -163,6 +170,12 @@ public class MainActivity extends Activity {
             Log.i(LOG_TAG, "Validated network is stable; recovering the live app shell.");
             refreshApp();
         });
+    };
+    private final Runnable validatedNetworkRecoveryRetry = () -> {
+        if (webView == null || !hasUsableNetwork() || !loadingBundledFallback) return;
+        liveRecoveryAttemptedForCurrentNetwork = false;
+        Log.i(LOG_TAG, "Retrying live recovery after the validated-network backoff.");
+        startupHandler.post(validatedNetworkRecovery);
     };
     private final Runnable unusableNetworkFallback = () -> {
         if (webView == null || hasUsableNetwork() || loadingBundledFallback) return;
@@ -339,9 +352,13 @@ public class MainActivity extends Activity {
                     callback.invoke(origin, true, false);
                     return;
                 }
+                if (locationPermissionDeniedForSession || runtimePermissionPromptActive) {
+                    callback.invoke(origin, false, false);
+                    return;
+                }
                 pendingLocationOrigin = origin;
                 pendingLocationCallback = callback;
-                suppressResumeRefreshAfterPermissionPrompt();
+                beginRuntimePermissionPrompt();
                 requestPermissions(new String[] {
                     Manifest.permission.ACCESS_FINE_LOCATION,
                     Manifest.permission.ACCESS_COARSE_LOCATION
@@ -357,7 +374,7 @@ public class MainActivity extends Activity {
                             return;
                         }
                         pendingCameraRequest = request;
-                        suppressResumeRefreshAfterPermissionPrompt();
+                        beginRuntimePermissionPrompt();
                         requestPermissions(new String[] { Manifest.permission.CAMERA }, CAMERA_REQUEST);
                         return;
                     }
@@ -376,6 +393,7 @@ public class MainActivity extends Activity {
                 if (wantsImageCapture(fileChooserParams)) {
                     if (!hasCameraPermission()) {
                         pendingPhotoCaptureAfterPermission = true;
+                        beginRuntimePermissionPrompt();
                         requestPermissions(new String[] { Manifest.permission.CAMERA }, PHOTO_CAMERA_REQUEST);
                         return true;
                     }
@@ -802,6 +820,11 @@ public class MainActivity extends Activity {
                     return;
                 }
 
+                if (runtimePermissionPromptActive) {
+                    Log.i(LOG_TAG, "Deferring app readiness fallback while a runtime permission prompt is open.");
+                    return;
+                }
+
                 Log.w(LOG_TAG, "WebView did not produce usable archive content: " + url + " probe=" + value);
                 if (!loadingBundledFallback && isNativeLongIslandUrl(url)) {
                     loadBundledFallback("app-readiness-timeout");
@@ -916,6 +939,7 @@ public class MainActivity extends Activity {
         networkStateInitialized = true;
         lastValidatedNetworkState = validated;
         startupHandler.removeCallbacks(validatedNetworkRecovery);
+        startupHandler.removeCallbacks(validatedNetworkRecoveryRetry);
         startupHandler.removeCallbacks(unusableNetworkFallback);
         Log.i(LOG_TAG, "Validated network state changed to " + validated + " (" + reason + ").");
         if (validated) {
@@ -978,6 +1002,7 @@ public class MainActivity extends Activity {
 
     private void scheduleLiveStartupFallback() {
         startupHandler.removeCallbacks(startupFallback);
+        if (runtimePermissionPromptActive) return;
         startupHandler.postDelayed(startupFallback, LIVE_STARTUP_FALLBACK_DELAY_MS);
     }
 
@@ -1279,6 +1304,7 @@ public class MainActivity extends Activity {
         appReadinessProbeAttempts = 0;
         startupHandler.removeCallbacks(startupFallback);
         startupHandler.removeCallbacks(validatedNetworkRecovery);
+        startupHandler.removeCallbacks(validatedNetworkRecoveryRetry);
         startupHandler.removeCallbacks(unusableNetworkFallback);
         startupHandler.removeCallbacks(revealBundledFallback);
         if (!hasUsableNetwork()) {
@@ -1302,8 +1328,10 @@ public class MainActivity extends Activity {
 
     private void loadBundledFallback(String reason) {
         if (webView == null || loadingBundledFallback) return;
+        boolean retryValidatedNetwork = liveRecoveryAttemptedForCurrentNetwork && hasUsableNetwork();
         startupHandler.removeCallbacks(startupFallback);
         startupHandler.removeCallbacks(validatedNetworkRecovery);
+        startupHandler.removeCallbacks(validatedNetworkRecoveryRetry);
         startupHandler.removeCallbacks(unusableNetworkFallback);
         startupHandler.removeCallbacks(revealBundledFallback);
         loadingBundledFallback = true;
@@ -1322,6 +1350,10 @@ public class MainActivity extends Activity {
                 null
             );
             startupHandler.postDelayed(revealBundledFallback, OFFLINE_COVER_REVEAL_DELAY_MS);
+            if (retryValidatedNetwork) {
+                Log.i(LOG_TAG, "Live recovery returned to fallback; scheduling a bounded retry.");
+                startupHandler.postDelayed(validatedNetworkRecoveryRetry, LIVE_RECOVERY_RETRY_DELAY_MS);
+            }
         } catch (IOException error) {
             Log.e(LOG_TAG, "Lightweight offline archive could not be opened.", error);
             hideLoadingCover();
@@ -1330,6 +1362,22 @@ public class MainActivity extends Activity {
 
     void suppressResumeRefreshAfterPermissionPrompt() {
         Log.d(LOG_TAG, "Permission prompt resume will not reload the app shell.");
+    }
+
+    void beginRuntimePermissionPrompt() {
+        runtimePermissionPromptActive = true;
+        startupHandler.removeCallbacks(startupFallback);
+        suppressResumeRefreshAfterPermissionPrompt();
+        Log.d(LOG_TAG, "Runtime permission prompt paused startup fallback timers.");
+    }
+
+    private void finishRuntimePermissionPrompt() {
+        boolean wasActive = runtimePermissionPromptActive;
+        runtimePermissionPromptActive = false;
+        if (!wasActive || webView == null || appShellLoaded || loadingBundledFallback) return;
+        Log.d(LOG_TAG, "Runtime permission prompt resolved; restarting app readiness checks.");
+        validateLoadedAppShell(webView.getUrl());
+        scheduleLiveStartupFallback();
     }
 
     String packageVersionName() {
@@ -1678,7 +1726,7 @@ public class MainActivity extends Activity {
     boolean showNearbyNotification(String title, String body) {
         if (!hasNotificationPermission()) {
             if (Build.VERSION.SDK_INT >= 33) {
-                suppressResumeRefreshAfterPermissionPrompt();
+                beginRuntimePermissionPrompt();
                 requestPermissions(new String[] { Manifest.permission.POST_NOTIFICATIONS }, NOTIFICATION_REQUEST);
             }
             return false;
@@ -1711,56 +1759,61 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        boolean granted = false;
-        for (int result : grantResults) {
-            if (result == PackageManager.PERMISSION_GRANTED) {
-                granted = true;
-                break;
+        try {
+            boolean granted = false;
+            for (int result : grantResults) {
+                if (result == PackageManager.PERMISSION_GRANTED) {
+                    granted = true;
+                    break;
+                }
             }
-        }
 
-        if (requestCode == LOCATION_REQUEST && pendingLocationCallback != null) {
-            suppressResumeRefreshAfterPermissionPrompt();
-            pendingLocationCallback.invoke(pendingLocationOrigin, granted, false);
-            pendingLocationCallback = null;
-            pendingLocationOrigin = null;
-            return;
-        }
-
-        if (requestCode == CAMERA_REQUEST && pendingCameraRequest != null) {
-            suppressResumeRefreshAfterPermissionPrompt();
-            if (granted) {
-                pendingCameraRequest.grant(new String[] { PermissionRequest.RESOURCE_VIDEO_CAPTURE });
-            } else {
-                pendingCameraRequest.deny();
+            if (requestCode == LOCATION_REQUEST && pendingLocationCallback != null) {
+                suppressResumeRefreshAfterPermissionPrompt();
+                locationPermissionDeniedForSession = !granted;
+                pendingLocationCallback.invoke(pendingLocationOrigin, granted, false);
+                pendingLocationCallback = null;
+                pendingLocationOrigin = null;
+                return;
             }
-            pendingCameraRequest = null;
-            return;
-        }
 
-        if (requestCode == PHOTO_CAMERA_REQUEST && pendingFileChooserCallback != null) {
-            suppressResumeRefreshAfterPermissionPrompt();
-            ValueCallback<Uri[]> callback = pendingFileChooserCallback;
-            pendingPhotoCaptureAfterPermission = false;
-            if (granted) {
-                launchImageCaptureOrPicker(callback);
-            } else {
-                launchImagePickerFallback(callback);
+            if (requestCode == CAMERA_REQUEST && pendingCameraRequest != null) {
+                suppressResumeRefreshAfterPermissionPrompt();
+                if (granted) {
+                    pendingCameraRequest.grant(new String[] { PermissionRequest.RESOURCE_VIDEO_CAPTURE });
+                } else {
+                    pendingCameraRequest.deny();
+                }
+                pendingCameraRequest = null;
+                return;
             }
-            return;
-        }
 
-        if (requestCode == PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST) {
-            suppressResumeRefreshAfterPermissionPrompt();
-            if (granted) launchPlantBridgeCamera();
-            else queuePlantPhoto(false, "Camera permission is needed to take a plant photo.", "", "", "");
-            return;
-        }
+            if (requestCode == PHOTO_CAMERA_REQUEST && pendingFileChooserCallback != null) {
+                suppressResumeRefreshAfterPermissionPrompt();
+                ValueCallback<Uri[]> callback = pendingFileChooserCallback;
+                pendingPhotoCaptureAfterPermission = false;
+                if (granted) {
+                    launchImageCaptureOrPicker(callback);
+                } else {
+                    launchImagePickerFallback(callback);
+                }
+                return;
+            }
 
-        if (requestCode == COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST) {
-            suppressResumeRefreshAfterPermissionPrompt();
-            if (granted) launchCommentBridgeCamera();
-            else queueCommentPhoto(false, "Camera permission is needed to take a comment photo.", "", "", "");
+            if (requestCode == PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST) {
+                suppressResumeRefreshAfterPermissionPrompt();
+                if (granted) launchPlantBridgeCamera();
+                else queuePlantPhoto(false, "Camera permission is needed to take a plant photo.", "", "", "");
+                return;
+            }
+
+            if (requestCode == COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST) {
+                suppressResumeRefreshAfterPermissionPrompt();
+                if (granted) launchCommentBridgeCamera();
+                else queueCommentPhoto(false, "Camera permission is needed to take a comment photo.", "", "", "");
+            }
+        } finally {
+            finishRuntimePermissionPrompt();
         }
     }
 

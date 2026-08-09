@@ -81,14 +81,15 @@ class AppBridge {
     @JavascriptInterface
     public void takePlantPhoto() {
         activity.runOnUiThread(() -> {
-            activity.suppressResumeRefreshAfterPermissionPrompt();
             if (!activity.hasCameraPermission()) {
+                activity.beginRuntimePermissionPrompt();
                 activity.requestPermissions(
                     new String[] { Manifest.permission.CAMERA },
                     MainActivity.PLANT_BRIDGE_CAMERA_PERMISSION_REQUEST
                 );
                 return;
             }
+            activity.suppressResumeRefreshAfterPermissionPrompt();
             activity.launchPlantBridgeCamera();
         });
     }
@@ -96,14 +97,15 @@ class AppBridge {
     @JavascriptInterface
     public void takeCommentPhoto() {
         activity.runOnUiThread(() -> {
-            activity.suppressResumeRefreshAfterPermissionPrompt();
             if (!activity.hasCameraPermission()) {
+                activity.beginRuntimePermissionPrompt();
                 activity.requestPermissions(
                     new String[] { Manifest.permission.CAMERA },
                     MainActivity.COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST
                 );
                 return;
             }
+            activity.suppressResumeRefreshAfterPermissionPrompt();
             activity.launchCommentBridgeCamera();
         });
     }

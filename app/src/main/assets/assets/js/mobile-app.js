@@ -4204,6 +4204,7 @@
       setMobileBottomPanelState("maximized");
       listEl?.scrollTo?.({ top: 0, behavior: "smooth" });
       searchEl.blur();
+      renderSearchSuggestions("");
       if (state.filtered.length) showBanner(`${state.filtered.length} search result${state.filtered.length === 1 ? "" : "s"}.`);
     }
 
@@ -4283,9 +4284,11 @@
 
     function handleMobileSearchFocus() {
       state.androidImeSearchDraft = searchEl?.value || "";
+      state.lastAutocompleteQuery = null;
       hideMobileStartupSpotlight();
       closeDetailForSearchResults();
       startSearchValueWatch();
+      refreshMobileSearchSuggestions();
     }
 
     function startSearchValueWatch() {
@@ -5163,6 +5166,7 @@
         searchSuggestionsEl.replaceChildren();
         searchEl.setAttribute("aria-expanded", "false");
       };
+      if (document.activeElement !== searchEl) return hide();
       // A visitor may start a new search while the results tray is already
       // full-height. Keep type-ahead available there instead of silently
       // hiding it after the first search.

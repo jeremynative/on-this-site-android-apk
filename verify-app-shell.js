@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260809-private-comment-camera-r52";
+const expectedBuild = "20260809-permission-search-stability-r53";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -402,8 +402,11 @@ requireText("connectivityManager.registerNetworkCallback(request, connectivityCa
 requireText("NET_CAPABILITY_VALIDATED", "Android shell must require a validated network before loading the live shell.");
 requireText("unregisterConnectivityMonitoring();", "Android shell must release its network callback when destroyed.");
 requireText("validated == lastValidatedNetworkState", "Android shell must deduplicate repeated network callback events.");
-requireText("liveRecoveryAttemptedForCurrentNetwork", "Android shell must bound live recovery to one attempt per validated network connection.");
+requireText("liveRecoveryAttemptedForCurrentNetwork", "Android shell must prevent overlapping live recovery attempts.");
 requireText("VALIDATED_NETWORK_STABLE_DELAY_MS", "Android shell must debounce validated-network recovery.");
+requireText("LIVE_RECOVERY_RETRY_DELAY_MS", "Android shell must back off before retrying a failed live recovery.");
+requireText("validatedNetworkRecoveryRetry", "Android shell must retry a validated connection that returned to fallback.");
+requireText("Live recovery returned to fallback; scheduling a bounded retry.", "Android shell must not remain offline forever after one slow live recovery.");
 requireText("NETWORK_LOSS_GRACE_DELAY_MS", "Android shell must allow brief Wi-Fi/cellular handoffs before falling back.");
 requireText("|| !loadingBundledFallback", "Android shell must only recover live from an active fallback after validation.");
 requireText("requestBundledFallbackPreservingActiveWork", "Android shell must preserve active work before replacing a live shell.");
@@ -417,6 +420,11 @@ requireText("app-readiness-timeout", "Android shell must fall back when the live
 requireText("if (!loadingBundledFallback) return null;", "Android live mode must use deployed assets instead of stale APK-packaged site data.");
 requireText("onReceivedHttpError", "Android shell must fall back when the live mobile archive returns an HTTP error.");
 requireText("isSiteGroundChallengeUrl", "Android shell must detect SiteGround challenge redirects and use the bundled fallback.");
+requireText("runtimePermissionPromptActive", "Android shell must track active runtime permission prompts.");
+requireText("locationPermissionDeniedForSession", "Android shell must not immediately repeat a denied location prompt.");
+requireText("Deferring live startup fallback while a runtime permission prompt is open.", "Android shell must not replace the live shell while a permission dialog is open.");
+requireText("Deferring app readiness fallback while a runtime permission prompt is open.", "Android shell must pause readiness fallback while a permission dialog is open.");
+requireText("finishRuntimePermissionPrompt();", "Android shell must restart readiness checks after a permission dialog resolves.");
 requireText("loadBundledFallback(\"siteground-challenge-start\")", "Android shell must switch to the bundled fallback as soon as SiteGround challenge navigation starts.");
 requireText("shouldIgnoreLifecycleMainFrameReload", "Android shell must ignore non-explicit main-frame reloads after the app has loaded.");
 requireText("appShellLoaded = true;", "Android shell must remember when the app shell has loaded.");
@@ -995,6 +1003,9 @@ requireBundledPattern(/const\s+startupLandMask\s*=\s*isOfflineTextMode\(\)\s*\?\
 requireBundledText('enterkeyhint="search"', "Bundled Android app must request the Android keyboard search action.");
 requireBundledText('autocomplete="off"', "Bundled Android app must keep the mobile search input from fighting app results.");
 requireBundledText('function openMobileSearchResultsPage()', "Bundled Android app must include an explicit mobile search results page.");
+requireBundledPattern(/function\s+openMobileSearchResultsPage\(\)[\s\S]*?searchEl\.blur\(\);[\s\S]*?renderSearchSuggestions\(""\)/, "Bundled Android search must hide autocomplete after submitting results.");
+requireBundledPattern(/function\s+renderSearchSuggestions\([^)]*\)[\s\S]*?document\.activeElement\s*!==\s*searchEl[\s\S]*?return\s+hide\(\)/, "Bundled Android autocomplete must stay hidden while search is blurred.");
+requireBundledPattern(/function\s+handleMobileSearchFocus\(\)[\s\S]*?state\.lastAutocompleteQuery\s*=\s*null[\s\S]*?refreshMobileSearchSuggestions\(\)/, "Bundled Android search must restore predictions when refocused.");
 requireBundledText('setMobileBottomPanelState("maximized")', "Bundled Android app must expand the nearby tray for submitted search results.");
 requireBundledText('searchEl.addEventListener("keydown", handleMobileSearchKeydown);', "Bundled Android app must open search results on Enter.");
 requireBundledText('searchEl.addEventListener("search", handleMobileSearchCommand);', "Bundled Android app must open search results from the Android search keyboard action.");
