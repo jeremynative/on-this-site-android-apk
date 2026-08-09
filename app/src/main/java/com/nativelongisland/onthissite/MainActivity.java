@@ -77,9 +77,10 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_REQUEST = 47;
     private static final int COMMENT_BRIDGE_CAMERA_REQUEST = 48;
     static final int COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST = 49;
+    private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260809-carousel-autoplay-swipe-r50";
+    static final String APP_VERSION = "20260809-comment-photo-picker-r51";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -1520,6 +1521,37 @@ public class MainActivity extends Activity {
         }
     }
 
+    void launchCommentBridgePicker() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("image/*");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            startActivityForResult(intent, COMMENT_BRIDGE_PICKER_REQUEST);
+        } catch (Exception error) {
+            queueCommentPhoto(false, "Could not open the photo library.", "", "", "");
+        }
+    }
+
+    private void deliverPickedCommentPhoto(Uri uri) {
+        if (uri == null) {
+            queueCommentPhoto(false, "Photo selection was cancelled.", "", "", "");
+            return;
+        }
+        try {
+            try {
+                getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (SecurityException ignored) {
+                // Some system photo providers grant only temporary access. Read and
+                // copy the image now while that grant is active.
+            }
+            byte[] bytes = MediaStorePhotoHelper.compressedJpegBytes(this, uri);
+            queueCommentPhoto(true, "", Base64.encodeToString(bytes, Base64.NO_WRAP), "image/jpeg", "comment-photo-" + System.currentTimeMillis() + ".jpg");
+        } catch (Exception error) {
+            queueCommentPhoto(false, "The selected photo could not be read. Please choose it again.", "", "", "");
+        }
+    }
+
     private void deliverCommentBridgePhoto(Uri uri) {
         deliverCommentBridgePhoto(uri, 0);
     }
@@ -1542,7 +1574,7 @@ public class MainActivity extends Activity {
                 return;
             }
             clearPendingCommentCameraUri();
-            queueCommentPhoto(false, error.getMessage(), "", "", "");
+            queueCommentPhoto(false, "The captured photo could not be read. Please try again.", "", "", "");
         }
     }
 
@@ -1716,6 +1748,15 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == COMMENT_BRIDGE_PICKER_REQUEST) {
+            suppressResumeRefreshAfterPermissionPrompt();
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                deliverPickedCommentPhoto(data.getData());
+            } else {
+                queueCommentPhoto(false, "Photo selection was cancelled.", "", "", "");
+            }
+            return;
+        }
         if (requestCode == COMMENT_BRIDGE_CAMERA_REQUEST) {
             suppressResumeRefreshAfterPermissionPrompt();
             if (pendingCommentBridgeCameraUri == null) restorePendingCommentCameraUri();

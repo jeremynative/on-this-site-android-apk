@@ -107,4 +107,9 @@ class AppBridge {
             activity.launchCommentBridgeCamera();
         });
     }
+
+    @JavascriptInterface
+    public void chooseCommentPhoto() {
+        activity.runOnUiThread(activity::launchCommentBridgePicker);
+    }
 }

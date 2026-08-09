@@ -559,9 +559,9 @@
       }
     };
     const MOBILE_BASEMAPS = {
-      streets: { tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: "Â© OpenStreetMap contributors" },
-      satellite: { tileUrl: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attribution: "Tiles Â© Esri" },
-      outdoors: { tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: "Â© OpenStreetMap contributors" },
+      streets: { tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: "© OpenStreetMap contributors" },
+      satellite: { tileUrl: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attribution: "Tiles © Esri" },
+      outdoors: { tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: "© OpenStreetMap contributors" },
       blank: null
     };
 
@@ -1831,14 +1831,14 @@
     function decodeImportedText(value) {
       const textarea = document.createElement("textarea");
       textarea.innerHTML = String(value || "")
-        .replace(/Ãƒâ€šÃ‚Â /g, " ")
-        .replace(/Ãƒâ€š/g, "")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢|&#8217;|&rsquo;/g, "'")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“|&#8216;|&lsquo;/g, "'")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8220;|&ldquo;/g, "\"")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8221;|&rdquo;/g, "\"")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“|&#8211;/g, "-")
-        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â|&#8212;/g, "-")
+        .replace(/Ã‚Â /g, " ")
+        .replace(/Ã‚/g, "")
+        .replace(/Ã¢â‚¬â„¢|&#8217;|&rsquo;/g, "'")
+        .replace(/Ã¢â‚¬Ëœ|&#8216;|&lsquo;/g, "'")
+        .replace(/Ã¢â‚¬Å“|&#8220;|&ldquo;/g, "\"")
+        .replace(/Ã¢â‚¬Â|&#8221;|&rdquo;/g, "\"")
+        .replace(/Ã¢â‚¬â€œ|&#8211;/g, "-")
+        .replace(/Ã¢â‚¬â€|&#8212;/g, "-")
         .replace(/&nbsp;/gi, " ");
       return textarea.value.replace(/\s+/g, " ").trim();
     }
@@ -5189,7 +5189,7 @@
       `).join("")}${visiblePlaces.map((item, index) => `
         <button class="search-suggestion place-search-suggestion" type="button" role="option" data-place-suggestion="${index}">
           <strong>${escapeHtml(item.title)}</strong>
-          <span>${escapeHtml(item.featureType === "poi" ? "Place or business" : "Long Island map result")}${item.subtitle ? ` Â· ${escapeHtml(item.subtitle)}` : ""}</span>
+          <span>${escapeHtml(item.featureType === "poi" ? "Place or business" : "Long Island map result")}${item.subtitle ? ` · ${escapeHtml(item.subtitle)}` : ""}</span>
         </button>
       `).join("")}`;
       searchSuggestionsEl.hidden = false;
@@ -8365,7 +8365,7 @@
             const confidence = Number(match?.confidence || 0);
             const score = confidence ? `${Math.round(confidence * 100)}%` : "score unavailable";
             const source = match?.source || "Pl@ntNet";
-            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} Â· ${escapeHtml(source)}</em></div>`;
+            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} · ${escapeHtml(source)}</em></div>`;
           }).join("")}</div>`
         : "";
       const exactWarning = analysis?.safetyWarning || "Automated plant identification can be wrong. Verify with a field guide or expert before touching, eating, or using any plant.";
@@ -9210,7 +9210,7 @@
             ` : `
               <button class="site-hero-slide site-hero-comment-slide${index === 0 ? " is-active" : ""}" type="button" data-site-hero-slide-index="${index}" data-site-hero-comment="${escapeHtml(slide.id)}" aria-hidden="${index === 0 ? "false" : "true"}" tabindex="${index === 0 ? "0" : "-1"}" aria-label="View ${escapeHtml(slide.author)}'s approved comment">
                 <img src="${escapeHtml(slide.image)}" alt="Photo from ${escapeHtml(slide.author)}'s approved comment" loading="lazy" decoding="async" data-site-hero-comment-image>
-                <span class="site-hero-comment-caption">${escapeHtml(slide.author)} Â· View comment</span>
+                <span class="site-hero-comment-caption">${escapeHtml(slide.author)} · View comment</span>
               </button>
             `).join("")}
           </div>
@@ -10314,7 +10314,7 @@
       const candidates = [place.place, place.label].filter(Boolean);
       for (const candidate of candidates) {
         let text = stripHtml(candidate)
-          .replace(/^\s*\d{3,4}\s*[-â€“â€”]\s*/g, "")
+          .replace(/^\s*\d{3,4}\s*[-–—]\s*/g, "")
           .replace(/\([^)]*\)/g, " ")
           .replace(/\s+/g, " ")
           .trim();
@@ -11623,6 +11623,16 @@
       try {
         if (window.AndroidApp?.takeCommentPhoto) {
           window.AndroidApp.takeCommentPhoto();
+          return true;
+        }
+      } catch {}
+      return false;
+    }
+
+    function nativeChooseCommentPhoto() {
+      try {
+        if (window.AndroidApp?.chooseCommentPhoto) {
+          window.AndroidApp.chooseCommentPhoto();
           return true;
         }
       } catch {}
@@ -16063,10 +16073,12 @@
       }
       if (event.target.closest("[data-choose-comment-photo]") && discussion) {
         event.preventDefault();
+        state.pendingCommentPhotoDiscussion = discussion;
+        setCommentPhotoStatus(discussion, "Opening photo library...");
+        if (nativeChooseCommentPhoto()) return;
         state.pendingCommentPhotoDiscussion = null;
         const input = discussion.querySelector("[data-discussion-image]");
         if (input) {
-          setCommentPhotoStatus(discussion, "Opening photo library...");
           input.removeAttribute("capture");
           input.value = "";
           try {

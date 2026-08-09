@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260809-carousel-autoplay-swipe-r50";
+const expectedBuild = "20260809-comment-photo-picker-r51";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -210,6 +210,13 @@ requireText("deliverCommentBridgePhoto(uri, attempt + 1)", "Android shell must r
 if (!appBridge.includes("public void takeCommentPhoto()") || !appBridge.includes("COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST")) {
   throw new Error("Android bridge must expose the dedicated comment-camera action.");
 }
+if (!appBridge.includes("public void chooseCommentPhoto()") || !source.includes("COMMENT_BRIDGE_PICKER_REQUEST")) {
+  throw new Error("Android bridge must expose a dedicated comment-photo library action.");
+}
+requireText("Intent.ACTION_OPEN_DOCUMENT", "Comment photo selection must use the durable Android document picker.");
+requireText("Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION", "Comment photo selection must request persistable read access.");
+requireText("deliverPickedCommentPhoto(data.getData())", "Selected comment photos must be imported while the picker grant is active.");
+requireBundledText("window.AndroidApp.chooseCommentPhoto()", "The bundled app must use the native comment-photo library bridge.");
 requireText("updateNativeSafeInsets(insets);", "Android shell must capture current window insets instead of padding the WebView.");
 requireText("WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()", "Android shell must include system bars and display cutouts in its safe boundary.");
 requireText("windowInsets.getInsetsIgnoringVisibility(safeTypes)", "Android shell must preserve stable system-bar bounds when bars are temporarily hidden.");
