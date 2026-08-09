@@ -559,9 +559,9 @@
       }
     };
     const MOBILE_BASEMAPS = {
-      streets: { tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: "© OpenStreetMap contributors" },
-      satellite: { tileUrl: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attribution: "Tiles © Esri" },
-      outdoors: { tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: "© OpenStreetMap contributors" },
+      streets: { tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: "Â© OpenStreetMap contributors" },
+      satellite: { tileUrl: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attribution: "Tiles Â© Esri" },
+      outdoors: { tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: "Â© OpenStreetMap contributors" },
       blank: null
     };
 
@@ -756,6 +756,8 @@
       eventBySlug: new Map(),
       contributorProfiles: [],
       publicComments: [],
+      siteHeroCarouselTimer: null,
+      siteHeroCarouselKey: "",
       commentVotes: [],
       profilePointEvents: [],
       profilePointEventCanonicalIds: new Set(),
@@ -1829,14 +1831,14 @@
     function decodeImportedText(value) {
       const textarea = document.createElement("textarea");
       textarea.innerHTML = String(value || "")
-        .replace(/Ã‚Â /g, " ")
-        .replace(/Ã‚/g, "")
-        .replace(/Ã¢â‚¬â„¢|&#8217;|&rsquo;/g, "'")
-        .replace(/Ã¢â‚¬Ëœ|&#8216;|&lsquo;/g, "'")
-        .replace(/Ã¢â‚¬Å“|&#8220;|&ldquo;/g, "\"")
-        .replace(/Ã¢â‚¬Â|&#8221;|&rdquo;/g, "\"")
-        .replace(/Ã¢â‚¬â€œ|&#8211;/g, "-")
-        .replace(/Ã¢â‚¬â€|&#8212;/g, "-")
+        .replace(/Ãƒâ€šÃ‚Â /g, " ")
+        .replace(/Ãƒâ€š/g, "")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢|&#8217;|&rsquo;/g, "'")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“|&#8216;|&lsquo;/g, "'")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|&#8220;|&ldquo;/g, "\"")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â|&#8221;|&rdquo;/g, "\"")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“|&#8211;/g, "-")
+        .replace(/ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â|&#8212;/g, "-")
         .replace(/&nbsp;/gi, " ");
       return textarea.value.replace(/\s+/g, " ").trim();
     }
@@ -5187,7 +5189,7 @@
       `).join("")}${visiblePlaces.map((item, index) => `
         <button class="search-suggestion place-search-suggestion" type="button" role="option" data-place-suggestion="${index}">
           <strong>${escapeHtml(item.title)}</strong>
-          <span>${escapeHtml(item.featureType === "poi" ? "Place or business" : "Long Island map result")}${item.subtitle ? ` · ${escapeHtml(item.subtitle)}` : ""}</span>
+          <span>${escapeHtml(item.featureType === "poi" ? "Place or business" : "Long Island map result")}${item.subtitle ? ` Â· ${escapeHtml(item.subtitle)}` : ""}</span>
         </button>
       `).join("")}`;
       searchSuggestionsEl.hidden = false;
@@ -8363,7 +8365,7 @@
             const confidence = Number(match?.confidence || 0);
             const score = confidence ? `${Math.round(confidence * 100)}%` : "score unavailable";
             const source = match?.source || "Pl@ntNet";
-            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} · ${escapeHtml(source)}</em></div>`;
+            return `<div><strong>${escapeHtml(common || scientific || "Plant match")}</strong><span>${escapeHtml(scientific || "")}</span><em>${escapeHtml(score)} Â· ${escapeHtml(source)}</em></div>`;
           }).join("")}</div>`
         : "";
       const exactWarning = analysis?.safetyWarning || "Automated plant identification can be wrong. Verify with a field guide or expert before touching, eating, or using any plant.";
@@ -9159,6 +9161,151 @@
     function hideQuoteSelectionPopup() {
       const popup = document.getElementById("mobile-quote-selection-popup");
       if (popup) popup.hidden = true;
+    }
+
+    function mobileHeroComparableImageUrl(value) {
+      try {
+        const parsed = new URL(String(value || ""), window.location.href);
+        return `${parsed.origin}${parsed.pathname}`.toLowerCase();
+      } catch {
+        return String(value || "").trim().toLowerCase().split(/[?#]/)[0];
+      }
+    }
+
+    function approvedSiteCommentPhotoSlides(site, listingImage = "") {
+      const seen = new Set([mobileHeroComparableImageUrl(listingImage)].filter(Boolean));
+      return commentsForSource("site", site)
+        .filter(comment => normalizeCommentStatus(comment) === "approved" && directusAssetUrl(comment.comment_image))
+        .map(comment => {
+          const image = mobileSnapshotImageUrl(directusAssetUrl(comment.comment_image));
+          const comparable = mobileHeroComparableImageUrl(image);
+          if (!image || !comparable || seen.has(comparable)) return null;
+          seen.add(comparable);
+          const profile = state.contributorProfiles.find(item => Number(item.id) === Number(comment.member_profile));
+          return {
+            id: String(comment.id || ""),
+            image,
+            author: profile?.display_name || comment.author_name || "Contributor"
+          };
+        })
+        .filter(Boolean);
+    }
+
+    function siteHeroCarouselHtml(site, image, imageFallback = "") {
+      const commentSlides = approvedSiteCommentPhotoSlides(site, image);
+      if (!commentSlides.length) {
+        return image ? `<img class="hero article-sticky-hero" src="${escapeHtml(image)}" alt="${escapeHtml(site.listing_image_alt || site.title)}" loading="lazy" decoding="async" onerror="${imageErrorAction(imageFallback)}">` : "";
+      }
+      const slides = [
+        ...(image ? [{ image, author: "", id: "", primary: true }] : []),
+        ...commentSlides
+      ];
+      return `
+        <div class="site-hero-carousel hero article-sticky-hero" data-site-hero-carousel data-site-hero-site="${escapeHtml(site.slug || site.id || "")}" data-site-hero-index="0" aria-label="${escapeHtml(site.title)} photo carousel">
+          <div class="site-hero-carousel-stage">
+            ${slides.map((slide, index) => slide.primary ? `
+              <div class="site-hero-slide${index === 0 ? " is-active" : ""}" data-site-hero-slide-index="${index}" aria-hidden="${index === 0 ? "false" : "true"}">
+                <img src="${escapeHtml(slide.image)}" alt="${escapeHtml(site.listing_image_alt || site.title)}" loading="eager" decoding="async" onerror="${imageErrorAction(imageFallback)}">
+              </div>
+            ` : `
+              <button class="site-hero-slide site-hero-comment-slide${index === 0 ? " is-active" : ""}" type="button" data-site-hero-slide-index="${index}" data-site-hero-comment="${escapeHtml(slide.id)}" aria-hidden="${index === 0 ? "false" : "true"}" tabindex="${index === 0 ? "0" : "-1"}" aria-label="View ${escapeHtml(slide.author)}'s approved comment">
+                <img src="${escapeHtml(slide.image)}" alt="Photo from ${escapeHtml(slide.author)}'s approved comment" loading="lazy" decoding="async" data-site-hero-comment-image>
+                <span class="site-hero-comment-caption">${escapeHtml(slide.author)} Â· View comment</span>
+              </button>
+            `).join("")}
+          </div>
+          <div class="site-hero-carousel-dots" aria-label="Choose a site photo">
+            ${slides.map((slide, index) => `<button type="button" data-site-hero-dot="${index}" class="${index === 0 ? "is-active" : ""}" aria-label="Show photo ${index + 1} of ${slides.length}" aria-pressed="${index === 0 ? "true" : "false"}"></button>`).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function stopSiteHeroCarousel() {
+      window.clearInterval(state.siteHeroCarouselTimer);
+      state.siteHeroCarouselTimer = null;
+      state.siteHeroCarouselKey = "";
+    }
+
+    function setSiteHeroCarouselIndex(root, requestedIndex) {
+      if (!root) return;
+      const slides = [...root.querySelectorAll("[data-site-hero-slide-index]")].filter(slide => !slide.hidden);
+      if (!slides.length) return;
+      const normalized = ((Number(requestedIndex) % slides.length) + slides.length) % slides.length;
+      const activeSlide = slides[normalized];
+      const activeIndex = String(activeSlide.dataset.siteHeroSlideIndex || "0");
+      root.dataset.siteHeroIndex = activeIndex;
+      root.querySelectorAll("[data-site-hero-slide-index]").forEach(slide => {
+        const active = slide === activeSlide;
+        slide.classList.toggle("is-active", active);
+        slide.setAttribute("aria-hidden", String(!active));
+        if (slide.matches("button")) slide.tabIndex = active ? 0 : -1;
+      });
+      root.querySelectorAll("[data-site-hero-dot]").forEach(dot => {
+        const active = dot.dataset.siteHeroDot === activeIndex;
+        dot.classList.toggle("is-active", active);
+        dot.setAttribute("aria-pressed", String(active));
+      });
+    }
+
+    function bindSiteHeroCarouselSwipe(root) {
+      if (!root || root.dataset.siteHeroSwipeBound === "true") return;
+      root.dataset.siteHeroSwipeBound = "true";
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let touchStartedAt = 0;
+      root.addEventListener("touchstart", event => {
+        if (event.touches.length !== 1) return;
+        touchStartX = event.touches[0].clientX;
+        touchStartY = event.touches[0].clientY;
+        touchStartedAt = Date.now();
+      }, { passive: true });
+      root.addEventListener("touchend", event => {
+        const touch = event.changedTouches[0];
+        if (!touch || !touchStartedAt) return;
+        const deltaX = touch.clientX - touchStartX;
+        const deltaY = touch.clientY - touchStartY;
+        const elapsed = Date.now() - touchStartedAt;
+        touchStartedAt = 0;
+        if (elapsed > 1000 || Math.abs(deltaX) < 42 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.15) return;
+        const slides = [...root.querySelectorAll("[data-site-hero-slide-index]")].filter(slide => !slide.hidden);
+        const current = slides.findIndex(slide => slide.classList.contains("is-active"));
+        setSiteHeroCarouselIndex(root, current + (deltaX < 0 ? 1 : -1));
+        root.dataset.siteHeroSuppressClickUntil = String(Date.now() + 500);
+        startSiteHeroCarousel(root, { restart: true });
+      }, { passive: true });
+      root.addEventListener("click", event => {
+        if (Number(root.dataset.siteHeroSuppressClickUntil || 0) <= Date.now()) return;
+        event.preventDefault();
+        event.stopPropagation();
+      }, true);
+    }
+
+    function startSiteHeroCarousel(root = detailBodyEl?.querySelector("[data-site-hero-carousel]") || detailHeroDockEl?.querySelector("[data-site-hero-carousel]"), options = {}) {
+      if (!root) return;
+      bindSiteHeroCarouselSwipe(root);
+      root.querySelectorAll("[data-site-hero-comment-image]").forEach(image => image.addEventListener("error", () => {
+        const slide = image.closest("[data-site-hero-slide-index]");
+        const failedIndex = slide?.dataset.siteHeroSlideIndex;
+        if (slide) slide.hidden = true;
+        if (failedIndex != null) root.querySelector(`[data-site-hero-dot="${CSS.escape(failedIndex)}"]`)?.setAttribute("hidden", "");
+        setSiteHeroCarouselIndex(root, 0);
+      }, { once: true }));
+      if (root.querySelectorAll("[data-site-hero-slide-index]").length < 2) return;
+      const carouselKey = root.dataset.siteHeroSite || "";
+      if (options.restart || (state.siteHeroCarouselKey && state.siteHeroCarouselKey !== carouselKey)) {
+        stopSiteHeroCarousel();
+      }
+      state.siteHeroCarouselKey = carouselKey;
+      if (state.siteHeroCarouselTimer) return;
+      state.siteHeroCarouselTimer = window.setInterval(() => {
+        const currentRoot = detailBodyEl?.querySelector("[data-site-hero-carousel]") || detailHeroDockEl?.querySelector("[data-site-hero-carousel]");
+        if (!currentRoot || document.hidden || currentRoot.classList.contains("is-compact")) return;
+        bindSiteHeroCarouselSwipe(currentRoot);
+        const slides = [...currentRoot.querySelectorAll("[data-site-hero-slide-index]")].filter(slide => !slide.hidden);
+        const current = slides.findIndex(slide => slide.classList.contains("is-active"));
+        setSiteHeroCarouselIndex(currentRoot, current + 1);
+      }, 8000);
     }
 
     function syncDetailHeroScrollState() {
@@ -10167,7 +10314,7 @@
       const candidates = [place.place, place.label].filter(Boolean);
       for (const candidate of candidates) {
         let text = stripHtml(candidate)
-          .replace(/^\s*\d{3,4}\s*[-–—]\s*/g, "")
+          .replace(/^\s*\d{3,4}\s*[-â€“â€”]\s*/g, "")
           .replace(/\([^)]*\)/g, " ")
           .replace(/\s+/g, " ")
           .trim();
@@ -11767,8 +11914,9 @@
       }).join("");
       const historyHtml = moments.length && !renderedMoments ? historicMomentsHtml(moments, { showLocations: false }) : "";
       detailTitleEl.innerHTML = mobileSiteTitleHtml(site);
+      restoreDetailHeroToBody();
       detailBodyEl.innerHTML = `
-        ${image ? `<img class="hero article-sticky-hero" src="${escapeHtml(image)}" alt="${escapeHtml(site.listing_image_alt || site.title)}" loading="lazy" decoding="async" onerror="${imageErrorAction(imageFallback)}">` : ""}
+        ${siteHeroCarouselHtml(site, image, imageFallback)}
         ${introductionPresentation.leadSummary ? `<p class="summary" data-site-introduction="summary">${escapeHtml(introductionPresentation.leadSummary)}</p>` : ""}
         ${siteTagsHtml(site)}
         ${sections}
@@ -11789,6 +11937,7 @@
       removeUnbundledSnapshotImages(detailBodyEl);
       detailBodyEl.scrollTop = 0;
       syncDetailHeroScrollState();
+      startSiteHeroCarousel();
       detailEl.classList.add("open");
       setDetailDrawerState(options.drawerState || "half");
       detailEl.classList.toggle("plant-browse-mode", plantObservationsForSource("site", site).length > 0);
@@ -11804,6 +11953,7 @@
     }
 
     function closeDetail(options = {}) {
+      stopSiteHeroCarousel();
       restoreDetailHeroToBody();
       const returnToLongIslandView = state.mobileStartupSpotlightReturnOnDetailClose;
       state.mobileStartupSpotlightReturnOnDetailClose = false;
@@ -15718,6 +15868,20 @@
       if (event.target === plantPhotoViewerEl) closePlantPhotoViewer();
     });
     detailBodyEl.addEventListener("click", event => {
+      const heroDot = event.target.closest("[data-site-hero-dot]");
+      if (heroDot) {
+        event.preventDefault();
+        const carousel = heroDot.closest("[data-site-hero-carousel]");
+        setSiteHeroCarouselIndex(carousel, Number(heroDot.dataset.siteHeroDot || 0));
+        startSiteHeroCarousel(carousel, { restart: true });
+        return;
+      }
+      const heroCommentSlide = event.target.closest("[data-site-hero-comment]");
+      if (heroCommentSlide?.dataset.siteHeroComment) {
+        event.preventDefault();
+        jumpToQuoteComment(heroCommentSlide.dataset.siteHeroComment);
+        return;
+      }
       const discussion = event.target.closest(".discussion-section");
       const quoteMarker = event.target.closest("[data-jump-quote-comment]");
       if (quoteMarker?.dataset.jumpQuoteComment) {
