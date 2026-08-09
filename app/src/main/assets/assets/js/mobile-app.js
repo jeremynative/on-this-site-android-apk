@@ -4054,12 +4054,10 @@
     }
 
     function scheduleSearchMapSync() {
+      // Results searching must not redraw the visitor's map. Only an explicit
+      // result selection is allowed to reframe it.
       window.clearTimeout(state.searchMapSyncTimer);
-      const delay = isNativeAndroidApp() ? 620 : 0;
-      state.searchMapSyncTimer = window.setTimeout(() => {
-        state.searchMapSyncTimer = null;
-        syncMarkers({ auxiliary: false });
-      }, delay);
+      state.searchMapSyncTimer = null;
     }
 
     function scheduleSearchRenderSettle() {
@@ -4100,7 +4098,10 @@
       }
       const includesSearch = item => String(item.searchText || "").includes(query)
         || String(item.normalizedSearchText || "").includes(normalizedQuery)
-        || (compactQuery.length >= 2 && mobileCompactSearchKey(item.normalizedSearchText || "").includes(compactQuery));
+        || (compactQuery.length >= 2 && (
+          mobileCompactSearchKey(item.title || "").includes(compactQuery)
+          || mobileCompactSearchKey(item.normalizedSearchText || "").includes(compactQuery)
+        ));
       const siteMatches = state.sites.filter(includesSearch);
       const wikiMatches = (state.wikiArticles || [])
         .map(mobileWikiSearchResult)
@@ -4115,7 +4116,6 @@
         resetNearbyRenderLimit();
         renderList();
         showAndroidSearchPreviewPanel();
-        scheduleSearchMapSync();
         updateAddressSearch(query);
         return;
       }
@@ -4126,7 +4126,6 @@
       showAndroidSearchPreviewPanel();
       clearAddressSearch();
       scheduleSearchRenderSettle();
-      scheduleSearchMapSync();
     }
 
     function closeDetailForSearchResults() {
@@ -4162,12 +4161,11 @@
 
     function scheduleSearchSync() {
       if (!searchEl) return;
-      const value = searchEl.value || "";
-      if (value.trim()) closeDetailForSearchResults();
+      const value = activeMobileSearchValue();
       if (value === state.lastSearchValue && state.lastSearchDataVersion === state.searchDataVersion) return;
       state.lastSearchValue = value;
       state.lastSearchDataVersion = state.searchDataVersion;
-      scheduleFilterSites();
+      refreshMobileSearchSuggestions();
     }
 
     function openMobileSearchResultsPage() {
@@ -4197,7 +4195,7 @@
     }
 
     function handleMobileSearchCommand() {
-      if (!searchEl?.value.trim()) return;
+      if (!activeMobileSearchValue().trim()) return;
       // The Android keyboard's Search action is delivered as this event and
       // may arrive immediately after the final character.  Always honor it.
       openMobileSearchResultsPage();
@@ -4218,16 +4216,13 @@
           : domValue)
         : String(nativeDraft);
       state.lastSearchInputAt = Date.now();
-      // Search results must remain immediately readable and tappable.
-      hideMobileStartupSpotlight();
-      closeDetailForSearchResults();
-      // Android can defer timer work while the IME is open. Filter the small
-      // local index immediately so every character updates its prediction.
+      // Typing only changes the type-ahead. Keep the visible map and current
+      // listing context steady until the visitor chooses a suggestion or
+      // explicitly submits the search.
       state.lastSearchValue = activeMobileSearchValue();
       state.lastSearchDataVersion = state.searchDataVersion;
       refreshMobileSearchSuggestions();
       window.clearTimeout(state.searchTimer);
-      filterSites();
     }
 
     // Native WebView input can update the visible field without delivering a
@@ -5000,7 +4995,10 @@
       if (!query) return [];
       const includesSearch = item => String(item.searchText || "").includes(query)
         || String(item.normalizedSearchText || "").includes(normalizedQuery)
-        || (compactQuery.length >= 2 && mobileCompactSearchKey(item.normalizedSearchText || "").includes(compactQuery));
+        || (compactQuery.length >= 2 && (
+          mobileCompactSearchKey(item.title || "").includes(compactQuery)
+          || mobileCompactSearchKey(item.normalizedSearchText || "").includes(compactQuery)
+        ));
       return [
         ...state.sites.filter(includesSearch),
         ...(state.wikiArticles || []).map(mobileWikiSearchResult).filter(includesSearch)
@@ -5027,7 +5025,10 @@
         searchSuggestionsEl.replaceChildren();
         searchEl.setAttribute("aria-expanded", "false");
       };
-      if (!query || state.mobilePanelState === "maximized") return hide();
+      // A visitor may start a new search while the results tray is already
+      // full-height. Keep type-ahead available there instead of silently
+      // hiding it after the first search.
+      if (!query) return hide();
       const seen = new Set();
       const suggestions = mobileAutocompleteCandidates(query)
         .filter(item => item && item.slug !== "address-result" && item.title)

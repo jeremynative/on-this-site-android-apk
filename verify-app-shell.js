@@ -962,7 +962,7 @@ requireBundledText('function mobileAutocompleteCandidates(rawQuery)', "Bundled A
 requireBundledText('normalizedSearchText: normalizeText', "Bundled Android app must include normalized mobile search text.");
 requireBundledText('function scheduleSearchSync()', "Bundled Android app must watch mobile search value changes.");
 requireBundledText('function closeDetailForSearchResults()', "Bundled Android app must close open detail sheets before search results take over.");
-requireBundledText('if (value.trim()) closeDetailForSearchResults();', "Bundled Android search sync must close an open detail sheet while typing.");
+requireBundledPattern(/function\s+openMobileSearchResultsPage\(\)[\s\S]*?detailEl\?\.classList\.contains\("open"\)[\s\S]*?closeDetail\(\{\s*skipRoute:\s*true,\s*blockMapTap:\s*false\s*\}\)[\s\S]*?filterSites\(\)/, "Bundled Android search must close an open detail sheet only when results are submitted.");
 requireBundledPattern(/function\s+closeDetail\(options\s*=\s*\{\}\)[\s\S]*?const\s+activeElement\s*=\s*document\.activeElement;[\s\S]*?detailEl\.contains\(activeElement\)[\s\S]*?activeElement\.blur\(\);[\s\S]*?detailEl\.classList\.remove\("open"\)/, "Bundled Android detail close must release focused panel controls before hiding the panel.");
 requireBundledText('function clearMobileSearchForResultOpen()', "Bundled Android app must clear active search before opening a result detail panel.");
 requireBundledText('searchEl.value = "";', "Bundled Android result opens must empty the search box so search polling does not close the article.");
