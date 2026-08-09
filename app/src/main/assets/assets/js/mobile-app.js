@@ -4231,7 +4231,19 @@
     window.__nliRefreshMobileSearchInput = handleMobileSearchInput;
     // Android's composing text can advance before Chromium updates input.value.
     // MainActivity forwards it here so every character drives the local search.
-    window.__nliSetNativeSearchDraft = value => handleMobileSearchInput(value);
+    function reconcileNativeSearchDraft(value) {
+      const nativeValue = String(value || "");
+      const domValue = searchEl?.value || "";
+      if (!nativeValue) return domValue;
+      const nativeKey = nativeValue.toLowerCase();
+      const domKey = domValue.toLowerCase();
+      return domValue.length > nativeValue.length
+        && (domKey.startsWith(nativeKey) || domKey.endsWith(nativeKey))
+        ? domValue
+        : nativeValue;
+    }
+
+    window.__nliSetNativeSearchDraft = value => handleMobileSearchInput(reconcileNativeSearchDraft(value));
     window.__nliAppendNativeSearchText = value => {
       const fragment = String(value || "");
       if (fragment) handleMobileSearchInput(`${activeMobileSearchValue()}${fragment}`);
