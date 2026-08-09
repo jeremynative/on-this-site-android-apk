@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260809-comment-photo-picker-r51";
+const expectedBuild = "20260809-private-comment-camera-r52";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -16,6 +16,8 @@ const stylesPath = "app/src/main/res/values/styles.xml";
 const launchBackgroundPath = "app/src/main/res/drawable/launch_background.xml";
 const manifestPath = "app/src/main/AndroidManifest.xml";
 const appBridgePath = "app/src/main/java/com/nativelongisland/onthissite/AppBridge.java";
+const captureFileProviderPath = "app/src/main/java/com/nativelongisland/onthissite/CaptureFileProvider.java";
+const nativeCommentPhotoCompatPath = "app/src/main/assets/native-comment-photo-compat.js";
 const offlineInsetAuditPath = "audit-apk-offline-insets.mjs";
 const bundledMobileIndexPaths = [
   "app/src/main/assets/assets/data/mobile-site-geometry.json",
@@ -31,6 +33,8 @@ const source = fs.readFileSync(mainActivityPath, "utf8");
 const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
 const manifest = fs.readFileSync(manifestPath, "utf8");
 const appBridge = fs.readFileSync(appBridgePath, "utf8");
+const captureFileProvider = fs.readFileSync(captureFileProviderPath, "utf8");
+const nativeCommentPhotoCompat = fs.readFileSync(nativeCommentPhotoCompatPath, "utf8");
 const offlineInsetAudit = fs.readFileSync(offlineInsetAuditPath, "utf8");
 const bundledApp = bundledAppBytes.toString("utf8");
 const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
@@ -207,6 +211,29 @@ requireText("COMMENT_BRIDGE_CAMERA_REQUEST", "Android shell must reserve a dedic
 requireText("window.onAndroidCommentPhoto", "Android shell must return a captured comment photo to the WebView draft.");
 requireText("COMMENT_PHOTO_READ_MAX_ATTEMPTS", "Android shell must briefly retry a Samsung comment-camera output before reporting failure.");
 requireText("deliverCommentBridgePhoto(uri, attempt + 1)", "Android shell must retry a temporarily unreadable captured comment photo.");
+requireText("CaptureFileProvider.createCommentCaptureUri(this)", "Comment camera output must use app-private storage instead of MediaStore.");
+requireText('intent.setClipData(ClipData.newRawUri("comment-photo", pendingCommentBridgeCameraUri))', "Samsung Camera must receive the private output URI through ClipData as well as EXTRA_OUTPUT.");
+if (!captureFileProvider.includes('AUTHORITY = BuildConfig.APPLICATION_ID + ".capture"')
+    || !captureFileProvider.includes('context.getCacheDir()')
+    || !captureFileProvider.includes('ParcelFileDescriptor.MODE_TRUNCATE')) {
+  throw new Error("The dedicated comment camera provider must expose only app-private temporary JPEG output.");
+}
+if (!manifest.includes('android:name=".CaptureFileProvider"')
+    || !manifest.includes('android:exported="false"')
+    || !manifest.includes('android:grantUriPermissions="true"')) {
+  throw new Error("Android manifest must register the non-exported private comment camera provider.");
+}
+if (/pendingCommentBridgeCameraUri\s*=\s*MediaStorePhotoHelper\.createPlantPhotoUri/.test(source)) {
+  throw new Error("Comment camera capture must not regress to shared MediaStore output.");
+}
+requireText('installNativeCommentPhotoCompatibility(view);', "Every hosted or bundled page must receive the native-owned comment photo compatibility layer.");
+requireText('window.__otsReceiveNativeCommentPhoto', "Native delivery must fall back to the wrapper-owned comment photo receiver when the hosted handler changes.");
+if (!nativeCommentPhotoCompat.includes('[data-take-comment-photo]')
+    || !nativeCommentPhotoCompat.includes('bridge.takeCommentPhoto()')
+    || !nativeCommentPhotoCompat.includes('new DataTransfer()')
+    || !nativeCommentPhotoCompat.includes('input.dispatchEvent(new Event("change", { bubbles: true }))')) {
+  throw new Error("Native comment camera compatibility must own click routing and a file-input delivery fallback.");
+}
 if (!appBridge.includes("public void takeCommentPhoto()") || !appBridge.includes("COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST")) {
   throw new Error("Android bridge must expose the dedicated comment-camera action.");
 }

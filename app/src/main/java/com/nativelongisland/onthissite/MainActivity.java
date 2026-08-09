@@ -10,6 +10,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
+import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
@@ -80,7 +81,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260809-comment-photo-picker-r51";
+    static final String APP_VERSION = "20260809-private-comment-camera-r52";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -452,6 +453,7 @@ public class MainActivity extends Activity {
                     return;
                 }
                 enforceExclusiveMobilePanels(view);
+                installNativeCommentPhotoCompatibility(view);
                 validateLoadedAppShell(url);
             }
         });
@@ -1497,7 +1499,7 @@ public class MainActivity extends Activity {
 
     void launchCommentBridgeCamera() {
         try {
-            pendingCommentBridgeCameraUri = MediaStorePhotoHelper.createPlantPhotoUri(this);
+            pendingCommentBridgeCameraUri = CaptureFileProvider.createCommentCaptureUri(this);
             if (pendingCommentBridgeCameraUri == null) {
                 queueCommentPhoto(false, "Could not create a local photo file.", "", "", "");
                 return;
@@ -1506,6 +1508,7 @@ public class MainActivity extends Activity {
                 .putString(PREF_PENDING_COMMENT_URI, pendingCommentBridgeCameraUri.toString()).apply();
             Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
             intent.putExtra(MediaStore.EXTRA_OUTPUT, pendingCommentBridgeCameraUri);
+            intent.setClipData(ClipData.newRawUri("comment-photo", pendingCommentBridgeCameraUri));
             intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 for (android.content.pm.ResolveInfo activity : getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)) {
@@ -1518,6 +1521,17 @@ public class MainActivity extends Activity {
             pendingCommentBridgeCameraUri = null;
             clearPendingCommentCameraUri();
             queueCommentPhoto(false, "Could not open the camera.", "", "", "");
+        }
+    }
+
+    private void installNativeCommentPhotoCompatibility(WebView view) {
+        if (view == null) return;
+        try {
+            view.evaluateJavascript(readBundledTextAsset("native-comment-photo-compat.js"), value ->
+                Log.d(LOG_TAG, "Native comment photo compatibility installed: " + value)
+            );
+        } catch (IOException error) {
+            Log.e(LOG_TAG, "Could not install native comment photo compatibility.", error);
         }
     }
 
@@ -1558,10 +1572,10 @@ public class MainActivity extends Activity {
 
     private void deliverCommentBridgePhoto(Uri uri, int attempt) {
         try {
-            MediaStorePhotoHelper.markPlantPhotoReady(this, uri);
             byte[] bytes = MediaStorePhotoHelper.compressedJpegBytes(this, uri);
             clearPendingCommentCameraUri();
             queueCommentPhoto(true, "", Base64.encodeToString(bytes, Base64.NO_WRAP), "image/jpeg", "comment-photo-" + System.currentTimeMillis() + ".jpg");
+            getContentResolver().delete(uri, null, null);
         } catch (Exception error) {
             // Samsung Camera can hand control back before its EXTRA_OUTPUT image is
             // readable. Keep the persisted URI and retry briefly before treating a
@@ -1574,6 +1588,7 @@ public class MainActivity extends Activity {
                 return;
             }
             clearPendingCommentCameraUri();
+            if (uri != null) getContentResolver().delete(uri, null, null);
             queueCommentPhoto(false, "The captured photo could not be read. Please try again.", "", "", "");
         }
     }
@@ -1604,13 +1619,16 @@ public class MainActivity extends Activity {
 
     private void dispatchPendingCommentPhoto() {
         if (!hasPendingCommentPhotoDelivery || webView == null) return;
+        String arguments = pendingCommentPhotoOk + ","
+            + jsString(pendingCommentPhotoMessage) + ","
+            + jsString(pendingCommentPhotoBase64) + ","
+            + jsString(pendingCommentPhotoMimeType) + ","
+            + jsString(pendingCommentPhotoFilename);
         webView.evaluateJavascript(
-            "window.onAndroidCommentPhoto && window.onAndroidCommentPhoto("
-                + pendingCommentPhotoOk + ","
-                + jsString(pendingCommentPhotoMessage) + ","
-                + jsString(pendingCommentPhotoBase64) + ","
-                + jsString(pendingCommentPhotoMimeType) + ","
-                + jsString(pendingCommentPhotoFilename) + ")",
+            "(function(){"
+                + "try{if(typeof window.onAndroidCommentPhoto==='function'&&window.onAndroidCommentPhoto(" + arguments + ")===true)return true;}catch(error){}"
+                + "try{return typeof window.__otsReceiveNativeCommentPhoto==='function'&&window.__otsReceiveNativeCommentPhoto(" + arguments + ")===true;}catch(error){return false;}"
+                + "})()",
             value -> {
                 if ("true".equals(value)) {
                     hasPendingCommentPhotoDelivery = false;
