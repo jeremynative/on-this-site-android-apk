@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260809-compact-site-header-r47";
+const expectedBuild = "20260809-comment-photo-carousel-r48";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1069,6 +1069,10 @@ requireBundledText('mobileBiographyPathMapPinLabel(place, order)', "Bundled Andr
 requireBundledText('id: "mobile-biography-place-labels"', "Bundled Android biography travel map pins must use collision-aware map labels.");
 requireBundledText('event && (event.title || event.description || event.date_label || event.sort_key)', "Bundled Android timeline must retain public source records without a site/wiki link.");
 forbidBundledText('event.source_type && (event.source_slug || event.source_id))', "Bundled Android timeline must not hide unlinked public source records.");
+requireBundledPattern(/function\s+approvedSiteCommentPhotoSlides\(site,\s*listingImage\s*=\s*""\)[\s\S]*?commentsForSource\("site",\s*site\)[\s\S]*?normalizeCommentStatus\(comment\)\s*===\s*"approved"[\s\S]*?comment\.comment_image/, "Bundled Android site carousels must use only approved comment photos from the current site.");
+requireBundledText('data-site-hero-comment="${escapeHtml(slide.id)}"', "Bundled Android comment-photo slides must link to their source comment.");
+requireBundledPattern(/function\s+startSiteHeroCarousel\([\s\S]*?prefers-reduced-motion:\s*reduce[\s\S]*?window\.setInterval\([\s\S]*?setSiteHeroCarouselIndex\(root,\s*current\s*\+\s*1\)[\s\S]*?8000\)/, "Bundled Android site photo carousels must rotate every eight seconds and respect reduced motion.");
+requireBundledText('jumpToQuoteComment(heroCommentSlide.dataset.siteHeroComment);', "Bundled Android comment-photo slides must jump to the exact approved comment.");
 
 console.log(`Android shell verifier passed: ${expectedBuild}`);
 
