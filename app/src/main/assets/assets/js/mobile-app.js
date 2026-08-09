@@ -3880,10 +3880,17 @@
       ].map(value => stripHtml(value || "")).filter(Boolean).join(" ");
     }
 
+    function mobileCompactSearchKey(value) {
+      // Treat punctuation such as the apostrophe in Ma's House as optional
+      // while preserving normal word-based matching everywhere else.
+      return normalizeText(value).replace(/\s+/g, "");
+    }
+
     function mobileSiteSearchScore(site, query) {
       const rawQuery = String(query || "").trim().toLowerCase();
       if (!rawQuery) return 0;
       const queryKey = normalizeText(rawQuery);
+      const compactQuery = mobileCompactSearchKey(rawQuery);
       const terms = queryKey.split(" ").filter(term => term.length >= 2);
       const title = normalizeText(site.title || "");
       const slug = normalizeText(site.slug || "");
@@ -3891,7 +3898,12 @@
       const type = normalizeText(site.site_type || "");
       const summary = normalizeText(site.summary || "");
       const full = normalizeText(site.searchText || "");
+      const compactTitle = mobileCompactSearchKey(site.title || "");
+      const compactSlug = mobileCompactSearchKey(site.slug || "");
       let score = 0;
+      if (compactQuery && compactTitle === compactQuery) score += 1400;
+      if (compactQuery && compactTitle.startsWith(compactQuery)) score += 1000;
+      if (compactQuery && compactSlug.startsWith(compactQuery)) score += 520;
       if (title === queryKey) score += 1200;
       if (title.startsWith(queryKey)) score += 800;
       if (title.includes(queryKey)) score += 520;
@@ -3932,13 +3944,19 @@
       const rawQuery = String(query || "").trim().toLowerCase();
       if (!rawQuery) return 0;
       const queryKey = normalizeText(rawQuery);
+      const compactQuery = mobileCompactSearchKey(rawQuery);
       const terms = queryKey.split(" ").filter(term => term.length >= 2);
       const title = normalizeText(article.title || "");
       const slug = normalizeText(article.slug || "");
       const summary = normalizeText(article.summary || "");
       const content = normalizeText(stripHtml(article.content || ""));
       const full = normalizeText(article.searchText || mobileWikiSearchText(article));
+      const compactTitle = mobileCompactSearchKey(article.title || "");
+      const compactSlug = mobileCompactSearchKey(article.slug || "");
       let score = 0;
+      if (compactQuery && compactTitle === compactQuery) score += 1800;
+      if (compactQuery && compactTitle.startsWith(compactQuery)) score += 1400;
+      if (compactQuery && compactSlug.startsWith(compactQuery)) score += 820;
       if (title === queryKey) score += 1600;
       if (title.startsWith(queryKey)) score += 1200;
       if (title.includes(queryKey)) score += 850;
@@ -4067,6 +4085,7 @@
       const rawQuery = searchEl.value.trim();
       const query = rawQuery.toLowerCase();
       const normalizedQuery = normalizeText(rawQuery);
+      const compactQuery = mobileCompactSearchKey(rawQuery);
       if (!query) {
         clearAddressSearch();
         state.filtered = browsableSites();
@@ -4076,10 +4095,13 @@
         syncMarkers();
         return;
       }
-      const siteMatches = state.sites.filter(site => String(site.searchText || "").includes(query) || String(site.normalizedSearchText || "").includes(normalizedQuery));
+      const includesSearch = item => String(item.searchText || "").includes(query)
+        || String(item.normalizedSearchText || "").includes(normalizedQuery)
+        || (compactQuery.length >= 2 && mobileCompactSearchKey(item.normalizedSearchText || "").includes(compactQuery));
+      const siteMatches = state.sites.filter(includesSearch);
       const wikiMatches = (state.wikiArticles || [])
         .map(mobileWikiSearchResult)
-        .filter(article => String(article.searchText || "").includes(query) || String(article.normalizedSearchText || "").includes(normalizedQuery));
+        .filter(includesSearch);
       const matches = [...siteMatches, ...wikiMatches];
       const placeSearch = isPlaceSearchCandidate(query, matches);
       if (placeSearch) {

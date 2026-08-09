@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260808-search-submit-startup-r37";
+const expectedBuild = "20260808-punctuation-search-r38";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
