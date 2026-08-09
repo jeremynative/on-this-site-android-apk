@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260809-native-search-reconcile-r43";
+const expectedBuild = "20260809-native-search-full-value-r45";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -197,6 +197,12 @@ function requireBundledPattern(pattern, message) {
 }
 
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
+requireText("readCurrentInputText(InputConnection connection, CharSequence fallback)", "Android search bridge must read the complete WebView input value after each IME edit.");
+requireText("connection.getExtractedText(new ExtractedTextRequest(), 0)", "Android search bridge must prefer the IME's full extracted text over composing fragments.");
+requireText("boolean handled = super.setComposingText(text, newCursorPosition);", "Android search bridge must read the complete value after applying composition.");
+requireText("boolean handled = super.commitText(text, newCursorPosition);", "Android search bridge must read the complete value after committing text.");
+requireText("public boolean performEditorAction(int editorAction)", "Android search bridge must handle the keyboard Search action.");
+requireText("dispatchNativeSearchSubmit();", "Android keyboard Search must submit the current full query to the app.");
 requireText("COMMENT_BRIDGE_CAMERA_REQUEST", "Android shell must reserve a dedicated result path for comment-camera captures.");
 requireText("window.onAndroidCommentPhoto", "Android shell must return a captured comment photo to the WebView draft.");
 requireText("COMMENT_PHOTO_READ_MAX_ATTEMPTS", "Android shell must briefly retry a Samsung comment-camera output before reporting failure.");
@@ -956,6 +962,12 @@ requireBundledText('function openMobileSearchResultsPage()', "Bundled Android ap
 requireBundledText('setMobileBottomPanelState("maximized")', "Bundled Android app must expand the nearby tray for submitted search results.");
 requireBundledText('searchEl.addEventListener("keydown", handleMobileSearchKeydown);', "Bundled Android app must open search results on Enter.");
 requireBundledText('searchEl.addEventListener("search", handleMobileSearchCommand);', "Bundled Android app must open search results from the Android search keyboard action.");
+requireBundledText('window.__nliSubmitMobileSearch = handleMobileSearchCommand;', "Bundled Android app must expose a native keyboard Search submit bridge.");
+requireBundledText('function mobileSearchResultTypeLabel(value)', "Bundled Android autocomplete must format map-entry types without an undefined global helper.");
+requireBundledText('`${leadingTitleTerms[0]}${leadingTitleTerms[1]}` === compactQuery) score += 2600;', "Bundled Android autocomplete must prioritize punctuation-free possessive title matches such as Ma's House.");
+forbidBundledText('formatLabel(item.site_type)', "Bundled Android autocomplete must not crash when a site enters the suggestions.");
+requireBundledText('if (searchEl.value !== query) searchEl.value = query;', "Bundled Android search must commit the full native composition into the DOM before submitting.");
+requireBundledPattern(/function\s+clearMobileSearchForResultOpen\(\)[\s\S]*?state\.androidImeSearchDraft\s*=\s*""/, "Bundled Android result open must clear its native search value with the visible field.");
 requireBundledText('listTitleTextEl.textContent = showingSearch ? "Search results" : "Nearby sites";', "Bundled Android app must label the results view clearly.");
 requireBundledPattern(/function\s+installNativeAndroidSearchWatch\(\)[\s\S]*?\/Android\/i\.test\(navigator\.userAgent\)[\s\S]*?setInterval\(\(\)\s*=>\s*\{[\s\S]*?refreshMobileSearchSuggestions\(\);[\s\S]*?scheduleSearchSync\(\);[\s\S]*?\},\s*180\)/, "Bundled Android app must poll and refresh autocomplete from native field changes.");
 requireBundledText('function mobileAutocompleteCandidates(rawQuery)', "Bundled Android app must derive autocomplete candidates from the current field query.");
@@ -969,6 +981,8 @@ requireBundledText('searchEl.value = "";', "Bundled Android result opens must em
 requireBundledText('state.filtered = browsableSites();', "Bundled Android result opens must restore all saved content offline and normal visitable sites online after clearing search.");
 requireBundledText('searchEl.addEventListener("keyup", handleMobileSearchInput);', "Bundled Android app must filter search after Android keyboard events.");
 requireBundledPattern(/function\s+handleMobileSearchInput\(nativeDraft\s*=\s*null\)[\s\S]*?const\s+hasNativeDraft\s*=\s*typeof\s+nativeDraft\s*===\s*"string"[\s\S]*?state\.androidImeSearchDraft\s*=\s*!hasNativeDraft[\s\S]*?:\s*nativeDraft/, "Bundled Android search must not mistake DOM Event objects for native IME query strings.");
+requireBundledPattern(/function\s+activeMobileSearchValue\(\)[\s\S]*?reconcileNativeSearchDraft\(nativeValue\)[\s\S]*?state\.androidImeSearchDraft\s*=\s*resolvedValue[\s\S]*?return\s+resolvedValue/, "Bundled Android search polling must promote a newer visible query over a stale native composition.");
+requireBundledPattern(/function\s+handleMobileSearchInput\(nativeDraft\s*=\s*null\)[\s\S]*?state\.androidImeSearchDraft\s*=\s*!hasNativeDraft[\s\S]*?!domValue[\s\S]*?\?\s*""/, "Bundled Android search clear must also clear its native draft.");
 requireBundledPattern(/function\s+reconcileNativeSearchDraft\(value\)[\s\S]*?domValue\.length\s*>\s*nativeValue\.length[\s\S]*?domKey\.startsWith\(nativeKey\)[\s\S]*?domKey\.endsWith\(nativeKey\)[\s\S]*?window\.__nliSetNativeSearchDraft\s*=\s*value\s*=>\s*handleMobileSearchInput\(reconcileNativeSearchDraft\(value\)\)/, "Bundled Android search must reconcile stale IME fragments with the full visible query.");
 requireBundledText('searchEl.addEventListener("focus", handleMobileSearchFocus);', "Bundled Android app must poll focused search values for WebView text changes.");
 requireBundledText('function installNativeAndroidSearchWatch()', "Bundled Android app must keep polling native Android search values.");

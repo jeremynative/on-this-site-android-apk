@@ -3903,7 +3903,12 @@
       const full = normalizeText(site.searchText || "");
       const compactTitle = mobileCompactSearchKey(site.title || "");
       const compactSlug = mobileCompactSearchKey(site.slug || "");
+      const leadingTitleTerms = title.split(" ").filter(Boolean);
       let score = 0;
+      // Let punctuation-free typing such as "mas" strongly identify
+      // "Ma's House" instead of burying it below every title beginning Mass-.
+      if (compactQuery && leadingTitleTerms.length > 1 && leadingTitleTerms[0].length <= 3
+          && `${leadingTitleTerms[0]}${leadingTitleTerms[1]}` === compactQuery) score += 2600;
       if (compactQuery && compactTitle === compactQuery) score += 1400;
       if (compactQuery && compactTitle.startsWith(compactQuery)) score += 1000;
       if (compactQuery && compactSlug.startsWith(compactQuery)) score += 520;
@@ -4129,17 +4134,18 @@
     }
 
     function closeDetailForSearchResults() {
-      if (!searchEl?.value?.trim() || !detailEl?.classList.contains("open")) return false;
+      if (!activeMobileSearchValue().trim() || !detailEl?.classList.contains("open")) return false;
       closeDetail({ skipRoute: true, blockMapTap: false });
       return true;
     }
 
     function clearMobileSearchForResultOpen() {
-      if (!searchEl?.value?.trim()) return false;
+      if (!activeMobileSearchValue().trim()) return false;
       window.clearTimeout(state.searchTimer);
       window.clearTimeout(state.searchMapSyncTimer);
       window.clearTimeout(state.searchRenderSettledTimer);
       searchEl.value = "";
+      state.androidImeSearchDraft = "";
       state.lastSearchValue = "";
       state.lastSearchDataVersion = state.searchDataVersion;
       if (state.searchValueWatchTimer) {
@@ -4171,6 +4177,10 @@
     function openMobileSearchResultsPage() {
       if (!searchEl) return;
       const query = activeMobileSearchValue().trim();
+      // Commit Android's full native composition into the DOM before any
+      // existing result/blur paths inspect input.value.
+      if (searchEl.value !== query) searchEl.value = query;
+      state.androidImeSearchDraft = query;
       window.clearTimeout(state.searchTimer);
       if (detailEl?.classList.contains("open")) closeDetail({ skipRoute: true, blockMapTap: false });
       filterSites();
@@ -4201,8 +4211,15 @@
       openMobileSearchResultsPage();
     }
 
+    // Android IMEs deliver their Search action through InputConnection rather
+    // than consistently emitting the HTML search event in WebView.
+    window.__nliSubmitMobileSearch = handleMobileSearchCommand;
+
     function activeMobileSearchValue() {
-      return state.androidImeSearchDraft || searchEl?.value || "";
+      const nativeValue = state.androidImeSearchDraft || "";
+      const resolvedValue = reconcileNativeSearchDraft(nativeValue);
+      if (resolvedValue !== nativeValue) state.androidImeSearchDraft = resolvedValue;
+      return resolvedValue;
     }
 
     function handleMobileSearchInput(nativeDraft = null) {
@@ -4212,7 +4229,9 @@
       // Android can emit a stale input event that still exposes the first
       // committed character after the IME has sent a longer composing string.
       state.androidImeSearchDraft = !hasNativeDraft
-        ? (isNativeAndroidApp() && priorDraft.length > domValue.length && priorDraft.startsWith(domValue)
+        ? (!domValue
+          ? ""
+          : isNativeAndroidApp() && priorDraft.length > domValue.length && priorDraft.startsWith(domValue)
           ? priorDraft
           : domValue)
         : nativeDraft;
@@ -5030,9 +5049,15 @@
       renderSearchSuggestions();
     }
 
+    function mobileSearchResultTypeLabel(value) {
+      return String(value || "Map entry")
+        .replace(/[_-]+/g, " ")
+        .replace(/\b\w/g, character => character.toUpperCase());
+    }
+
     function renderSearchSuggestions(queryOverride = null) {
       if (!searchSuggestionsEl || !searchEl) return;
-      const query = String(queryOverride == null ? (state.androidImeSearchDraft || searchEl.value) : queryOverride).trim();
+      const query = String(queryOverride == null ? activeMobileSearchValue() : queryOverride).trim();
       const hide = () => {
         searchSuggestionsEl.hidden = true;
         searchSuggestionsEl.replaceChildren();
@@ -5056,7 +5081,7 @@
       searchSuggestionsEl.innerHTML = suggestions.map(item => `
         <button class="search-suggestion" type="button" role="option" data-search-suggestion="${escapeHtml(item.title)}">
           <strong>${escapeHtml(item.title)}</strong>
-          <span>${escapeHtml(item.resultType === "wiki" ? "Knowledgebase" : item.site_type ? formatLabel(item.site_type) : "Map entry")}</span>
+          <span>${escapeHtml(item.resultType === "wiki" ? "Knowledgebase" : mobileSearchResultTypeLabel(item.site_type))}</span>
         </button>
       `).join("");
       searchSuggestionsEl.hidden = false;

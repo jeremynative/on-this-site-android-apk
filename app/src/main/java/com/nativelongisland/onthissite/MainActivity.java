@@ -33,6 +33,8 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.ExtractedText;
+import android.view.inputmethod.ExtractedTextRequest;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputConnectionWrapper;
 import android.view.MotionEvent;
@@ -77,7 +79,7 @@ public class MainActivity extends Activity {
     static final int COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST = 49;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260809-native-search-reconcile-r43";
+    static final String APP_VERSION = "20260809-native-search-full-value-r45";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -179,6 +181,18 @@ public class MainActivity extends Activity {
     private final class SearchAwareWebView extends WebView {
         private String composingSearchText = "";
 
+        private String readCurrentInputText(InputConnection connection, CharSequence fallback) {
+            try {
+                ExtractedText extracted = connection.getExtractedText(new ExtractedTextRequest(), 0);
+                if (extracted != null && extracted.text != null) return extracted.text.toString();
+                CharSequence beforeCursor = connection.getTextBeforeCursor(4096, 0);
+                if (beforeCursor != null) return beforeCursor.toString();
+            } catch (RuntimeException error) {
+                Log.w(LOG_TAG, "Could not read current WebView input text", error);
+            }
+            return fallback == null ? "" : fallback.toString();
+        }
+
         SearchAwareWebView(Context context) {
             super(context);
         }
@@ -190,34 +204,39 @@ public class MainActivity extends Activity {
             return new InputConnectionWrapper(target, false) {
                 @Override
                 public boolean setComposingText(CharSequence text, int newCursorPosition) {
-                    composingSearchText = text == null ? "" : text.toString();
+                    boolean handled = super.setComposingText(text, newCursorPosition);
+                    composingSearchText = readCurrentInputText(this, text);
                     dispatchNativeSearchDraft(composingSearchText);
-                    return super.setComposingText(text, newCursorPosition);
+                    return handled;
                 }
 
                 @Override
                 public boolean commitText(CharSequence text, int newCursorPosition) {
-                    String committed = text == null ? "" : text.toString();
-                    if (composingSearchText.isEmpty()) {
-                        dispatchNativeSearchTextAppend(committed);
-                    } else {
-                        dispatchNativeSearchDraft(composingSearchText);
-                    }
+                    boolean handled = super.commitText(text, newCursorPosition);
+                    composingSearchText = readCurrentInputText(this, text);
+                    dispatchNativeSearchDraft(composingSearchText);
                     composingSearchText = "";
-                    return super.commitText(text, newCursorPosition);
+                    return handled;
                 }
 
                 @Override
                 public boolean deleteSurroundingText(int beforeLength, int afterLength) {
-                    if (beforeLength > 0) dispatchNativeSearchTextDelete(beforeLength);
-                    if (beforeLength > 0 && !composingSearchText.isEmpty()) {
-                        composingSearchText = composingSearchText.substring(
-                            0,
-                            Math.max(0, composingSearchText.length() - beforeLength)
-                        );
-                        dispatchNativeSearchDraft(composingSearchText);
+                    boolean handled = super.deleteSurroundingText(beforeLength, afterLength);
+                    composingSearchText = readCurrentInputText(this, "");
+                    dispatchNativeSearchDraft(composingSearchText);
+                    return handled;
+                }
+
+                @Override
+                public boolean performEditorAction(int editorAction) {
+                    boolean handled = super.performEditorAction(editorAction);
+                    dispatchNativeSearchDraft(readCurrentInputText(this, composingSearchText));
+                    if (editorAction == EditorInfo.IME_ACTION_SEARCH
+                        || editorAction == EditorInfo.IME_ACTION_GO
+                        || editorAction == EditorInfo.IME_ACTION_DONE) {
+                        dispatchNativeSearchSubmit();
                     }
-                    return super.deleteSurroundingText(beforeLength, afterLength);
+                    return handled;
                 }
             };
         }
@@ -243,6 +262,14 @@ public class MainActivity extends Activity {
         if (webView == null || count < 1) return;
         webView.post(() -> webView.evaluateJavascript(
             "window.__nliDeleteNativeSearchText&&window.__nliDeleteNativeSearchText(" + count + ")",
+            null
+        ));
+    }
+
+    private void dispatchNativeSearchSubmit() {
+        if (webView == null) return;
+        webView.post(() -> webView.evaluateJavascript(
+            "window.__nliSubmitMobileSearch&&window.__nliSubmitMobileSearch()",
             null
         ));
     }
