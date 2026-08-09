@@ -74,7 +74,7 @@ public class MainActivity extends Activity {
     static final int COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST = 49;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260808-live-autocomplete-r39";
+    static final String APP_VERSION = "20260808-native-search-sync-r40";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -163,6 +163,16 @@ public class MainActivity extends Activity {
     };
     private final Runnable revealBundledFallback = () -> {
         if (webView != null && loadingBundledFallback) hideLoadingCover();
+    };
+    private final Runnable nativeSearchValueRefresh = new Runnable() {
+        @Override public void run() {
+            if (webView == null) return;
+            if (appShellLoaded) webView.evaluateJavascript(
+                "(function(){try{var el=document.getElementById('search');if(!el)return;var value=String(el.value||'');if(window.__nliNativeSearchInputValue===value)return;window.__nliNativeSearchInputValue=value;el.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){}})();",
+                null
+            );
+            startupHandler.postDelayed(this, 120);
+        }
     };
     Uri lastStoryVideoUri;
     String lastStoryVideoMimeType = "video/webm";
@@ -344,6 +354,8 @@ public class MainActivity extends Activity {
                 hideLoadingCover();
                 enforceExclusiveMobilePanels(view);
                 validateLoadedAppShell(url);
+                startupHandler.removeCallbacks(nativeSearchValueRefresh);
+                startupHandler.postDelayed(nativeSearchValueRefresh, 180);
             }
         });
 
