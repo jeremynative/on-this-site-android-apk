@@ -4208,13 +4208,14 @@
     function handleMobileSearchInput(nativeDraft = null) {
       const domValue = searchEl?.value || "";
       const priorDraft = state.androidImeSearchDraft || "";
+      const hasNativeDraft = typeof nativeDraft === "string";
       // Android can emit a stale input event that still exposes the first
       // committed character after the IME has sent a longer composing string.
-      state.androidImeSearchDraft = nativeDraft == null
+      state.androidImeSearchDraft = !hasNativeDraft
         ? (isNativeAndroidApp() && priorDraft.length > domValue.length && priorDraft.startsWith(domValue)
           ? priorDraft
           : domValue)
-        : String(nativeDraft);
+        : nativeDraft;
       state.lastSearchInputAt = Date.now();
       // Typing only changes the type-ahead. Keep the visible map and current
       // listing context steady until the visitor chooses a suggestion or

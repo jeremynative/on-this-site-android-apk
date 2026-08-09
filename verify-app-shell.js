@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260808-native-search-ime-r41";
+const expectedBuild = "20260809-native-search-events-r42";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -968,6 +968,7 @@ requireBundledText('function clearMobileSearchForResultOpen()', "Bundled Android
 requireBundledText('searchEl.value = "";', "Bundled Android result opens must empty the search box so search polling does not close the article.");
 requireBundledText('state.filtered = browsableSites();', "Bundled Android result opens must restore all saved content offline and normal visitable sites online after clearing search.");
 requireBundledText('searchEl.addEventListener("keyup", handleMobileSearchInput);', "Bundled Android app must filter search after Android keyboard events.");
+requireBundledPattern(/function\s+handleMobileSearchInput\(nativeDraft\s*=\s*null\)[\s\S]*?const\s+hasNativeDraft\s*=\s*typeof\s+nativeDraft\s*===\s*"string"[\s\S]*?state\.androidImeSearchDraft\s*=\s*!hasNativeDraft[\s\S]*?:\s*nativeDraft/, "Bundled Android search must not mistake DOM Event objects for native IME query strings.");
 requireBundledText('searchEl.addEventListener("focus", handleMobileSearchFocus);', "Bundled Android app must poll focused search values for WebView text changes.");
 requireBundledText('function installNativeAndroidSearchWatch()', "Bundled Android app must keep polling native Android search values.");
 requireBundledPattern(/state\.lastSearchValue\s*=\s*"";[\s\S]*?scheduleSearchSync\(\);[\s\S]*?state\.nativeAndroidSearchWatchTimer\s*=\s*window\.setInterval/, "Bundled Android app must process search text typed before native polling starts.");
