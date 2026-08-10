@@ -343,8 +343,10 @@ public class MainActivity extends Activity {
         cookieManager.setAcceptThirdPartyCookies(webView, true);
         webView.addJavascriptInterface(new AppBridge(this), "AndroidApp");
         webView.addJavascriptInterface(new StoryBridge(this), "AndroidStory");
-        billingManager = new BillingManager(this);
-        billingManager.start();
+        if (isGooglePlayInstall()) {
+            billingManager = new BillingManager(this);
+            billingManager.start();
+        }
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
