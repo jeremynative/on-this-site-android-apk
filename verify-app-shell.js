@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260809-permission-search-stability-r53";
+const expectedBuild = "20260809-lifecycle-restore-r59";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -201,6 +201,20 @@ function requireBundledPattern(pattern, message) {
 }
 
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
+for (const lifecycleRuntime of [bundledApp, bundledLiveRuntime]) {
+  if (!lifecycleRuntime.includes("if (state.mobileStartupRendering)")
+      || !lifecycleRuntime.includes("const activeContentKey = androidLifecycleContentKey(activeContent)")
+      || !lifecycleRuntime.includes("const existingContentKey = androidLifecycleContentKey(existing?.content)")
+      || !lifecycleRuntime.includes("(!activeContentKey || activeContentKey === existingContentKey)")
+      || !lifecycleRuntime.includes("function restoreAndroidLifecycleDetailScroll(snapshot)")
+      || !lifecycleRuntime.includes("[150, 550, 1500, 3500].forEach(delay => window.setTimeout(apply, delay))")
+      || !lifecycleRuntime.includes("}, 8000)")
+      || !lifecycleRuntime.includes("preserveDetailScrollTop: detailBodyEl.scrollTop")
+      || !lifecycleRuntime.includes("drawerState: currentDetailDrawerState()")
+      || !lifecycleRuntime.includes("if (androidLifecycleContentRestored) restoreAndroidLifecycleDetailScroll(androidLifecycleSnapshot)")) {
+    throw new Error("Bundled Android runtimes must preserve meaningful lifecycle content during startup fallback navigation.");
+  }
+}
 requireText("readCurrentInputText(InputConnection connection, CharSequence fallback)", "Android search bridge must read the complete WebView input value after each IME edit.");
 requireText("connection.getExtractedText(new ExtractedTextRequest(), 0)", "Android search bridge must prefer the IME's full extracted text over composing fragments.");
 requireText("boolean handled = super.setComposingText(text, newCursorPosition);", "Android search bridge must read the complete value after applying composition.");
