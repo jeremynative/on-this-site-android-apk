@@ -1021,6 +1021,25 @@
       overflow: hidden;
     }
 
+    .app.mobile-map-initializing .mobile-map-shell::after {
+      content: "Loading map\2026";
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: var(--ink);
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+      text-align: center;
+      background:
+        radial-gradient(circle at 50% 44%, rgba(63, 122, 96, 0.2), transparent 34%),
+        linear-gradient(135deg, #eef5ef, #dcebe4);
+      pointer-events: auto;
+    }
+
     #map {
       width: 100%;
       height: 100%;
@@ -33222,13 +33241,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           androidLifecycleContentRestored = await restoreAndroidLifecycleContent(androidLifecycleSnapshot);
         }
         if (state.passwordResetToken) openSheet(loginSheetEl);
-        // The searchable local index is ready at this point.  Let people use
-        // the app while the slower map initializes in the background.
+        // The local index and search are usable before Mapbox. Replace the
+        // full-screen startup cover with an explicit in-map loading surface,
+        // then reveal the live map or text fallback only when it is ready.
+        appEl?.classList.add("mobile-map-initializing");
         hideLoadingScreen();
         await initMap().catch(error => {
           console.warn("Map did not initialize yet.", error);
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
-        });
+        }).finally(() => appEl?.classList.remove("mobile-map-initializing"));
         if (!isOfflineTextMode()) {
           state.researchQuestionInstance = window.NLI_RESEARCH_QUESTION_UTILS?.init?.({
             platform: "mobile",

@@ -17171,13 +17171,15 @@
           androidLifecycleContentRestored = await restoreAndroidLifecycleContent(androidLifecycleSnapshot);
         }
         if (state.passwordResetToken) openSheet(loginSheetEl);
-        // The searchable local index is ready at this point.  Let people use
-        // the app while the slower map initializes in the background.
+        // The local index and search are usable before Mapbox. Replace the
+        // full-screen startup cover with an explicit in-map loading surface,
+        // then reveal the live map or text fallback only when it is ready.
+        appEl?.classList.add("mobile-map-initializing");
         hideLoadingScreen();
         await initMap().catch(error => {
           console.warn("Map did not initialize yet.", error);
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
-        });
+        }).finally(() => appEl?.classList.remove("mobile-map-initializing"));
         if (!isOfflineTextMode()) {
           state.researchQuestionInstance = window.NLI_RESEARCH_QUESTION_UTILS?.init?.({
             platform: "mobile",

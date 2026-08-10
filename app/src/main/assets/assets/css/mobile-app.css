@@ -1000,6 +1000,25 @@
       overflow: hidden;
     }
 
+    .app.mobile-map-initializing .mobile-map-shell::after {
+      content: "Loading map\2026";
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: var(--ink);
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+      text-align: center;
+      background:
+        radial-gradient(circle at 50% 44%, rgba(63, 122, 96, 0.2), transparent 34%),
+        linear-gradient(135deg, #eef5ef, #dcebe4);
+      pointer-events: auto;
+    }
+
     #map {
       width: 100%;
       height: 100%;

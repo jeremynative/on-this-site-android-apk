@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260809-lifecycle-restore-r59";
+const expectedBuild = "20260809-map-startup-shield-r60";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -213,6 +213,17 @@ for (const lifecycleRuntime of [bundledApp, bundledLiveRuntime]) {
       || !lifecycleRuntime.includes("drawerState: currentDetailDrawerState()")
       || !lifecycleRuntime.includes("if (androidLifecycleContentRestored) restoreAndroidLifecycleDetailScroll(androidLifecycleSnapshot)")) {
     throw new Error("Bundled Android runtimes must preserve meaningful lifecycle content during startup fallback navigation.");
+  }
+}
+for (const startupRuntime of [bundledApp, bundledLiveRuntime]) {
+  if (!startupRuntime.includes('appEl?.classList.add("mobile-map-initializing")')
+      || !startupRuntime.includes('hideLoadingScreen();')
+      || !startupRuntime.includes('await initMap().catch(error =>')
+      || !startupRuntime.includes('.finally(() => appEl?.classList.remove("mobile-map-initializing"))')
+      || !startupRuntime.includes('.app.mobile-map-initializing .mobile-map-shell::after')
+      || !startupRuntime.includes('content: "Loading map\\2026"')
+      || !startupRuntime.includes('pointer-events: auto')) {
+    throw new Error("Bundled Android runtimes must shield the unfinished map without blocking ready search and saved content.");
   }
 }
 requireText("readCurrentInputText(InputConnection connection, CharSequence fallback)", "Android search bridge must read the complete WebView input value after each IME edit.");
