@@ -1704,13 +1704,21 @@ public class MainActivity extends Activity {
     }
 
     private boolean openExternallyWhenNeeded(Uri uri) {
+        if (uri == null) return true;
+        String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase();
         String host = uri.getHost();
-        String path = uri.getPath();
-        boolean isArchiveApp = "nativelongisland.com".equalsIgnoreCase(host);
+        boolean isArchiveApp = "https".equals(scheme) && "nativelongisland.com".equalsIgnoreCase(host);
         if (isArchiveApp) return false;
 
-        Intent intent = new Intent(Intent.ACTION_VIEW, uri);
-        startActivity(intent);
+        if (!("https".equals(scheme) || "http".equals(scheme) || "geo".equals(scheme)
+            || "mailto".equals(scheme) || "tel".equals(scheme))) return true;
+
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+            startActivity(intent);
+        } catch (ActivityNotFoundException ignored) {
+            // Consume links that Android cannot safely route instead of crashing the shell.
+        }
         return true;
     }
 

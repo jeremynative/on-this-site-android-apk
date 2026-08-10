@@ -218,6 +218,10 @@ if (!manifest.includes('android:allowBackup="false"')) {
 if (!source.includes('safeLogUrl(url)') || source.includes('"WebView page started: " + url')) {
   throw new Error("Android release logs must not expose URL queries or password-reset fragments.");
 }
+if (!source.includes('"mailto".equals(scheme) || "tel".equals(scheme)')
+    || !source.includes('if (!("https".equals(scheme) || "http".equals(scheme) || "geo".equals(scheme)')) {
+  throw new Error("Android external navigation must reject unsafe URI schemes.");
+}
 if (!storyBridge.includes("MAX_STORY_BASE64_CHARS") || !storyBridge.includes("base64Video.length() > MAX_STORY_BASE64_CHARS")) {
   throw new Error("Android story video bridge must reject oversized base64 payloads before decoding.");
 }
@@ -592,7 +596,7 @@ if (!appBridge.includes("public boolean isDebugBuild()") || !appBridge.includes(
   throw new Error("Android app bridge must expose the debug-only location-control audit guard.");
 }
 requireText("CookieManager.getInstance()", "Android shell must explicitly enable WebView cookies for SiteGround and app sessions.");
-requireText("setAcceptThirdPartyCookies(webView, true)", "Android shell must allow web session cookies inside the APK WebView.");
+requireText("setAcceptThirdPartyCookies(webView, true)", "Android shell must allow the cross-origin SiteGround session needed by the Directus-hosted app shell.");
 requireText("settings.setCacheMode(WebSettings.LOAD_DEFAULT)", "Android shell must allow WebView to cache remote Mapbox/static resources between launches.");
 requireText("FrameLayout root = new FrameLayout(this);", "Android shell must layer a native startup cover over slow cold WebView startup.");
 requireText("webView.setBackgroundColor(Color.rgb(238, 243, 237));", "Android shell must use the app theme color behind the WebView during startup.");
@@ -705,7 +709,7 @@ requireText("cacheAndroidSearchResultTap(event);", "Android shell must cache sea
 requireText("window.onAndroidSearchResultTapStart", "Android shell must call the search result tap bridge on touch down.");
 requireText("MotionEvent.ACTION_UP", "Android shell must only forward completed taps.");
 requireText("action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP", "Android shell must keep map drag move frames out of the tap bridge.");
-requireText("boolean isArchiveApp = \"nativelongisland.com\".equalsIgnoreCase(host);", "Android shell must keep nativelongisland.com navigation inside the APK WebView.");
+requireText("boolean isArchiveApp = \"https\".equals(scheme) && \"nativelongisland.com\".equalsIgnoreCase(host);", "Android shell must keep only secure nativelongisland.com navigation inside the APK WebView.");
 if (source.includes("applyApkTimelineTrayFix")
     || source.includes("android-apk-timeline-tray-fix")
     || source.includes("android-apk-timeline-fix")) {
@@ -1123,6 +1127,9 @@ requireBundledText('showRandomMobileStartupSpotlight()', "Bundled Android app mu
 requireBundledText('scheduleMobilePromoStartup();', "Bundled Android app must schedule the daily feature after the map is interactive.");
 requireBundledText('fitLongIslandMapView("android-startup-outside-long-island")', "Bundled Android app must use the Long Island overview when startup location is outside the project area.");
 requireBundledText('const SITE_CHECKIN_RADIUS_MILES = 0.05;', "Bundled Android app must require check-ins within about 260 feet.");
+if (!bundledLiveRuntime.includes('aria-label="Search sites, towns, and histories"')) {
+  throw new Error("Bundled Android search must have an accessible name.");
+}
 requireBundledText('const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;', "Bundled Android app must alert within half a mile of a site.");
 requireBundledText('window.AndroidApp.showNotification', "Bundled Android app must use the native notification bridge.");
 if (!bundledMobileJs.includes('const androidBridgeToken = () => String(window.__NLI_ANDROID_BRIDGE_TOKEN || "")')) {
