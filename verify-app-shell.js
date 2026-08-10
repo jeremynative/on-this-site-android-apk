@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260809-map-startup-shield-r60";
+const expectedBuild = "20260809-offline-search-normalization-r61";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -481,6 +481,12 @@ for (const side of ["Top", "Right", "Bottom", "Left"]) {
 if (!lightweightOfflineApp.includes('addEventListener("nli-native-insets-changed",syncNativeInsets)')
     || !lightweightOfflineApp.includes("inset:var(--app-top-safe) var(--app-right-safe) var(--app-bottom-safe) var(--app-left-safe)")) {
   throw new Error("Lightweight APK fallback must refresh native insets and keep its detail dialog inside them.");
+}
+if (!lightweightOfflineApp.includes('normalize("NFKD")')
+    || !lightweightOfflineApp.includes("\\u2018\\u2019\\u02bc")
+    || !lightweightOfflineApp.includes("searchKey(state.query)")
+    || !lightweightOfflineApp.includes("searchKey(`${x.title")) {
+  throw new Error("Lightweight APK fallback search must normalize accents, apostrophes, punctuation, and spacing for forgiving offline matches.");
 }
 if (!offlineInsetAudit.includes("getSafeInsetBottom")
     || !offlineInsetAudit.includes("result.detail.safe")

@@ -127,12 +127,12 @@ const search = await evaluate(`new Promise(resolve => {
     return;
   }
   input.focus();
-  input.value = "coopers";
-  input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: "coopers" }));
+  input.value = "Mas House";
+  input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: "Mas House" }));
   setTimeout(() => {
     const cards = Array.from(document.querySelectorAll(".site-card[data-slug], .site-card[data-wiki-slug]"))
       .filter(card => !card.hidden);
-    const match = cards.find(card => /Coopers Beach/i.test(card.textContent || ""));
+    const match = cards.find(card => /Ma['’]s House/i.test(card.textContent || ""));
     match?.click();
     setTimeout(() => {
       const detail = document.querySelector("#detail");
@@ -169,7 +169,7 @@ const failures = [
     ) || (key === "regionButtons" && value !== 4))
     .map(([key, value]) => ({ key, value })),
   ...regions.filter(region => region.missing || !region.active || region.visibleCards < 1),
-  ...(search.missing || !search.found || !search.detailOpen || !/Coopers Beach/i.test(search.detailTitle)
+  ...(search.missing || !search.found || !search.detailOpen || !/Ma['’]s House/i.test(search.detailTitle)
     || search.detailTextLength < 80 || search.detailVisibleMedia !== 0 ? [search] : []),
 ];
 

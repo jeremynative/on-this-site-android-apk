@@ -57,6 +57,7 @@
     const $=id=>document.getElementById(id), search=$("search"), list=$("site-list"), status=$("status"), count=$("result-count"), summary=$("offline-summary"), more=$("load-more"), canvas=$("offline-map"), detail=$("detail"), title=$("detail-title"), meta=$("detail-meta"), body=$("detail-body");
     const esc=v=>String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
     const text=v=>{const d=document.createElement("div");d.innerHTML=String(v||"");return String(d.textContent||"").replace(/\s+/g," ").trim()};
+    const searchKey=v=>text(v).normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/['\u2018\u2019\u02bc]/gi,"").replace(/[^a-z0-9]+/gi," ").trim().toLocaleLowerCase();
     const rows=p=>Array.isArray(p)?p:(Array.isArray(p?.rows)?p.rows:[]);
     const region=lon=>!Number.isFinite(lon)?"all":lon<=S.west?"west":lon>=S.east?"east":"central";
     const load=async path=>{const r=await fetch(path,{cache:"no-store"});if(!r.ok)throw Error("Saved archive file could not be opened.");return r.json()};
@@ -69,10 +70,10 @@
       state.points=state.filtered.filter(x=>x.kind==="site"&&Number.isFinite(x.longitude)&&Number.isFinite(x.latitude)).map(item=>{const [x,y]=pos(item.longitude,item.latitude,w,h);c.beginPath();c.arc(x,y,2.6,0,Math.PI*2);c.fillStyle="#2f6f57";c.fill();return{item,x,y}});
     }
     function filter(){
-      const q=state.query.toLocaleLowerCase();
+      const q=searchKey(state.query);
       state.filtered=[...state.sites.map(x=>({...x,kind:"site"})),...state.wikis.map(x=>({...x,kind:"wiki"}))]
         .filter(x=>state.region==="all"||x.kind==="wiki"||x.region===state.region)
-        .filter(x=>!q||`${x.title||""} ${x.summary||""} ${x.address_label||""} ${x.why_this_matters||""}`.toLocaleLowerCase().includes(q))
+        .filter(x=>!q||searchKey(`${x.title||""} ${x.summary||""} ${x.address_label||""} ${x.why_this_matters||""}`).includes(q))
         .sort((a,b)=>String(a.title||"").localeCompare(String(b.title||"")));
     }
     function render(){
