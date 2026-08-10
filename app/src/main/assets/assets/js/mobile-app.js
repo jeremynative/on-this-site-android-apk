@@ -34,6 +34,15 @@
     const GEOMETRY_UTILS = window.NLI_GEOMETRY_UTILS || {};
     const ROUTE_UTILS = window.NLI_ROUTE_UTILS || {};
     const HTML_UTILS = window.NLI_HTML_UTILS || {};
+    const androidBridgeToken = () => String(window.__NLI_ANDROID_BRIDGE_TOKEN || "");
+    const safeExternalUrl = HTML_UTILS.safeExternalUrl || (value => {
+      try {
+        const url = new URL(String(value || "").trim(), window.location.href);
+        return (url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password ? url.href : "";
+      } catch {
+        return "";
+      }
+    });
     const MEDIA_UTILS = window.NLI_MEDIA_UTILS || {};
     const cleanImageUrl = MEDIA_UTILS.cleanImageUrl || (value => String(value || "").trim());
     const normalizeHex = GEOMETRY_UTILS.normalizeHex || ((value, fallback) => {
@@ -1514,11 +1523,11 @@
       const response = await fetch("https://nativelongisland.com/account-registration.php", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: normalizedEmail, password, display_name: profile.display_name })
+        body: JSON.stringify({ email: normalizedEmail, password, display_name: profile.display_name, website: "" })
       });
       const registrationRecord = await response.json().catch(() => ({}));
       if (!response.ok || !registrationRecord?.ok) throw new Error(registrationRecord?.error || "Could not create contributor account request.");
-      profile.registrationSynced = true;
+      profile.registrationSynced = Boolean(registrationRecord?.data?.id);
       profile.registrationId = registrationRecord?.data?.id || null;
       if (profile.registrationSynced) {
         try {
@@ -1548,7 +1557,7 @@
         }
       }
       profile.reviewTodoSynced = profile.registrationSynced;
-      profile.memberProfileSynced = true;
+      profile.memberProfileSynced = profile.registrationSynced;
       return profile;
     }
 
@@ -2804,7 +2813,10 @@
     async function notifyUser(title, body) {
       if (window.AndroidApp?.showNotification) {
         try {
-          if (window.AndroidApp.showNotification(String(title || ""), String(body || ""))) return true;
+          const token = androidBridgeToken();
+          if (token
+            ? window.AndroidApp.showNotification(token, String(title || ""), String(body || ""))
+            : window.AndroidApp.showNotification(String(title || ""), String(body || ""))) return true;
         } catch {}
       }
       if (!("Notification" in window)) {
@@ -3186,9 +3198,7 @@
 
     async function uploadFeedbackScreenshot(file, title) {
       return FEEDBACK_UTILS.uploadFeedbackScreenshot(file, title, {
-        compressImage: compressFeedbackImage,
-        uploadFile: uploadDirectusFile,
-        normalizeUploadFileId: SHARED_DIRECTUS.normalizeUploadFileId
+        compressImage: compressFeedbackImage
       });
     }
 
@@ -7637,7 +7647,7 @@
         let imageId = null;
         if (file) {
           const compressed = await compressPlantImage(file);
-          imageId = await uploadDirectusFile(compressed || file, `Map story - ${prompt.label}`);
+          imageId = await uploadDirectusFile(compressed || file, `Map story - ${prompt.label}`, { requireAuth: true });
         }
         const now = new Date();
         const expires = new Date(now.getTime() + MAP_STORY_BASE_LIFETIME_MS);
@@ -8602,12 +8612,15 @@
         const profile = identity.profile;
         image = await prepareJpegUploadImage(image, "plant-observation");
         suggestSubmitBtn.textContent = image ? "Uploading image..." : (admin ? "Publishing..." : "Submitting...");
-        const imageId = image ? await uploadDirectusFile(image, title) : null;
+        const imageId = image ? await uploadDirectusFile(image, title, { requireAuth: true }) : null;
         suggestSubmitBtn.textContent = admin ? "Publishing..." : "Submitting...";
         const submittedAt = new Date().toISOString();
         const payload = {
-          status: admin ? "approved" : "pending",
-          priority: 1,
+          ...(admin ? {
+            status: "approved",
+            priority: 1,
+            review_note: `Editor public site submission. Contribution type: ${prompt}`
+          } : {}),
           title,
           introduction,
           suggested_image: imageId,
@@ -8616,13 +8629,9 @@
           latitude,
           author_profile: profile?.id || null,
           author_name: identity.name,
-          author_email: identity.email,
-          submitted_at: submittedAt,
-          review_note: admin
-            ? `Editor public site submission. Contribution type: ${prompt}`
-            : `Contribution type: ${prompt}`
+          submitted_at: submittedAt
         };
-        const created = await postDirectusItem("site_suggestions", payload);
+        const created = await postDirectusItem("site_suggestions", payload, { requireAuth: true });
         state.siteSuggestions.push({ id: created?.data?.id || `local-${Date.now()}`, ...payload });
         suggestTitleEl.value = "";
         suggestIntroEl.value = "";
@@ -10234,6 +10243,7 @@
     }
 
     function openExhibit(exhibit) {
+      const externalUrl = safeExternalUrl(exhibit.external_url);
       detailTitleEl.innerHTML = `
         <h2>${escapeHtml(exhibit.title)}</h2>
         <p class="detail-meta">${escapeHtml([CALENDAR_UTILS.exhibitDateLabel(exhibit), exhibit.venue || exhibit.address_label, CALENDAR_UTILS.eventTypeLabel(exhibit.event_type || exhibit.status)].filter(Boolean).join(" - "))}</p>
@@ -10251,7 +10261,7 @@
         ` : ""}
         <div class="actions">
           <a class="action purple" href="${escapeHtml(googleMapsUrl(exhibit))}" target="_blank" rel="noreferrer">Directions</a>
-          ${exhibit.external_url ? `<a class="action secondary" href="${escapeHtml(exhibit.external_url)}" target="_blank" rel="noreferrer">Event link</a>` : ""}
+          ${externalUrl ? `<a class="action secondary" href="${escapeHtml(externalUrl)}" target="_blank" rel="noopener noreferrer">Event link</a>` : ""}
           ${isAdminContributor() ? `<a class="action secondary" href="${DIRECTUS}/admin/content/calendar_events/${escapeHtml(exhibit.id)}" target="_blank" rel="noreferrer">Edit event</a>` : ""}
           <button class="action secondary" type="button" id="mark-visited">Mark visited</button>
           <button class="action secondary" type="button" id="check-in-site">Check in nearby</button>
@@ -11130,6 +11140,7 @@
       const showArticleSummary = Boolean(publicCleanText(article.summary)) && !articleContentHtml;
       const wikiMoments = timelineEventsForSource("wiki", article.id, article.slug);
       const biographyTimeline = mobileBiographyTimelineData(article, wikiMoments);
+      const sourceUrl = safeExternalUrl(article.source_url);
       detailTitleEl.innerHTML = `
         <h2>${escapeHtml(article.title)}</h2>
         <p class="detail-meta">${article.lastmod ? "Knowledgebase article" : "Knowledgebase"}</p>
@@ -11144,7 +11155,7 @@
         ${plantWikiObservationSitesHtml(article)}
         ${discussionHtml("wiki", article)}
         <div class="actions">
-          ${article.source_url ? `<a class="action secondary" href="${escapeHtml(article.source_url)}" target="_blank" rel="noreferrer">Original page</a>` : ""}
+          ${sourceUrl ? `<a class="action secondary" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">Original page</a>` : ""}
           ${isAdminContributor() ? `<button class="action secondary" type="button" data-open-frontend-editor="wiki" data-editor-slug="${escapeHtml(article.slug)}">Edit article</button>` : ""}
         </div>
       `;
@@ -11584,7 +11595,9 @@
     function nativeTakePlantPhoto() {
       try {
         if (window.AndroidApp?.takePlantPhoto) {
-          window.AndroidApp.takePlantPhoto();
+          const token = androidBridgeToken();
+          if (token) window.AndroidApp.takePlantPhoto(token);
+          else window.AndroidApp.takePlantPhoto();
           return true;
         }
       } catch {}
@@ -11626,7 +11639,9 @@
     function nativeTakeCommentPhoto() {
       try {
         if (window.AndroidApp?.takeCommentPhoto) {
-          window.AndroidApp.takeCommentPhoto();
+          const token = androidBridgeToken();
+          if (token) window.AndroidApp.takeCommentPhoto(token);
+          else window.AndroidApp.takeCommentPhoto();
           return true;
         }
       } catch {}
@@ -11636,7 +11651,9 @@
     function nativeChooseCommentPhoto() {
       try {
         if (window.AndroidApp?.chooseCommentPhoto) {
-          window.AndroidApp.chooseCommentPhoto();
+          const token = androidBridgeToken();
+          if (token) window.AndroidApp.chooseCommentPhoto(token);
+          else window.AndroidApp.chooseCommentPhoto();
           return true;
         }
       } catch {}
@@ -13383,6 +13400,7 @@
       const locationLabel = linkedProfile?.location_label || state.profile.location_label || "";
       const website = linkedProfile?.website_url || state.profile.website_url || "";
       const websiteUrl = profileWebsiteUrl(website);
+      const donateUrl = safeExternalUrl(state.supportSettings?.donate_url);
       const userSinceLine = profileUserSinceLine(linkedProfile || state.profile);
       const visits = mergedProfileVisits(linkedProfile);
       const comments = profileActivity(linkedProfile || {}).comments || [];
@@ -13438,7 +13456,7 @@
           `).join("") : `<p class="detail-meta">Mark places visited from a site page and they will appear here.</p>`}
           <button class="action secondary" type="button" data-open-visits>View sites visited</button>
         </div>
-        ${state.supportSettings?.donate_url ? `<a class="action secondary" href="${escapeHtml(state.supportSettings.donate_url)}" target="_blank" rel="noreferrer">Donate monthly</a>` : ""}
+        ${donateUrl ? `<a class="action secondary" href="${escapeHtml(donateUrl)}" target="_blank" rel="noopener noreferrer">Donate monthly</a>` : ""}
         <details class="community-extra" ${state.profile.pending ? "hidden" : ""}>
           <summary>Edit profile</summary>
           <div class="field">
@@ -15270,7 +15288,11 @@
           storyDownloadLinkEl.setAttribute("aria-disabled", "true");
           storyShareBtn.disabled = true;
           blobToBase64(blob)
-            .then(base64 => window.AndroidStory.saveVideo(base64, filename, mimeType))
+            .then(base64 => {
+              const token = androidBridgeToken();
+              if (token) window.AndroidStory.saveVideo(token, base64, filename, mimeType);
+              else window.AndroidStory.saveVideo(base64, filename, mimeType);
+            })
             .catch(() => {
               storySavePanelEl.querySelector("p").textContent = "Android could not receive the video. Use Download video instead.";
               storyDownloadLinkEl.removeAttribute("aria-disabled");
@@ -17051,7 +17073,9 @@
     storyDownloadLinkEl.addEventListener("click", event => {
       if (window.AndroidStory?.openLastVideo && state.storyLastBlob) {
         event.preventDefault();
-        window.AndroidStory.openLastVideo();
+        const token = androidBridgeToken();
+        if (token) window.AndroidStory.openLastVideo(token);
+        else window.AndroidStory.openLastVideo();
       }
     });
     storyShareBtn.addEventListener("click", async () => {
@@ -17060,7 +17084,9 @@
         return;
       }
       if (window.AndroidStory?.shareLastVideo) {
-        window.AndroidStory.shareLastVideo();
+        const token = androidBridgeToken();
+        if (token) window.AndroidStory.shareLastVideo(token);
+        else window.AndroidStory.shareLastVideo();
         return;
       }
       const file = new File([state.storyLastBlob], storyDownloadLinkEl.download || "on-this-site-ar-story.webm", { type: state.storyLastBlob.type || "video/webm" });

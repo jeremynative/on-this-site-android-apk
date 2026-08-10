@@ -55,12 +55,14 @@ class AppBridge {
     }
 
     @JavascriptInterface
-    public void refreshNow() {
+    public void refreshNow(String token) {
+        if (!activity.validBridgeToken(token)) return;
         activity.runOnUiThread(activity::refreshApp);
     }
 
     @JavascriptInterface
-    public boolean showNotification(String title, String body) {
+    public boolean showNotification(String token, String title, String body) {
+        if (!activity.validBridgeToken(token)) return false;
         if (Looper.myLooper() == Looper.getMainLooper()) {
             return activity.showNearbyNotification(title, body);
         }
@@ -79,7 +81,8 @@ class AppBridge {
     }
 
     @JavascriptInterface
-    public void takePlantPhoto() {
+    public void takePlantPhoto(String token) {
+        if (!activity.validBridgeToken(token)) return;
         activity.runOnUiThread(() -> {
             if (!activity.hasCameraPermission()) {
                 activity.beginRuntimePermissionPrompt();
@@ -95,7 +98,8 @@ class AppBridge {
     }
 
     @JavascriptInterface
-    public void takeCommentPhoto() {
+    public void takeCommentPhoto(String token) {
+        if (!activity.validBridgeToken(token)) return;
         activity.runOnUiThread(() -> {
             if (!activity.hasCameraPermission()) {
                 activity.beginRuntimePermissionPrompt();
@@ -111,7 +115,8 @@ class AppBridge {
     }
 
     @JavascriptInterface
-    public void chooseCommentPhoto() {
+    public void chooseCommentPhoto(String token) {
+        if (!activity.validBridgeToken(token)) return;
         activity.runOnUiThread(activity::launchCommentBridgePicker);
     }
 }

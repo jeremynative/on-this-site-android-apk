@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260809-offline-search-normalization-r61";
+const expectedBuild = "20260809-security-bridge-r62";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -16,6 +16,7 @@ const stylesPath = "app/src/main/res/values/styles.xml";
 const launchBackgroundPath = "app/src/main/res/drawable/launch_background.xml";
 const manifestPath = "app/src/main/AndroidManifest.xml";
 const appBridgePath = "app/src/main/java/com/nativelongisland/onthissite/AppBridge.java";
+const storyBridgePath = "app/src/main/java/com/nativelongisland/onthissite/StoryBridge.java";
 const captureFileProviderPath = "app/src/main/java/com/nativelongisland/onthissite/CaptureFileProvider.java";
 const nativeCommentPhotoCompatPath = "app/src/main/assets/native-comment-photo-compat.js";
 const offlineInsetAuditPath = "audit-apk-offline-insets.mjs";
@@ -33,6 +34,7 @@ const source = fs.readFileSync(mainActivityPath, "utf8");
 const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
 const manifest = fs.readFileSync(manifestPath, "utf8");
 const appBridge = fs.readFileSync(appBridgePath, "utf8");
+const storyBridge = fs.readFileSync(storyBridgePath, "utf8");
 const captureFileProvider = fs.readFileSync(captureFileProviderPath, "utf8");
 const nativeCommentPhotoCompat = fs.readFileSync(nativeCommentPhotoCompatPath, "utf8");
 const offlineInsetAudit = fs.readFileSync(offlineInsetAuditPath, "utf8");
@@ -201,6 +203,35 @@ function requireBundledPattern(pattern, message) {
 }
 
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
+for (const setting of [
+  "settings.setAllowFileAccess(false)",
+  "settings.setAllowFileAccessFromFileURLs(false)",
+  "settings.setAllowUniversalAccessFromFileURLs(false)",
+  "settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW)",
+  "settings.setSafeBrowsingEnabled(true)"
+]) {
+  requireText(setting, `Android WebView security setting is missing: ${setting}.`);
+}
+if (!manifest.includes('android:allowBackup="false"')) {
+  throw new Error("Android backups must remain disabled because the WebView stores contributor sessions.");
+}
+if (!source.includes('safeLogUrl(url)') || source.includes('"WebView page started: " + url')) {
+  throw new Error("Android release logs must not expose URL queries or password-reset fragments.");
+}
+if (!storyBridge.includes("MAX_STORY_BASE64_CHARS") || !storyBridge.includes("base64Video.length() > MAX_STORY_BASE64_CHARS")) {
+  throw new Error("Android story video bridge must reject oversized base64 payloads before decoding.");
+}
+if (!source.includes("bridgeCapabilityToken = UUID.randomUUID().toString()")
+    || !source.includes("window.__NLI_ANDROID_BRIDGE_TOKEN=")
+    || !source.includes("isTrustedAppOrigin(request.getOrigin())")
+    || !source.includes("isTrustedAppOrigin(Uri.parse(origin))")) {
+  throw new Error("Android WebView permissions and sensitive bridges must be restricted to the trusted top-level archive.");
+}
+for (const bridgeSource of [appBridge, storyBridge]) {
+  if (!bridgeSource.includes("validBridgeToken(token)")) {
+    throw new Error("Every sensitive Android JavaScript bridge must verify the per-app capability token.");
+  }
+}
 for (const lifecycleRuntime of [bundledApp, bundledLiveRuntime]) {
   if (!lifecycleRuntime.includes("if (state.mobileStartupRendering)")
       || !lifecycleRuntime.includes("const activeContentKey = androidLifecycleContentKey(activeContent)")
@@ -254,21 +285,23 @@ if (/pendingCommentBridgeCameraUri\s*=\s*MediaStorePhotoHelper\.createPlantPhoto
 requireText('installNativeCommentPhotoCompatibility(view);', "Every hosted or bundled page must receive the native-owned comment photo compatibility layer.");
 requireText('window.__otsReceiveNativeCommentPhoto', "Native delivery must fall back to the wrapper-owned comment photo receiver when the hosted handler changes.");
 if (!nativeCommentPhotoCompat.includes('[data-take-comment-photo]')
-    || !nativeCommentPhotoCompat.includes('bridge.takeCommentPhoto()')
+    || !nativeCommentPhotoCompat.includes('bridge.takeCommentPhoto(bridgeToken)')
     || !nativeCommentPhotoCompat.includes('new DataTransfer()')
     || !nativeCommentPhotoCompat.includes('input.dispatchEvent(new Event("change", { bubbles: true }))')) {
   throw new Error("Native comment camera compatibility must own click routing and a file-input delivery fallback.");
 }
-if (!appBridge.includes("public void takeCommentPhoto()") || !appBridge.includes("COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST")) {
+if (!appBridge.includes("public void takeCommentPhoto(String token)") || !appBridge.includes("COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST")) {
   throw new Error("Android bridge must expose the dedicated comment-camera action.");
 }
-if (!appBridge.includes("public void chooseCommentPhoto()") || !source.includes("COMMENT_BRIDGE_PICKER_REQUEST")) {
+if (!appBridge.includes("public void chooseCommentPhoto(String token)") || !source.includes("COMMENT_BRIDGE_PICKER_REQUEST")) {
   throw new Error("Android bridge must expose a dedicated comment-photo library action.");
 }
 requireText("Intent.ACTION_OPEN_DOCUMENT", "Comment photo selection must use the durable Android document picker.");
 requireText("Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION", "Comment photo selection must request persistable read access.");
 requireText("deliverPickedCommentPhoto(data.getData())", "Selected comment photos must be imported while the picker grant is active.");
-requireBundledText("window.AndroidApp.chooseCommentPhoto()", "The bundled app must use the native comment-photo library bridge.");
+if (!bundledMobileJs.includes("window.AndroidApp.chooseCommentPhoto(token)")) {
+  throw new Error("The bundled mobile runtime must use the token-protected native comment-photo library bridge.");
+}
 requireText("updateNativeSafeInsets(insets);", "Android shell must capture current window insets instead of padding the WebView.");
 requireText("WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()", "Android shell must include system bars and display cutouts in its safe boundary.");
 requireText("windowInsets.getInsetsIgnoringVisibility(safeTypes)", "Android shell must preserve stable system-bar bounds when bars are temporarily hidden.");
@@ -1092,6 +1125,9 @@ requireBundledText('fitLongIslandMapView("android-startup-outside-long-island")'
 requireBundledText('const SITE_CHECKIN_RADIUS_MILES = 0.05;', "Bundled Android app must require check-ins within about 260 feet.");
 requireBundledText('const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;', "Bundled Android app must alert within half a mile of a site.");
 requireBundledText('window.AndroidApp.showNotification', "Bundled Android app must use the native notification bridge.");
+if (!bundledMobileJs.includes('const androidBridgeToken = () => String(window.__NLI_ANDROID_BRIDGE_TOKEN || "")')) {
+  throw new Error("Bundled Android mobile runtime must pass the native bridge capability token.");
+}
 requireBundledText('localStorage.getItem("nli-proximity-alert-date") === todayKey', "Bundled Android app must limit nearby site notifications to once per day.");
 requireBundledText('const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 8;', "Bundled Android app must keep the first nearby tray render small.");
 requireBundledText('const NEARBY_LIST_ANDROID_DEFAULT_LIMIT = 12;', "Bundled Android app must keep the normal nearby tray render bounded.");

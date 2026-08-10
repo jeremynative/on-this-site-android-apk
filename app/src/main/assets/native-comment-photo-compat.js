@@ -52,14 +52,15 @@
     const hasAction = takeButton
       ? bridge && typeof bridge.takeCommentPhoto === "function"
       : bridge && typeof bridge.chooseCommentPhoto === "function";
-    if (!hasAction) return;
+    const bridgeToken = String(window.__NLI_ANDROID_BRIDGE_TOKEN || "");
+    if (!hasAction || !bridgeToken) return;
 
     activeDiscussion = target.closest(".discussion-section") || document.querySelector(".discussion-section");
     event.preventDefault();
     event.stopImmediatePropagation();
     setStatus(activeDiscussion, takeButton ? "Opening camera..." : "Opening photo library...");
-    if (takeButton) bridge.takeCommentPhoto();
-    else bridge.chooseCommentPhoto();
+    if (takeButton) bridge.takeCommentPhoto(bridgeToken);
+    else bridge.chooseCommentPhoto(bridgeToken);
   }, true);
 
   return true;

@@ -51,6 +51,19 @@
     }
   }
 
+  function safeExternalUrl(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    try {
+      const url = new URL(raw, window.location.href);
+      if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+      if (url.username || url.password) return "";
+      return url.href;
+    } catch {
+      return "";
+    }
+  }
+
   function baseClean(value, options = {}) {
     const convertImportedFootnotes = options.convertImportedFootnotes || (text => String(text || ""));
     const source = options.convertFootnotes === false ? String(value || "") : convertImportedFootnotes(value);
@@ -128,16 +141,22 @@
         element.setAttribute("loading", "lazy");
       }
       if (element.tagName === "A") {
-        const href = internalHref(element.getAttribute("href"));
+        const rawHref = element.getAttribute("href");
+        const href = internalHref(rawHref);
         if (href) {
           element.setAttribute("href", href);
           element.removeAttribute("target");
           element.removeAttribute("rel");
-        } else if (isMediaUrl(element.getAttribute("href"))) {
-          element.setAttribute("href", rewriteMediaUrl(element.getAttribute("href")));
+        } else if (isMediaUrl(rawHref)) {
+          const mediaHref = safeExternalUrl(rewriteMediaUrl(rawHref));
+          if (mediaHref) element.setAttribute("href", mediaHref);
+          else element.removeAttribute("href");
         } else {
+          const externalHref = safeExternalUrl(rawHref);
+          if (externalHref) element.setAttribute("href", externalHref);
+          else element.removeAttribute("href");
           element.target = "_blank";
-          element.rel = "noreferrer";
+          element.rel = "noopener noreferrer";
         }
       }
     }
@@ -145,9 +164,24 @@
   }
 
   function cleanMobileTemplate(template, options) {
+    const allowedTags = options.allowedTags || DESKTOP_ALLOWED_TAGS;
+    const allowedAttrs = options.allowedAttrs || DESKTOP_ALLOWED_ATTRS;
     const rewriteMediaUrl = options.rewriteMediaUrl || (value => value);
     const internalHref = options.internalHref || (() => "");
     const cleanImageUrl = options.cleanImageUrl || (value => String(value || ""));
+    const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_ELEMENT);
+    const unwrap = [];
+    while (walker.nextNode()) {
+      const element = walker.currentNode;
+      if (!allowedTags.has(element.tagName)) {
+        unwrap.push(element);
+        continue;
+      }
+      for (const attr of [...element.attributes]) {
+        if (!allowedAttrs.has(attr.name.toLowerCase())) element.removeAttribute(attr.name);
+      }
+    }
+    for (const element of unwrap) element.replaceWith(...element.childNodes);
     template.content.querySelectorAll("img").forEach(img => {
       const src = cleanImageUrl(img.getAttribute("src") || "");
       if (!src || isBlockedRemoteImageUrl(src)) img.remove();
@@ -158,15 +192,19 @@
       }
     });
     template.content.querySelectorAll("a").forEach(link => {
-      const internal = internalHref(link.getAttribute("href"));
+      const rawHref = link.getAttribute("href");
+      const internal = internalHref(rawHref);
       if (internal) {
         link.setAttribute("href", internal);
         link.removeAttribute("target");
         link.removeAttribute("rel");
         link.dataset.internalLink = "true";
       } else {
+        const externalHref = safeExternalUrl(rawHref);
+        if (externalHref) link.setAttribute("href", externalHref);
+        else link.removeAttribute("href");
         link.target = "_blank";
-        link.rel = "noreferrer";
+        link.rel = "noopener noreferrer";
       }
     });
     template.content.querySelectorAll("iframe").forEach(frame => {
@@ -259,8 +297,9 @@
     const context = cleanText(source?.citation_context || "");
     const citation = cleanText(source?.citation || "");
     const body = context || citation;
-    const titleHtml = source?.url
-      ? `<a href="${escape(source.url)}" target="_blank" rel="noreferrer">${escape(title)}</a>`
+    const sourceUrl = safeExternalUrl(source?.url);
+    const titleHtml = sourceUrl
+      ? `<a href="${escape(sourceUrl)}" target="_blank" rel="noopener noreferrer">${escape(title)}</a>`
       : escape(title);
     return `
         <article class="source-reference-card">
@@ -319,6 +358,7 @@
     stripHtml,
     publicCleanText,
     publicFacingWorkflowTextCleanup,
+    safeExternalUrl,
     sourceReferences,
     sourceReferenceHtml,
     sourceReferenceTextHtml,

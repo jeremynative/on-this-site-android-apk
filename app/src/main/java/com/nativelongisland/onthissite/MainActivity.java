@@ -65,6 +65,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.io.OutputStream;
 
 public class MainActivity extends Activity {
@@ -81,7 +82,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260809-offline-search-normalization-r61";
+    static final String APP_VERSION = "20260809-security-bridge-r62";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -101,6 +102,7 @@ public class MainActivity extends Activity {
         "https://directus.nativelongisland.com/app/mobile-app-live.html";
     private static final String OFFLINE_BASE_URL =
         "https://directus.nativelongisland.com/app/";
+    private final String bridgeCapabilityToken = UUID.randomUUID().toString();
 
     private WebView webView;
     private View loadingCover;
@@ -324,6 +326,11 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setGeolocationEnabled(true);
+        settings.setAllowFileAccess(false);
+        settings.setAllowFileAccessFromFileURLs(false);
+        settings.setAllowUniversalAccessFromFileURLs(false);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) settings.setSafeBrowsingEnabled(true);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
@@ -337,9 +344,7 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onConsoleMessage(ConsoleMessage message) {
-                if (message != null && (BuildConfig.DEBUG
-                    || message.messageLevel() == ConsoleMessage.MessageLevel.ERROR
-                    || message.messageLevel() == ConsoleMessage.MessageLevel.WARNING)) {
+                if (BuildConfig.DEBUG && message != null) {
                     Log.d(LOG_TAG, "Web console: " + message.messageLevel() + " " + message.message()
                         + " at " + message.sourceId() + ":" + message.lineNumber());
                 }
@@ -348,6 +353,10 @@ public class MainActivity extends Activity {
 
             @Override
             public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                if (!isTrustedAppOrigin(Uri.parse(origin))) {
+                    callback.invoke(origin, false, false);
+                    return;
+                }
                 if (hasLocationPermission()) {
                     callback.invoke(origin, true, false);
                     return;
@@ -367,6 +376,10 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPermissionRequest(PermissionRequest request) {
+                if (request == null || !isTrustedAppOrigin(request.getOrigin())) {
+                    if (request != null) request.deny();
+                    return;
+                }
                 for (String resource : request.getResources()) {
                     if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) {
                         if (hasCameraPermission()) {
@@ -408,7 +421,7 @@ public class MainActivity extends Activity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
-                Log.d(LOG_TAG, "WebView page started: " + url);
+                Log.d(LOG_TAG, "WebView page started: " + safeLogUrl(url));
                 if (isSiteGroundChallengeUrl(url)) {
                     if (shouldIgnoreLifecycleMainFrameReload("siteground-challenge-start")) {
                         view.stopLoading();
@@ -464,12 +477,16 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                Log.d(LOG_TAG, "WebView page finished: " + url);
+                Log.d(LOG_TAG, "WebView page finished: " + safeLogUrl(url));
                 if (isSiteGroundChallengeUrl(url)) {
                     if (shouldIgnoreLifecycleMainFrameReload("siteground-challenge")) return;
                     loadBundledFallback("siteground-challenge");
                     return;
                 }
+                view.evaluateJavascript(
+                    "window.__NLI_ANDROID_BRIDGE_TOKEN=" + jsString(bridgeCapabilityToken),
+                    null
+                );
                 enforceExclusiveMobilePanels(view);
                 installNativeCommentPhotoCompatibility(view);
                 validateLoadedAppShell(url);
@@ -825,7 +842,7 @@ public class MainActivity extends Activity {
                     return;
                 }
 
-                Log.w(LOG_TAG, "WebView did not produce usable archive content: " + url + " probe=" + value);
+                Log.w(LOG_TAG, "WebView did not produce usable archive content: " + safeLogUrl(url) + " probe=" + value);
                 if (!loadingBundledFallback && isNativeLongIslandUrl(url)) {
                     loadBundledFallback("app-readiness-timeout");
                     return;
@@ -1695,6 +1712,31 @@ public class MainActivity extends Activity {
         Intent intent = new Intent(Intent.ACTION_VIEW, uri);
         startActivity(intent);
         return true;
+    }
+
+    private boolean isTrustedAppOrigin(Uri uri) {
+        if (uri == null || !"https".equalsIgnoreCase(uri.getScheme())) return false;
+        String host = uri.getHost();
+        return "nativelongisland.com".equalsIgnoreCase(host)
+            || "directus.nativelongisland.com".equalsIgnoreCase(host);
+    }
+
+    boolean validBridgeToken(String token) {
+        return token != null && bridgeCapabilityToken.equals(token);
+    }
+
+    private String safeLogUrl(String value) {
+        if (value == null || value.trim().isEmpty()) return "";
+        try {
+            Uri uri = Uri.parse(value);
+            String scheme = uri.getScheme() == null ? "" : uri.getScheme();
+            String host = uri.getHost() == null ? "" : uri.getHost();
+            String path = uri.getPath() == null ? "" : uri.getPath();
+            if (!scheme.isEmpty() && !host.isEmpty()) return scheme + "://" + host + path;
+            return path;
+        } catch (Exception error) {
+            return "unparseable-url";
+        }
     }
 
     private boolean hasLocationPermission() {

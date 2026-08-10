@@ -22,6 +22,17 @@
     return String(value || "").replace(/\s+/g, " ").trim().slice(0, limit);
   }
 
+  function safeStripeCheckoutUrl(value) {
+    try {
+      const url = new URL(String(value || "").trim());
+      return url.protocol === "https:" && url.hostname === "checkout.stripe.com" && !url.username && !url.password
+        ? url.href
+        : "";
+    } catch {
+      return "";
+    }
+  }
+
   function money(value) {
     const amount = Number(value);
     if (!Number.isFinite(amount) || amount <= 0) return "$0";
@@ -454,8 +465,9 @@
         throw new Error("The secure payment form could not load here. Please try again.");
       }
       const data = await createSession(false);
-      if (!data.url) throw new Error(data.message || "Payment checkout could not start.");
-      return { url: data.url };
+      const checkoutUrl = safeStripeCheckoutUrl(data.url);
+      if (!checkoutUrl) throw new Error(data.message || "Payment checkout returned an unsafe destination.");
+      return { url: checkoutUrl };
     }
     throw new Error("Secure checkout is not connected yet.");
   }

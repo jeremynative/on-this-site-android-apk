@@ -206,16 +206,27 @@
     if (!file) return null;
     if (!/^image\//i.test(file.type || "")) throw new Error("Screenshot must be an image file.");
     const compressImage = options.compressImage || (async image => image);
-    const uploadFileToDirectus = options.uploadFile;
-    if (typeof uploadFileToDirectus !== "function") throw new Error("Feedback upload is not available.");
     const uploadFile = file.size > 5 * 1024 * 1024 || !/jpe?g/i.test(file.type || "")
       ? await compressImage(file)
       : file;
-    if (uploadFile.size > 6 * 1024 * 1024) throw new Error("Screenshot is too large. Use an image under 6 MB.");
+    if (uploadFile.size > 5 * 1024 * 1024) throw new Error("Screenshot is too large. Use an image under 5 MB.");
     const safeTitle = `${title || "Feedback screenshot"}.${fileExtensionForType(uploadFile.type)}`;
-    const uploaded = await uploadFileToDirectus(uploadFile, safeTitle, options.uploadOptions || {});
-    const normalizeUploadFileId = options.normalizeUploadFileId || SHARED_DIRECTUS.normalizeUploadFileId;
-    return normalizeUploadFileId ? normalizeUploadFileId(uploaded) : uploaded;
+    const body = new FormData();
+    body.append("type", "feedback_screenshot_upload");
+    body.append("website", "");
+    body.append("image", uploadFile, safeTitle);
+    const response = await fetch(FEEDBACK_ENDPOINT, {
+      method: "POST",
+      body,
+      cache: "no-store"
+    });
+    const text = await response.text();
+    let uploaded = null;
+    try { uploaded = text ? JSON.parse(text) : null; } catch {}
+    if (!response.ok || !uploaded?.id) {
+      throw new Error(uploaded?.error || `Screenshot upload failed ${response.status}`);
+    }
+    return String(uploaded.id);
   }
 
   async function sendFeedbackReviewEmail(record = {}, options = {}) {

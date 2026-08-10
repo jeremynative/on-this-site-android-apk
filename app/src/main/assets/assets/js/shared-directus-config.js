@@ -9,7 +9,7 @@
   ]);
 
   const publicVisitFields = fields(["id", "member_profile", "site", "site_slug", "site_title", "visited_at", "distance_miles", "public_activity"]);
-  const siteSuggestionFields = fields(["id", "status", "title", "introduction", "priority", "suggested_image", "approved_site", "author_profile", "author_name", "author_email", "latitude", "longitude", "geojson", "submitted_at", "date_created", "review_note"]);
+  const siteSuggestionFields = fields(["id", "status", "title", "introduction", "suggested_image", "approved_site", "author_profile", "author_name", "latitude", "longitude", "geojson", "submitted_at", "date_created"]);
   const languageProgressFields = fields(["id", "member_profile", "word_id", "english", "algonquian", "source", "content_key", "content_title", "correct", "answered_at"]);
   const loginRewardFields = fields(["id", "member_profile", "login_date", "streak_day", "created_at"]);
   const followFields = fields(["id", "status", "follower_profile", "following_profile", "follower_name", "following_name", "created_at"]);
@@ -24,6 +24,7 @@
     "geometry_surface", "geometry_cleanup_status", "map_geometry_source", "map_fill_color", "map_opacity",
     "map_icon", "listing_image_file", "listing_image_url", "listing_image_thumb_url", "listing_image_alt",
     "activity_pin_until", "activity_pin_label", "activity_pin_title", "activity_pin_preview",
+    "activity_update_date", "activity_update_summary",
     "show_print_purchase", "last_reviewed", "wp_date", "known_plant_species", "ancestral_territory",
     "ancestral_territory_note", "why_this_matters",
     ...siteAdoptionFields
@@ -33,6 +34,7 @@
     "geometry_surface", "geometry_cleanup_status", "map_icon", "map_fill_color", "map_opacity",
     "listing_image_file", "listing_image_thumb_url", "listing_image_url", "listing_image_alt",
     "activity_pin_until", "activity_pin_label", "activity_pin_title", "activity_pin_preview",
+    "activity_update_date", "activity_update_summary",
     "show_print_purchase",
     "last_reviewed", "known_plant_species", "ancestral_territory", "ancestral_territory_note", "why_this_matters",
     ...siteAdoptionFields
@@ -42,6 +44,7 @@
     "geometry_surface", "geometry_cleanup_status", "map_icon", "map_fill_color", "map_opacity",
     "listing_image_file", "listing_image_url", "listing_image_thumb_url", "listing_image_alt",
     "activity_pin_until", "activity_pin_label", "activity_pin_title", "activity_pin_preview",
+    "activity_update_date", "activity_update_summary",
     "show_print_purchase", "introduction_title", "introduction_content", "history_title", "history_content",
     "preservation_title", "preservation_content", "oral_history_title", "oral_history_content",
     "translation_title", "translation_content", "legends_and_lore_title", "legends_and_lore_content",
@@ -52,9 +55,9 @@
     "last_reviewed", "wp_date", "known_plant_species", "ancestral_territory", "ancestral_territory_note", "why_this_matters",
     ...siteAdoptionFields
   ]);
-  const desktopWikiFields = fields(["id", "title", "slug", "summary", "why_this_matters", "source_url", "biography_source_citation", "last_reviewed", "lastmod", "imported_at"]);
-  const mobileWikiIndexFields = fields(["id", "title", "slug", "summary", "why_this_matters", "source_url", "last_reviewed", "lastmod", "imported_at"]);
-  const mobileWikiDetailFields = fields(["id", "title", "slug", "summary", "content", "why_this_matters", "source_url", "last_reviewed", "lastmod", "imported_at"]);
+  const desktopWikiFields = fields(["id", "title", "slug", "summary", "why_this_matters", "source_url", "activity_update_date", "activity_update_summary", "last_reviewed", "lastmod", "imported_at"]);
+  const mobileWikiIndexFields = fields(["id", "title", "slug", "summary", "why_this_matters", "source_url", "activity_update_date", "activity_update_summary", "last_reviewed", "lastmod", "imported_at"]);
+  const mobileWikiDetailFields = fields(["id", "title", "slug", "summary", "content", "why_this_matters", "source_url", "activity_update_date", "activity_update_summary", "last_reviewed", "lastmod", "imported_at"]);
   const desktopPageFields = fields(["id", "title", "slug", "summary", "content_type", "wp_date", "featured_image_url"]);
   const desktopBlogFields = fields(["id", "title", "slug", "summary", "published_at", "featured_image_url"]);
   const timelineFields = fields([
