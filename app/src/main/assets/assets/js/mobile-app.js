@@ -12566,11 +12566,7 @@
     }
 
     async function requestStartupLocation() {
-      if (isNativeAndroidApp()) {
-        setMobilePanelMode("nearby");
-        setNearbyPanelState("default");
-        return requestUserLocation({ centerMap: true, silent: true, mapZoom: STARTUP_LOCATION_ZOOM, centerBounds: STARTUP_LOCATION_CENTER_BOUNDS });
-      }
+      if (isNativeAndroidApp()) return false;
       if (state.settings.proximityAlerts) {
         setMobilePanelMode("nearby");
         setNearbyPanelState("default");
@@ -17166,7 +17162,6 @@
         syncMobilePanelAccessibility();
         renderCurrentTerritoryStatus();
         const androidLifecycleSnapshot = nativeAndroid ? readAndroidLifecycleSnapshot() : null;
-        if (nativeAndroid && !isOfflineTextMode()) await requestStartupLocation();
         if (nativeAndroid) {
           idleTask(() => {
             if (!state.mobileTimelineRendered) renderMobileTimeline();

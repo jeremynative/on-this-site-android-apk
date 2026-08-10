@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260809-security-bridge-r62";
+const expectedBuild = "20260810-play-readiness-r63";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -543,7 +543,7 @@ requireText("window.NLI_APK_SNAPSHOT_MODE=true;", "Android shell must mark the b
 requireText("window.NLI_APK_OFFLINE_TEXT_MODE=true;", "Android shell must mark the bundled fallback as a text-first offline archive.");
 requireText("window.NLI_DISABLE_DIRECTUS_RUNTIME=true;", "Android shell must disable Directus runtime calls in the snapshot APK.");
 requireText("directus.nativelongisland.com", "Android shell must block Directus requests while the APK snapshot is offline.");
-requireText("window.__nliAllowGeoUntil=Date.now()+120000;", "Android shell must allow the app's startup Near me location request.");
+requireText("window.__nliAllowGeoUntil=0;", "Android shell must block geolocation until a dedicated user action allows it.");
 requireText("#locate,#mobile-map-locate,#suggest-use-location", "Android shell must allow the dedicated map location control through the geolocation gate.");
 if (!bundledMobileJs.includes("function isApkSnapshotMode()") || !bundledApp.includes("function isApkSnapshotMode()")) {
   throw new Error("Bundled mobile shells must distinguish live Android mode from offline APK snapshot mode.");
@@ -605,6 +605,8 @@ requireText("loadingCover = createLoadingCover();", "Android shell must attach t
 requireText("root.addView(loadingCover", "Android shell must layer the native cover above the WebView.");
 requireText("hideLoadingCover", "Android shell must hide the native loading cover after the app page finishes.");
 requireText("onPageCommitVisible", "Android shell must observe the first committed WebView frame.");
+requireText("if (!isAppShellUrl(url)) return;", "Android shell readiness validation must ignore privacy, deletion, and other first-party pages.");
+requireText("!isAppShellUrl(webView.getUrl())", "Pending shell probes must stop after navigation to a non-shell page.");
 if (/onPageCommitVisible\(WebView view, String url\)[\s\S]{0,300}?hideLoadingCover\(\)/.test(source)) {
   throw new Error("Android shell must keep the native cover until the app is interactive, not merely committed.");
 }
@@ -612,7 +614,7 @@ if (/onPageFinished\(WebView view, String url\)[\s\S]{0,1000}?hideLoadingCover\(
   throw new Error("Android shell must not uncover a partially initialized app at page completion.");
 }
 requireText('getAssets().open("assets/images/long-island-loading-outline.png")', "Android shell must show the Long Island loading outline during cold startup.");
-requireText('loadingCoverLabel.setText("Loading On This Site");', "Android shell must label the animated Long Island loading screen.");
+requireText('loadingCoverLabel.setText(R.string.loading_app);', "Android shell must label the animated Long Island loading screen from a translatable resource.");
 requireText("ObjectAnimator.ofFloat(outline, View.ALPHA", "Android shell must animate the Long Island loading outline.");
 if (!styles.includes('<item name="android:windowBackground">@drawable/launch_background</item>')) {
   throw new Error("Android theme must show a branded launch background while WebView starts.");
@@ -1120,8 +1122,10 @@ if (/profileActivitySynced\s*=\s*includeCommunity\s*&&\s*Boolean\(state\.profile
 }
 requireBundledText('sorted by proximity', "Bundled Android app must label nearby results as proximity sorted.");
 requireBundledText('const STARTUP_LOCATION_ZOOM = NEAR_ME_ZOOM;', "Bundled Android app must open with the Near me zoom level.");
-requireBundledText('if (nativeAndroid && !isOfflineTextMode()) await requestStartupLocation();', "Bundled Android app must request location before the first nearby list render while online and skip the prompt in offline text mode.");
-requireBundledText('refreshAndroidMapAfterSettle("android-startup-near-me")', "Bundled Android app must recenter the initialized map on startup location.");
+requireBundledText('if (isNativeAndroidApp()) return false;', "Bundled Android app must wait for an explicit user action before requesting location.");
+if (bundledMobileJs.includes('if (nativeAndroid && !isOfflineTextMode()) await requestStartupLocation();')) {
+  throw new Error("Bundled Android app must not request location during startup.");
+}
 requireBundledText('mobile-startup-spotlight', "Bundled Android app must include the shared daily feature card.");
 requireBundledText('showRandomMobileStartupSpotlight()', "Bundled Android app must resolve the randomized daily feature after startup.");
 requireBundledText('scheduleMobilePromoStartup();', "Bundled Android app must schedule the daily feature after the map is interactive.");
@@ -1132,6 +1136,8 @@ if (!bundledLiveRuntime.includes('aria-label="Search sites, towns, and histories
 }
 requireBundledText('const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;', "Bundled Android app must alert within half a mile of a site.");
 requireBundledText('window.AndroidApp.showNotification', "Bundled Android app must use the native notification bridge.");
+requireBundledText('https://nativelongisland.com/privacy-policy.html', "Bundled Android account screen must link to the public privacy policy.");
+requireBundledText('https://nativelongisland.com/account-deletion.html', "Bundled Android account screen must expose account and data deletion.");
 if (!bundledMobileJs.includes('const androidBridgeToken = () => String(window.__NLI_ANDROID_BRIDGE_TOKEN || "")')) {
   throw new Error("Bundled Android mobile runtime must pass the native bridge capability token.");
 }

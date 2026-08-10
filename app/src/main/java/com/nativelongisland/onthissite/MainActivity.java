@@ -65,6 +65,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Locale;
 import java.util.UUID;
 import java.io.OutputStream;
 
@@ -82,7 +83,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260809-security-bridge-r62";
+    static final String APP_VERSION = "20260810-play-readiness-r63";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -541,7 +542,7 @@ public class MainActivity extends Activity {
         card.addView(outline, new LinearLayout.LayoutParams(dp(240), dp(116)));
 
         loadingCoverLabel = new TextView(this);
-        loadingCoverLabel.setText("Loading On This Site");
+        loadingCoverLabel.setText(R.string.loading_app);
         loadingCoverLabel.setTextColor(Color.rgb(18, 34, 25));
         loadingCoverLabel.setTextSize(22);
         loadingCoverLabel.setTypeface(Typeface.DEFAULT_BOLD);
@@ -792,12 +793,13 @@ public class MainActivity extends Activity {
     }
 
     private void validateLoadedAppShell(String url) {
+        if (!isAppShellUrl(url)) return;
         appReadinessProbeAttempts = 0;
         probeLoadedAppReadiness(url);
     }
 
     private void probeLoadedAppReadiness(String url) {
-        if (webView == null) return;
+        if (webView == null || !isAppShellUrl(url) || !isAppShellUrl(webView.getUrl())) return;
         webView.evaluateJavascript(
             "(function(){try{"
                 + "var shell=!!(document.getElementById('map')&&document.querySelector('.app'));"
@@ -843,7 +845,7 @@ public class MainActivity extends Activity {
                 }
 
                 Log.w(LOG_TAG, "WebView did not produce usable archive content: " + safeLogUrl(url) + " probe=" + value);
-                if (!loadingBundledFallback && isNativeLongIslandUrl(url)) {
+                if (!loadingBundledFallback && isAppShellUrl(url)) {
                     loadBundledFallback("app-readiness-timeout");
                     return;
                 }
@@ -855,10 +857,16 @@ public class MainActivity extends Activity {
         );
     }
 
-    private boolean isNativeLongIslandUrl(String url) {
+    private boolean isAppShellUrl(String url) {
         if (url == null) return false;
         Uri uri = Uri.parse(url);
-        return "nativelongisland.com".equalsIgnoreCase(uri.getHost());
+        String host = uri.getHost();
+        String path = uri.getPath() == null ? "" : uri.getPath();
+        if ("directus.nativelongisland.com".equalsIgnoreCase(host)) {
+            return path.equals("/app") || path.startsWith("/app/");
+        }
+        return "nativelongisland.com".equalsIgnoreCase(host)
+            && (path.equals("/mobile-app.html") || path.equals("/mobile-app-live.html"));
     }
 
     private boolean hasUsableNetwork() {
@@ -1044,7 +1052,7 @@ public class MainActivity extends Activity {
                     + "return originalFetch(input,init);"
                 + "};"
             + "}"
-            + "window.__nliAllowGeoUntil=Date.now()+120000;"
+            + "window.__nliAllowGeoUntil=0;"
             + "function allowGeo(){window.__nliAllowGeoUntil=Date.now()+30000;}"
             + "document.addEventListener('click',function(event){"
                 + "var target=event.target&&event.target.closest&&event.target.closest('#locate,#mobile-map-locate,#suggest-use-location,[data-allow-geolocation]');"
@@ -1114,7 +1122,7 @@ public class MainActivity extends Activity {
 
     private String mimeTypeForAsset(String assetName) {
         String extension = MimeTypeMap.getFileExtensionFromUrl(assetName);
-        String mimeType = extension == null ? null : MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.toLowerCase());
+        String mimeType = extension == null ? null : MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.toLowerCase(Locale.ROOT));
         if (mimeType != null && !mimeType.isEmpty()) return mimeType;
         if (assetName.endsWith(".js")) return "application/javascript";
         if (assetName.endsWith(".css")) return "text/css";
@@ -1182,7 +1190,7 @@ public class MainActivity extends Activity {
         String[] acceptTypes = params.getAcceptTypes();
         if (acceptTypes == null || acceptTypes.length == 0) return true;
         for (String type : acceptTypes) {
-            if (type == null || type.trim().isEmpty() || type.toLowerCase().startsWith("image/")) return true;
+            if (type == null || type.trim().isEmpty() || type.toLowerCase(Locale.ROOT).startsWith("image/")) return true;
         }
         return false;
     }
@@ -1277,7 +1285,7 @@ public class MainActivity extends Activity {
     String safeStoryFilename(String filename) {
         String value = filename == null ? "" : filename.replaceAll("[^A-Za-z0-9._-]+", "-");
         if (value.length() < 5) value = "on-this-site-ar-story.webm";
-        if (!value.toLowerCase().endsWith(".webm")) value = value + ".webm";
+        if (!value.toLowerCase(Locale.ROOT).endsWith(".webm")) value = value + ".webm";
         return value;
     }
 
@@ -1705,7 +1713,7 @@ public class MainActivity extends Activity {
 
     private boolean openExternallyWhenNeeded(Uri uri) {
         if (uri == null) return true;
-        String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase();
+        String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
         String host = uri.getHost();
         boolean isArchiveApp = "https".equals(scheme) && "nativelongisland.com".equalsIgnoreCase(host);
         if (isArchiveApp) return false;

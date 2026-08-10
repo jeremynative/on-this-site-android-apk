@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">On This Site</string>
+    <string name="loading_app">Loading On This Site</string>
 </resources>

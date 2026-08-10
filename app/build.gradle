@@ -10,7 +10,7 @@ def hasReleaseSigning = releaseKeystorePath
 
 android {
     namespace = "com.nativelongisland.onthissite"
-    compileSdk = 35
+    compileSdk = 36
     buildToolsVersion = "35.0.0"
 
     buildFeatures {
@@ -20,7 +20,7 @@ android {
     defaultConfig {
         applicationId = "com.nativelongisland.onthissite"
         minSdk = 23
-        targetSdk = 35
+        targetSdk = 36
         versionCode = Integer.parseInt((System.getenv("VERSION_CODE") ?: "17").toString())
         versionName = (System.getenv("VERSION_NAME") ?: "0.1.16").toString()
         buildConfigField "String", "MAPBOX_TOKEN", "\"${(System.getenv("MAPBOX_TOKEN") ?: "").replace("\\", "\\\\").replace("\"", "\\\"")}\""
@@ -49,7 +49,7 @@ android {
 }
 
 gradle.taskGraph.whenReady { graph ->
-    if (graph.hasTask(":app:assembleRelease") && !hasReleaseSigning) {
+    if ((graph.hasTask(":app:assembleRelease") || graph.hasTask(":app:bundleRelease")) && !hasReleaseSigning) {
         throw new GradleException("Release APK builds require ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD so Obtainium updates keep the same signing certificate.")
     }
 }

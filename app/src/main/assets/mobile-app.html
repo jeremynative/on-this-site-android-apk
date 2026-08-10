@@ -7026,6 +7026,7 @@ body.research-question-dialog-open .research-question-prompt,
       <button class="action secondary" id="logout-submit" type="button" hidden>Logout</button>
       <button class="action secondary account-continue" data-close-sheet type="button">Continue without login</button>
       <div class="profile-card" id="profile-card"></div>
+      <p class="summary account-data-links"><a href="https://nativelongisland.com/privacy-policy.html">Privacy policy</a> · <a href="https://nativelongisland.com/account-deletion.html">Delete account and data</a></p>
     </div>
   </section>
 
@@ -28619,11 +28620,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     async function requestStartupLocation() {
-      if (isNativeAndroidApp()) {
-        setMobilePanelMode("nearby");
-        setNearbyPanelState("default");
-        return requestUserLocation({ centerMap: true, silent: true, mapZoom: STARTUP_LOCATION_ZOOM, centerBounds: STARTUP_LOCATION_CENTER_BOUNDS });
-      }
+      if (isNativeAndroidApp()) return false;
       if (state.settings.proximityAlerts) {
         setMobilePanelMode("nearby");
         setNearbyPanelState("default");
@@ -33210,7 +33207,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         syncMobilePanelAccessibility();
         renderCurrentTerritoryStatus();
         const androidLifecycleSnapshot = nativeAndroid ? readAndroidLifecycleSnapshot() : null;
-        if (nativeAndroid && !isOfflineTextMode()) await requestStartupLocation();
         if (nativeAndroid) {
           idleTask(() => {
             if (!state.mobileTimelineRendered) renderMobileTimeline();
