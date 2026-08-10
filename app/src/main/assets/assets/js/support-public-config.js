@@ -5,6 +5,7 @@
   window.NLI_SUPPORT_CONFIG = {
     ...(window.NLI_SUPPORT_CONFIG || {}),
     checkoutEndpoint: endpoint ? `${endpoint}/support/create-checkout-session` : "",
+    playVerificationEndpoint: endpoint ? `${endpoint}/support/google-play/verify` : "",
     publishableKey,
     stripeJsUrl: "https://js.stripe.com/v3/",
     publicThankYousUrl: endpoint ? `${endpoint}/support/public-thank-yous` : "support/public-thank-yous.json",

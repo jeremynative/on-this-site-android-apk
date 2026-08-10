@@ -3,6 +3,7 @@
     projectName: "On This Site",
     supportEmail: "jeremynative@gmail.com",
     checkoutEndpoint: "",
+    playVerificationEndpoint: "",
     publishableKey: "",
     stripeJsUrl: "https://js.stripe.com/v3/",
     publicThankYousUrl: "support/public-thank-yous.json",
@@ -10,6 +11,12 @@
     defaultAmounts: [10, 25, 50, 100],
     defaultAmount: 25
   };
+  const PLAY_AMOUNTS = [10, 25, 50, 100];
+  const PLAY_ONE_TIME_IDS = PLAY_AMOUNTS.map(amount => `support_${amount}`);
+  const PLAY_MONTHLY_IDS = PLAY_AMOUNTS.map(amount => `support_monthly_${amount}`);
+  const PLAY_INTENT_KEY = "nliPlaySupportIntent";
+  const playProductDetails = new Map();
+  let activePlayForm = null;
 
   function config() {
     return {
@@ -52,6 +59,205 @@
   function amountOptions() {
     const amounts = config().defaultAmounts || DEFAULT_CONFIG.defaultAmounts;
     return amounts.map(Number).filter(amount => Number.isFinite(amount) && amount > 0);
+  }
+
+  function androidBridgeToken() {
+    return String(window.__NLI_ANDROID_BRIDGE_TOKEN || "");
+  }
+
+  function hasNativePlayBilling() {
+    return Boolean(
+      typeof navigator !== "undefined"
+      && /Android/i.test(navigator.userAgent || "")
+      && window.AndroidApp?.queryPlayProducts
+      && window.AndroidApp?.purchasePlayProduct
+      && window.AndroidApp?.completePlayPurchase
+      && androidBridgeToken()
+      && window.AndroidApp.isGooglePlayInstall?.(androidBridgeToken()) === true
+    );
+  }
+
+  function playProductId(frequency, amount) {
+    const normalized = Math.round(Number(amount));
+    if (!PLAY_AMOUNTS.includes(normalized)) return "";
+    return frequency === "monthly" ? `support_monthly_${normalized}` : `support_${normalized}`;
+  }
+
+  function playProductType(frequency) {
+    return frequency === "monthly" ? "subs" : "inapp";
+  }
+
+  function playProductIds(type) {
+    return type === "subs" ? PLAY_MONTHLY_IDS : PLAY_ONE_TIME_IDS;
+  }
+
+  function setPlayStatus(form, message, kind = "") {
+    const status = form?.querySelector?.("[data-support-status]");
+    if (!status) return;
+    status.hidden = !message;
+    status.textContent = message || "";
+    status.className = `form-status ${kind}`.trim();
+  }
+
+  function refreshPlayAmountOptions(form) {
+    if (!form) return;
+    const frequency = form.querySelector("[data-support-frequency]:checked")?.value === "monthly" ? "monthly" : "once";
+    form.querySelectorAll("[data-support-amount]").forEach(input => {
+      const productId = playProductId(frequency, input.value);
+      const details = playProductDetails.get(productId);
+      input.disabled = !details;
+      const label = input.closest("label")?.querySelector("span");
+      if (label && details?.formattedPrice) label.textContent = frequency === "monthly"
+        ? `${details.formattedPrice}/month`
+        : details.formattedPrice;
+    });
+    const selected = form.querySelector("[data-support-amount]:checked:not(:disabled)");
+    if (!selected) form.querySelector("[data-support-amount]:not(:disabled)")?.click();
+    const button = form.querySelector("[data-support-submit]");
+    if (button) button.disabled = !form.querySelector("[data-support-amount]:checked:not(:disabled)");
+  }
+
+  function queryNativePlayProducts() {
+    if (!hasNativePlayBilling()) return false;
+    const token = androidBridgeToken();
+    window.AndroidApp.queryPlayProducts(token, "inapp", JSON.stringify(PLAY_ONE_TIME_IDS));
+    window.AndroidApp.queryPlayProducts(token, "subs", JSON.stringify(PLAY_MONTHLY_IDS));
+    return true;
+  }
+
+  function rememberPlayIntent(intent, productId, productType) {
+    const record = { intent, productId, productType, savedAt: Date.now() };
+    try { localStorage.setItem(PLAY_INTENT_KEY, JSON.stringify(record)); } catch { /* best effort */ }
+    return record;
+  }
+
+  function recalledPlayIntent() {
+    try {
+      const record = JSON.parse(localStorage.getItem(PLAY_INTENT_KEY) || "null");
+      if (!record || Date.now() - Number(record.savedAt || 0) > 7 * 86400000) return null;
+      return record;
+    } catch {
+      return null;
+    }
+  }
+
+  function clearPlayIntent() {
+    try { localStorage.removeItem(PLAY_INTENT_KEY); } catch { /* best effort */ }
+  }
+
+  async function verifyPlayPurchase(event) {
+    if (!event?.purchaseToken || Number(event.purchaseState) !== 1) return false;
+    const saved = recalledPlayIntent();
+    const productId = String(event.products?.[0] || saved?.productId || "");
+    const productType = String(event.productType || saved?.productType || "inapp");
+    const intent = saved?.intent || {};
+    const endpoint = config().playVerificationEndpoint;
+    if (!endpoint) throw new Error("Google Play purchase verification is not connected yet.");
+    setPlayStatus(activePlayForm, "Verifying your Google Play purchase...", "");
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        packageName: String(event.packageName || "com.nativelongisland.onthissite"),
+        productId,
+        productType,
+        purchaseToken: String(event.purchaseToken),
+        orderId: String(event.orderId || ""),
+        intent
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.verified !== true) throw new Error(data.message || "Google Play could not verify this purchase.");
+    const token = androidBridgeToken();
+    window.AndroidApp.completePlayPurchase(token, String(event.purchaseToken), productType, productType === "inapp");
+    clearPlayIntent();
+    if (activePlayForm) {
+      await completeEmbeddedCheckout(activePlayForm, { updateUrl: true });
+      setPlayStatus(activePlayForm, "Google Play payment approved. Thank you for supporting On This Site.", "success");
+    }
+    return true;
+  }
+
+  async function handlePlayBillingEvent(event) {
+    const detail = event?.detail || event || {};
+    if (detail.event === "products" && Number(detail.responseCode) === 0) {
+      (detail.products || []).forEach(product => playProductDetails.set(product.productId, product));
+      refreshPlayAmountOptions(activePlayForm);
+      if (activePlayForm && playProductDetails.size) setPlayStatus(activePlayForm, "Google Play is ready.", "success");
+      return true;
+    }
+    if (detail.event === "status" && detail.ready) {
+      queryNativePlayProducts();
+      return true;
+    }
+    if (detail.event === "purchase-update") {
+      if (Number(detail.purchaseState) === 2) {
+        setPlayStatus(activePlayForm, "Payment is pending in Google Play. Support will be recorded after payment completes.", "");
+        return true;
+      }
+      try {
+        await verifyPlayPurchase(detail);
+      } catch (error) {
+        setPlayStatus(activePlayForm, error.message || "Could not verify the Google Play purchase.", "error");
+      }
+      return true;
+    }
+    if ((detail.event === "purchase" || detail.event === "products") && Number(detail.responseCode) !== 0) {
+      const cancelled = Number(detail.responseCode) === 1;
+      setPlayStatus(activePlayForm, cancelled ? "Google Play purchase cancelled." : (detail.message || "Google Play billing is unavailable."), cancelled ? "" : "error");
+      const button = activePlayForm?.querySelector?.("[data-support-submit]");
+      if (button) button.disabled = false;
+      return true;
+    }
+    return true;
+  }
+
+  window.onAndroidPlayBillingEvent = detail => {
+    window.dispatchEvent(new CustomEvent("nli-play-billing-event", { detail }));
+    return true;
+  };
+  if (typeof window.addEventListener === "function") {
+    window.addEventListener("nli-play-billing-event", handlePlayBillingEvent);
+  }
+
+  function preparePlayBillingForm(form) {
+    if (!form || !hasNativePlayBilling()) return false;
+    activePlayForm = form;
+    form.dataset.supportPaymentProvider = "google-play";
+    const customAmount = form.querySelector("[data-support-custom-amount]")?.closest(".field");
+    if (customAmount) customAmount.hidden = true;
+    const meta = form.querySelector(".article-meta");
+    if (meta) meta.textContent = "Payments are processed securely by Google Play. Manage recurring support in your Play subscriptions.";
+    form.querySelectorAll("[data-support-amount]").forEach(input => { input.disabled = true; });
+    const button = form.querySelector("[data-support-submit]");
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Loading Google Play...";
+    }
+    form.querySelectorAll("[data-support-frequency]").forEach(input => {
+      input.addEventListener("change", () => refreshPlayAmountOptions(form));
+    });
+    queryNativePlayProducts();
+    window.AndroidApp.restorePlayPurchases?.(androidBridgeToken());
+    return true;
+  }
+
+  async function startPlayCheckout(form, options = {}) {
+    const intent = intentFromForm(form, options.pageUrl || window.location.href);
+    const productId = playProductId(intent.frequency, intent.amount);
+    const productType = playProductType(intent.frequency);
+    if (!productId || !playProductDetails.has(productId)) {
+      throw new Error("Choose an available Google Play support amount.");
+    }
+    rememberPlayIntent(intent, productId, productType);
+    let accountId = "";
+    try {
+      const identity = new TextEncoder().encode(String(intent.email || intent.name || "anonymous").toLowerCase());
+      const digest = await crypto.subtle.digest("SHA-256", identity);
+      accountId = Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, "0")).join("").slice(0, 64);
+    } catch { /* optional fraud signal */ }
+    window.AndroidApp.purchasePlayProduct(androidBridgeToken(), productId, productType, accountId);
+    return { native: true, provider: "google-play", productId, productType };
   }
 
   function selectedAmount(form) {
@@ -268,6 +474,7 @@
     const defaultAmount = Number(supportConfig.defaultAmount || amounts[0] || 25);
     const title = settings.title || "Support On This Site";
     const note = settings.support_note || "Thank you to Monument Lab, Running Strong for American Indian Youth, community contributors, and other supporters who help keep On This Site online, reviewed, expanded, and available across the website and mobile app.";
+    const hasPlay = options.platform === "mobile" && hasNativePlayBilling();
     const hasStripe = Boolean(supportConfig.checkoutEndpoint);
     const hasEmbedded = hasStripe && hasEmbeddedCheckoutConfig(supportConfig);
     const initialThankYousHtml = publicThankYousHtml(window.NLI_PUBLIC_SUPPORTERS || [], { escapeHtml: esc });
@@ -277,7 +484,7 @@
       </div>
       <section class="section support-form-section" data-support-form data-support-platform="${esc(options.platform || "web")}">
         <h3>${esc(title)}</h3>
-        <p class="article-meta">${hasStripe ? (hasEmbedded ? "Secure payment opens here on the project site." : "Payments open through secure checkout.") : "Secure checkout is being connected. Payment will open here after the support system is ready."}</p>
+        <p class="article-meta">${hasPlay ? "Payments are processed securely by Google Play." : (hasStripe ? (hasEmbedded ? "Secure payment opens here on the project site." : "Payments open through secure checkout.") : "Secure checkout is being connected. Payment will open here after the support system is ready.")}</p>
         ${supportReturnNoticeHtml(options.pageUrl || window.location.href, { escapeHtml: esc })}
         ${supportCompletionHtml({ escapeHtml: esc })}
         <div class="support-frequency" role="group" aria-label="Support frequency">
@@ -329,7 +536,7 @@
           <textarea id="${esc(options.platform || "web")}-support-note" data-support-note rows="4"></textarea>
         </div>
         <div class="actions">
-          <button class="button action" type="button" data-support-submit ${hasStripe ? "" : "disabled"}>Continue to secure payment</button>
+          <button class="button action" type="button" data-support-submit ${hasStripe || hasPlay ? "" : "disabled"}>${hasPlay ? "Continue with Google Play" : "Continue to secure payment"}</button>
           <a class="button action secondary" href="mailto:${esc(supportConfig.supportEmail)}">Ask a question</a>
         </div>
         <p class="form-status" data-support-status hidden></p>
@@ -408,6 +615,9 @@
   }
 
   async function startCheckout(form, options = {}) {
+    if (hasNativePlayBilling() && form?.dataset?.supportPlatform === "mobile") {
+      return await startPlayCheckout(form, options);
+    }
     const intent = intentFromForm(form, options.pageUrl || window.location.href);
     if (intent.publicThankYou && window.NLI_MODERATION_UTILS?.checkPublicText) {
       const publicName = intent.publicDisplayName || intent.name;
@@ -487,6 +697,9 @@
     fetchAdminSupportActivity,
     supportAdminActivityHtml,
     supportFormHtml,
+    hasNativePlayBilling,
+    preparePlayBillingForm,
+    startPlayCheckout,
     startCheckout
   };
 })();

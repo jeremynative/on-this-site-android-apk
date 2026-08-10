@@ -119,4 +119,38 @@ class AppBridge {
         if (!activity.validBridgeToken(token)) return;
         activity.runOnUiThread(activity::launchCommentBridgePicker);
     }
+
+    @JavascriptInterface
+    public boolean isPlayBillingReady(String token) {
+        return activity.validBridgeToken(token) && activity.isPlayBillingReady();
+    }
+
+    @JavascriptInterface
+    public boolean isGooglePlayInstall(String token) {
+        return activity.validBridgeToken(token) && activity.isGooglePlayInstall();
+    }
+
+    @JavascriptInterface
+    public void queryPlayProducts(String token, String productType, String productIdsJson) {
+        if (!activity.validBridgeToken(token)) return;
+        activity.runOnUiThread(() -> activity.queryPlayProducts(productType, productIdsJson));
+    }
+
+    @JavascriptInterface
+    public void purchasePlayProduct(String token, String productId, String productType, String obfuscatedAccountId) {
+        if (!activity.validBridgeToken(token)) return;
+        activity.runOnUiThread(() -> activity.purchasePlayProduct(productId, productType, obfuscatedAccountId));
+    }
+
+    @JavascriptInterface
+    public void restorePlayPurchases(String token) {
+        if (!activity.validBridgeToken(token)) return;
+        activity.runOnUiThread(activity::restorePlayPurchases);
+    }
+
+    @JavascriptInterface
+    public void completePlayPurchase(String token, String purchaseToken, String productType, boolean consume) {
+        if (!activity.validBridgeToken(token)) return;
+        activity.runOnUiThread(() -> activity.completePlayPurchase(purchaseToken, productType, consume));
+    }
 }

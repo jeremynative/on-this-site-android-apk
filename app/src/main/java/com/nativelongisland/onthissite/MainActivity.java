@@ -58,6 +58,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.MimeTypeMap;
+import org.json.JSONObject;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -106,6 +107,7 @@ public class MainActivity extends Activity {
     private final String bridgeCapabilityToken = UUID.randomUUID().toString();
 
     private WebView webView;
+    private BillingManager billingManager;
     private View loadingCover;
     private TextView loadingCoverLabel;
     private ObjectAnimator loadingOutlinePulse;
@@ -341,6 +343,8 @@ public class MainActivity extends Activity {
         cookieManager.setAcceptThirdPartyCookies(webView, true);
         webView.addJavascriptInterface(new AppBridge(this), "AndroidApp");
         webView.addJavascriptInterface(new StoryBridge(this), "AndroidStory");
+        billingManager = new BillingManager(this);
+        billingManager.start();
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -1424,6 +1428,49 @@ public class MainActivity extends Activity {
         }
     }
 
+    boolean isPlayBillingReady() {
+        return billingManager != null && billingManager.isReady();
+    }
+
+    boolean isGooglePlayInstall() {
+        try {
+            String installer;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                installer = getPackageManager().getInstallSourceInfo(getPackageName()).getInstallingPackageName();
+            } else {
+                installer = getPackageManager().getInstallerPackageName(getPackageName());
+            }
+            return "com.android.vending".equals(installer);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    void queryPlayProducts(String productType, String productIdsJson) {
+        if (billingManager != null) billingManager.queryProducts(productType, productIdsJson);
+    }
+
+    void purchasePlayProduct(String productId, String productType, String obfuscatedAccountId) {
+        if (billingManager != null) billingManager.launchPurchase(productId, productType, obfuscatedAccountId);
+    }
+
+    void restorePlayPurchases() {
+        if (billingManager != null) billingManager.restorePurchases();
+    }
+
+    void completePlayPurchase(String purchaseToken, String productType, boolean consume) {
+        if (billingManager != null) billingManager.completeVerifiedPurchase(purchaseToken, productType, consume);
+    }
+
+    void dispatchPlayBillingEvent(JSONObject event) {
+        if (webView == null || event == null) return;
+        String json = event.toString();
+        webView.post(() -> webView.evaluateJavascript(
+            "window.onAndroidPlayBillingEvent&&window.onAndroidPlayBillingEvent(" + json + ")",
+            null
+        ));
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -1432,6 +1479,7 @@ public class MainActivity extends Activity {
             webView.post(webView::requestApplyInsets);
             scheduleNetworkStateEvaluation("resume");
         }
+        if (billingManager != null) billingManager.restorePurchases();
     }
 
     @Override
@@ -1458,6 +1506,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         unregisterConnectivityMonitoring();
         startupHandler.removeCallbacksAndMessages(null);
+        if (billingManager != null) billingManager.close();
         super.onDestroy();
     }
 

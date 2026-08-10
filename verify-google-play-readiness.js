@@ -7,6 +7,10 @@ const manifest = read("app/src/main/AndroidManifest.xml");
 const workflow = read(".github/workflows/build-release-apk.yml");
 const activity = read("app/src/main/java/com/nativelongisland/onthissite/MainActivity.java");
 const mobile = read("app/src/main/assets/assets/js/mobile-app.js");
+const supportUtils = read("app/src/main/assets/assets/js/shared-support-utils.js");
+const supportConfig = read("app/src/main/assets/assets/js/support-public-config.js");
+const appBridge = read("app/src/main/java/com/nativelongisland/onthissite/AppBridge.java");
+const billingManager = read("app/src/main/java/com/nativelongisland/onthissite/BillingManager.java");
 
 function requireMatch(source, pattern, message) {
   if (!pattern.test(source)) throw new Error(message);
@@ -33,6 +37,9 @@ requireMatch(manifest, /android:icon="@mipmap\/ic_launcher"/, "Manifest must use
 requireMatch(manifest, /android:roundIcon="@mipmap\/ic_launcher_round"/, "Manifest must provide a round launcher icon.");
 requireMatch(manifest, /android:dataExtractionRules="@xml\/data_extraction_rules"/,
   "Android 12+ backup and device-transfer exclusions must be explicit.");
+requireMatch(manifest, /com\.android\.vending\.BILLING/, "Google Play Billing permission is missing.");
+requireMatch(appGradle, /com\.android\.billingclient:billing:8\.2\.1/,
+  "Google Play Billing 8.2.1 dependency is missing.");
 requireMatch(manifest, /android:name="\.CaptureFileProvider"[\s\S]*?android:exported="false"/,
   "The capture provider must remain private.");
 for (const permission of [
@@ -52,6 +59,14 @@ requireMatch(mobile, /async function requestStartupLocation\(\) \{\s*if \(isNati
   "APK location must wait for an explicit user action.");
 forbid(mobile, "if (nativeAndroid && !isOfflineTextMode()) await requestStartupLocation();",
   "APK must not request location during startup.");
+for (const productId of ["support_10", "support_25", "support_50", "support_100", "support_monthly_10", "support_monthly_25", "support_monthly_50", "support_monthly_100"]) {
+  requireMatch(billingManager, new RegExp(`"${productId}"`), `Billing product is missing from the native allowlist: ${productId}`);
+}
+requireMatch(appBridge, /completePlayPurchase\(String token, String purchaseToken/,
+  "The guarded WebView bridge cannot complete verified Play purchases.");
+requireMatch(supportUtils, /playVerificationEndpoint/, "APK support form cannot request server-side Google Play verification.");
+requireMatch(supportUtils, /completePlayPurchase/, "APK support form cannot consume or acknowledge a verified purchase.");
+requireMatch(supportConfig, /\/support\/google-play\/verify/, "APK support config is missing the Google Play verification endpoint.");
 for (const icon of [
   "app/src/main/res/mipmap-anydpi/ic_launcher.xml",
   "app/src/main/res/mipmap-anydpi/ic_launcher_round.xml",

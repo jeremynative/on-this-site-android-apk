@@ -11345,6 +11345,7 @@
           platform: "mobile",
           escapeHtml
         }));
+      SUPPORT_UTILS.preparePlayBillingForm?.(detailBodyEl.querySelector("[data-support-form]"));
       SUPPORT_UTILS.renderPublicThankYous(detailBodyEl, { escapeHtml });
     }
 
@@ -11374,6 +11375,14 @@
       try {
         const checkoutResult = await SUPPORT_UTILS.startCheckout(section, { pageUrl: window.location.href });
         const checkoutUrl = typeof checkoutResult === "string" ? checkoutResult : checkoutResult?.url;
+        if (checkoutResult?.native) {
+          setInlineStatus(section, "[data-support-status]", "Complete your purchase in Google Play.", "success");
+          if (button) {
+            button.disabled = true;
+            button.textContent = "Google Play opened";
+          }
+          return;
+        }
         if (checkoutResult?.embedded) {
           setInlineStatus(section, "[data-support-status]", "Secure payment form is ready below.", "success");
           if (button) {
