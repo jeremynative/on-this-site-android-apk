@@ -7531,6 +7531,7 @@
         ${attached}
         <div class="map-story-vote-row">
           <button class="action secondary" type="button" data-story-vote="1" data-story-id="${escapeHtml(story.id)}">Helpful ${counts.up}</button>
+          ${isAdminContributor() ? `<button class="action secondary" type="button" data-delete-map-story="${escapeHtml(story.id)}">Delete contribution</button>` : ""}
           <span class="detail-meta">${counts.up} helpful vote${counts.up === 1 ? "" : "s"}; 10 keeps it.</span>
         </div>
         ${MAP_STORY_UTILS.hasMemberVote(story, state.mapStoryVotes, currentContributorProfile()?.id) ? `<p class="detail-meta">You already voted on this story.</p>` : ""}
@@ -9669,6 +9670,7 @@
                       : `<button class="site-plant-card-action" type="button" data-open-native-plants="${escapeHtml(guideMatch.common)}">Open plant guide</button>`)
                       : `<span class="site-plant-card-meta">Plant guide not yet added.</span>`}
                     <button class="site-plant-card-action" type="button" data-plant-observation-details="${escapeHtml(detailsId)}">View observation details</button>
+                    ${isAdminContributor() ? `<button class="site-plant-card-action" type="button" data-delete-plant-observation="${escapeHtml(sourceRecord.id)}">Delete contribution</button>` : ""}
                     <details class="site-plant-card-details" id="${escapeHtml(detailsId)}">
                       <summary>Observation details</summary>
                       ${detailLines.map(line => `<p>${escapeHtml(line)}</p>`).join("")}
@@ -9784,29 +9786,105 @@
       return COMMENT_UTILS.viewerOwnsComment(comment, { profile, viewerEmail });
     }
 
-    async function deleteOwnComment(commentId) {
+    async function deleteComment(commentId) {
       const id = String(commentId || "");
       const comment = state.publicComments.find(item => String(item.id) === id);
-      if (!comment || !currentViewerOwnsComment(comment)) {
+      const adminDeletion = isAdminContributor();
+      if (!comment || (!currentViewerOwnsComment(comment) && !adminDeletion)) {
         showBanner("Only the person who posted this comment can delete it.");
         return;
       }
-      if (!window.confirm("Delete this comment from the public archive?")) return;
+      if (!window.confirm(adminDeletion
+        ? "Remove this comment and leave a public [deleted] placeholder?"
+        : "Delete this comment from the public archive?")) return;
       if (!id.startsWith("pending-")) {
         try {
-          await patchDirectusItem("mobile_comments", id, { status: "deleted" }, { requireAuth: true });
+          const payload = adminDeletion ? {
+            status: "approved",
+            moderated_deleted: true,
+            moderated_deleted_at: new Date().toISOString(),
+            public_activity: false,
+            member_profile: null,
+            author_name: "[deleted]",
+            author_email: null,
+            reply_to_profile: null,
+            quote_context: null,
+            source_section: null,
+            source_excerpt: null,
+            comment: "[deleted]",
+            comment_image: null,
+            moderator_note: "Removed from the public app by an administrator."
+          } : { status: "deleted" };
+          const updated = await patchDirectusItem("mobile_comments", id, payload, { requireAuth: true });
+          if (adminDeletion) Object.assign(comment, payload, updated?.data || {});
         } catch (error) {
           showBanner("Could not delete the comment yet. Please try again.");
           return;
         }
       }
-      state.publicComments = state.publicComments.filter(item => String(item.id) !== id);
-      showBanner("Comment deleted.");
+      if (!adminDeletion) state.publicComments = state.publicComments.filter(item => String(item.id) !== id);
+      showBanner(adminDeletion ? "Comment replaced with [deleted]." : "Comment deleted.");
       const sourceType = normalizeCommentSourceType(comment);
       const sourceSlug = comment.source_slug || comment.site_slug || "";
       if (sourceType === "wiki" && sourceSlug) openWikiArticle(sourceSlug, { focus: false, skipCommentRefresh: true });
       else if (sourceSlug) openSite(sourceSlug, { focus: false, skipCommentRefresh: true });
       renderMobileActivitySheet();
+    }
+
+    async function removeAdminContribution(collection, contributionId) {
+      if (!isAdminContributor()) {
+        showBanner("Administrator access is required to remove another contributor's post.");
+        return false;
+      }
+      const id = String(contributionId || "");
+      if (!id || !window.confirm("Remove this contribution from the public app?")) return false;
+      const payload = collection === "mobile_plant_observations" ? {
+        status: "rejected",
+        member_profile: null,
+        author_name: "[deleted]",
+        photo: null,
+        common_name: "[deleted]",
+        scientific_name: null,
+        indigenous_context: null,
+        visitor_notes: null,
+        raw_plantnet_data: null
+      } : collection === "site_suggestions" ? {
+        status: "declined",
+        author_profile: null,
+        author_name: "[deleted]",
+        author_email: null,
+        title: "[deleted]",
+        introduction: null,
+        suggested_image: null,
+        review_note: "Removed from the public app by an administrator."
+      } : {
+        status: "rejected",
+        member_profile: null,
+        author_name: "[deleted]",
+        photo: null,
+        caption: "[deleted]"
+      };
+      try {
+        await patchDirectusItem(collection, id, payload, { requireAuth: true });
+      } catch (error) {
+        showBanner(error.message || "Could not remove that contribution.");
+        return false;
+      }
+      if (collection === "mobile_plant_observations") {
+        state.plantObservations = state.plantObservations.filter(item => String(item.id) !== id);
+        const site = state.selectedSite;
+        if (site) openSite(site.slug, { focus: false, skipCommentRefresh: true });
+      } else if (collection === "site_suggestions") {
+        state.siteSuggestions = state.siteSuggestions.filter(item => String(item.id) !== id);
+        renderMobileNotificationsSheet();
+      } else {
+        state.mapStories = state.mapStories.filter(item => String(item.id) !== id);
+        syncMapStoryMarkers();
+        mapStoryViewSheetEl?.classList.remove("open");
+      }
+      renderMobileActivitySheet();
+      showBanner("Contribution removed.");
+      return true;
     }
 
     function discussionHtml(sourceType, item) {
@@ -9817,38 +9895,36 @@
       const rootComments = comments.filter(comment => !comment.parent_comment && !isPlantObservationComment(comment));
       const repliesFor = parentId => comments.filter(comment => Number(comment.parent_comment) === Number(parentId));
       const renderComment = (comment, depth = 0) => {
+        const deleted = COMMENT_UTILS.isModeratedDeleted(comment);
         const author = state.contributorProfiles.find(profile => Number(profile.id) === Number(comment.member_profile));
         const parent = depth ? comments.find(item => Number(item.id) === Number(comment.parent_comment)) : null;
         const parentAuthor = parent ? state.contributorProfiles.find(profile => Number(profile.id) === Number(parent.member_profile)) : null;
-        const parentName = parentAuthor?.display_name || parent?.author_name || "";
+        const parentName = COMMENT_UTILS.isModeratedDeleted(parent) ? "[deleted]" : (parentAuthor?.display_name || parent?.author_name || "");
         const attachment = directusAssetUrl(comment.comment_image);
-        const name = author?.display_name || comment.author_name || "Contributor";
+        const name = deleted ? "[deleted]" : (author?.display_name || comment.author_name || "Contributor");
         const avatar = directusAssetUrl(author?.avatar);
         const initial = (name || "?").trim().slice(0, 1) || "?";
         const pending = false;
         const parsedComment = QUOTE_COMMENT_UTILS.parseCommentRecord(comment);
         const commentBody = parsedComment.body || (!parsedComment.quote ? comment.comment || "" : "");
         return `
-          <article class="comment${depth ? " reply" : ""}${pending ? " pending" : ""}" data-comment-card="${escapeHtml(comment.id || "")}" style="margin-left:${Math.min(Math.max(depth - 1, 0), 2) * 18}px">
-            <span class="comment-avatar" aria-hidden="true">${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : escapeHtml(initial)}</span>
+          <article class="comment${depth ? " reply" : ""}${pending ? " pending" : ""}${deleted ? " deleted" : ""}" data-comment-card="${escapeHtml(comment.id || "")}" style="margin-left:${Math.min(Math.max(depth - 1, 0), 2) * 18}px">
+            <span class="comment-avatar" aria-hidden="true">${deleted ? "-" : (avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : escapeHtml(initial))}</span>
             <div>
               <div class="comment-bubble">
                 ${depth ? `<span class="reply-label">Reply${parentName ? ` to ${escapeHtml(parentName)}` : ""}</span>` : ""}
-                <strong class="comment-author">${escapeHtml(name)}</strong>
-                ${QUOTE_COMMENT_UTILS.quoteCommentButtonHtml(comment, parsedComment.quote, parsedComment.context)}
-                ${commentBody ? `<p class="comment-text">${escapeHtml(commentBody)}</p>` : ""}
-                ${attachment ? `
+                ${deleted ? `<strong class="comment-author">[deleted]</strong><p class="comment-text">[deleted]</p>` : `<strong class="comment-author">${escapeHtml(name)}</strong>${QUOTE_COMMENT_UTILS.quoteCommentButtonHtml(comment, parsedComment.quote, parsedComment.context)}${commentBody ? `<p class="comment-text">${escapeHtml(commentBody)}</p>` : ""}${attachment ? `
                   <button class="comment-image-button" type="button" data-comment-photo-view="${escapeHtml(attachment)}" data-comment-photo-title="${escapeHtml(`${name} comment photo`)}" aria-label="Open comment photo">
                     <img class="comment-image" src="${escapeHtml(attachment)}" alt="" loading="lazy" decoding="async">
                   </button>
-                ` : ""}
+                ` : ""}`}
               </div>
               <div class="comment-meta-row">
-                <span>${comment.created_at ? escapeHtml(new Date(comment.created_at).toLocaleString()) : "Approved comment"}</span>
+                <span>${deleted ? "Removed by moderator" : (comment.created_at ? escapeHtml(new Date(comment.created_at).toLocaleString()) : "Approved comment")}</span>
                 ${pending ? `<span class="comment-status-pill">Not public</span>` : ""}
-                ${!pending ? `<span class="comment-actions" data-comment-actions="${escapeHtml(comment.id)}">${commentReactionControls(comment)}</span>` : ""}
-                ${canContribute && !pending ? `<button class="comment-reply-button" type="button" data-reply-comment="${escapeHtml(comment.id)}" data-reply-profile="${escapeHtml(comment.member_profile || "")}">Reply</button>` : ""}
-                ${currentViewerOwnsComment(comment) ? `<button class="comment-reply-button" type="button" data-delete-comment="${escapeHtml(comment.id)}">Delete</button>` : ""}
+                ${!pending && !deleted ? `<span class="comment-actions" data-comment-actions="${escapeHtml(comment.id)}">${commentReactionControls(comment)}</span>` : ""}
+                ${canContribute && !pending && !deleted ? `<button class="comment-reply-button" type="button" data-reply-comment="${escapeHtml(comment.id)}" data-reply-profile="${escapeHtml(comment.member_profile || "")}">Reply</button>` : ""}
+                ${!deleted && (currentViewerOwnsComment(comment) || isAdminContributor()) ? `<button class="comment-reply-button" type="button" data-delete-comment="${escapeHtml(comment.id)}">Delete</button>` : ""}
               </div>
             </div>
           </article>
@@ -14835,6 +14911,7 @@
             ${item.type === "suggestion-review" && item.pendingReview ? `<div class="notification-actions">
               <button type="button" data-mobile-notification-action="approve">Approve</button>
               <button type="button" data-mobile-notification-action="decline">Deny</button>
+              <button type="button" data-mobile-notification-action="delete">Delete</button>
             </div>` : ""}
           </article>
         `).join("") || `<p class="summary">No notifications right now.</p>`}
@@ -14914,6 +14991,7 @@
 
     async function handleMobileSuggestionReview(id, action) {
       if (!isCurrentAdminReviewer()) return showBanner("Only an editor can review suggestions.");
+      if (action === "delete") return removeAdminContribution("site_suggestions", id);
       const suggestion = state.siteSuggestions.find(item => String(item.id) === String(id));
       if (!suggestion) return showBanner("That suggestion is not loaded.");
       const nextStatus = action === "approve" ? "approved" : "declined";
@@ -16523,7 +16601,12 @@
       }
       const deleteCommentButton = event.target.closest("[data-delete-comment]");
       if (deleteCommentButton?.dataset.deleteComment) {
-        deleteOwnComment(deleteCommentButton.dataset.deleteComment).catch(error => showBanner(error.message || "Could not delete comment."));
+        deleteComment(deleteCommentButton.dataset.deleteComment).catch(error => showBanner(error.message || "Could not delete comment."));
+        return;
+      }
+      const deletePlantObservationButton = event.target.closest("[data-delete-plant-observation]");
+      if (deletePlantObservationButton?.dataset.deletePlantObservation) {
+        removeAdminContribution("mobile_plant_observations", deletePlantObservationButton.dataset.deletePlantObservation);
         return;
       }
       const replyButton = event.target.closest("[data-reply-comment]");
@@ -16858,6 +16941,11 @@
     });
     mapStorySubmitEl?.addEventListener("click", () => submitMapStory());
     mapStoryViewEl?.addEventListener("click", event => {
+      const remove = event.target.closest("[data-delete-map-story]");
+      if (remove?.dataset.deleteMapStory) {
+        removeAdminContribution("mobile_map_stories", remove.dataset.deleteMapStory);
+        return;
+      }
       const vote = event.target.closest("[data-story-vote]");
       if (vote) {
         voteMapStory(vote.dataset.storyId, vote.dataset.storyVote);

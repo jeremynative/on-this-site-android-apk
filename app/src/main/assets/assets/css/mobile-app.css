@@ -4720,6 +4720,18 @@
       text-transform: lowercase;
     }
 
+    .comment.deleted .comment-bubble {
+      background: transparent;
+      border-style: dashed;
+      box-shadow: none;
+    }
+
+    .comment.deleted .comment-author,
+    .comment.deleted .comment-text,
+    .comment.deleted .comment-meta-row {
+      color: #6b746f;
+    }
+
     .detail-drawer-handle {
       grid-column: 1 / -1;
       justify-self: center;

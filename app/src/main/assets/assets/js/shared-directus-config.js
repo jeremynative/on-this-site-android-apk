@@ -128,13 +128,13 @@
       commentVote: fields(["id", "comment", "vote", "vote_key", "member_profile", "created_at"]),
       pointEvent: fields(["id", "event_key", "event_type", "points", "member_profile", "source_collection", "source_id", "source_slug", "source_title", "created_at"]),
       publicComment: fields([
-        "id", "status", "public_activity", "source_type", "source_id", "source_slug", "source_title",
+        "id", "status", "moderated_deleted", "moderated_deleted_at", "public_activity", "source_type", "source_id", "source_slug", "source_title",
         "quote_context", "source_section", "source_excerpt",
         "site_slug", "site_title", "member_profile", "author_name", "parent_comment", "reply_to_profile",
         "comment", "comment_image", "created_at"
       ]),
       desktopPublicComment: fields([
-        "id", "member_profile", "site_slug", "site_title", "source_type", "source_id", "source_slug",
+        "id", "moderated_deleted", "moderated_deleted_at", "member_profile", "site_slug", "site_title", "source_type", "source_id", "source_slug",
         "source_title", "quote_context", "source_section", "source_excerpt", "author_name", "parent_comment", "reply_to_profile", "comment", "comment_image",
         "status", "created_at"
       ]),

@@ -98,6 +98,10 @@
     return value;
   }
 
+  function isModeratedDeleted(comment) {
+    return comment?.moderated_deleted === true || comment?.moderated_deleted === 1 || String(comment?.moderated_deleted || "").toLowerCase() === "true";
+  }
+
   function isLikelyPublicTestComment(comment = {}) {
     const author = String(comment.author_name || "").trim().toLowerCase();
     const body = String(comment.comment || "").trim().toLowerCase();
@@ -112,6 +116,7 @@
 
   function visibleToViewer(comment, options = {}) {
     if (!comment) return false;
+    if (isModeratedDeleted(comment)) return true;
     if (isLikelyPublicTestComment(comment)) return false;
     const normalizeStatus = options.normalizeStatus || normalizeCommentStatus;
     const isProfileBanned = typeof options.isProfileBanned === "function"
@@ -128,6 +133,7 @@
 
   function isPublicActivityComment(comment, options = {}) {
     if (!comment || isLikelyPublicTestComment(comment)) return false;
+    if (isModeratedDeleted(comment)) return true;
     const normalizeStatus = options.normalizeStatus || normalizeCommentStatus;
     return !["rejected", "deleted"].includes(normalizeStatus(comment));
   }
@@ -263,6 +269,22 @@
     };
   }
 
+  function activityThreadHtml(comments = [], options = {}) {
+    const escape = options.escapeHtml || (value => String(value || ""));
+    const authorName = options.authorName || (comment => comment?.author_name || "Contributor");
+    const parse = options.parseComment || (comment => ({ body: comment?.comment || "", quote: "" }));
+    const attachmentUrl = options.attachmentUrl || (() => "");
+    const entries = comments.map(comment => {
+      const name = authorName(comment);
+      const parsed = parse(comment) || {};
+      const body = parsed.body || (!parsed.quote ? comment.comment || "" : "");
+      const attachment = attachmentUrl(comment) || "";
+      const date = comment.created_at ? new Date(comment.created_at).toLocaleString() : "Approved comment";
+      return `<article class="activity-thread-entry${comment.parent_comment ? " is-reply" : ""}"><strong>${escape(name)}</strong>${parsed.quote ? `<q>${escape(parsed.quote)}</q>` : ""}${body ? `<span class="activity-thread-caption">${escape(body)}</span>` : ""}${attachment ? `<img class="comment-image activity-thread-image" src="${escape(attachment)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">` : ""}<time>${escape(date)}</time></article>`;
+    }).join("");
+    return `<div class="activity-comment-thread" aria-label="Existing comments"><div class="activity-comment-thread-heading"><strong>${comments.length} comment${comments.length === 1 ? "" : "s"}</strong><span>${comments.length ? "Join the conversation below." : "Start the conversation."}</span></div>${entries || `<p class="activity-thread-empty">No comments yet.</p>`}</div>`;
+  }
+
   window.NLI_COMMENT_UTILS = {
     relationId,
     commentVotes,
@@ -275,6 +297,7 @@
     reactionState,
     normalizeStatus: normalizeCommentStatus,
     normalizeSourceType,
+    isModeratedDeleted,
     isLikelyPublicTestComment,
     isPublicActivityComment,
     visibleToViewer,
@@ -289,6 +312,7 @@
     viewerOwnsComment,
     voteKey,
     votePayload,
-    helpfulVotePointEvent
+    helpfulVotePointEvent,
+    activityThreadHtml
   };
 }());
