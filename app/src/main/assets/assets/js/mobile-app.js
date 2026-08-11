@@ -180,6 +180,9 @@
       { center: [-71.82, 41.02], zoom: 9.05 }
     ];
     const MOBILE_STARTUP_VIEW = randomMobileLongIslandStartupView();
+    const MOBILE_STARTUP_SITE_REVEAL_DURATION_MS = 1080;
+    const MOBILE_STARTUP_SITE_REVEAL_DELAY_MS = 140;
+    const MOBILE_STARTUP_SITE_REVEAL_ZOOM_DELTA = 1.15;
     const KNOWLEDGEBASE_CATEGORIES = [
       { label: "Biography", slugs: ["mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "quashawam", "elizabeth-thunder-bird-haile-shinnecock", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "sachem-warawakmy-of-the-setauket", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "john-a-strong", "nathan-jeffrey-cuffee", "samson-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "penhawitz-sachem-of-the-canarsie", "stephen-talkhouse-pharoah", "nasseconset-sachem-of-the-nissequogue", "keeossechok-sachem-of-the-secatogue", "sunksquaws-and-indigenous-womens-leadership"] },
       { label: "Tribal Nations and Communities", entries: [["wiki", "native-long-island-overview"], ["wiki", "continued-indigenous-presence-today"], ["wiki", "the-tribes-of-long-island"], ["wiki", "western-long-island-native-communities"], ["wiki", "central-long-island-native-communities"], ["wiki", "eastern-long-island-native-communities"], ["wiki", "myth-of-the-thirteen-tribes"], ["site", "montaukett-ancestral-land"], ["site", "shinnecock-indian-reservation"], ["site", "unkechaug-indian-reservation"], ["site", "corchaug-tribe"], ["site", "manhansack-aqua-quash-awamock"], ["site", "setauket-ancestral-land"], ["site", "nissaquogue"], ["site", "matinecock"], ["site", "secatogues"], ["site", "massapequas"], ["site", "merricks"], ["site", "rockaways"], ["site", "canarsie"]] },
@@ -883,6 +886,9 @@
       mobileSiteIconQueueTimer: null,
       mobileMapLayerEventsBound: false,
       mobileMapLayerHandlers: new Map(),
+      mobileStartupSiteRevealPending: false,
+      mobileStartupSiteRevealRunning: false,
+      mobileStartupSiteRevealFrame: null,
       mobileMapPulseMoveBound: false,
       exhibitMarkers: new Map(),
       storyMarkers: new Map(),
@@ -6127,12 +6133,24 @@
             has_header_image: siteHasHeaderImage(site),
             has_icon: !!siteMapIconUrl(site),
             icon_key: mobileSiteIconKey(site),
+            startup_distance: mobileStartupSiteDistance(siteDisplayGeometry(site)?.coordinates),
             broad: isBroadTerritory(site),
             territory_label_point: site.territory_label_point || null,
             bounds_area: geometryBoundsArea(siteDisplayGeometry(site))
           }
         }))
       };
+    }
+
+    function mobileStartupSiteDistance(coordinates) {
+      if (!Array.isArray(coordinates) || coordinates.length < 2) return 0;
+      const longitude = Number(coordinates[0]);
+      const latitude = Number(coordinates[1]);
+      const centerLongitude = Number(MOBILE_STARTUP_VIEW.center?.[0]);
+      const centerLatitude = Number(MOBILE_STARTUP_VIEW.center?.[1]);
+      if (![longitude, latitude, centerLongitude, centerLatitude].every(Number.isFinite)) return 0;
+      const longitudeScale = Math.cos((centerLatitude * Math.PI) / 180);
+      return Math.hypot((longitude - centerLongitude) * longitudeScale, latitude - centerLatitude);
     }
 
     function mobilePlaceNameAreaFeatures(sites = []) {
@@ -13359,6 +13377,7 @@
       });
       state.mapSourceAppliedKey = state.mapSourceCacheKey || "";
       syncMobileBiographyPathLayers();
+      prepareMobileStartupSiteRevealLayers();
       startMobileSiteAttentionPulse();
       ensureMobileMovingFeatureMarkers();
       bindMobileMapLayerEvents();
@@ -13376,10 +13395,122 @@
 
     function syncMobileBiographyPathLayers() {
       if (!state.map) return;
-      const visible = mobileBiographyPathsEnabled();
+      const visible = mobileBiographyPathsEnabled() && !state.mobileStartupSiteRevealPending;
       const source = state.map.getSource("mobile-biography-paths");
       if (source) source.setData(allMobileBiographyPathFeatureCollection({ enabled: visible }));
       MAP_UTILS.setLayerVisibilityMany(state.map, ["mobile-biography-path-lines", "mobile-biography-path-points", "mobile-biography-path-point-numbers", "mobile-biography-path-labels"], visible ? "visible" : "none");
+    }
+
+    const MOBILE_STARTUP_REVEAL_HIDDEN_LAYERS = [
+      "mobile-site-point-hit",
+      "mobile-site-attention-outer",
+      "mobile-site-attention-core",
+      "mobile-site-attention-history-badge",
+      "mobile-site-attention-history-icon"
+    ];
+
+    function prepareMobileStartupSiteRevealLayers() {
+      if (!state.map || !state.mobileStartupSiteRevealPending) return;
+      try {
+        state.map.setPaintProperty("mobile-site-point-dots", "circle-opacity", 0);
+        state.map.setPaintProperty("mobile-site-icons", "icon-opacity", 0);
+        state.map.setPaintProperty("mobile-site-point-labels", "text-opacity", 0);
+        MAP_UTILS.setLayerVisibilityMany(state.map, MOBILE_STARTUP_REVEAL_HIDDEN_LAYERS, "none");
+        state.map.jumpTo({
+          center: MOBILE_STARTUP_VIEW.center,
+          zoom: Math.min(MOBILE_STARTUP_VIEW.zoom + MOBILE_STARTUP_SITE_REVEAL_ZOOM_DELTA, state.map.getMaxZoom?.() || 18)
+        });
+      } catch (_) {}
+    }
+
+    function mobileStartupRevealRamp(radius, feather) {
+      return [
+        "interpolate", ["linear"], ["coalesce", ["to-number", ["get", "startup_distance"]], 999],
+        Math.max(0, radius - feather), 1,
+        radius + feather, 0
+      ];
+    }
+
+    function finishMobileStartupSiteReveal() {
+      window.cancelAnimationFrame(state.mobileStartupSiteRevealFrame);
+      state.mobileStartupSiteRevealFrame = null;
+      state.mobileStartupSiteRevealPending = false;
+      state.mobileStartupSiteRevealRunning = false;
+      try {
+        state.map?.setPaintProperty("mobile-site-point-dots", "circle-opacity", 0.92);
+        state.map?.setPaintProperty("mobile-site-icons", "icon-opacity", 1);
+        state.map?.setPaintProperty("mobile-site-point-labels", "text-opacity", ["interpolate", ["linear"], ["zoom"], SITE_POINT_LABEL_MIN_ZOOM, 0, SITE_POINT_LABEL_MIN_ZOOM + 0.35, 1]);
+        MAP_UTILS.setLayerVisibilityMany(state.map, MOBILE_STARTUP_REVEAL_HIDDEN_LAYERS, "visible");
+        syncMobileBiographyPathLayers();
+        state.map?.triggerRepaint?.();
+      } catch (_) {}
+      appEl?.classList.remove("mobile-site-reveal-pending");
+      appEl?.classList.add("mobile-site-reveal-settling");
+      window.setTimeout(() => appEl?.classList.remove("mobile-site-reveal-settling"), 420);
+    }
+
+    function startMobileStartupSiteReveal() {
+      if (!state.map || !state.mobileStartupSiteRevealPending || state.mobileStartupSiteRevealRunning) {
+        finishMobileStartupSiteReveal();
+        return Promise.resolve(false);
+      }
+      state.mobileStartupSiteRevealRunning = true;
+      const pointDistances = activeMapSites()
+        .filter(site => siteDisplayGeometry(site)?.type === "Point")
+        .map(site => mobileStartupSiteDistance(siteDisplayGeometry(site)?.coordinates));
+      const maximumDistance = Math.max(0.1, ...pointDistances);
+      const feather = Math.max(0.045, maximumDistance * 0.055);
+      const mapContainer = state.map.getContainer?.();
+      return new Promise(resolve => {
+        let startedAt = 0;
+        let lastPaintAt = 0;
+        let finished = false;
+        const finish = (cancelCamera = false) => {
+          if (finished) return;
+          finished = true;
+          mapContainer?.removeEventListener("pointerdown", cancelForInteraction, true);
+          mapContainer?.removeEventListener("touchstart", cancelForInteraction, true);
+          if (cancelCamera) state.map?.stop?.();
+          finishMobileStartupSiteReveal();
+          resolve(true);
+        };
+        const cancelForInteraction = () => finish(true);
+        mapContainer?.addEventListener("pointerdown", cancelForInteraction, { capture: true, once: true });
+        mapContainer?.addEventListener("touchstart", cancelForInteraction, { capture: true, once: true, passive: true });
+        try {
+          state.map.easeTo({
+            center: MOBILE_STARTUP_VIEW.center,
+            zoom: MOBILE_STARTUP_VIEW.zoom,
+            duration: MOBILE_STARTUP_SITE_REVEAL_DURATION_MS,
+            easing: progress => 1 - Math.pow(1 - progress, 3),
+            essential: true
+          });
+        } catch (_) {}
+        const step = timestamp => {
+          if (finished || !state.map) return finish();
+          if (!startedAt) startedAt = timestamp;
+          const elapsed = timestamp - startedAt;
+          const revealElapsed = Math.max(0, elapsed - MOBILE_STARTUP_SITE_REVEAL_DELAY_MS);
+          const revealDuration = MOBILE_STARTUP_SITE_REVEAL_DURATION_MS - MOBILE_STARTUP_SITE_REVEAL_DELAY_MS;
+          const progress = Math.min(1, revealElapsed / revealDuration);
+          if (revealElapsed > 0 && (timestamp - lastPaintAt >= 30 || progress >= 1)) {
+            lastPaintAt = timestamp;
+            const eased = 1 - Math.pow(1 - progress, 2.4);
+            const ramp = mobileStartupRevealRamp((maximumDistance + feather) * eased, feather);
+            try {
+              state.map.setPaintProperty("mobile-site-point-dots", "circle-opacity", ["*", 0.92, ramp]);
+              state.map.setPaintProperty("mobile-site-icons", "icon-opacity", ramp);
+              state.map.setPaintProperty("mobile-site-point-labels", "text-opacity", ["*", ["interpolate", ["linear"], ["zoom"], SITE_POINT_LABEL_MIN_ZOOM, 0, SITE_POINT_LABEL_MIN_ZOOM + 0.35, 1], ramp]);
+              state.map.triggerRepaint?.();
+            } catch (_) {
+              return finish();
+            }
+          }
+          if (progress >= 1) return finish();
+          state.mobileStartupSiteRevealFrame = window.requestAnimationFrame(step);
+        };
+        state.mobileStartupSiteRevealFrame = window.requestAnimationFrame(step);
+      });
     }
 
     function openMobileInteractivePolygonLayer(event) {
@@ -17523,16 +17654,29 @@
           androidLifecycleContentRestored = await restoreAndroidLifecycleContent(androidLifecycleSnapshot);
         }
         if (state.passwordResetToken) openSheet(loginSheetEl);
+        const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+        state.mobileStartupSiteRevealPending = Boolean(
+          nativeAndroid
+          && !isOfflineTextMode()
+          && !reducedMotion
+          && !androidLifecycleSnapshot
+          && !routeAlreadyOpened
+          && !androidLifecycleContentRestored
+          && !state.passwordResetToken
+        );
+        appEl?.classList.toggle("mobile-site-reveal-pending", state.mobileStartupSiteRevealPending);
         // The local index and search are usable before Mapbox. Replace the
         // full-screen startup cover with an explicit in-map loading surface,
         // then reveal the live map or text fallback only when it is ready.
         appEl?.classList.add("mobile-map-initializing");
         hideLoadingScreen();
         if (nativeAndroid) requestStartupLocation();
-        await initMap().catch(error => {
+        const mobileMapReady = await initMap().catch(error => {
           console.warn("Map did not initialize yet.", error);
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
         }).finally(() => appEl?.classList.remove("mobile-map-initializing"));
+        if (mobileMapReady && state.mobileStartupSiteRevealPending) await startMobileStartupSiteReveal();
+        else if (state.mobileStartupSiteRevealPending) finishMobileStartupSiteReveal();
         if (!isOfflineTextMode()) {
           state.researchQuestionInstance = window.NLI_RESEARCH_QUESTION_UTILS?.init?.({
             platform: "mobile",

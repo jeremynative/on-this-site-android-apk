@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260811-nearby-startup-r69";
+const expectedBuild = "20260811-apk-center-reveal-r70";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -55,6 +55,17 @@ if (!bundledMobileJs.includes("CALENDAR_UTILS.calendarBadgeMarkup(exhibit")
     || !bundledCalendarUtils.includes("function calendarBadgeMarkup")
     || bundledMobileJs.includes('element.textContent = "🗓"')) {
   throw new Error("APK event markers must use the shared dated calendar badge instead of the old emoji calendar.");
+}
+
+if (!bundledMobileJs.includes("function startMobileStartupSiteReveal()")
+    || !bundledMobileJs.includes("mobileStartupRevealRamp")
+    || !bundledMobileJs.includes("MOBILE_STARTUP_SITE_REVEAL_ZOOM_DELTA")
+    || !bundledMobileJs.includes("!androidLifecycleSnapshot")
+    || !bundledMobileJs.includes("!routeAlreadyOpened")
+    || !bundledMobileJs.includes("!reducedMotion")
+    || !bundledMobileCss.includes(".app.mobile-site-reveal-pending #map .mapboxgl-marker")
+    || !bundledMobileCss.includes("@keyframes mobile-startup-marker-settle")) {
+  throw new Error("APK cold starts must use the center-out site reveal while restored, routed, offline, and reduced-motion launches skip it.");
 }
 
 if (!lightweightOfflineApp.includes('class="brand-row"')

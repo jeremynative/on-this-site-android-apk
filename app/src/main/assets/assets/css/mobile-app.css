@@ -1089,6 +1089,20 @@
       min-height: 190px;
     }
 
+    .app.mobile-site-reveal-pending #map .mapboxgl-marker {
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+
+    .app.mobile-site-reveal-settling #map .mapboxgl-marker {
+      animation: mobile-startup-marker-settle 360ms ease-out both;
+    }
+
+    @keyframes mobile-startup-marker-settle {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
     .mobile-map-locate {
       position: absolute;
       right: 12px;
