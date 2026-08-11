@@ -84,7 +84,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260811-apk-center-reveal-r70";
+    static final String APP_VERSION = "20260811-apk-center-reveal-r71";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -95,6 +95,7 @@ public class MainActivity extends Activity {
     private static final long NETWORK_LOSS_GRACE_DELAY_MS = 4000;
     private static final long ACTIVE_WORK_RECHECK_DELAY_MS = 15000;
     private static final long OFFLINE_COVER_REVEAL_DELAY_MS = 900;
+    private static final int OFFLINE_RENDER_MAX_ATTEMPTS = 12;
     private static final int COMMENT_PHOTO_READ_MAX_ATTEMPTS = 3;
     private static final long COMMENT_PHOTO_READ_RETRY_DELAY_MS = 350;
     private static final String PREFS_NAME = "on_this_site_native_state";
@@ -141,6 +142,7 @@ public class MainActivity extends Activity {
     private boolean runtimePermissionPromptActive;
     private boolean locationPermissionDeniedForSession;
     private int appReadinessProbeAttempts;
+    private int offlineRenderProbeAttempts;
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback connectivityCallback;
     private boolean connectivityCallbackRegistered;
@@ -186,9 +188,36 @@ public class MainActivity extends Activity {
         if (webView == null || hasUsableNetwork() || loadingBundledFallback) return;
         requestBundledFallbackPreservingActiveWork("validated-network-unavailable");
     };
-    private final Runnable revealBundledFallback = () -> {
-        if (webView != null && loadingBundledFallback) hideLoadingCover();
-    };
+    private final Runnable revealBundledFallback = this::probeBundledFallbackPaint;
+
+    private void probeBundledFallbackPaint() {
+        if (webView == null || !loadingBundledFallback) return;
+        webView.evaluateJavascript(
+            "(function(){try{"
+                + "var app=document.querySelector('.app');"
+                + "var body=document.body;"
+                + "return app&&body&&body.innerText&&body.innerText.trim().length>20?'painted':'waiting';"
+                + "}catch(error){return 'waiting';}})();",
+            value -> {
+                if (webView == null || !loadingBundledFallback) return;
+                if (value != null && value.contains("painted")) {
+                    appShellLoaded = true;
+                    hideLoadingCover();
+                    return;
+                }
+                offlineRenderProbeAttempts += 1;
+                if (offlineRenderProbeAttempts < OFFLINE_RENDER_MAX_ATTEMPTS) {
+                    startupHandler.postDelayed(revealBundledFallback, OFFLINE_COVER_REVEAL_DELAY_MS);
+                    return;
+                }
+                // Never uncover an empty WebView. A stalled renderer should
+                // leave a useful branded status surface instead of the gray
+                // frame that previously appeared after the fixed 900ms delay.
+                showLoadingCover("Saved map is taking longer than expected...");
+                Log.w(LOG_TAG, "Bundled fallback did not paint; keeping the native cover visible.");
+            }
+        );
+    }
     Uri lastStoryVideoUri;
     String lastStoryVideoMimeType = "video/webm";
 
@@ -1376,26 +1405,20 @@ public class MainActivity extends Activity {
         loadingBundledFallback = true;
         appShellLoaded = false;
         appReadinessProbeAttempts = 0;
+        offlineRenderProbeAttempts = 0;
         showLoadingCover("Opening saved map...");
         Log.w(LOG_TAG, "Loading bundled mobile archive fallback: " + reason);
         webView.stopLoading();
-        try {
-            String offlineHtml = readBundledTextAsset("offline-app.html");
-            webView.loadDataWithBaseURL(
-                OFFLINE_BASE_URL,
-                offlineHtml,
-                "text/html",
-                "UTF-8",
-                null
-            );
-            startupHandler.postDelayed(revealBundledFallback, OFFLINE_COVER_REVEAL_DELAY_MS);
-            if (retryValidatedNetwork) {
-                Log.i(LOG_TAG, "Live recovery returned to fallback; scheduling a bounded retry.");
-                startupHandler.postDelayed(validatedNetworkRecoveryRetry, LIVE_RECOVERY_RETRY_DELAY_MS);
-            }
-        } catch (IOException error) {
-            Log.e(LOG_TAG, "Lightweight offline archive could not be opened.", error);
-            hideLoadingCover();
+        // Navigate to a real app-origin URL and serve it from packaged assets
+        // in shouldInterceptRequest(). This commits more reliably than
+        // loadDataWithBaseURL() on older Android System WebView versions.
+        webView.loadUrl(
+            OFFLINE_BASE_URL + "offline-app.html?apk-offline=" + System.currentTimeMillis()
+        );
+        startupHandler.postDelayed(revealBundledFallback, OFFLINE_COVER_REVEAL_DELAY_MS);
+        if (retryValidatedNetwork) {
+            Log.i(LOG_TAG, "Live recovery returned to fallback; scheduling a bounded retry.");
+            startupHandler.postDelayed(validatedNetworkRecoveryRetry, LIVE_RECOVERY_RETRY_DELAY_MS);
         }
     }
 

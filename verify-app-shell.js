@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260811-apk-center-reveal-r70";
+const expectedBuild = "20260811-apk-center-reveal-r71";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -488,11 +488,12 @@ if (!manifest.includes("ACCESS_NETWORK_STATE")) {
   throw new Error("Android shell must be able to detect a true offline launch.");
 }
 requireText("hasUsableNetwork()", "Android shell must route no-network launches directly to the bundled archive.");
-requireText("webView.loadDataWithBaseURL(", "Android shell must open the lightweight offline archive without a network navigation.");
 requireText("OFFLINE_BASE_URL", "Android shell must keep a stable same-origin base URL for bundled offline data files.");
-requireText('readBundledTextAsset("offline-app.html")', "Android shell must load the lightweight offline document directly from APK assets.");
-requireText("OFFLINE_COVER_REVEAL_DELAY_MS", "Android shell must reveal the offline interface on a bounded timer.");
-requireText("revealBundledFallback", "Android shell must not leave the native title cover over a ready offline archive.");
+requireText('OFFLINE_BASE_URL + "offline-app.html?apk-offline="', "Android shell must navigate the fallback through its intercepted app-origin asset URL.");
+requireText('"/app/offline-app.html".equals(path)', "Android shell must serve the offline document directly from APK assets.");
+requireText("OFFLINE_RENDER_MAX_ATTEMPTS", "Android shell must bound its offline paint checks.");
+requireText("body.innerText.trim().length>20?'painted':'waiting'", "Android shell must verify visible offline content before uncovering the WebView.");
+requireText('showLoadingCover("Saved map is taking longer than expected...")', "Android shell must retain a useful branded surface when the WebView renderer stalls.");
 requireText("LIVE_STARTUP_FALLBACK_DELAY_MS = 22000", "Android shell must let the bounded page-readiness probe finish before falling back on a cold validated connection.");
 requireText("if (!loadingBundledFallback && isAppShellUrl(url))", "Android shell must restart the readiness allowance when the main WebView page actually begins loading.");
 requireText("scheduleLiveStartupFallback();", "Android shell must schedule a bounded live startup fallback.");
@@ -731,10 +732,10 @@ if (!source.includes('currentUrl == null || currentUrl.isEmpty() || "about:blank
 }
 const fallbackMatch = source.match(/private void loadBundledFallback\(String reason\) \{[\s\S]*?\n    \}/);
 if (!fallbackMatch
-    || !fallbackMatch[0].includes('readBundledTextAsset("offline-app.html")')
-    || !fallbackMatch[0].includes("webView.loadDataWithBaseURL(")
+    || !fallbackMatch[0].includes('OFFLINE_BASE_URL + "offline-app.html?apk-offline="')
+    || !source.includes('"/app/offline-app.html".equals(path)')
     || !fallbackMatch[0].includes("OFFLINE_BASE_URL")) {
-  throw new Error("No-signal startup must open the lightweight APK archive without waiting on a network URL.");
+  throw new Error("No-signal startup must open the lightweight APK archive through the intercepted app-origin URL.");
 }
 if (/Thread loader|bundledMobileHtml\(\)/.test(fallbackMatch[0])) {
   throw new Error("No-signal startup must not parse the full bundled online application before showing saved content.");
