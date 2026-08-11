@@ -1,5 +1,16 @@
 # Android APK — Codex Handoff
 
+## August 11 startup-watchdog correction (pending release)
+
+- Reproduced a premature live-to-offline fallback on the Android 16 emulator with the exact signed 0.1.466 release. During a heavily loaded cold start, WebView process creation consumed most of the 22-second watchdog before the main page request began, leaving the actual hosted app only a few seconds before fallback.
+- `MainActivity.onPageStarted` now restarts the bounded readiness watchdog when the trusted app shell actually begins loading. The emulator log proved the fallback moved from roughly 5 seconds after `onPageStarted` to the full allowance (over 22 seconds despite emulator stalls).
+- Hardened the Android-injected panel CSS against a transitional page with neither `document.head` nor `document.documentElement`, removing the observed `appendChild` console exception.
+- Bumped the native shell build ID to `20260811-startup-watchdog-r64`; `node verify-app-shell.js`, `git diff --check`, and `build-debug-apk.ps1` pass.
+- The full offline emulator audit passes: all four region filters, 424/93 saved catalog counts, punctuation-normalized `Mas House` search, Ma's House text-only article, and no online media placeholders.
+- The physical S25 was not attached. The emulator was severely CPU-starved by Google Play Services/WebView and could not complete the hosted live shell before the now-correctly timed fallback, so full online interaction coverage and real Samsung camera/location checks remain unverified.
+
+Safest next action: commit and publish this focused native fix, verify the exact signed release/Obtainium artifact, then repeat cold online startup and camera/location flows on the S25 when USB is available.
+
 ## August 10 Google Play readiness release (pending publication)
 
 - Upgraded the Android build to compile/target API 36 with Android Gradle Plugin 8.10.1 and Gradle 8.11.1. The release workflow now builds both the signed Obtainium APK and a Play-ready AAB, runs release lint/readiness checks, and uploads the AAB as a workflow artifact.

@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260810-play-readiness-r63";
+const expectedBuild = "20260811-startup-watchdog-r64";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -457,6 +457,9 @@ requireText('readBundledTextAsset("offline-app.html")', "Android shell must load
 requireText("OFFLINE_COVER_REVEAL_DELAY_MS", "Android shell must reveal the offline interface on a bounded timer.");
 requireText("revealBundledFallback", "Android shell must not leave the native title cover over a ready offline archive.");
 requireText("LIVE_STARTUP_FALLBACK_DELAY_MS = 22000", "Android shell must let the bounded page-readiness probe finish before falling back on a cold validated connection.");
+requireText("if (!loadingBundledFallback && isAppShellUrl(url))", "Android shell must restart the readiness allowance when the main WebView page actually begins loading.");
+requireText("scheduleLiveStartupFallback();", "Android shell must schedule a bounded live startup fallback.");
+requireText("var root=document.head||document.documentElement;if(!root)return;root.appendChild(s);", "Android shell panel protection must tolerate a transitional page without a DOM root.");
 requireText('showLoadingCover("Opening saved map...")', "Android shell must identify the saved-map fallback while it opens.");
 requireText("registerConnectivityMonitoring();", "Android shell must start runtime connectivity monitoring.");
 requireText("registerDefaultNetworkCallback(connectivityCallback)", "Android shell must monitor the active network on Android 7 and newer.");

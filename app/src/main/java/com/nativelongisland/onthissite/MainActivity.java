@@ -84,7 +84,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260810-play-readiness-r63";
+    static final String APP_VERSION = "20260811-startup-watchdog-r64";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -429,6 +429,12 @@ public class MainActivity extends Activity {
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
                 Log.d(LOG_TAG, "WebView page started: " + safeLogUrl(url));
+                // Give the page its full readiness window. On a busy or cold
+                // device WebView process creation can consume most of a timer
+                // started before loadUrl() reaches the main-frame request.
+                if (!loadingBundledFallback && isAppShellUrl(url)) {
+                    scheduleLiveStartupFallback();
+                }
                 if (isSiteGroundChallengeUrl(url)) {
                     if (shouldIgnoreLifecycleMainFrameReload("siteground-challenge-start")) {
                         view.stopLoading();
@@ -583,7 +589,7 @@ public class MainActivity extends Activity {
                 + "var s=document.createElement('style');"
                 + "s.id='ots-native-panel-exclusivity';"
                 + "s.textContent='body.mobile-detail-open .app{grid-template-rows:auto minmax(0,1fr) 0 0!important;}body.mobile-detail-open .mobile-view-tabs,body.mobile-detail-open .mobile-timeline,body.mobile-detail-open .list-panel{display:none!important;}';"
-                + "(document.head||document.documentElement).appendChild(s);"
+                + "var root=document.head||document.documentElement;if(!root)return;root.appendChild(s);"
                 + "})();",
             null
         );
