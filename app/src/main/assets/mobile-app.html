@@ -161,7 +161,7 @@
       content: "";
       position: absolute;
       inset: 0;
-      background: url("assets/images/long-island-loading-outline.png") center / contain no-repeat;
+      background: url("../images/long-island-loading-outline.png") center / contain no-repeat;
       opacity: 0.72;
       pointer-events: none;
       z-index: 2;
@@ -177,8 +177,8 @@
       display: block;
       overflow: hidden;
       background: linear-gradient(90deg, #2f5a49 0%, #6e9d7c 62%, #f4c95d 100%);
-      -webkit-mask: url("assets/images/long-island-loading-outline.png") center / contain no-repeat;
-      mask: url("assets/images/long-island-loading-outline.png") center / contain no-repeat;
+      -webkit-mask: url("../images/long-island-loading-outline.png") center / contain no-repeat;
+      mask: url("../images/long-island-loading-outline.png") center / contain no-repeat;
       clip-path: inset(0 50% 0 50%);
       animation: loading-island-fill 2200ms cubic-bezier(.2, .74, .22, 1) infinite;
       z-index: 1;
@@ -888,6 +888,62 @@
       box-shadow: 0 5px 12px rgba(20, 31, 23, 0.22);
       font-size: 18px;
       font-weight: 900;
+      line-height: 1;
+    }
+
+    .mobile-calendar-event-marker {
+      display: grid;
+      place-items: center;
+      background: transparent;
+    }
+
+    .mobile-calendar-event-marker .calendar-date-badge {
+      position: relative;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-end;
+      width: 30px;
+      height: 30px;
+      border: 2px solid #315c48;
+      border-radius: 6px;
+      background: #fbf7e9;
+      color: #315c48;
+      box-shadow: 0 4px 14px rgba(31, 49, 37, 0.22);
+      font-weight: 900;
+      line-height: 1;
+      overflow: visible;
+    }
+
+    .mobile-calendar-event-marker .calendar-date-badge::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto;
+      height: 7px;
+      border-radius: 3px 3px 0 0;
+      background: #315c48;
+    }
+
+    .mobile-calendar-event-marker .calendar-date-badge::after {
+      content: "";
+      position: absolute;
+      top: -4px;
+      left: 7px;
+      width: 2px;
+      height: 7px;
+      border-radius: 2px;
+      background: #315c48;
+      box-shadow: 12px 0 0 #315c48;
+    }
+
+    .mobile-calendar-event-marker .calendar-date-badge-date {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      flex: 1 1 auto;
+      place-items: end center;
+      padding-bottom: 3px;
+      font-size: 13px;
       line-height: 1;
     }
 
@@ -13210,13 +13266,32 @@ body.research-question-dialog-open .research-question-prompt,
       .filter(event => event.title && event.center);
   }
 
-  function onThisDayNumber(date = new Date()) {
-    const day = Number(date?.getDate?.());
+  function calendarDate(value = new Date()) {
+    const raw = value && typeof value === "object" && !(value instanceof Date)
+      ? (value.start_datetime || value.start_date || value.activity_feed_date || value.collection_date)
+      : value;
+    if (raw instanceof Date) return raw;
+    if (!raw) return null;
+    const parsed = new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  function calendarDayNumber(value = new Date()) {
+    const day = Number(calendarDate(value)?.getDate?.());
     return Number.isFinite(day) && day >= 1 && day <= 31 ? String(day) : "";
   }
 
+  function calendarBadgeMarkup(value = new Date(), extraClass = "") {
+    const className = ["calendar-date-badge", "on-this-day-badge", extraClass].filter(Boolean).join(" ");
+    return `<span class="${className}" aria-hidden="true"><span class="calendar-date-badge-date on-this-day-badge-date">${calendarDayNumber(value)}</span></span>`;
+  }
+
+  function onThisDayNumber(date = new Date()) {
+    return calendarDayNumber(date);
+  }
+
   function onThisDayCalendarMarkup(date = new Date()) {
-    return `<span class="on-this-day-badge" aria-hidden="true"><span class="on-this-day-badge-date">${onThisDayNumber(date)}</span></span>`;
+    return calendarBadgeMarkup(date);
   }
 
   function roundedRectPath(context, x, y, width, height, radius) {
@@ -13234,7 +13309,7 @@ body.research-question-dialog-open .research-question-prompt,
     context.closePath();
   }
 
-  function addOnThisDayMapImage(map, id = "on-this-day-calendar", date = new Date()) {
+  function addCalendarMapImage(map, id = "calendar-date", value = new Date()) {
     if (!map?.addImage || map.hasImage?.(id) || typeof document === "undefined") return false;
     const pixelRatio = 2;
     const size = 38;
@@ -13277,13 +13352,20 @@ body.research-question-dialog-open .research-question-prompt,
     context.font = "700 15px Arial, sans-serif";
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillText(onThisDayNumber(date), 19, 24);
+    context.fillText(calendarDayNumber(value), 19, 24);
     map.addImage(id, context.getImageData(0, 0, canvas.width, canvas.height), { pixelRatio });
     return true;
   }
 
+  function addOnThisDayMapImage(map, id = "on-this-day-calendar", date = new Date()) {
+    return addCalendarMapImage(map, id, date);
+  }
+
   window.NLI_CALENDAR_UTILS = {
+    addCalendarMapImage,
     addOnThisDayMapImage,
+    calendarBadgeMarkup,
+    calendarDayNumber,
     eventTypeLabel,
     eventDateRange,
     exhibitDateLabel: eventDateRange,
@@ -23784,23 +23866,20 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           const element = document.createElement("button");
           element.type = "button";
           const attachedSite = exhibit.attachedSite || null;
+          const calendarDay = CALENDAR_UTILS.calendarDayNumber(exhibit);
+          const isCalendarBadge = Boolean(calendarDay);
           element.setAttribute("aria-label", `Open event: ${exhibit.title}`);
-          element.style.width = attachedSite ? "27px" : "36px";
-          element.style.height = attachedSite ? "30px" : "36px";
+          element.className = isCalendarBadge ? "mobile-calendar-event-marker" : "mobile-exhibit-marker";
+          element.style.width = "36px";
+          element.style.height = "36px";
           element.style.border = "0";
-          element.style.borderRadius = attachedSite ? "5px" : "0";
-          element.style.background = attachedSite ? "#fffdf7" : `url(${EXHIBIT_MARKER_ICON}) center / contain no-repeat`;
-          element.style.boxShadow = attachedSite ? "0 2px 5px rgba(23,32,25,.25)" : "none";
-          if (attachedSite) {
-            element.style.color = "#315c48";
-            element.style.fontSize = "20px";
-            element.style.lineHeight = "1";
-            element.style.padding = "0";
-            element.style.border = "1.5px solid #315c48";
-            element.textContent = "🗓";
-          }
+          element.style.borderRadius = "0";
+          element.style.background = isCalendarBadge ? "transparent" : `url(${EXHIBIT_MARKER_ICON}) center / contain no-repeat`;
+          element.style.boxShadow = "none";
+          element.style.padding = "0";
+          if (isCalendarBadge) element.innerHTML = CALENDAR_UTILS.calendarBadgeMarkup(exhibit, "calendar-event-badge");
           element.addEventListener("click", () => openExhibit(exhibit));
-          state.exhibitMarkers.set(key, new mapboxgl.Marker({ element, anchor: attachedSite ? "bottom" : "center", offset: attachedSite ? [23, -6] : [0, 0] }).setLngLat(exhibit.center).addTo(state.map));
+          state.exhibitMarkers.set(key, new mapboxgl.Marker({ element, anchor: isCalendarBadge || attachedSite ? "bottom" : "center", offset: attachedSite ? [23, -6] : [0, 0] }).setLngLat(exhibit.center).addTo(state.map));
         });
     }
 

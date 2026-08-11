@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260811-admin-moderation-r67";
+const expectedBuild = "20260811-calendar-marker-r68";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -46,8 +46,16 @@ const bundledLiveRuntime = `${bundledLiveApp}\n${bundledMobileJs}\n${bundledMobi
 const bundledLearningCardUtils = fs.readFileSync(bundledLearningCardUtilsPath, "utf8");
 const bundledResearchQuestionCss = fs.readFileSync(bundledResearchQuestionCssPath, "utf8");
 const bundledSharedSiteUtils = fs.readFileSync(bundledSharedSiteUtilsPath, "utf8");
+const bundledCalendarUtils = fs.readFileSync("app/src/main/assets/assets/js/shared-calendar-utils.js", "utf8");
 const styles = fs.readFileSync(stylesPath, "utf8");
 const launchBackground = fs.readFileSync(launchBackgroundPath, "utf8");
+
+if (!bundledMobileJs.includes("CALENDAR_UTILS.calendarBadgeMarkup(exhibit")
+    || !bundledMobileCss.includes(".mobile-calendar-event-marker .calendar-date-badge")
+    || !bundledCalendarUtils.includes("function calendarBadgeMarkup")
+    || bundledMobileJs.includes('element.textContent = "🗓"')) {
+  throw new Error("APK event markers must use the shared dated calendar badge instead of the old emoji calendar.");
+}
 
 if (!lightweightOfflineApp.includes('class="brand-row"')
     || !lightweightOfflineApp.includes('class="offline-pill">Offline')

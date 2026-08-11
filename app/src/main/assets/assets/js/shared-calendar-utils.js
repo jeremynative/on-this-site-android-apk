@@ -49,13 +49,32 @@
       .filter(event => event.title && event.center);
   }
 
-  function onThisDayNumber(date = new Date()) {
-    const day = Number(date?.getDate?.());
+  function calendarDate(value = new Date()) {
+    const raw = value && typeof value === "object" && !(value instanceof Date)
+      ? (value.start_datetime || value.start_date || value.activity_feed_date || value.collection_date)
+      : value;
+    if (raw instanceof Date) return raw;
+    if (!raw) return null;
+    const parsed = new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  function calendarDayNumber(value = new Date()) {
+    const day = Number(calendarDate(value)?.getDate?.());
     return Number.isFinite(day) && day >= 1 && day <= 31 ? String(day) : "";
   }
 
+  function calendarBadgeMarkup(value = new Date(), extraClass = "") {
+    const className = ["calendar-date-badge", "on-this-day-badge", extraClass].filter(Boolean).join(" ");
+    return `<span class="${className}" aria-hidden="true"><span class="calendar-date-badge-date on-this-day-badge-date">${calendarDayNumber(value)}</span></span>`;
+  }
+
+  function onThisDayNumber(date = new Date()) {
+    return calendarDayNumber(date);
+  }
+
   function onThisDayCalendarMarkup(date = new Date()) {
-    return `<span class="on-this-day-badge" aria-hidden="true"><span class="on-this-day-badge-date">${onThisDayNumber(date)}</span></span>`;
+    return calendarBadgeMarkup(date);
   }
 
   function roundedRectPath(context, x, y, width, height, radius) {
@@ -73,7 +92,7 @@
     context.closePath();
   }
 
-  function addOnThisDayMapImage(map, id = "on-this-day-calendar", date = new Date()) {
+  function addCalendarMapImage(map, id = "calendar-date", value = new Date()) {
     if (!map?.addImage || map.hasImage?.(id) || typeof document === "undefined") return false;
     const pixelRatio = 2;
     const size = 38;
@@ -116,13 +135,20 @@
     context.font = "700 15px Arial, sans-serif";
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillText(onThisDayNumber(date), 19, 24);
+    context.fillText(calendarDayNumber(value), 19, 24);
     map.addImage(id, context.getImageData(0, 0, canvas.width, canvas.height), { pixelRatio });
     return true;
   }
 
+  function addOnThisDayMapImage(map, id = "on-this-day-calendar", date = new Date()) {
+    return addCalendarMapImage(map, id, date);
+  }
+
   window.NLI_CALENDAR_UTILS = {
+    addCalendarMapImage,
     addOnThisDayMapImage,
+    calendarBadgeMarkup,
+    calendarDayNumber,
     eventTypeLabel,
     eventDateRange,
     exhibitDateLabel: eventDateRange,

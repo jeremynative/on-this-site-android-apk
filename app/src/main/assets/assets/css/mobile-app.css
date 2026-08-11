@@ -870,6 +870,62 @@
       line-height: 1;
     }
 
+    .mobile-calendar-event-marker {
+      display: grid;
+      place-items: center;
+      background: transparent;
+    }
+
+    .mobile-calendar-event-marker .calendar-date-badge {
+      position: relative;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-end;
+      width: 30px;
+      height: 30px;
+      border: 2px solid #315c48;
+      border-radius: 6px;
+      background: #fbf7e9;
+      color: #315c48;
+      box-shadow: 0 4px 14px rgba(31, 49, 37, 0.22);
+      font-weight: 900;
+      line-height: 1;
+      overflow: visible;
+    }
+
+    .mobile-calendar-event-marker .calendar-date-badge::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto;
+      height: 7px;
+      border-radius: 3px 3px 0 0;
+      background: #315c48;
+    }
+
+    .mobile-calendar-event-marker .calendar-date-badge::after {
+      content: "";
+      position: absolute;
+      top: -4px;
+      left: 7px;
+      width: 2px;
+      height: 7px;
+      border-radius: 2px;
+      background: #315c48;
+      box-shadow: 12px 0 0 #315c48;
+    }
+
+    .mobile-calendar-event-marker .calendar-date-badge-date {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      flex: 1 1 auto;
+      place-items: end center;
+      padding-bottom: 3px;
+      font-size: 13px;
+      line-height: 1;
+    }
+
     .mobile-more-grid {
       position: fixed;
       top: var(--mobile-more-top, 112px);

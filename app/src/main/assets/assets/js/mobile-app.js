@@ -7342,23 +7342,20 @@
           const element = document.createElement("button");
           element.type = "button";
           const attachedSite = exhibit.attachedSite || null;
+          const calendarDay = CALENDAR_UTILS.calendarDayNumber(exhibit);
+          const isCalendarBadge = Boolean(calendarDay);
           element.setAttribute("aria-label", `Open event: ${exhibit.title}`);
-          element.style.width = attachedSite ? "27px" : "36px";
-          element.style.height = attachedSite ? "30px" : "36px";
+          element.className = isCalendarBadge ? "mobile-calendar-event-marker" : "mobile-exhibit-marker";
+          element.style.width = "36px";
+          element.style.height = "36px";
           element.style.border = "0";
-          element.style.borderRadius = attachedSite ? "5px" : "0";
-          element.style.background = attachedSite ? "#fffdf7" : `url(${EXHIBIT_MARKER_ICON}) center / contain no-repeat`;
-          element.style.boxShadow = attachedSite ? "0 2px 5px rgba(23,32,25,.25)" : "none";
-          if (attachedSite) {
-            element.style.color = "#315c48";
-            element.style.fontSize = "20px";
-            element.style.lineHeight = "1";
-            element.style.padding = "0";
-            element.style.border = "1.5px solid #315c48";
-            element.textContent = "🗓";
-          }
+          element.style.borderRadius = "0";
+          element.style.background = isCalendarBadge ? "transparent" : `url(${EXHIBIT_MARKER_ICON}) center / contain no-repeat`;
+          element.style.boxShadow = "none";
+          element.style.padding = "0";
+          if (isCalendarBadge) element.innerHTML = CALENDAR_UTILS.calendarBadgeMarkup(exhibit, "calendar-event-badge");
           element.addEventListener("click", () => openExhibit(exhibit));
-          state.exhibitMarkers.set(key, new mapboxgl.Marker({ element, anchor: attachedSite ? "bottom" : "center", offset: attachedSite ? [23, -6] : [0, 0] }).setLngLat(exhibit.center).addTo(state.map));
+          state.exhibitMarkers.set(key, new mapboxgl.Marker({ element, anchor: isCalendarBadge || attachedSite ? "bottom" : "center", offset: attachedSite ? [23, -6] : [0, 0] }).setLngLat(exhibit.center).addTo(state.map));
         });
     }
 
