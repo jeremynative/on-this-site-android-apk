@@ -133,7 +133,7 @@
 
   function isPublicActivityComment(comment, options = {}) {
     if (!comment || isLikelyPublicTestComment(comment)) return false;
-    if (isModeratedDeleted(comment)) return true;
+    if (isModeratedDeleted(comment)) return false;
     const normalizeStatus = options.normalizeStatus || normalizeCommentStatus;
     return !["rejected", "deleted"].includes(normalizeStatus(comment));
   }

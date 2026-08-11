@@ -9803,7 +9803,7 @@
             status: "approved",
             moderated_deleted: true,
             moderated_deleted_at: new Date().toISOString(),
-            public_activity: false,
+            public_activity: true,
             member_profile: null,
             author_name: "[deleted]",
             author_email: null,
