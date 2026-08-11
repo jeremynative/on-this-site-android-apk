@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260811-calendar-marker-r68";
+const expectedBuild = "20260811-nearby-startup-r69";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -572,7 +572,8 @@ requireText("window.NLI_APK_SNAPSHOT_MODE=true;", "Android shell must mark the b
 requireText("window.NLI_APK_OFFLINE_TEXT_MODE=true;", "Android shell must mark the bundled fallback as a text-first offline archive.");
 requireText("window.NLI_DISABLE_DIRECTUS_RUNTIME=true;", "Android shell must disable Directus runtime calls in the snapshot APK.");
 requireText("directus.nativelongisland.com", "Android shell must block Directus requests while the APK snapshot is offline.");
-requireText("window.__nliAllowGeoUntil=0;", "Android shell must block geolocation until a dedicated user action allows it.");
+requireText("window.__nliAllowGeoUntil=0;", "Android shell must block a new permission prompt until a dedicated user action allows it.");
+requireText("window.AndroidApp.hasLocationPermission", "Android shell must reuse an already granted location permission during startup.");
 requireText("#locate,#mobile-map-locate,#suggest-use-location", "Android shell must allow the dedicated map location control through the geolocation gate.");
 if (!bundledMobileJs.includes("function isApkSnapshotMode()") || !bundledApp.includes("function isApkSnapshotMode()")) {
   throw new Error("Bundled mobile shells must distinguish live Android mode from offline APK snapshot mode.");
@@ -871,8 +872,10 @@ for (const promoKind of ["event", "on-this-date", "did-you-know", "learning", "q
   requireBundledText(`data-mobile-promo-kind="${promoKind}"`, `Bundled Android app must retain the ${promoKind} daily feature restore bubble.`);
 }
 requireBundledText("function availableMobilePromoKinds()", "Bundled Android app must resolve available daily feature bubbles from current content.");
-requireBundledText("function showRandomMobileStartupSpotlight()", "Bundled Android app must choose no more than one expanded daily feature at startup.");
-requireBundledText("const selected = candidates.filter(() => Math.random() < 0.28);", "Bundled Android daily features must retain independent randomized startup chances.");
+requireBundledText("function showMobilePromo(kind)", "Bundled Android daily feature bubbles must remain explicitly openable.");
+if (bundledApp.includes("showRandomMobileStartupSpotlight") || bundledLiveRuntime.includes("showRandomMobileStartupSpotlight")) {
+  throw new Error("Bundled Android app must not open a random archive feature over Nearby sites during startup.");
+}
 requireBundledText("autoPrompt: false", "Bundled Android app must disable the legacy competing question timer.");
 requireBundledText("showRestore: false", "Bundled Android app must use the unified question restore bubble.");
 requireBundledText('"text-opacity": ["interpolate", ["linear"], ["zoom"], SITE_POINT_LABEL_MIN_ZOOM, 0, SITE_POINT_LABEL_MIN_ZOOM + 0.35, 1]', "Bundled Android point labels must fade in around the local-area zoom threshold.");
@@ -1151,13 +1154,16 @@ if (/profileActivitySynced\s*=\s*includeCommunity\s*&&\s*Boolean\(state\.profile
 }
 requireBundledText('sorted by proximity', "Bundled Android app must label nearby results as proximity sorted.");
 requireBundledText('const STARTUP_LOCATION_ZOOM = NEAR_ME_ZOOM;', "Bundled Android app must open with the Near me zoom level.");
-requireBundledText('if (isNativeAndroidApp()) return false;', "Bundled Android app must wait for an explicit user action before requesting location.");
+requireBundledText('function nativeLocationPermissionGranted()', "Bundled Android app must check the native permission before startup location use.");
+requireBundledText('if (!nativeLocationPermissionGranted()) return false;', "Bundled Android app must not open a new location prompt during startup.");
+requireBundledText('data-find-nearby-sites', "Bundled Android app must provide an explicit location action when permission is unavailable.");
 if (bundledMobileJs.includes('if (nativeAndroid && !isOfflineTextMode()) await requestStartupLocation();')) {
   throw new Error("Bundled Android app must not request location during startup.");
 }
 requireBundledText('mobile-startup-spotlight', "Bundled Android app must include the shared daily feature card.");
-requireBundledText('showRandomMobileStartupSpotlight()', "Bundled Android app must resolve the randomized daily feature after startup.");
-requireBundledText('scheduleMobilePromoStartup();', "Bundled Android app must schedule the daily feature after the map is interactive.");
+if (bundledMobileJs.includes('scheduleMobilePromoStartup();')) {
+  throw new Error("Bundled Android app must not open a random daily feature over Nearby during startup.");
+}
 requireBundledText('fitLongIslandMapView("android-startup-outside-long-island")', "Bundled Android app must use the Long Island overview when startup location is outside the project area.");
 requireBundledText('const SITE_CHECKIN_RADIUS_MILES = 0.05;', "Bundled Android app must require check-ins within about 260 feet.");
 if (!bundledLiveRuntime.includes('aria-label="Search sites, towns, and histories"')) {

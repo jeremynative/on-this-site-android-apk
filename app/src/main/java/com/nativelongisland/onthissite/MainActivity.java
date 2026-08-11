@@ -84,7 +84,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260811-calendar-marker-r68";
+    static final String APP_VERSION = "20260811-nearby-startup-r69";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -1075,11 +1075,13 @@ public class MainActivity extends Activity {
             + "var originalWatch=navigator.geolocation.watchPosition.bind(navigator.geolocation);"
             + "function blocked(error){setTimeout(function(){if(error)error({code:1,message:'Location is available from the Near me button.'});},0);}"
             + "navigator.geolocation.getCurrentPosition=function(success,error,options){"
-                + "if(Date.now()>window.__nliAllowGeoUntil)return blocked(error);"
+                + "var alreadyGranted=window.AndroidApp&&window.AndroidApp.hasLocationPermission&&window.AndroidApp.hasLocationPermission();"
+                + "if(!alreadyGranted&&Date.now()>window.__nliAllowGeoUntil)return blocked(error);"
                 + "return originalGet(success,error,options);"
             + "};"
             + "navigator.geolocation.watchPosition=function(success,error,options){"
-                + "if(Date.now()>window.__nliAllowGeoUntil){blocked(error);return 0;}"
+                + "var alreadyGranted=window.AndroidApp&&window.AndroidApp.hasLocationPermission&&window.AndroidApp.hasLocationPermission();"
+                + "if(!alreadyGranted&&Date.now()>window.__nliAllowGeoUntil){blocked(error);return 0;}"
                 + "return originalWatch(success,error,options);"
             + "};"
         + "})();";
@@ -1812,7 +1814,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private boolean hasLocationPermission() {
+    boolean hasLocationPermission() {
         return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }

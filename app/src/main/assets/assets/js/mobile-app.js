@@ -852,8 +852,6 @@
       mobileStartupSpotlightReturnOnDetailClose: false,
       mobilePromoKind: "",
       mobilePromoPayload: null,
-      mobilePromoStartupScheduled: false,
-      mobilePromoStartupResolved: false,
       researchQuestionInstance: null,
       nearbyRenderLimit: 0,
       searchMapSyncTimer: null,
@@ -1534,19 +1532,7 @@
       if (!response.ok || !registrationRecord?.ok) throw new Error(registrationRecord?.error || "Could not create contributor account request.");
       profile.registrationSynced = Boolean(registrationRecord?.data?.id);
       profile.registrationId = registrationRecord?.data?.id || null;
-      if (profile.registrationSynced) {
-        try {
-          await FEEDBACK_UTILS.sendAccountSignupEmail(
-            { ...(registrationRecord?.data || {}), id: profile.registrationId || registrationRecord?.data?.id },
-            { appUrl: window.location.href, platform: "mobile" }
-          );
-          profile.signupEmailSent = true;
-        } catch (error) {
-          profile.signupEmailSent = false;
-          profile.signupEmailError = "Your account request was saved, but the admin email could not be sent. Please use Feedback to let us know.";
-          console.warn("Account signup email failed:", error);
-        }
-      }
+      profile.verificationEmailSent = profile.registrationSynced;
       const cleanedInviteCode = String(inviteCode || "").trim();
       if (cleanedInviteCode && profile.registrationSynced) {
         try {
@@ -5080,6 +5066,24 @@
           : state.userLocation
             ? `${count} place${count === 1 ? "" : "s"}, sorted by proximity`
             : `${count} place${count === 1 ? "" : "s"}, sorted by name`;
+      const needsNativeNearbyLocation = isNativeAndroidApp()
+        && !state.userLocation
+        && !showingSearch
+        && !state.addressSearchMode;
+      if (needsNativeNearbyLocation) {
+        statusEl.textContent = "Use your location to find the closest sites";
+        listEl.innerHTML = `
+          <div class="site-card empty-state nearby-location-state" role="status">
+            <span class="site-copy">
+              <h2>Find sites near you</h2>
+              <p>Nearby sites will appear here after the app can use your location.</p>
+              <button class="action primary" type="button" data-find-nearby-sites>Find sites near me</button>
+            </span>
+          </div>
+        `;
+        renderSearchSuggestions();
+        return;
+      }
       if (!count) {
         listEl.innerHTML = `
           <div class="site-card empty-state" role="status">
@@ -12705,43 +12709,6 @@
       if (payload.kind === "question") state.researchQuestionInstance?.open?.();
     }
 
-    function showRandomMobileStartupSpotlight() {
-      const candidates = availableMobilePromoKinds();
-      if (!candidates.length) return false;
-      const selected = candidates.filter(() => Math.random() < 0.28);
-      if (!selected.length) return false;
-      return showMobilePromo(selected[Math.floor(Math.random() * selected.length)]);
-    }
-
-    function mobilePromoUiBusy() {
-      return Boolean(
-        detailEl?.classList.contains("open")
-        || appEl?.classList.contains("panel-maximized")
-        || document.querySelector(".sheet.open")
-        || document.querySelector("#language-quiz-modal:not([hidden])")
-        || document.querySelector("#plant-photo-viewer:not([hidden])")
-        || document.body.classList.contains("research-question-dialog-open")
-      );
-    }
-
-    function scheduleMobilePromoStartup(attempt = 0) {
-      if (!isNativeAndroidApp() || state.mobilePromoStartupResolved) return;
-      if (attempt === 0) {
-        if (state.mobilePromoStartupScheduled) return;
-        state.mobilePromoStartupScheduled = true;
-      }
-      window.setTimeout(() => {
-        if (state.mobilePromoStartupResolved) return;
-        if (mobilePromoUiBusy()) {
-          if (attempt < 4) scheduleMobilePromoStartup(attempt + 1);
-          else state.mobilePromoStartupResolved = true;
-          return;
-        }
-        state.mobilePromoStartupResolved = true;
-        showRandomMobileStartupSpotlight();
-      }, attempt === 0 ? 1600 : 900);
-    }
-
     function locationMovedEnough(nextLocation) {
       if (!state.userLocation) return true;
       const miles = milesBetween(state.userLocation, nextLocation);
@@ -12869,8 +12836,20 @@
       });
     }
 
+    function nativeLocationPermissionGranted() {
+      if (!isNativeAndroidApp()) return false;
+      try {
+        return window.AndroidApp?.hasLocationPermission?.() === true;
+      } catch (_) {
+        return false;
+      }
+    }
+
     async function requestStartupLocation() {
-      if (isNativeAndroidApp()) return false;
+      if (isNativeAndroidApp()) {
+        if (!nativeLocationPermissionGranted()) return false;
+        return requestUserLocation({ centerMap: false, silent: true, mapZoom: NEAR_ME_ZOOM });
+      }
       if (state.settings.proximityAlerts) {
         setMobilePanelMode("nearby");
         setNearbyPanelState("default");
@@ -16029,6 +16008,13 @@
         loadMoreNearbyCards();
         return true;
       }
+      const findNearby = target?.closest?.("[data-find-nearby-sites]");
+      if (findNearby) {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        locateUser();
+        return true;
+      }
       const seeMore = target?.closest?.("[data-learning-see-more]");
       if (seeMore) {
         event?.preventDefault?.();
@@ -17181,7 +17167,7 @@
       const originalLabel = registerSubmitBtn.textContent;
       registerSubmitBtn.disabled = true;
       registerSubmitBtn.textContent = "Saving...";
-      showRegisterStatus("Saving account request...");
+      showRegisterStatus("Creating your account and sending a verification email...");
       try {
         const profile = await registerLocalAccount({
           displayName: registerNameEl.value.trim(),
@@ -17193,12 +17179,12 @@
         loginPasswordEl.value = "";
         registerPasswordEl.value = "";
         if (registerInviteCodeEl) registerInviteCodeEl.value = "";
-        const message = profile.signupEmailError || (profile.inviteRedeemed
-          ? "Thank you for registering. Your invite code was accepted and 100 points were awarded to the friend who invited you."
+        const message = profile.inviteRedeemed
+          ? "Check your email to verify and activate your account. Your invite code was accepted and 100 points were awarded to the friend who invited you."
           : profile.inviteError
-            ? `Thank you for registering. We will review your account soon. Invite code note: ${profile.inviteError}`
-            : "Thank you for registering. We will review your account soon.");
-        showRegisterStatus(message, profile.signupEmailError ? "error" : "success");
+            ? `Check your email to verify and activate your account. Invite code note: ${profile.inviteError}`
+            : "Check your email to verify and activate your account.";
+        showRegisterStatus(message, "success");
         showBanner(message);
       } catch (error) {
         showRegisterStatus(error.message || "Could not create registration.", "error");
@@ -17542,6 +17528,7 @@
         // then reveal the live map or text fallback only when it is ready.
         appEl?.classList.add("mobile-map-initializing");
         hideLoadingScreen();
+        if (nativeAndroid) requestStartupLocation();
         await initMap().catch(error => {
           console.warn("Map did not initialize yet.", error);
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
@@ -17586,7 +17573,6 @@
           }
         }
         if (state.selectedSite && !androidLifecycleMapRestored) focusSite(state.selectedSite);
-        scheduleMobilePromoStartup();
         checkDailyHistoryMoment();
         checkNewContentAlerts();
         if (!nativeAndroid) requestStartupLocation();

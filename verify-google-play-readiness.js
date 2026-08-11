@@ -55,8 +55,10 @@ requireMatch(activity, /window\.__nliAllowGeoUntil=0/,
   "Bundled fallback must not grant a startup location-request window.");
 requireMatch(activity, /validateLoadedAppShell\(String url\) \{\s*if \(!isAppShellUrl\(url\)\) return;/,
   "Privacy and account-deletion pages must not be rejected by the app-shell watchdog.");
-requireMatch(mobile, /async function requestStartupLocation\(\) \{\s*if \(isNativeAndroidApp\(\)\) return false;/,
-  "APK location must wait for an explicit user action.");
+requireMatch(mobile, /function nativeLocationPermissionGranted\(\)[\s\S]*?if \(!nativeLocationPermissionGranted\(\)\) return false;[\s\S]*?requestUserLocation\(\{ centerMap: false, silent: true/,
+  "APK must reuse granted location permission without opening a new startup prompt.");
+requireMatch(mobile, /data-find-nearby-sites/,
+  "APK Nearby must offer a dedicated location action instead of showing an alphabetical archive list.");
 forbid(mobile, "if (nativeAndroid && !isOfflineTextMode()) await requestStartupLocation();",
   "APK must not request location during startup.");
 for (const productId of ["support_10", "support_25", "support_50", "support_100", "support_monthly_10", "support_monthly_25", "support_monthly_50", "support_monthly_100"]) {

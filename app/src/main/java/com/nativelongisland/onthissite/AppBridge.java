@@ -35,6 +35,11 @@ class AppBridge {
     }
 
     @JavascriptInterface
+    public boolean hasLocationPermission() {
+        return activity.hasLocationPermission();
+    }
+
+    @JavascriptInterface
     public float getSafeInsetTop() {
         return activity.safeInsetTopCss();
     }
