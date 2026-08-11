@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260811-startup-watchdog-r64";
+const expectedBuild = "20260811-close-control-r65";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";

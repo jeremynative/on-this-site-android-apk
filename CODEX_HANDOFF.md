@@ -1,5 +1,14 @@
 # Android APK — Codex Handoff
 
+## August 11 S25 hardware QA and lowercase close control (publishing)
+
+- Exact signed `0.1.467` was exercised on the connected Samsung S25 Ultra over stable wireless ADB while preserving app data and the signed-in Jeremy Dennis session.
+- Passed on real hardware: cold launch without a blank screen, responsive `Ma's House` type-ahead and Samsung keyboard Search submission, GPS recenter, disabled grey `Checked In!` state, collapsed/full Timeline panel behavior, comment camera capture returning `Photo ready (41 KB)`, AR Story open/cancel, Plant ID camera open/cancel, and compact thumbnail tap restoring the full site header image.
+- The close button already contains lowercase `x`, but its 18px Arial rendering looked uppercase on the S25. The focused UI adjustment sets the site-detail close glyph to 16px while retaining the explicit lowercase transform. The web source and both generated mobile shells are synchronized at web commit `7b79d8d6`.
+- APK shell ID is bumped to `20260811-close-control-r65`; `node verify-app-shell.js`, the public-token scan, `git diff --check`, and `build-debug-apk.ps1` pass.
+
+Safest next action: push this focused APK bundle, wait for the signed Obtainium workflow, install the exact signed release on the S25 without clearing data, and visually confirm the smaller lowercase close glyph.
+
 ## August 11 startup-watchdog correction (pending release)
 
 - Reproduced a premature live-to-offline fallback on the Android 16 emulator with the exact signed 0.1.466 release. During a heavily loaded cold start, WebView process creation consumed most of the 22-second watchdog before the main page request began, leaving the actual hosted app only a few seconds before fallback.
