@@ -1,5 +1,15 @@
 # Android APK — Codex Handoff
 
+## August 11 APK learning-path navigation (publishing)
+
+- Replaced the APK Learn action's hard-coded Knowledgebase route with a mobile-native Learning Paths browser backed by the public `learning_paths` and `learning_path_sites` collections.
+- Bundled 3 public paths and 29 ordered stops for offline use, including path questions, short activities, progress saved on-device, and linked site navigation.
+- Refreshed the offline catalog to the current 439 published sites while retaining the 305 currently published reviewed place-name quotations and their content-safety checks.
+- Synced the mobile runtime, CSS, generated shells, media cache map, and site index/geometry from web commit `8b99446a`; raw Mapbox tokens remain excluded from the APK.
+- APK shell ID is `20260811-mobile-learning-paths-r66`; `node verify-app-shell.js`, the token scan, `git diff --check`, and `build-debug-apk.ps1` pass.
+
+Safest next action: push this focused APK bundle, wait for the signed Obtainium release, install that exact signed APK on the S25 without clearing data, and verify More -> Learn opens the 3 guided paths rather than Knowledgebase.
+
 ## August 11 S25 hardware QA and lowercase close control (publishing)
 
 - Exact signed `0.1.467` was exercised on the connected Samsung S25 Ultra over stable wireless ADB while preserving app data and the signed-in Jeremy Dennis session.

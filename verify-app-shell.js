@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260811-close-control-r65";
+const expectedBuild = "20260811-mobile-learning-paths-r66";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -122,21 +122,22 @@ function verifyGeneralPlaceNameQuotes(document, label) {
   const payload = JSON.parse(match[1]);
   const placeNames = (Array.isArray(payload.sites) ? payload.sites : [])
     .filter(site => site.site_type === "placename");
-  if (placeNames.length !== 306) {
-    throw new Error(`${label} must contain 306 place-name listings; found ${placeNames.length}.`);
+  if (placeNames.length !== 321) {
+    throw new Error(`${label} must contain 321 place-name listings; found ${placeNames.length}.`);
   }
 
-  const quotes = placeNames.map(site => {
+  const quotedPlaceNames = placeNames.filter(site => /<blockquote class="place-name-quote">/.test(String(site.translation_content || "")));
+  if (quotedPlaceNames.length !== 305) {
+    throw new Error(`${label} must retain the 305 currently published reviewed place-name quotations; found ${quotedPlaceNames.length}.`);
+  }
+  const quotes = quotedPlaceNames.map(site => {
     const quoteMatch = String(site.translation_content || "")
       .match(/<blockquote class="place-name-quote">\s*<p>([\s\S]*?)<\/p>/);
-    if (!quoteMatch) {
-      throw new Error(`${label} is missing a place-name quotation for ${site.slug}.`);
-    }
     return { slug: site.slug, text: decodeQuoteHtml(quoteMatch[1]) };
   });
   const normalized = quotes.map(({ text }) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim());
-  if (new Set(normalized).size !== 306) {
-    throw new Error(`${label} must contain 306 distinct place-name quotations.`);
+  if (new Set(normalized).size !== 305) {
+    throw new Error(`${label} must retain 305 distinct reviewed place-name quotations.`);
   }
 
   const subjectPattern = /\b(?:geographic(?:al)? names?|place[- ]names?|placenames|toponym\w*|names?|named|namer|naming|nomenclature|gazetteer)\b/i;
@@ -172,6 +173,23 @@ if (bundledTimeline.length !== 1375) {
 const bundledSourceRecords = bundledTimeline.filter(event => !(event?.source_type && (event?.source_slug || event?.source_id)));
 if (bundledSourceRecords.length !== 288) {
   throw new Error(`Bundled Android fallback must retain 288 unlinked public source records; found ${bundledSourceRecords.length}.`);
+}
+
+const bundledMobileDataMatch = bundledApp.match(/window\.NLI_MOBILE_DATA\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
+const bundledMobileData = JSON.parse(bundledMobileDataMatch[1]);
+if (!Array.isArray(bundledMobileData.learningPaths) || bundledMobileData.learningPaths.length !== 3) {
+  throw new Error(`Bundled Android fallback must contain 3 public learning paths; found ${bundledMobileData.learningPaths?.length || 0}.`);
+}
+if (!Array.isArray(bundledMobileData.learningPathSites) || bundledMobileData.learningPathSites.length !== 29) {
+  throw new Error(`Bundled Android fallback must contain 29 learning-path stops; found ${bundledMobileData.learningPathSites?.length || 0}.`);
+}
+for (const runtime of [bundledApp, bundledLiveRuntime]) {
+  if (!runtime.includes('openAppPage("learn")')
+      || !runtime.includes("function openMobileLearningPathsPanel")
+      || !runtime.includes("function openMobileLearningPath(pathSlug)")
+      || !runtime.includes("data-mobile-learning-path-complete")) {
+    throw new Error("Bundled Android shells must route Learn to guided learning paths with stop progress.");
+  }
 }
 
 function requireText(text, message) {

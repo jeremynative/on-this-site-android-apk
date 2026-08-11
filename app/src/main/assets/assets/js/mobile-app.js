@@ -810,6 +810,11 @@
       mediaMap: window.NLI_MOBILE_MEDIA_MAP || {},
       blogPosts: [],
       blogPostsLoaded: false,
+      learningPathRows: [],
+      learningPathSiteRows: [],
+      learningPaths: [],
+      learningPathBySlug: new Map(),
+      learningPathsLoaded: false,
       siteDetailCache: new Map(),
       wikiDetailCache: new Map(),
       timelineDetailCache: new Map(),
@@ -2112,6 +2117,16 @@
       return CALENDAR_UTILS.isExhibitActive(exhibit, { normalizeText, localDateKey });
     }
 
+    function isExhibitCurrentOrUpcoming(exhibit) {
+      if (isExhibitActive(exhibit)) return true;
+      const status = normalizeText(exhibit?.status || exhibit?.on_view_status || "");
+      if (status && !/published|current|active|on view|permanent/.test(status)) return false;
+      const today = localDateKey();
+      const start = String(exhibit?.start_datetime || exhibit?.start_date || "").slice(0, 10);
+      const end = String(exhibit?.end_datetime || exhibit?.end_date || "").slice(0, 10);
+      return Boolean(start && start >= today && (!end || end >= today));
+    }
+
     function exhibitHasSiteMapPin(exhibit) {
       const linkedSlug = exhibit?.related_site_slug || exhibit?.source_slug || "";
       const exhibitSlug = exhibit?.slug || "";
@@ -2122,7 +2137,7 @@
     }
 
     function shouldShowExhibitMarker(exhibit) {
-      return state.settings.exhibits && isExhibitActive(exhibit) && !exhibitHasSiteMapPin(exhibit);
+      return state.settings.exhibits && isExhibitCurrentOrUpcoming(exhibit);
     }
 
     function collectCoordinates(value, output) {
@@ -2770,7 +2785,11 @@
 
     function hideLoadingScreen() {
       loadingScreenEl?.classList.add("hidden");
-      if (loadingScreenEl) loadingScreenEl.hidden = true;
+      if (!loadingScreenEl) return;
+      const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+      window.setTimeout(() => {
+        loadingScreenEl.hidden = true;
+      }, reducedMotion ? 0 : 380);
     }
 
     function showRegisterStatus(message, status = "") {
@@ -3208,6 +3227,8 @@
         state.wikiArticles = (window.NLI_MOBILE_DATA.wikiArticles || []).map(sanitizePublicWikiArticle);
         state.blogPosts = (window.NLI_MOBILE_DATA.blogPosts || []).map(normalizeBlogPost);
         state.blogPostsLoaded = state.blogPosts.length > 0;
+        state.learningPathRows = window.NLI_MOBILE_DATA.learningPaths || [];
+        state.learningPathSiteRows = window.NLI_MOBILE_DATA.learningPathSites || [];
         state.wikiById = new Map(state.wikiArticles.map(article => [Number(article.id), article]));
         state.wikiBySlug = new Map(state.wikiArticles.map(article => [article.slug, article]));
         state.layers = window.NLI_MOBILE_DATA.layers || [];
@@ -3789,7 +3810,10 @@
 
     function prepareExhibits() {
       const prepared = state.exhibits
-        .map(exhibit => ({ ...exhibit, center: geometryCenter(exhibit.geojson) }))
+        .map(exhibit => {
+          const attachedSite = state.siteBySlug.get(exhibit.related_site_slug || exhibit.source_slug || "") || null;
+          return { ...exhibit, attachedSite, center: geometryCenter(exhibit.geojson) || attachedSite?.center || null };
+        })
         .filter(exhibit => exhibit.title);
       state.eventById = new Map(prepared.map(exhibit => [Number(exhibit.id), exhibit]));
       state.eventBySlug = new Map(prepared.map(exhibit => [exhibit.slug || "", exhibit]));
@@ -7317,15 +7341,24 @@
           if (state.exhibitMarkers.has(key)) return;
           const element = document.createElement("button");
           element.type = "button";
-          element.setAttribute("aria-label", exhibit.title);
-          element.style.width = "36px";
-          element.style.height = "36px";
+          const attachedSite = exhibit.attachedSite || null;
+          element.setAttribute("aria-label", `Open event: ${exhibit.title}`);
+          element.style.width = attachedSite ? "27px" : "36px";
+          element.style.height = attachedSite ? "30px" : "36px";
           element.style.border = "0";
-          element.style.borderRadius = "0";
-          element.style.background = `url(${EXHIBIT_MARKER_ICON}) center / contain no-repeat`;
-          element.style.boxShadow = "none";
+          element.style.borderRadius = attachedSite ? "5px" : "0";
+          element.style.background = attachedSite ? "#fffdf7" : `url(${EXHIBIT_MARKER_ICON}) center / contain no-repeat`;
+          element.style.boxShadow = attachedSite ? "0 2px 5px rgba(23,32,25,.25)" : "none";
+          if (attachedSite) {
+            element.style.color = "#315c48";
+            element.style.fontSize = "20px";
+            element.style.lineHeight = "1";
+            element.style.padding = "0";
+            element.style.border = "1.5px solid #315c48";
+            element.textContent = "🗓";
+          }
           element.addEventListener("click", () => openExhibit(exhibit));
-          state.exhibitMarkers.set(key, new mapboxgl.Marker({ element, anchor: "center" }).setLngLat(exhibit.center).addTo(state.map));
+          state.exhibitMarkers.set(key, new mapboxgl.Marker({ element, anchor: attachedSite ? "bottom" : "center", offset: attachedSite ? [23, -6] : [0, 0] }).setLngLat(exhibit.center).addTo(state.map));
         });
     }
 
@@ -11414,6 +11447,194 @@
       `);
     }
 
+    const MOBILE_LEARNING_PATH_PROGRESS_KEY = "nli-mobile-learning-path-progress-v1";
+
+    function mobileLearningPathProgress() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(MOBILE_LEARNING_PATH_PROGRESS_KEY) || "{}");
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function completedMobileLearningPathStops(pathSlug) {
+      const values = mobileLearningPathProgress()[String(pathSlug || "")];
+      return new Set(Array.isArray(values) ? values.map(String) : []);
+    }
+
+    function toggleMobileLearningPathStop(pathSlug, stopId) {
+      const slug = String(pathSlug || "");
+      const id = String(stopId || "");
+      if (!slug || !id) return false;
+      const progress = mobileLearningPathProgress();
+      const completed = new Set(Array.isArray(progress[slug]) ? progress[slug].map(String) : []);
+      if (completed.has(id)) completed.delete(id);
+      else completed.add(id);
+      progress[slug] = [...completed];
+      try {
+        localStorage.setItem(MOBILE_LEARNING_PATH_PROGRESS_KEY, JSON.stringify(progress));
+      } catch {}
+      return completed.has(id);
+    }
+
+    function mobileLearningPathQuestions(value) {
+      if (Array.isArray(value)) return value.map(publicCleanText).filter(Boolean);
+      return String(value || "").split(/\n|;/).map(publicCleanText).filter(Boolean);
+    }
+
+    async function loadMobileLearningPaths(options = {}) {
+      if (state.learningPathsLoaded && !options.fresh) return state.learningPaths;
+      let pathRows = Array.isArray(state.learningPathRows) ? state.learningPathRows : [];
+      let stopRows = Array.isArray(state.learningPathSiteRows) ? state.learningPathSiteRows : [];
+      if (!pathRows.length || options.fresh) {
+        try {
+          const [pathResponse, stopResponse] = await Promise.all([
+            fetchJson("/items/learning_paths?limit=-1&filter[is_public][_eq]=true&sort=sort_order,title&fields=id,title,slug,short_description,long_intro,theme,estimated_time_minutes,recommended_grades,cover_image,icon,badge_name,key_questions,sensitivity_level,is_public,sort_order", { cacheKey: "mobile-learning-paths", ttl: 300000, fresh: Boolean(options.fresh) }),
+            fetchJson("/items/learning_path_sites?limit=-1&sort=sort_order,stop_number&fields=id,learning_path_id,site_id,stop_number,stop_title_override,why_this_stop_matters,path_question,short_activity,sensitive_note,show_exact_location,is_required,sort_order", { cacheKey: "mobile-learning-path-stops", ttl: 300000, fresh: Boolean(options.fresh) })
+          ]);
+          if (pathResponse.data?.length) pathRows = pathResponse.data;
+          if (stopResponse.data?.length) stopRows = stopResponse.data;
+          state.learningPathRows = pathRows;
+          state.learningPathSiteRows = stopRows;
+        } catch (error) {
+          if (!pathRows.length) throw error;
+        }
+      }
+      const stopsByPath = new Map();
+      stopRows.forEach((row, index) => {
+        const pathId = String(relationId(row.learning_path_id) || "");
+        if (!pathId) return;
+        const siteId = Number(relationId(row.site_id));
+        const site = Number.isFinite(siteId) ? state.siteById.get(siteId) || null : null;
+        const stop = {
+          ...row,
+          id: String(row.id || `${pathId}-${index + 1}`),
+          site,
+          stop_number: Number(row.stop_number || row.sort_order || index + 1),
+          sort_order: Number(row.sort_order || row.stop_number || index + 1),
+          title: publicCleanText(row.stop_title_override || site?.title || "Learning stop"),
+          why: publicCleanText(row.why_this_stop_matters || ""),
+          question: publicCleanText(row.path_question || ""),
+          activity: publicCleanText(row.short_activity || ""),
+          sensitiveNote: publicCleanText(row.sensitive_note || "")
+        };
+        if (!stopsByPath.has(pathId)) stopsByPath.set(pathId, []);
+        stopsByPath.get(pathId).push(stop);
+      });
+      state.learningPaths = pathRows
+        .filter(row => row?.is_public !== false && row?.slug && row?.title)
+        .map((row, index) => ({
+          ...row,
+          id: String(row.id || row.slug),
+          slug: String(row.slug),
+          title: publicCleanText(row.title),
+          summary: publicCleanText(row.short_description || row.long_intro || ""),
+          introduction: publicCleanText(row.long_intro || row.short_description || ""),
+          theme: publicCleanText(row.theme || ""),
+          estimatedMinutes: Number(row.estimated_time_minutes || 0),
+          recommendedGrades: publicCleanText(row.recommended_grades || ""),
+          badgeName: publicCleanText(row.badge_name || ""),
+          keyQuestions: mobileLearningPathQuestions(row.key_questions),
+          sort_order: Number(row.sort_order || index + 1),
+          stops: (stopsByPath.get(String(row.id)) || []).sort((a, b) => a.stop_number - b.stop_number || a.sort_order - b.sort_order)
+        }))
+        .filter(path => path.stops.length)
+        .sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title));
+      state.learningPathBySlug = new Map(state.learningPaths.map(path => [path.slug, path]));
+      state.learningPathsLoaded = true;
+      return state.learningPaths;
+    }
+
+    function mobileLearningPathCardHtml(path, index) {
+      const completed = completedMobileLearningPathStops(path.slug).size;
+      const meta = [
+        path.estimatedMinutes ? `${path.estimatedMinutes} min` : "",
+        path.recommendedGrades || "",
+        `${completed}/${path.stops.length} stops complete`
+      ].filter(Boolean).join(" · ");
+      return `
+        <button class="site-card mobile-learning-path-card" type="button" data-mobile-learning-path-open="${escapeHtml(path.slug)}">
+          <span class="thumb empty">${escapeHtml(String(index + 1))}</span>
+          <span>
+            <h2>${escapeHtml(path.title)}</h2>
+            <p>${escapeHtml(path.summary || "Open this guided learning path.")}</p>
+            <small>${escapeHtml(meta)}</small>
+          </span>
+        </button>
+      `;
+    }
+
+    async function openMobileLearningPathsPanel(options = {}) {
+      detailTitleEl.innerHTML = `<h2>Learning Paths</h2><p class="detail-meta">Guided learning</p>`;
+      detailBodyEl.innerHTML = `<p class="summary">Loading guided learning paths...</p>`;
+      detailEl.classList.add("open");
+      syncMobilePanelAccessibility();
+      try {
+        const paths = await loadMobileLearningPaths(options);
+        openInfoPanel("Learning Paths", `${paths.length} guided paths`, `
+          <p class="summary">Choose a path to move through connected places, questions, and short activities. Your completed stops are saved on this device.</p>
+          <section class="section compact-list mobile-learning-path-list">
+            ${paths.map(mobileLearningPathCardHtml).join("") || `<p class="summary">No public learning paths are available yet.</p>`}
+          </section>
+        `);
+      } catch (error) {
+        console.warn("Learning paths are unavailable.", error);
+        openInfoPanel("Learning Paths", "Temporarily unavailable", `
+          <p class="summary">The guided paths could not be loaded. Try again when the app is online.</p>
+          <button class="action secondary" type="button" data-mobile-learning-path-retry>Try again</button>
+        `);
+      }
+    }
+
+    async function openMobileLearningPath(pathSlug) {
+      if (!state.learningPathsLoaded) await loadMobileLearningPaths();
+      const path = state.learningPathBySlug.get(String(pathSlug || ""));
+      if (!path) {
+        showBanner("That learning path is not available yet.");
+        return;
+      }
+      const completed = completedMobileLearningPathStops(path.slug);
+      const questions = path.keyQuestions.length ? `
+        <section class="section mobile-learning-path-questions">
+          <h3>Questions to carry with you</h3>
+          <ul>${path.keyQuestions.map(question => `<li>${escapeHtml(question)}</li>`).join("")}</ul>
+        </section>
+      ` : "";
+      openInfoPanel(path.title, `${completed.size} of ${path.stops.length} stops complete`, `
+        <div class="actions mobile-learning-path-top-actions">
+          <button class="action secondary" type="button" data-mobile-learning-path-back>All learning paths</button>
+        </div>
+        <section class="section mobile-learning-path-intro">
+          ${path.theme ? `<p class="section-kicker">${escapeHtml(path.theme)}</p>` : ""}
+          <p class="summary">${escapeHtml(path.introduction || path.summary)}</p>
+          <p class="detail-meta">${escapeHtml([path.estimatedMinutes ? `${path.estimatedMinutes} minutes` : "", path.recommendedGrades, path.badgeName ? `Badge: ${path.badgeName}` : ""].filter(Boolean).join(" · "))}</p>
+          <progress value="${completed.size}" max="${path.stops.length}" aria-label="${escapeHtml(`${completed.size} of ${path.stops.length} learning path stops complete`)}"></progress>
+        </section>
+        ${questions}
+        <section class="mobile-learning-path-stops" aria-label="Learning path stops">
+          ${path.stops.map(stop => {
+            const isComplete = completed.has(String(stop.id));
+            return `
+              <article class="section mobile-learning-path-stop${isComplete ? " is-complete" : ""}">
+                <p class="section-kicker">Stop ${escapeHtml(String(stop.stop_number))}${stop.is_required === false ? " · Optional" : ""}</p>
+                <h3>${escapeHtml(stop.title)}</h3>
+                ${stop.why ? `<p>${escapeHtml(stop.why)}</p>` : ""}
+                ${stop.question ? `<p><strong>Think about:</strong> ${escapeHtml(stop.question)}</p>` : ""}
+                ${stop.activity ? `<p><strong>Try this:</strong> ${escapeHtml(stop.activity)}</p>` : ""}
+                ${stop.sensitiveNote ? `<p class="detail-meta">${escapeHtml(stop.sensitiveNote)}</p>` : ""}
+                ${stop.show_exact_location === false ? `<p class="detail-meta">Use the broad public location shown in the listing.</p>` : ""}
+                <div class="actions">
+                  ${stop.site?.slug ? `<button class="action" type="button" data-slug="${escapeHtml(stop.site.slug)}">Open stop</button>` : `<span class="detail-meta">Linked place unavailable.</span>`}
+                  <button class="action secondary" type="button" data-mobile-learning-path-complete="${escapeHtml(stop.id)}" data-mobile-learning-path-slug="${escapeHtml(path.slug)}">${isComplete ? "Completed" : "Mark complete"}</button>
+                </div>
+              </article>
+            `;
+          }).join("")}
+        </section>
+      `);
+    }
+
     async function openKnowledgebasePanel() {
       detailTitleEl.innerHTML = `<h2>Knowledgebase</h2><p class="detail-meta">Articles</p>`;
       detailBodyEl.innerHTML = `<p class="summary">Loading knowledgebase articles...</p>`;
@@ -11905,13 +12126,14 @@
     async function openAppPage(page, options = {}) {
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
       const routePage = String(page || "").replace(/^page-/, "");
-      if (["home", "about", "contact", "support", "support-admin", "browse", "knowledgebase", "blog", "native-plants"].includes(routePage)) {
+      if (["home", "about", "contact", "support", "support-admin", "browse", "learn", "knowledgebase", "blog", "native-plants"].includes(routePage)) {
         if (routePage === "home") openHomePanel();
         if (routePage === "about") openAboutPanel();
         if (routePage === "contact") openContactPanel();
         if (routePage === "support") openSupportPanel();
         if (routePage === "support-admin") await openSupportAdminPanel();
         if (routePage === "browse") openBrowsePanel();
+        if (routePage === "learn") await openMobileLearningPathsPanel();
         if (routePage === "knowledgebase") await openKnowledgebasePanel();
         if (routePage === "blog") await openBlogPanel();
         if (routePage === "native-plants") openNativePlantsGuide();
@@ -14012,7 +14234,9 @@
               authorName: profile?.display_name || comment.author_name || "Contributor"
             }),
             preview: plantFields ? publicCleanText(`${plantFields.name} - ${plantFields.vocabulary || plantFields.identification}`) : publicCleanText(comment.comment),
-            date: comment.created_at
+            date: comment.created_at,
+            image: directusAssetUrl(comment.comment_image),
+            imageFallback: ""
           };
         });
       const suggestions = (state.siteSuggestions || [])
@@ -15989,6 +16213,34 @@
       if (event.target === plantPhotoViewerEl) closePlantPhotoViewer();
     });
     detailBodyEl.addEventListener("click", event => {
+      const learningPathOpen = event.target.closest("[data-mobile-learning-path-open]");
+      if (learningPathOpen?.dataset.mobileLearningPathOpen) {
+        event.preventDefault();
+        openMobileLearningPath(learningPathOpen.dataset.mobileLearningPathOpen);
+        return;
+      }
+      if (event.target.closest("[data-mobile-learning-path-back]")) {
+        event.preventDefault();
+        openMobileLearningPathsPanel();
+        return;
+      }
+      if (event.target.closest("[data-mobile-learning-path-retry]")) {
+        event.preventDefault();
+        state.learningPathsLoaded = false;
+        openMobileLearningPathsPanel({ fresh: true });
+        return;
+      }
+      const learningPathComplete = event.target.closest("[data-mobile-learning-path-complete]");
+      if (learningPathComplete?.dataset.mobileLearningPathComplete && learningPathComplete.dataset.mobileLearningPathSlug) {
+        event.preventDefault();
+        const completed = toggleMobileLearningPathStop(
+          learningPathComplete.dataset.mobileLearningPathSlug,
+          learningPathComplete.dataset.mobileLearningPathComplete
+        );
+        showBanner(completed ? "Learning stop completed." : "Learning stop marked incomplete.");
+        openMobileLearningPath(learningPathComplete.dataset.mobileLearningPathSlug);
+        return;
+      }
       const heroDot = event.target.closest("[data-site-hero-dot]");
       if (heroDot) {
         event.preventDefault();
@@ -16624,8 +16876,7 @@
     mobileLearnOpenBtn?.addEventListener("click", () => {
       localStorage.removeItem("nli-kid-mode");
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
-      openAppPage("knowledgebase");
-      showBanner("Learning articles opened.");
+      openAppPage("learn");
     });
     suggestSiteOpenBtn.addEventListener("click", () => {
       if (!requireRegisteredContributor()) return;

@@ -81,14 +81,22 @@
       box-sizing: border-box;
       background: linear-gradient(180deg, #e8f4ee 0%, #f7faf6 58%, #d9edf3 100%);
       color: var(--ink);
-      transition: opacity 220ms ease, visibility 220ms ease;
+      transition: opacity 360ms cubic-bezier(.2, .72, .2, 1), visibility 360ms ease;
     }
 
     .loading-screen.hidden {
-      display: none !important;
       visibility: hidden !important;
       opacity: 0 !important;
       pointer-events: none;
+    }
+
+    .loading-screen .loading-card {
+      transition: opacity 280ms ease, transform 360ms cubic-bezier(.2, .72, .2, 1);
+    }
+
+    .loading-screen.hidden .loading-card {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.985);
     }
 
     .loading-card {
@@ -139,14 +147,7 @@
     }
 
     .long-island-loader::after {
-      content: "";
-      position: absolute;
-      inset: -1px;
-      background: rgba(251, 252, 250, 0.98);
-      transform: translateX(0);
-      animation: loading-island-fill 2400ms cubic-bezier(.2, .74, .22, 1) infinite;
-      pointer-events: none;
-      z-index: 4;
+      display: none;
     }
 
     .long-island-loader span {
@@ -157,6 +158,8 @@
       background: linear-gradient(90deg, #2f5a49 0%, #6e9d7c 62%, #f4c95d 100%);
       -webkit-mask: url("../images/long-island-loading-outline.png") center / contain no-repeat;
       mask: url("../images/long-island-loading-outline.png") center / contain no-repeat;
+      clip-path: inset(0 50% 0 50%);
+      animation: loading-island-fill 2200ms cubic-bezier(.2, .74, .22, 1) infinite;
       z-index: 1;
     }
 
@@ -171,15 +174,14 @@
 
     @keyframes loading-island-fill {
       0% {
-        transform: translateX(0);
+        clip-path: inset(0 50% 0 50%);
       }
-      52%,
-      82% {
-        transform: translateX(101%);
+      58%,
+      78% {
+        clip-path: inset(0 0 0 0);
       }
-      82.01%,
       100% {
-        transform: translateX(0);
+        clip-path: inset(0 50% 0 50%);
       }
     }
 
@@ -200,12 +202,18 @@
 
     @media (prefers-reduced-motion: reduce) {
       .long-island-loader::after,
+      .long-island-loader span,
       .long-island-loader span::after {
         animation: none;
       }
 
-      .long-island-loader::after {
-        display: none;
+      .long-island-loader span {
+        clip-path: none;
+      }
+
+      .loading-screen,
+      .loading-screen .loading-card {
+        transition-duration: 1ms !important;
       }
     }
 
@@ -5258,6 +5266,69 @@
       border-top: 1px solid var(--line);
       padding-top: 12px;
       margin-top: 14px;
+    }
+
+    .section-kicker {
+      margin: 0 0 5px;
+      color: var(--accent-strong);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .mobile-learning-path-list,
+    .mobile-learning-path-stops {
+      display: grid;
+      gap: 10px;
+    }
+
+    .mobile-learning-path-card {
+      margin: 0;
+    }
+
+    .mobile-learning-path-card small {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 750;
+    }
+
+    .mobile-learning-path-intro progress {
+      width: 100%;
+      height: 12px;
+      margin-top: 8px;
+      accent-color: var(--accent);
+    }
+
+    .mobile-learning-path-questions ul {
+      display: grid;
+      gap: 6px;
+      margin: 8px 0 0;
+      padding-left: 20px;
+    }
+
+    .mobile-learning-path-stop {
+      margin-top: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .mobile-learning-path-stop.is-complete {
+      border-color: rgba(73, 111, 93, 0.45);
+      background: rgba(238, 245, 240, 0.82);
+    }
+
+    .mobile-learning-path-stop h3,
+    .mobile-learning-path-stop p {
+      margin-top: 0;
+    }
+
+    .mobile-learning-path-stop .actions {
+      margin-top: 10px;
     }
 
     .frontend-content-editor {
