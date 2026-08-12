@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-map-unread-placement-r79";
+const expectedBuild = "20260812-notifications-menu-r80";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -251,6 +251,8 @@ function requireBundledPattern(pattern, message) {
 }
 
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
+requireBundledText('<button class="ghost-button" id="settings-open" type="button">Notifications</button>', "Bundled Android menu must label the settings action Notifications.");
+forbidBundledText('<button class="ghost-button" id="settings-open" type="button">Alerts</button>', "Bundled Android menu must not use the old Alerts label.");
 for (const setting of [
   "settings.setAllowFileAccess(false)",
   "settings.setAllowFileAccessFromFileURLs(false)",
