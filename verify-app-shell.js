@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-knowledgebase-badge-r78";
+const expectedBuild = "20260812-map-unread-placement-r79";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1069,7 +1069,11 @@ requireBundledText('data-mobile-activity-dismiss', "Bundled Android activity car
 requireBundledText('mobile-site-unread-badges', "Bundled Android map must expose per-site unread badges.");
 requireBundledPattern(/function ensureMobileUnreadBadgeImages\(\)[\s\S]*?canvas\.width\s*=\s*28[\s\S]*?context\.arc\(14,\s*14,\s*12[\s\S]*?context\.fillText\(label,\s*14,\s*14\.5\)[\s\S]*?pixelRatio:\s*2/, "Bundled Android unread numbers must be baked into compact outline-free icons.");
 requireBundledPattern(/id:\s*"mobile-site-unread-badges"[\s\S]*?type:\s*"symbol"[\s\S]*?"icon-image":\s*\["get",\s*"unread_icon"\][\s\S]*?"icon-size":\s*1/, "Bundled Android point unread badges must use their numbered icon.");
-requireBundledPattern(/id:\s*`mobile-\$\{kind\}-unread-badges`[\s\S]*?type:\s*"symbol"[\s\S]*?"icon-image":\s*\["get",\s*"unread_icon"\]/, "Bundled Android polygon unread badges must use their numbered icon.");
+requireBundledPattern(/id:\s*"mobile-detail-labels-unread"[\s\S]*?"text-field":\s*\["get",\s*"title"\][\s\S]*?"icon-image":\s*\["get",\s*"unread_icon"\][\s\S]*?"icon-offset":\s*\["interpolate"/, "Bundled Android detail polygons must render their title and numbered badge in one symbol.");
+requireBundledPattern(/id:\s*"mobile-territory-labels-unread"[\s\S]*?"text-field":\s*\["get",\s*"title"\][\s\S]*?"icon-image":\s*\["get",\s*"unread_icon"\][\s\S]*?"icon-offset":\s*\["interpolate"/, "Bundled Android territory polygons must render their title and numbered badge in one symbol.");
+if (/id:\s*`mobile-\$\{kind\}-unread-badges`/.test(bundledMobileJs)) {
+  throw new Error("Bundled Android polygon unread badges must not exist independently from their visible title.");
+}
 requireBundledPattern(/function promoteMobileUnreadBadgeLayers\(\)[\s\S]*?badgeLayers\.forEach\(layerId[\s\S]*?state\.map\.moveLayer\(layerId\)/, "Bundled Android numbered unread icons must stay above map content.");
 requireBundledPattern(/unread_icon:\s*mobileUnreadCountIcon\(unreadCount\)/, "Bundled Android map features must carry a numbered unread icon key.");
 requireBundledText('data-mobile-knowledgebase-unread-badge', "Bundled Android Knowledgebase must expose its unread count.");

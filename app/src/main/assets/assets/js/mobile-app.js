@@ -2287,6 +2287,32 @@
       state.mapSourceRevision += 1;
     }
 
+    function polygonUnreadBadgeOffset(title, fontSize, maxWidthEm = 8, textOffsetEm = 0) {
+      const words = String(title || "").trim().split(/\s+/).filter(Boolean);
+      const characterWidthEm = 0.56;
+      const lines = [];
+      let lineWidth = 0;
+      words.forEach(word => {
+        const wordWidth = Math.max(0.8, word.length * characterWidthEm);
+        const nextWidth = lineWidth ? lineWidth + characterWidthEm + wordWidth : wordWidth;
+        if (lineWidth && nextWidth > maxWidthEm) {
+          lines.push(lineWidth);
+          lineWidth = wordWidth;
+        } else {
+          lineWidth = nextWidth;
+        }
+      });
+      if (lineWidth || !lines.length) lines.push(lineWidth || 1);
+      const safeFontSize = Math.max(8, Number(fontSize) || 10);
+      const labelWidth = Math.min(maxWidthEm, Math.max(...lines)) * safeFontSize;
+      const labelHeight = lines.length * safeFontSize * 1.16;
+      const badgeRadius = 6;
+      return [
+        Math.round(labelWidth / 2 + badgeRadius),
+        Math.round(textOffsetEm * safeFontSize - labelHeight / 2 - badgeRadius)
+      ];
+    }
+
     function polygonLabelCollection(kind = "all", sites = state.mapSites) {
       return {
         type: "FeatureCollection",
@@ -2302,16 +2328,21 @@
               : geometryCenter(siteDisplayGeometry(site));
             if (!center) return null;
             const unreadCount = mobileContentUnreadCount("site", site.slug);
+            const labelSize = polygonLabelSize(site);
+            const lowFontSize = kind === "territory" ? 9 : labelSize * 0.84;
+            const highFontSize = kind === "territory" ? 15 : labelSize * 1.25;
             return {
               type: "Feature",
               geometry: { type: "Point", coordinates: center },
               properties: {
                 slug: site.slug,
                 title: site.title,
-                label_size: polygonLabelSize(site),
+                label_size: labelSize,
                 unread_count: unreadCount,
                 unread_label: mobileUnreadCountLabel(unreadCount),
-                unread_icon: mobileUnreadCountIcon(unreadCount)
+                unread_icon: mobileUnreadCountIcon(unreadCount),
+                unread_badge_offset_low: polygonUnreadBadgeOffset(site.title, lowFontSize, kind === "territory" ? 9 : 8),
+                unread_badge_offset_high: polygonUnreadBadgeOffset(site.title, highFontSize, kind === "territory" ? 9 : 8)
               }
             };
           })
@@ -6308,7 +6339,9 @@
         "mobile-place-name-area-labels",
         "mobile-place-name-area-fill",
         "mobile-detail-labels",
+        "mobile-detail-labels-unread",
         "mobile-territory-labels",
+        "mobile-territory-labels-unread",
         "mobile-site-polygons",
         "mobile-territory-polygons"
       ];
@@ -6321,9 +6354,11 @@
       const point = event.point;
       const targetLayers = [
         "mobile-detail-labels",
+        "mobile-detail-labels-unread",
         "mobile-place-name-area-labels",
         "mobile-place-name-area-fill",
         "mobile-territory-labels",
+        "mobile-territory-labels-unread",
         "mobile-site-polygons",
         "mobile-territory-polygons"
       ];
@@ -6338,7 +6373,7 @@
       if (containedPolygon) return containedPolygon;
       const renderedFeatures = mobileMapPolygonHitFeatures(event);
       const detailLabel = bestClickableFeature(renderedFeatures.filter(feature =>
-        (feature?.layer?.id === "mobile-place-name-area-labels" || feature?.layer?.id === "mobile-detail-labels") && feature?.properties?.slug
+        (["mobile-place-name-area-labels", "mobile-detail-labels", "mobile-detail-labels-unread"].includes(feature?.layer?.id)) && feature?.properties?.slug
       ));
       if (detailLabel) return detailLabel;
       const renderedPolygon = bestClickableFeature(renderedFeatures.filter(feature =>
@@ -6346,7 +6381,7 @@
       ));
       if (renderedPolygon) return renderedPolygon;
       const territoryLabel = bestClickableFeature(renderedFeatures.filter(feature =>
-        feature?.layer?.id === "mobile-territory-labels" && feature?.properties?.slug
+        ["mobile-territory-labels", "mobile-territory-labels-unread"].includes(feature?.layer?.id) && feature?.properties?.slug
       ));
       if (territoryLabel) return territoryLabel;
       return null;
@@ -6359,7 +6394,9 @@
         layerId === "mobile-place-name-area-fill" ||
         layerId === "mobile-place-name-area-labels" ||
         layerId === "mobile-detail-labels" ||
-        layerId === "mobile-territory-labels";
+        layerId === "mobile-detail-labels-unread" ||
+        layerId === "mobile-territory-labels" ||
+        layerId === "mobile-territory-labels-unread";
     }
 
     function isMobilePointHitFeature(feature) {
@@ -13310,6 +13347,7 @@
         id: "mobile-territory-labels",
         type: "symbol",
         source: "mobile-territory-labels",
+        filter: ["<=", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
         minzoom: 6,
         layout: {
           "text-field": ["get", "title"],
@@ -13330,11 +13368,42 @@
           "text-halo-width": 1.7
         }
       });
+      state.map.addLayer({
+        id: "mobile-territory-labels-unread",
+        type: "symbol",
+        source: "mobile-territory-labels",
+        filter: [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
+        minzoom: 6,
+        layout: {
+          "text-field": ["get", "title"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 6, 9, 9, 12, 12, 15],
+          "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+          "text-anchor": "center",
+          "text-justify": "center",
+          "text-allow-overlap": false,
+          "text-ignore-placement": false,
+          "text-max-width": 9,
+          "text-optional": false,
+          "icon-image": ["get", "unread_icon"],
+          "icon-size": 1,
+          "icon-anchor": "center",
+          "icon-offset": ["interpolate", ["linear"], ["zoom"], 6, ["get", "unread_badge_offset_low"], 12, ["get", "unread_badge_offset_high"]],
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+          "icon-optional": false
+        },
+        paint: {
+          "text-color": "#20251f",
+          "text-halo-color": "rgba(255,255,255,0.92)",
+          "text-halo-width": 1.7
+        }
+      });
       state.map.addSource("mobile-detail-labels", { type: "geojson", data: sourceData.detailLabels });
       state.map.addLayer({
         id: "mobile-detail-labels",
         type: "symbol",
         source: "mobile-detail-labels",
+        filter: ["<=", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
         minzoom: SITE_LABEL_MIN_ZOOM,
         layout: {
           "text-field": ["get", "title"],
@@ -13348,6 +13417,36 @@
           "text-ignore-placement": false,
           "text-max-width": 8,
           "text-optional": true
+        },
+        paint: {
+          "text-color": "#2d352f",
+          "text-halo-color": "rgba(255,255,255,0.88)",
+          "text-halo-width": 1.35
+        }
+      });
+      state.map.addLayer({
+        id: "mobile-detail-labels-unread",
+        type: "symbol",
+        source: "mobile-detail-labels",
+        filter: [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
+        minzoom: SITE_LABEL_MIN_ZOOM,
+        layout: {
+          "text-field": ["get", "title"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], SITE_LABEL_MIN_ZOOM, ["*", ["get", "label_size"], 0.84], 16, ["*", ["get", "label_size"], 1.25]],
+          "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+          "text-anchor": "center",
+          "text-justify": "center",
+          "text-allow-overlap": false,
+          "text-ignore-placement": false,
+          "text-max-width": 8,
+          "text-optional": false,
+          "icon-image": ["get", "unread_icon"],
+          "icon-size": 1,
+          "icon-anchor": "center",
+          "icon-offset": ["interpolate", ["linear"], ["zoom"], SITE_LABEL_MIN_ZOOM, ["get", "unread_badge_offset_low"], 16, ["get", "unread_badge_offset_high"]],
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+          "icon-optional": false
         },
         paint: {
           "text-color": "#2d352f",
@@ -13379,22 +13478,6 @@
           "text-halo-width": 1.8,
           "text-halo-blur": 0.2
         }
-      });
-      [["detail", "mobile-detail-labels"], ["territory", "mobile-territory-labels"]].forEach(([kind, source]) => {
-        state.map.addLayer({
-          id: `mobile-${kind}-unread-badges`,
-          type: "symbol",
-          source,
-          filter: [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
-          layout: {
-            "icon-image": ["get", "unread_icon"],
-            "icon-size": 1,
-            "icon-anchor": "center",
-            "icon-allow-overlap": true,
-            "icon-ignore-placement": true
-          },
-          paint: { "icon-translate": [10, -10] }
-        });
       });
       state.map.addLayer({
         id: "mobile-site-point-labels",
@@ -13454,10 +13537,8 @@
       "mobile-site-point-hit",
       "mobile-site-unread-badges",
       "mobile-site-unread-counts",
-      "mobile-detail-unread-badges",
-      "mobile-detail-unread-counts",
-      "mobile-territory-unread-badges",
-      "mobile-territory-unread-counts",
+      "mobile-detail-labels-unread",
+      "mobile-territory-labels-unread",
       "mobile-site-attention-outer",
       "mobile-site-attention-core",
       "mobile-site-attention-history-badge",
@@ -13589,20 +13670,12 @@
           markMobileMapEventHandled(event);
         });
       });
-      ["mobile-detail-unread-badges", "mobile-detail-unread-counts", "mobile-territory-unread-badges", "mobile-territory-unread-counts"].forEach(layerId => {
-        bindMobileInteractiveLayer(layerId, event => {
-          if (handleSuggestionMapPickClick(event)) return;
-          const feature = event?.features?.find(item => item?.properties?.slug);
-          if (feature?.properties?.slug) openSite(feature.properties.slug);
-          markMobileMapEventHandled(event);
-        });
-      });
       ["mobile-biography-place-labels", "mobile-biography-place-points", "mobile-biography-path-labels", "mobile-biography-path-point-numbers", "mobile-biography-path-points"]
         .forEach(layerId => bindMobileInteractiveLayer(layerId, event => {
           if (handleSuggestionMapPickClick(event)) return;
           if (openMobileMapTap(event)) markMobileMapEventHandled(event);
         }));
-      ["mobile-place-name-area-fill", "mobile-place-name-area-labels", "mobile-site-polygons", "mobile-territory-polygons", "mobile-detail-labels", "mobile-territory-labels"]
+      ["mobile-place-name-area-fill", "mobile-place-name-area-labels", "mobile-site-polygons", "mobile-territory-polygons", "mobile-detail-labels", "mobile-detail-labels-unread", "mobile-territory-labels", "mobile-territory-labels-unread"]
         .forEach(layerId => bindMobileInteractiveLayer(layerId, openMobileInteractivePolygonLayer));
       if (!state.mobileMapLayerEventsBound) {
         state.mobileMapLayerEventsBound = true;
@@ -14896,8 +14969,8 @@
       if (!state.map) return;
       const badgeLayers = [
         "mobile-site-unread-badges",
-        "mobile-detail-unread-badges",
-        "mobile-territory-unread-badges"
+        "mobile-detail-labels-unread",
+        "mobile-territory-labels-unread"
       ];
       badgeLayers.forEach(layerId => {
         if (state.map.getLayer(layerId)) state.map.moveLayer(layerId);
