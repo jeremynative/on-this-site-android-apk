@@ -1,7 +1,6 @@
 package com.nativelongisland.onthissite;
 
 import android.Manifest;
-import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.Notification;
@@ -29,7 +28,9 @@ import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.Log;
 import android.graphics.Color;
+import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
@@ -86,7 +87,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260812-precise-content-focus-r89";
+    static final String APP_VERSION = "20260812-unread-focus-loader-r90";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -97,6 +98,7 @@ public class MainActivity extends Activity {
     private static final long NETWORK_LOSS_GRACE_DELAY_MS = 4000;
     private static final long ACTIVE_WORK_RECHECK_DELAY_MS = 15000;
     private static final long OFFLINE_COVER_REVEAL_DELAY_MS = 900;
+    private static final long LOADING_COVER_MINIMUM_MS = 1500;
     private static final int OFFLINE_RENDER_MAX_ATTEMPTS = 12;
     private static final long OFFLINE_RENDER_DEADLINE_MS = 12000;
     private static final int COMMENT_PHOTO_READ_MAX_ATTEMPTS = 3;
@@ -116,7 +118,9 @@ public class MainActivity extends Activity {
     private TextView loadingCoverLabel;
     private TextView loadingCoverDetail;
     private LinearLayout loadingCoverActions;
-    private ObjectAnimator loadingOutlinePulse;
+    private ValueAnimator loadingOutlinePulse;
+    private long loadingCoverShownAt;
+    private long loadingCoverGeneration;
     private GeolocationPermissions.Callback pendingLocationCallback;
     private String pendingLocationOrigin;
     private PermissionRequest pendingCameraRequest;
@@ -592,15 +596,32 @@ public class MainActivity extends Activity {
         card.setBackground(cardBackground);
         card.setElevation(dp(8));
 
+        FrameLayout islandAnimation = new FrameLayout(this);
         ImageView outline = new ImageView(this);
+        ImageView reveal = new ImageView(this);
         outline.setAdjustViewBounds(true);
         outline.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        reveal.setAdjustViewBounds(true);
+        reveal.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        Bitmap outlineBitmap = null;
         try (InputStream stream = getAssets().open("assets/images/long-island-loading-outline.png")) {
-            outline.setImageBitmap(BitmapFactory.decodeStream(stream));
+            outlineBitmap = BitmapFactory.decodeStream(stream);
+            outline.setImageBitmap(outlineBitmap);
+            reveal.setImageBitmap(outlineBitmap);
         } catch (IOException error) {
             Log.w(LOG_TAG, "Native Long Island loading outline could not be opened.", error);
         }
-        card.addView(outline, new LinearLayout.LayoutParams(dp(240), dp(116)));
+        outline.setAlpha(0.34f);
+        reveal.setColorFilter(Color.rgb(47, 90, 73));
+        islandAnimation.addView(outline, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+        islandAnimation.addView(reveal, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+        card.addView(islandAnimation, new LinearLayout.LayoutParams(dp(240), dp(116)));
 
         loadingCoverLabel = new TextView(this);
         loadingCoverLabel.setText(R.string.loading_app);
@@ -657,11 +678,21 @@ public class MainActivity extends Activity {
         );
         cover.addView(card, cardParams);
 
-        loadingOutlinePulse = ObjectAnimator.ofFloat(outline, View.ALPHA, 0.48f, 1f);
-        loadingOutlinePulse.setDuration(720);
+        loadingOutlinePulse = ValueAnimator.ofFloat(0.04f, 1f);
+        loadingOutlinePulse.setDuration(1050);
         loadingOutlinePulse.setRepeatMode(ValueAnimator.REVERSE);
         loadingOutlinePulse.setRepeatCount(ValueAnimator.INFINITE);
-        outline.post(() -> loadingOutlinePulse.start());
+        loadingOutlinePulse.addUpdateListener(animation -> {
+            int width = reveal.getWidth();
+            int height = reveal.getHeight();
+            if (width <= 0 || height <= 0) return;
+            float progress = (float) animation.getAnimatedValue();
+            int center = width / 2;
+            int halfWidth = Math.max(1, Math.round(center * progress));
+            reveal.setClipBounds(new Rect(center - halfWidth, 0, center + halfWidth, height));
+            reveal.setAlpha(0.7f + (0.3f * progress));
+        });
+        reveal.post(() -> loadingOutlinePulse.start());
         return cover;
     }
 
@@ -755,6 +786,14 @@ public class MainActivity extends Activity {
         startupHandler.removeCallbacks(startupFallback);
         startupHandler.removeCallbacks(offlineRenderDeadline);
         if (loadingCover == null || loadingCover.getVisibility() != View.VISIBLE) return;
+        long remaining = LOADING_COVER_MINIMUM_MS - (System.currentTimeMillis() - loadingCoverShownAt);
+        if (remaining > 0) {
+            long generation = loadingCoverGeneration;
+            loadingCover.postDelayed(() -> {
+                if (generation == loadingCoverGeneration) hideLoadingCover();
+            }, remaining);
+            return;
+        }
         loadingCover.animate()
             .alpha(0f)
             .setDuration(180)
@@ -767,6 +806,8 @@ public class MainActivity extends Activity {
 
     private void showLoadingCover(String message) {
         if (loadingCover == null) return;
+        loadingCoverGeneration += 1;
+        loadingCoverShownAt = System.currentTimeMillis();
         if (loadingCoverDetail != null) loadingCoverDetail.setVisibility(View.GONE);
         if (loadingCoverActions != null) loadingCoverActions.setVisibility(View.GONE);
         if (loadingCoverLabel != null) loadingCoverLabel.setText(message == null || message.trim().isEmpty()

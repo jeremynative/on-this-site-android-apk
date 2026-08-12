@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-precise-content-focus-r89";
+const expectedBuild = "20260812-unread-focus-loader-r90";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -305,6 +305,9 @@ function requireBundledPattern(pattern, message) {
 }
 
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
+requireText("LOADING_COVER_MINIMUM_MS = 1500", "Android loading cover must remain visible long enough to show its Long Island progress animation.");
+requireText("ValueAnimator.ofFloat(0.04f, 1f)", "Android loading cover must animate the Long Island outline from its center.");
+requireText("reveal.setClipBounds(new Rect(center - halfWidth, 0, center + halfWidth, height))", "Android Long Island loader must reveal outward without stretching the graphic.");
 requireBundledText('<button class="ghost-button" id="settings-open" type="button">Notifications</button>', "Bundled Android menu must label the settings action Notifications.");
 forbidBundledText('<button class="ghost-button" id="settings-open" type="button">Alerts</button>', "Bundled Android menu must not use the old Alerts label.");
 requireBundledText('<details class="mobile-more-menu">\n          <summary>Menu</summary>', "Bundled Android overflow control must be labeled Menu.");
@@ -752,7 +755,7 @@ if (/onPageFinished\(WebView view, String url\)[\s\S]{0,1000}?hideLoadingCover\(
 }
 requireText('getAssets().open("assets/images/long-island-loading-outline.png")', "Android shell must show the Long Island loading outline during cold startup.");
 requireText('loadingCoverLabel.setText(R.string.loading_app);', "Android shell must label the animated Long Island loading screen from a translatable resource.");
-requireText("ObjectAnimator.ofFloat(outline, View.ALPHA", "Android shell must animate the Long Island loading outline.");
+requireText("ValueAnimator.ofFloat(0.04f, 1f)", "Android shell must animate the Long Island loading outline from its center.");
 if (!styles.includes('<item name="android:windowBackground">@drawable/launch_background</item>')) {
   throw new Error("Android theme must show a branded launch background while WebView starts.");
 }

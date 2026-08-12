@@ -839,6 +839,7 @@
       deferredDataLoading: false,
       deferredCommunityDataLoaded: false,
       mobileActivityRenderedSignature: "",
+      mobileActivitySeenSessionKeys: new Set(),
       mobileActivityRenderLimit: MOBILE_ACTIVITY_INITIAL_LIMIT,
       mobileActivityDiscussionKeys: new Set(),
       mobileActivityDrafts: new Map(),
@@ -13901,7 +13902,11 @@
         bindMobileInteractiveLayer(layerId, event => {
           if (handleSuggestionMapPickClick(event)) return;
           const feature = event?.features?.find(item => item?.properties?.slug);
-          if (feature?.properties?.slug) openSite(feature.properties.slug);
+          if (feature?.properties?.slug) {
+            const slug = feature.properties.slug;
+            const contentUpdateItems = mobileUnreadContentActivityItems("site", slug);
+            openSite(slug, { contentUpdateItems });
+          }
           markMobileMapEventHandled(event);
         });
       });
@@ -15247,9 +15252,11 @@
 
     function mobileUnreadActivityItems() {
       if (mobileActivityUnreadTaskCache) return mobileActivityUnreadTaskCache;
+      const persistedSeenKeys = ACTIVITY_UTILS.readSeenItemKeys(mobileActivitySeenItemsKey());
+      const seenKeys = new Set([...persistedSeenKeys, ...state.mobileActivitySeenSessionKeys]);
       mobileActivityUnreadTaskCache = ACTIVITY_UTILS.unreadItems(latestMobileActivity(), {
         baseline: ACTIVITY_UTILS.readSeen(mobileActivityLastSeenKey()),
-        seenKeys: ACTIVITY_UTILS.readSeenItemKeys(mobileActivitySeenItemsKey())
+        seenKeys
       });
       window.setTimeout(() => { mobileActivityUnreadTaskCache = null; }, 0);
       return mobileActivityUnreadTaskCache;
@@ -15339,7 +15346,9 @@
     function markMobileActivityItemSeen(key) {
       if (!key) return;
       const item = latestMobileActivity().find(candidate => ACTIVITY_UTILS.activityItemKey(candidate) === key);
-      ACTIVITY_UTILS.writeSeenItemKeys(mobileActivitySeenItemsKey(), item ? ACTIVITY_UTILS.activityItemKeys(item) : [key]);
+      const keys = item ? ACTIVITY_UTILS.activityItemKeys(item) : [key];
+      keys.forEach(itemKey => state.mobileActivitySeenSessionKeys.add(String(itemKey)));
+      ACTIVITY_UTILS.writeSeenItemKeys(mobileActivitySeenItemsKey(), keys);
       mobileActivityUnreadTaskCache = null;
       state.mobileActivityRenderedSignature = "";
       invalidateMapSourceCache();
@@ -15355,6 +15364,7 @@
         .filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.key === targetKey)
         .flatMap(ACTIVITY_UTILS.activityItemKeys);
       if (!keys.length) return;
+      keys.forEach(itemKey => state.mobileActivitySeenSessionKeys.add(String(itemKey)));
       ACTIVITY_UTILS.writeSeenItemKeys(mobileActivitySeenItemsKey(), keys);
       mobileActivityUnreadTaskCache = null;
       state.mobileActivityRenderedSignature = "";
