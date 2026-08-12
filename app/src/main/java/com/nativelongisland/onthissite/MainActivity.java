@@ -545,6 +545,7 @@ public class MainActivity extends Activity {
                     null
                 );
                 syncTabletLandscapeClass(view);
+                view.postDelayed(() -> syncTabletLandscapeClass(view), 750);
                 enforceExclusiveMobilePanels(view);
                 installNativeCommentPhotoCompatibility(view);
                 validateLoadedAppShell(url);
