@@ -1616,7 +1616,8 @@ public class MainActivity extends Activity {
         if (view == null) return;
         Configuration config = getResources().getConfiguration();
         boolean tabletLandscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE
-            && config.smallestScreenWidthDp >= 600;
+            && config.screenWidthDp >= 650
+            && config.screenHeightDp >= 400;
         view.evaluateJavascript(
             "(function(){var enabled=" + tabletLandscape
                 + ";document.documentElement.classList.toggle('tablet-landscape',enabled);"
