@@ -4738,6 +4738,163 @@
       visibility: visible;
     }
 
+    /* A tablet in landscape has room for the map and reading surface together.
+       Keep the phone drawer model below this breakpoint, but turn the wider view
+       into a purposeful split layout instead of stretching the mobile stack. */
+    @media (orientation: landscape) and (min-width: 900px) and (min-height: 600px) {
+      body.native-android-app {
+        --map-height: auto;
+      }
+
+      body.native-android-app .app,
+      body.native-android-app .app.panel-timeline,
+      body.native-android-app .app.panel-nearby {
+        grid-template-columns: minmax(0, 1fr) clamp(380px, 34dvw, 620px);
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+
+      body.native-android-app header {
+        grid-column: 1;
+        grid-row: 1;
+        grid-template-columns: minmax(0, 1fr) minmax(250px, 0.8fr);
+        align-items: center;
+        gap: 6px 10px;
+        padding: max(8px, var(--app-top-safe)) 12px 8px;
+      }
+
+      body.native-android-app .title-row {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      body.native-android-app .search-autocomplete {
+        grid-column: 2;
+        grid-row: 1;
+      }
+
+      body.native-android-app .quick-actions {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+        gap: 6px;
+      }
+
+      body.native-android-app .mobile-header-instruction,
+      body.native-android-app .territory-subtitle {
+        display: none;
+      }
+
+      body.native-android-app .mobile-priority-action,
+      body.native-android-app .mobile-layer-menu > summary,
+      body.native-android-app .mobile-more-menu > summary {
+        min-height: 36px;
+      }
+
+      body.native-android-app .mobile-map-shell {
+        grid-column: 1;
+        grid-row: 2;
+        min-height: 0;
+        height: auto;
+      }
+
+      body.native-android-app #map {
+        min-height: 0;
+        height: 100%;
+      }
+
+      body.native-android-app .mobile-view-tabs {
+        grid-column: 2;
+        grid-row: 1;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 64px 58px;
+        gap: 5px;
+        padding: max(8px, var(--app-top-safe)) 8px 8px;
+      }
+
+      body.native-android-app .mobile-view-tab {
+        min-height: 38px;
+        font-size: 11px;
+      }
+
+      body.native-android-app .mobile-timeline,
+      body.native-android-app .list-panel {
+        grid-column: 2;
+        grid-row: 2;
+        min-height: 0;
+        max-height: none;
+        border-radius: 0;
+      }
+
+      body.native-android-app .detail {
+        inset: var(--app-top-safe) var(--app-right-safe) var(--app-bottom-safe) auto;
+        width: clamp(380px, 34dvw, 620px);
+        height: auto;
+        max-height: none;
+        border-radius: 16px 0 0 16px;
+        transform: translate3d(110%, 0, 0);
+      }
+
+      body.native-android-app .detail:not(.open) {
+        top: var(--app-top-safe) !important;
+        bottom: var(--app-bottom-safe) !important;
+        transform: translate3d(110%, 0, 0) !important;
+      }
+
+      body.native-android-app .detail.open {
+        transform: translate3d(0, 0, 0) !important;
+        box-shadow: -18px 0 45px rgba(20, 30, 23, 0.24);
+      }
+
+      body.native-android-app .detail.drawer-collapsed,
+      body.native-android-app .detail.drawer-half,
+      body.native-android-app .detail.drawer-expanded {
+        --detail-drawer-height: auto;
+      }
+
+      body.native-android-app .detail-head {
+        padding: 9px 12px;
+      }
+
+      body.native-android-app .detail-body {
+        padding: 12px 14px calc(14px + var(--app-bottom-safe));
+      }
+
+      body.native-android-app .app.panel-maximized {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+
+      body.native-android-app .app.panel-maximized > .mobile-view-tabs {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      body.native-android-app .app.panel-maximized > .mobile-timeline,
+      body.native-android-app .app.panel-maximized > .list-panel {
+        grid-column: 1;
+        grid-row: 2;
+      }
+
+      body.native-android-app .app.panel-collapsed {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr) auto 0;
+      }
+
+      body.native-android-app .app.panel-collapsed > header,
+      body.native-android-app .app.panel-collapsed > .mobile-map-shell,
+      body.native-android-app .app.panel-collapsed > .mobile-view-tabs,
+      body.native-android-app .app.panel-collapsed > .mobile-timeline,
+      body.native-android-app .app.panel-collapsed > .list-panel {
+        grid-column: 1;
+      }
+
+      body.native-android-app .app.panel-collapsed > header { grid-row: 1; }
+      body.native-android-app .app.panel-collapsed > .mobile-map-shell { grid-row: 2; }
+      body.native-android-app .app.panel-collapsed > .mobile-view-tabs { grid-row: 3; }
+      body.native-android-app .app.panel-collapsed > .mobile-timeline,
+      body.native-android-app .app.panel-collapsed > .list-panel { grid-row: 4; }
+    }
+
     body.mobile-content-open .app header {
       gap: 0;
       padding-top: max(7px, var(--app-top-safe));
@@ -33188,13 +33345,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         state.pendingPlantObservationPanel = plantPanel;
         const button = plantPanel.querySelector("[data-take-plant-photo]");
         if (button) button.textContent = "Opening camera...";
+        // Android's system Camera provides a reliable shutter control and returns through
+        // the activity result when the user presses Back. Prefer it over the WebView camera,
+        // whose overlay controls can be hidden by vendor WebView/camera implementations.
+        if (nativeTakePlantPhoto()) return;
         openInAppPlantCamera(plantPanel).then(opened => {
           if (button) button.textContent = "Take plant photo";
           if (opened) return;
-          if (nativeTakePlantPhoto()) {
-            if (button) button.textContent = "Opening camera...";
-            return;
-          }
           const input = plantPanel.querySelector("[data-plant-image]");
           if (input) {
             input.setAttribute("capture", "environment");
