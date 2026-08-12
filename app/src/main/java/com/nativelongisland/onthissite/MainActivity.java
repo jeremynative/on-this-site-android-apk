@@ -1619,18 +1619,20 @@ public class MainActivity extends Activity {
 
     private void syncTabletLandscapeClass(WebView view) {
         if (view == null) return;
-        Configuration config = getResources().getConfiguration();
-        boolean tabletLandscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE
-            && config.screenWidthDp >= 650
-            && config.screenHeightDp >= 400;
-        view.evaluateJavascript(
-            "(function(){var enabled=" + tabletLandscape
-                + ";document.documentElement.dataset.nativeTabletLandscape=enabled?'true':'false';"
-                + "document.documentElement.classList.toggle('tablet-landscape',enabled);"
-                + "if(document.body)document.body.dataset.nativeTabletLandscape=enabled?'true':'false';"
-                + "document.body&&document.body.classList.toggle('tablet-landscape',enabled);})()",
-            null
-        );
+        view.post(() -> {
+            Configuration config = getResources().getConfiguration();
+            boolean tabletLandscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE
+                && config.screenWidthDp >= 650
+                && config.screenHeightDp >= 400;
+            view.evaluateJavascript(
+                "(function(){var enabled=" + tabletLandscape
+                    + ";document.documentElement.dataset.nativeTabletLandscape=enabled?'true':'false';"
+                    + "document.documentElement.classList.toggle('tablet-landscape',enabled);"
+                    + "if(document.body)document.body.dataset.nativeTabletLandscape=enabled?'true':'false';"
+                    + "document.body&&document.body.classList.toggle('tablet-landscape',enabled);return enabled;})()",
+                value -> Log.d(LOG_TAG, "Tablet landscape layout synced: " + value)
+            );
+        });
     }
 
     @Override
