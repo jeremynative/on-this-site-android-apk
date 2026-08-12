@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-unread-focus-loader-r90";
+const expectedBuild = "20260812-unread-focus-loader-r91";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -306,6 +306,7 @@ function requireBundledPattern(pattern, message) {
 
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
 requireText("LOADING_COVER_MINIMUM_MS = 1500", "Android loading cover must remain visible long enough to show its Long Island progress animation.");
+requireText('showLoadingCover("Loading On This Site");', "Android cold startup must initialize the native loading animation timer before the WebView can finish.");
 requireText("ValueAnimator.ofFloat(0.04f, 1f)", "Android loading cover must animate the Long Island outline from its center.");
 requireText("reveal.setClipBounds(new Rect(center - halfWidth, 0, center + halfWidth, height))", "Android Long Island loader must reveal outward without stretching the graphic.");
 requireBundledText('<button class="ghost-button" id="settings-open" type="button">Notifications</button>', "Bundled Android menu must label the settings action Notifications.");
