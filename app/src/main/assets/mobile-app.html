@@ -161,7 +161,7 @@
       content: "";
       position: absolute;
       inset: 0;
-      background: url("assets/images/long-island-loading-outline.png") center / contain no-repeat;
+      background: url("../images/long-island-loading-outline.png") center / contain no-repeat;
       opacity: 0.72;
       pointer-events: none;
       z-index: 2;
@@ -177,8 +177,8 @@
       display: block;
       overflow: hidden;
       background: linear-gradient(90deg, #2f5a49 0%, #6e9d7c 62%, #f4c95d 100%);
-      -webkit-mask: url("assets/images/long-island-loading-outline.png") center / contain no-repeat;
-      mask: url("assets/images/long-island-loading-outline.png") center / contain no-repeat;
+      -webkit-mask: url("../images/long-island-loading-outline.png") center / contain no-repeat;
+      mask: url("../images/long-island-loading-outline.png") center / contain no-repeat;
       clip-path: inset(0 50% 0 50%);
       animation: loading-island-fill 2200ms cubic-bezier(.2, .74, .22, 1) infinite;
       z-index: 1;
@@ -4742,18 +4742,18 @@
        Keep the phone drawer model below this breakpoint, but turn the wider view
        into a purposeful split layout instead of stretching the mobile stack. */
     @media (orientation: landscape) and (min-width: 900px) and (min-height: 600px) {
-      body.native-android-app {
+      body.android-device {
         --map-height: auto;
       }
 
-      body.native-android-app .app,
-      body.native-android-app .app.panel-timeline,
-      body.native-android-app .app.panel-nearby {
+      body.android-device .app,
+      body.android-device .app.panel-timeline,
+      body.android-device .app.panel-nearby {
         grid-template-columns: minmax(0, 1fr) clamp(380px, 34dvw, 620px);
         grid-template-rows: auto minmax(0, 1fr);
       }
 
-      body.native-android-app header {
+      body.android-device header {
         grid-column: 1;
         grid-row: 1;
         grid-template-columns: minmax(0, 1fr) minmax(250px, 0.8fr);
@@ -4762,17 +4762,17 @@
         padding: max(8px, var(--app-top-safe)) 12px 8px;
       }
 
-      body.native-android-app .title-row {
+      body.android-device .title-row {
         grid-column: 1;
         grid-row: 1;
       }
 
-      body.native-android-app .search-autocomplete {
+      body.android-device .search-autocomplete {
         grid-column: 2;
         grid-row: 1;
       }
 
-      body.native-android-app .quick-actions {
+      body.android-device .quick-actions {
         grid-column: 1 / -1;
         grid-row: 2;
         display: grid;
@@ -4780,30 +4780,30 @@
         gap: 6px;
       }
 
-      body.native-android-app .mobile-header-instruction,
-      body.native-android-app .territory-subtitle {
+      body.android-device .mobile-header-instruction,
+      body.android-device .territory-subtitle {
         display: none;
       }
 
-      body.native-android-app .mobile-priority-action,
-      body.native-android-app .mobile-layer-menu > summary,
-      body.native-android-app .mobile-more-menu > summary {
+      body.android-device .mobile-priority-action,
+      body.android-device .mobile-layer-menu > summary,
+      body.android-device .mobile-more-menu > summary {
         min-height: 36px;
       }
 
-      body.native-android-app .mobile-map-shell {
+      body.android-device .mobile-map-shell {
         grid-column: 1;
         grid-row: 2;
         min-height: 0;
         height: auto;
       }
 
-      body.native-android-app #map {
+      body.android-device #map {
         min-height: 0;
         height: 100%;
       }
 
-      body.native-android-app .mobile-view-tabs {
+      body.android-device .mobile-view-tabs {
         grid-column: 2;
         grid-row: 1;
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 64px 58px;
@@ -4811,13 +4811,13 @@
         padding: max(8px, var(--app-top-safe)) 8px 8px;
       }
 
-      body.native-android-app .mobile-view-tab {
+      body.android-device .mobile-view-tab {
         min-height: 38px;
         font-size: 11px;
       }
 
-      body.native-android-app .mobile-timeline,
-      body.native-android-app .list-panel {
+      body.android-device .mobile-timeline,
+      body.android-device .list-panel {
         grid-column: 2;
         grid-row: 2;
         min-height: 0;
@@ -4825,7 +4825,7 @@
         border-radius: 0;
       }
 
-      body.native-android-app .detail {
+      body.android-device .detail {
         inset: var(--app-top-safe) var(--app-right-safe) var(--app-bottom-safe) auto;
         width: clamp(380px, 34dvw, 620px);
         height: auto;
@@ -4834,65 +4834,65 @@
         transform: translate3d(110%, 0, 0);
       }
 
-      body.native-android-app .detail:not(.open) {
+      body.android-device .detail:not(.open) {
         top: var(--app-top-safe) !important;
         bottom: var(--app-bottom-safe) !important;
         transform: translate3d(110%, 0, 0) !important;
       }
 
-      body.native-android-app .detail.open {
+      body.android-device .detail.open {
         transform: translate3d(0, 0, 0) !important;
         box-shadow: -18px 0 45px rgba(20, 30, 23, 0.24);
       }
 
-      body.native-android-app .detail.drawer-collapsed,
-      body.native-android-app .detail.drawer-half,
-      body.native-android-app .detail.drawer-expanded {
+      body.android-device .detail.drawer-collapsed,
+      body.android-device .detail.drawer-half,
+      body.android-device .detail.drawer-expanded {
         --detail-drawer-height: auto;
       }
 
-      body.native-android-app .detail-head {
+      body.android-device .detail-head {
         padding: 9px 12px;
       }
 
-      body.native-android-app .detail-body {
+      body.android-device .detail-body {
         padding: 12px 14px calc(14px + var(--app-bottom-safe));
       }
 
-      body.native-android-app .app.panel-maximized {
+      body.android-device .app.panel-maximized {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: auto minmax(0, 1fr);
       }
 
-      body.native-android-app .app.panel-maximized > .mobile-view-tabs {
+      body.android-device .app.panel-maximized > .mobile-view-tabs {
         grid-column: 1;
         grid-row: 1;
       }
 
-      body.native-android-app .app.panel-maximized > .mobile-timeline,
-      body.native-android-app .app.panel-maximized > .list-panel {
+      body.android-device .app.panel-maximized > .mobile-timeline,
+      body.android-device .app.panel-maximized > .list-panel {
         grid-column: 1;
         grid-row: 2;
       }
 
-      body.native-android-app .app.panel-collapsed {
+      body.android-device .app.panel-collapsed {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: auto minmax(0, 1fr) auto 0;
       }
 
-      body.native-android-app .app.panel-collapsed > header,
-      body.native-android-app .app.panel-collapsed > .mobile-map-shell,
-      body.native-android-app .app.panel-collapsed > .mobile-view-tabs,
-      body.native-android-app .app.panel-collapsed > .mobile-timeline,
-      body.native-android-app .app.panel-collapsed > .list-panel {
+      body.android-device .app.panel-collapsed > header,
+      body.android-device .app.panel-collapsed > .mobile-map-shell,
+      body.android-device .app.panel-collapsed > .mobile-view-tabs,
+      body.android-device .app.panel-collapsed > .mobile-timeline,
+      body.android-device .app.panel-collapsed > .list-panel {
         grid-column: 1;
       }
 
-      body.native-android-app .app.panel-collapsed > header { grid-row: 1; }
-      body.native-android-app .app.panel-collapsed > .mobile-map-shell { grid-row: 2; }
-      body.native-android-app .app.panel-collapsed > .mobile-view-tabs { grid-row: 3; }
-      body.native-android-app .app.panel-collapsed > .mobile-timeline,
-      body.native-android-app .app.panel-collapsed > .list-panel { grid-row: 4; }
+      body.android-device .app.panel-collapsed > header { grid-row: 1; }
+      body.android-device .app.panel-collapsed > .mobile-map-shell { grid-row: 2; }
+      body.android-device .app.panel-collapsed > .mobile-view-tabs { grid-row: 3; }
+      body.android-device .app.panel-collapsed > .mobile-timeline,
+      body.android-device .app.panel-collapsed > .list-panel { grid-row: 4; }
     }
 
     body.mobile-content-open .app header {
