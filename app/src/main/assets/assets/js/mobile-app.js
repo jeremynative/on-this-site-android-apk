@@ -16650,13 +16650,13 @@
         state.pendingPlantObservationPanel = plantPanel;
         const button = plantPanel.querySelector("[data-take-plant-photo]");
         if (button) button.textContent = "Opening camera...";
+        // Android's system Camera provides a reliable shutter control and returns through
+        // the activity result when the user presses Back. Prefer it over the WebView camera,
+        // whose overlay controls can be hidden by vendor WebView/camera implementations.
+        if (nativeTakePlantPhoto()) return;
         openInAppPlantCamera(plantPanel).then(opened => {
           if (button) button.textContent = "Take plant photo";
           if (opened) return;
-          if (nativeTakePlantPhoto()) {
-            if (button) button.textContent = "Opening camera...";
-            return;
-          }
           const input = plantPanel.querySelector("[data-plant-image]");
           if (input) {
             input.setAttribute("capture", "environment");
