@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-contributor-profile-tap-through-r85";
+const expectedBuild = "20260812-center-first-startup-r86";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -21,6 +21,7 @@ const captureFileProviderPath = "app/src/main/java/com/nativelongisland/onthissi
 const nativeCommentPhotoCompatPath = "app/src/main/assets/native-comment-photo-compat.js";
 const offlineInsetAuditPath = "audit-apk-offline-insets.mjs";
 const bundledMobileIndexPaths = [
+  "app/src/main/assets/assets/data/mobile-site-centers.json",
   "app/src/main/assets/assets/data/mobile-site-geometry.json",
   "app/src/main/assets/assets/data/mobile-site-index.json",
   "app/src/main/assets/assets/data/mobile-timeline-index.json",
@@ -108,6 +109,10 @@ const bundledSiteGeometry = JSON.parse(fs.readFileSync(
   "app/src/main/assets/assets/data/mobile-site-geometry.json",
   "utf8"
 ));
+const bundledSiteCenters = JSON.parse(fs.readFileSync(
+  "app/src/main/assets/assets/data/mobile-site-centers.json",
+  "utf8"
+));
 
 function siteSlugs(payload) {
   return new Set((Array.isArray(payload?.rows) ? payload.rows : [])
@@ -121,6 +126,7 @@ function setDifference(left, right) {
 
 const bundledIndexSlugs = siteSlugs(bundledSiteIndex);
 const bundledGeometrySlugs = siteSlugs(bundledSiteGeometry);
+const bundledCenterSlugs = siteSlugs(bundledSiteCenters);
 const missingBundledGeometry = setDifference(bundledIndexSlugs, bundledGeometrySlugs);
 const extraBundledGeometry = setDifference(bundledGeometrySlugs, bundledIndexSlugs);
 if (missingBundledGeometry.length || extraBundledGeometry.length) {
@@ -128,6 +134,20 @@ if (missingBundledGeometry.length || extraBundledGeometry.length) {
     `Bundled Android site index/geometry parity failed. Missing geometry: ${missingBundledGeometry.join(", ") || "none"}; `
       + `unexpected geometry: ${extraBundledGeometry.join(", ") || "none"}.`
   );
+}
+const missingBundledCenters = setDifference(bundledIndexSlugs, bundledCenterSlugs);
+const extraBundledCenters = setDifference(bundledCenterSlugs, bundledIndexSlugs);
+if (missingBundledCenters.length || extraBundledCenters.length) {
+  throw new Error(
+    `Bundled Android site index/center parity failed. Missing centers: ${missingBundledCenters.join(", ") || "none"}; `
+      + `unexpected centers: ${extraBundledCenters.join(", ") || "none"}.`
+  );
+}
+if (!bundledMobileJs.includes('const SITE_CENTER_URL = "assets/data/mobile-site-centers.json";')
+    || !bundledMobileJs.includes("fetchMobileSiteCenterRows")
+    || !bundledMobileJs.includes("hydrateMobileSiteGeometry")
+    || !bundledMobileJs.includes("idleTask(hydrateMobileSiteGeometry)")) {
+  throw new Error("APK startup must use compact site centers first and hydrate full map geometry after the initial render.");
 }
 for (const slug of ["coopers-beach-shinnecock-access", "watermill-center"]) {
   if (!bundledIndexSlugs.has(slug)) {

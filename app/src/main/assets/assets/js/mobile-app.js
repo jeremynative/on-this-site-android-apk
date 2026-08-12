@@ -591,8 +591,10 @@
     const SITE_INDEX_RUNTIME_FIELDS = String(SITE_INDEX_FIELDS || "").split(",").filter(field => !["geojson", "display_geojson"].includes(field)).join(",");
     const SITE_INDEX_URL = "assets/data/mobile-site-index.json";
     const SITE_INDEX_VERSION = "20260723-site-index-v2";
+    const SITE_CENTER_URL = "assets/data/mobile-site-centers.json";
+    const SITE_CENTER_VERSION = "20260812-startup-centers-v1";
     const SITE_GEOMETRY_URL = "assets/data/mobile-site-geometry.json";
-    const SITE_GEOMETRY_VERSION = "20260723-site-geometry-v2";
+    const SITE_GEOMETRY_VERSION = "20260812-deferred-geometry-v3";
     const SITE_DETAIL_FIELDS = SHARED_FIELDS.mobileSiteDetail;
     const WIKI_INDEX_FIELDS = SHARED_FIELDS.mobileWikiIndex;
     const WIKI_INDEX_URL = "assets/data/mobile-wiki-index.json";
@@ -830,6 +832,8 @@
       timelineDetailCache: new Map(),
       relatedSitesCache: new Map(),
       relatedSiteIndexCache: null,
+      siteGeometryLoaded: false,
+      siteGeometryPromise: null,
       deferredDataLoaded: false,
       deferredDataLoading: false,
       deferredCommunityDataLoaded: false,
@@ -3130,6 +3134,72 @@
       }
     }
 
+    async function fetchMobileSiteCenterRows() {
+      try {
+        const response = await fetch(`${SITE_CENTER_URL}?v=${SITE_CENTER_VERSION}`, { cache: "no-cache" });
+        if (!response.ok) throw new Error(`Mobile site centers unavailable: ${response.status}`);
+        const json = await response.json();
+        if (Array.isArray(json?.rows) && json.rows.length) return json.rows;
+        throw new Error("Mobile site center snapshot was empty.");
+      } catch (error) {
+        console.warn("Static mobile site centers unavailable; using the full geometry snapshot.", error);
+        return fetchMobileSiteGeometryRows();
+      }
+    }
+
+    async function hydrateMobileSiteGeometry() {
+      if (window.NLI_MOBILE_DATA || state.siteGeometryLoaded) return true;
+      if (state.siteGeometryPromise) return state.siteGeometryPromise;
+      performance.mark?.("nli-mobile-geometry-hydration-start");
+      appEl?.setAttribute("data-site-geometry", "hydrating");
+      state.siteGeometryPromise = fetchMobileSiteGeometryRows()
+        .then(rows => {
+          const bySlug = new Map((rows || []).filter(row => row?.slug).map(row => [String(row.slug), row]));
+          const byId = new Map((rows || []).filter(row => row?.id != null).map(row => [String(row.id), row]));
+          let changed = false;
+          state.sites.forEach(site => {
+            const row = bySlug.get(String(site?.slug || "")) || byId.get(String(site?.id || ""));
+            if (!row) return;
+            const geojson = compactSiteGeometryToGeojson(row);
+            if (geojson) site.geojson = geojson;
+            if (row.display_geojson) site.display_geojson = row.display_geojson;
+            if (row.map_geometry_alias_of) site.map_geometry_alias_of = row.map_geometry_alias_of;
+            if (row.geometry_cleanup_status) site.geometry_cleanup_status = row.geometry_cleanup_status;
+            if (row.territory_display_label) site.territory_display_label = row.territory_display_label;
+            if (row.territory_assignment_version) site.territory_assignment_version = row.territory_assignment_version;
+            site.displayGeometry = siteDisplayGeometry(site);
+            site.center = geometryCenter(site.displayGeometry);
+            site.checkinCenter = geometryCenter(site.geojson || site.display_geojson || site.displayGeometry);
+            changed = true;
+          });
+          state.siteGeometryLoaded = true;
+          appEl?.setAttribute("data-site-geometry", "loaded");
+          if (!changed) return true;
+          state.mapSites = state.sites.filter(site => (
+            site.center &&
+            site.slug !== WHALING_FEATURE_SLUG &&
+            !site.map_geometry_alias_of
+          ));
+          invalidateMapSourceCache();
+          if (state.map) {
+            refreshMobileMapSources({ force: true });
+            syncMarkers({ auxiliary: false });
+          }
+          return true;
+        })
+        .catch(error => {
+          appEl?.setAttribute("data-site-geometry", "deferred");
+          console.warn("Detailed mobile site geometry will load on a later refresh.", error);
+          return false;
+        })
+        .finally(() => {
+          performance.mark?.("nli-mobile-geometry-hydration-end");
+          performance.measure?.("nli-mobile-geometry-hydration", "nli-mobile-geometry-hydration-start", "nli-mobile-geometry-hydration-end");
+          state.siteGeometryPromise = null;
+        });
+      return state.siteGeometryPromise;
+    }
+
     async function fetchWikiDetail(articleOrSlug) {
       const slug = typeof articleOrSlug === "string" ? articleOrSlug : articleOrSlug?.slug;
       if (!slug) return null;
@@ -3254,6 +3324,7 @@
     }
 
     async function loadData() {
+      performance.mark?.("nli-mobile-critical-data-start");
       if (window.NLI_MOBILE_DATA) {
         state.sites = repairSiteTitles((window.NLI_MOBILE_DATA.sites || []).map(SITE_UTILS.sanitizePublicSiteContent));
         state.wikiArticles = (window.NLI_MOBILE_DATA.wikiArticles || []).map(sanitizePublicWikiArticle);
@@ -3283,6 +3354,8 @@
       state.profileLoginRewards = window.NLI_MOBILE_DATA.profileLoginRewards || [];
       state.profileActivitySynced = false;
       state.deferredDataLoaded = true;
+      state.siteGeometryLoaded = true;
+      appEl?.setAttribute("data-site-geometry", "loaded");
       state.deferredCommunityDataLoaded = false;
       state.supportSettings = window.NLI_MOBILE_DATA.supportSettings || null;
       state.placeNameAreas = window.NLI_MOBILE_DATA.placeNameAreas || window.NLI_PLACE_NAME_AREAS || { type: "FeatureCollection", features: [] };
@@ -3290,6 +3363,8 @@
       updateMobileActivityUnreadBadge();
       updateMobileNotificationUnreadBadge();
       updateMobileHeaderInstruction();
+      performance.mark?.("nli-mobile-critical-data-end");
+      performance.measure?.("nli-mobile-critical-data", "nli-mobile-critical-data-start", "nli-mobile-critical-data-end");
       return;
       }
       let sitesResponse;
@@ -3299,7 +3374,7 @@
       try {
         [sitesResponse, siteGeometryRows, layersResponse, supportResponse] = await Promise.all([
           fetchMobileSiteIndexRows().then(data => ({ data })),
-          fetchMobileSiteGeometryRows(),
+          fetchMobileSiteCenterRows(),
           fetchJson("/items/map_layers?limit=1&filter[slug][_eq]=native-long-island-base-map&fields=id,title,slug,layer_type,style_json,visible_by_default,description", { cacheKey: "mobile-layers-base", ttl: 300000, fresh: false }),
           fetchJson(`/items/project_support_settings?limit=1&filter[key][_eq]=native-long-island&fields=${SUPPORT_FIELDS}`, { cacheKey: "mobile-support", ttl: 300000, fresh: false }).catch(() => ({ data: [] }))
         ]);
@@ -3320,6 +3395,8 @@
       updateMobileActivityUnreadBadge();
       updateMobileNotificationUnreadBadge();
       updateMobileHeaderInstruction();
+      performance.mark?.("nli-mobile-critical-data-end");
+      performance.measure?.("nli-mobile-critical-data", "nli-mobile-critical-data-start", "nli-mobile-critical-data-end");
     }
 
     function updateMobileHeaderInstruction() {
@@ -18084,6 +18161,7 @@
         }).finally(() => appEl?.classList.remove("mobile-map-initializing"));
         if (mobileMapReady && state.mobileStartupSiteRevealPending) await startMobileStartupSiteReveal();
         else if (state.mobileStartupSiteRevealPending) finishMobileStartupSiteReveal();
+        if (!isOfflineTextMode()) idleTask(hydrateMobileSiteGeometry);
         if (!isOfflineTextMode()) {
           state.researchQuestionInstance = window.NLI_RESEARCH_QUESTION_UTILS?.init?.({
             platform: "mobile",
