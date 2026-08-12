@@ -4720,7 +4720,7 @@
     /* A tablet in landscape has room for the map and reading surface together.
        Keep the phone drawer model below this breakpoint, but turn the wider view
        into a purposeful split layout instead of stretching the mobile stack. */
-    @media (orientation: landscape) and (min-width: 900px) and (min-height: 600px) {
+@media (orientation: landscape) and (min-width: 650px) and (min-height: 450px) {
       body.android-device {
         --map-height: auto;
       }
