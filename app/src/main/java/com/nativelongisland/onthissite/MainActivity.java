@@ -499,6 +499,7 @@ public class MainActivity extends Activity {
             @Override
             public void onPageCommitVisible(WebView view, String url) {
                 super.onPageCommitVisible(view, url);
+                syncTabletLandscapeClass(view);
             }
 
             @Override
@@ -1596,6 +1597,7 @@ public class MainActivity extends Activity {
         if (webView != null) {
             webView.onResume();
             webView.post(webView::requestApplyInsets);
+            syncTabletLandscapeClass(webView);
             scheduleNetworkStateEvaluation("resume");
         }
         if (billingManager != null) billingManager.restorePurchases();
@@ -1606,7 +1608,21 @@ public class MainActivity extends Activity {
         super.onConfigurationChanged(newConfig);
         if (webView != null) {
             webView.post(webView::requestApplyInsets);
+            syncTabletLandscapeClass(webView);
         }
+    }
+
+    private void syncTabletLandscapeClass(WebView view) {
+        if (view == null) return;
+        Configuration config = getResources().getConfiguration();
+        boolean tabletLandscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE
+            && config.smallestScreenWidthDp >= 600;
+        view.evaluateJavascript(
+            "(function(){var enabled=" + tabletLandscape
+                + ";document.documentElement.classList.toggle('tablet-landscape',enabled);"
+                + "document.body&&document.body.classList.toggle('tablet-landscape',enabled);})()",
+            null
+        );
     }
 
     @Override

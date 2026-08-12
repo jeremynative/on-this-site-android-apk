@@ -696,10 +696,16 @@
     function syncSystemSafeArea() {
       const isAndroid = /Android/i.test(navigator.userAgent);
       const isNativeAndroid = isAndroid && Boolean(window.AndroidApp || window.AndroidStory);
+      const tabletLandscape = isAndroid && (
+        document.documentElement.classList.contains("tablet-landscape")
+        || window.matchMedia("(orientation: landscape) and (min-width: 650px) and (min-height: 450px)").matches
+      );
       document.body.classList.toggle("android-device", isAndroid);
       document.documentElement.classList.toggle("android-device", isAndroid);
       document.body.classList.toggle("native-android-app", isNativeAndroid);
       document.documentElement.classList.toggle("native-android-app", isNativeAndroid);
+      document.body.classList.toggle("tablet-landscape", tabletLandscape);
+      document.documentElement.classList.toggle("tablet-landscape", tabletLandscape);
       const viewport = window.visualViewport;
       const topGap = viewport ? Math.max(0, viewport.offsetTop) : 0;
       const bottomGap = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
