@@ -4810,14 +4810,14 @@
         grid-column: 1;
         grid-row: 1;
         grid-template-columns: minmax(0, 1fr) auto;
-        grid-template-rows: 34px 34px;
+        grid-template-rows: 34px;
         align-items: center;
         gap: 4px 6px;
         padding: max(5px, var(--app-top-safe)) 8px 5px;
       }
 
       body.android-device.tablet-landscape .title-row {
-        grid-column: 1 / -1;
+        grid-column: 1;
         grid-row: 1;
         min-width: 0;
         gap: 6px;
@@ -4839,9 +4839,7 @@
       }
 
       body.android-device.tablet-landscape .search-autocomplete {
-        grid-column: 1;
-        grid-row: 2;
-        min-width: 0;
+        display: none;
       }
 
       body.android-device.tablet-landscape .search {
@@ -4853,7 +4851,7 @@
 
       body.android-device.tablet-landscape .quick-actions {
         grid-column: 2;
-        grid-row: 2;
+        grid-row: 1;
         display: grid;
         grid-template-columns: auto auto;
         gap: 4px;
