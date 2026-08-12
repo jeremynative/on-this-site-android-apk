@@ -2300,6 +2300,7 @@
               ? site.territory_label_point
               : geometryCenter(siteDisplayGeometry(site));
             if (!center) return null;
+            const unreadCount = mobileContentUnreadCount("site", site.slug);
             return {
               type: "Feature",
               geometry: { type: "Point", coordinates: center },
@@ -2307,7 +2308,8 @@
                 slug: site.slug,
                 title: site.title,
                 label_size: polygonLabelSize(site),
-                unread_count: mobileContentUnreadCount("site", site.slug)
+                unread_count: unreadCount,
+                unread_label: mobileUnreadCountLabel(unreadCount)
               }
             };
           })
@@ -6116,10 +6118,12 @@
     function siteFeatureCollection(sites = state.mapSites) {
       return {
         type: "FeatureCollection",
-        features: sites.map(site => ({
-          type: "Feature",
-          geometry: siteDisplayGeometry(site),
-          properties: {
+        features: sites.map(site => {
+          const unreadCount = mobileContentUnreadCount("site", site.slug);
+          return {
+            type: "Feature",
+            geometry: siteDisplayGeometry(site),
+            properties: {
             id: site.id,
             slug: site.slug,
             title: site.title,
@@ -6134,12 +6138,14 @@
             has_icon: !!siteMapIconUrl(site),
             icon_key: mobileSiteIconKey(site),
             startup_distance: mobileStartupSiteDistance(siteDisplayGeometry(site)?.coordinates),
-            unread_count: mobileContentUnreadCount("site", site.slug),
+            unread_count: unreadCount,
+            unread_label: mobileUnreadCountLabel(unreadCount),
             broad: isBroadTerritory(site),
             territory_label_point: site.territory_label_point || null,
             bounds_area: geometryBoundsArea(siteDisplayGeometry(site))
-          }
-        }))
+            }
+          };
+        })
       };
     }
 
@@ -13194,7 +13200,7 @@
         source: "mobile-sites",
         filter: ["all", ["==", ["geometry-type"], "Point"], [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0]],
         layout: {
-          "text-field": ["to-string", ["min", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 99]],
+          "text-field": ["get", "unread_label"],
           "text-size": 9,
           "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
           "text-anchor": "center",
@@ -13406,7 +13412,7 @@
           source,
           filter: [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
           layout: {
-            "text-field": ["to-string", ["min", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 99]],
+            "text-field": ["get", "unread_label"],
             "text-size": 9,
             "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
             "text-anchor": "center",
@@ -14957,6 +14963,11 @@
     function mobileContentUnreadCount(type, slug) {
       const targetKey = `${String(type || "").toLowerCase()}|${String(slug || "").trim().toLowerCase()}`;
       return ACTIVITY_UTILS.weightedActivityCount(mobileUnreadActivityItems().filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.key === targetKey));
+    }
+
+    function mobileUnreadCountLabel(count) {
+      const normalizedCount = Math.max(0, Number(count) || 0);
+      return normalizedCount > 99 ? "99+" : String(normalizedCount);
     }
 
     function markMobileActivityItemSeen(key) {
