@@ -42,6 +42,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -54,6 +55,7 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -96,6 +98,7 @@ public class MainActivity extends Activity {
     private static final long ACTIVE_WORK_RECHECK_DELAY_MS = 15000;
     private static final long OFFLINE_COVER_REVEAL_DELAY_MS = 900;
     private static final int OFFLINE_RENDER_MAX_ATTEMPTS = 12;
+    private static final long OFFLINE_RENDER_DEADLINE_MS = 12000;
     private static final int COMMENT_PHOTO_READ_MAX_ATTEMPTS = 3;
     private static final long COMMENT_PHOTO_READ_RETRY_DELAY_MS = 350;
     private static final String PREFS_NAME = "on_this_site_native_state";
@@ -111,6 +114,8 @@ public class MainActivity extends Activity {
     private BillingManager billingManager;
     private View loadingCover;
     private TextView loadingCoverLabel;
+    private TextView loadingCoverDetail;
+    private LinearLayout loadingCoverActions;
     private ObjectAnimator loadingOutlinePulse;
     private GeolocationPermissions.Callback pendingLocationCallback;
     private String pendingLocationOrigin;
@@ -189,6 +194,11 @@ public class MainActivity extends Activity {
         requestBundledFallbackPreservingActiveWork("validated-network-unavailable");
     };
     private final Runnable revealBundledFallback = this::probeBundledFallbackPaint;
+    private final Runnable offlineRenderDeadline = () -> {
+        if (webView == null || !loadingBundledFallback || appShellLoaded) return;
+        Log.w(LOG_TAG, "Bundled fallback renderer never became available; showing browser compatibility fallback.");
+        showWebViewCompatibilityFallback();
+    };
 
     private void probeBundledFallbackPaint() {
         if (webView == null || !loadingBundledFallback) return;
@@ -210,11 +220,8 @@ public class MainActivity extends Activity {
                     startupHandler.postDelayed(revealBundledFallback, OFFLINE_COVER_REVEAL_DELAY_MS);
                     return;
                 }
-                // Never uncover an empty WebView. A stalled renderer should
-                // leave a useful branded status surface instead of the gray
-                // frame that previously appeared after the fixed 900ms delay.
-                showLoadingCover("Saved map is taking longer than expected...");
-                Log.w(LOG_TAG, "Bundled fallback did not paint; keeping the native cover visible.");
+                Log.w(LOG_TAG, "Bundled fallback did not paint; showing browser compatibility fallback.");
+                showWebViewCompatibilityFallback();
             }
         );
     }
@@ -495,6 +502,14 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                Log.e(LOG_TAG, "WebView renderer ended; showing browser compatibility fallback."
+                    + " didCrash=" + (detail != null && detail.didCrash()));
+                showWebViewCompatibilityFallback();
+                return true;
+            }
+
+            @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
                 if (request != null && request.isForMainFrame()) {
@@ -594,6 +609,41 @@ public class MainActivity extends Activity {
         );
         labelParams.topMargin = dp(8);
         card.addView(loadingCoverLabel, labelParams);
+
+        loadingCoverDetail = new TextView(this);
+        loadingCoverDetail.setTextColor(Color.rgb(57, 76, 64));
+        loadingCoverDetail.setTextSize(15);
+        loadingCoverDetail.setGravity(Gravity.CENTER);
+        loadingCoverDetail.setVisibility(View.GONE);
+        LinearLayout.LayoutParams detailParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        detailParams.topMargin = dp(10);
+        card.addView(loadingCoverDetail, detailParams);
+
+        loadingCoverActions = new LinearLayout(this);
+        loadingCoverActions.setOrientation(LinearLayout.VERTICAL);
+        loadingCoverActions.setGravity(Gravity.CENTER);
+        loadingCoverActions.setVisibility(View.GONE);
+        LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        actionsParams.topMargin = dp(14);
+        Button openInBrowser = new Button(this);
+        openInBrowser.setAllCaps(false);
+        openInBrowser.setText("Open On This Site in browser");
+        openInBrowser.setOnClickListener(view -> openAppInBrowser());
+        loadingCoverActions.addView(openInBrowser, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+        Button retryInApp = new Button(this);
+        retryInApp.setAllCaps(false);
+        retryInApp.setText("Try in app again");
+        retryInApp.setOnClickListener(view -> refreshApp());
+        loadingCoverActions.addView(retryInApp, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+        card.addView(loadingCoverActions, actionsParams);
 
         FrameLayout.LayoutParams cardParams = new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -698,6 +748,7 @@ public class MainActivity extends Activity {
 
     private void hideLoadingCover() {
         startupHandler.removeCallbacks(startupFallback);
+        startupHandler.removeCallbacks(offlineRenderDeadline);
         if (loadingCover == null || loadingCover.getVisibility() != View.VISIBLE) return;
         loadingCover.animate()
             .alpha(0f)
@@ -711,6 +762,8 @@ public class MainActivity extends Activity {
 
     private void showLoadingCover(String message) {
         if (loadingCover == null) return;
+        if (loadingCoverDetail != null) loadingCoverDetail.setVisibility(View.GONE);
+        if (loadingCoverActions != null) loadingCoverActions.setVisibility(View.GONE);
         if (loadingCoverLabel != null) loadingCoverLabel.setText(message == null || message.trim().isEmpty()
             ? "Loading On This Site"
             : message);
@@ -718,6 +771,37 @@ public class MainActivity extends Activity {
         loadingCover.animate().cancel();
         loadingCover.setAlpha(1f);
         loadingCover.setVisibility(View.VISIBLE);
+    }
+
+    private void showWebViewCompatibilityFallback() {
+        if (loadingCover == null) return;
+        startupHandler.removeCallbacks(startupFallback);
+        startupHandler.removeCallbacks(revealBundledFallback);
+        startupHandler.removeCallbacks(offlineRenderDeadline);
+        if (loadingOutlinePulse != null) loadingOutlinePulse.cancel();
+        if (loadingCoverLabel != null) loadingCoverLabel.setText("This map needs a browser on this device");
+        if (loadingCoverDetail != null) {
+            loadingCoverDetail.setText("Open the same On This Site map in your browser. You can return here and try again after your device updates its web display service.");
+            loadingCoverDetail.setVisibility(View.VISIBLE);
+        }
+        if (loadingCoverActions != null) loadingCoverActions.setVisibility(View.VISIBLE);
+        loadingCover.animate().cancel();
+        loadingCover.setAlpha(1f);
+        loadingCover.setVisibility(View.VISIBLE);
+    }
+
+    private void openAppInBrowser() {
+        Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(APP_BASE_URL));
+        browserIntent.addCategory(Intent.CATEGORY_BROWSABLE);
+        try {
+            startActivity(browserIntent);
+        } catch (ActivityNotFoundException error) {
+            Log.w(LOG_TAG, "No browser was available for the WebView compatibility fallback.", error);
+            if (loadingCoverDetail != null) {
+                loadingCoverDetail.setText("No browser is available on this device. Update Android System WebView, then choose Try in app again.");
+                loadingCoverDetail.setVisibility(View.VISIBLE);
+            }
+        }
     }
 
     private WebResourceResponse bundledAppResponse(Uri uri) {
@@ -1375,6 +1459,7 @@ public class MainActivity extends Activity {
         startupHandler.removeCallbacks(validatedNetworkRecoveryRetry);
         startupHandler.removeCallbacks(unusableNetworkFallback);
         startupHandler.removeCallbacks(revealBundledFallback);
+        startupHandler.removeCallbacks(offlineRenderDeadline);
         if (!hasUsableNetwork()) {
             loadBundledFallback("offline-at-launch");
             return;
@@ -1416,6 +1501,7 @@ public class MainActivity extends Activity {
             OFFLINE_BASE_URL + "offline-app.html?apk-offline=" + System.currentTimeMillis()
         );
         startupHandler.postDelayed(revealBundledFallback, OFFLINE_COVER_REVEAL_DELAY_MS);
+        startupHandler.postDelayed(offlineRenderDeadline, OFFLINE_RENDER_DEADLINE_MS);
         if (retryValidatedNetwork) {
             Log.i(LOG_TAG, "Live recovery returned to fallback; scheduling a bounded retry.");
             startupHandler.postDelayed(validatedNetworkRecoveryRetry, LIVE_RECOVERY_RETRY_DELAY_MS);

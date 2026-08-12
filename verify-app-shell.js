@@ -493,7 +493,12 @@ requireText('OFFLINE_BASE_URL + "offline-app.html?apk-offline="', "Android shell
 requireText('"/app/offline-app.html".equals(path)', "Android shell must serve the offline document directly from APK assets.");
 requireText("OFFLINE_RENDER_MAX_ATTEMPTS", "Android shell must bound its offline paint checks.");
 requireText("body.innerText.trim().length>20?'painted':'waiting'", "Android shell must verify visible offline content before uncovering the WebView.");
-requireText('showLoadingCover("Saved map is taking longer than expected...")', "Android shell must retain a useful branded surface when the WebView renderer stalls.");
+requireText("OFFLINE_RENDER_DEADLINE_MS", "Android shell must retain a native deadline when a failed renderer never returns JavaScript callbacks.");
+requireText("offlineRenderDeadline", "Android shell must escape a permanently unavailable WebView renderer.");
+requireText("showWebViewCompatibilityFallback", "Android shell must provide an app-owned fallback when WebView cannot render.");
+requireText("onRenderProcessGone", "Android shell must recover visibly when Android terminates the WebView renderer.");
+requireText("Open On This Site in browser", "Android shell must offer the full site in a browser when its embedded renderer cannot start.");
+requireText("Intent.ACTION_VIEW", "Android shell must launch the browser compatibility route without requiring device settings changes.");
 requireText("LIVE_STARTUP_FALLBACK_DELAY_MS = 22000", "Android shell must let the bounded page-readiness probe finish before falling back on a cold validated connection.");
 requireText("if (!loadingBundledFallback && isAppShellUrl(url))", "Android shell must restart the readiness allowance when the main WebView page actually begins loading.");
 requireText("scheduleLiveStartupFallback();", "Android shell must schedule a bounded live startup fallback.");
