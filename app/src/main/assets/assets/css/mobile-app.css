@@ -4900,8 +4900,13 @@
 
       body.android-device.tablet-landscape .mobile-activity-button,
       body.android-device.tablet-landscape .mobile-notification-button {
+        top: var(--mobile-map-actions-top, calc(var(--app-top-safe) + 90px));
         left: max(10px, var(--app-left-safe));
         right: auto;
+      }
+
+      body.android-device.tablet-landscape .mobile-notification-button {
+        left: max(62px, calc(var(--app-left-safe) + 52px));
       }
 
       body.android-device.tablet-landscape .detail {

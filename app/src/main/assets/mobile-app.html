@@ -161,7 +161,7 @@
       content: "";
       position: absolute;
       inset: 0;
-      background: url("assets/images/long-island-loading-outline.png") center / contain no-repeat;
+      background: url("../images/long-island-loading-outline.png") center / contain no-repeat;
       opacity: 0.72;
       pointer-events: none;
       z-index: 2;
@@ -177,8 +177,8 @@
       display: block;
       overflow: hidden;
       background: linear-gradient(90deg, #2f5a49 0%, #6e9d7c 62%, #f4c95d 100%);
-      -webkit-mask: url("assets/images/long-island-loading-outline.png") center / contain no-repeat;
-      mask: url("assets/images/long-island-loading-outline.png") center / contain no-repeat;
+      -webkit-mask: url("../images/long-island-loading-outline.png") center / contain no-repeat;
+      mask: url("../images/long-island-loading-outline.png") center / contain no-repeat;
       clip-path: inset(0 50% 0 50%);
       animation: loading-island-fill 2200ms cubic-bezier(.2, .74, .22, 1) infinite;
       z-index: 1;
@@ -4921,8 +4921,13 @@
 
       body.android-device.tablet-landscape .mobile-activity-button,
       body.android-device.tablet-landscape .mobile-notification-button {
+        top: var(--mobile-map-actions-top, calc(var(--app-top-safe) + 90px));
         left: max(10px, var(--app-left-safe));
         right: auto;
+      }
+
+      body.android-device.tablet-landscape .mobile-notification-button {
+        left: max(62px, calc(var(--app-left-safe) + 52px));
       }
 
       body.android-device.tablet-landscape .detail {
