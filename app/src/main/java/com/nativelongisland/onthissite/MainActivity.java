@@ -544,6 +544,7 @@ public class MainActivity extends Activity {
                     "window.__NLI_ANDROID_BRIDGE_TOKEN=" + jsString(bridgeCapabilityToken),
                     null
                 );
+                syncTabletLandscapeClass(view);
                 enforceExclusiveMobilePanels(view);
                 installNativeCommentPhotoCompatibility(view);
                 validateLoadedAppShell(url);
