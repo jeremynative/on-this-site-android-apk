@@ -503,8 +503,7 @@ public class MainActivity extends Activity {
 
             @Override
             public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
-                Log.e(LOG_TAG, "WebView renderer ended; showing browser compatibility fallback."
-                    + " didCrash=" + (detail != null && detail.didCrash()));
+                Log.e(LOG_TAG, "WebView renderer ended; showing browser compatibility fallback.");
                 showWebViewCompatibilityFallback();
                 return true;
             }
