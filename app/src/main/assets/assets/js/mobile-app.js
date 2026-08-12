@@ -697,7 +697,7 @@
       const isAndroid = /Android/i.test(navigator.userAgent);
       const isNativeAndroid = isAndroid && Boolean(window.AndroidApp || window.AndroidStory);
       const tabletLandscape = isAndroid && (
-        document.documentElement.classList.contains("tablet-landscape")
+        document.documentElement.dataset.nativeTabletLandscape === "true"
         || window.matchMedia("(orientation: landscape) and (min-width: 650px) and (min-height: 450px)").matches
       );
       document.body.classList.toggle("android-device", isAndroid);

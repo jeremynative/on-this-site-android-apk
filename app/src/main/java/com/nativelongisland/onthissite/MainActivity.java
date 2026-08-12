@@ -1625,7 +1625,9 @@ public class MainActivity extends Activity {
             && config.screenHeightDp >= 400;
         view.evaluateJavascript(
             "(function(){var enabled=" + tabletLandscape
-                + ";document.documentElement.classList.toggle('tablet-landscape',enabled);"
+                + ";document.documentElement.dataset.nativeTabletLandscape=enabled?'true':'false';"
+                + "document.documentElement.classList.toggle('tablet-landscape',enabled);"
+                + "if(document.body)document.body.dataset.nativeTabletLandscape=enabled?'true':'false';"
                 + "document.body&&document.body.classList.toggle('tablet-landscape',enabled);})()",
             null
         );
