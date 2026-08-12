@@ -799,6 +799,36 @@
       place-items: center;
     }
 
+    .mobile-content-unread-badge {
+      display: inline-grid;
+      place-items: center;
+      min-width: 19px;
+      height: 19px;
+      margin-left: 7px;
+      padding: 0 5px;
+      border: 2px solid #fff;
+      border-radius: 999px;
+      background: #c62828;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 900;
+      line-height: 1;
+      vertical-align: middle;
+      box-shadow: 0 2px 7px rgba(44, 24, 20, 0.28);
+      pointer-events: none;
+    }
+
+    .mobile-content-unread-badge[hidden] { display: none !important; }
+
+    [data-app-page="knowledgebase"] { position: relative; }
+
+    .mobile-knowledgebase-unread-badge {
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      margin: 0;
+    }
+
     .mobile-activity-button svg,
     .mobile-notification-button svg {
       width: 19px;
@@ -5685,6 +5715,12 @@
       display: block;
       gap: 0;
       padding: 0;
+    }
+
+    .activity-feed-item.activity-learning-card.is-unread,
+    .site-card.has-unread-activity {
+      border-color: rgba(198, 40, 40, 0.55);
+      box-shadow: 0 8px 22px rgba(118, 37, 31, 0.11);
     }
 
     .activity-learning-card .learning-card-header {

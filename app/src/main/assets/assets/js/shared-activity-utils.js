@@ -106,6 +106,81 @@
     return latest;
   }
 
+  function activityContentTarget(item = {}) {
+    const itemType = String(item.kind || item.type || "").toLowerCase();
+    const explicitType = String(item.contentSourceType || item.content_source_type || "").toLowerCase();
+    const explicitSlug = String(item.contentSlug || item.content_slug || item.attachedSiteSlug || item.attached_site_slug || "").trim().toLowerCase();
+    if (["site", "wiki"].includes(explicitType) && explicitSlug) {
+      return { type: explicitType, slug: explicitSlug, key: `${explicitType}|${explicitSlug}` };
+    }
+    const sourceType = itemType === "historic-moment" || itemType === "comment" || itemType === "event"
+      ? String(item.sourceType || item.source_type || "").toLowerCase()
+      : itemType;
+    const slug = String(item.sourceSlug || item.source_slug || item.slug || "").trim().toLowerCase();
+    if (!["site", "wiki"].includes(sourceType) || !slug) return null;
+    return { type: sourceType, slug, key: `${sourceType}|${slug}` };
+  }
+
+  function activityItemKey(item = {}) {
+    const groupKey = String(item.activityGroupKey || item.activity_group_key || "").trim();
+    if (groupKey) return groupKey;
+    const target = activityContentTarget(item);
+    const type = String(item.kind || item.type || "activity").toLowerCase();
+    const id = String(item.commentId || item.comment_id || item.activityId || item.activity_id || item.id || "").trim();
+    const title = String(item.title || item.sourceTitle || item.source_title || "").trim().toLowerCase();
+    const date = String(item.date || item.created_at || item.updated_at || "").trim();
+    return [type, target?.key || "global", id || String(item.slug || ""), title, date].join("|");
+  }
+
+  function activityItemKeys(item = {}) {
+    const members = Array.isArray(item.activityMembers) ? item.activityMembers : [];
+    if (!members.length) return [activityItemKey(item)];
+    return [...new Set(members.flatMap(member => activityItemKeys(member)).filter(Boolean))];
+  }
+
+  function readSeenItemKeys(storageKey, storage = defaultStorage()) {
+    try {
+      const parsed = JSON.parse(storage?.getItem?.(storageKey) || "[]");
+      return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  function writeSeenItemKeys(storageKey, keys = [], options = {}) {
+    const storage = options.storage || defaultStorage();
+    const existing = options.replace ? new Set() : readSeenItemKeys(storageKey, storage);
+    [...keys].filter(Boolean).forEach(key => existing.add(String(key)));
+    const values = [...existing].slice(-Math.max(50, Number(options.limit || 500)));
+    try {
+      storage?.setItem?.(storageKey, JSON.stringify(values));
+    } catch {}
+    return new Set(values);
+  }
+
+  function unreadItems(items = [], options = {}) {
+    const baseline = Number(options.baseline || 0);
+    const seenKeys = options.seenKeys instanceof Set ? options.seenKeys : new Set(options.seenKeys || []);
+    const now = Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now();
+    return items.map(item => {
+      const members = Array.isArray(item.activityMembers) && item.activityMembers.length ? item.activityMembers : [item];
+      const unreadMembers = members.filter(member => {
+        const date = activityDateValue(member?.date || member?.created_at);
+        return date > baseline && date <= now && !seenKeys.has(activityItemKey(member));
+      });
+      if (!unreadMembers.length || seenKeys.has(activityItemKey(item))) return null;
+      return { ...item, unreadWeight: unreadMembers.reduce((total, member) => total + Math.max(1, Number(member.groupedCount || 1) || 1), 0) };
+    }).filter(Boolean);
+  }
+
+  function activityItemWeight(item = {}) {
+    return Math.max(1, Number(item.unreadWeight || item.groupedCount || item.grouped_count || 1) || 1);
+  }
+
+  function weightedActivityCount(items = []) {
+    return items.reduce((total, item) => total + activityItemWeight(item), 0);
+  }
+
   function commentLabel(sourceType = "site", options = {}) {
     if (options.plantObservation) return `${options.authorName || "Contributor"} reported a plant`;
     const normalized = String(sourceType || "").toLowerCase();
@@ -155,16 +230,89 @@
     return article.date_created || article.created_at || article.imported_at || article.wp_date || "";
   }
 
+  function contentUpdateDate(item = {}) {
+    item = item || {};
+    return item.activity_update_date || item.activity_feed_date || "";
+  }
+
+  function contentActivityDate(item = {}, options = {}) {
+    const created = options.type === "wiki" ? wikiCreatedDate(item) : siteCreatedDate(item);
+    return contentUpdateDate(item) || created || "";
+  }
+
+  function relatedActivityMoments(item = {}, options = {}) {
+    item = item || {};
+    const type = String(options.type || "site").toLowerCase();
+    const id = String(item.id ?? "");
+    const slug = String(item.slug || "").toLowerCase();
+    return (options.timelineEvents || [])
+      .filter(moment => String(moment?.source_type || "").toLowerCase() === type)
+      .filter(moment => {
+        const sourceId = String(moment?.source_id ?? moment?.wiki_article ?? moment?.site ?? "");
+        const sourceSlug = String(moment?.source_slug || "").toLowerCase();
+        return Boolean((id && sourceId === id) || (slug && sourceSlug === slug));
+      })
+      .sort((a, b) =>
+        Number(a.sort_key ?? a.start_year ?? Number.MAX_SAFE_INTEGER) - Number(b.sort_key ?? b.start_year ?? Number.MAX_SAFE_INTEGER) ||
+        Number(a.id || 0) - Number(b.id || 0)
+      );
+  }
+
+  function activityNewsPreview(item = {}, options = {}) {
+    item = item || {};
+    const cleanText = typeof options.cleanText === "function"
+      ? options.cleanText
+      : value => String(value || "").replace(/<[^>]*>/g, " ");
+    const explicit = cleanText(item.activity_update_summary || item.activity_feed_summary || "").replace(/\s+/g, " ").trim();
+    if (explicit) return preview(explicit, { cleanText, limit: options.limit || 230, preferSentence: true });
+
+    const moments = relatedActivityMoments(item, options);
+    if (moments.length) {
+      const moment = moments[0];
+      const date = cleanText(moment.date_label || moment.period || "").replace(/\s+/g, " ").trim();
+      const detail = cleanText(moment.description || moment.source_excerpt || moment.title || "").replace(/\s+/g, " ").trim();
+      if (detail) {
+        const lead = options.isNew ? "New content includes" : "Featured research";
+        return preview(`${lead}: ${date ? `${date} - ` : ""}${detail}`, {
+          cleanText,
+          limit: options.limit || 230,
+          preferSentence: true
+        });
+      }
+    }
+
+    const candidates = options.type === "wiki"
+      ? [item.content, item.why_this_matters]
+      : [
+          item.history_content,
+          item.translation_content,
+          item.preservation_content,
+          item.oral_history_content,
+          item.land_loss_content,
+          item.why_this_matters
+        ];
+    const intro = cleanText(item.summary || item.introduction_content || item.introduction || "").replace(/\s+/g, " ").trim();
+    const substantive = candidates
+      .map(value => cleanText(value || "").replace(/\s+/g, " ").trim())
+      .find(value => value && value !== intro);
+    if (!substantive) return "";
+    return preview(`${options.isNew ? "New content includes" : "Featured research"}: ${substantive}`, {
+      cleanText,
+      limit: options.limit || 230,
+      preferSentence: true
+    });
+  }
+
   function wikiActivityLabel(article = {}) {
     const created = wikiCreatedDate(article);
-    const edited = siteEditedDate(article, { extended: true });
+    const edited = contentUpdateDate(article);
     if (created && (!edited || sameCalendarDate(created, edited))) return "New Article";
     return "Wiki updated";
   }
 
   function wikiActivityDate(article = {}) {
     const created = wikiCreatedDate(article);
-    const edited = siteEditedDate(article, { extended: true });
+    const edited = contentUpdateDate(article);
     if (created && (!edited || sameCalendarDate(created, edited))) return created;
     return edited || created;
   }
@@ -203,9 +351,13 @@
 
   function siteActivityLabel(site = {}) {
     const created = siteCreatedDate(site);
-    const edited = siteEditedDate(site);
+    const edited = contentUpdateDate(site);
     if (created && (!edited || sameCalendarDate(created, edited))) return "Site added";
     return "Site updated";
+  }
+
+  function siteActivityDate(site = {}) {
+    return contentActivityDate(site, { type: "site" });
   }
 
   function editedDateLabel(value, options = {}) {
@@ -229,6 +381,9 @@
       const pinnedA = activityIsPinned(a, options);
       const pinnedB = activityIsPinned(b, options);
       return Number(pinnedB) - Number(pinnedA) ||
+        // Pins are announcements: show the newest one first. Their expiry is only
+        // a tie-breaker, so a long-running older pin cannot bury a new event.
+        (pinnedB ? activityDateValue(dateAccessor(b)) : 0) - (pinnedA ? activityDateValue(dateAccessor(a)) : 0) ||
         (pinnedB ? activityDateValue(activityPinUntil(b)) : 0) - (pinnedA ? activityDateValue(activityPinUntil(a)) : 0) ||
         activityDateValue(dateAccessor(b)) - activityDateValue(dateAccessor(a)) ||
         Number(b.activityPriority || b.activity_priority || 0) - Number(a.activityPriority || a.activity_priority || 0) ||
@@ -236,9 +391,122 @@
     });
   }
 
+  function activityItemType(item = {}) {
+    return String(item.kind || item.type || "").toLowerCase();
+  }
+
+  function contentUpdateIdentity(item = {}) {
+    if (activityIsPinned(item)) return null;
+    const type = activityItemType(item);
+    if (!["site", "wiki", "historic-moment"].includes(type)) return null;
+    const sourceType = type === "historic-moment"
+      ? String(item.sourceType || item.source_type || "").toLowerCase()
+      : type;
+    const slug = String(item.slug || item.source_slug || "").trim().toLowerCase();
+    const day = calendarDateKey(item.date || item.created_at);
+    if (!["site", "wiki"].includes(sourceType) || !slug || !day) return null;
+    return { sourceType, slug, day, key: `${sourceType}|${slug}|${day}` };
+  }
+
+  function activityComparisonTokens(value) {
+    const stopWords = new Set(["a", "an", "and", "as", "at", "by", "for", "from", "in", "is", "of", "on", "or", "the", "to", "was", "with"]);
+    return new Set(String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter(token => token.length > 2 && !stopWords.has(token)));
+  }
+
+  function activityUpdatesOverlap(first, second) {
+    const left = String(first || "").replace(/\s+/g, " ").trim().toLowerCase();
+    const right = String(second || "").replace(/\s+/g, " ").trim().toLowerCase();
+    if (!left || !right) return false;
+    if (left === right || (Math.min(left.length, right.length) > 45 && (left.includes(right) || right.includes(left)))) return true;
+    const leftTokens = activityComparisonTokens(left);
+    const rightTokens = activityComparisonTokens(right);
+    if (!leftTokens.size || !rightTokens.size) return false;
+    const shared = [...leftTokens].filter(token => rightTokens.has(token)).length;
+    return shared / Math.min(leftTokens.size, rightTokens.size) >= 0.45;
+  }
+
+  function activityUpdateEntry(item = {}) {
+    const type = activityItemType(item);
+    const title = String(item.title || "").replace(/\s+/g, " ").trim();
+    const detail = String(item.preview || "").replace(/\s+/g, " ").trim();
+    if (type === "historic-moment") {
+      return {
+        title,
+        detail: detail && !activityUpdatesOverlap(title, detail) ? detail : "",
+        text: [title, detail].filter(Boolean).join(" "),
+        type
+      };
+    }
+    return { title: "", detail, text: detail || title, type };
+  }
+
+  function groupSameDayContentUpdates(items = []) {
+    const buckets = new Map();
+    const passthrough = [];
+    items.forEach((item, index) => {
+      const identity = contentUpdateIdentity(item);
+      if (!identity) {
+        passthrough.push({ item, index });
+        return;
+      }
+      if (!buckets.has(identity.key)) buckets.set(identity.key, { identity, rows: [] });
+      buckets.get(identity.key).rows.push({ item, index });
+    });
+
+    const grouped = [...passthrough];
+    buckets.forEach(({ identity, rows }) => {
+      if (rows.length === 1) {
+        grouped.push(rows[0]);
+        return;
+      }
+      const direct = rows.find(row => activityItemType(row.item) === identity.sourceType);
+      const baseRow = direct || rows[0];
+      const historicEntries = rows
+        .filter(row => activityItemType(row.item) === "historic-moment")
+        .map(row => activityUpdateEntry(row.item));
+      const otherEntries = rows
+        .filter(row => activityItemType(row.item) !== "historic-moment")
+        .map(row => activityUpdateEntry(row.item))
+        .filter(entry => !historicEntries.some(historic => activityUpdatesOverlap(entry.text, historic.text)));
+      const updates = [...historicEntries, ...otherEntries]
+        .filter(entry => entry.text)
+        .filter((entry, index, list) => !list.slice(0, index).some(prior => activityUpdatesOverlap(entry.text, prior.text)))
+        .map(({ title, detail, type }) => ({ title, detail, type }));
+      const base = baseRow.item;
+      const sourceTitle = String(base.sourceTitle || direct?.item?.title || base.title || "Archive update").trim();
+      grouped.push({
+        index: Math.min(...rows.map(row => row.index)),
+        item: {
+          ...base,
+          title: sourceTitle,
+          label: direct?.item?.label || (identity.sourceType === "wiki" ? "Wiki updated" : "Site updated"),
+          sourceType: identity.sourceType,
+          preview: "",
+          updates,
+          groupedActivity: true,
+          groupedCount: rows.length,
+          activityGroupKey: `activity-group:${identity.key}`,
+          activityMembers: rows.map(row => row.item)
+        }
+      });
+    });
+    return grouped.sort((a, b) => a.index - b.index).map(entry => entry.item);
+  }
+
+  function updateListHtml(updates = [], options = {}) {
+    if (!Array.isArray(updates) || !updates.length) return "";
+    const escape = options.escapeHtml || (value => String(value || ""));
+    return `<div class="activity-update-summary"><strong>Updated content</strong><ul>${updates.map(update => `<li>${update.title ? `<strong>${escape(update.title)}</strong>` : ""}${update.detail ? `<span>${escape(update.detail)}</span>` : ""}</li>`).join("")}</ul></div>`;
+  }
+
   function mergeRecentActivity(groups = [], options = {}) {
     const limit = Number(options.limit || 40);
-    return sortByRecentActivity(groups.flat(), options).slice(0, limit);
+    return sortByRecentActivity(groupSameDayContentUpdates(groups.flat()), options).slice(0, limit);
   }
 
   function activityPinUntil(item = {}) {
@@ -269,6 +537,14 @@
     unreadCount,
     readSeen,
     writeSeen,
+    activityContentTarget,
+    activityItemKey,
+    activityItemKeys,
+    readSeenItemKeys,
+    writeSeenItemKeys,
+    unreadItems,
+    activityItemWeight,
+    weightedActivityCount,
     commentLabel,
     suggestionLabel,
     suggestionDate,
@@ -278,9 +554,13 @@
     siteEditedDate,
     siteCreatedDate,
     wikiCreatedDate,
+    contentUpdateDate,
+    contentActivityDate,
+    activityNewsPreview,
     wikiActivityDate,
     eventActivityDate,
     siteActivityLabel,
+    siteActivityDate,
     wikiActivityLabel,
     wikiActivityPriority,
     editedDateLabel,
@@ -288,6 +568,8 @@
     activityIsPinned,
     activityPinLabel,
     sortByRecentActivity,
+    groupSameDayContentUpdates,
+    updateListHtml,
     mergeRecentActivity
   };
 }());

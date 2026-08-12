@@ -1,5 +1,14 @@
 # Android APK — Codex Handoff
 
+## August 11 persistent content notification bundle
+
+- Synced the tested mobile runtime for persistent per-content activity notifications into both Android fallbacks. Community Activity no longer clears merely because its panel opens; each update remains unread until the visitor opens the linked site/article or explicitly presses that card's Dismiss action.
+- Added weighted per-site red map badges, a Knowledgebase total badge, and article/site card badges. Grouped activity keeps its member identities so the displayed count represents the actual number of unseen updates.
+- APK shell build ID is `20260811-persistent-content-unread-r73`. The Android shell verifier now protects the item-key store, weighted count, map badges, Knowledgebase badge, Dismiss action, and absence of the former blanket-clear call.
+- `node verify-app-shell.js`, JavaScript syntax checks, `git diff --check`, and `build-debug-apk.ps1` pass. The hosted APK runtime was separately deployed and read back with all new notification markers.
+
+Safest next action: publish this focused APK bundle through the signed release workflow, verify the exact Obtainium artifact, and install it over an existing test device without clearing app data.
+
 ## August 11 Plant ID system-navigation clearance
 
 - Added Plant-ID-specific Android bottom clearance so the expanded plant report form, its photo actions, and the in-app camera controls stay above gesture and three-button system navigation even if WebView briefly reports a partial inset while opening the drawer or returning from Camera.

@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260811-plant-safe-area-r72";
+const expectedBuild = "20260811-persistent-content-unread-r73";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1063,6 +1063,14 @@ requireBundledText('function readSeen(storageKey, storage = defaultStorage())', 
 requireBundledText('function writeSeen(storageKey, items = [], options = {})', "Bundled Android app must include shared safe activity seen writes.");
 requireBundledText('ACTIVITY_UTILS.readSeen(mobileNotificationLastSeenKey())', "Bundled Android app must route notification unread state through shared activity utilities.");
 requireBundledText('ACTIVITY_UTILS.readSeen(mobileActivityLastSeenKey())', "Bundled Android app must route activity unread state through shared activity utilities.");
+requireBundledText('nli-mobile-activity-seen-items-v2', "Bundled Android app must persist individual activity items until their connected content is viewed or they are dismissed.");
+requireBundledText('ACTIVITY_UTILS.weightedActivityCount(mobileUnreadActivityItems())', "Bundled Android app must count grouped unread activity accurately.");
+requireBundledText('data-mobile-activity-dismiss', "Bundled Android activity cards must expose an explicit unread dismissal action.");
+requireBundledText('mobile-site-unread-badges', "Bundled Android map must expose per-site unread badges.");
+requireBundledText('data-mobile-knowledgebase-unread-badge', "Bundled Android Knowledgebase must expose its unread count.");
+if (bundledMobileJs.includes('markMobileActivitySeen();')) {
+  throw new Error("Bundled Android app must not clear all activity merely because the Community Activity feed was opened.");
+}
 requireBundledText('function editedDateLabel(value, options = {})', "Bundled Android app must include shared edited-date labels.");
 requireBundledText('ACTIVITY_UTILS.editedDateLabel(latestEditedDate(item), { fallback: DEFAULT_LAST_EDITED_LABEL })', "Bundled Android app must route edited-date labels through shared activity utilities.");
 requireBundledText('function siteEditedDate(site = {}, options = {})', "Bundled Android app must include shared edited-date source selection.");

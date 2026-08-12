@@ -1567,29 +1567,22 @@
     async function requestPasswordReset({ email }) {
       const normalizedEmail = normalizeAccountEmail(email);
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalizedEmail)) throw new Error("Enter the email for the account.");
-      let response = await fetch(`${DIRECTUS}/auth/password/request`, {
+      const response = await fetch("https://nativelongisland.com/account-registration.php", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: normalizedEmail, reset_url: ROUTE_UTILS.passwordResetReturnUrl(window.location) })
+        body: JSON.stringify({ action: "password_reset_request", email: normalizedEmail })
       });
-      if (!response.ok && response.status === 400) {
-        response = await fetch(`${DIRECTUS}/auth/password/request`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: normalizedEmail })
-        });
-      }
       if (!response.ok) throw new Error("Could not send reset email.");
       return true;
     }
 
     async function completePasswordReset({ password }) {
       if (!state.passwordResetToken) throw new Error("This reset link is missing its token. Request a new reset email.");
-      if (String(password || "").length < 8) throw new Error("New password must be at least 8 characters.");
-      const response = await fetch(`${DIRECTUS}/auth/password/reset`, {
+      if (String(password || "").length < 10) throw new Error("New password must be at least 10 characters.");
+      const response = await fetch("https://nativelongisland.com/account-registration.php", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token: state.passwordResetToken, password })
+        body: JSON.stringify({ action: "password_reset_confirm", token: state.passwordResetToken, password })
       });
       if (!response.ok) throw new Error("This reset link is expired or has already been used.");
       state.passwordResetToken = "";
@@ -2313,7 +2306,8 @@
               properties: {
                 slug: site.slug,
                 title: site.title,
-                label_size: polygonLabelSize(site)
+                label_size: polygonLabelSize(site),
+                unread_count: mobileContentUnreadCount("site", site.slug)
               }
             };
           })
@@ -3525,7 +3519,7 @@
       if (eventsSheetEl?.classList.contains("open")) runDeferredUpdate("Events", renderEventsList);
       if (activitySheetEl?.classList.contains("open")) runDeferredUpdate("Activity", () => {
         renderMobileActivitySheet();
-        markMobileActivitySeen();
+        updateMobileActivityUnreadBadge();
       });
       if (notificationsSheetEl?.classList.contains("open")) runDeferredUpdate("Notifications", () => {
         renderMobileNotificationsSheet();
@@ -6140,6 +6134,7 @@
             has_icon: !!siteMapIconUrl(site),
             icon_key: mobileSiteIconKey(site),
             startup_distance: mobileStartupSiteDistance(siteDisplayGeometry(site)?.coordinates),
+            unread_count: mobileContentUnreadCount("site", site.slug),
             broad: isBroadTerritory(site),
             territory_label_point: site.territory_label_point || null,
             bounds_area: geometryBoundsArea(siteDisplayGeometry(site))
@@ -6298,6 +6293,8 @@
         "mobile-biography-path-labels",
         "mobile-biography-path-point-numbers",
         "mobile-biography-path-points",
+        "mobile-site-unread-counts",
+        "mobile-site-unread-badges",
         "mobile-site-point-hit",
         "mobile-place-name-area-labels",
         "mobile-place-name-area-fill",
@@ -6357,7 +6354,7 @@
     }
 
     function isMobilePointHitFeature(feature) {
-      return feature?.layer?.id === "mobile-site-point-hit";
+      return ["mobile-site-point-hit", "mobile-site-unread-badges", "mobile-site-unread-counts"].includes(feature?.layer?.id);
     }
 
     function bestMobilePointHitFeature(features = [], event = null) {
@@ -11235,6 +11232,7 @@
         showBanner("This knowledgebase article is not available yet.");
         return;
       }
+      markMobileContentActivitySeen("wiki", slug);
       let article = state.wikiBySlug.get(slug) || (typeof articleOrSlug === "object" ? articleOrSlug : null);
       state.selectedSlug = "";
       state.selectedSite = null;
@@ -11381,10 +11379,10 @@
 
     function siteCardButton(site) {
       return `
-        <button class="site-card" type="button" data-slug="${escapeHtml(site.slug)}">
+        <button class="site-card" type="button" data-slug="${escapeHtml(site.slug)}" data-mobile-activity-content-type="site" data-mobile-activity-content-slug="${escapeHtml(site.slug)}">
           ${siteCardThumbHtml(site)}
           <span>
-            <h2>${escapeHtml(site.title)}</h2>
+            <h2>${escapeHtml(site.title)}<span class="mobile-content-unread-badge" data-mobile-content-unread-badge hidden></span></h2>
             <p>${escapeHtml(publicCleanText(site.summary || site.address_label || "Mapped place").slice(0, 150))}</p>
           </span>
         </button>
@@ -11737,7 +11735,7 @@
     }
 
     async function openKnowledgebasePanel() {
-      detailTitleEl.innerHTML = `<h2>Knowledgebase</h2><p class="detail-meta">Articles</p>`;
+      detailTitleEl.innerHTML = `<h2>Knowledgebase <span class="mobile-content-unread-badge" data-mobile-knowledgebase-unread-badge hidden></span></h2><p class="detail-meta">Articles</p>`;
       detailBodyEl.innerHTML = `<p class="summary">Loading knowledgebase articles...</p>`;
       detailEl.classList.add("open");
       syncMobilePanelAccessibility();
@@ -11751,7 +11749,7 @@
         .filter(Boolean);
       const categorizedSlugs = new Set(KNOWLEDGEBASE_CATEGORIES.flatMap(category => categoryItems(category).filter(entry => entry.type === "wiki").map(entry => entry.item.slug)));
       const uncategorizedArticles = articles.filter(article => !categorizedSlugs.has(article.slug));
-      detailTitleEl.innerHTML = `<h2>Knowledgebase</h2><p class="detail-meta">${articles.length} articles</p>`;
+      detailTitleEl.innerHTML = `<h2>Knowledgebase <span class="mobile-content-unread-badge" data-mobile-knowledgebase-unread-badge hidden></span></h2><p class="detail-meta">${articles.length} articles</p>`;
       detailBodyEl.innerHTML = `
         <p class="summary">Articles grouped by topic, with community notes when available.</p>
         <section class="section">
@@ -11774,10 +11772,10 @@
               <h3>${escapeHtml(category.label)}</h3>
               ${matches.map(entry => entry.type === "site"
                 ? siteCardButton(entry.item)
-                : `<button class="site-card" type="button" data-wiki-slug="${escapeHtml(entry.item.slug)}">
+                : `<button class="site-card" type="button" data-wiki-slug="${escapeHtml(entry.item.slug)}" data-mobile-activity-content-type="wiki" data-mobile-activity-content-slug="${escapeHtml(entry.item.slug)}">
                     <span class="thumb empty">${escapeHtml((entry.item.title || "K").slice(0, 1))}</span>
                     <span>
-                      <h2>${escapeHtml(entry.item.title || "Knowledgebase article")}</h2>
+                      <h2>${escapeHtml(entry.item.title || "Knowledgebase article")}<span class="mobile-content-unread-badge" data-mobile-content-unread-badge hidden></span></h2>
                       <p>${escapeHtml(publicCleanText(entry.item.summary || "Open article").slice(0, 150))}</p>
                     </span>
                   </button>`).join("")}
@@ -11788,10 +11786,10 @@
           <section class="section compact-list">
             <h3>More Articles</h3>
             ${uncategorizedArticles.map(article => `
-              <button class="site-card" type="button" data-wiki-slug="${escapeHtml(article.slug)}">
+              <button class="site-card" type="button" data-wiki-slug="${escapeHtml(article.slug)}" data-mobile-activity-content-type="wiki" data-mobile-activity-content-slug="${escapeHtml(article.slug)}">
                 <span class="thumb empty">${escapeHtml((article.title || "K").slice(0, 1))}</span>
                 <span>
-                  <h2>${escapeHtml(article.title || "Knowledgebase article")}</h2>
+                  <h2>${escapeHtml(article.title || "Knowledgebase article")}<span class="mobile-content-unread-badge" data-mobile-content-unread-badge hidden></span></h2>
                   <p>${escapeHtml(publicCleanText(article.summary || "Open article").slice(0, 150))}</p>
                 </span>
               </button>
@@ -11799,6 +11797,7 @@
           </section>
         ` : ""}
       `;
+      refreshMobileContentUnreadBadges();
     }
 
     async function fetchBlogPosts() {
@@ -12279,6 +12278,7 @@
         }
         return;
       }
+      markMobileContentActivitySeen("site", slug);
       let site = state.sites.find(item => item.slug === slug);
       if (!site) return;
       const selectedMapCenter = slug === WHALING_FEATURE_SLUG
@@ -13177,6 +13177,36 @@
         }
       });
       state.map.addLayer({
+        id: "mobile-site-unread-badges",
+        type: "circle",
+        source: "mobile-sites",
+        filter: ["all", ["==", ["geometry-type"], "Point"], [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0]],
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 8.5, 12, 10.5],
+          "circle-color": "#c62828",
+          "circle-stroke-color": "#fff",
+          "circle-stroke-width": 1.5,
+          "circle-translate": [12, -12]
+        }
+      });
+      state.map.addLayer({
+        id: "mobile-site-unread-counts",
+        type: "symbol",
+        source: "mobile-sites",
+        filter: ["all", ["==", ["geometry-type"], "Point"], [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0]],
+        layout: {
+          "text-field": ["to-string", ["min", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 99]],
+          "text-size": 10,
+          "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+          "text-allow-overlap": true,
+          "text-ignore-placement": true
+        },
+        paint: {
+          "text-color": "#fff",
+          "text-translate": [12, -12]
+        }
+      });
+      state.map.addLayer({
         id: "mobile-site-attention-history-badge",
         type: "circle",
         source: "mobile-site-attention",
@@ -13354,6 +13384,35 @@
           "text-halo-blur": 0.2
         }
       });
+      [["detail", "mobile-detail-labels"], ["territory", "mobile-territory-labels"]].forEach(([kind, source]) => {
+        state.map.addLayer({
+          id: `mobile-${kind}-unread-badges`,
+          type: "circle",
+          source,
+          filter: [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
+          paint: {
+            "circle-radius": 10,
+            "circle-color": "#c62828",
+            "circle-stroke-color": "#fff",
+            "circle-stroke-width": 1.5,
+            "circle-translate": [16, -16]
+          }
+        });
+        state.map.addLayer({
+          id: `mobile-${kind}-unread-counts`,
+          type: "symbol",
+          source,
+          filter: [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
+          layout: {
+            "text-field": ["to-string", ["min", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 99]],
+            "text-size": 10,
+            "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+            "text-allow-overlap": true,
+            "text-ignore-placement": true
+          },
+          paint: { "text-color": "#fff", "text-translate": [16, -16] }
+        });
+      });
       state.map.addLayer({
         id: "mobile-site-point-labels",
         type: "symbol",
@@ -13409,6 +13468,12 @@
 
     const MOBILE_STARTUP_REVEAL_HIDDEN_LAYERS = [
       "mobile-site-point-hit",
+      "mobile-site-unread-badges",
+      "mobile-site-unread-counts",
+      "mobile-detail-unread-badges",
+      "mobile-detail-unread-counts",
+      "mobile-territory-unread-badges",
+      "mobile-territory-unread-counts",
       "mobile-site-attention-outer",
       "mobile-site-attention-core",
       "mobile-site-attention-history-badge",
@@ -13531,6 +13596,22 @@
       bindMobileInteractiveLayer("mobile-site-point-hit", event => {
         if (handleSuggestionMapPickClick(event)) return;
         if (openMobileMapTap(event)) markMobileMapEventHandled(event);
+      });
+      ["mobile-site-unread-badges", "mobile-site-unread-counts"].forEach(layerId => {
+        bindMobileInteractiveLayer(layerId, event => {
+          if (handleSuggestionMapPickClick(event)) return;
+          const feature = event?.features?.find(item => item?.properties?.slug);
+          if (feature?.properties?.slug) openSite(feature.properties.slug);
+          markMobileMapEventHandled(event);
+        });
+      });
+      ["mobile-detail-unread-badges", "mobile-detail-unread-counts", "mobile-territory-unread-badges", "mobile-territory-unread-counts"].forEach(layerId => {
+        bindMobileInteractiveLayer(layerId, event => {
+          if (handleSuggestionMapPickClick(event)) return;
+          const feature = event?.features?.find(item => item?.properties?.slug);
+          if (feature?.properties?.slug) openSite(feature.properties.slug);
+          markMobileMapEventHandled(event);
+        });
       });
       ["mobile-biography-place-labels", "mobile-biography-place-points", "mobile-biography-path-labels", "mobile-biography-path-point-numbers", "mobile-biography-path-points"]
         .forEach(layerId => bindMobileInteractiveLayer(layerId, event => {
@@ -14475,6 +14556,8 @@
       const stories = activeMapStories().map(story => ({
         type: "map-story",
         slug: String(story.id || ""),
+        contentSourceType: story.attached_site_slug ? "site" : "",
+        contentSlug: story.attached_site_slug || "",
         title: story.attached_site_title || "Shared from the map",
         authorName: MAP_STORY_UTILS.authorName(story),
         label: `${story.author_name || "Contributor"} shared a story`,
@@ -14535,6 +14618,7 @@
         const eventTargetSlug = exhibit.related_site_slug || exhibit.source_slug || String(exhibit.slug || exhibit.id || "");
         return {
           type: "event",
+          sourceType: state.siteBySlug.has(eventTargetSlug) ? "site" : (state.wikiBySlug.has(eventTargetSlug) ? "wiki" : ""),
           slug: eventTargetSlug,
           activityId: String(exhibit.id || ""),
           title: pinned && exhibit.activity_pin_title ? exhibit.activity_pin_title : exhibit.title || "Event",
@@ -14682,6 +14766,7 @@
         activityLabel: item.label || "Archive activity",
         activityId: item.activityId || item.id || "",
         activitySlug: item.slug || "",
+        activityItemKey: ACTIVITY_UTILS.activityItemKey(item),
         sourceType,
         canonicalTarget,
         canonicalType,
@@ -14823,25 +14908,99 @@
       return ACTIVITY_UTILS.lastSeenKey("nli-mobile-activity-last-seen", key);
     }
 
+    function mobileActivitySeenItemsKey() {
+      const profile = currentContributorProfile?.();
+      const key = profile?.id || state.profile?.profileId || state.profile?.email || "public";
+      return ACTIVITY_UTILS.lastSeenKey("nli-mobile-activity-seen-items-v2", key);
+    }
+
+    let mobileActivityUnreadTaskCache = null;
+
+    function mobileUnreadActivityItems() {
+      if (mobileActivityUnreadTaskCache) return mobileActivityUnreadTaskCache;
+      mobileActivityUnreadTaskCache = ACTIVITY_UTILS.unreadItems(latestMobileActivity(), {
+        baseline: ACTIVITY_UTILS.readSeen(mobileActivityLastSeenKey()),
+        seenKeys: ACTIVITY_UTILS.readSeenItemKeys(mobileActivitySeenItemsKey())
+      });
+      window.setTimeout(() => { mobileActivityUnreadTaskCache = null; }, 0);
+      return mobileActivityUnreadTaskCache;
+    }
+
     function mobileUnreadActivityCount() {
-      const seen = ACTIVITY_UTILS.readSeen(mobileActivityLastSeenKey());
-      return ACTIVITY_UTILS.unreadCount(latestMobileActivity(), seen, { capAtNow: true });
+      return ACTIVITY_UTILS.weightedActivityCount(mobileUnreadActivityItems());
+    }
+
+    function mobileContentUnreadCount(type, slug) {
+      const targetKey = `${String(type || "").toLowerCase()}|${String(slug || "").trim().toLowerCase()}`;
+      return ACTIVITY_UTILS.weightedActivityCount(mobileUnreadActivityItems().filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.key === targetKey));
+    }
+
+    function markMobileActivityItemSeen(key) {
+      if (!key) return;
+      const item = latestMobileActivity().find(candidate => ACTIVITY_UTILS.activityItemKey(candidate) === key);
+      ACTIVITY_UTILS.writeSeenItemKeys(mobileActivitySeenItemsKey(), item ? ACTIVITY_UTILS.activityItemKeys(item) : [key]);
+      mobileActivityUnreadTaskCache = null;
+      state.mobileActivityRenderedSignature = "";
+      invalidateMapSourceCache();
+      refreshMobileMapSources({ force: true });
+      updateMobileActivityUnreadBadge();
+      renderMobileActivitySheet();
+    }
+
+    function markMobileContentActivitySeen(type, slug) {
+      if (!slug) return;
+      const targetKey = `${String(type || "").toLowerCase()}|${String(slug || "").trim().toLowerCase()}`;
+      const keys = mobileUnreadActivityItems()
+        .filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.key === targetKey)
+        .flatMap(ACTIVITY_UTILS.activityItemKeys);
+      if (!keys.length) return;
+      ACTIVITY_UTILS.writeSeenItemKeys(mobileActivitySeenItemsKey(), keys);
+      mobileActivityUnreadTaskCache = null;
+      state.mobileActivityRenderedSignature = "";
+      invalidateMapSourceCache();
+      refreshMobileMapSources({ force: true });
+      updateMobileActivityUnreadBadge();
+      if (activitySheetEl?.classList.contains("open")) renderMobileActivitySheet();
+    }
+
+    function refreshMobileContentUnreadBadges() {
+      document.querySelectorAll("[data-mobile-activity-content-type][data-mobile-activity-content-slug]").forEach(element => {
+        const count = mobileContentUnreadCount(element.dataset.mobileActivityContentType, element.dataset.mobileActivityContentSlug);
+        let badge = element.querySelector("[data-mobile-content-unread-badge]");
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "mobile-content-unread-badge";
+          badge.dataset.mobileContentUnreadBadge = "";
+          element.appendChild(badge);
+        }
+        badge.textContent = count > 99 ? "99+" : String(count);
+        badge.hidden = count <= 0;
+        element.classList.toggle("has-unread-activity", count > 0);
+      });
+      const wikiCount = ACTIVITY_UTILS.weightedActivityCount(mobileUnreadActivityItems().filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.type === "wiki"));
+      document.querySelectorAll('[data-app-page="knowledgebase"]').forEach(button => {
+        let badge = button.querySelector("[data-mobile-knowledgebase-unread-badge]");
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "mobile-content-unread-badge mobile-knowledgebase-unread-badge";
+          badge.dataset.mobileKnowledgebaseUnreadBadge = "";
+          button.appendChild(badge);
+        }
+        badge.textContent = wikiCount > 99 ? "99+" : String(wikiCount);
+        badge.hidden = wikiCount <= 0;
+      });
     }
 
     function updateMobileActivityUnreadBadge() {
       const badge = document.querySelector("[data-mobile-activity-unread-badge]");
-      if (!badge) return;
       const count = mobileUnreadActivityCount();
-      badge.textContent = count > 99 ? "99+" : String(count);
-      badge.hidden = count <= 0;
-      badge.classList.toggle("show", count > 0);
+      if (badge) {
+        badge.textContent = count > 99 ? "99+" : String(count);
+        badge.hidden = count <= 0;
+        badge.classList.toggle("show", count > 0);
+      }
       mobileActivityOpenBtn?.setAttribute("aria-label", count > 0 ? `Open community activity, ${count} new updates` : "Open community activity");
-    }
-
-    function markMobileActivitySeen() {
-      ACTIVITY_UTILS.writeSeen(mobileActivityLastSeenKey(), latestMobileActivity(), { capAtNow: true });
-      updateMobileActivityUnreadBadge();
-      updateMobileNotificationUnreadBadge();
+      refreshMobileContentUnreadBadges();
     }
 
     function mobileActivityFeedSignature(feed = []) {
@@ -14952,8 +15111,9 @@
         ? (card.story?.attached_site_title || "Community map")
         : card.sourceName;
       const commentLabel = card.comment ? "Reply" : "Comment";
+      const unread = mobileUnreadActivityItems().some(item => ACTIVITY_UTILS.activityItemKey(item) === card.activityItemKey);
       return `
-        <article class="activity-feed-item activity-learning-card learning-card${card.pinned ? " is-pinned" : ""}" data-learning-card-key="${escapeHtml(card.key)}" data-mobile-activity-key="${escapeHtml(card.key)}" data-mobile-activity-index="${index}" data-mobile-activity-type="${escapeHtml(card.activityType)}" data-mobile-activity-source-type="${escapeHtml(card.sourceType || "")}" data-mobile-activity-id="${escapeHtml(card.activityId || card.id || "")}" data-mobile-activity-slug="${escapeHtml(card.activitySlug || "")}">
+        <article class="activity-feed-item activity-learning-card learning-card${card.pinned ? " is-pinned" : ""}${unread ? " is-unread" : ""}" data-learning-card-key="${escapeHtml(card.key)}" data-mobile-activity-key="${escapeHtml(card.key)}" data-mobile-activity-item-key="${escapeHtml(card.activityItemKey)}" data-mobile-activity-index="${index}" data-mobile-activity-type="${escapeHtml(card.activityType)}" data-mobile-activity-source-type="${escapeHtml(card.sourceType || "")}" data-mobile-activity-id="${escapeHtml(card.activityId || card.id || "")}" data-mobile-activity-slug="${escapeHtml(card.activitySlug || "")}">
           <header class="learning-card-header">
             <span>${card.pinned ? mobileActivityPinIconHtml() : ""}${escapeHtml(card.activityLabel)}</span>
             <time datetime="${escapeHtml(card.date || "")}">${escapeHtml(activityDateLabel(card.date))}</time>
@@ -14975,6 +15135,7 @@
           <div class="learning-card-actions" aria-label="Activity actions">
             ${card.capabilities.vote ? `<button class="learning-card-action${card.hasVoted ? " is-active" : ""}" type="button" data-mobile-activity-helpful="${escapeHtml(card.key)}"${card.hasVoted ? " disabled" : ""}>${card.permissions.canVote ? "Helpful" : `${actionPrompt}vote`} ${card.counts.upvotes}</button>` : ""}
             ${card.capabilities.comment ? `<button class="learning-card-action" type="button" data-mobile-activity-comment="${escapeHtml(card.key)}" aria-expanded="${state.mobileActivityDiscussionKeys.has(card.key) ? "true" : "false"}"><span>${commentLabel}</span><span class="learning-card-action-count">${card.counts.comments}</span></button>` : ""}
+            ${unread ? `<button class="learning-card-action" type="button" data-mobile-activity-dismiss aria-label="Dismiss this new update">Dismiss</button>` : ""}
           </div>
           ${mobileActivityDiscussionHtml(card)}
         </article>
@@ -15047,7 +15208,7 @@
         }
         await loadDeferredData({ includeCommunity: true });
       }
-      markMobileActivitySeen();
+      updateMobileActivityUnreadBadge();
     }
 
     async function openMobileNotificationsSheet() {
@@ -15066,6 +15227,7 @@
       const sourceType = button?.dataset.mobileActivitySourceType || "";
       const activityId = button?.dataset.mobileActivityId || "";
       activitySheetEl?.classList.remove("open");
+      markMobileActivityItemSeen(button?.dataset.mobileActivityItemKey || "");
       if (type === "map-story" && slug) {
         const story = state.mapStories.find(item => String(item.id) === String(slug));
         if (story && MAP_STORY_UTILS.isActive(story, state.mapStoryVotes, MAP_STORY_RULES)) {
@@ -16343,6 +16505,10 @@
       const cardElement = event.target.closest("[data-mobile-activity-key]");
       const key = cardElement?.dataset.mobileActivityKey || "";
       const card = key ? mobileActivityLearningCards().find(item => item.key === key) : null;
+      if (event.target.closest("[data-mobile-activity-dismiss]") && cardElement) {
+        markMobileActivityItemSeen(cardElement.dataset.mobileActivityItemKey || "");
+        return;
+      }
       const cancelComment = event.target.closest("[data-mobile-activity-comment-cancel]");
       if (cancelComment && card) {
         state.mobileActivityDiscussionKeys.delete(card.key);
@@ -16656,13 +16822,13 @@
         state.pendingPlantObservationPanel = plantPanel;
         const button = plantPanel.querySelector("[data-take-plant-photo]");
         if (button) button.textContent = "Opening camera...";
-        // Android's system Camera provides a reliable shutter control and returns through
-        // the activity result when the user presses Back. Prefer it over the WebView camera,
-        // whose overlay controls can be hidden by vendor WebView/camera implementations.
-        if (nativeTakePlantPhoto()) return;
         openInAppPlantCamera(plantPanel).then(opened => {
           if (button) button.textContent = "Take plant photo";
           if (opened) return;
+          if (nativeTakePlantPhoto()) {
+            if (button) button.textContent = "Opening camera...";
+            return;
+          }
           const input = plantPanel.querySelector("[data-plant-image]");
           if (input) {
             input.setAttribute("capture", "environment");
