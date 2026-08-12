@@ -999,6 +999,8 @@
     const collapseListBtn = document.getElementById("collapse-list");
     const mobilePanelSizeBtn = document.getElementById("mobile-panel-size-toggle");
     const landscapePanelResizerEl = document.getElementById("landscape-panel-resizer");
+    const accountButtonHomeAnchorEl = document.getElementById("account-button-home-anchor");
+    const mobileMoreGridEl = document.querySelector(".mobile-more-grid");
     const mobileTimelineEl = document.querySelector(".mobile-timeline");
     const showTimelineBtn = document.getElementById("show-timeline");
     const mobileTimelineCurrentBtn = document.getElementById("mobile-timeline-current");
@@ -2280,16 +2282,6 @@
       return 8;
     }
 
-    function activeMapSites() {
-      return state.mapSites.filter(siteVisibleInMobileLayers);
-    }
-
-    function invalidateMapSourceCache() {
-      state.mapSourceCache = null;
-      state.mapSourceCacheKey = "";
-      state.mapSourceRevision += 1;
-    }
-
     function polygonUnreadBadgeOffset(title, fontSize, maxWidthEm = 8, textOffsetEm = 0) {
       const words = String(title || "").trim().split(/\s+/).filter(Boolean);
       const characterWidthEm = 0.56;
@@ -2314,6 +2306,16 @@
         Math.round(labelWidth / 2 + badgeRadius),
         Math.round(textOffsetEm * safeFontSize - labelHeight / 2 - badgeRadius)
       ];
+    }
+
+    function activeMapSites() {
+      return state.mapSites.filter(siteVisibleInMobileLayers);
+    }
+
+    function invalidateMapSourceCache() {
+      state.mapSourceCache = null;
+      state.mapSourceCacheKey = "";
+      state.mapSourceRevision += 1;
     }
 
     function polygonLabelCollection(kind = "all", sites = state.mapSites) {
@@ -6023,6 +6025,20 @@
       };
     }
 
+    function syncLandscapeHeaderControls() {
+      if (!loginOpenBtn || !accountButtonHomeAnchorEl || !mobileMoreGridEl) return;
+      const landscape = document.body.classList.contains("tablet-landscape");
+      const headerWidth = document.querySelector("header")?.getBoundingClientRect?.().width || window.innerWidth || 0;
+      const accountBelongsInMenu = landscape && headerWidth < 430;
+      document.body.classList.toggle("landscape-account-in-menu", accountBelongsInMenu);
+      document.documentElement.classList.toggle("landscape-account-in-menu", accountBelongsInMenu);
+      if (accountBelongsInMenu) {
+        if (loginOpenBtn.parentElement !== mobileMoreGridEl) mobileMoreGridEl.prepend(loginOpenBtn);
+      } else if (loginOpenBtn.parentElement !== accountButtonHomeAnchorEl.parentElement) {
+        accountButtonHomeAnchorEl.insertAdjacentElement("afterend", loginOpenBtn);
+      }
+    }
+
     function setLandscapePanelWidth(width, options = {}) {
       if (!document.body.classList.contains("tablet-landscape")) return;
       const limits = landscapePanelWidthLimits();
@@ -6037,7 +6053,11 @@
           localStorage.setItem(LANDSCAPE_PANEL_RATIO_KEY, ratio.toFixed(4));
         } catch {}
       }
-      window.requestAnimationFrame(() => state.map?.resize?.());
+      window.requestAnimationFrame(() => {
+        syncLandscapeHeaderControls();
+        positionMobileMapActionButtons();
+        state.map?.resize?.();
+      });
     }
 
     function restoreLandscapePanelWidth() {
@@ -6052,6 +6072,7 @@
       } else {
         document.body.style.removeProperty("--landscape-panel-width");
       }
+      window.requestAnimationFrame(syncLandscapeHeaderControls);
     }
 
     function installLandscapePanelResize() {
@@ -6105,6 +6126,7 @@
         setLandscapePanelWidth(next);
       });
       restoreLandscapePanelWidth();
+      syncLandscapeHeaderControls();
     }
 
     function detailDrawerLimits() {
@@ -17211,6 +17233,7 @@
       syncSystemSafeArea();
       restoreNearbyPanelHeight();
       restoreLandscapePanelWidth();
+      syncLandscapeHeaderControls();
       positionMobileMapActionButtons();
       window.setTimeout(() => {
         positionMobileMapActionButtons();

@@ -4807,7 +4807,7 @@
         grid-column: 1;
         grid-row: 1;
         grid-template-columns: minmax(0, 1fr) auto;
-        grid-template-rows: 34px;
+        grid-template-rows: auto;
         align-items: center;
         gap: 4px 6px;
         padding: max(5px, var(--app-top-safe)) 8px 5px;
@@ -4872,9 +4872,33 @@
         grid-column: 2;
         grid-row: 1;
         display: grid;
-        grid-template-columns: auto auto;
+        grid-template-columns: 96px;
+        grid-template-rows: 32px 32px;
         gap: 4px;
         padding: 0;
+      }
+
+      body.android-device.tablet-landscape .mobile-more-menu {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      body.android-device.tablet-landscape .mobile-layer-menu {
+        grid-column: 1;
+        grid-row: 2;
+      }
+
+      body.android-device.tablet-landscape .mobile-more-menu,
+      body.android-device.tablet-landscape .mobile-layer-menu,
+      body.android-device.tablet-landscape .mobile-more-menu > summary,
+      body.android-device.tablet-landscape .mobile-layer-menu > summary {
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      body.android-device.tablet-landscape.landscape-account-in-menu .mobile-more-grid .account-button {
+        width: 100%;
+        max-width: none;
       }
 
       body.android-device.tablet-landscape .quick-actions > .mobile-priority-action {
@@ -4985,12 +5009,12 @@
       body.android-device.tablet-landscape .mobile-activity-button,
       body.android-device.tablet-landscape .mobile-notification-button {
         top: var(--mobile-map-actions-top, calc(var(--app-top-safe) + 90px));
-        left: max(10px, var(--app-left-safe));
+        left: max(18px, calc(var(--app-left-safe) + 18px));
         right: auto;
       }
 
       body.android-device.tablet-landscape .mobile-notification-button {
-        left: max(62px, calc(var(--app-left-safe) + 52px));
+        left: max(70px, calc(var(--app-left-safe) + 70px));
       }
 
       body.android-device.tablet-landscape .detail {

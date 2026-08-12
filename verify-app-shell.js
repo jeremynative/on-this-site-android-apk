@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-landscape-menu-layout-r81";
+const expectedBuild = "20260812-landscape-responsive-header-r82";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -253,9 +253,14 @@ function requireBundledPattern(pattern, message) {
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
 requireBundledText('<button class="ghost-button" id="settings-open" type="button">Notifications</button>', "Bundled Android menu must label the settings action Notifications.");
 forbidBundledText('<button class="ghost-button" id="settings-open" type="button">Alerts</button>', "Bundled Android menu must not use the old Alerts label.");
+requireBundledText('<details class="mobile-more-menu">\n          <summary>Menu</summary>', "Bundled Android overflow control must be labeled Menu.");
+forbidBundledText('<details class="mobile-more-menu">\n          <summary>More</summary>', "Bundled Android overflow control must not retain the old More label.");
 requireBundledPattern(/body\.android-device\.tablet-landscape \.account-button\s*\{[\s\S]*?min-width:\s*118px;[\s\S]*?max-width:\s*148px;/, "Bundled Android landscape must keep the member name and points readable.");
+requireBundledPattern(/body\.android-device\.tablet-landscape \.quick-actions\s*\{[\s\S]*?grid-template-columns:\s*96px;[\s\S]*?grid-template-rows:\s*32px 32px;[\s\S]*?body\.android-device\.tablet-landscape \.mobile-more-menu\s*\{[\s\S]*?grid-row:\s*1;[\s\S]*?body\.android-device\.tablet-landscape \.mobile-layer-menu\s*\{[\s\S]*?grid-row:\s*2;/, "Bundled Android landscape must stack Menu above Labels.");
+requireBundledPattern(/body\.android-device\.tablet-landscape \.mobile-activity-button,[\s\S]*?left:\s*max\(18px,\s*calc\(var\(--app-left-safe\) \+ 18px\)\);[\s\S]*?body\.android-device\.tablet-landscape \.mobile-notification-button\s*\{[\s\S]*?left:\s*max\(70px,\s*calc\(var\(--app-left-safe\) \+ 70px\)\);/, "Bundled Android landscape community controls must be inset from the map edge.");
 requireBundledPattern(/body\.android-device\.tablet-landscape \.mobile-more-menu\[open\] \.mobile-more-grid\s*\{[\s\S]*?repeat\(5,\s*minmax\(0,\s*1fr\)\)/, "Bundled Android landscape More menu must use the balanced five-column grid.");
 requireBundledPattern(/body\.android-device\.tablet-landscape:has\(\.mobile-more-menu\[open\]\) \.landscape-panel-resizer[\s\S]*?visibility:\s*hidden;[\s\S]*?pointer-events:\s*none;/, "Bundled Android split resize handle must stay behind open menus.");
+requireBundledPattern(/function syncLandscapeHeaderControls\(\)[\s\S]*?headerWidth < 430[\s\S]*?mobileMoreGridEl\.prepend\(loginOpenBtn\)[\s\S]*?accountButtonHomeAnchorEl\.insertAdjacentElement\("afterend", loginOpenBtn\)[\s\S]*?function setLandscapePanelWidth[\s\S]*?syncLandscapeHeaderControls\(\);/, "Bundled Android landscape must move the real account control into Menu when the map-side header becomes narrow.");
 for (const setting of [
   "settings.setAllowFileAccess(false)",
   "settings.setAllowFileAccessFromFileURLs(false)",

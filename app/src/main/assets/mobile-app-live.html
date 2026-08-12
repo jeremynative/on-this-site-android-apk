@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://directus.nativelongisland.com">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/mobile-app.css?v=0ccf1f69d93d">
+  <link rel="stylesheet" href="assets/css/mobile-app.css?v=cdea92aa32fc">
   <link rel="stylesheet" href="assets/css/shared-research-question.css?v=8ab3cc48abe5">
 </head>
 <body>
@@ -35,6 +35,7 @@
         <h1>On This Site</h1>
         <span class="title-actions">
           <button class="story-plus-button" id="map-story-open" type="button" title="Add to the map" aria-label="Add to the map" hidden>+</button>
+          <span id="account-button-home-anchor" hidden></span>
           <button class="ghost-button account-button" id="login-open" type="button">Login</button>
         </span>
       </div>
@@ -149,10 +150,11 @@
           </div>
         </details>
         <details class="mobile-more-menu">
-          <summary>More</summary>
+          <summary>Menu</summary>
           <div class="mobile-more-grid">
             <button class="ghost-button mobile-landscape-menu-action" data-app-page="about" type="button">About</button>
             <button class="ghost-button mobile-landscape-menu-action" id="feedback-open-menu" type="button">Feedback</button>
+            <button class="ghost-button mobile-landscape-menu-action" id="map-story-open-menu" type="button" hidden>Add to map</button>
             <button class="ghost-button" data-app-page="home" type="button">Home</button>
             <select class="map-style-select" id="mobile-basemap" aria-label="Map style">
               <option value="streets">Streets</option>
@@ -215,6 +217,7 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
       <span class="mobile-activity-unread-badge" data-mobile-notification-unread-badge hidden></span>
     </button>
+    <button class="landscape-panel-resizer" id="landscape-panel-resizer" type="button" role="separator" aria-orientation="vertical" aria-label="Resize map and content panels" aria-valuemin="0" aria-valuemax="100" aria-valuenow="42" title="Drag to resize the map and content panels"></button>
     <div class="mobile-view-tabs" role="group" aria-label="Mobile section">
       <button class="mobile-view-tab" id="mobile-tab-timeline" type="button" aria-pressed="false">Timeline</button>
       <button class="mobile-view-tab" id="mobile-tab-nearby" type="button" aria-pressed="true">Nearby sites</button>
@@ -618,7 +621,7 @@
   <script src="assets/js/shared-research-question-utils.js?v=2c70d31de0d2" defer></script>
   <script src="assets/js/language-quiz-words.js?v=76446c19134d" defer></script>
   <script src="assets/js/userviews-tracker.js?v=031e0d03c4d5" defer></script>
-  <script src="assets/js/mobile-app.js?v=96ce1f7bc974" defer></script>
+  <script src="assets/js/mobile-app.js?v=1296266fbde9" defer></script>
 </body>
 </html>
 
