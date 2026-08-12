@@ -50,6 +50,17 @@ const bundledCalendarUtils = fs.readFileSync("app/src/main/assets/assets/js/shar
 const styles = fs.readFileSync(stylesPath, "utf8");
 const launchBackground = fs.readFileSync(launchBackgroundPath, "utf8");
 
+if (!bundledApp.includes('id="landscape-panel-resizer"')
+    || !bundledMobileCss.includes("body.android-device.tablet-landscape .landscape-panel-resizer")
+    || !bundledMobileCss.includes("cursor: ew-resize")
+    || !bundledMobileJs.includes("function installLandscapePanelResize()")
+    || !bundledMobileJs.includes("LANDSCAPE_PANEL_RATIO_KEY")
+    || !bundledMobileJs.includes("setPointerCapture")
+    || !bundledMobileJs.includes('event.key === "ArrowLeft"')
+    || !bundledMobileJs.includes('event.key === "ArrowRight"')) {
+  throw new Error("APK landscape split view must provide a persistent touch and keyboard panel-width resizer.");
+}
+
 if (!bundledMobileJs.includes("CALENDAR_UTILS.calendarBadgeMarkup(exhibit")
     || !bundledMobileCss.includes(".mobile-calendar-event-marker .calendar-date-badge")
     || !bundledCalendarUtils.includes("function calendarBadgeMarkup")

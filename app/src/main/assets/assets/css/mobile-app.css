@@ -522,6 +522,10 @@
       display: none;
     }
 
+    .landscape-panel-resizer {
+      display: none;
+    }
+
     .mobile-more-menu {
       position: relative;
       flex: 0 0 auto;
@@ -4918,6 +4922,50 @@
         border-radius: 0;
       }
 
+      body.android-device.tablet-landscape .landscape-panel-resizer {
+        display: flex;
+        grid-column: 2;
+        grid-row: 1 / 4;
+        align-self: stretch;
+        justify-self: start;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        min-width: 24px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--accent-strong);
+        cursor: ew-resize;
+        touch-action: none;
+        transform: translateX(-50%);
+        z-index: 1205;
+      }
+
+      body.android-device.tablet-landscape .landscape-panel-resizer::before {
+        content: "";
+        width: 5px;
+        height: 54px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.94);
+        border: 1px solid rgba(44, 91, 73, 0.42);
+        box-shadow: 0 2px 9px rgba(20, 31, 23, 0.2);
+      }
+
+      body.android-device.tablet-landscape .landscape-panel-resizer:focus-visible::before,
+      body.android-device.tablet-landscape .landscape-panel-resizer:hover::before,
+      body.landscape-panel-resizing .landscape-panel-resizer::before {
+        width: 7px;
+        background: var(--accent-strong);
+        border-color: white;
+      }
+
+      body.landscape-panel-resizing {
+        cursor: ew-resize;
+        user-select: none;
+      }
+
       body.android-device.tablet-landscape .mobile-activity-button,
       body.android-device.tablet-landscape .mobile-notification-button {
         top: var(--mobile-map-actions-top, calc(var(--app-top-safe) + 90px));
@@ -4966,6 +5014,11 @@
       body.android-device.tablet-landscape .app.panel-maximized {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: minmax(0, 1fr) auto;
+      }
+
+      body.android-device.tablet-landscape .app.panel-maximized > .landscape-panel-resizer,
+      body.android-device.tablet-landscape .app.panel-collapsed > .landscape-panel-resizer {
+        display: none;
       }
 
       body.android-device.tablet-landscape .app.panel-maximized > .mobile-view-tabs {

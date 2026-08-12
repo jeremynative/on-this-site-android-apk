@@ -676,6 +676,7 @@
     const MOBILE_ACTIVITY_INITIAL_LIMIT = 8;
     const MOBILE_ACTIVITY_INCREMENT = 8;
     const MOBILE_PANEL_STATE_KEY = "nli-mobile-bottom-panel-state";
+    const LANDSCAPE_PANEL_RATIO_KEY = "nli-landscape-content-panel-ratio";
     const MOBILE_APP_BUILD_ID = "20260603-label-threshold-quieter";
     const MIN_ANDROID_APP_BUILD_ID = "20260524-plant-camera-analysis-7";
     const ANDROID_APK_UPDATE_URL = "https://github.com/jeremynative/on-this-site-android-apk/releases/latest/download/on-this-site-latest.apk";
@@ -997,6 +998,7 @@
     const mobileLayerEraInputs = [...document.querySelectorAll(".mobile-layer-era")];
     const collapseListBtn = document.getElementById("collapse-list");
     const mobilePanelSizeBtn = document.getElementById("mobile-panel-size-toggle");
+    const landscapePanelResizerEl = document.getElementById("landscape-panel-resizer");
     const mobileTimelineEl = document.querySelector(".mobile-timeline");
     const showTimelineBtn = document.getElementById("show-timeline");
     const mobileTimelineCurrentBtn = document.getElementById("mobile-timeline-current");
@@ -6007,6 +6009,102 @@
 
     function installNearbyPanelDrag() {
       installMobileBottomPanelDrag();
+    }
+
+    function landscapePanelWidthLimits() {
+      const rect = appEl?.getBoundingClientRect?.();
+      const total = Math.max(600, rect?.width || window.innerWidth || 600);
+      const minPanel = Math.min(320, Math.max(280, Math.round(total * 0.38)));
+      const minMap = Math.min(360, Math.max(240, Math.round(total * 0.3)));
+      return {
+        total,
+        min: minPanel,
+        max: Math.max(minPanel, Math.min(total * 0.72, total - minMap))
+      };
+    }
+
+    function setLandscapePanelWidth(width, options = {}) {
+      if (!document.body.classList.contains("tablet-landscape")) return;
+      const limits = landscapePanelWidthLimits();
+      const next = Math.round(Math.min(limits.max, Math.max(limits.min, Number(width) || limits.min)));
+      const ratio = next / limits.total;
+      document.body.style.setProperty("--landscape-panel-width", `${next}px`);
+      landscapePanelResizerEl?.setAttribute("aria-valuemin", String(Math.round((limits.min / limits.total) * 100)));
+      landscapePanelResizerEl?.setAttribute("aria-valuemax", String(Math.round((limits.max / limits.total) * 100)));
+      landscapePanelResizerEl?.setAttribute("aria-valuenow", String(Math.round(ratio * 100)));
+      if (options.persist !== false) {
+        try {
+          localStorage.setItem(LANDSCAPE_PANEL_RATIO_KEY, ratio.toFixed(4));
+        } catch {}
+      }
+      window.requestAnimationFrame(() => state.map?.resize?.());
+    }
+
+    function restoreLandscapePanelWidth() {
+      if (!document.body.classList.contains("tablet-landscape")) return;
+      let ratio = 0;
+      try {
+        ratio = Number(localStorage.getItem(LANDSCAPE_PANEL_RATIO_KEY) || 0);
+      } catch {}
+      if (ratio > 0.15 && ratio < 0.85) {
+        const limits = landscapePanelWidthLimits();
+        setLandscapePanelWidth(limits.total * ratio, { persist: false });
+      } else {
+        document.body.style.removeProperty("--landscape-panel-width");
+      }
+    }
+
+    function installLandscapePanelResize() {
+      if (!landscapePanelResizerEl) return;
+      let dragging = false;
+      const resizeFromPointer = event => {
+        if (!dragging) return;
+        const rect = appEl?.getBoundingClientRect?.();
+        if (!rect) return;
+        setLandscapePanelWidth(rect.right - event.clientX, { persist: false });
+        event.preventDefault();
+      };
+      const finish = event => {
+        if (!dragging) return;
+        dragging = false;
+        document.body.classList.remove("landscape-panel-resizing");
+        landscapePanelResizerEl.releasePointerCapture?.(event.pointerId);
+        const width = parseFloat(getComputedStyle(document.body).getPropertyValue("--landscape-panel-width"));
+        if (Number.isFinite(width)) setLandscapePanelWidth(width);
+      };
+      landscapePanelResizerEl.addEventListener("pointerdown", event => {
+        if (!document.body.classList.contains("tablet-landscape")) return;
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        dragging = true;
+        document.body.classList.add("landscape-panel-resizing");
+        landscapePanelResizerEl.setPointerCapture?.(event.pointerId);
+        resizeFromPointer(event);
+      });
+      landscapePanelResizerEl.addEventListener("pointermove", resizeFromPointer);
+      landscapePanelResizerEl.addEventListener("pointerup", finish);
+      landscapePanelResizerEl.addEventListener("pointercancel", finish);
+      landscapePanelResizerEl.addEventListener("dblclick", () => {
+        try {
+          localStorage.removeItem(LANDSCAPE_PANEL_RATIO_KEY);
+        } catch {}
+        document.body.style.removeProperty("--landscape-panel-width");
+        restoreLandscapePanelWidth();
+        window.requestAnimationFrame(() => state.map?.resize?.());
+      });
+      landscapePanelResizerEl.addEventListener("keydown", event => {
+        if (!document.body.classList.contains("tablet-landscape")) return;
+        const limits = landscapePanelWidthLimits();
+        const current = parseFloat(getComputedStyle(document.body).getPropertyValue("--landscape-panel-width")) || limits.total * 0.42;
+        let next = current;
+        if (event.key === "ArrowLeft") next += 24;
+        else if (event.key === "ArrowRight") next -= 24;
+        else if (event.key === "Home") next = limits.min;
+        else if (event.key === "End") next = limits.max;
+        else return;
+        event.preventDefault();
+        setLandscapePanelWidth(next);
+      });
+      restoreLandscapePanelWidth();
     }
 
     function detailDrawerLimits() {
@@ -17112,6 +17210,7 @@
     const refreshMobileViewportLayout = () => {
       syncSystemSafeArea();
       restoreNearbyPanelHeight();
+      restoreLandscapePanelWidth();
       positionMobileMapActionButtons();
       window.setTimeout(() => {
         positionMobileMapActionButtons();
@@ -17922,6 +18021,7 @@
           setMobileBottomPanelState("normal", { persist: false });
         }
         installMobileBottomPanelDrag();
+        installLandscapePanelResize();
         installDetailPanelDrag();
         installNativeAndroidSearchWatch();
         if (nativeAndroid) {
