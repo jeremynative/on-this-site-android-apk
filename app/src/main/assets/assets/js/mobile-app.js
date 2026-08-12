@@ -7213,6 +7213,10 @@
     window.onAndroidSearchResultTapStart = function onAndroidSearchResultTapStart(viewX, viewY, viewWidth, viewHeight) {
       state.pendingAndroidSearchResultTap = null;
       if (!searchEl?.value?.trim() || !listEl) return false;
+      // Never let the native recovery bridge reinterpret a touch in the
+      // search box as a result-card tap. That can dismiss the IME after its
+      // first composition update on tablet WebViews.
+      if (isAndroidEditableControlTap(viewX, viewY, viewWidth, viewHeight)) return false;
       const boundsCard = androidSearchResultCardFromViewPoint(viewX, viewY, viewWidth, viewHeight);
       if (boundsCard) return cacheAndroidSearchResultCard(boundsCard);
       const nearestCard = nearestAndroidSearchResultCardFromViewPoint(viewX, viewY, viewWidth, viewHeight);
@@ -7422,8 +7426,20 @@
       });
     }
 
+    function isAndroidEditableControlTap(viewX, viewY, viewWidth, viewHeight) {
+      return androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight).some(candidate =>
+        androidTapElementsAt(candidate.clientX, candidate.clientY).some(element =>
+          !!element?.closest?.("input, textarea, select, [contenteditable='true']")
+        )
+      );
+    }
+
     window.onAndroidMapTap = function onAndroidMapTap(viewX, viewY, viewWidth, viewHeight, retry = false) {
       if (!state.map?.getCanvas) return false;
+      if (isAndroidEditableControlTap(viewX, viewY, viewWidth, viewHeight)) {
+        state.pendingAndroidSearchResultTap = null;
+        return false;
+      }
       // The native bridge is deliberately delayed after ACTION_UP. On slower
       // tablets, closing a detail panel can re-render long enough that the old
       // 300 ms shortcut expired before this same gesture reached the bridge,
