@@ -1623,7 +1623,7 @@ public class MainActivity extends Activity {
             Configuration config = getResources().getConfiguration();
             boolean tabletLandscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE
                 && config.screenWidthDp >= 600
-                && config.screenHeightDp >= 300;
+                && config.screenHeightDp >= 260;
             view.loadUrl(
                 "javascript:(function(){var enabled=" + tabletLandscape
                     + ";document.documentElement.dataset.nativeTabletLandscape=enabled?'true':'false';"
