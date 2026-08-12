@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-content-focus-location-guard-r88";
+const expectedBuild = "20260812-precise-content-focus-r89";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -56,6 +56,15 @@ if (!bundledMobileJs.includes("function revealMobileContentUpdate(item, activity
     || !bundledMobileJs.includes('showBanner("New content highlighted.")')
     || !bundledMobileCss.includes(".content-update-highlight::before")) {
   throw new Error("APK unread site updates must scroll to and temporarily highlight the matching content section.");
+}
+
+if (!bundledMobileJs.includes("function mobileActivitySpecificContentTarget(activityItems = [])")
+    || !bundledMobileJs.includes('detailBodyEl.querySelector(`[data-comment-card="${CSS.escape(commentId)}"]`)')
+    || !bundledMobileJs.includes("#timeline-moment-${CSS.escape(activityId)}")
+    || !bundledMobileJs.includes('detailBodyEl.querySelector("[data-site-hero-carousel], .article-sticky-hero")')
+    || !bundledMobileJs.includes('detailBodyEl.querySelector("[data-mobile-visit-actions]")')
+    || !bundledMobileJs.includes("preserveDetailScrollTop: detailBodyEl.scrollTop,\n            contentUpdateItems")) {
+  throw new Error("APK unread site updates must prioritize and preserve the exact new comment, moment, story, or visit area.");
 }
 
 if (!bundledMobileJs.includes("LOCATION_CONTROL_MAX_SCOPE_DISTANCE_MILES = 75")

@@ -12644,7 +12644,8 @@
             skipCommentRefresh: true,
             skipRoute: true,
             drawerState: currentDetailDrawerState(),
-            preserveDetailScrollTop: detailBodyEl.scrollTop
+            preserveDetailScrollTop: detailBodyEl.scrollTop,
+            contentUpdateItems
           });
         }
       });
@@ -15268,13 +15269,51 @@
       return mobileUnreadActivityItems().filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.key === targetKey);
     }
 
+    function mobileContentUpdateActivityRecords(activityItems = []) {
+      return activityItems.flatMap(activity => [
+        activity,
+        ...(Array.isArray(activity?.activityMembers) ? activity.activityMembers : [])
+      ]).filter(Boolean);
+    }
+
+    function mobileActivitySpecificContentTarget(activityItems = []) {
+      const records = mobileContentUpdateActivityRecords(activityItems);
+      for (const record of records) {
+        const type = String(record.type || record.kind || "").toLowerCase();
+        if (type === "comment") {
+          const commentId = String(record.commentId || record.comment_id || "");
+          const exactComment = commentId
+            ? detailBodyEl.querySelector(`[data-comment-card="${CSS.escape(commentId)}"]`)
+            : null;
+          return exactComment || detailBodyEl.querySelector(".discussion-section");
+        }
+        if (type === "historic-moment") {
+          const activityId = String(record.activityId || record.activity_id || record.id || "");
+          const exactMoment = activityId
+            ? detailBodyEl.querySelector(`#timeline-moment-${CSS.escape(activityId)}, [data-event-id="${CSS.escape(activityId)}"]`)
+            : null;
+          if (exactMoment) return exactMoment;
+        }
+        if (type === "map-story") {
+          const hero = detailBodyEl.querySelector("[data-site-hero-carousel], .article-sticky-hero");
+          if (hero) return hero;
+        }
+        if (type === "site" && /^site visit$/i.test(String(record.label || ""))) {
+          const visitActions = detailBodyEl.querySelector("[data-mobile-visit-actions]");
+          if (visitActions) return visitActions.closest(".actions") || visitActions;
+        }
+      }
+      return null;
+    }
+
     function revealMobileContentUpdate(item, activityItems = []) {
       if (!item || !activityItems.length || state.selectedSlug !== item.slug) return;
       const field = ACTIVITY_UTILS.contentUpdateFocusField(item, activityItems, MOBILE_SITE_CONTENT_SECTION_FIELDS, {
         cleanText: publicCleanText
       });
       const escapedField = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(field) : field.replace(/[^a-z0-9_-]/gi, "");
-      const target = (escapedField && detailBodyEl.querySelector(`[data-content-section-field="${escapedField}"]`))
+      const target = mobileActivitySpecificContentTarget(activityItems)
+        || (escapedField && detailBodyEl.querySelector(`[data-content-section-field="${escapedField}"]`))
         || detailBodyEl.querySelector('[data-site-introduction="section"]')
         || detailBodyEl.querySelector('[data-site-introduction="summary"]')
         || detailBodyEl.querySelector(".section");
