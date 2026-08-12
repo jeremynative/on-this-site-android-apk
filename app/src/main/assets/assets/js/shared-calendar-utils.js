@@ -64,9 +64,18 @@
     return Number.isFinite(day) && day >= 1 && day <= 31 ? String(day) : "";
   }
 
+  function calendarMonthDay(value = new Date()) {
+    const date = calendarDate(value);
+    const month = Number(date?.getMonth?.()) + 1;
+    const day = Number(date?.getDate?.());
+    return Number.isFinite(month) && month >= 1 && month <= 12 && Number.isFinite(day) && day >= 1 && day <= 31
+      ? `${month}/${day}`
+      : "";
+  }
+
   function calendarBadgeMarkup(value = new Date(), extraClass = "") {
     const className = ["calendar-date-badge", "on-this-day-badge", extraClass].filter(Boolean).join(" ");
-    return `<span class="${className}" aria-hidden="true"><span class="calendar-date-badge-date on-this-day-badge-date">${calendarDayNumber(value)}</span></span>`;
+    return `<span class="${className}" aria-hidden="true"><span class="calendar-date-badge-date on-this-day-badge-date">${calendarMonthDay(value)}</span></span>`;
   }
 
   function onThisDayNumber(date = new Date()) {
@@ -132,10 +141,10 @@
     });
 
     context.fillStyle = "#315c48";
-    context.font = "700 15px Arial, sans-serif";
+    context.font = "700 11px Arial, sans-serif";
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillText(calendarDayNumber(value), 19, 24);
+    context.fillText(calendarMonthDay(value), 19, 24);
     map.addImage(id, context.getImageData(0, 0, canvas.width, canvas.height), { pixelRatio });
     return true;
   }
@@ -149,6 +158,7 @@
     addOnThisDayMapImage,
     calendarBadgeMarkup,
     calendarDayNumber,
+    calendarMonthDay,
     eventTypeLabel,
     eventDateRange,
     exhibitDateLabel: eventDateRange,

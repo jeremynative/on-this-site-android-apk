@@ -8,6 +8,7 @@
     const PROFILE_UTILS = window.NLI_PROFILE_UTILS || {};
     const MAP_STORY_UTILS = window.NLI_MAP_STORY_UTILS || {};
     const ACTIVITY_UTILS = window.NLI_ACTIVITY_UTILS || {};
+    const LEARNING_CARD_UTILS = window.NLI_LEARNING_CARD_UTILS || {};
     const COMMENT_UTILS = window.NLI_COMMENT_UTILS || {};
     const QUOTE_COMMENT_UTILS = window.NLI_QUOTE_COMMENT_UTILS || {};
     const FEEDBACK_UTILS = window.NLI_FEEDBACK_UTILS || {};
@@ -30,7 +31,21 @@
     });
     const ROUTE_UTILS = window.NLI_ROUTE_UTILS || {};
     const HTML_UTILS = window.NLI_HTML_UTILS || {};
+    const safeExternalUrl = HTML_UTILS.safeExternalUrl || (value => {
+      try {
+        const url = new URL(String(value || "").trim(), window.location.href);
+        return (url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password ? url.href : "";
+      } catch {
+        return "";
+      }
+    });
     const MAP_UTILS = window.NLI_SHARED_MAP_UTILS || {};
+    const learningCardActionGuard = LEARNING_CARD_UTILS.createActionGuard?.() || {
+      begin: () => true,
+      has: () => false,
+      end: () => true,
+      run: (_key, action) => Promise.resolve().then(action)
+    };
     const DIRECTUS = SHARED_CONFIG.directusUrl || "https://directus.nativelongisland.com";
     const ADMIN_NOTIFICATION_FLOW_IDS = {
       approveSuggestion: "6f80f94d-c0d9-4266-9291-2a455e7a7f8d",
@@ -72,7 +87,7 @@
     const WHALING_WHALE_ONE_WAY_MS = 900000;
     const WHALING_WHALE_START_OFFSET_MS = WHALING_WHALE_ONE_WAY_MS * 0.78;
     const WHALING_WHALE_TURN_FADE_MS = 1800;
-    const WHALING_WHALE_ANIMATION_INTERVAL_MS = 90;
+    const WHALING_WHALE_ANIMATION_INTERVAL_MS = 1000;
     const WHALING_WHALE_ROUTE = Object.freeze([
       [-73.88, 40.52],
       [-73.62, 40.52],
@@ -85,7 +100,7 @@
     ]);
     const MOVING_DOG_ONE_WAY_MS = 1020000;
     const MOVING_DOG_START_OFFSET_MS = MOVING_DOG_ONE_WAY_MS * 0.35;
-    const MOVING_DOG_ANIMATION_INTERVAL_MS = 90;
+    const MOVING_DOG_ANIMATION_INTERVAL_MS = 1000;
     const MOVING_DOG_ROUTE = Object.freeze([
       [-73.86, 40.70],
       [-73.72, 40.72],
@@ -242,7 +257,7 @@
     ];
     const BIOGRAPHY_PERSON_ROUTE_DURATION_MS = 300000;
     const BIOGRAPHY_PERSON_REFERENCE_ROUTE_DISTANCE = 0.35;
-    const BIOGRAPHY_PERSON_ANIMATION_INTERVAL_MS = 140;
+    const BIOGRAPHY_PERSON_ANIMATION_INTERVAL_MS = 1000;
     const BIOGRAPHY_PERSON_FOLLOW_ANIMATION_INTERVAL_MS = 16;
     const BIOGRAPHY_PERSON_FOLLOW_INTERVAL_MS = 16;
     const BIOGRAPHY_CANOE_LAND_SAMPLE_RADIUS_DEG = 0.00022;
@@ -252,7 +267,11 @@
     const BIOGRAPHY_PERSON_MIN_STOP_MS = 1000;
     const BIOGRAPHY_PERSON_MAX_STOP_MS = 5000;
     const BIOGRAPHY_PERSON_FINAL_STOP_MS = 5000;
-    const BIOGRAPHY_PERSON_FADE_MS = 900;
+    // The regular map animation refreshes once per second. Keep each fade longer
+    // than that cadence and reserve a full invisible frame for the route reset so
+    // Leaflet never interpolates a visible icon from the end of a route to its start.
+    const BIOGRAPHY_PERSON_FADE_MS = 1200;
+    const BIOGRAPHY_PERSON_RESET_MS = 1000;
     const BIOGRAPHY_PERSON_PHOTO_FLASH_MS = 650;
     const BIOGRAPHY_PERSON_QUOTE_VISIBLE_MIN_MS = 22000;
     const BIOGRAPHY_PERSON_QUOTE_VISIBLE_MAX_MS = 34000;
@@ -265,6 +284,7 @@
     const BIOGRAPHY_PERSON_QUOTE_AUTO_MIN_DELAY_MS = 4500;
     const BIOGRAPHY_PERSON_QUOTE_AUTO_STAGGER_MS = 3500;
     const BIOGRAPHY_PERSON_QUOTE_AUTO_RETRY_MS = 5000;
+    const BIOGRAPHY_PERSON_QUOTE_Z_INDEX = 10000;
     const JEREMY_BIOGRAPHY_ROUTE_BATCH_SIZE = 36;
     const JEREMY_BIOGRAPHY_ROUTE_BATCH_MS = 2 * 60 * 60 * 1000;
     const urlParams = new URLSearchParams(window.location.search);
@@ -323,15 +343,6 @@
       maxBounds: [[35, -85], [48, -60]],
       maxBoundsViscosity: 0.3
     };
-    const LONG_ISLAND_START_VIEWS = [
-      { center: [40.72, -73.72], zoom: 11.2 },
-      { center: [40.76, -73.36], zoom: 11.2 },
-      { center: [40.82, -73.02], zoom: 11.18 },
-      { center: [40.84, -72.68], zoom: 11.16 },
-      { center: [40.88, -72.34], zoom: 11.14 },
-      { center: [40.93, -72.02], zoom: 11.12 },
-      { center: [41.02, -71.82], zoom: 11.1 }
-    ];
     const BASEMAPS = SHARED_MAP_CONFIG.mapboxBasemaps || DEFAULT_MAPBOX_BASEMAPS;
     const USE_LEAFLET_PRIMARY = SHARED_MAP_CONFIG.useLeafletPrimary !== false;
     const MAPBOX_GL_SCRIPT_URL = "https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js";
@@ -388,6 +399,8 @@
     const STYLE_MARKER_LAYER_ID = "native-long-island-wp-go-maps-dcejvz";
     const STYLE_POLYGON_LAYER_ID = "native-long-island-wp-go-maps-28zbd8";
     const ARCHIVE_LAYER_IDS = [
+      "activity-unread-site-counts",
+      "activity-unread-site-badges",
       "biography-place-points",
       "biography-place-labels",
       "biography-place-path",
@@ -410,6 +423,8 @@
       "site-attention-history-badge",
       "map-story-labels",
       "map-stories",
+      "site-attached-calendar-events",
+      "calendar-event-date-badges",
       "calendar-event-icons",
       "calendar-event-points",
       "calendar-event-polygons",
@@ -417,7 +432,9 @@
       "directus-site-point-labels",
       "directus-site-points",
       "directus-site-labels",
+      "directus-site-labels-unread",
       "directus-site-territory-labels",
+      "directus-site-territory-labels-unread",
       "directus-site-polygons",
       "directus-site-territories",
       "wp-marker-labels",
@@ -436,12 +453,15 @@
       "wp-polygons-original-fill"
     ];
     const ARCHIVE_SOURCE_IDS = [
+      "activity-unread-sites",
       "biography-place-path",
       "biography-people",
       "biography-place-paths",
       "hover-feature",
       "site-attention-points",
       "map-stories",
+      "site-attached-calendar-events",
+      "calendar-event-date-badges",
       "calendar-event-icons",
       "calendar-events",
       "directus-site-icons",
@@ -533,13 +553,13 @@
     };
     const BIOGRAPHY_PERSON_QUOTES = {
       "jeremy-dennis": {
-        text: "Invisibility is an intentional tool� our rights are devalued.",
+        text: "Invisibility is an intentional tool\u2014our rights are devalued.",
         date: "April 18, 2026 panel; published April 29, 2026",
         source: "East End Beacon, April 29, 2026",
         url: "https://www.eastendbeacon.com/regeneration-art-as-an-ecological-force/"
       },
       "lois-princess-nowedonah-hunter": {
-        text: "I don�t want [Manhattan] back after they�ve messed it up. I want the rent they owe us.",
+        text: "I don\u2019t want [Manhattan] back after they\u2019ve messed it up. I want the rent they owe us.",
         date: "Recalled from the 1970s",
         source: "Company One Theatre program, 2025",
         url: "https://companyone.org/wp-content/uploads/2025/02/S26_HNT_Program_Web2.pdf"
@@ -1126,6 +1146,7 @@
       virtual: true
     }));
     const LANGUAGE_QUIZ_WORDS = window.NLI_LANGUAGE_QUIZ_WORDS || [];
+    const LQ = new Map(LANGUAGE_QUIZ_WORDS.map(w => [w.id, w]));
     const MAP_QUOTE_TICKER_ITEMS = [
       {
         person: "Lois Marie Hunter / Princess Nowedonah",
@@ -1406,6 +1427,8 @@
       calendarEvents: [],
       contributorProfiles: [],
       publicComments: [],
+      siteHeroCarouselTimer: null,
+      siteHeroCarouselKey: "",
       commentVotes: [],
       profilePointEvents: [],
       profilePointEventCanonicalIds: new Set(),
@@ -1485,6 +1508,9 @@
       leafletMapPointerLeaveElement: null,
       leafletHoverCard: null,
       leafletHoverCardSize: null,
+      labelOriginalFeatures: new Map(),
+      labelSourceFeatureKeys: new WeakMap(),
+      labelSourceFeatureCounter: 0,
       leafletHoverHydrationRequested: false,
       leafletHoverHydrationTimer: null,
       leafletHoverRefreshTimer: null,
@@ -1512,8 +1538,8 @@
       activityScrollResetTimer: null,
       activityScrollPaused: false,
       activityScrollListenersReady: false,
-      activityRenderTimer: null,
-      activityRenderToken: 0,
+      activityRenderedSignature: "",
+      activityDiscussionKeys: new Set(),
       siteListFilterSyncTimer: null,
       siteListItemCache: new Map(),
       siteListPublishedSitesCache: null,
@@ -1557,9 +1583,11 @@
       leafletArchiveLayer: null,
       leafletStaticArchiveLayer: null,
       leafletPointArchiveLayer: null,
+      leafletPointLabelLayer: null,
       leafletPathArchiveLayer: null,
       leafletStaticRenderSignature: "",
       leafletRenderedPointBounds: null,
+      leafletPointMarkerRegistry: new Map(),
       leafletProgressivePointLayer: null,
       leafletProgressivePointTimer: null,
       leafletProgressivePointToken: 0,
@@ -1590,6 +1618,10 @@
       biographyMappedGeometryCache: new Map(),
       biographyWaterCoordinateCache: new Map(),
       biographyPersonMotionStartedAt: new Map(),
+      biographyPeoplePausedAt: 0,
+      biographyPeopleMapInteractionPausedAt: 0,
+      biographyPeopleMapInteractionKinds: new Set(),
+      biographyPeopleMapInteractionResumeTimer: null,
       biographyPersonQuoteSchedules: new Map(),
       biographyPersonQuoteAutoSchedules: new Map(),
       biographyPersonQuoteTypeStates: new Map(),
@@ -1601,16 +1633,20 @@
       followedBiographySlug: "",
       biographyFollowLastCenteredAt: 0,
       leafletBaseLayer: null,
-      leafletCanvasRenderer: null,
+      leafletArchiveRenderer: null,
       leafletPlaceNameAreaRenderer: null,
       leafletPlaceNameAreaLabelLayer: null,
+      leafletPlaceNameAreaLabelsDirty: false,
       leafletRenderSignature: "",
       leafletStartupFullRenderPending: false,
       leafletStartupFullRenderTimer: null,
       leafletStartupProgressiveRenderScheduled: false,
       leafletStartupPointDripUsed: false,
       leafletStartupPinsVisibleReady: false,
+      leafletStartupCameraAnimating: false,
+      leafletStartupCameraCancel: null,
       leafletBiographyStartupDeferred: false,
+      leafletMovingClassTimer: null,
       loadingScreenHideRequested: false,
       usingLeafletFallback: false,
       suggestionMapPickMode: false,
@@ -1925,8 +1961,10 @@
       const next = Math.max(320, Math.min(max, Math.round(width)));
       articleEl.style.setProperty("--article-width", `${next}px`);
       document.body.style.setProperty("--article-width", `${next}px`);
-      localStorage.setItem("nli-article-panel-width", String(next));
+      return next;
     }
+
+    const deferArticleMap = (type, slug, callback) => window.setTimeout(() => state.activeContent?.type === type && state.activeContent.slug === slug && callback(), 16);
 
     function restoreArticlePanelWidth() {
       const saved = Number(localStorage.getItem("nli-article-panel-width") || 0);
@@ -1940,10 +1978,65 @@
       state.panelHistory.push({
         head: articleHeadEl.innerHTML,
         body: articleBodyEl.innerHTML,
-        expanded: articleEl.classList.contains("expanded")
+        expanded: articleEl.classList.contains("expanded"),
+        activeContent: state.activeContent ? { ...state.activeContent } : null,
+        activeTimelineEventId: state.activeTimelineEventId,
+        timelineContextEventIds: [...(state.timelineContextEventIds || [])],
+        articleScrollTop: articleBodyEl.scrollTop || 0,
+        panelScrollTop: articleEl.scrollTop || 0,
+        url: window.location.href,
+        seo: capturePanelSeoState()
       });
       if (state.panelHistory.length > 20) state.panelHistory.shift();
       updateBackButton();
+    }
+
+    function capturePanelSeoState() {
+      const meta = {};
+      [
+        ["name", "description"],
+        ["property", "og:title"],
+        ["property", "og:description"],
+        ["property", "og:url"],
+        ["property", "og:type"],
+        ["property", "og:image"],
+        ["name", "twitter:title"],
+        ["name", "twitter:description"],
+        ["name", "twitter:image"]
+      ].forEach(([attribute, key]) => {
+        meta[`${attribute}:${key}`] = document.head.querySelector(`meta[${attribute}="${key}"]`)?.getAttribute("content") || "";
+      });
+      const canonical = document.getElementById("nli-canonical") || document.querySelector('link[rel="canonical"]');
+      const schema = document.getElementById("nli-content-schema");
+      return {
+        title: document.title,
+        canonical: canonical?.href || "",
+        meta,
+        schema: schema?.textContent || ""
+      };
+    }
+
+    function restorePanelSeoState(snapshot = {}) {
+      if (snapshot.title) document.title = snapshot.title;
+      Object.entries(snapshot.meta || {}).forEach(([compoundKey, value]) => {
+        const separator = compoundKey.indexOf(":");
+        if (separator < 1) return;
+        setSeoMeta(compoundKey.slice(0, separator), compoundKey.slice(separator + 1), value);
+      });
+      const canonical = document.getElementById("nli-canonical") || document.querySelector('link[rel="canonical"]');
+      if (canonical && snapshot.canonical) canonical.href = snapshot.canonical;
+      let schema = document.getElementById("nli-content-schema");
+      if (snapshot.schema) {
+        if (!schema) {
+          schema = document.createElement("script");
+          schema.id = "nli-content-schema";
+          schema.type = "application/ld+json";
+          document.head.appendChild(schema);
+        }
+        schema.textContent = snapshot.schema;
+      } else {
+        schema?.remove();
+      }
     }
 
     function updateBackButton() {
@@ -1959,6 +2052,144 @@
 
     function articleHeroElement() {
       return articleBodyEl?.querySelector(".article-sticky-hero") || articleHeroDockEl?.querySelector(".article-sticky-hero");
+    }
+
+    function approvedSiteCommentPhotoSlides(site, listingImage = "") {
+      const seen = new Set([comparableImageUrl(listingImage)].filter(Boolean));
+      return discussionComments("site", site)
+        .filter(comment => normalizeCommentStatus(comment) === "approved" && directusAssetUrl(comment.comment_image))
+        .map(comment => {
+          const image = directusAssetUrl(comment.comment_image);
+          const comparable = comparableImageUrl(image) || image;
+          if (!comparable || seen.has(comparable)) return null;
+          seen.add(comparable);
+          const profile = state.contributorProfiles.find(item => Number(item.id) === Number(comment.member_profile));
+          return {
+            id: String(comment.id || ""),
+            image,
+            author: profile?.display_name || comment.author_name || "Contributor"
+          };
+        })
+        .filter(Boolean);
+    }
+
+    function siteHeroCarouselHtml(site, image, options = {}) {
+      const commentSlides = approvedSiteCommentPhotoSlides(site, image);
+      const imageSrcset = options.imageSrcset || "";
+      const imageFallback = options.imageFallback || "";
+      if (!commentSlides.length) {
+        return image ? `<img class="hero-image article-sticky-hero" src="${escapeHtml(image)}" ${imageSrcset ? `srcset="${imageSrcset}" sizes="(max-width: 760px) 100vw, 760px"` : ""} ${imageFallback ? `data-fallback-src="${escapeHtml(imageFallback)}"` : ""} alt="${escapeHtml(site.listing_image_alt || site.title || "")}" loading="lazy" decoding="async" onerror="${dataFallbackImageErrorAction({ removeAction: "this.remove();" })}">` : "";
+      }
+      const slides = [
+        ...(image ? [{ image, author: "", id: "", primary: true }] : []),
+        ...commentSlides
+      ];
+      return `
+        <div class="site-hero-carousel hero-image article-sticky-hero" data-site-hero-carousel data-site-hero-site="${escapeHtml(site.slug || site.id || "")}" data-site-hero-index="0" aria-label="${escapeHtml(site.title)} photo carousel">
+          <div class="site-hero-carousel-stage">
+            ${slides.map((slide, index) => slide.primary ? `
+              <div class="site-hero-slide${index === 0 ? " is-active" : ""}" data-site-hero-slide-index="${index}" aria-hidden="${index === 0 ? "false" : "true"}">
+                <img src="${escapeHtml(slide.image)}" ${imageSrcset ? `srcset="${imageSrcset}" sizes="(max-width: 760px) 100vw, 760px"` : ""} ${imageFallback ? `data-fallback-src="${escapeHtml(imageFallback)}"` : ""} alt="${escapeHtml(site.listing_image_alt || site.title || "")}" loading="eager" decoding="async" onerror="${dataFallbackImageErrorAction({ removeAction: "this.remove();" })}">
+              </div>
+            ` : `
+              <button class="site-hero-slide site-hero-comment-slide${index === 0 ? " is-active" : ""}" type="button" data-site-hero-slide-index="${index}" data-site-hero-comment="${escapeHtml(slide.id)}" aria-hidden="${index === 0 ? "false" : "true"}" tabindex="${index === 0 ? "0" : "-1"}" aria-label="View ${escapeHtml(slide.author)}'s approved comment">
+                <img src="${escapeHtml(slide.image)}" alt="Photo from ${escapeHtml(slide.author)}'s approved comment" loading="lazy" decoding="async" data-site-hero-comment-image>
+                <span class="site-hero-comment-caption">${escapeHtml(slide.author)} · View comment</span>
+              </button>
+            `).join("")}
+          </div>
+          <div class="site-hero-carousel-dots" aria-label="Choose a site photo">
+            ${slides.map((slide, index) => `<button type="button" data-site-hero-dot="${index}" class="${index === 0 ? "is-active" : ""}" aria-label="Show photo ${index + 1} of ${slides.length}" aria-pressed="${index === 0 ? "true" : "false"}"></button>`).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function stopSiteHeroCarousel() {
+      window.clearInterval(state.siteHeroCarouselTimer);
+      state.siteHeroCarouselTimer = null;
+      state.siteHeroCarouselKey = "";
+    }
+
+    function setSiteHeroCarouselIndex(root, requestedIndex) {
+      if (!root) return;
+      const slides = [...root.querySelectorAll("[data-site-hero-slide-index]")].filter(slide => !slide.hidden);
+      if (!slides.length) return;
+      const normalized = ((Number(requestedIndex) % slides.length) + slides.length) % slides.length;
+      const activeSlide = slides[normalized];
+      const activeIndex = String(activeSlide.dataset.siteHeroSlideIndex || "0");
+      root.dataset.siteHeroIndex = activeIndex;
+      root.querySelectorAll("[data-site-hero-slide-index]").forEach(slide => {
+        const active = slide === activeSlide;
+        slide.classList.toggle("is-active", active);
+        slide.setAttribute("aria-hidden", String(!active));
+        if (slide.matches("button")) slide.tabIndex = active ? 0 : -1;
+      });
+      root.querySelectorAll("[data-site-hero-dot]").forEach(dot => {
+        const active = dot.dataset.siteHeroDot === activeIndex;
+        dot.classList.toggle("is-active", active);
+        dot.setAttribute("aria-pressed", String(active));
+      });
+    }
+
+    function bindSiteHeroCarouselSwipe(root) {
+      if (!root || root.dataset.siteHeroSwipeBound === "true") return;
+      root.dataset.siteHeroSwipeBound = "true";
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let touchStartedAt = 0;
+      root.addEventListener("touchstart", event => {
+        if (event.touches.length !== 1) return;
+        touchStartX = event.touches[0].clientX;
+        touchStartY = event.touches[0].clientY;
+        touchStartedAt = Date.now();
+      }, { passive: true });
+      root.addEventListener("touchend", event => {
+        const touch = event.changedTouches[0];
+        if (!touch || !touchStartedAt) return;
+        const deltaX = touch.clientX - touchStartX;
+        const deltaY = touch.clientY - touchStartY;
+        const elapsed = Date.now() - touchStartedAt;
+        touchStartedAt = 0;
+        if (elapsed > 1000 || Math.abs(deltaX) < 42 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.15) return;
+        const slides = [...root.querySelectorAll("[data-site-hero-slide-index]")].filter(slide => !slide.hidden);
+        const current = slides.findIndex(slide => slide.classList.contains("is-active"));
+        setSiteHeroCarouselIndex(root, current + (deltaX < 0 ? 1 : -1));
+        root.dataset.siteHeroSuppressClickUntil = String(Date.now() + 500);
+        startSiteHeroCarousel(root, { restart: true });
+      }, { passive: true });
+      root.addEventListener("click", event => {
+        if (Number(root.dataset.siteHeroSuppressClickUntil || 0) <= Date.now()) return;
+        event.preventDefault();
+        event.stopPropagation();
+      }, true);
+    }
+
+    function startSiteHeroCarousel(root = articleHeroElement(), options = {}) {
+      if (!root?.matches?.("[data-site-hero-carousel]")) return;
+      bindSiteHeroCarouselSwipe(root);
+      root.querySelectorAll("[data-site-hero-comment-image]").forEach(image => image.addEventListener("error", () => {
+        const slide = image.closest("[data-site-hero-slide-index]");
+        const failedIndex = slide?.dataset.siteHeroSlideIndex;
+        if (slide) slide.hidden = true;
+        if (failedIndex != null) root.querySelector(`[data-site-hero-dot="${CSS.escape(failedIndex)}"]`)?.setAttribute("hidden", "");
+        setSiteHeroCarouselIndex(root, 0);
+      }, { once: true }));
+      if (root.querySelectorAll("[data-site-hero-slide-index]").length < 2) return;
+      const carouselKey = root.dataset.siteHeroSite || "";
+      if (options.restart || (state.siteHeroCarouselKey && state.siteHeroCarouselKey !== carouselKey)) {
+        stopSiteHeroCarousel();
+      }
+      state.siteHeroCarouselKey = carouselKey;
+      if (state.siteHeroCarouselTimer) return;
+      state.siteHeroCarouselTimer = window.setInterval(() => {
+        const currentRoot = articleHeroElement();
+        if (!currentRoot?.matches?.("[data-site-hero-carousel]") || document.hidden || currentRoot.classList.contains("is-compact")) return;
+        bindSiteHeroCarouselSwipe(currentRoot);
+        const slides = [...currentRoot.querySelectorAll("[data-site-hero-slide-index]")].filter(slide => !slide.hidden);
+        const current = slides.findIndex(slide => slide.classList.contains("is-active"));
+        setSiteHeroCarouselIndex(currentRoot, current + 1);
+      }, 8000);
     }
 
     function animateArticleHeroMove(hero, move) {
@@ -1996,8 +2227,15 @@
       }
       const move = () => {
         hero.classList.remove("is-compact");
-        if (articleHeroHomeNode?.parentNode) articleHeroHomeNode.replaceWith(hero);
-        else articleBodyEl.prepend(hero);
+        if (articleHeroHomeNode?.parentNode) {
+          articleHeroHomeNode.replaceWith(hero);
+        } else if (articleHeroHomeNode) {
+          // The article body was replaced while its hero was docked. Discard the
+          // detached article's hero instead of inserting it into the new article.
+          hero.remove();
+        } else {
+          articleBodyEl.prepend(hero);
+        }
         articleHeroHomeNode = null;
         articleHeroDockEl.setAttribute("aria-hidden", "true");
         articleEl.classList.remove("hero-docked");
@@ -2059,8 +2297,23 @@
       articleHeadEl.innerHTML = previous.head;
       articleBodyEl.innerHTML = previous.body;
       articleEl.classList.toggle("expanded", previous.expanded);
+      expandArticleBtn.setAttribute("aria-label", previous.expanded ? "Shrink article panel" : "Expand article panel");
+      expandArticleBtn.setAttribute("title", previous.expanded ? "Shrink article panel" : "Expand article panel");
+      expandArticleBtn.innerHTML = previous.expanded ? ICONS.shrink : ICONS.expand;
+      state.activeContent = previous.activeContent ? { ...previous.activeContent } : null;
+      state.timelineContextEventIds = [...(previous.timelineContextEventIds || [])];
+      state.activeTimelineEventId = previous.activeTimelineEventId || null;
+      if (previous.url) window.history.replaceState(null, "", previous.url);
+      restorePanelSeoState(previous.seo);
       markArticlePanelOpen();
+      updateTimelineContextLines();
+      setActiveTimelineEvent(state.activeTimelineEventId);
       updateBackButton();
+      window.requestAnimationFrame(() => {
+        articleBodyEl.scrollTop = previous.articleScrollTop || 0;
+        articleEl.scrollTop = previous.panelScrollTop || 0;
+        syncArticleHeroScrollState();
+      });
     }
 
     function collapseActivityPanel({ persist = false } = {}) {
@@ -2154,7 +2407,7 @@
       const sourceNote = importedFootnoteSources(content).join("; ");
       const html = removeFootnoteReferenceMarkers(formatSectionContent(title, content));
       return `
-        <section class="section${sourceNote ? " has-source" : ""}">
+        <section class="section${sourceNote ? " has-source" : ""}"${options.introduction ? ` data-site-introduction="section"` : ""}>
           <h3>${escapeHtml(title)}</h3>
           <div class="section-content">${autoLinkHtml(html, options)}</div>
           ${sourceNote ? `
@@ -2249,7 +2502,7 @@
     function renderQuoteTicker() {
       if (!quoteTickerEl) return;
       const ordered = shuffledQuoteTickerItems();
-      const sequence = [...ordered, ...ordered, ...ordered, ...ordered];
+      const sequence = [...ordered, ...ordered];
       quoteTickerEl.innerHTML = `<div class="quote-ticker-track">${sequence.map(quoteTickerItemHtml).join("")}</div>`;
       const totalCharacters = sequence.reduce((sum, item) => sum + item.quote.length + item.person.length + item.source.length + 20, 0);
       quoteTickerEl.style.setProperty("--quote-ticker-duration", `${Math.max(180, Math.round(totalCharacters / 8))}s`);
@@ -2540,9 +2793,7 @@
 
     async function uploadFeedbackScreenshot(file, title) {
       return FEEDBACK_UTILS.uploadFeedbackScreenshot(file, title, {
-        compressImage: compressFeedbackImage,
-        uploadFile: uploadDirectusFile,
-        normalizeUploadFileId: SHARED_DIRECTUS.normalizeUploadFileId
+        compressImage: compressFeedbackImage
       });
     }
 
@@ -2700,7 +2951,7 @@
     }
 
     function learnedLanguageWords(profile = currentContributorProfile()) {
-      return PROFILE_UTILS.learnedLanguageWordsFromAttempts(state.languageQuizAttempts, profileIdentityIds(profile), { relationId });
+      return PROFILE_UTILS.learnedLanguageWordsFromAttempts(state.languageQuizAttempts, profileIdentityIds(profile), { relationId, wordById: LQ });
     }
 
     function languageCorrectAttemptCount(profile = currentContributorProfile()) {
@@ -2919,7 +3170,7 @@
     async function registerContributorFromSection(section) {
       const button = section.querySelector("[data-register-contributor]");
       const originalLabel = button?.textContent || "Submit account request";
-      setInlineStatus(section, "[data-register-status]", "Saving account request...");
+      setInlineStatus(section, "[data-register-status]", "Creating your account and sending a verification email...");
       if (button) {
         button.disabled = true;
         button.textContent = "Saving...";
@@ -2940,23 +3191,13 @@
         const response = await fetch("https://nativelongisland.com/account-registration.php", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email, password, display_name: profile.displayName })
+          body: JSON.stringify({ email, password, display_name: profile.displayName, website: "" })
         });
         const registrationRecord = await response.json().catch(() => ({}));
         if (!response.ok || !registrationRecord?.ok) throw new Error(registrationRecord?.error || "Could not create contributor account request.");
         const registrationId = registrationRecord?.data?.id || null;
-        let signupEmailError = "";
-        try {
-          await FEEDBACK_UTILS.sendAccountSignupEmail(
-            { ...(registrationRecord?.data || {}), id: registrationId },
-            { appUrl: window.location.href, platform: "desktop" }
-          );
-        } catch (error) {
-          signupEmailError = "Your account request was saved, but the admin email could not be sent. Please use Feedback to let us know.";
-          console.warn("Account signup email failed:", error);
-        }
         let inviteMessage = "";
-        if (inviteCode) {
+        if (inviteCode && registrationId) {
           try {
             const inviteResult = await FEEDBACK_UTILS.redeemAccountInviteCode({
               code: inviteCode,
@@ -2971,8 +3212,10 @@
         section.querySelector("[data-register-password]").value = "";
         const inviteInput = section.querySelector("[data-register-invite-code]");
         if (inviteInput) inviteInput.value = "";
-        const message = signupEmailError || `Thank you for registering. We will review your account soon.${inviteMessage}`;
-        setInlineStatus(section, "[data-register-status]", message, signupEmailError ? "error" : "success");
+        const message = registrationId
+          ? `Check your email to verify and activate your account.${inviteMessage}`
+          : "If this email can be registered, we will send a verification link.";
+        setInlineStatus(section, "[data-register-status]", message, "success");
         showBanner(message);
         section.querySelectorAll("[data-register-name], [data-register-email], [data-register-password], [data-register-invite-code]").forEach(input => {
           input.value = "";
@@ -3021,18 +3264,11 @@
       try {
         const email = normalizeAccountEmail(section.querySelector("[data-password-reset-email]")?.value);
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Enter the email for the account.");
-        let response = await fetch(`${DIRECTUS}/auth/password/request`, {
+        const response = await fetch("https://nativelongisland.com/account-registration.php", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email, reset_url: ROUTE_UTILS.passwordResetReturnUrl(window.location) })
+          body: JSON.stringify({ action: "password_reset_request", email })
         });
-        if (!response.ok && response.status === 400) {
-          response = await fetch(`${DIRECTUS}/auth/password/request`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ email })
-          });
-        }
         if (!response.ok) throw new Error("Could not send reset email.");
         const message = "If an account exists for that email, a reset link has been sent.";
         setInlineStatus(section, "[data-password-reset-status]", message, "success");
@@ -3059,11 +3295,11 @@
       }
       try {
         if (!state.passwordResetToken) throw new Error("This reset link is missing its token. Request a new reset email.");
-        if (password.length < 8) throw new Error("New password must be at least 8 characters.");
-        const response = await fetch(`${DIRECTUS}/auth/password/reset`, {
+        if (password.length < 10) throw new Error("New password must be at least 10 characters.");
+        const response = await fetch("https://nativelongisland.com/account-registration.php", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token: state.passwordResetToken, password })
+          body: JSON.stringify({ action: "password_reset_confirm", token: state.passwordResetToken, password })
         });
         if (!response.ok) throw new Error("This reset link is expired or has already been used.");
         state.passwordResetToken = "";
@@ -3331,10 +3567,10 @@
 
     const INITIAL_SITE_FIELDS = SHARED_FIELDS.desktopSite || [
       "id", "title", "slug", "summary", "address_label", "site_type", "geojson", "display_geojson", "geometry_surface", "geometry_cleanup_status", "map_geometry_source",
-      "map_fill_color", "map_opacity", "map_icon", "listing_image_file", "listing_image_url", "listing_image_thumb_url", "listing_image_alt", "show_print_purchase", "introduction_content", "history_content", "last_reviewed", "wp_date", "known_plant_species"
+      "map_fill_color", "map_opacity", "map_icon", "listing_image_file", "listing_image_url", "listing_image_thumb_url", "listing_image_alt", "show_print_purchase", "introduction_content", "history_content", "activity_update_date", "activity_update_summary", "last_reviewed", "wp_date", "known_plant_species"
       , "ancestral_territory", "ancestral_territory_note"
     ].join(",");
-    const INITIAL_WIKI_FIELDS = SHARED_FIELDS.desktopWiki || ["id", "title", "slug", "summary", "last_reviewed", "lastmod"].join(",");
+    const INITIAL_WIKI_FIELDS = SHARED_FIELDS.desktopWiki || ["id", "title", "slug", "summary", "activity_update_date", "activity_update_summary", "last_reviewed", "lastmod"].join(",");
     const INITIAL_PAGE_FIELDS = SHARED_FIELDS.desktopPage || ["id", "title", "slug", "summary", "content_type", "wp_date", "featured_image_url"].join(",");
     const INITIAL_BLOG_FIELDS = SHARED_FIELDS.desktopBlog || ["id", "title", "slug", "summary", "published_at", "featured_image_url"].join(",");
     const INITIAL_EVENT_FIELDS = SHARED_FIELDS.exhibit || [
@@ -3617,44 +3853,21 @@
         };
         const fullSocialData = socialMode === "full";
         if (!fullSocialData) {
-          let publicActivityRenderTimer = null;
-          const renderPublicActivityData = (options = {}) => {
-            window.clearTimeout(publicActivityRenderTimer);
-            publicActivityRenderTimer = null;
-            const renderNow = () => {
-              renderActivityPanel();
-              renderNotificationPanel();
-            };
-            if (options.flush) {
-              renderNow();
-              return;
-            }
-            publicActivityRenderTimer = window.setTimeout(renderNow, 80);
-          };
-          const flushPublicActivityDataRender = () => {
-            window.clearTimeout(publicActivityRenderTimer);
-            publicActivityRenderTimer = null;
-            renderActivityPanel();
-            renderNotificationPanel();
-          };
           const publicSocialTasks = [
             fetchCachedPublicJson(`/items/mobile_comments?limit=80&filter[status][_eq]=approved&filter[public_activity][_eq]=true&sort=-created_at&fields=${INITIAL_PUBLIC_COMMENT_FIELDS}`, "public-comments")
               .catch(() => existingRows(state.publicComments))
               .then(commentsResponse => {
                 state.publicComments = mergeSeededComments(mergePublicRows(state.publicComments, commentsResponse.data, ["id", "created_at", "comment"]));
-                renderPublicActivityData();
               }),
             fetchCachedPublicJson(`/items/site_suggestions?limit=40&filter[status][_eq]=approved&sort=-submitted_at,-date_created&fields=${INITIAL_SITE_SUGGESTION_FIELDS}`, "public-site-suggestions")
               .catch(() => existingRows(state.siteSuggestions))
               .then(suggestionsResponse => {
                 state.siteSuggestions = mergePublicRows(state.siteSuggestions, suggestionsResponse.data, ["id", "title"]);
-                renderPublicActivityData();
               }),
             fetchCachedPublicJson(`/items/mobile_plant_observations?limit=80&filter[status][_eq]=approved&sort=-created_at&fields=${INITIAL_PLANT_OBSERVATION_FIELDS}`, "public-plant-observations")
               .catch(() => existingRows(state.plantObservations))
               .then(plantResponse => {
                 state.plantObservations = mergePublicRows(state.plantObservations, plantResponse.data, ["id", "created_at"]);
-                renderPublicActivityData();
               }),
             Promise.all([
               fetchJson(`/items/mobile_map_stories?limit=-1&fields=${INITIAL_MAP_STORY_FIELDS}`, { fresh: true, dedupe: false }).catch(() => existingRows(state.mapStories)),
@@ -3664,15 +3877,15 @@
                 state.mapStoryVotes = voteResponse.data || state.mapStoryVotes || [];
                 state.mapStoryLastRefreshAt = Date.now();
                 if (state.map?.getSource("map-stories")) state.map.getSource("map-stories").setData(mapStoryFeatures());
-                renderPublicActivityData();
               })
           ];
           await Promise.all(publicSocialTasks);
-          flushPublicActivityDataRender();
-          repaintActiveContentPreservingScroll();
-          renderContributorLoginButton();
           state.deferredSocialDataLoaded = true;
           state.deferredSocialDataMode = socialMode;
+          renderActivityPanel();
+          renderNotificationPanel();
+          repaintActiveContentPreservingScroll();
+          renderContributorLoginButton();
           return true;
         }
         const siteSuggestionsRequest = fetchJson(`/items/site_suggestions?limit=-1&fields=${INITIAL_SITE_SUGGESTION_FIELDS}`)
@@ -3710,6 +3923,8 @@
         state.profileLoginRewards = preserveActiveProfileRows(loginRewardsResponse.data, state.profileLoginRewards);
         state.artworkPrintPurchases = preserveActiveProfileRows(purchasesResponse.data, state.artworkPrintPurchases);
         if (state.contributorSession) await refreshContributorSessionApproval({ silent: true });
+        state.deferredSocialDataLoaded = true;
+        state.deferredSocialDataMode = socialMode;
         renderContributorLoginButton();
         renderActivityPanel();
         renderNotificationPanel();
@@ -3727,8 +3942,6 @@
             articleBodyEl.scrollTop = previousScroll;
           }
         }
-        state.deferredSocialDataLoaded = true;
-        state.deferredSocialDataMode = socialMode;
         return true;
       } catch (error) {
         console.warn("Community data will load later.", error);
@@ -3822,6 +4035,18 @@
         state.mapStoryVotes = nextVotes;
         state.mapStoryLastRefreshAt = Date.now();
         if (state.map?.getSource("map-stories")) state.map.getSource("map-stories").setData(mapStoryFeatures());
+        // Leaflet has no source object to update. Rebuild its visible point
+        // layer when stories change so fallback-map visitors see new markers.
+        if (state.leafletMap) {
+          renderLeafletArchiveLayers({
+            viewportOnly: true,
+            viewportPad: 0.42,
+            pointLimit: LEAFLET_VIEWPORT_POINT_LIMIT,
+            skipBiographyPeople: true,
+            skipDetailLabels: true,
+            allowStartupPins: false
+          });
+        }
         renderActivityPanel();
         renderNotificationPanel();
         return true;
@@ -4273,7 +4498,7 @@
           <div class="guided-paths-active">
             <div class="guided-paths-progress">
               <strong>Active Path: ${escapeHtml(active.title)}</strong>
-              <span>Stop ${Math.min((state.activeLearningPathStopIndex || 0) + 1, stats.total)} of ${stats.total} � ${stats.percent}% complete${stop ? ` � ${escapeHtml(guidedLearningPathStopTitle(stop))}` : ""}</span>
+              <span>Stop ${Math.min((state.activeLearningPathStopIndex || 0) + 1, stats.total)} of ${stats.total} &middot; ${stats.percent}% complete${stop ? ` &middot; ${escapeHtml(guidedLearningPathStopTitle(stop))}` : ""}</span>
             </div>
             <div class="guided-paths-active-actions" aria-label="Guided path controls">
               <button class="guided-paths-button" type="button" data-learning-path-prev aria-label="Previous guided path stop">Previous</button>
@@ -4296,9 +4521,9 @@
           <span>Explore Native Long Island through curated map routes</span>
         </div>
         <div class="guided-paths-quick">
-          <button class="guided-paths-button quick-desktop" type="button" data-learning-path-start="sovereignty-tribal-governance">Sovereignty and Tribal Governance</button>
-          <button class="guided-paths-button quick-desktop" type="button" data-learning-path-start="making-a-living-economic-development">Making a Living</button>
-          <button class="guided-paths-button quick-desktop" type="button" data-learning-path-start="place-names-language">Place Names and Language</button>
+          <a class="guided-paths-button quick-desktop" href="?path=sovereignty-tribal-governance" data-learning-path-start="sovereignty-tribal-governance">Sovereignty and Tribal Governance</a>
+          <a class="guided-paths-button quick-desktop" href="?path=making-a-living-economic-development" data-learning-path-start="making-a-living-economic-development">Making a Living</a>
+          <a class="guided-paths-button quick-desktop" href="?path=place-names-language" data-learning-path-start="place-names-language">Place Names and Language</a>
           <button class="guided-paths-button guided-paths-more-mobile" type="button" data-learning-path-toggle aria-expanded="${state.guidedPathsExpanded ? "true" : "false"}">${window.matchMedia("(max-width: 860px)").matches ? "Explore Guided Paths" : "More Paths"}</button>
         </div>
       `;
@@ -4362,7 +4587,7 @@
             ${meta.map(item => `<span class="${/sensitive/i.test(item) ? "sensitive" : ""}">${escapeHtml(item)}</span>`).join("")}
             ${stats.completed ? `<span>${stats.completed}/${stats.total} complete</span>` : ""}
           </div>
-          <button type="button" data-learning-path-start="${escapeHtml(path.slug)}">${escapeHtml(guidedLearningPathButtonLabel(path))}</button>
+          <a href="${escapeHtml(publicRouteHref({ path: path.slug }))}" data-learning-path-start="${escapeHtml(path.slug)}">${escapeHtml(guidedLearningPathButtonLabel(path))}</a>
         </article>
       `;
     }
@@ -4414,10 +4639,10 @@
             <ol>
               ${path.stops.map((stop, index) => `
                 <li>
-                  <button type="button" data-learning-path-stop="${index}">
+                  <a href="${escapeHtml(publicRouteHref({ site: stop.siteSlug }))}" data-learning-path-stop="${index}">
                     <strong>${completed.has(stop.siteSlug) ? "?" : "?"} ${index + 1}.</strong>
                     <span>${escapeHtml(guidedLearningPathStopTitle(stop))}</span>
-                  </button>
+                  </a>
                 </li>
               `).join("")}
             </ol>
@@ -4536,10 +4761,19 @@
       }
     }
 
-    function openGuidedLearningPathOverview() {
+    function openGuidedLearningPathOverview(options = {}) {
+      const requestedPath = options.path || activeGuidedLearningPath();
+      if (requestedPath?.slug && state.activeLearningPathSlug !== requestedPath.slug) {
+        state.activeLearningPathSlug = requestedPath.slug;
+        state.activeLearningPathStopIndex = 0;
+        state.activeLearningPathShowOnly = false;
+        state.guidedPathsExpanded = false;
+        renderGuidedPathsUi();
+      }
       const path = activeGuidedLearningPath();
       if (!path) return;
-      rememberPanel();
+      if (!options.skipHistory) rememberPanel();
+      if (!options.skipRoute) setRoute({ path: path.slug });
       state.activeContent = { type: "guided-path", slug: path.slug };
       articleHeadEl.innerHTML = `
         <p class="article-kicker">Guided Learning Path</p>
@@ -4550,6 +4784,11 @@
       markArticlePanelOpen();
       updateBackButton();
       resetArticleScroll();
+      updateSeoMetadata({
+        title: path.title,
+        description: path.short_description || path.long_intro || `Follow the ${path.title} guided learning path across Native Long Island.`,
+        schemaType: "CollectionPage"
+      });
     }
 
     function handleGuidedLearningPathClick(event) {
@@ -4562,6 +4801,7 @@
       }
       const start = event.target.closest("[data-learning-path-start]");
       if (start?.dataset.learningPathStart) {
+        if (!prepareInternalRouteClick(event, start)) return false;
         startGuidedLearningPath(start.dataset.learningPathStart);
         return true;
       }
@@ -4596,6 +4836,7 @@
       }
       const stopButton = event.target.closest("[data-learning-path-stop]");
       if (stopButton?.dataset.learningPathStop !== undefined) {
+        if (!prepareInternalRouteClick(event, stopButton)) return false;
         openGuidedLearningPathStop(Number(stopButton.dataset.learningPathStop));
         return true;
       }
@@ -4714,16 +4955,23 @@
           : type === "blog"
             ? `data-blog-slug="${escapeHtml(item.slug || "")}"`
             : `data-content-slug="${escapeHtml(item.slug || "")}"`;
+      const href = type === "listing"
+        ? publicRouteHref({ site: item.slug })
+        : type === "wiki"
+          ? publicRouteHref({ wiki: item.slug })
+          : type === "blog"
+            ? publicRouteHref({ blog: item.slug })
+            : publicRouteHref({ page: item.slug });
       const snippet = searchResultSnippet(result, query);
       const meta = [result.label, snippet.sectionTitle].filter(Boolean).join(" - ");
       return `
-        <button class="content-card search-result-card" type="button" ${attr}>
+        <a class="content-card search-result-card" href="${escapeHtml(href)}" ${attr}>
           <span class="content-card-body">
             <span class="content-card-meta">${escapeHtml(meta)}</span>
             <strong>${highlightedSearchText(item.title || result.title || "Untitled", query)}</strong>
             ${snippet.html ? `<span class="content-card-summary search-result-snippet">${snippet.html}</span>` : ""}
           </span>
-        </button>
+        </a>
       `;
     }
 
@@ -5114,7 +5362,10 @@
 
     function sortedTimelineEvents() {
       return [...state.timelineEvents]
-        .filter(event => event.source_type && (event.source_slug || event.source_id))
+        // Source records without a linked listing or wiki article are still public
+        // historic moments.  Keep them in the timeline; their action resolver
+        // deliberately omits a Read button when no published content exists.
+        .filter(event => event && (event.title || event.description || event.date_label || event.sort_key))
         .filter(eventPassesEraFilter)
         .filter(event => {
           const active = activeThemeFilters();
@@ -5462,9 +5713,10 @@
 
     function timelineEventHref(event) {
       const params = new URLSearchParams();
-      if (event.source_type === "site" && event.source_slug) params.set("site", event.source_slug);
-      else if (event.source_type === "wiki" && event.source_slug) params.set("wiki", event.source_slug);
-      else if (event.source_type === "calendar_event" && event.source_slug) params.set("calendar", event.source_slug);
+      const target = timelineEventContentTarget(event);
+      if (target?.type === "site" && target.record?.slug) params.set("site", target.record.slug);
+      else if (target?.type === "wiki" && target.record?.slug) params.set("wiki", target.record.slug);
+      else if (target?.type === "calendar_event" && target.record?.slug) params.set("calendar", target.record.slug);
       if (event.id) params.set("event", event.id);
       return params.toString() ? `?${params.toString()}` : "#";
     }
@@ -5497,27 +5749,29 @@
     }
 
     function timelineEventSite(event = {}) {
-      if (!event || event.source_type !== "site") return null;
-      if (event.source_slug && state.siteBySlug.has(event.source_slug)) return state.siteBySlug.get(event.source_slug);
-      const sourceId = Number(event.source_id);
-      if (Number.isFinite(sourceId) && state.siteById.has(sourceId)) return state.siteById.get(sourceId);
-      return null;
+      const target = timelineEventContentTarget(event);
+      return target?.type === "site" ? target.record : null;
     }
 
     function timelineEventWiki(event = {}) {
-      if (!event || event.source_type !== "wiki") return null;
-      if (event.source_slug && state.wikiBySlug.has(event.source_slug)) return state.wikiBySlug.get(event.source_slug);
-      const sourceId = Number(event.source_id);
-      if (Number.isFinite(sourceId) && state.wikiById?.has?.(sourceId)) return state.wikiById.get(sourceId);
-      return null;
+      const target = timelineEventContentTarget(event);
+      return target?.type === "wiki" ? target.record : null;
     }
 
     function timelineEventCalendarEvent(event = {}) {
-      if (!event || event.source_type !== "calendar_event") return null;
-      if (event.source_slug && state.eventBySlug.has(event.source_slug)) return state.eventBySlug.get(event.source_slug);
-      const sourceId = Number(event.source_id);
-      if (!Number.isFinite(sourceId)) return null;
-      return state.calendarEvents.find(item => Number(item.id) === sourceId) || null;
+      const target = timelineEventContentTarget(event);
+      return target?.type === "calendar_event" ? target.record : null;
+    }
+
+    function timelineEventContentTarget(event = {}) {
+      return TIMELINE_UTILS.contentTarget(event, {
+        siteById: state.siteById,
+        siteBySlug: state.siteBySlug,
+        wikiById: state.wikiById,
+        wikiBySlug: state.wikiBySlug,
+        calendarById: new Map(state.calendarEvents.map(item => [Number(item.id), item])),
+        calendarBySlug: state.eventBySlug
+      });
     }
 
     function timelineEventTargetGeometry(event = {}, site = null, wiki = null, calendarEvent = null) {
@@ -5860,19 +6114,20 @@
       const type = result.type || "wiki";
       const thumb = type === "site" ? listingImage(item) : firstContentImage(item.content || "");
       const attr = type === "site" ? `data-site-slug="${escapeHtml(item.slug)}"` : `data-wiki-slug="${escapeHtml(item.slug)}"`;
+      const href = type === "site" ? publicRouteHref({ site: item.slug }) : publicRouteHref({ wiki: item.slug });
       const wikiDate = item.last_reviewed || item.lastmod || "";
       const meta = type === "site"
         ? [safeSiteSubtitle(item), item.featured ? "Featured site" : ""].filter(Boolean).join(" - ")
         : ["Knowledgebase", wikiDate ? formatDate(wikiDate) : ""].filter(Boolean).join(" - ");
       return `
-        <button class="content-card${thumb ? " has-thumb" : ""}" type="button" ${attr}>
+        <a class="content-card${thumb ? " has-thumb" : ""}" href="${escapeHtml(href)}" ${attr} data-activity-content-type="${escapeHtml(type)}" data-activity-content-slug="${escapeHtml(item.slug)}">
           ${thumb ? `<img class="content-thumb" src="${escapeHtml(thumb)}" alt="" loading="lazy" decoding="async" onerror="${imageErrorAction("", { removeAction: "this.remove();this.closest('.content-card')?.classList.remove('has-thumb');" })}">` : ""}
           <span class="content-card-body">
             ${meta ? `<span class="content-card-meta">${escapeHtml(meta)}</span>` : ""}
-            <strong>${escapeHtml(item.title)}</strong>
+            <strong>${escapeHtml(item.title)}<span class="content-unread-badge" data-content-unread-badge hidden></span></strong>
             <span class="content-card-summary">${escapeHtml(item.summary || "")}</span>
           </span>
-        </button>
+        </a>
       `;
     }
 
@@ -6070,14 +6325,14 @@
       const summarySource = site.summary || site.why_this_matters || site.introduction_content || site.history_content || "";
       const summary = firstCompleteSentences(stripHtml(summarySource), 1, 180);
       return `
-        <button class="content-card site-list-card" type="button" data-site-slug="${escapeHtml(site.slug || "")}">
+        <a class="content-card site-list-card" href="${escapeHtml(publicRouteHref({ site: site.slug }))}" data-site-slug="${escapeHtml(site.slug || "")}">
           ${siteListThumbnailHtml(site)}
           <span class="content-card-body">
             ${meta ? `<span class="content-card-meta">${escapeHtml(meta)}</span>` : ""}
             <strong>${escapeHtml(site.title || "Untitled site")}</strong>
             ${summary ? `<span class="content-card-summary">${escapeHtml(summary)}</span>` : ""}
           </span>
-        </button>
+        </a>
       `;
     }
 
@@ -6113,21 +6368,22 @@
       const image = imageSource ? rewriteMediaUrl(imageSource) : "";
       const date = item.published_at ? new Date(item.published_at).toLocaleDateString() : "";
       return `
-        <button class="content-card${image ? " has-thumb" : ""}" type="button" data-blog-slug="${escapeHtml(item.slug)}">
+        <a class="content-card${image ? " has-thumb" : ""}" href="${escapeHtml(publicRouteHref({ blog: item.slug }))}" data-blog-slug="${escapeHtml(item.slug)}">
           ${image ? `<img class="content-thumb" src="${escapeHtml(image)}" alt="" loading="lazy" decoding="async">` : ""}
           <span class="content-card-body">
             ${date ? `<span class="content-card-meta">${escapeHtml(date)}</span>` : ""}
             <strong>${escapeHtml(item.title)}</strong>
             <span class="content-card-summary">${escapeHtml(item.summary || "")}</span>
           </span>
-        </button>
+        </a>
       `;
     }
 
-    function openKnowledgebaseTag(tag) {
+    function openKnowledgebaseTag(tag, options = {}) {
       const cleanTag = String(tag || "").trim();
       if (!cleanTag) return;
-      rememberPanel();
+      if (!options.skipHistory) rememberPanel();
+      if (!options.skipRoute) setRoute({ kbtag: routeSlugValue(cleanTag) });
       const needle = normalizeComparisonText(cleanTag);
       const matches = state.wikiArticles
         .filter(article => normalizeComparisonText([article.title, article.summary, article.content].filter(Boolean).join(" ")).includes(needle))
@@ -6146,6 +6402,11 @@
       markArticlePanelOpen();
       updateBackButton();
       resetArticleScroll();
+      updateSeoMetadata({
+        title: `${cleanTag.replace(/\b\w/g, letter => letter.toUpperCase())} - Native Long Island Knowledgebase`,
+        description: `Browse Native Long Island research articles connected to ${cleanTag}.`,
+        schemaType: "CollectionPage"
+      });
     }
 
     function pageCardHtml(item) {
@@ -6154,14 +6415,14 @@
       const date = item.wp_date ? new Date(item.wp_date).toLocaleDateString() : "";
       const typeLabel = item.content_type === "homepage" ? "Homepage" : "Public page";
       return `
-        <button class="content-card${image ? " has-thumb" : ""}" type="button" data-content-slug="${escapeHtml(item.slug)}">
+        <a class="content-card${image ? " has-thumb" : ""}" href="${escapeHtml(publicRouteHref({ page: item.slug }))}" data-content-slug="${escapeHtml(item.slug)}">
           ${image ? `<img class="content-thumb" src="${escapeHtml(image)}" alt="" loading="lazy" decoding="async">` : ""}
           <span class="content-card-body">
             <span class="content-card-meta">${escapeHtml([typeLabel, date].filter(Boolean).join(" - "))}</span>
             <strong>${escapeHtml(item.title)}</strong>
             <span class="content-card-summary">${escapeHtml(item.summary || "")}</span>
           </span>
-        </button>
+        </a>
       `;
     }
 
@@ -6388,10 +6649,10 @@
       }
       site = await hydrateSite(site);
       state.activeContent = { type: "site", slug: site.slug };
+      markContentActivitySeen("site", site.slug);
       const linked = new Set();
       const excludeHref = `#listing/${site.slug}`;
       const summary = publicCleanText(site.summary || stripHtml(site.introduction_content || site.history_content));
-      const showSummary = shouldShowLeadSummary(summary, site);
       const image = listingHeroImage(site);
       const imageSrcset = listingHeroSrcset(site);
       const access = visitAccessStatus(site);
@@ -6407,17 +6668,28 @@
       const siteMoments = timelineEventsFor("site", site.id, site.slug);
       const imageFallback = listingImageFallback(site);
       let renderedSiteMoments = false;
-      const sections = contentSections(site).map(([title, content]) => {
-        if (/^history$/i.test(title) && siteMoments.length) {
+      const sectionEntries = contentSections(site);
+      const introductionPresentation = SITE_UTILS.siteIntroductionPresentation(site, sectionEntries, {
+        cleanText: publicCleanText,
+        summary: site.summary
+      });
+      const sections = sectionEntries.map(([title, content, field]) => {
+        if (field?.content === "history_content" && siteMoments.length) {
           renderedSiteMoments = true;
           return `${sourceAwareSectionHtml(title, content, { used: linked, excludeHref })}${historicMomentsSection(siteMoments, { linked, excludeHref, showLocations: false })}`;
         }
-        return sourceAwareSectionHtml(title, content, { used: linked, excludeHref });
+        return sourceAwareSectionHtml(title, content, {
+          used: linked,
+          excludeHref,
+          introduction: field?.content === "introduction_content"
+        });
       }).join("");
+      restoreArticleHeroToBody();
       articleBodyEl.innerHTML = `
         ${learningPathArticleHeader(site)}
-        ${image ? `<img class="hero-image article-sticky-hero" src="${escapeHtml(image)}" ${imageSrcset ? `srcset="${imageSrcset}" sizes="(max-width: 760px) 100vw, 760px"` : ""} ${imageFallback ? `data-fallback-src="${escapeHtml(imageFallback)}"` : ""} alt="" loading="lazy" decoding="async" onerror="${dataFallbackImageErrorAction({ removeAction: "this.remove();" })}">${printSupportPanel({ title: site.title, image, sourceType: "site", slug: site.slug, enabled: site.show_print_purchase !== false })}` : ""}
-        ${showSummary ? `<p class="article-summary">${escapeHtml(summary)}</p>` : ""}
+        ${siteHeroCarouselHtml(site, image, { imageSrcset, imageFallback })}
+        ${image ? printSupportPanel({ title: site.title, image, sourceType: "site", slug: site.slug, enabled: site.show_print_purchase !== false }) : ""}
+        ${introductionPresentation.leadSummary ? `<p class="article-summary" data-site-introduction="summary">${escapeHtml(introductionPresentation.leadSummary)}</p>` : ""}
         ${sections}
         ${siteMoments.length && !renderedSiteMoments ? historicMomentsSection(siteMoments, { linked, excludeHref, showLocations: false }) : ""}
         ${whyThisMattersSection(site)}
@@ -6436,6 +6708,7 @@
       decorateCurrentArticleForLanguageQuiz("site", site);
       updateBackButton();
       resetArticleScroll();
+      startSiteHeroCarousel();
       setTimelineContextEvents(siteMoments);
       const activeEvent = context.timelineEventId || siteMoments[0]?.id;
       if (activeEvent) setActiveTimelineEvent(activeEvent, { scrollTimeline: true });
@@ -6447,7 +6720,8 @@
         image,
         schemaType: "Place"
       });
-      if (context.focus !== false && (context.focusGeometry || context.focusCenter || !userMovedMapSince(openedAt))) {
+      deferArticleMap("site", site.slug, () => {
+        if (context.focus === false || (!context.focusGeometry && !context.focusCenter && userMovedMapSince(openedAt))) return;
         const targetGeometry = context.focusGeometry || siteDisplayGeometry(site);
         if (targetGeometry) focusGeometry(targetGeometry, targetGeometry.type === "Point" ? 11 : 9.5, {
           center: context.focusCenter || null,
@@ -6456,31 +6730,7 @@
           localPolygonFocus: context.localPolygonFocus === true
         });
         else focusRelatedContentFeature("site", site.slug);
-      }
-    }
-
-    function shouldShowLeadSummary(summary, site) {
-      const lead = stripHtml(summary || "");
-      if (!lead) return false;
-      const introduction = stripHtml(site.introduction_content || "");
-      if (!introduction) return true;
-      const leadKey = normalizeComparisonText(lead);
-      const introKey = normalizeComparisonText(introduction);
-      if (introKey.includes(leadKey) || leadKey.includes(introKey.slice(0, Math.min(introKey.length, 180)))) return false;
-      const leadStart = leadKey.split(/\s+/).slice(0, 18).join(" ");
-      const introStart = introKey.split(/\s+/).slice(0, 18).join(" ");
-      if (leadStart && introStart && (leadStart.startsWith(introStart.slice(0, 80)) || introStart.startsWith(leadStart.slice(0, 80)))) return false;
-      const leadWords = new Set(leadKey.split(/\s+/).filter(word => word.length > 3).slice(0, 55));
-      const introWords = new Set(introKey.split(/\s+/).filter(word => word.length > 3).slice(0, 55));
-      if (leadWords.size && introWords.size) {
-        let shared = 0;
-        leadWords.forEach(word => {
-          if (introWords.has(word)) shared += 1;
-        });
-        const overlap = shared / Math.min(leadWords.size, introWords.size);
-        if (overlap >= 0.58) return false;
-      }
-      return true;
+      });
     }
 
     function shouldShowWikiLeadSummary(summary, articleContentHtml) {
@@ -6900,14 +7150,14 @@
       const meta = [safeSiteSubtitle(site), distance].filter(Boolean).join(" - ");
       const attr = mobile ? `data-slug="${escapeHtml(site.slug)}"` : `data-site-slug="${escapeHtml(site.slug)}"`;
       return `
-        <button class="content-card related-site-card${index >= initialLimit ? " related-site-extra" : ""}" type="button" ${attr} ${index >= initialLimit ? "hidden" : ""}>
+        <a class="content-card related-site-card${index >= initialLimit ? " related-site-extra" : ""}" href="${escapeHtml(publicRouteHref({ site: site.slug }))}" ${attr} ${index >= initialLimit ? "hidden" : ""}>
           <span class="content-card-body">
             <span class="related-site-reason">${escapeHtml(entry.reason || "Connected site")}</span>
             <strong>${escapeHtml(site.title)}</strong>
             ${meta ? `<span class="content-card-meta">${escapeHtml(meta)}</span>` : ""}
             ${summary ? `<span class="content-card-summary">${escapeHtml(summary)}</span>` : ""}
           </span>
-        </button>
+        </a>
       `;
     }
 
@@ -6985,10 +7235,10 @@
       if (!text) return "";
       const patterns = [
         /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+\d{3,4}\b/i,
-        /\b(?:c\.|ca\.|circa)\s*\d{3,4}s?(?:\s*[-�/]\s*\d{2,4}s?)?\b/i,
-        /\b(?:late|early|mid)\s+\d{3,4}s?(?:\s*[-�/]\s*(?:early|late|mid)?\s*\d{3,4}s?)?\b/i,
+        /\b(?:c\.|ca\.|circa)\s*\d{3,4}s?(?:\s*[-\u2013\u2014/]\s*\d{2,4}s?)?\b/i,
+        /\b(?:late|early|mid)\s+\d{3,4}s?(?:\s*[-\u2013\u2014/]\s*(?:early|late|mid)?\s*\d{3,4}s?)?\b/i,
         /\b(?:spring|summer|fall|autumn|winter)\s+\d{3,4}\b/i,
-        /\b\d{3,4}s?(?:\s*[-�/]\s*(?:early|late|mid)?\s*\d{2,4}s?)?\b/i
+        /\b\d{3,4}s?(?:\s*[-\u2013\u2014/]\s*(?:early|late|mid)?\s*\d{2,4}s?)?\b/i
       ];
       for (const pattern of patterns) {
         const match = text.match(pattern);
@@ -6999,7 +7249,7 @@
 
     function biographyPersonDestinationCandidate(value) {
       return publicCleanText(value || "")
-        .replace(/^\s*(?:(?:c\.|ca\.|circa)\s*)?(?:(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+\d{3,4}|(?:late|early|mid)\s+\d{3,4}s?(?:\s*[-�/]\s*(?:early|late|mid)?\s*\d{3,4}s?)?|(?:spring|summer|fall|autumn|winter)\s+\d{3,4}|\d{3,4}s?(?:\s*[-�/]\s*(?:early|late|mid)?\s*\d{2,4}s?)?)\s*(?:record)?\s*[-��]\s*/i, "")
+        .replace(/^\s*(?:(?:c\.|ca\.|circa)\s*)?(?:(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+\d{3,4}|(?:late|early|mid)\s+\d{3,4}s?(?:\s*[-\u2013\u2014/]\s*(?:early|late|mid)?\s*\d{3,4}s?)?|(?:spring|summer|fall|autumn|winter)\s+\d{3,4}|\d{3,4}s?(?:\s*[-\u2013\u2014/]\s*(?:early|late|mid)?\s*\d{2,4}s?)?)\s*(?:record)?\s*[-\u2013\u2014]\s*/i, "")
         .replace(/[;:].*?\b(exact|approx|uncertain|unknown|source|record)\b.*$/ig, "")
         .replace(/\b(?:record|deed|conference|house site|path)?\s*context\b/ig, "")
         .replace(/\b(?:colonial|court|deed|land|source)?\s*records?\b/ig, "")
@@ -7181,7 +7431,7 @@
       const candidates = [place.place, place.label].filter(Boolean);
       for (const candidate of candidates) {
         let text = stripHtml(candidate)
-          .replace(/^\s*\d{3,4}\s*[-��]\s*/g, "")
+          .replace(/^\s*\d{3,4}\s*[-\u2013\u2014]\s*/g, "")
           .replace(/\([^)]*\)/g, " ")
           .replace(/\s+/g, " ")
           .trim();
@@ -7267,25 +7517,8 @@
     function biographyPathLabelCoordinates(places = [], index = 0) {
       const place = places[index] || {};
       const coordinates = Array.isArray(place.coordinates) ? place.coordinates : null;
-      if (!coordinates?.every(Number.isFinite)) return coordinates;
-      const closeIndexes = places
-        .map((candidate, candidateIndex) => {
-          const coords = Array.isArray(candidate?.coordinates) ? candidate.coordinates : null;
-          if (!coords?.every(Number.isFinite)) return null;
-          const lngDelta = Math.abs(coords[0] - coordinates[0]);
-          const latDelta = Math.abs(coords[1] - coordinates[1]);
-          return lngDelta <= 0.16 && latDelta <= 0.07 ? candidateIndex : null;
-        })
-        .filter(Number.isFinite);
-      if (closeIndexes.length <= 1) return coordinates;
-      const localIndex = Math.max(0, closeIndexes.indexOf(index));
-      const lane = localIndex - ((closeIndexes.length - 1) / 2);
-      const radiusLat = Math.max(0.0135, Math.min(0.024, 0.09 / Math.max(2, closeIndexes.length)));
-      const radiusLng = (localIndex % 2 === 0 ? -0.006 : 0.006) * (Math.floor(localIndex / 2) + 1);
-      return [
-        Number((coordinates[0] + radiusLng).toFixed(6)),
-        Number((coordinates[1] + lane * radiusLat).toFixed(6))
-      ];
+      // Keep the callout at its dotted-line endpoint, not an invented location.
+      return coordinates?.every(Number.isFinite) ? coordinates : null;
     }
 
     function allBiographyPathFeatureCollection({ enabled = false } = {}) {
@@ -7622,6 +7855,14 @@
       return null;
     }
 
+    function biographyPersonIsNearLeafletViewport(coordinates, padding = 240) {
+      if (!state.usingLeafletFallback || !state.leafletMap?.latLngToContainerPoint) return true;
+      if (!Array.isArray(coordinates) || !coordinates.every(Number.isFinite)) return false;
+      const point = state.leafletMap.latLngToContainerPoint([coordinates?.[1], coordinates?.[0]]);
+      const size = state.leafletMap.getSize?.();
+      return Boolean(point && size && point.x >= -padding && point.y >= -padding && point.x <= size.x + padding && point.y <= size.y + padding);
+    }
+
     function biographyPersonActiveQuoteCount(now = performance.now()) {
       let count = 0;
       state.biographyPersonQuoteSchedules.forEach(schedule => {
@@ -7714,6 +7955,7 @@
     function updateBiographyPersonQuoteEncounters(entries = [], now = performance.now()) {
       if (!biographyPersonLabelsVisible()) return;
       const quoteEntries = entries
+        .filter(entry => biographyPersonIsNearLeafletViewport(entry?.coordinates))
         .filter(entry => entry?.quote?.text && Array.isArray(entry.coordinates) && numeric(entry.motionOpacity, 1) > 0.15)
         .map(entry => ({ ...entry, screenPoint: biographyPersonScreenPoint(entry.coordinates) }))
         .filter(entry => entry.screenPoint);
@@ -7788,6 +8030,11 @@
       return (path?.routePlaces?.length >= 2 ? path.routePlaces : path?.places) || [];
     }
 
+    // Multi-stop biographies move unless source review opts out; water adds canoe.
+    function biographyPersonHasDocumentedTravel(path) {
+      return path?.animate !== false && biographyPersonRoutePlaces(path).length >= 2;
+    }
+
     function biographyPersonRouteLineGeometry(path) {
       const places = biographyPersonRoutePlaces(path);
       const lines = [];
@@ -7851,8 +8098,9 @@
       const result = biographyPersonCoordinateTouchesLand(coordinates) ? false
         : biographyPersonCoordinateIsMappedWater(coordinates) ? true
           : biographyPersonCoordinateIsShallowWater(coordinates) ? true
-            : state.landMaskData?.geometry ? !pointInGeometry(coordinates, state.landMaskData.geometry)
-              : false;
+            : state.landMaskData?.geometry ? !biographyPersonCoordinateIsLandMask(coordinates)
+              // Shoreline data arrives asynchronously; use the safe canoe state.
+              : true;
       if (state.biographyWaterCoordinateCache.size > 2500) state.biographyWaterCoordinateCache.clear();
       state.biographyWaterCoordinateCache.set(cacheKey, result);
       return result;
@@ -7870,9 +8118,30 @@
       if (!Array.isArray(coordinates)) return false;
       const samples = biographyPersonLandSampleCoordinates(coordinates);
       return samples.some(sample =>
-        (state.landMaskData?.geometry && pointInGeometry(sample, state.landMaskData.geometry)) ||
+        biographyPersonCoordinateIsLandMask(sample) ||
         biographyPersonCoordinateIsMappedLand(sample)
       );
+    }
+
+    function biographyPersonCoordinateIsLandMask(coordinates) {
+      return biographyLandMaskCandidates().some(item =>
+        pointInBounds(coordinates, item.bounds, 0.000001) && pointInGeometry(coordinates, item.geometry)
+      );
+    }
+
+    function biographyLandMaskCandidates() {
+      const cacheKey = "canoe-land-mask-parts";
+      if (state.biographyMappedGeometryCache.has(cacheKey)) return state.biographyMappedGeometryCache.get(cacheKey);
+      const geometry = state.landMaskData?.geometry;
+      if (!geometry) return [];
+      const parts = geometry.type === "MultiPolygon" ? geometry.coordinates : [geometry.coordinates];
+      const items = parts.map(coordinates => {
+        const part = { type: "Polygon", coordinates };
+        const bounds = cachedGeometryBounds(part);
+        return bounds ? { geometry: part, bounds } : null;
+      }).filter(Boolean);
+      state.biographyMappedGeometryCache.set(cacheKey, items);
+      return items;
     }
 
     function biographyPersonLandSampleCoordinates(coordinates) {
@@ -8045,6 +8314,7 @@
       const last = validPlaces[lastIndex].coordinates;
       const firstLabel = biographyPersonDestinationLabel(validPlaces[0]);
       timeline.push({ type: "fade-out", point: last, duration: BIOGRAPHY_PERSON_FADE_MS, nextLabel: firstLabel, nextPlace: validPlaces[0] });
+      timeline.push({ type: "reset", point: first, duration: BIOGRAPHY_PERSON_RESET_MS, nextLabel: firstLabel, nextPlace: validPlaces[0] });
       timeline.push({ type: "fade-in", point: first, duration: BIOGRAPHY_PERSON_FADE_MS, nextLabel: biographyPersonDestinationLabel(validPlaces[1]), nextPlace: validPlaces[1] });
       return timeline.filter(item => item.duration > 0);
     }
@@ -8084,9 +8354,9 @@
         const start = cursor;
         const end = cursor + Number(item.duration || 0);
         if (elapsed <= end) {
-          if (item.type === "fade-out" || item.type === "fade-in") {
+          if (item.type === "fade-out" || item.type === "reset" || item.type === "fade-in") {
             let nextIndex = (index + 1) % timeline.length;
-            while (timeline[nextIndex]?.type === "fade-out" || timeline[nextIndex]?.type === "fade-in") {
+            while (["fade-out", "reset", "fade-in"].includes(timeline[nextIndex]?.type)) {
               nextIndex = (nextIndex + 1) % timeline.length;
               if (nextIndex === index) return 0;
             }
@@ -8150,29 +8420,44 @@
           };
         }
         if (item.type === "fade-out") return { coordinates: item.point, opacity: 1 - t, phase: "fade-out", nextLabel: item.nextLabel || "", nextPlace: item.nextPlace || null, cameraPosition: "chest", photoFlash: "false" };
+        if (item.type === "reset") return { coordinates: item.point, opacity: 0, phase: "reset", nextLabel: item.nextLabel || "", nextPlace: item.nextPlace || null, cameraPosition: "chest", photoFlash: "false" };
         if (item.type === "fade-in") return { coordinates: item.point, opacity: t, phase: "fade-in", nextLabel: item.nextLabel || "", nextPlace: item.nextPlace || null, cameraPosition: "chest", photoFlash: "false" };
         return { coordinates: item.point, opacity: 1, phase: "dwell", nextLabel: item.nextLabel || "", nextPlace: item.nextPlace || null, ...biographyPersonDwellCameraState(item, elapsed) };
       }
       return { coordinates: first, opacity: 1, phase: "dwell", cameraPosition: "chest", photoFlash: "false" };
     }
 
+    function biographyPersonDisplayOffsets(entries = []) { const groups = new Map(), offsets = new Map(), PI = Math.PI; for (const entry of entries) { const c = entry.coordinates || [], lng = c[0], lat = c[1]; if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue; const key = `${lng.toFixed(6)},${lat.toFixed(6)}`; (groups.get(key) || groups.set(key, []).get(key)).push(entry); } for (const group of groups.values()) { const n = group.length; if (n < 2) continue; group.sort((a, b) => String(a.slug).localeCompare(String(b.slug))); group.forEach((entry, index) => { const angle = n === 2 ? index * PI : -PI / 2 + PI * 2 * index / n, radius = n === 2 ? 18 : 22; offsets.set(entry.slug, { icon: [Math.round(Math.cos(angle) * radius), Math.round(Math.sin(angle) * radius)], label: [Math.round(Math.cos(angle) * (n === 2 ? 108 : 112)), Math.round(Math.sin(angle) * 30) - 6] }); }); } return offsets; }
+
     function biographyPersonFeatureCollection(now = performance.now(), options = {}) {
       const features = [];
       const entries = [];
       const visibleSlugs = options.visibleSlugs instanceof Set ? options.visibleSlugs : null;
+      const leafletViewportOnly = options.leafletViewportOnly === true;
       for (const slug of biographyPersonKnownSlugs()) {
         if (visibleSlugs && !visibleSlugs.has(slug)) continue;
         const path = biographyPersonPathData(slug);
         if (!path?.places?.length) continue;
+        const routePlaces = biographyPersonRoutePlaces(path);
+        const moving = biographyPersonHasDocumentedTravel(path);
+        const motion = moving
+          ? biographyPersonMotionState(slug, routePlaces, now, path)
+          : {
+              coordinates: path.places[0]?.coordinates || routePlaces[0]?.coordinates || null,
+              opacity: 1,
+              phase: "static",
+              nextLabel: "",
+              nextPlace: null,
+              cameraPosition: "chest",
+              photoFlash: "false"
+            };
+        const coordinates = motion.coordinates;
+        if (!coordinates) continue;
+        if (leafletViewportOnly && slug !== state.followedBiographySlug && !biographyPersonIsNearLeafletViewport(coordinates)) continue;
         const article = path.article || state.wikiBySlug.get(slug) || { slug };
         const person = biographyPathPersonName(article, slug);
         const mapLabel = biographyPersonMapLabel(article, slug);
         const quote = biographyPersonQuoteFor(slug);
-        const routePlaces = biographyPersonRoutePlaces(path);
-        const moving = routePlaces.length >= 2;
-        const motion = biographyPersonMotionState(slug, routePlaces, now, path);
-        const coordinates = motion.coordinates;
-        if (!coordinates) continue;
         const motionOpacity = Math.max(0, Math.min(1, numeric(motion.opacity, 1)));
         const travelStatus = biographyPersonTravelStatus(motion.nextPlace || null, { slug, path, article, person, mapLabel });
         const mapTravelLabel = biographyPersonMapLabelWithStatus(mapLabel, travelStatus);
@@ -8198,7 +8483,9 @@
       }
       updateBiographyPersonQuoteEncounters(entries, now);
       updateBiographyPersonAutoQuotes(entries, now);
+      const dos = biographyPersonDisplayOffsets(entries);
       for (const entry of entries) {
+        const d = dos.get(entry.slug) || { icon: [0, 0], label: [0, 0] };
         const quoteCanRender = entry.quote?.text && biographyPersonLabelsVisible();
         const quoteVisibility = quoteCanRender ? biographyPersonQuoteVisibility(entry.slug, now) : { visible: false, opacity: 0, cycle: 0 };
         const quoteTypedText = entry.quote?.text ? biographyPersonQuoteTypedText(entry.slug, entry.quote.text, quoteVisibility.visible, quoteVisibility.cycle, now) : "";
@@ -8213,6 +8500,8 @@
             pin_label: entry.person,
             map_label: entry.mapLabel,
             map_travel_label: entry.mapTravelLabel,
+            io: d.icon,
+            lo: d.label,
             travel_status: entry.travelStatus,
             next_destination: entry.motion.nextLabel || "",
             has_quote: entry.quote?.text ? "true" : "false",
@@ -8244,6 +8533,7 @@
 
     function stopBiographyPersonFollow() {
       state.followedBiographySlug = "";
+      state.leafletMap?.getContainer?.().classList.remove("is-biography-following");
       state.biographyFollowLastCenteredAt = 0;
       state.biographyPeopleLastAnimationAt = 0;
     }
@@ -8252,8 +8542,11 @@
       const slug = feature?.properties?.wiki_slug || "";
       if (!slug) return;
       state.followedBiographySlug = slug;
+      state.leafletMap?.getContainer?.().classList.add("is-biography-following");
       state.biographyFollowLastCenteredAt = 0;
       state.biographyPeopleLastAnimationAt = 0;
+      window.clearTimeout(state.biographyPeopleAnimationFrame);
+      state.biographyPeopleAnimationFrame = null;
       startBiographyPeopleAnimation();
       syncFollowedBiographyCamera(biographyPersonFeatureCollection(), performance.now(), { force: true });
     }
@@ -8366,9 +8659,14 @@
       return state.biographyPeopleProgressiveActive ? state.biographyPeopleVisibleSlugs : null;
     }
 
-    function biographyPersonFeatureCollectionForRender(now = performance.now()) {
-      return biographyPersonFeatureCollection(now, { visibleSlugs: activeBiographyPeopleVisibleSlugs() });
+    function biographyPersonFeatureCollectionForRender(now = performance.now(), options = {}) {
+      return biographyPersonFeatureCollection(now, {
+        visibleSlugs: activeBiographyPeopleVisibleSlugs(),
+        leafletViewportOnly: options.leafletViewportOnly === true
+      });
     }
+
+    function biographyPersonLeafletLatLng(coords, offset = [0, 0]) { if (!Array.isArray(coords)) return null; const base = [coords[1], coords[0]], x = Number(offset?.[0]) || 0, y = Number(offset?.[1]) || 0; if ((!x && !y) || !state.leafletMap?.latLngToLayerPoint || !state.leafletMap?.layerPointToLatLng) return base; const point = state.leafletMap.latLngToLayerPoint(base); return state.leafletMap.layerPointToLatLng([point.x + x, point.y + y]); }
 
     function resetBiographyPeopleProgressiveLoad(signature = "") {
       if (state.biographyPeopleProgressiveTimer) {
@@ -8412,7 +8710,7 @@
     }
 
     function updateBiographyPeopleLayer(now = performance.now()) {
-      const data = biographyPersonFeatureCollectionForRender(now);
+      const data = biographyPersonFeatureCollectionForRender(now, { leafletViewportOnly: state.usingLeafletFallback });
       syncFollowedBiographyCamera(data, now);
       const renderData = biographyPersonRenderDataForFollow(data);
       if (state.map?.getSource?.("biography-people")) {
@@ -8421,26 +8719,60 @@
       if (state.leafletBiographyPersonMarkers?.length) {
         const featuresBySlug = new Map((renderData.features || []).map(feature => [feature.properties?.wiki_slug, feature]));
         const showPersonLabels = leafletCurrentZoom() >= BIOGRAPHY_PERSON_LABEL_MIN_ZOOM;
+        const zoomKey = leafletCurrentZoom().toFixed(2);
         state.leafletBiographyPersonMarkers.forEach(entry => {
           const feature = featuresBySlug.get(entry.slug);
           const coords = feature?.geometry?.coordinates;
           if (!coords || !entry.marker?.setLatLng) return;
+          if (entry.slug !== state.followedBiographySlug && !biographyPersonIsNearLeafletViewport(coords)) return;
           const opacity = Math.max(0, Math.min(1, numeric(feature.properties?.motion_opacity, 1)));
-          entry.marker.setLatLng([coords[1], coords[0]]);
-          entry.marker.setOpacity?.(opacity);
-          entry.labelMarker?.setLatLng?.([coords[1], coords[0]]);
-          entry.labelMarker?.setOpacity?.(showPersonLabels ? opacity : 0);
-          const labelElement = entry.labelMarker?.getElement?.();
-          setLeafletMarkerPointerEvents(entry.labelMarker, showPersonLabels && opacity > 0.05);
-          if (labelElement) {
-            labelElement.innerHTML = biographyPersonLeafletLabelHtml(feature);
-            labelElement.setAttribute("aria-hidden", showPersonLabels ? "false" : "true");
+          const iconOffset = feature.properties?.io || [0, 0];
+          const labelOffset = feature.properties?.lo || [0, 0];
+          const markerStateKey = [coords[0], coords[1], iconOffset[0], iconOffset[1], opacity, zoomKey, feature.properties?.motion_phase || "static", feature.properties?.camera_position || "chest", feature.properties?.photo_flash || "false"].join("|");
+          const markerElementStateKey = [feature.properties?.motion_phase || "static", feature.properties?.camera_position || "chest", feature.properties?.photo_flash || "false", feature.properties?.canoe_visible || "false"].join("|");
+          const labelStateKey = showPersonLabels
+            ? [coords[0], coords[1], labelOffset[0], labelOffset[1], opacity, zoomKey, feature.properties?.map_label || feature.properties?.title || "", feature.properties?.travel_status || ""].join("|")
+            : `hidden:${zoomKey}`;
+          if (entry.markerStateKey !== markerStateKey) {
+            entry.marker.setLatLng(biographyPersonLeafletLatLng(coords, iconOffset));
+            entry.marker.setOpacity?.(opacity);
+            entry.markerStateKey = markerStateKey;
           }
-          entry.quoteMarker?.setLatLng?.([coords[1], coords[0]]);
+          if (entry.labelMarker && entry.labelStateKey !== labelStateKey) {
+            if (showPersonLabels) entry.labelMarker.setLatLng?.(biographyPersonLeafletLatLng(coords, labelOffset));
+            entry.labelMarker.setOpacity?.(showPersonLabels ? opacity : 0);
+            entry.labelStateKey = labelStateKey;
+          }
+          const labelElement = entry.labelMarker?.getElement?.();
+          const labelInteractive = showPersonLabels && opacity > 0.05;
+          if (entry.labelInteractive !== labelInteractive) {
+            setLeafletMarkerPointerEvents(entry.labelMarker, labelInteractive);
+            entry.labelInteractive = labelInteractive;
+          }
+          if (labelElement && showPersonLabels) {
+            const labelHtml = biographyPersonLeafletLabelHtml(feature);
+            if (entry.labelHtml !== labelHtml) {
+              labelElement.innerHTML = labelHtml;
+              entry.labelHtml = labelHtml;
+            }
+            const labelHidden = showPersonLabels ? "false" : "true";
+            if (labelElement.getAttribute("aria-hidden") !== labelHidden) labelElement.setAttribute("aria-hidden", labelHidden);
+          }
           const quoteOpacity = Math.max(0, Math.min(1, numeric(feature.properties?.quote_opacity, 0)));
           const quoteVisible = showPersonLabels && feature.properties?.quote_visible === "true" && String(feature.properties?.quote_typed_text || "").trim();
-          entry.quoteMarker?.setOpacity?.(quoteVisible ? opacity * quoteOpacity : 0);
-          setLeafletMarkerPointerEvents(entry.quoteMarker, quoteVisible && opacity > 0.05);
+          const quoteStateKey = quoteVisible
+            ? [coords[0], coords[1], iconOffset[0], iconOffset[1], opacity, quoteOpacity, zoomKey].join("|")
+            : `hidden:${zoomKey}`;
+          if (entry.quoteMarker && entry.quoteStateKey !== quoteStateKey) {
+            if (quoteVisible) entry.quoteMarker.setLatLng?.(biographyPersonLeafletLatLng(coords, iconOffset));
+            entry.quoteMarker.setOpacity?.(quoteVisible ? opacity * quoteOpacity : 0);
+            entry.quoteStateKey = quoteStateKey;
+          }
+          const quoteInteractive = quoteVisible && opacity > 0.05;
+          if (entry.quoteInteractive !== quoteInteractive) {
+            setLeafletMarkerPointerEvents(entry.quoteMarker, quoteInteractive);
+            entry.quoteInteractive = quoteInteractive;
+          }
           const quoteElement = entry.quoteMarker?.getElement?.();
           if (quoteElement && quoteVisible) {
             const nextQuoteKey = `${feature.properties?.quote_cycle || 0}:${feature.properties?.quote_typed_text || ""}:${feature.properties?.quote_date || ""}`;
@@ -8450,23 +8782,25 @@
               quoteElement.removeAttribute("aria-hidden");
             }
           } else if (quoteElement) {
-            quoteElement.dataset.quoteTypeKey = "";
-            quoteElement.innerHTML = "";
-            quoteElement.setAttribute("aria-hidden", "true");
+            if (quoteElement.dataset.quoteTypeKey || quoteElement.childNodes.length) {
+              quoteElement.dataset.quoteTypeKey = "";
+              quoteElement.innerHTML = "";
+            }
+            if (quoteElement.getAttribute("aria-hidden") !== "true") quoteElement.setAttribute("aria-hidden", "true");
           }
-          if (entry.feature?.geometry) entry.feature.geometry.coordinates = coords;
-          if (entry.feature?.properties) {
+          if (entry.feature?.geometry && entry.markerFeatureStateKey !== markerStateKey) entry.feature.geometry.coordinates = coords;
+          if (entry.feature?.properties && entry.markerFeatureStateKey !== markerStateKey) {
             entry.feature.properties.motion_opacity = opacity;
             entry.feature.properties.motion_phase = feature.properties?.motion_phase || "static";
             entry.feature.properties.camera_position = feature.properties?.camera_position || "chest";
             entry.feature.properties.photo_flash = feature.properties?.photo_flash || "false";
           }
           const element = entry.marker.getElement?.();
-          if (element) {
-            setLeafletBiographyPersonElementState(element, feature, coords);
-            element.dataset.lng = String(coords[0]);
-            element.dataset.lat = String(coords[1]);
+          if (element && entry.markerElementStateKey !== markerElementStateKey) {
+            setLeafletBiographyPersonElementState(element, feature);
+            entry.markerElementStateKey = markerElementStateKey;
           }
+          entry.markerFeatureStateKey = markerStateKey;
         });
       }
     }
@@ -8476,15 +8810,15 @@
       if (!element) return;
       element.style.pointerEvents = enabled ? "auto" : "none";
       element.setAttribute("aria-hidden", enabled ? "false" : "true");
+      element.tabIndex = enabled ? 0 : -1;
     }
 
-    function setLeafletBiographyPersonElementState(element, feature, coords) {
+    function setLeafletBiographyPersonElementState(element, feature) {
       if (!element || !feature?.properties) return;
       const cameraPosition = feature.properties.camera_position || "chest";
       const photoFlash = feature.properties.photo_flash || "false";
       const motionPhase = feature.properties.motion_phase || "static";
-      const currentCoordinates = Array.isArray(coords) ? coords : feature.geometry?.coordinates;
-      const canoeCurrentlyVisible = biographyPersonIsOverWater(currentCoordinates, { phase: motionPhase });
+      const canoeCurrentlyVisible = feature.properties.canoe_visible === "true";
       const canoeVisible = canoeCurrentlyVisible ? "true" : "false";
       const canoeOpacity = canoeCurrentlyVisible ? "1" : "0";
       const targets = [element, element.querySelector?.(".biography-person-marker-shell")].filter(Boolean);
@@ -8494,11 +8828,91 @@
         target.dataset.canoeVisible = canoeVisible;
         target.dataset.motionPhase = motionPhase;
         target.style.setProperty("--biography-canoe-opacity", canoeOpacity);
-        if (coords) {
-          target.dataset.lng = String(coords[0]);
-          target.dataset.lat = String(coords[1]);
+      });
+    }
+
+    function leafletBusy() { const m=state.leafletMap, el=m?.getContainer?.(); return state.usingLeafletFallback && m && (el?.classList?.contains("is-moving") || m._animatingZoom || m.dragging?.moving?.()); }
+    function leafletNoHover(event) { return leafletBusy() || (event?.originalEvent || event)?.buttons; }
+
+    function shiftBiographyPeopleClocks(pausedFor) {
+      const shift = Math.max(0, Number(pausedFor) || 0);
+      if (!shift) return;
+      state.biographyPersonMotionStartedAt.forEach((startedAt, slug) => {
+        state.biographyPersonMotionStartedAt.set(slug, Number(startedAt) + shift);
+      });
+      state.biographyPersonQuoteSchedules.forEach(schedule => {
+        if (Number.isFinite(Number(schedule?.startedAt))) schedule.startedAt = Number(schedule.startedAt) + shift;
+        if (Number.isFinite(Number(schedule?.nextAt))) schedule.nextAt = Number(schedule.nextAt) + shift;
+      });
+      state.biographyPersonQuoteAutoSchedules.forEach(schedule => {
+        if (Number.isFinite(Number(schedule?.nextAt))) schedule.nextAt = Number(schedule.nextAt) + shift;
+      });
+      state.biographyPersonQuoteTypeStates.forEach(typeState => {
+        if (Number.isFinite(Number(typeState?.startedAt))) typeState.startedAt = Number(typeState.startedAt) + shift;
+      });
+      state.biographyPersonQuoteEncounterPairs.forEach(pair => {
+        if (Number.isFinite(Number(pair?.lastTriggeredAt)) && Number(pair.lastTriggeredAt) > 0) {
+          pair.lastTriggeredAt = Number(pair.lastTriggeredAt) + shift;
         }
       });
+      if (Number(state.biographyPersonQuoteLastAutoAt || 0) > 0) {
+        state.biographyPersonQuoteLastAutoAt = Number(state.biographyPersonQuoteLastAutoAt) + shift;
+      }
+    }
+
+    function beginBiographyPeopleMapInteractionPause(kind = "map", now = performance.now()) {
+      window.clearTimeout(state.biographyPeopleMapInteractionResumeTimer);
+      state.biographyPeopleMapInteractionResumeTimer = null;
+      state.biographyPeopleMapInteractionKinds.add(String(kind || "map"));
+      if (!state.biographyPeopleMapInteractionPausedAt) state.biographyPeopleMapInteractionPausedAt = now;
+    }
+
+    function resumeBiographyPeopleMapInteraction(now = performance.now()) {
+      const pausedAt = Number(state.biographyPeopleMapInteractionPausedAt || 0);
+      if (!pausedAt) return;
+      state.biographyPeopleMapInteractionPausedAt = 0;
+      shiftBiographyPeopleClocks(Math.max(0, now - pausedAt));
+      state.biographyPeopleLastAnimationAt = now;
+      updateBiographyPeopleLayer(now);
+    }
+
+    function endBiographyPeopleMapInteractionPause(kind = "map") {
+      state.biographyPeopleMapInteractionKinds.delete(String(kind || "map"));
+      window.clearTimeout(state.biographyPeopleMapInteractionResumeTimer);
+      if (state.biographyPeopleMapInteractionKinds.size) return;
+      state.biographyPeopleMapInteractionResumeTimer = window.setTimeout(() => {
+        state.biographyPeopleMapInteractionResumeTimer = null;
+        resumeBiographyPeopleMapInteraction(performance.now());
+      }, 160);
+    }
+
+    function startMapMotionTimer(timerKey, lastRunKey, intervalFor, update, pauseForBiographyMapInteraction = false) {
+      if (state[timerKey]) return;
+      const tick = () => {
+        const now = performance.now(), interval = intervalFor();
+        if (!document.hidden && (!pauseForBiographyMapInteraction || !state.biographyPeopleMapInteractionPausedAt) && !leafletBusy() && now - state[lastRunKey] >= interval) {
+          update(now); state[lastRunKey] = now;
+        }
+        state[timerKey] = window.setTimeout(tick, interval);
+      };
+      state[timerKey] = window.setTimeout(tick, intervalFor());
+    }
+
+    function syncBiographyPeopleVisibility(now = performance.now()) {
+      if (document.hidden) {
+        if (!state.biographyPeoplePausedAt) state.biographyPeoplePausedAt = now;
+        return;
+      }
+      const pausedAt = Number(state.biographyPeoplePausedAt || 0);
+      if (!pausedAt) return;
+      const pausedFor = Math.max(0, now - pausedAt);
+      state.biographyPeoplePausedAt = 0;
+      shiftBiographyPeopleClocks(pausedFor);
+      if (state.biographyPeopleMapInteractionPausedAt) {
+        state.biographyPeopleMapInteractionPausedAt = Number(state.biographyPeopleMapInteractionPausedAt) + pausedFor;
+      }
+      state.biographyPeopleLastAnimationAt = now;
+      updateBiographyPeopleLayer(now);
     }
 
     function startBiographyPeopleAnimation() {
@@ -8506,18 +8920,8 @@
         window.clearTimeout(state.biographyPeopleAnimationDelayTimer);
         state.biographyPeopleAnimationDelayTimer = null;
       }
-      if (state.biographyPeopleAnimationFrame || !window.requestAnimationFrame) return;
-      const tick = now => {
-        const interval = state.followedBiographySlug
-          ? BIOGRAPHY_PERSON_FOLLOW_ANIMATION_INTERVAL_MS
-          : BIOGRAPHY_PERSON_ANIMATION_INTERVAL_MS;
-        if (!document.hidden && now - state.biographyPeopleLastAnimationAt >= interval) {
-          updateBiographyPeopleLayer(now);
-          state.biographyPeopleLastAnimationAt = now;
-        }
-        state.biographyPeopleAnimationFrame = window.requestAnimationFrame(tick);
-      };
-      state.biographyPeopleAnimationFrame = window.requestAnimationFrame(tick);
+      startMapMotionTimer("biographyPeopleAnimationFrame", "biographyPeopleLastAnimationAt", () => state.followedBiographySlug
+        ? BIOGRAPHY_PERSON_FOLLOW_ANIMATION_INTERVAL_MS : BIOGRAPHY_PERSON_ANIMATION_INTERVAL_MS, updateBiographyPeopleLayer, true);
     }
 
     function scheduleBiographyPeopleAnimationStart(delay = 30000) {
@@ -8608,6 +9012,8 @@
       state.followedWhalingWhale = true;
       state.whalingWhaleFollowLastCenteredAt = 0;
       state.whalingWhaleLastAnimationAt = 0;
+      window.clearTimeout(state.whalingWhaleAnimationFrame);
+      state.whalingWhaleAnimationFrame = null;
       startWhalingWhaleAnimation();
       syncFollowedWhalingWhaleCamera(whalingWhaleMotionState(), performance.now(), { force: true });
     }
@@ -8681,6 +9087,10 @@
     function bindWhalingWhaleElement(element) {
       const target = element?.matches?.(".whaling-whale-marker") ? element : element?.querySelector?.(".whaling-whale-marker");
       if (!target || target.dataset.whalingBound === "true") return;
+      if (target !== element) {
+        element.setAttribute("role", "presentation");
+        element.tabIndex = -1;
+      }
       target.dataset.whalingBound = "true";
       target.addEventListener("click", event => {
         event.preventDefault();
@@ -8757,15 +9167,8 @@
     }
 
     function startWhalingWhaleAnimation() {
-      if (state.whalingWhaleAnimationFrame || !window.requestAnimationFrame) return;
-      const tick = now => {
-        if (!document.hidden && now - state.whalingWhaleLastAnimationAt >= WHALING_WHALE_ANIMATION_INTERVAL_MS) {
-          updateWhalingWhaleMarker(now);
-          state.whalingWhaleLastAnimationAt = now;
-        }
-        state.whalingWhaleAnimationFrame = window.requestAnimationFrame(tick);
-      };
-      state.whalingWhaleAnimationFrame = window.requestAnimationFrame(tick);
+      startMapMotionTimer("whalingWhaleAnimationFrame", "whalingWhaleLastAnimationAt", () => state.followedWhalingWhale
+        ? BIOGRAPHY_PERSON_FOLLOW_ANIMATION_INTERVAL_MS : WHALING_WHALE_ANIMATION_INTERVAL_MS, updateWhalingWhaleMarker);
     }
 
     function movingDogRouteSegments() {
@@ -8877,6 +9280,10 @@
     function bindMovingDogElement(element) {
       const target = element?.matches?.(".moving-dog-marker") ? element : element?.querySelector?.(".moving-dog-marker");
       if (!target || target.dataset.dogBound === "true") return;
+      if (target !== element) {
+        element.setAttribute("role", "presentation");
+        element.tabIndex = -1;
+      }
       target.dataset.dogBound = "true";
       target.addEventListener("click", event => {
         event.preventDefault();
@@ -8951,15 +9358,7 @@
     }
 
     function startMovingDogAnimation() {
-      if (state.movingDogAnimationFrame || !window.requestAnimationFrame) return;
-      const tick = now => {
-        if (!document.hidden && now - state.movingDogLastAnimationAt >= MOVING_DOG_ANIMATION_INTERVAL_MS) {
-          updateMovingDogMarker(now);
-          state.movingDogLastAnimationAt = now;
-        }
-        state.movingDogAnimationFrame = window.requestAnimationFrame(tick);
-      };
-      state.movingDogAnimationFrame = window.requestAnimationFrame(tick);
+      startMapMotionTimer("movingDogAnimationFrame", "movingDogLastAnimationAt", () => MOVING_DOG_ANIMATION_INTERVAL_MS, updateMovingDogMarker);
     }
 
     function biographyPathsEnabled() {
@@ -9262,17 +9661,23 @@
         });
         const markers = path.places.map((place, index) => {
           const labelCoordinates = biographyPathLabelCoordinates(path.places, index) || place.coordinates;
-          return L.marker([labelCoordinates[1], labelCoordinates[0]], {
+          const marker = L.marker([labelCoordinates[1], labelCoordinates[0]], {
             icon: L.divIcon({
               className: "biography-path-leaflet-label",
               html: `<span class="biography-path-map-label">${escapeHtml(biographyPathMapPinLabel(place, index + 1))}</span>`,
               iconSize: [270, 24],
-              iconAnchor: [135, 12],
-              tooltipAnchor: [0, -12]
+              iconAnchor: [135, 12]
             }),
             keyboard: false,
             zIndexOffset: 2800
-          }).bindTooltip(biographyPathMapPinLabel(place, index + 1), { direction: "top" });
+          });
+          marker.on("click", event => {
+            if (event?.originalEvent && window.L?.DomEvent?.stop) window.L.DomEvent.stop(event.originalEvent);
+            event?.originalEvent?.preventDefault?.();
+            event?.originalEvent?.stopPropagation?.();
+            focusBiographyPathMoment(path, index, place.event_id || place.eventId);
+          });
+          return marker;
         });
         state.leafletBiographyPathLayer = L.layerGroup([line, ...markers]).addTo(state.leafletMap);
       }
@@ -9323,6 +9728,11 @@
       markArticlePanelOpen();
       updateBackButton();
       resetArticleScroll();
+      updateSeoMetadata({
+        title: `${cleanLabel} - Native Long Island Sites`,
+        description: `Browse ${matches.length} mapped Native Long Island place${matches.length === 1 ? "" : "s"} connected to ${cleanLabel}.`,
+        schemaType: "CollectionPage"
+      });
     }
 
     function isBroadTerritorySite(site) {
@@ -9410,6 +9820,7 @@
       if (!context.skipHistory) rememberPanel();
       article = await hydrateWiki(article);
       state.activeContent = { type: "wiki", slug: article.slug };
+      markContentActivitySeen("wiki", article.slug);
       const linked = new Set();
       const excludeHref = `#wiki/${article.slug}`;
       const image = firstContentImage(article.content || "");
@@ -9458,11 +9869,13 @@
         schemaType: "Article"
       });
       const shouldFocus = context.focus !== false && !userMovedMapSince(openedAt);
-      if (biographyTimeline?.places?.length >= 2) showBiographyPathOverlay(article, { focus: shouldFocus, events: wikiMoments });
-      else {
-        clearBiographyPathOverlay();
-        if (shouldFocus) focusRelatedContentFeature("wiki", article.slug);
-      }
+      deferArticleMap("wiki", article.slug, () => {
+        if (biographyTimeline?.places?.length >= 2) showBiographyPathOverlay(article, { focus: shouldFocus, events: wikiMoments });
+        else {
+          clearBiographyPathOverlay();
+          if (shouldFocus) focusRelatedContentFeature("wiki", article.slug);
+        }
+      });
     }
 
     async function openSiteContent(item, context = {}) {
@@ -9491,7 +9904,7 @@
       markArticlePanelOpen();
       updateBackButton();
       resetArticleScroll();
-      if (!context.skipRoute) setRoute({ page: item.slug });
+      if (!context.skipRoute) setRoute(item.content_type === "homepage" || item.slug === "homepage" ? {} : { page: item.slug });
       updateSeoMetadata({
         title: item.title,
         description: item.summary || item.content,
@@ -10025,23 +10438,156 @@
       return ACTIVITY_UTILS.lastSeenKey("nli-activity-last-seen", key);
     }
 
+    function activitySeenItemsKey() {
+      const profile = currentContributorProfile?.();
+      const key = profile?.id || state.contributorSession?.profileId || state.contributorSession?.email || "public";
+      return ACTIVITY_UTILS.lastSeenKey("nli-activity-seen-items-v2", key);
+    }
+
     function latestActivityItemsForUnread() {
       return latestActivityFeed(60);
     }
 
-    function unreadActivityCount() {
-      const seen = ACTIVITY_UTILS.readSeen(activityLastSeenKey());
-      return ACTIVITY_UTILS.unreadCount(latestActivityItemsForUnread(), seen);
+    let activityUnreadTaskCache = null;
+
+    function unreadActivityItems() {
+      if (activityUnreadTaskCache) return activityUnreadTaskCache;
+      activityUnreadTaskCache = ACTIVITY_UTILS.unreadItems(latestActivityItemsForUnread(), {
+        baseline: ACTIVITY_UTILS.readSeen(activityLastSeenKey()),
+        seenKeys: ACTIVITY_UTILS.readSeenItemKeys(activitySeenItemsKey())
+      });
+      window.setTimeout(() => { activityUnreadTaskCache = null; }, 0);
+      return activityUnreadTaskCache;
     }
 
-    function markActivitySeen() {
-      ACTIVITY_UTILS.writeSeen(activityLastSeenKey(), latestActivityItemsForUnread());
+    function unreadActivityCount() {
+      return ACTIVITY_UTILS.weightedActivityCount(unreadActivityItems());
+    }
+
+    function contentActivityUnreadCount(type, slug) {
+      const targetKey = `${String(type || "").toLowerCase()}|${String(slug || "").trim().toLowerCase()}`;
+      return ACTIVITY_UTILS.weightedActivityCount(unreadActivityItems().filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.key === targetKey));
+    }
+
+    function activityUnreadSiteFeatures() {
+      const counts = new Map();
+      unreadActivityItems().forEach(item => {
+        const target = ACTIVITY_UTILS.activityContentTarget(item);
+        if (target?.type !== "site") return;
+        counts.set(target.slug, (counts.get(target.slug) || 0) + ACTIVITY_UTILS.activityItemWeight(item));
+      });
+      return {
+        type: "FeatureCollection",
+        features: [...counts.entries()].map(([slug, count]) => {
+          const site = state.siteBySlug.get(slug);
+          const geometry = siteDisplayGeometry(site);
+          const coordinates = geometry?.type === "Point"
+            ? geometry.coordinates
+            : (Array.isArray(site?.territory_label_point) ? site.territory_label_point : geometryCenter(geometry));
+          if (!site || !Array.isArray(coordinates)) return null;
+          return {
+            type: "Feature",
+            geometry: { type: "Point", coordinates },
+            properties: {
+              slug,
+              title: site.title,
+              geometry_kind: geometry?.type === "Point" ? "point" : "polygon",
+              unread_count: count,
+              unread_label: count > 99 ? "99+" : String(count)
+            }
+          };
+        }).filter(Boolean)
+      };
+    }
+
+    function activityUnreadCountIcon(count) {
+      const normalizedCount = Math.max(0, Math.round(Number(count) || 0));
+      if (!normalizedCount) return "";
+      return `activity-unread-count-${normalizedCount > 99 ? "99-plus" : normalizedCount}`;
+    }
+
+    function ensureActivityUnreadBadgeImages() {
+      if (!state.map) return;
+      for (let count = 1; count <= 100; count += 1) {
+        const label = count === 100 ? "99+" : String(count);
+        const imageId = `activity-unread-count-${count === 100 ? "99-plus" : count}`;
+        if (state.map.hasImage(imageId)) continue;
+        const canvas = document.createElement("canvas");
+        canvas.width = 28;
+        canvas.height = 28;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        context.clearRect(0, 0, 28, 28);
+        context.fillStyle = "#c62828";
+        context.beginPath();
+        context.arc(14, 14, 12, 0, Math.PI * 2);
+        context.fill();
+        context.fillStyle = "#fff";
+        context.font = `700 ${label.length > 2 ? 11 : (label.length > 1 ? 14 : 16)}px sans-serif`;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText(label, 14, 14.5);
+        state.map.addImage(imageId, context.getImageData(0, 0, 28, 28), { pixelRatio: 2 });
+      }
+    }
+
+    function markActivityItemSeen(key) {
+      if (!key) return;
+      const item = latestActivityItemsForUnread().find(candidate => ACTIVITY_UTILS.activityItemKey(candidate) === key);
+      ACTIVITY_UTILS.writeSeenItemKeys(activitySeenItemsKey(), item ? ACTIVITY_UTILS.activityItemKeys(item) : [key]);
+      activityUnreadTaskCache = null;
+      state.activityRenderedSignature = "";
       updateActivityUnreadBadge();
+      if (activityPanelEl && !activityPanelEl.hidden) renderActivityPanel();
+    }
+
+    function markContentActivitySeen(type, slug) {
+      const targetKey = `${String(type || "").toLowerCase()}|${String(slug || "").trim().toLowerCase()}`;
+      if (!slug) return;
+      const keys = unreadActivityItems()
+        .filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.key === targetKey)
+        .flatMap(ACTIVITY_UTILS.activityItemKeys);
+      if (!keys.length) return;
+      ACTIVITY_UTILS.writeSeenItemKeys(activitySeenItemsKey(), keys);
+      activityUnreadTaskCache = null;
+      state.activityRenderedSignature = "";
+      updateActivityUnreadBadge();
+      if (activityPanelEl && !activityPanelEl.hidden) renderActivityPanel();
+    }
+
+    function refreshContentUnreadBadges() {
+      document.querySelectorAll("[data-activity-content-type][data-activity-content-slug]").forEach(element => {
+        const count = contentActivityUnreadCount(element.dataset.activityContentType, element.dataset.activityContentSlug);
+        let badge = element.matches?.("[data-content-unread-badge]") ? element : element.querySelector("[data-content-unread-badge]");
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "content-unread-badge";
+          badge.dataset.contentUnreadBadge = "";
+          element.appendChild(badge);
+        }
+        badge.textContent = count > 99 ? "99+" : String(count);
+        badge.hidden = count <= 0;
+        element.classList.toggle("has-unread-activity", count > 0);
+        if (count > 0) badge.setAttribute("aria-label", `${count} new update${count === 1 ? "" : "s"}`);
+      });
+      const wikiCount = ACTIVITY_UTILS.weightedActivityCount(unreadActivityItems().filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.type === "wiki"));
+      document.querySelectorAll('[data-view="knowledgebase"]').forEach(button => {
+        let badge = button.querySelector("[data-knowledgebase-unread-badge]");
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "content-unread-badge knowledgebase-unread-badge";
+          badge.dataset.knowledgebaseUnreadBadge = "";
+          button.appendChild(badge);
+        }
+        badge.textContent = wikiCount > 99 ? "99+" : String(wikiCount);
+        badge.hidden = wikiCount <= 0;
+      });
+      state.map?.getSource?.("activity-unread-sites")?.setData(activityUnreadSiteFeatures());
+      state.map?.getSource?.("directus-site-labels")?.setData(withPolygonUnreadBadges(managedSiteDetailLabelFeatures(), "detail"));
+      state.map?.getSource?.("directus-site-territory-labels")?.setData(withPolygonUnreadBadges(managedSiteTerritoryLabelFeatures(), "territory"));
     }
 
     function updateActivityUnreadBadge() {
       const badges = document.querySelectorAll("[data-activity-unread-badge]");
-      if (!badges.length) return;
       const count = unreadActivityCount();
       badges.forEach(badge => {
         badge.textContent = count > 99 ? "99+" : String(count);
@@ -10052,6 +10598,7 @@
         "aria-label",
         count > 0 ? `Show community activity, ${count} new updates` : "Show community activity"
       );
+      refreshContentUnreadBadges();
     }
 
     function activityPreview(text, limit = 135) {
@@ -10108,7 +10655,7 @@
             : null;
           const sourceItem = sourceSite || sourceWiki;
           if (sourceWiki && ACTIVITY_UTILS.wikiActivityLabel(sourceWiki) === "New Article") return null;
-          const date = latestEditedDate(sourceItem);
+          const date = ACTIVITY_UTILS.contentUpdateDate(sourceItem);
           return {
             kind: "historic-moment",
             label: "Historic moment updated",
@@ -10117,10 +10664,11 @@
             preview: item.description || item.source_excerpt || item.citation || "",
             date,
             image: sourceSite ? listingImage(sourceSite) : "",
-            imageFallback: sourceSite ? listingThumbFallback(sourceSite) : "",
-            slug: item.source_slug || "",
-            sourceType: item.source_type || "",
-            id: item.id || ""
+             imageFallback: sourceSite ? listingThumbFallback(sourceSite) : "",
+             slug: item.source_slug || "",
+             sourceType: item.source_type || "",
+             sourceTitle: sourceItem?.title || item.source_title || "",
+             id: item.id || ""
           };
         })
         .filter(Boolean)
@@ -10142,6 +10690,8 @@
           date: story.created_at,
           image: directusAssetUrl(story.photo),
           imageFallback: "",
+          contentSourceType: story.attached_site_slug ? "site" : "",
+          contentSlug: story.attached_site_slug || "",
           id: story.id || ""
         }));
     }
@@ -10152,13 +10702,22 @@
           .filter(item => item.slug && item.slug !== "address-result")
           .map(item => {
             const pinned = ACTIVITY_UTILS.activityIsPinned(item);
+            const label = pinned ? ACTIVITY_UTILS.activityPinLabel(item) : ACTIVITY_UTILS.siteActivityLabel(item);
+            const date = pinned ? latestEditedDate(item) : ACTIVITY_UTILS.siteActivityDate(item);
             return {
               kind: "site",
-              label: pinned ? ACTIVITY_UTILS.activityPinLabel(item) : ACTIVITY_UTILS.siteActivityLabel(item),
+              label,
               title: pinned && item.activity_pin_title ? item.activity_pin_title : item.title,
-              meta: activityDateLabel(latestEditedDate(item)),
-              preview: pinned && item.activity_pin_preview ? item.activity_pin_preview : item.summary || item.introduction_content || safeSiteSubtitle(item) || "",
-              date: latestEditedDate(item),
+              meta: activityDateLabel(date),
+              preview: pinned && item.activity_pin_preview
+                ? item.activity_pin_preview
+                : ACTIVITY_UTILS.activityNewsPreview(item, {
+                    type: "site",
+                    timelineEvents: state.timelineEvents,
+                    cleanText: publicCleanText,
+                    isNew: label === "Site added"
+                  }),
+              date,
               pinUntil: item.activity_pin_until,
               pinned,
               image: listingImage(item),
@@ -10167,19 +10726,28 @@
               id: item.id || ""
             };
           }),
-        ...state.wikiArticles.map(item => ({
-          kind: "wiki",
-          label: ACTIVITY_UTILS.wikiActivityLabel(item),
-          title: item.title,
-          meta: activityDateLabel(ACTIVITY_UTILS.wikiActivityDate(item)),
-          preview: item.summary || item.content || "",
-          date: ACTIVITY_UTILS.wikiActivityDate(item),
-          activityPriority: ACTIVITY_UTILS.wikiActivityPriority(item),
-          image: firstContentImage(item.content || ""),
-          imageFallback: "",
-          slug: item.slug,
-          id: item.id || ""
-        })),
+        ...state.wikiArticles.map(item => {
+          const label = ACTIVITY_UTILS.wikiActivityLabel(item);
+          const date = ACTIVITY_UTILS.wikiActivityDate(item);
+          return {
+            kind: "wiki",
+            label,
+            title: item.title,
+            meta: activityDateLabel(date),
+            preview: ACTIVITY_UTILS.activityNewsPreview(item, {
+              type: "wiki",
+              timelineEvents: state.timelineEvents,
+              cleanText: publicCleanText,
+              isNew: label === "New Article"
+            }),
+            date,
+            activityPriority: ACTIVITY_UTILS.wikiActivityPriority(item),
+            image: firstContentImage(item.content || ""),
+            imageFallback: "",
+            slug: item.slug,
+            id: item.id || ""
+          };
+        }),
         ...state.blogPosts.map(item => ({
           kind: "blog",
           label: "Blog post",
@@ -10226,6 +10794,7 @@
       const seen = new Set();
       const dedupedItems = items
         .filter(item => item.title && item.slug)
+        .filter(item => item.pinned || (activityDateValue(item.date) && (!["site", "wiki"].includes(item.kind) || item.preview)))
         .filter(item => {
           const key = `${String(item.slug).toLowerCase()}|${normalizeComparisonText(item.title || "")}`;
           if (seen.has(key)) return false;
@@ -10378,6 +10947,7 @@
           ${item.kind === "suggestion-review" && item.pendingReview ? `<div class="notification-actions">
             <button type="button" data-notification-action="approve">Approve</button>
             <button type="button" data-notification-action="decline">Deny</button>
+            <button type="button" data-notification-action="delete">Delete</button>
           </div>` : ""}
         </article>
       `;
@@ -10395,6 +10965,7 @@
 
     async function handleSuggestionReview(id, action) {
       if (!isCurrentAdminReviewer()) return showBanner("Only an editor can review suggestions.");
+      if (action === "delete") return removeAdminContribution("site_suggestions", id);
       const suggestion = state.siteSuggestions.find(item => String(item.id) === String(id));
       if (!suggestion) return showBanner("That suggestion is not loaded.");
       const nextStatus = action === "approve" ? "approved" : "declined";
@@ -10443,52 +11014,365 @@
       }
     }
 
-    function activityImageHtml(item) {
-      const image = item.image || "";
+    function activityCanonicalTarget(item = {}) {
+      const sourceType = String(item.sourceType || "").toLowerCase();
+      if (item.kind === "event") {
+        const event = state.calendarEvents.find(entry =>
+          String(entry.id || "") === String(item.id || "") ||
+          String(entry.slug || "") === String(item.eventSlug || "")
+        ) || null;
+        const relatedWikiSlug = event?.related_wiki_slug || (sourceType === "wiki" ? item.slug : "");
+        const relatedSiteSlug = event?.related_site_slug || event?.source_slug || (sourceType !== "wiki" ? item.slug : "");
+        if (relatedWikiSlug) {
+          const record = findActivityRecord(state.wikiArticles, state.wikiBySlug, state.wikiById, { slug: relatedWikiSlug });
+          if (record) return { sourceType: "wiki", record, event };
+        }
+        if (relatedSiteSlug) {
+          const record = findActivityRecord(state.sites, state.siteBySlug, state.siteById, { slug: relatedSiteSlug });
+          if (record) return { sourceType: "site", record, event };
+        }
+        return { sourceType: "", record: null, event };
+      }
+      if (item.kind === "historic-moment") {
+        const event = state.timelineById.get(String(item.id || "")) ||
+          state.timelineEvents.find(entry => String(entry.id) === String(item.id || ""));
+        const target = event ? timelineEventContentTarget(event) : null;
+        if (target?.type === "site" || target?.type === "wiki") {
+          return { sourceType: target.type, record: target.record, event };
+        }
+        return { sourceType: "", record: null, event };
+      }
+      if (item.kind === "comment" || item.kind === "site" || item.kind === "wiki") {
+        const type = item.kind === "comment" ? sourceType : item.kind;
+        if (type === "site") {
+          const record = findActivityRecord(state.sites, state.siteBySlug, state.siteById, {
+            slug: item.slug,
+            id: item.id,
+            title: item.title
+          });
+          return { sourceType: record ? "site" : "", record, event: null };
+        }
+        if (type === "wiki") {
+          const record = findActivityRecord(state.wikiArticles, state.wikiBySlug, state.wikiById, {
+            slug: item.slug,
+            id: item.id,
+            title: item.title
+          });
+          return { sourceType: record ? "wiki" : "", record, event: null };
+        }
+      }
+      return { sourceType: "", record: null, event: null };
+    }
+
+    function activityCanonicalMedia(target = {}) {
+      const record = target.record;
+      if (!record) return { image: "", fallback: "" };
+      if (target.sourceType === "site") {
+        return {
+          image: listingImage(record),
+          fallback: listingThumbFallback(record)
+        };
+      }
+      if (target.sourceType === "wiki") {
+        const raw = MEDIA_UTILS.cleanImageUrl(record.activity_image_url || "");
+        const image = raw ? rewriteMediaUrl(raw) : firstContentImage(record.content || "");
+        const absolute = raw ? absoluteMediaUrl(raw) : "";
+        return {
+          image,
+          fallback: absolute && absolute !== image ? absolute : ""
+        };
+      }
+      return { image: "", fallback: "" };
+    }
+
+    function activityCardHref(item = {}, target = null) {
+      if (target?.record?.slug && target.sourceType === "site") {
+        return publicRouteHref({ site: target.record.slug });
+      }
+      if (target?.record?.slug && target.sourceType === "wiki") {
+        return publicRouteHref({ wiki: target.record.slug });
+      }
+      if (!item.slug) return "";
+      if (item.kind === "site") return publicRouteHref({ site: item.slug });
+      if (item.kind === "wiki") return publicRouteHref({ wiki: item.slug });
+      if (item.kind === "blog") return publicRouteHref({ blog: item.slug });
+      if (item.kind === "site-post" || item.kind === "page") return publicRouteHref({ page: item.slug });
+      if (item.kind === "event" && state.siteBySlug.has(item.slug)) return publicRouteHref({ site: item.slug });
+      if (item.kind === "event" && state.eventBySlug.has(item.slug)) return publicRouteHref({ calendar: item.slug });
+      return "";
+    }
+
+    function activityCardModel(item = {}) {
+      const canonicalTarget = activityCanonicalTarget(item);
+      const targetRecord = canonicalTarget.record;
+      const canonicalMedia = activityCanonicalMedia(canonicalTarget);
+      const story = item.kind === "map-story"
+        ? state.mapStories.find(entry => String(entry.id) === String(item.id || ""))
+        : null;
+      const comment = item.kind === "comment"
+        ? state.publicComments.find(entry => String(entry.id) === String(item.commentId || ""))
+        : null;
+      const authorName = story
+        ? MAP_STORY_UTILS.authorName(story)
+        : comment?.author_name || item.authorName || "";
+      const sourceName = story
+        ? authorName
+        : targetRecord?.title || item.sourceName || item.title || "";
+      const title = story
+        ? (story.attached_site_title
+          ? `${authorName || "A community member"} at ${story.attached_site_title}`
+          : `${authorName || "A community member"} shared a story`)
+        : item.title;
+      const target = targetRecord ? {
+        type: canonicalTarget.sourceType,
+        id: targetRecord.id,
+        slug: targetRecord.slug,
+        url: activityCardHref(item, canonicalTarget)
+      } : item.kind === "map-story" && story ? {
+        type: "user-story",
+        id: story.id
+      } : null;
+      const coordinates = targetRecord && canonicalTarget.sourceType === "site"
+        ? siteCenter(targetRecord) || targetRecord.center || null
+        : story
+          ? mapStoryDisplayCoordinates(story)
+          : null;
+      const targetComments = targetRecord
+        ? discussionComments(canonicalTarget.sourceType, targetRecord)
+        : [];
+      const commentCounts = comment ? commentReactionCounts(comment) : { up: 0 };
+      const storyCounts = story ? MAP_STORY_UTILS.storyVoteCounts(story, state.mapStoryVotes) : { up: 0 };
+      const profile = currentContributorProfile();
+      const loggedIn = Boolean(profile?.id && !state.contributorSession?.pending);
+       const normalized = LEARNING_CARD_UTILS.normalizeLearningCard?.({
+         key: item.activityGroupKey || "",
+        id: item.id || item.commentId || "",
+        type: item.kind,
+        title,
+        sourceName,
+        pageName: sourceName,
+        authorName,
+        date: item.date || item.meta || "",
+         imageUrl: item.image || canonicalMedia.image || "",
+         imageFallbackUrl: item.imageFallback || canonicalMedia.fallback || "",
+        excerpt: item.preview || "",
+        fullUrl: activityCardHref(item, canonicalTarget),
+        target,
+        relatedMapItem: coordinates ? {
+          type: canonicalTarget.sourceType || (story ? "user-story" : item.kind),
+          id: targetRecord?.id || story?.id || "",
+          slug: targetRecord?.slug || story?.attached_site_slug || "",
+          coordinates
+        } : null,
+        counts: {
+          upvotes: comment ? commentCounts.up : story ? storyCounts.up : 0,
+          comments: targetComments.length
+        },
+        capabilities: {
+          open: Boolean(activityCardHref(item, canonicalTarget) || story),
+          map: Boolean(coordinates),
+          vote: Boolean(comment || story),
+          comment: Boolean(targetRecord && ["site", "wiki"].includes(canonicalTarget.sourceType))
+        },
+        permissions: {
+          loggedIn,
+          canVote: loggedIn,
+          canComment: loggedIn
+        },
+         pinned: item.pinned
+       }) || {};
+      return {
+        ...normalized,
+        raw: item,
+        label: item.label || "Community update",
+        meta: item.date ? activityDateLabel(item.date) : item.meta,
+        canonicalTarget,
+        targetRecord,
+        story,
+         comment,
+         authorName,
+         updates: Array.isArray(item.updates) ? item.updates : []
+       };
+    }
+
+    function activityCardDomId(card = {}) {
+      return `activity-${String(card.key || `${card.type}-${card.id || ""}`)
+        .replace(/[^a-z0-9_-]+/gi, "-")
+        .replace(/^-+|-+$/g, "")
+        .toLowerCase() || "card"}`;
+    }
+
+    function activityOpenControl(card, content, className, label) {
+      const href = card.fullUrl || "";
+      if (href) {
+        return `<a class="${className}" href="${escapeHtml(href)}" data-activity-open aria-label="${escapeHtml(label || card.title)}">${content}</a>`;
+      }
+      return `<button class="${className}" type="button" data-activity-open aria-label="${escapeHtml(label || card.title)}">${content}</button>`;
+    }
+
+    function activityImageHtml(card, index = 0) {
+      const image = card.imageUrl || "";
       if (!image) return "";
-      const fallback = item.imageFallback || "";
+      const fallback = card.imageFallbackUrl || "";
       const onerror = fallback && fallback !== image
         ? imageErrorAction(fallback)
         : imageErrorAction();
-      return `<span class="activity-thumb"><img src="${escapeHtml(image)}" alt="" loading="lazy" decoding="async" onerror="${onerror}"></span>`;
+      const eager = index < 10;
+      const priority = index < 2;
+      return activityOpenControl(
+        card,
+        `<span class="activity-thumb"><img class="activity-card-image" src="${escapeHtml(image)}" alt="${escapeHtml(card.title || "")}" loading="${eager ? "eager" : "lazy"}"${priority ? ' fetchpriority="high"' : ""} decoding="async" onload="this.classList.add('is-loaded')" onerror="${onerror}"></span>`,
+        "activity-image-link",
+        `Open ${card.title || "this history"}`
+      );
     }
 
-    function activityItemHtml(item) {
+    function activityCommentThreadHtml(sourceType, item) {
+      const comments = discussionComments(sourceType, item);
+      return COMMENT_UTILS.activityThreadHtml(comments, { escapeHtml,
+        authorName: comment => profileFromComment(comment)?.display_name || comment.author_name || "Contributor",
+        parseComment: QUOTE_COMMENT_UTILS.parseCommentRecord,
+        attachmentUrl: comment => directusAssetUrl(comment.comment_image)
+      });
+    }
+
+    function activityItemHtml(item, index = 0) {
+      const card = activityCardModel(item);
+      const cardId = `${activityCardDomId(card)}-${index}`;
+      const excerptId = `${cardId}-excerpt`;
+      const commentsId = `${cardId}-comments`;
+      const target = card.canonicalTarget || {};
+      const targetRecord = target.record;
+      const canDiscuss = Boolean(card.capabilities?.comment && targetRecord?.id && targetRecord?.slug);
+      const canVote = Boolean(card.capabilities?.vote);
+      const longExcerpt = String(card.excerpt || "").length > 190;
+      const parentCommentId = card.comment?.id || "";
+      const replyToProfile = relationId(card.comment?.member_profile) || "";
+      const discussionOpen = state.activityDiscussionKeys.has(card.key);
+      const titleControl = activityOpenControl(
+        card,
+        escapeHtml(card.title || "Explore local history"),
+        "activity-card-title",
+        `Open ${card.title || "this history"}`
+      );
+      const readLabel = card.type === "user-story" ? "Open story" : "Read";
+      const activityKey = ACTIVITY_UTILS.activityItemKey(item);
+      const unread = unreadActivityItems().some(candidate => ACTIVITY_UTILS.activityItemKey(candidate) === activityKey);
       return `
-        <button class="activity-item${item.image ? " has-image" : ""}${item.pinned ? " is-pinned" : ""}" type="button" data-activity-kind="${escapeHtml(item.kind)}" data-activity-slug="${escapeHtml(item.slug || "")}" data-activity-source-type="${escapeHtml(item.sourceType || "")}" data-activity-id="${escapeHtml(item.id || "")}" data-activity-title="${escapeHtml(item.title || "")}" data-activity-comment-id="${escapeHtml(item.commentId || "")}">
-          ${activityImageHtml(item)}
-          <span class="activity-copy">
-          <span class="activity-meta">${item.pinned ? `<span class="activity-pin-icon" aria-label="Pinned">${ACTIVITY_ICONS.pin}</span>` : ""}${escapeHtml(item.label)} - ${escapeHtml(item.meta || "Recently")}</span>
-          <strong>${escapeHtml(item.title || "Untitled")}</strong>
-          ${activityPreview(item.preview) ? `<p class="activity-preview">${escapeHtml(activityPreview(item.preview))}</p>` : ""}
-          </span>
-        </button>
+        <article class="activity-item activity-learning-card${card.imageUrl ? " has-image" : ""}${card.pinned ? " is-pinned" : ""}${discussionOpen ? " is-commenting" : ""}${unread ? " is-unread" : ""}" data-activity-card-key="${escapeHtml(card.key)}" data-activity-item-key="${escapeHtml(activityKey)}" data-activity-kind="${escapeHtml(item.kind)}" data-activity-slug="${escapeHtml(item.slug || "")}" data-activity-source-type="${escapeHtml(item.sourceType || "")}" data-activity-id="${escapeHtml(item.id || "")}" data-activity-title="${escapeHtml(item.title || "")}" data-activity-comment-id="${escapeHtml(item.commentId || "")}">
+          <header class="activity-card-header">
+            <span class="activity-meta">${card.pinned ? `<span class="activity-pin-icon" aria-label="Pinned">${ACTIVITY_ICONS.pin}</span>` : ""}${escapeHtml(card.label)}</span>
+            <time>${escapeHtml(card.meta || "Recently")}</time>
+          </header>
+          ${activityImageHtml(card, index)}
+          <div class="activity-copy">
+            ${titleControl}
+            ${card.sourceName && card.sourceName !== card.title ? `<span class="activity-card-source">${escapeHtml(card.sourceName)}</span>` : ""}
+            ${card.authorName && card.type !== "user-story" ? `<span class="activity-card-author">Shared by ${escapeHtml(card.authorName)}</span>` : ""}
+            ${ACTIVITY_UTILS.updateListHtml(card.updates, { escapeHtml })}
+            ${card.excerpt ? `<p class="activity-preview${longExcerpt ? " is-clamped" : ""}" id="${escapeHtml(excerptId)}">${escapeHtml(card.excerpt)}</p>` : ""}
+            ${longExcerpt ? `<button class="activity-see-more" type="button" data-activity-see-more aria-expanded="false" aria-controls="${escapeHtml(excerptId)}">See more</button>` : ""}
+          </div>
+          <div class="activity-card-actions">
+            ${canVote ? `<button type="button" data-activity-helpful="${escapeHtml(card.type)}" data-activity-helpful-id="${escapeHtml(card.comment?.id || card.story?.id || "")}" aria-label="Mark helpful">Helpful <span>${card.counts?.upvotes || 0}</span></button>` : ""}
+            ${canDiscuss ? `<button type="button" data-activity-comment-toggle aria-expanded="${discussionOpen ? "true" : "false"}" aria-controls="${escapeHtml(commentsId)}"><span>Comment</span><span class="activity-action-count">${card.counts?.comments || 0}</span></button>` : ""}
+            ${card.capabilities?.open ? activityOpenControl(card, escapeHtml(readLabel), "activity-read-link", `${readLabel} ${card.title || "this history"}`) : ""}
+            ${unread ? `<button type="button" data-activity-dismiss aria-label="Dismiss this new update">Dismiss</button>` : ""}
+          </div>
+          ${canDiscuss ? `
+            <section class="activity-comment-panel" id="${escapeHtml(commentsId)}" data-activity-comment-panel tabindex="-1"${discussionOpen ? "" : " hidden"}>
+              ${activityCommentThreadHtml(target.sourceType, targetRecord)}
+              ${card.permissions?.canComment ? `
+                <div class="activity-comment-composer"
+                  data-discussion-type="${escapeHtml(target.sourceType)}"
+                  data-discussion-id="${escapeHtml(targetRecord.id)}"
+                  data-discussion-slug="${escapeHtml(targetRecord.slug)}"
+                  data-discussion-title="${escapeHtml(targetRecord.title)}">
+                  <label for="${escapeHtml(cardId)}-comment">${parentCommentId ? "Reply to this comment" : `Add to the discussion about ${escapeHtml(targetRecord.title)}`}</label>
+                  <textarea id="${escapeHtml(cardId)}-comment" data-discussion-input rows="3" maxlength="4000" placeholder="${parentCommentId ? "Write a reply" : "Share what this history adds or makes you wonder"}"></textarea>
+                  <input data-parent-comment type="hidden" value="${escapeHtml(parentCommentId)}">
+                  <input data-reply-to-profile type="hidden" value="${escapeHtml(replyToProfile)}">
+                  <button type="button" data-submit-discussion>Post comment</button>
+                </div>
+              ` : `
+                <p>Log in with an approved contributor account to join this discussion.</p>
+                <button type="button" data-activity-login>Log in to comment</button>
+              `}
+            </section>
+          ` : ""}
+          <p class="activity-card-status" data-activity-card-status aria-live="polite"></p>
+        </article>
       `;
     }
 
-    function stopActivityProgressiveRender() {
-      if (state.activityRenderTimer) window.clearTimeout(state.activityRenderTimer);
-      state.activityRenderTimer = null;
-      state.activityRenderToken += 1;
+    function activityFeedSignature(feed = []) {
+      return feed.map(rawItem => {
+        const card = activityCardModel(rawItem);
+        return [
+          card.key,
+          rawItem.kind,
+          rawItem.id,
+          rawItem.commentId,
+          rawItem.slug,
+          rawItem.sourceType,
+          card.label,
+          card.meta,
+          card.title,
+          card.sourceName,
+          card.excerpt,
+          card.imageUrl,
+          card.imageFallbackUrl,
+          card.counts?.upvotes || 0,
+        card.counts?.comments || 0,
+        JSON.stringify(card.updates || []),
+          card.pinned ? "1" : "0"
+        ].map(value => String(value || "")).join("\u001f");
+      }).join("\u001e");
     }
 
-    function appendActivityItemsProgressively(groupEl, feed, startIndex, token) {
-      if (!groupEl || token !== state.activityRenderToken) return;
-      const chunkSize = startIndex < 6 ? 1 : 2;
-      const nextItems = feed.slice(startIndex, startIndex + chunkSize);
-      if (!nextItems.length) {
-        startActivityAutoScroll();
-        return;
-      }
-      groupEl.insertAdjacentHTML("beforeend", nextItems.map(activityItemHtml).join(""));
-      syncFloatingPanelLayout();
-      const nextIndex = startIndex + nextItems.length;
-      if (nextIndex < feed.length) {
-        state.activityRenderTimer = window.setTimeout(() => appendActivityItemsProgressively(groupEl, feed, nextIndex, token), 320);
-      } else {
-        state.activityRenderTimer = null;
-        startActivityAutoScroll();
-      }
+    function captureActivityCardUiState() {
+      const snapshot = {
+        expanded: new Set(),
+        commenting: new Set(),
+        drafts: new Map(),
+        statuses: new Map()
+      };
+      activityBodyEl?.querySelectorAll("[data-activity-card-key]").forEach(card => {
+        const key = card.dataset.activityCardKey || "";
+        if (!key) return;
+        if (card.classList.contains("is-expanded")) snapshot.expanded.add(key);
+        const panel = card.querySelector("[data-activity-comment-panel]");
+        if (panel && !panel.hidden) snapshot.commenting.add(key);
+        const draft = card.querySelector("[data-discussion-input]")?.value || "";
+        if (draft) snapshot.drafts.set(key, draft);
+        const status = card.querySelector("[data-activity-card-status]")?.textContent || "";
+        if (status) snapshot.statuses.set(key, status);
+      });
+      return snapshot;
+    }
+
+    function restoreActivityCardUiState(snapshot) {
+      if (!snapshot) return;
+      activityBodyEl?.querySelectorAll("[data-activity-card-key]").forEach(card => {
+        const key = card.dataset.activityCardKey || "";
+        const seeMore = card.querySelector("[data-activity-see-more]");
+        if (snapshot.expanded.has(key)) {
+          card.classList.add("is-expanded");
+          seeMore?.setAttribute("aria-expanded", "true");
+          if (seeMore) seeMore.textContent = "See less";
+        }
+        const commentPanel = card.querySelector("[data-activity-comment-panel]");
+        const commentToggle = card.querySelector("[data-activity-comment-toggle]");
+        if (snapshot.commenting.has(key) && commentPanel) {
+          commentPanel.hidden = false;
+          card.classList.add("is-commenting");
+          commentToggle?.setAttribute("aria-expanded", "true");
+        }
+        const input = card.querySelector("[data-discussion-input]");
+        if (input && snapshot.drafts.has(key)) input.value = snapshot.drafts.get(key);
+        const status = card.querySelector("[data-activity-card-status]");
+        if (status && snapshot.statuses.has(key)) status.textContent = snapshot.statuses.get(key);
+      });
     }
 
     function normalizedActivitySlug(value) {
@@ -10565,7 +11449,11 @@
       setupActivityAutoScroll();
       if (!activityBodyEl || activityPanelEl?.hidden || activityPanelEl?.classList.contains("collapsed")) return;
       state.activityScrollTimer = window.setInterval(() => {
-        if (state.activityScrollPaused || document.hidden) return;
+        if (
+          state.activityScrollPaused ||
+          document.hidden ||
+          activityBodyEl.querySelector(".activity-item.is-expanded, .activity-item.is-commenting")
+        ) return;
         const maxScroll = activityBodyEl.scrollHeight - activityBodyEl.clientHeight;
         if (maxScroll <= 8) return;
         if (activityBodyEl.scrollTop >= maxScroll - 1) {
@@ -10582,7 +11470,6 @@
 
     function renderActivityPanel(options = {}) {
       if (!activityPanelEl || !activityBodyEl) return;
-      stopActivityProgressiveRender();
       const preserveBody = options.preserveBody === true && activityBodyEl.hasChildNodes();
       const isMobileViewport = window.innerWidth <= 860;
       const articleOpen = articleEl?.classList.contains("open") && !isMobileViewport;
@@ -10604,6 +11491,27 @@
       activityCollapseBtn.innerHTML = ACTIVITY_ICONS.hide;
       activityCollapseBtn.title = "Hide community activity";
       activityCollapseBtn.setAttribute("aria-label", "Hide community activity");
+      const waitingForSettledFeed = !fullArchiveDataLoaded || !state.deferredSocialDataLoaded;
+      if (waitingForSettledFeed) {
+        state.activityRenderedSignature = "activity-loading";
+        if (!hidden) {
+          activityBodyEl.innerHTML = `
+            <section class="activity-group activity-feed-loading" aria-label="Loading recent archive activity" aria-busy="true">
+              <div class="activity-loading-status" role="status"><span class="activity-loading-status-icon" aria-hidden="true">${ACTIVITY_ICONS.newspaper}</span><span><strong>Gathering recent updates</strong><small>New research, listings, comments, and community stories will appear here.</small></span></div>
+              <article class="activity-loading-card activity-loading-card-featured" aria-hidden="true"><span class="activity-loading-card-header"></span><span class="activity-loading-media"></span><span class="activity-loading-copy"></span><span class="activity-loading-actions"></span></article>
+              <article class="activity-loading-card activity-loading-card-compact" aria-hidden="true"><span class="activity-loading-card-header"></span><span class="activity-loading-copy"></span><span class="activity-loading-actions"></span></article>
+            </section>
+          `;
+          ensureActivityFeedReady();
+        }
+        updateActivityUnreadBadge();
+        updateNotificationUnreadBadge();
+        syncFloatingPanelLayout();
+        return;
+      }
+      const feed = latestActivityFeed(18);
+      const signature = activityFeedSignature(feed);
+      const hasRenderedItems = Boolean(activityBodyEl.querySelector(".activity-item"));
       if (preserveBody) {
         updateActivityUnreadBadge();
         updateNotificationUnreadBadge();
@@ -10611,25 +11519,31 @@
         if (!hidden) startActivityAutoScroll();
         return;
       }
-      const feed = latestActivityFeed(18);
-      const progressive = !hidden && options.progressive !== false && feed.length > 1;
-      const initialCount = hidden ? 0 : progressive ? Math.max(1, Math.min(Number(options.initialCount) || 1, feed.length)) : feed.length;
-      const initialFeed = feed.slice(0, initialCount);
+      if (signature === state.activityRenderedSignature && (hidden || hasRenderedItems || !feed.length)) {
+        updateActivityUnreadBadge();
+        updateNotificationUnreadBadge();
+        syncFloatingPanelLayout();
+        if (!hidden) startActivityAutoScroll();
+        return;
+      }
+      const replacingRenderedFeed = Boolean(state.activityRenderedSignature && hasRenderedItems);
+      const preservedScrollTop = replacingRenderedFeed ? activityBodyEl.scrollTop : 0;
+      const cardUiState = replacingRenderedFeed ? captureActivityCardUiState() : null;
+      state.activityRenderedSignature = signature;
+      const visibleFeed = hidden ? [] : feed;
       activityBodyEl.innerHTML = `
-        <section class="activity-group" aria-label="Most recent archive activity" data-activity-progressive-group>
-          ${initialFeed.length ? initialFeed.map(activityItemHtml).join("") : `<p class="article-meta">Recent public activity will appear here.</p>`}
+        <section class="activity-group" aria-label="Most recent archive activity">
+          ${visibleFeed.length ? visibleFeed.map(activityItemHtml).join("") : `<p class="article-meta">Recent public activity will appear here.</p>`}
         </section>
       `;
+      restoreActivityCardUiState(cardUiState);
       updateActivityUnreadBadge();
       updateNotificationUnreadBadge();
       syncFloatingPanelLayout();
-      if (progressive && initialCount < feed.length) {
-        const token = state.activityRenderToken;
-        const groupEl = activityBodyEl.querySelector("[data-activity-progressive-group]");
-        state.activityRenderTimer = window.setTimeout(() => appendActivityItemsProgressively(groupEl, feed, initialCount, token), Number(options.nextDelay) || 220);
-      } else {
-        startActivityAutoScroll();
+      if (replacingRenderedFeed) {
+        activityBodyEl.scrollTop = Math.min(preservedScrollTop, Math.max(0, activityBodyEl.scrollHeight - activityBodyEl.clientHeight));
       }
+      startActivityAutoScroll();
     }
 
     async function openActivityItem(item) {
@@ -10639,6 +11553,7 @@
       const commentId = item?.dataset.activityCommentId || "";
       const activityId = item?.dataset.activityId || "";
       const activityTitle = item?.dataset.activityTitle || "";
+      markActivityItemSeen(item?.dataset.activityItemKey || "");
       const wikiTarget = await resolveActivityWikiTarget({
         slug,
         id: kind === "wiki" ? activityId : "",
@@ -10691,6 +11606,12 @@
         }
       }
       if (kind === "historic-moment") {
+        const event = state.timelineById.get(String(activityId)) ||
+          state.timelineEvents.find(entry => String(entry.id) === String(activityId));
+        const target = event ? timelineEventContentTarget(event) : null;
+        if (target?.type === "wiki") return openWikiArticle(target.record, { source: "Historic moment", timelineEventId: activityId });
+        if (target?.type === "site") return openListing(target.record, { source: "Historic moment", timelineEventId: activityId });
+        if (target?.type === "calendar_event") return openCalendarEvent(target.record, { source: "Historic moment", timelineEventId: activityId });
         if (sourceType === "wiki" && wikiTarget) return openWikiArticle(wikiTarget, { source: "Historic moment", timelineEventId: activityId });
         if (sourceType === "site" && siteTarget) return openListing(siteTarget, { source: "Historic moment", timelineEventId: activityId });
       }
@@ -11083,52 +12004,61 @@
       const profile = currentContributorProfile();
       if (!profile?.id || state.contributorSession?.pending) {
         showBanner("Log in to mark comments helpful or report a concern.");
-        return;
+        return false;
       }
       const votedComment = state.publicComments.find(item => String(item.id) === id);
       if (currentViewerOwnsComment(votedComment)) {
         showBanner("You cannot vote on your own comment.");
-        return;
+        return false;
       }
       if (commentReaction(id)) {
         showBanner("Your vote for this comment is already saved.");
-        return;
+        return false;
       }
-      await refreshRemoteCommentVote(id, profile.id).catch(() => null);
-      if (commentReaction(id)) {
-        showBanner("Your vote for this comment is already saved.");
-        return;
-      }
-      const vote = COMMENT_UTILS.votePayload(id, value, profile);
-      let created;
-      try {
-        created = await postDirectusItem("mobile_comment_votes", vote, { requireAuth: true });
-      } catch (error) {
+      const actionKey = `comment-vote:${id}:${profile.id}`;
+      const guarded = learningCardActionGuard.run(actionKey, async () => {
         await refreshRemoteCommentVote(id, profile.id).catch(() => null);
         if (commentReaction(id)) {
           showBanner("Your vote for this comment is already saved.");
-          return;
+          return false;
         }
-        showBanner("Comment votes are not available yet. Please try again later.");
-        return;
-      }
-      const voteRecord = created?.data ? { ...vote, ...created.data } : vote;
-      mergeCommentVoteRecords([voteRecord]);
-      if (voteRecord.vote === "up" && votedComment?.member_profile) {
-        await recordProfilePointEvent(COMMENT_UTILS.helpfulVotePointEvent({
-          commentId: id,
-          profileId: profile.id,
-          comment: votedComment,
-          voteRecord,
-          points: PROFILE_UTILS.POINT_RULES.helpful_vote,
-          relationId
-        }));
-      }
-      document.querySelectorAll(`[data-comment-actions="${CSS.escape(id)}"]`).forEach(container => {
-        const comment = state.publicComments.find(item => String(item.id) === id);
-        if (comment) container.innerHTML = commentReactionControls(comment);
+        const vote = COMMENT_UTILS.votePayload(id, value, profile);
+        let created;
+        try {
+          created = await postDirectusItem("mobile_comment_votes", vote, { requireAuth: true });
+        } catch (error) {
+          await refreshRemoteCommentVote(id, profile.id).catch(() => null);
+          if (commentReaction(id)) {
+            showBanner("Your vote for this comment is already saved.");
+            return false;
+          }
+          showBanner("Comment votes are not available yet. Please try again later.");
+          return false;
+        }
+        const voteRecord = created?.data ? { ...vote, ...created.data } : vote;
+        mergeCommentVoteRecords([voteRecord]);
+        if (voteRecord.vote === "up" && votedComment?.member_profile) {
+          await recordProfilePointEvent(COMMENT_UTILS.helpfulVotePointEvent({
+            commentId: id,
+            profileId: profile.id,
+            comment: votedComment,
+            voteRecord,
+            points: PROFILE_UTILS.POINT_RULES.helpful_vote,
+            relationId
+          }));
+        }
+        document.querySelectorAll(`[data-comment-actions="${CSS.escape(id)}"]`).forEach(container => {
+          const comment = state.publicComments.find(item => String(item.id) === id);
+          if (comment) container.innerHTML = commentReactionControls(comment);
+        });
+        showBanner(value === "report" ? "Report saved." : "Comment vote saved.");
+        return true;
       });
-      showBanner(value === "report" ? "Report saved." : "Comment vote saved.");
+      if (!guarded) {
+        showBanner("That vote is already being saved.");
+        return false;
+      }
+      return guarded;
     }
 
     function currentViewerOwnsComment(comment) {
@@ -11137,26 +12067,101 @@
       return COMMENT_UTILS.viewerOwnsComment(comment, { profile, viewerEmail });
     }
 
-    async function deleteOwnComment(commentId) {
+    async function deleteComment(commentId) {
       const id = String(commentId || "");
       const comment = state.publicComments.find(item => String(item.id) === id);
-      if (!comment || !currentViewerOwnsComment(comment)) {
+      const adminDeletion = isAdminContributor();
+      if (!comment || (!currentViewerOwnsComment(comment) && !adminDeletion)) {
         showBanner("Only the person who posted this comment can delete it.");
         return;
       }
-      if (!window.confirm("Delete this comment from the public archive?")) return;
+      if (!window.confirm(adminDeletion
+        ? "Remove this comment and leave a public [deleted] placeholder?"
+        : "Delete this comment from the public archive?")) return;
       if (!id.startsWith("pending-")) {
         try {
-          await patchDirectusItem("mobile_comments", id, { status: "deleted" }, { requireAuth: true });
+          const payload = adminDeletion ? {
+            status: "approved",
+            moderated_deleted: true,
+            moderated_deleted_at: new Date().toISOString(),
+            public_activity: true,
+            member_profile: null,
+            author_name: "[deleted]",
+            author_email: null,
+            reply_to_profile: null,
+            quote_context: null,
+            source_section: null,
+            source_excerpt: null,
+            comment: "[deleted]",
+            comment_image: null,
+            moderator_note: "Removed from the public site by an administrator."
+          } : { status: "deleted" };
+          const updated = await patchDirectusItem("mobile_comments", id, payload, { requireAuth: true });
+          if (adminDeletion) Object.assign(comment, payload, updated?.data || {});
         } catch (error) {
           showBanner("Could not delete the comment yet. Please try again.");
           return;
         }
       }
-      state.publicComments = state.publicComments.filter(item => String(item.id) !== id);
+      if (!adminDeletion) state.publicComments = state.publicComments.filter(item => String(item.id) !== id);
       renderActivityPanel();
       reopenActiveContent();
-      showBanner("Comment deleted.");
+      showBanner(adminDeletion ? "Comment replaced with [deleted]." : "Comment deleted.");
+    }
+
+    async function removeAdminContribution(collection, contributionId) {
+      if (!isAdminContributor()) {
+        showBanner("Administrator access is required to remove another contributor's post.");
+        return false;
+      }
+      const id = String(contributionId || "");
+      if (!id || !window.confirm("Remove this contribution from the public site?")) return false;
+      const payload = collection === "mobile_plant_observations" ? {
+        status: "rejected",
+        member_profile: null,
+        author_name: "[deleted]",
+        photo: null,
+        common_name: "[deleted]",
+        scientific_name: null,
+        indigenous_context: null,
+        visitor_notes: null,
+        raw_plantnet_data: null
+      } : collection === "site_suggestions" ? {
+        status: "declined",
+        author_profile: null,
+        author_name: "[deleted]",
+        author_email: null,
+        title: "[deleted]",
+        introduction: null,
+        suggested_image: null,
+        review_note: "Removed from the public site by an administrator."
+      } : {
+        status: "rejected",
+        member_profile: null,
+        author_name: "[deleted]",
+        photo: null,
+        caption: "[deleted]"
+      };
+      try {
+        await patchDirectusItem(collection, id, payload, { requireAuth: true });
+      } catch (error) {
+        showBanner(error.message || "Could not remove that contribution.");
+        return false;
+      }
+      if (collection === "mobile_plant_observations") {
+        state.plantObservations = state.plantObservations.filter(item => String(item.id) !== id);
+        reopenActiveContent();
+      } else if (collection === "site_suggestions") {
+        state.siteSuggestions = state.siteSuggestions.filter(item => String(item.id) !== id);
+        renderNotificationPanel();
+      } else {
+        state.mapStories = state.mapStories.filter(item => String(item.id) !== id);
+        if (state.map?.getSource("map-stories")) state.map.getSource("map-stories").setData(mapStoryFeatures());
+        closeArticlePanel();
+      }
+      renderActivityPanel();
+      showBanner("Contribution removed.");
+      return true;
     }
 
     function articleShareUrl(sourceType, item) {
@@ -11307,6 +12312,7 @@
                     ${plantObservationFactsHtml(observation)}
                     ${context ? `<p class="site-plant-card-context">${escapeHtml(context)}</p>` : ""}
                     ${guideMatch ? `<button class="site-plant-card-action" type="button" data-wiki-slug="native-plants">Open plant guide</button>` : ""}
+                    ${isAdminContributor() ? `<button class="site-plant-card-action" type="button" data-delete-plant-observation="${escapeHtml(observation.id)}">Delete contribution</button>` : ""}
                   </div>
                 </article>
               `;
@@ -11459,12 +12465,13 @@
       const rootComments = rankedComments(comments.filter(comment => !comment.parent_comment));
       const repliesFor = parentId => rankedComments(comments.filter(comment => Number(comment.parent_comment) === Number(parentId)));
       const renderComment = (comment, depth = 0) => {
+        const deleted = COMMENT_UTILS.isModeratedDeleted(comment);
         const profile = profileFromComment(comment);
         const parent = depth ? comments.find(item => Number(item.id) === Number(comment.parent_comment)) : null;
         const parentProfile = parent ? profileFromComment(parent) : null;
-        const parentName = parentProfile?.display_name || parent?.author_name || "";
+        const parentName = COMMENT_UTILS.isModeratedDeleted(parent) ? "[deleted]" : (parentProfile?.display_name || parent?.author_name || "");
         const attachment = directusAssetUrl(comment.comment_image);
-        const name = profile?.display_name || comment.author_name || "Contributor";
+        const name = deleted ? "[deleted]" : (profile?.display_name || comment.author_name || "Contributor");
         const avatar = directusAssetUrl(profile?.avatar);
         const initial = (name || "?").trim().slice(0, 1) || "?";
         const pending = false;
@@ -11474,25 +12481,20 @@
         const parsedComment = QUOTE_COMMENT_UTILS.parseCommentRecord(comment);
         const commentBody = parsedComment.body || (!parsedComment.quote ? comment.comment || "" : "");
         return `
-          <article class="comment${depth ? " reply" : ""}${pending ? " pending" : ""}" data-comment-card="${escapeHtml(comment.id || "")}" style="margin-left:${Math.min(Math.max(depth - 1, 0), 2) * 24}px">
-            <button class="comment-profile-link"${profileButtonAttrs} type="button" aria-label="Open ${escapeHtml(name)} profile">
-              <span class="comment-avatar" aria-hidden="true">${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : escapeHtml(initial)}</span>
-            </button>
+          <article class="comment${depth ? " reply" : ""}${pending ? " pending" : ""}${deleted ? " deleted" : ""}" data-comment-card="${escapeHtml(comment.id || "")}" style="margin-left:${Math.min(Math.max(depth - 1, 0), 2) * 24}px">
+            ${deleted ? `<span class="comment-avatar" aria-hidden="true">-</span>` : `<button class="comment-profile-link"${profileButtonAttrs} type="button" aria-label="Open ${escapeHtml(name)} profile"><span class="comment-avatar" aria-hidden="true">${avatar ? `<img src="${escapeHtml(avatar)}" alt="">` : escapeHtml(initial)}</span></button>`}
             <div>
               <div class="comment-bubble">
                 ${depth ? `<span class="reply-label">Reply${parentName ? ` to ${escapeHtml(parentName)}` : ""}</span>` : ""}
-                <button class="comment-profile-name"${profileButtonAttrs} type="button">${escapeHtml(name)}</button>
-                ${QUOTE_COMMENT_UTILS.quoteCommentButtonHtml(comment, parsedComment.quote, parsedComment.context)}
-                ${commentBody ? `<p class="comment-text">${escapeHtml(commentBody)}</p>` : ""}
-                ${attachment ? `<img class="comment-image" src="${escapeHtml(attachment)}" alt="" loading="lazy" decoding="async">` : ""}
+                ${deleted ? `<strong class="comment-profile-name">[deleted]</strong><p class="comment-text">[deleted]</p>` : `<button class="comment-profile-name"${profileButtonAttrs} type="button">${escapeHtml(name)}</button>${QUOTE_COMMENT_UTILS.quoteCommentButtonHtml(comment, parsedComment.quote, parsedComment.context)}${commentBody ? `<p class="comment-text">${escapeHtml(commentBody)}</p>` : ""}${attachment ? `<img class="comment-image" src="${escapeHtml(attachment)}" alt="" loading="lazy" decoding="async">` : ""}`}
               </div>
               <div class="comment-meta-row">
-                <span>${comment.created_at ? escapeHtml(new Date(comment.created_at).toLocaleString()) : "Approved comment"}</span>
+                <span>${deleted ? "Removed by moderator" : (comment.created_at ? escapeHtml(new Date(comment.created_at).toLocaleString()) : "Approved comment")}</span>
                 ${pending ? `<span class="comment-status-pill">Not public</span>` : ""}
-                ${!pending ? `<span class="comment-actions" data-comment-actions="${escapeHtml(comment.id)}">${commentReactionControls(comment)}</span>` : ""}
+                ${!pending && !deleted ? `<span class="comment-actions" data-comment-actions="${escapeHtml(comment.id)}">${commentReactionControls(comment)}</span>` : ""}
                 ${adminMode && pending ? `<a class="comment-reply-button" href="${escapeHtml(adminReviewUrl)}" target="_blank" rel="noreferrer">Review</a>` : ""}
-                ${currentContributorProfile() && !pending ? `<button class="comment-reply-button" type="button" data-reply-comment="${escapeHtml(comment.id)}" data-reply-profile="${escapeHtml(comment.member_profile || "")}">Reply</button>` : ""}
-                ${currentViewerOwnsComment(comment) ? `<button class="comment-reply-button" type="button" data-delete-comment="${escapeHtml(comment.id)}">Delete</button>` : ""}
+                ${currentContributorProfile() && !pending && !deleted ? `<button class="comment-reply-button" type="button" data-reply-comment="${escapeHtml(comment.id)}" data-reply-profile="${escapeHtml(comment.member_profile || "")}">Reply</button>` : ""}
+                ${!deleted && (currentViewerOwnsComment(comment) || isAdminContributor()) ? `<button class="comment-reply-button" type="button" data-delete-comment="${escapeHtml(comment.id)}">Delete</button>` : ""}
               </div>
             </div>
           </article>
@@ -11831,6 +12833,16 @@
       return CALENDAR_UTILS.isCalendarEventActive(event, { normalizeText: normalizeComparisonText, localDateKey });
     }
 
+    function isCalendarEventCurrentOrUpcoming(event) {
+      if (isCalendarEventActive(event)) return true;
+      const status = normalizeComparisonText(event?.status || event?.on_view_status || "");
+      if (status && !/published|current|active|on view|permanent/.test(status)) return false;
+      const today = localDateKey();
+      const start = String(event?.start_datetime || event?.start_date || "").slice(0, 10);
+      const end = String(event?.end_datetime || event?.end_date || "").slice(0, 10);
+      return Boolean(start && start >= today && (!end || end >= today));
+    }
+
     function openCalendarEvent(event, context = {}) {
       if (!context.skipHistory) rememberPanel();
       clearBiographyPathOverlay();
@@ -11838,13 +12850,14 @@
       if (context.timelineEventId) setActiveTimelineEvent(context.timelineEventId, { scrollTimeline: false });
       else clearActiveTimelineEvent();
       const image = directusAssetUrl(event.cover_image);
+      const externalUrl = safeExternalUrl(event.external_url);
       const related = [
         event.related_site_slug && state.siteBySlug.has(event.related_site_slug)
-          ? `<button class="button secondary" type="button" data-site-slug="${escapeHtml(event.related_site_slug)}">Related listing</button>` : "",
+          ? `<a class="button secondary" href="${escapeHtml(publicRouteHref({ site: event.related_site_slug }))}" data-site-slug="${escapeHtml(event.related_site_slug)}">Related listing</a>` : "",
         event.related_wiki_slug && state.wikiBySlug.has(event.related_wiki_slug)
-          ? `<button class="button secondary" type="button" data-wiki-slug="${escapeHtml(event.related_wiki_slug)}">Related wiki article</button>` : "",
+          ? `<a class="button secondary" href="${escapeHtml(publicRouteHref({ wiki: event.related_wiki_slug }))}" data-wiki-slug="${escapeHtml(event.related_wiki_slug)}">Related wiki article</a>` : "",
         event.related_blog_slug && state.blogBySlug.has(event.related_blog_slug)
-          ? `<button class="button secondary" type="button" data-blog-slug="${escapeHtml(event.related_blog_slug)}">Related blog post</button>` : ""
+          ? `<a class="button secondary" href="${escapeHtml(publicRouteHref({ blog: event.related_blog_slug }))}" data-blog-slug="${escapeHtml(event.related_blog_slug)}">Related blog post</a>` : ""
       ].filter(Boolean).join("");
       articleHeadEl.innerHTML = `
         <p class="article-kicker">${escapeHtml(context.source || CALENDAR_UTILS.eventTypeLabel(event.event_type))}</p>
@@ -11865,9 +12878,9 @@
         ` : ""}
         ${related ? `<div class="article-actions">${related}</div>` : ""}
         ${isFrontendAdmin() ? `<div class="article-actions">
-          ${event.external_url ? `<a class="button secondary" href="${escapeHtml(event.external_url)}" target="_blank" rel="noreferrer">Event link</a>` : ""}
+          ${externalUrl ? `<a class="button secondary" href="${escapeHtml(externalUrl)}" target="_blank" rel="noopener noreferrer">Event link</a>` : ""}
           <a class="button secondary" href="${DIRECTUS}/admin/content/calendar_events/${event.id}" target="_blank" rel="noreferrer">Edit event</a>
-        </div>` : event.external_url ? `<div class="article-actions"><a class="button secondary" href="${escapeHtml(event.external_url)}" target="_blank" rel="noreferrer">Event link</a></div>` : ""}
+        </div>` : externalUrl ? `<div class="article-actions"><a class="button secondary" href="${escapeHtml(externalUrl)}" target="_blank" rel="noopener noreferrer">Event link</a></div>` : ""}
       `;
       markArticlePanelOpen();
       updateBackButton();
@@ -11885,11 +12898,12 @@
       if (context.focus !== false) focusGeometry(event.geojson, 12);
     }
 
-    function openEventsList() {
-      rememberPanel();
+    function openEventsList(options = {}) {
+      if (!options.skipHistory) rememberPanel();
       clearBiographyPathOverlay();
       state.activeContent = null;
       clearActiveTimelineEvent();
+      if (!options.skipRoute) setRoute({ page: "events" });
       const events = [...state.calendarEvents].filter(isCalendarEventActive).sort((a, b) =>
         String(a.start_datetime || a.collection_date || "9999").localeCompare(String(b.start_datetime || b.collection_date || "9999")) ||
         String(a.title || "").localeCompare(String(b.title || ""))
@@ -11902,12 +12916,12 @@
         <p class="article-summary">Exhibits, permanent collections, programs, and collection moments that can appear on the map and timeline.</p>
         <div class="content-list">
           ${events.map(event => `
-            <button class="content-card" type="button" data-calendar-slug="${escapeHtml(event.slug)}">
+            <a class="content-card" href="${escapeHtml(publicRouteHref({ calendar: event.slug }))}" data-calendar-slug="${escapeHtml(event.slug)}">
               <span class="content-date">${escapeHtml(CALENDAR_UTILS.eventDateRange(event))}</span>
               <strong>${escapeHtml(event.title)}</strong>
               <span>${escapeHtml([CALENDAR_UTILS.eventTypeLabel(event.event_type), event.venue].filter(Boolean).join(" - "))}</span>
               ${event.summary ? `<span>${escapeHtml(stripHtml(event.summary).slice(0, 180))}</span>` : ""}
-            </button>
+            </a>
           `).join("") || `<p class="article-summary">No published calendar events yet.</p>`}
         </div>
         ${isFrontendAdmin() ? `<div class="article-actions">
@@ -12014,29 +13028,37 @@
       const profile = currentContributorProfile();
       if (!approvedContributorCanPost(profile)) {
         showBanner(contributorWritePrompt());
-        return;
+        return false;
       }
-      if (!contributorCanUseDailyAction(profile, "comments")) return;
+      const actionKey = [
+        "comment-submit",
+        profile.id,
+        section.dataset.discussionType || "",
+        section.dataset.discussionId || "",
+        section.querySelector("[data-parent-comment]")?.value || "root"
+      ].join(":");
+      const guarded = learningCardActionGuard.run(actionKey, async () => {
+      if (!contributorCanUseDailyAction(profile, "comments")) return false;
       const text = section.querySelector("[data-discussion-input]")?.value?.trim() || "";
       if (!text) {
         showBanner("Write a comment first.");
-        return;
+        return false;
       }
       const moderation = moderationCheck(text, "Your comment");
       if (!moderation.ok) {
         showBanner(moderation.message);
-        return;
+        return false;
       }
       let image = section.querySelector("[data-discussion-image]")?.files?.[0] || null;
       if (image && !isImageUploadFile(image)) {
         showBanner("Choose an image file.");
-        return;
+        return false;
       }
       try {
         image = await prepareJpegUploadImage(image, "comment-image");
       } catch (error) {
         showBanner(error.message || "Could not prepare that comment photo.");
-        return;
+        return false;
       }
       if (submitButton) {
         submitButton.disabled = true;
@@ -12053,7 +13075,7 @@
             submitButton.disabled = false;
             submitButton.textContent = originalLabel;
           }
-          return;
+          return false;
         }
         showBanner("The image could not be attached, but the comment text will still be posted.");
         if (submitButton) submitButton.textContent = "Posting...";
@@ -12154,6 +13176,13 @@
       await refreshCommentsNow({ rerender: false });
       renderActivityPanel({ preserveBody: true });
       reopenActiveContent();
+      return true;
+      });
+      if (!guarded) {
+        showBanner("That comment is already being posted.");
+        return false;
+      }
+      return guarded;
     }
 
     function openSuggestSite(options = {}) {
@@ -12263,11 +13292,9 @@
       try {
         image = await prepareJpegUploadImage(image, "site-suggestion-image");
         if (button) button.textContent = image ? "Uploading image..." : "Submitting...";
-        const imageId = image ? await uploadDirectusFile(image, title) : null;
+        const imageId = image ? await uploadDirectusFile(image, title, { requireAuth: true }) : null;
         if (button) button.textContent = "Submitting...";
         await postDirectusItem("site_suggestions", {
-          status: "pending",
-          priority: 1,
           title,
           introduction,
           suggested_image: imageId,
@@ -12276,10 +13303,8 @@
           latitude,
           author_profile: profile.id,
           author_name: identity.name,
-          author_email: identity.email,
-          submitted_at: new Date().toISOString(),
-          review_note: `Contribution type: ${prompt}`
-        });
+          submitted_at: new Date().toISOString()
+        }, { requireAuth: true });
         setInlineStatus(section, "[data-suggest-status]", "Site suggestion submitted for review. Thank you.", "success");
         showBanner("Site suggestion submitted for review.");
         state.suggestionMarker?.remove?.();
@@ -12521,8 +13546,10 @@
             screenshotId = await uploadFeedbackScreenshot(screenshotFile, `desktop-feedback-${Date.now()}`);
             screenshotNote = screenshotId ? "Screenshot attached." : "Screenshot was not attached.";
           } catch (uploadError) {
-            screenshotNote = `Screenshot could not be uploaded: ${uploadError.message || "permission denied"}.`;
-            console.warn("Feedback screenshot upload failed; sending text feedback without it.", uploadError);
+            const attachmentError = new Error("The screenshot could not be uploaded, so the feedback was not sent. Remove the screenshot to send text only, or try the upload again.");
+            attachmentError.isFeedbackScreenshotUploadError = true;
+            attachmentError.cause = uploadError;
+            throw attachmentError;
           }
         }
         if (button) button.textContent = "Sending...";
@@ -12555,9 +13582,11 @@
         section.querySelectorAll("input, textarea, button").forEach(control => control.disabled = true);
         if (button) button.textContent = "Feedback sent";
       } catch (error) {
-        const fallbackMessage = "The feedback could not be sent yet. Please try again, or email onthissiteny@gmail.com if this is urgent.";
+        const fallbackMessage = error?.isFeedbackScreenshotUploadError
+          ? error.message
+          : "The feedback could not be sent yet. Please try again, or email onthissiteny@gmail.com if this is urgent.";
         setInlineStatus(section, "[data-contact-status]", fallbackMessage, "error");
-        showBanner("Could not send feedback yet.");
+        showBanner(error?.isFeedbackScreenshotUploadError ? "Screenshot upload failed. Feedback was not sent." : "Could not send feedback yet.");
         if (button) {
           button.disabled = false;
           button.textContent = "Send feedback";
@@ -12587,37 +13616,34 @@
     }
 
     function openContentList(kind, options = {}) {
-      clearBiographyPathOverlay();
-      state.activeContent = null;
-      clearActiveTimelineEvent();
       const route = topPageRoute(kind);
-      if (route && !options.skipRoute) setRoute({ page: route });
       if (kind === "contact" || kind === "feedback") {
-        openContact({ skipRoute: true, mapLocation: options.mapLocation });
+        openContact({ skipRoute: options.skipRoute, mapLocation: options.mapLocation });
         return;
       }
       if (kind === "support" || kind === "donate") {
-        openSupportPage({ skipRoute: true });
+        openSupportPage({ skipRoute: options.skipRoute });
         return;
       }
       if (kind === "support-admin") {
-        openSupportAdminPage({ skipRoute: true });
+        openSupportAdminPage({ skipRoute: options.skipRoute });
         return;
       }
       if (kind === "site-list") {
-        openSiteList({ skipRoute: true });
+        openSiteList({ skipRoute: options.skipRoute });
         return;
       }
       if (kind === "knowledgebase") {
-        openKnowledgebase();
+        openKnowledgebase(options);
         return;
       }
       if (kind === "contributors") {
         openContributors();
+        if (route && !options.skipRoute) setRoute({ page: route });
         return;
       }
       if (kind === "events") {
-        openEventsList();
+        openEventsList(options);
         return;
       }
       if (kind === "login") {
@@ -12626,17 +13652,18 @@
           return;
         }
         openContributorLogin();
+        if (route && !options.skipRoute) setRoute({ page: route });
         return;
       }
       if (kind === "profile") {
-        openContributorLogin();
+        openContributorProfileRoute({ skipRoute: options.skipRoute });
         return;
       }
       if (kind === "suggest-site") {
         openSuggestSite({ mapLocation: options.mapLocation });
+        if (route && !options.skipRoute) setRoute({ page: route });
         return;
       }
-      rememberPanel();
       const isBlog = kind === "blog";
       const items = isBlog
         ? state.blogPosts
@@ -12646,9 +13673,17 @@
             return item.slug === `page-${kind}` || item.content_type === kind;
           });
       if (!isBlog && items.length === 1) {
-        openSiteContent(items[0], { source: kind === "home" ? "Homepage" : "Site page" });
+        openSiteContent(items[0], {
+          source: kind === "home" ? "Homepage" : "Site page",
+          skipRoute: options.skipRoute
+        });
         return;
       }
+      rememberPanel();
+      clearBiographyPathOverlay();
+      state.activeContent = null;
+      clearActiveTimelineEvent();
+      if (route && !options.skipRoute) setRoute({ page: route });
       const title = isBlog ? "Blog / News" : "Site Pages";
       articleHeadEl.innerHTML = `
         <p class="article-kicker">On This Site</p>
@@ -12663,6 +13698,13 @@
       markArticlePanelOpen();
       updateBackButton();
       resetArticleScroll();
+      if (isBlog) {
+        updateSeoMetadata({
+          title: "On This Site News and Blog",
+          description: "Read news, project updates, exhibitions, publications, and public programs from On This Site - Native Long Island.",
+          schemaType: "CollectionPage"
+        });
+      }
     }
 
     function openSiteList(options = {}) {
@@ -12690,13 +13732,19 @@
       updateBackButton();
       if (options.preserveScroll) articleBodyEl.scrollTop = previousScroll;
       else resetArticleScroll();
+      updateSeoMetadata({
+        title: "Native Long Island Site List",
+        description: "Browse the complete alphabetical directory of mapped Native Long Island places, territories, records, cultural sites, and learning locations.",
+        schemaType: "CollectionPage"
+      });
     }
 
-    function openKnowledgebase() {
-      rememberPanel();
+    function openKnowledgebase(options = {}) {
+      if (!options.skipHistory) rememberPanel();
       clearBiographyPathOverlay();
       state.activeContent = null;
       clearActiveTimelineEvent();
+      if (!options.skipRoute) setRoute({ page: "knowledgebase" });
       const tribeArticle = state.wikiBySlug.get("the-tribes-of-long-island");
       const latest = [...state.wikiArticles]
         .sort((a, b) => String(b.lastmod || "").localeCompare(String(a.lastmod || "")))
@@ -12713,20 +13761,21 @@
           <div class="content-list">
             ${KNOWLEDGEBASE_CATEGORIES.map(category => {
               const count = categoryItems(category).length || (category.entries || category.slugs || []).length;
-              return `<button class="content-card" type="button" data-kb-category="${escapeHtml(category.label)}">
+              const categorySlug = routeSlugValue(category.label);
+              return `<a class="content-card" href="${escapeHtml(publicRouteHref({ topic: categorySlug }))}" data-kb-category="${escapeHtml(category.label)}">
                 <span class="content-card-body">
                   <span class="content-card-meta">Category</span>
                   <strong>${escapeHtml(category.label)}</strong>
                   <span class="content-card-summary">${count} related article${count === 1 ? "" : "s"}</span>
                 </span>
-              </button>`;
+              </a>`;
             }).join("")}
           </div>
         </section>
         <section class="section">
           <h3>Popular Tags</h3>
           <div class="keyword-actions" aria-label="Popular knowledgebase tags">
-            ${POPULAR_TAGS.map(tag => `<button class="button secondary" type="button" data-kb-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`).join("")}
+            ${POPULAR_TAGS.map(tag => `<a class="button secondary" href="${escapeHtml(publicRouteHref({ kbtag: routeSlugValue(tag) }))}" data-kb-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</a>`).join("")}
           </div>
         </section>
         <section class="section">
@@ -12739,6 +13788,16 @@
       markArticlePanelOpen();
       updateBackButton();
       resetArticleScroll();
+      updateSeoMetadata({
+        title: "Native Long Island Events and Exhibits",
+        description: "Find public events, exhibitions, programs, and continuing cultural activities connected to Native Long Island.",
+        schemaType: "CollectionPage"
+      });
+      updateSeoMetadata({
+        title: "Native Long Island Knowledgebase",
+        description: "Browse research articles about Native Long Island history, communities, sovereignty, language, culture, archaeology, and preservation.",
+        schemaType: "CollectionPage"
+      });
     }
 
     function renderKnowledgebaseCategory(label, matches) {
@@ -12753,10 +13812,20 @@
       `;
     }
 
-    function openKnowledgebaseCategory(label) {
-      rememberPanel();
-      const category = KNOWLEDGEBASE_CATEGORIES.find(item => item.label === label);
+    function openKnowledgebaseCategory(labelOrSlug, options = {}) {
+      if (!options.skipHistory) rememberPanel();
+      const requested = String(labelOrSlug || "").trim();
+      const category = KNOWLEDGEBASE_CATEGORIES.find(item =>
+        item.label === requested || routeSlugValue(item.label) === routeSlugValue(requested)
+      );
+      const label = category?.label || requested;
+      if (!options.skipRoute) setRoute({ topic: routeSlugValue(label) });
       renderKnowledgebaseCategory(label, categoryItems(category));
+      updateSeoMetadata({
+        title: `${label} - Native Long Island Knowledgebase`,
+        description: `Browse Native Long Island knowledgebase articles about ${String(label || "").toLowerCase()}.`,
+        schemaType: "CollectionPage"
+      });
       if (fullArchiveDataLoaded) return;
       articleBodyEl.innerHTML = "<p class=\"article-summary\">Loading category articles...</p>";
       requestFullArchiveData("knowledgebase-category")
@@ -12887,7 +13956,7 @@
     }
 
     function focusMapStory(story, options = {}) {
-      const coords = MAP_STORY_UTILS.coordinates(story);
+      const coords = mapStoryDisplayCoordinates(story);
       if (!coords) return;
       const [lng, lat] = coords;
       const zoom = Math.max(Number(state.map?.getZoom?.() || 0), 12.5);
@@ -12901,49 +13970,59 @@
       }
     }
 
-    async function voteMapStory(storyId, value) {
+    async function voteMapStory(storyId, value, options = {}) {
       const story = state.mapStories.find(item => String(item.id) === String(storyId));
-      if (!story) return;
+      if (!story) return false;
       const profile = currentContributorProfile();
       if (!profile?.id || state.contributorSession?.pending) {
         showBanner("Login as an approved contributor to vote on map stories.");
-        return;
+        return false;
       }
-      const remoteVote = await refreshRemoteMapStoryVote(story.id, profile.id).catch(() => null);
-      if (remoteVote) {
-        showBanner("You already voted on this story.");
-        openMapStoryPanel(story);
-        return;
-      }
-      if (MAP_STORY_UTILS.hasMemberVote(story, state.mapStoryVotes, currentContributorProfile()?.id)) {
-        showBanner("You already voted on this story.");
-        return;
-      }
-      const vote = {
-        story: Number(story.id),
-        vote: Number(value) > 0 ? 1 : -1,
-        visitor_key: MAP_STORY_UTILS.memberVoteKey(story?.id, profile?.id),
-        created_at: new Date().toISOString()
-      };
-      try {
-        const created = await postDirectusItem("mobile_map_story_votes", vote, { requireAuth: true });
-        mergeMapStoryVoteRecords([{ id: created.data?.id || `local-${Date.now()}`, ...vote, member_profile: Number(profile.id), ...(created.data || {}) }]);
-        const counts = MAP_STORY_UTILS.storyVoteCounts(story, state.mapStoryVotes);
-        const patch = {
-          up_votes: counts.up,
-          down_votes: counts.down,
-          vote_score: counts.score,
-          permanent: Boolean(story.permanent || counts.score >= MAP_STORY_PERMANENT_SCORE)
+      const actionKey = `map-story-vote:${story.id}:${profile.id}`;
+      const guarded = learningCardActionGuard.run(actionKey, async () => {
+        const remoteVote = await refreshRemoteMapStoryVote(story.id, profile.id).catch(() => null);
+        if (remoteVote) {
+          showBanner("You already voted on this story.");
+          if (options.openPanel !== false) openMapStoryPanel(story);
+          return false;
+        }
+        if (MAP_STORY_UTILS.hasMemberVote(story, state.mapStoryVotes, currentContributorProfile()?.id)) {
+          showBanner("You already voted on this story.");
+          return false;
+        }
+        const vote = {
+          story: Number(story.id),
+          vote: Number(value) > 0 ? 1 : -1,
+          visitor_key: MAP_STORY_UTILS.memberVoteKey(story?.id, profile?.id),
+          created_at: new Date().toISOString()
         };
-        const expiry = MAP_STORY_UTILS.effectiveExpiresAt(story, state.mapStoryVotes, MAP_STORY_RULES);
-        if (expiry) patch.expires_at = expiry.toISOString();
-        if (expiry && expiry.getTime() <= Date.now()) patch.status = "archived";
-        Object.assign(story, patch);
-        if (state.map?.getSource("map-stories")) state.map.getSource("map-stories").setData(mapStoryFeatures());
-        openMapStoryPanel(story);
-      } catch (error) {
-        showBanner(error.message || "Could not save vote.");
+        try {
+          const created = await postDirectusItem("mobile_map_story_votes", vote, { requireAuth: true });
+          mergeMapStoryVoteRecords([{ id: created.data?.id || `local-${Date.now()}`, ...vote, member_profile: Number(profile.id), ...(created.data || {}) }]);
+          const counts = MAP_STORY_UTILS.storyVoteCounts(story, state.mapStoryVotes);
+          const patch = {
+            up_votes: counts.up,
+            down_votes: counts.down,
+            vote_score: counts.score,
+            permanent: Boolean(story.permanent || counts.score >= MAP_STORY_PERMANENT_SCORE)
+          };
+          const expiry = MAP_STORY_UTILS.effectiveExpiresAt(story, state.mapStoryVotes, MAP_STORY_RULES);
+          if (expiry) patch.expires_at = expiry.toISOString();
+          if (expiry && expiry.getTime() <= Date.now()) patch.status = "archived";
+          Object.assign(story, patch);
+          if (state.map?.getSource("map-stories")) state.map.getSource("map-stories").setData(mapStoryFeatures());
+          if (options.openPanel !== false) openMapStoryPanel(story);
+          return true;
+        } catch (error) {
+          showBanner(error.message || "Could not save vote.");
+          return false;
+        }
+      });
+      if (!guarded) {
+        showBanner("That vote is already being saved.");
+        return false;
       }
+      return guarded;
     }
 
     function openMapStoryPanel(story) {
@@ -12965,6 +14044,7 @@
         </section>
         <div class="article-actions map-story-actions">
           <button class="article-action" type="button" data-story-vote="1" data-story-id="${escapeHtml(story.id)}" aria-label="Helpful story">Helpful ${counts.up}</button>
+          ${isAdminContributor() ? `<button class="article-action" type="button" data-delete-map-story="${escapeHtml(story.id)}">Delete contribution</button>` : ""}
           <span class="detail-meta">${counts.up} helpful vote${counts.up === 1 ? "" : "s"}; 10 keeps it permanently.</span>
         </div>
       `;
@@ -13036,6 +14116,10 @@
       if (props.calendar_event_slug && state.eventBySlug.has(props.calendar_event_slug)) {
         openCalendarEvent(state.eventBySlug.get(props.calendar_event_slug), { source: "Calendar event" });
         focusFeature(feature);
+        return;
+      }
+      if (props.attention_kind === "on-this-day" && props.timeline_event_id && state.timelineById.has(String(props.timeline_event_id))) {
+        openTimelineEvent(props.timeline_event_id);
         return;
       }
       if (props.wiki_slug && state.wikiBySlug.has(props.wiki_slug)) {
@@ -13185,10 +14269,13 @@
 
     function isBroadTerritoryHoverFeature(feature) {
       const props = feature?.properties || {};
+      if (props.place_name_area_overlay === true || props.place_name_area_overlay === "true") return false;
+      const rawCategory = normalizeComparisonText(props.feature_category || props.site_type || "");
+      const rawTitle = normalizeComparisonText(displayFeatureTitle(props));
+      if (/territory/.test(rawCategory) && /ancestral land|traditional land/.test(rawTitle)) return true;
       const site = findSiteFromFeature(feature);
       if (site && isBroadTerritorySite(site)) return true;
-      const title = displayFeatureTitle(props).toLowerCase();
-      return props.feature_category === "territory" && /ancestral land|traditional land/.test(title);
+      return false;
     }
 
     function suppressHoverPopupForFeature() {
@@ -13301,18 +14388,21 @@
     function queryPolygonFeatures(point, options = {}) {
       if (!polygonToggle.checked) return [];
       const includeScreenBounds = options.includeScreenBounds !== false;
-      const layers = MAP_UTILS.existingLayerIds(state.map, ["calendar-event-polygons", "directus-site-polygons", "directus-site-territories", "directus-site-labels", "directus-site-territory-labels", "place-name-area-label", "place-name-area-fill", "gardiners-montaukett-territory-fill", "wp-polygons-territory-label", "wp-polygons-detail-label", "wp-polygons-original-fill", "wp-polygons-detail-fill"]);
+      const layers = MAP_UTILS.existingLayerIds(state.map, ["calendar-event-polygons", "directus-site-polygons", "directus-site-territories", "directus-site-labels", "directus-site-labels-unread", "directus-site-territory-labels", "directus-site-territory-labels-unread", "place-name-area-label", "place-name-area-fill", "gardiners-montaukett-territory-fill", "wp-polygons-territory-label", "wp-polygons-detail-label", "wp-polygons-original-fill", "wp-polygons-detail-fill"]);
       const exact = state.map.queryRenderedFeatures(point, { layers });
       const tolerance = Number(options.tolerance || 14);
       const nearby = MAP_UTILS.queryRenderedFeaturesAround(state.map, point, layers, tolerance);
       const screenMatches = includeScreenBounds
         ? screenPolygonFeatures(point).filter(feature => featureIsActiveAtPoint(feature, point))
         : [];
-      return uniqueFeatures([...exact, ...nearby, ...geographicPolygonFeatures(point), ...screenMatches]);
+      return uniqueFeatures(
+        [...exact, ...nearby, ...geographicPolygonFeatures(point), ...screenMatches]
+          .map(feature => findOriginalMapFeature(feature, feature?.source || "") || feature)
+      );
     }
 
     function queryMarkerFeatures(point, options = {}) {
-      const layers = MAP_UTILS.existingLayerIds(state.map, ["learning-path-stop-labels", "learning-path-stop-numbers", "learning-path-stop-halos", "site-attention-history-icon", "site-attention-history-badge", "map-story-labels", "map-stories", "biography-people-quotes", "biography-people-labels", "biography-people", "biography-place-labels", "biography-place-points", "biography-place-path", "biography-path-labels", "biography-path-point-numbers", "biography-path-points", "biography-path-lines", "calendar-event-icons", "calendar-event-points", "directus-site-icons", "wp-markers-original-icon", "wp-markers-original-dot", "directus-site-points"]);
+      const layers = MAP_UTILS.existingLayerIds(state.map, ["activity-unread-site-counts", "activity-unread-site-badges", "learning-path-stop-labels", "learning-path-stop-numbers", "learning-path-stop-halos", "site-attention-history-icon", "site-attention-history-badge", "map-story-labels", "map-stories", "biography-people-quotes", "biography-people-labels", "biography-people", "biography-place-labels", "biography-place-points", "biography-place-path", "biography-path-labels", "biography-path-point-numbers", "biography-path-points", "biography-path-lines", "site-attached-calendar-events", "calendar-event-date-badges", "calendar-event-icons", "calendar-event-points", "directus-site-icons", "wp-markers-original-icon", "wp-markers-original-dot", "directus-site-points"]);
       if (!layers.length) return [];
       const exact = state.map.queryRenderedFeatures(point, { layers });
       const tolerance = Number(options.tolerance || 18);
@@ -13511,25 +14601,65 @@
       ].join("|");
     }
 
+    function polygonGeometryArea(feature) {
+      const geometry = feature?.geometry;
+      const areaForRings = rings => {
+        if (!Array.isArray(rings) || !rings.length) return 0;
+        const outerArea = Math.abs(ringArea(rings[0] || []));
+        const holeArea = rings.slice(1).reduce((sum, ring) => sum + Math.abs(ringArea(ring || [])), 0);
+        return Math.max(outerArea - holeArea, 0);
+      };
+      if (geometry?.type === "Polygon") return areaForRings(geometry.coordinates);
+      if (geometry?.type === "MultiPolygon") {
+        return (geometry.coordinates || []).reduce((sum, rings) => sum + areaForRings(rings), 0);
+      }
+      return Number.POSITIVE_INFINITY;
+    }
+
     function hoverFeatureStack(features = []) {
+      const resolvedFeatures = features.map(feature =>
+        findOriginalMapFeature(feature, feature?.source || "") || feature
+      );
       const unique = SHARED_UTILS.uniqueBy(
-        features.filter(feature => feature?.geometry && !suppressHoverPopupForFeature(feature)),
+        resolvedFeatures.filter(feature => feature?.geometry && !suppressHoverPopupForFeature(feature)),
         semanticHoverFeatureKey
       );
       return unique.sort((a, b) => {
         const aPoint = a.geometry?.type === "Point" ? 0 : 1;
         const bPoint = b.geometry?.type === "Point" ? 0 : 1;
         if (aPoint !== bPoint) return aPoint - bPoint;
+        if (aPoint === 0) return 0;
+        const aPlaceNameArea = a.properties?.place_name_area_overlay === true || a.properties?.place_name_area_overlay === "true" ? 0 : 1;
+        const bPlaceNameArea = b.properties?.place_name_area_overlay === true || b.properties?.place_name_area_overlay === "true" ? 0 : 1;
+        if (aPlaceNameArea !== bPlaceNameArea) return aPlaceNameArea - bPlaceNameArea;
+        const aBroadTerritory = isBroadTerritoryHoverFeature(a) ? 1 : 0;
+        const bBroadTerritory = isBroadTerritoryHoverFeature(b) ? 1 : 0;
+        if (aBroadTerritory !== bBroadTerritory) return aBroadTerritory - bBroadTerritory;
+        const areaDifference = polygonGeometryArea(a) - polygonGeometryArea(b);
+        if (Math.abs(areaDifference) > Number.EPSILON) return areaDifference;
         return polygonClickScore(a) - polygonClickScore(b);
       });
+    }
+
+    function hoverOutlineFeatureStack(features = []) {
+      const stack = hoverFeatureStack(Array.isArray(features) ? features : [features]);
+      if (stack.length <= 1) return stack;
+      const points = stack.filter(feature => feature?.geometry?.type === "Point");
+      if (points.length) return points;
+      const smallestPolygon = stack.find(feature => /Polygon/.test(feature?.geometry?.type || ""));
+      return smallestPolygon ? [smallestPolygon] : [];
     }
 
     function setHoverFeature(featureOrFeatures) {
       if (!state.map?.getSource("hover-feature")) return;
       const stack = hoverFeatureStack(Array.isArray(featureOrFeatures) ? featureOrFeatures : [featureOrFeatures]);
-      const renderedFeatures = stack.flatMap((feature, index) => {
+      const outlineStack = hoverOutlineFeatureStack(stack);
+      const renderedFeatures = outlineStack.flatMap(feature => {
         const fullFeature = findOriginalMapFeature(feature) || feature;
         const geometryType = fullFeature?.geometry?.type || "";
+        const stackIndex = Math.max(0, stack.findIndex(candidate =>
+          semanticHoverFeatureKey(candidate) === semanticHoverFeatureKey(feature)
+        ));
         return (/Polygon/.test(geometryType) || geometryType === "Point")
           ? [{
             feature: {
@@ -13537,8 +14667,8 @@
               geometry: fullFeature.geometry,
               properties: {
                 ...(fullFeature.properties || {}),
-                hover_rank: index,
-                hover_color: HOVER_STACK_COLORS[index % HOVER_STACK_COLORS.length]
+                hover_rank: stackIndex,
+                hover_color: HOVER_STACK_COLORS[stackIndex % HOVER_STACK_COLORS.length]
               }
             },
             key: hoverFeatureKey(feature)
@@ -13562,6 +14692,8 @@
 
     function findOriginalMapFeature(feature, sourceHint = "") {
       const props = feature?.properties || {};
+      const labelOriginal = state.labelOriginalFeatures.get(String(props.label_source_feature_key || ""));
+      if (labelOriginal) return labelOriginal;
       const source = feature?.source || sourceHint;
       const id = String(props.id || props.wp_id || "");
       const title = displayFeatureTitle(props);
@@ -13584,7 +14716,11 @@
           const candidateTitle = displayFeatureTitle(candidateProps);
           let score = 0;
           if (directusSlug && candidateSlug === directusSlug) score += 120;
-          if (id && candidateId === id) score += 80;
+          const candidateIsPlaceName = candidateProps.place_name_area_overlay === true || candidateProps.place_name_area_overlay === "true";
+          const sameSourceFamily = (placeNameSource && candidateIsPlaceName)
+            || (directusSource && !candidateIsPlaceName)
+            || (!placeNameSource && !directusSource);
+          if (id && candidateId === id && sameSourceFamily) score += 80;
           if (title && candidateTitle === title) score += 50;
           if (!score || score <= bestScore) continue;
           best = candidate;
@@ -13653,6 +14789,19 @@
           </div>
         </div>
       `;
+    }
+
+    function hoverStackPreviewKey(features = []) {
+      return hoverFeatureStack(features).map(feature => {
+        const preview = featurePreview(feature);
+        return [
+          hoverFeatureKey(feature),
+          preview.title || "",
+          preview.meta || "",
+          preview.summary || "",
+          preview.image || ""
+        ].join(":");
+      }).join("||").slice(0, 4000);
     }
 
     function polygonOpacityExpression(maximum = 0.45) {
@@ -14898,20 +16047,40 @@
       } else if (geometry.type === "MultiPolygon") {
         holes.push(...outerRingsForWaterMask(geometry.coordinates));
       }
-      const outer = [
-        [LONG_ISLAND_BOUNDS[0][0], LONG_ISLAND_BOUNDS[0][1]],
-        [LONG_ISLAND_BOUNDS[1][0], LONG_ISLAND_BOUNDS[0][1]],
-        [LONG_ISLAND_BOUNDS[1][0], LONG_ISLAND_BOUNDS[1][1]],
-        [LONG_ISLAND_BOUNDS[0][0], LONG_ISLAND_BOUNDS[1][1]],
-        [LONG_ISLAND_BOUNDS[0][0], LONG_ISLAND_BOUNDS[0][1]]
+      // Keep the wash fixed to the complete Web Mercator world. A viewport-
+      // sized outer ring leaves a conspicuous rectangle behind when the map is
+      // panned or zoomed out. Split the world at the prime meridian so neither
+      // polygon spans the antimeridian, which keeps both Leaflet and Mapbox
+      // from clipping the fill back into another visible rectangle.
+      const mercatorLimit = 85.05112878;
+      const westOuter = [
+        [-179.999, -mercatorLimit],
+        [0, -mercatorLimit],
+        [0, mercatorLimit],
+        [-179.999, mercatorLimit],
+        [-179.999, -mercatorLimit]
+      ];
+      const eastOuter = [
+        [0, -mercatorLimit],
+        [179.999, -mercatorLimit],
+        [179.999, mercatorLimit],
+        [0, mercatorLimit],
+        [0, -mercatorLimit]
       ];
       return {
         type: "FeatureCollection",
-        features: [{
-          type: "Feature",
-          properties: {},
-          geometry: { type: "Polygon", coordinates: [outer, ...holes] }
-        }]
+        features: [
+          {
+            type: "Feature",
+            properties: { world_half: "west" },
+            geometry: { type: "Polygon", coordinates: [westOuter, ...holes] }
+          },
+          {
+            type: "Feature",
+            properties: { world_half: "east" },
+            geometry: { type: "Polygon", coordinates: [eastOuter] }
+          }
+        ]
       };
     }
 
@@ -14967,6 +16136,59 @@
       }));
     }
 
+    function polygonUnreadBadgeOffset(title, fontSize, maxWidthEm = 8, textOffsetEm = 0) {
+      const words = String(title || "").trim().split(/\s+/).filter(Boolean);
+      const characterWidthEm = 0.56;
+      const lines = [];
+      let lineWidth = 0;
+      words.forEach(word => {
+        const wordWidth = Math.max(0.8, word.length * characterWidthEm);
+        const nextWidth = lineWidth ? lineWidth + characterWidthEm + wordWidth : wordWidth;
+        if (lineWidth && nextWidth > maxWidthEm) {
+          lines.push(lineWidth);
+          lineWidth = wordWidth;
+        } else {
+          lineWidth = nextWidth;
+        }
+      });
+      if (lineWidth || !lines.length) lines.push(lineWidth || 1);
+      const safeFontSize = Math.max(8, Number(fontSize) || 10);
+      const labelWidth = Math.min(maxWidthEm, Math.max(...lines)) * safeFontSize;
+      const labelHeight = lines.length * safeFontSize * 1.16;
+      const badgeRadius = 6;
+      return [
+        Math.round(labelWidth / 2 + badgeRadius),
+        Math.round(textOffsetEm * safeFontSize - labelHeight / 2 - badgeRadius)
+      ];
+    }
+
+    function withPolygonUnreadBadges(collection, kind = "detail") {
+      const territory = kind === "territory";
+      return {
+        ...collection,
+        features: (collection?.features || []).map(feature => {
+          const site = findSiteFromFeature(feature);
+          const slug = site?.slug || feature?.properties?.directus_site_slug || feature?.properties?.slug || "";
+          const unreadCount = slug ? contentActivityUnreadCount("site", slug) : 0;
+          const title = displayFeatureTitle(feature?.properties || site || "");
+          const labelSize = Math.max(8, numeric(feature?.properties?.label_size, territory ? 10.5 : 10));
+          const lowFontSize = territory ? labelSize * 0.82 : labelSize * 0.9;
+          const highFontSize = labelSize * 1.32;
+          const textOffsetEm = territory ? 0 : 0.95;
+          return {
+            ...feature,
+            properties: {
+              ...(feature.properties || {}),
+              unread_count: unreadCount,
+              unread_icon: activityUnreadCountIcon(unreadCount),
+              unread_badge_offset_low: polygonUnreadBadgeOffset(title, lowFontSize, 8, textOffsetEm),
+              unread_badge_offset_high: polygonUnreadBadgeOffset(title, highFontSize, 8, textOffsetEm)
+            }
+          };
+        })
+      };
+    }
+
     function isPriorityTerritoryLabel(feature) {
       const title = displayFeatureTitle(feature?.properties || feature || "");
       return /montaukett ancestral land/i.test(title);
@@ -15003,11 +16225,18 @@
     }
 
     function labelFeatureAt(feature, coordinates, index) {
+      let sourceKey = state.labelSourceFeatureKeys.get(feature);
+      if (!sourceKey) {
+        sourceKey = `label-source-${++state.labelSourceFeatureCounter}`;
+        state.labelSourceFeatureKeys.set(feature, sourceKey);
+        state.labelOriginalFeatures.set(sourceKey, feature);
+      }
       return {
         type: "Feature",
         geometry: { type: "Point", coordinates },
         properties: {
           ...(feature.properties || {}),
+          label_source_feature_key: sourceKey,
           label_instance: index,
           priority_label: isPriorityTerritoryLabel(feature)
         }
@@ -15254,7 +16483,8 @@
         if (event.source_type !== "site" || !event.source_slug || !timelineEventMatchesToday(event, today)) continue;
         entries.set(event.source_slug, {
           kind: "on-this-day",
-          reason: `On this day: ${event.title || event.date_label || "historic moment"}`
+          reason: `On this day: ${event.title || event.date_label || "historic moment"}`,
+          timelineEventId: String(event.id || "")
         });
       }
       return entries;
@@ -15277,6 +16507,7 @@
               title: site.title,
               attention_kind: attention.kind,
               attention_reason: attention.reason,
+              timeline_event_id: attention.timelineEventId || "",
               layer_categories: SITE_UTILS.siteLayerCategoryKeys(site).join(" "),
               feature_category: classifyFeature({
                 properties: {
@@ -15310,11 +16541,126 @@
               venue: event.venue || "",
               icon_key: eventMapIconKey(event),
               icon_url: MEDIA_UTILS.eventMapIconUrl(event, { directusAssetUrl }),
+              date_icon_key: calendarEventUsesDateBadge(event) ? calendarEventDateIconKey(event) : "",
               fillcolor: GEOMETRY_UTILS.normalizeHex(event.icon_color, "#7b3fc6"),
               opacity: 0.28
             }
           }))
       }));
+    }
+
+    function calendarEventDate(value = new Date()) {
+      const raw = value && typeof value === "object" && !(value instanceof Date)
+        ? (value.start_datetime || value.start_date || value.activity_feed_date || value.collection_date)
+        : value;
+      if (raw instanceof Date) return raw;
+      if (!raw) return null;
+      const parsed = new Date(raw);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    function calendarEventDayNumber(value = new Date()) {
+      if (typeof CALENDAR_UTILS.calendarDayNumber === "function") {
+        try {
+          return CALENDAR_UTILS.calendarDayNumber(value);
+        } catch (error) {
+          console.warn("Shared calendar day helper failed; using the map fallback.", error);
+        }
+      }
+      const day = Number(calendarEventDate(value)?.getDate?.());
+      return Number.isFinite(day) && day >= 1 && day <= 31 ? String(day) : "";
+    }
+
+    function calendarEventMonthDay(value = new Date()) {
+      if (typeof CALENDAR_UTILS.calendarMonthDay === "function") {
+        try {
+          return CALENDAR_UTILS.calendarMonthDay(value);
+        } catch (error) {
+          console.warn("Shared calendar month/day helper failed; using the map fallback.", error);
+        }
+      }
+      const date = calendarEventDate(value);
+      const month = Number(date?.getMonth?.()) + 1;
+      const day = Number(date?.getDate?.());
+      return Number.isFinite(month) && month >= 1 && month <= 12 && Number.isFinite(day) && day >= 1 && day <= 31
+        ? `${month}/${day}`
+        : "";
+    }
+
+    function calendarEventBadgeMarkup(value = new Date(), extraClass = "") {
+      if (typeof CALENDAR_UTILS.calendarBadgeMarkup === "function") {
+        try {
+          return CALENDAR_UTILS.calendarBadgeMarkup(value, extraClass);
+        } catch (error) {
+          console.warn("Shared calendar badge helper failed; using the map fallback.", error);
+        }
+      }
+      const className = ["calendar-date-badge", "on-this-day-badge", extraClass].filter(Boolean).join(" ");
+      return `<span class="${className}" aria-hidden="true"><span class="calendar-date-badge-date on-this-day-badge-date">${calendarEventMonthDay(value)}</span></span>`;
+    }
+
+    function addCalendarEventMapImage(map, id, value = new Date()) {
+      if (typeof CALENDAR_UTILS.addCalendarMapImage === "function") {
+        try {
+          return CALENDAR_UTILS.addCalendarMapImage(map, id, value);
+        } catch (error) {
+          console.warn("Shared calendar map-image helper failed; trying the legacy helper.", error);
+        }
+      }
+      const date = calendarEventDate(value);
+      if (date && typeof CALENDAR_UTILS.addOnThisDayMapImage === "function") {
+        try {
+          return CALENDAR_UTILS.addOnThisDayMapImage(map, id, date);
+        } catch (error) {
+          console.warn("Legacy calendar map-image helper failed; continuing without the badge image.", error);
+        }
+      }
+      return false;
+    }
+
+    function calendarEventDateIconKey(event = {}) {
+      const monthDay = calendarEventMonthDay(event);
+      return monthDay ? `calendar-event-date-${monthDay.replace("/", "-")}` : "calendar-event-date";
+    }
+
+    function calendarEventUsesDateBadge(event = {}) {
+      return Boolean(
+        event.center &&
+        event.geojson?.type === "Point" &&
+        !event.related_site_slug &&
+        !MEDIA_UTILS.eventMapIconUrl(event, { directusAssetUrl }) &&
+        isCalendarEventCurrentOrUpcoming(event) &&
+        calendarEventDateIconKey(event)
+      );
+    }
+
+    function calendarEventGeometryFeatures() {
+      const collection = calendarEventFeatures();
+      return {
+        ...collection,
+        features: collection.features.filter(feature => !(feature.geometry?.type === "Point" && feature.properties?.date_icon_key))
+      };
+    }
+
+    function calendarEventDateBadgeFeatures() {
+      return {
+        type: "FeatureCollection",
+        features: state.calendarEvents
+          .filter(calendarEventUsesDateBadge)
+          .map(event => ({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: event.center },
+            properties: {
+              calendar_event_id: event.id,
+              calendar_event_slug: event.slug,
+              title: event.title,
+              description: stripHtml(event.summary || event.body || ""),
+              icon_key: calendarEventDateIconKey(event),
+              calendar_day: calendarEventDayNumber(event),
+              calendar_month_day: calendarEventMonthDay(event)
+            }
+          }))
+      };
     }
 
     function calendarEventIconFeatures() {
@@ -15337,15 +16683,60 @@
       }));
     }
 
+    function attachedCalendarEventFeatures() {
+      const eventsBySite = new Map();
+      for (const event of state.calendarEvents) {
+        const site = state.siteBySlug.get(event.related_site_slug || "");
+        if (!site || !isCalendarEventCurrentOrUpcoming(event)) continue;
+        const center = siteCenter(siteDisplayGeometry(site));
+        if (!center) continue;
+        const entries = eventsBySite.get(site.slug) || [];
+        entries.push({ event, center });
+        eventsBySite.set(site.slug, entries);
+      }
+      return {
+        type: "FeatureCollection",
+        features: [...eventsBySite.values()].flatMap(entries => entries
+          .sort((a, b) => String(a.event.start_datetime || a.event.start_date || "9999").localeCompare(String(b.event.start_datetime || b.event.start_date || "9999")))
+          .map(({ event, center }, index) => ({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: center },
+            properties: {
+              calendar_event_id: event.id,
+              calendar_event_slug: event.slug,
+              title: event.title,
+              description: stripHtml(event.summary || ""),
+              icon_key: calendarEventDateIconKey(event),
+              calendar_day: calendarEventDayNumber(event),
+              calendar_month_day: calendarEventMonthDay(event),
+              attachment_offset: [1.15 + (index * 0.8), -1.05 - (index * 0.12)]
+            }
+          }))
+        )
+      };
+    }
+
     function activeMapStories() {
       return MAP_STORY_UTILS.activeStories(state.mapStories, state.mapStoryVotes, MAP_STORY_RULES);
+    }
+
+    // Keep a story attached to a listing visually anchored to that listing. The
+    // stored coordinates remain the contributor's device location, but using the
+    // reviewed map position avoids a GPS drift placing the bubble beside a site.
+    function mapStoryDisplayCoordinates(story) {
+      const attachedSlug = String(story?.attached_site_slug || "").trim();
+      const attachedSite = attachedSlug ? state.siteBySlug.get(attachedSlug) : null;
+      const attachedCoordinates = attachedSite && !isBroadTerritorySite(attachedSite)
+        ? siteCenter(siteDisplayGeometry(attachedSite))
+        : null;
+      return attachedCoordinates || MAP_STORY_UTILS.coordinates(story);
     }
 
     function mapStoryFeatures() {
       return {
         type: "FeatureCollection",
         features: activeMapStories().map(story => {
-          const coords = MAP_STORY_UTILS.coordinates(story);
+          const coords = mapStoryDisplayCoordinates(story);
           if (!coords) return null;
           return {
             type: "Feature",
@@ -15476,6 +16867,15 @@
         context.fill();
       });
       state.map.addImage("story-bubble", context.getImageData(0, 0, canvas.width, canvas.height), { pixelRatio });
+    }
+
+    function addCalendarEventDateIcons() {
+      if (!state.map) return;
+      for (const event of state.calendarEvents) {
+        const iconId = calendarEventDateIconKey(event);
+        if (!iconId || !isCalendarEventCurrentOrUpcoming(event)) continue;
+        addCalendarEventMapImage(state.map, iconId, event);
+      }
     }
 
     function addBiographyCanoeIcon() {
@@ -15614,7 +17014,9 @@
       });
       state.map.addSource("long-island-water-mask", {
         type: "geojson",
-        data: state.waterMask || { type: "FeatureCollection", features: [] }
+        data: state.landMaskData
+          ? createWaterMask(state.landMaskData)
+          : (state.waterMask || { type: "FeatureCollection", features: [] })
       });
       state.map.addLayer({
         id: "long-island-water-mask",
@@ -15622,9 +17024,9 @@
         source: "long-island-water-mask",
         paint: {
           "fill-color": state.basemap === "blank" ? "#f6f8f3" : "#9ed8e7",
-          "fill-opacity": state.basemap === "satellite" ? 0.78 : 0.9
+          "fill-opacity": state.basemap === "satellite" ? 0.16 : 0.22
         }
-      });
+      }, "long-island-emphasis");
       state.map.addSource("gardiners-montaukett-territory", {
         type: "geojson",
         data: gardinersMontaukettOverlayFeatures()
@@ -15806,11 +17208,13 @@
           "fill-opacity": ["min", 0.32, ["coalesce", ["to-number", ["get", "opacity"]], 0.32]]
         }
       });
-      state.map.addSource("directus-site-territory-labels", { type: "geojson", data: managedSiteTerritoryLabelFeatures() });
+      ensureActivityUnreadBadgeImages();
+      state.map.addSource("directus-site-territory-labels", { type: "geojson", data: withPolygonUnreadBadges(managedSiteTerritoryLabelFeatures(), "territory") });
       state.map.addLayer({
         id: "directus-site-territory-labels",
         type: "symbol",
         source: "directus-site-territory-labels",
+        filter: ["<=", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
         minzoom: TERRITORY_LABEL_MIN_ZOOM,
         layout: {
           "text-field": ["get", "title"],
@@ -15832,11 +17236,43 @@
           "text-halo-blur": 0
         }
       });
-      state.map.addSource("directus-site-labels", { type: "geojson", data: managedSiteDetailLabelFeatures() });
+      state.map.addLayer({
+        id: "directus-site-territory-labels-unread",
+        type: "symbol",
+        source: "directus-site-territory-labels",
+        filter: [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
+        minzoom: TERRITORY_LABEL_MIN_ZOOM,
+        layout: {
+          "text-field": ["get", "title"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 4, ["*", ["get", "label_size"], 0.82], 9, ["*", ["get", "label_size"], 1.02], 16, ["*", ["get", "label_size"], 1.32]],
+          "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+          "text-anchor": "center",
+          "text-justify": "center",
+          "text-allow-overlap": false,
+          "text-ignore-placement": false,
+          "text-max-width": 8,
+          "text-optional": false,
+          "icon-image": ["get", "unread_icon"],
+          "icon-size": 1,
+          "icon-anchor": "center",
+          "icon-offset": ["interpolate", ["linear"], ["zoom"], 4, ["get", "unread_badge_offset_low"], 16, ["get", "unread_badge_offset_high"]],
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+          "icon-optional": false
+        },
+        paint: {
+          "text-color": "#20251f",
+          "text-halo-color": "rgba(255,255,255,0.9)",
+          "text-halo-width": 1.28,
+          "text-halo-blur": 0
+        }
+      });
+      state.map.addSource("directus-site-labels", { type: "geojson", data: withPolygonUnreadBadges(managedSiteDetailLabelFeatures(), "detail") });
       state.map.addLayer({
         id: "directus-site-labels",
         type: "symbol",
         source: "directus-site-labels",
+        filter: ["<=", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
         minzoom: SITE_LABEL_MIN_ZOOM,
         layout: {
           "text-field": ["get", "title"],
@@ -15851,6 +17287,38 @@
           "text-ignore-placement": false,
           "text-max-width": 8,
           "text-optional": true
+        },
+        paint: {
+          "text-color": "#20251f",
+          "text-halo-color": "rgba(255,255,255,0.9)",
+          "text-halo-width": 1.28,
+          "text-halo-blur": 0
+        }
+      });
+      state.map.addLayer({
+        id: "directus-site-labels-unread",
+        type: "symbol",
+        source: "directus-site-labels",
+        filter: [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
+        minzoom: SITE_LABEL_MIN_ZOOM,
+        layout: {
+          "text-field": ["get", "title"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], SITE_LABEL_MIN_ZOOM, ["*", ["get", "label_size"], 0.9], 16, ["*", ["get", "label_size"], 1.32]],
+          "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+          "text-anchor": "center",
+          "text-justify": "center",
+          "text-offset": ["case", ["==", ["get", "feature_category"], "territory"], ["literal", [0, -0.85]], ["literal", [0, 0.95]]],
+          "text-allow-overlap": false,
+          "text-ignore-placement": false,
+          "text-max-width": 8,
+          "text-optional": false,
+          "icon-image": ["get", "unread_icon"],
+          "icon-size": 1,
+          "icon-anchor": "center",
+          "icon-offset": ["interpolate", ["linear"], ["zoom"], SITE_LABEL_MIN_ZOOM, ["get", "unread_badge_offset_low"], 16, ["get", "unread_badge_offset_high"]],
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+          "icon-optional": false
         },
         paint: {
           "text-color": "#20251f",
@@ -15940,7 +17408,7 @@
         filter: ["==", ["get", "attention_kind"], "on-this-day"],
         layout: {
           "icon-image": "on-this-day-calendar",
-          "icon-size": ["interpolate", ["linear"], ["zoom"], 7, 0.72, 10, 0.92, 14, 1.08],
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 7, 0.576, 10, 0.736, 14, 0.864],
           "icon-anchor": "center",
           "icon-allow-overlap": true,
           "icon-ignore-placement": true
@@ -15976,6 +17444,38 @@
           "icon-anchor": "center"
         }
       });
+      state.map.addSource("activity-unread-sites", { type: "geojson", data: activityUnreadSiteFeatures() });
+      state.map.addLayer({
+        id: "activity-unread-site-badges",
+        type: "circle",
+        source: "activity-unread-sites",
+        filter: ["==", ["get", "geometry_kind"], "point"],
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 6, 12, 7],
+          "circle-color": "#c62828",
+          "circle-stroke-width": 0,
+          "circle-translate": [9, -9]
+        }
+      });
+      state.map.addLayer({
+        id: "activity-unread-site-counts",
+        type: "symbol",
+        source: "activity-unread-sites",
+        filter: ["==", ["get", "geometry_kind"], "point"],
+        layout: {
+          "text-field": ["get", "unread_label"],
+          "text-size": 9,
+          "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+          "text-anchor": "center",
+          "text-offset": ["literal", [0, 0]],
+          "text-padding": 0,
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+          "text-optional": false
+        },
+        paint: { "text-color": "#fff", "text-translate": [9, -9] }
+      });
+      setPointerCursor(["activity-unread-site-counts", "activity-unread-site-badges"]);
       state.map.addSource("learning-path-stops", { type: "geojson", data: guidedLearningPathStopFeatures() });
       state.map.addLayer({
         id: "learning-path-stop-halos",
@@ -16076,7 +17576,8 @@
           "icon-ignore-placement": true
         },
         paint: {
-          "icon-opacity": ["*", 0.94, ["coalesce", ["get", "motion_opacity"], 1]]
+          "icon-opacity": ["*", 0.94, ["coalesce", ["get", "motion_opacity"], 1]],
+          "icon-translate": ["get", "io"]
         }
       });
       state.map.addLayer({
@@ -16160,6 +17661,7 @@
         },
         paint: {
           "text-color": "#34251a",
+          "text-translate": ["get", "lo"],
           "text-opacity": ["*", ["coalesce", ["get", "motion_opacity"], 1], ["interpolate", ["linear"], ["zoom"], BIOGRAPHY_PERSON_LABEL_MIN_ZOOM, 0, BIOGRAPHY_PERSON_LABEL_MIN_ZOOM + 0.35, 1]],
           "text-halo-color": "rgba(255,255,255,0.94)",
           "text-halo-width": 1.5,
@@ -16252,7 +17754,7 @@
       startBiographyPeopleAnimation();
       scheduleBiographyPeopleProgressiveLoad(progressiveBiographyPeopleSlugs());
 
-      state.map.addSource("calendar-events", { type: "geojson", data: calendarEventFeatures() });
+      state.map.addSource("calendar-events", { type: "geojson", data: calendarEventGeometryFeatures() });
       state.map.addLayer({
         id: "calendar-event-polygons",
         type: "fill",
@@ -16287,6 +17789,34 @@
           "icon-offset": ["literal", [0, 0]],
           "icon-allow-overlap": true,
           "icon-anchor": "center"
+        }
+      });
+      addCalendarEventDateIcons();
+      state.map.addSource("calendar-event-date-badges", { type: "geojson", data: calendarEventDateBadgeFeatures() });
+      state.map.addLayer({
+        id: "calendar-event-date-badges",
+        type: "symbol",
+        source: "calendar-event-date-badges",
+        layout: {
+          "icon-image": ["get", "icon_key"],
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 7, 0.76, 12, 0.94, 15, 1.04],
+          "icon-anchor": "bottom",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true
+        }
+      });
+      state.map.addSource("site-attached-calendar-events", { type: "geojson", data: attachedCalendarEventFeatures() });
+      state.map.addLayer({
+        id: "site-attached-calendar-events",
+        type: "symbol",
+        source: "site-attached-calendar-events",
+        layout: {
+          "icon-image": ["get", "icon_key"],
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 7, 0.76, 12, 0.94, 15, 1.04],
+          "icon-offset": ["get", "attachment_offset"],
+          "icon-anchor": "bottom",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true
         }
       });
       state.map.addSource("map-stories", { type: "geojson", data: mapStoryFeatures() });
@@ -16387,6 +17917,8 @@
           if (mapCameraIsInteracting() || now - state.lastHoverMove < 72) return;
           state.lastHoverMove = now;
           const layers = [
+            "activity-unread-site-counts",
+            "activity-unread-site-badges",
             "learning-path-stop-labels",
             "learning-path-stop-numbers",
             "learning-path-stop-halos",
@@ -16402,6 +17934,8 @@
             "biography-path-point-numbers",
             "biography-path-points",
             "biography-path-lines",
+            "site-attached-calendar-events",
+            "calendar-event-date-badges",
             "calendar-event-icons",
             "calendar-event-points",
             "map-story-labels",
@@ -16414,7 +17948,9 @@
             "directus-site-polygons",
             "directus-site-territories",
             "directus-site-labels",
+            "directus-site-labels-unread",
             "directus-site-territory-labels",
+            "directus-site-territory-labels-unread",
             "place-name-area-label",
             "place-name-area-fill",
             "gardiners-montaukett-territory-fill",
@@ -16437,6 +17973,8 @@
             return;
           }
           const markerFeaturesUnderCursor = features.filter(item =>
+            item.layer?.id === "activity-unread-site-counts" ||
+            item.layer?.id === "activity-unread-site-badges" ||
             item.layer?.id === "learning-path-stop-labels" ||
             item.layer?.id === "learning-path-stop-numbers" ||
             item.layer?.id === "learning-path-stop-halos" ||
@@ -16453,6 +17991,8 @@
             item.layer?.id === "biography-path-point-numbers" ||
             item.layer?.id === "biography-path-points" ||
             item.layer?.id === "biography-path-lines" ||
+            item.layer?.id === "site-attached-calendar-events" ||
+            item.layer?.id === "calendar-event-date-badges" ||
             item.layer?.id === "calendar-event-icons" ||
             item.layer?.id === "calendar-event-points" ||
             item.layer?.id === "map-story-labels" ||
@@ -16462,19 +18002,19 @@
             item.layer?.id === "directus-site-points"
           );
           const polygonFeaturesUnderCursor = features.filter(item =>
-            item.layer?.id === "calendar-event-polygons" || item.layer?.id === "directus-site-labels" || item.layer?.id === "directus-site-territory-labels" || item.layer?.id === "place-name-area-label" || item.layer?.id === "place-name-area-fill" || item.layer?.id === "gardiners-montaukett-territory-fill" || item.layer?.id === "wp-polygons-territory-label" || item.layer?.id === "wp-polygons-detail-label" || item.layer?.id === "wp-polygons-original-fill" || item.layer?.id === "wp-polygons-detail-fill" || item.layer?.id === "directus-site-polygons" || item.layer?.id === "directus-site-territories"
+            item.layer?.id === "calendar-event-polygons" || item.layer?.id === "directus-site-labels" || item.layer?.id === "directus-site-labels-unread" || item.layer?.id === "directus-site-territory-labels" || item.layer?.id === "directus-site-territory-labels-unread" || item.layer?.id === "place-name-area-label" || item.layer?.id === "place-name-area-fill" || item.layer?.id === "gardiners-montaukett-territory-fill" || item.layer?.id === "wp-polygons-territory-label" || item.layer?.id === "wp-polygons-detail-label" || item.layer?.id === "wp-polygons-original-fill" || item.layer?.id === "wp-polygons-detail-fill" || item.layer?.id === "directus-site-polygons" || item.layer?.id === "directus-site-territories"
           );
           const polygonStack = hoverFeatureStack([...polygonFeaturesUnderCursor, ...geographicPolygons]);
           const hoverStack = hoverFeatureStack([...markerFeaturesUnderCursor, ...polygonStack]);
           const feature = hoverStack[0] || features[0];
           state.map.getCanvas().style.cursor = "pointer";
-          setHoverFeature(feature);
+          setHoverFeature(hoverStack);
           if (suppressHoverPopupForFeature(feature)) {
             hoverPopup.remove();
             state.activeHoverFeatureKey = "";
             return;
           }
-          const key = hoverStack.map(hoverFeatureKey).join("||");
+          const key = hoverStackPreviewKey(hoverStack);
           hoverPopup.setLngLat(event.lngLat);
           if (state.activeHoverFeatureKey !== key) {
             state.activeHoverFeatureKey = key;
@@ -16490,22 +18030,32 @@
           state.map.getCanvas().style.cursor = "";
         });
         state.map.on("dragstart", () => {
+          beginBiographyPeopleMapInteractionPause("drag");
           markUserMapInteraction({ force: true });
           hoverPopup.remove();
           state.activeHoverFeatureKey = "";
           setHoverFeature(null);
           state.map.getCanvas().style.cursor = "";
         });
-        state.map.on("zoomstart", () => markUserMapInteraction({ preserveBiographyFollow: true }));
-        state.map.on("zoomend", recenterFollowedBiographyCameraAfterZoom);
+        state.map.on("dragend", () => endBiographyPeopleMapInteractionPause("drag"));
+        state.map.on("zoomstart", () => {
+          beginBiographyPeopleMapInteractionPause("zoom");
+          markUserMapInteraction({ preserveBiographyFollow: true });
+        });
+        state.map.on("zoomend", () => {
+          endBiographyPeopleMapInteractionPause("zoom");
+          recenterFollowedBiographyCameraAfterZoom();
+        });
       }
-      setPointerCursor(["learning-path-stop-labels", "learning-path-stop-numbers", "learning-path-stop-halos", "site-attention-history-icon", "site-attention-history-badge", "map-story-labels", "map-stories", "biography-people-quotes", "biography-people-labels", "biography-people", "biography-place-labels", "biography-place-points", "biography-place-path", "biography-path-labels", "biography-path-point-numbers", "biography-path-points", "biography-path-lines", "calendar-event-icons", "calendar-event-points", "calendar-event-polygons", "directus-site-icons", "directus-site-polygons", "directus-site-territories", "directus-site-labels", "directus-site-territory-labels", "wp-markers-original-icon", "wp-markers-original-dot", "place-name-area-label", "place-name-area-fill", "gardiners-montaukett-territory-fill", "wp-polygons-territory-label", "wp-polygons-detail-label", "wp-polygons-original-fill", "wp-polygons-detail-fill"]);
+      setPointerCursor(["learning-path-stop-labels", "learning-path-stop-numbers", "learning-path-stop-halos", "site-attention-history-icon", "site-attention-history-badge", "map-story-labels", "map-stories", "biography-people-quotes", "biography-people-labels", "biography-people", "biography-place-labels", "biography-place-points", "biography-place-path", "biography-path-labels", "biography-path-point-numbers", "biography-path-points", "biography-path-lines", "site-attached-calendar-events", "calendar-event-date-badges", "calendar-event-icons", "calendar-event-points", "calendar-event-polygons", "directus-site-icons", "directus-site-polygons", "directus-site-territories", "directus-site-labels", "directus-site-labels-unread", "directus-site-territory-labels", "directus-site-territory-labels-unread", "wp-markers-original-icon", "wp-markers-original-dot", "place-name-area-label", "place-name-area-fill", "gardiners-montaukett-territory-fill", "wp-polygons-territory-label", "wp-polygons-detail-label", "wp-polygons-original-fill", "wp-polygons-detail-fill"]);
       ensureWhalingWhaleMarker();
       ensureMovingDogMarker();
       applyLayerVisibility();
+      promoteActivityUnreadBadgeLayers();
       promoteGuidedLearningPathLayers();
       startSiteAttentionPulse();
       loadMarkerIcons().then(() => {
+        addCalendarEventDateIcons();
         if (state.map?.getSource("wp-markers-icons")) {
           state.map.getSource("wp-markers-icons").setData(markerIconFeatures());
         }
@@ -16516,13 +18066,19 @@
           state.map.getSource("directus-site-geometries").setData(filteredManagedSiteFeatures());
         }
         if (state.map?.getSource("directus-site-labels")) {
-          state.map.getSource("directus-site-labels").setData(managedSiteDetailLabelFeatures());
+          state.map.getSource("directus-site-labels").setData(withPolygonUnreadBadges(managedSiteDetailLabelFeatures(), "detail"));
         }
         if (state.map?.getSource("directus-site-territory-labels")) {
-          state.map.getSource("directus-site-territory-labels").setData(managedSiteTerritoryLabelFeatures());
+          state.map.getSource("directus-site-territory-labels").setData(withPolygonUnreadBadges(managedSiteTerritoryLabelFeatures(), "territory"));
         }
         if (state.map?.getSource("calendar-event-icons")) {
           state.map.getSource("calendar-event-icons").setData(calendarEventIconFeatures());
+        }
+        if (state.map?.getSource("calendar-event-date-badges")) {
+          state.map.getSource("calendar-event-date-badges").setData(calendarEventDateBadgeFeatures());
+        }
+        if (state.map?.getSource("site-attached-calendar-events")) {
+          state.map.getSource("site-attached-calendar-events").setData(attachedCalendarEventFeatures());
         }
         promoteActiveBiographyPathLayers();
       });
@@ -16568,8 +18124,8 @@
       const base = LEAFLET_BASEMAPS[next];
       if (base?.url) {
         state.leafletBaseLayer = L.tileLayer(base.url, {
-          updateWhenIdle: false,
-          updateWhenZooming: true,
+          updateWhenIdle: true,
+          updateWhenZooming: false,
           updateInterval: 180,
           keepBuffer: 2,
           ...(base.options || {})
@@ -16582,6 +18138,13 @@
 
     function setPointerCursor(layerIds) {
       MAP_UTILS.bindPointerCursor(state.map, state.archiveLayerHandlers, layerIds);
+    }
+
+    function promoteActivityUnreadBadgeLayers() {
+      if (!state.map) return;
+      for (const layerId of ["directus-site-territory-labels-unread", "directus-site-labels-unread", "activity-unread-site-badges", "activity-unread-site-counts"]) {
+        if (state.map.getLayer(layerId)) state.map.moveLayer(layerId);
+      }
     }
 
     function updateSiteAttentionPulse() {
@@ -16637,8 +18200,8 @@
         ["wp-markers-icons", markerIconFeatures()],
         ["site-attention-points", filterByCategory(siteAttentionFeatures())],
         ["directus-site-geometries", filteredManagedSiteFeatures()],
-        ["directus-site-labels", managedSiteDetailLabelFeatures()],
-        ["directus-site-territory-labels", managedSiteTerritoryLabelFeatures()],
+        ["directus-site-labels", withPolygonUnreadBadges(managedSiteDetailLabelFeatures(), "detail")],
+        ["directus-site-territory-labels", withPolygonUnreadBadges(managedSiteTerritoryLabelFeatures(), "territory")],
         ["directus-site-icons", filterByCategory(customSiteIconFeatures())],
         ["learning-path-stops", guidedLearningPathStopFeatures()],
         ["biography-people", biographyPersonFeatureCollection()],
@@ -16646,13 +18209,13 @@
       ]);
       const biographyPathVisibility = biographyPathsEnabled() ? "visible" : "none";
       const guidedPathVisibility = activeGuidedLearningPath() ? "visible" : "none";
-      MAP_UTILS.setLayerVisibilityMany(state.map, ["wp-markers-original-dot", "wp-markers-original-icon", "wp-marker-labels", "directus-site-points", "directus-site-icons", "directus-site-point-labels"], markerVisibility);
+      MAP_UTILS.setLayerVisibilityMany(state.map, ["activity-unread-site-counts", "activity-unread-site-badges", "wp-markers-original-dot", "wp-markers-original-icon", "wp-marker-labels", "directus-site-points", "directus-site-icons", "directus-site-point-labels"], markerVisibility);
       MAP_UTILS.setLayerVisibilityMany(state.map, ["learning-path-stop-halos", "learning-path-stop-numbers", "learning-path-stop-labels"], guidedPathVisibility);
       MAP_UTILS.setLayerVisibilityMany(state.map, ["site-attention-pulse-outer", "site-attention-pulse-core"], markerVisibility);
       MAP_UTILS.setLayerVisibilityMany(state.map, ["site-attention-history-badge", "site-attention-history-icon"], markerVisibility);
-      MAP_UTILS.setLayerVisibilityMany(state.map, ["calendar-event-icons", "calendar-event-points"], exhibitVisibility);
+      MAP_UTILS.setLayerVisibilityMany(state.map, ["site-attached-calendar-events", "calendar-event-date-badges", "calendar-event-icons", "calendar-event-points"], exhibitVisibility);
       MAP_UTILS.setLayerVisibilityMany(state.map, ["biography-path-line-casing", "biography-path-lines", "biography-path-points", "biography-path-point-numbers", "biography-path-labels"], biographyPathVisibility);
-      MAP_UTILS.setLayerVisibilityMany(state.map, ["place-name-area-fill", "place-name-area-line", "place-name-area-label", "gardiners-montaukett-territory-fill", "wp-polygons-original-fill", "wp-polygons-detail-fill", "wp-polygons-original-line", "wp-polygons-territory-label", "wp-polygons-detail-label", "directus-site-territories", "directus-site-polygons", "directus-site-territory-labels", "directus-site-labels"], polygonVisibility);
+      MAP_UTILS.setLayerVisibilityMany(state.map, ["place-name-area-fill", "place-name-area-line", "place-name-area-label", "gardiners-montaukett-territory-fill", "wp-polygons-original-fill", "wp-polygons-detail-fill", "wp-polygons-original-line", "wp-polygons-territory-label", "wp-polygons-detail-label", "directus-site-territories", "directus-site-polygons", "directus-site-territory-labels", "directus-site-territory-labels-unread", "directus-site-labels", "directus-site-labels-unread"], polygonVisibility);
       MAP_UTILS.setLayerVisibilityMany(state.map, ["calendar-event-polygons"], exhibitVisibility);
       MAP_UTILS.setLayerVisibilityMany(state.map, ["hover-feature-fill", "hover-feature-line"], polygonVisibility);
       MAP_UTILS.setLayerVisibilityMany(state.map, ["hover-feature-point"], markerVisibility);
@@ -17249,7 +18812,7 @@
       const description = seoPlainText(options.description, 180) || DEFAULT_SEO.description;
       const currentUrl = new URL(window.location.href);
       const canonicalUrl = new URL(currentUrl.pathname || "/", window.location.origin);
-      const routeKeys = ["site", "wiki", "event", "calendar", "page", "blog"];
+      const routeKeys = ["site", "wiki", "event", "calendar", "page", "blog", "tag", "topic", "kbtag", "path"];
       const routeKey = routeKeys.find(key => currentUrl.searchParams.get(key));
       if (routeKey) canonicalUrl.searchParams.set(routeKey, currentUrl.searchParams.get(routeKey));
       const canonical = document.getElementById("nli-canonical") || document.querySelector('link[rel="canonical"]');
@@ -17306,6 +18869,44 @@
         if (value) url.searchParams.set(key, value);
       }
       window.history.replaceState(null, "", url);
+    }
+
+    function publicRouteHref(params = {}) {
+      const search = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        if (value !== null && value !== undefined && String(value).trim()) search.set(key, String(value).trim());
+      }
+      const query = search.toString();
+      return query ? `?${query}` : "/";
+    }
+
+    function routeSlugValue(value) {
+      return String(value || "")
+        .toLowerCase()
+        .replace(/&/g, " and ")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    }
+
+    function prepareInternalRouteClick(event, target) {
+      if (target?.tagName !== "A") return true;
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return false;
+      event.preventDefault();
+      return true;
+    }
+
+    function focusBiographyPathMoment(pathOrArticle, index = 0, eventId = "") {
+      const path = pathOrArticle?.places ? pathOrArticle : state.activeBiographyPath;
+      const place = path?.places?.[Number(index) || 0];
+      const event = String(eventId || place?.event_id || place?.eventId || "").trim();
+      const target = articleBodyEl?.querySelector(event
+        ? `.biography-timeline-entry[data-event-id="${CSS.escape(event)}"]`
+        : `[data-biography-path-index="${Number(index) || 0}"]`);
+      if (!target || !articleEl?.classList.contains("open")) return false;
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+      target.classList.add("is-map-focused");
+      window.setTimeout(() => target.classList.remove("is-map-focused"), 1500);
+      return true;
     }
 
     function focusGeometry(geometry, zoom = 11, options = {}) {
@@ -17641,7 +19242,7 @@
 
     function updateTimelineIconLayerOffsets(offset = 0) {
       if (!state.map) return;
-      for (const layerId of ["wp-markers-original-icon", "directus-site-icons", "calendar-event-icons"]) {
+      for (const layerId of ["wp-markers-original-icon", "directus-site-icons", "calendar-event-icons", "calendar-event-date-badges"]) {
         if (!state.map.getLayer(layerId)) continue;
         state.map.setLayoutProperty(layerId, "icon-offset", [
           "case",
@@ -17659,6 +19260,9 @@
       if (state.map.getSource("wp-markers-icons")) state.map.getSource("wp-markers-icons").setData(markerIconFeatures());
       if (state.map.getSource("directus-site-icons")) state.map.getSource("directus-site-icons").setData(filterByCategory(customSiteIconFeatures()));
       if (state.map.getSource("calendar-event-icons")) state.map.getSource("calendar-event-icons").setData(calendarEventIconFeatures());
+      addCalendarEventDateIcons();
+      if (state.map.getSource("calendar-event-date-badges")) state.map.getSource("calendar-event-date-badges").setData(calendarEventDateBadgeFeatures());
+      if (state.map.getSource("site-attached-calendar-events")) state.map.getSource("site-attached-calendar-events").setData(attachedCalendarEventFeatures());
     }
 
     function timelineIconJumpMatchesFeature(feature) {
@@ -17984,6 +19588,8 @@
         state.leafletStartupProgressiveRenderScheduled = false;
         state.leafletStartupPointDripUsed = false;
         state.leafletStartupPinsVisibleReady = false;
+        state.leafletStartupCameraAnimating = false;
+        state.leafletStartupCameraCancel = null;
         state.leafletBiographyStartupDeferred = true;
         const runStartupWatchdog = () => {
           if (!state.leafletMap || !state.leafletStartupFullRenderPending) return;
@@ -18012,6 +19618,8 @@
           state.leafletMap.options.inertia = false;
           state.leafletMap.options.inertiaMaxSpeed = 0;
           state.leafletMap.options.inertiaDeceleration = 10000;
+          state.leafletMap.options.markerZoomAnimation = false;
+          state.leafletMap.options.zoomSnap = 0.1;
           state.leafletMap.setView?.(firstView.center, firstView.zoom, { animate: false });
         } else {
           mapEl.replaceChildren();
@@ -18028,7 +19636,9 @@
             inertiaDeceleration: 10000,
             wheelDebounceTime: 24,
             wheelPxPerZoomLevel: 80,
+            zoomSnap: 0.1,
             preferCanvas: true,
+            markerZoomAnimation: false,
             minZoom: LEAFLET_VIEW.minZoom,
             maxZoom: LEAFLET_VIEW.maxZoom,
             maxBounds: LEAFLET_VIEW.maxBounds,
@@ -18040,7 +19650,9 @@
         state.leafletMap.scrollWheelZoom?.enable?.();
         state.leafletMap.dragging?.enable?.();
         state.leafletMap.touchZoom?.enable?.();
-        state.leafletCanvasRenderer = L.canvas({ padding: 0.35 });
+        state.leafletArchiveRenderer = L.svg({ padding: 0.35 });
+        const siteMarkerPane = state.leafletMap.getPane?.("nli-site-markers") || state.leafletMap.createPane?.("nli-site-markers");
+        if (siteMarkerPane) siteMarkerPane.style.zIndex = "599";
         const placeNameAreaPane = state.leafletMap.getPane?.("nli-place-name-areas") || state.leafletMap.createPane?.("nli-place-name-areas");
         if (placeNameAreaPane) {
           placeNameAreaPane.style.zIndex = "440";
@@ -18112,31 +19724,46 @@
         state.leafletMapPointerLeaveElement = mapEl;
         mapEl.addEventListener("pointerleave", state.leafletMapPointerLeaveHandler);
         state.leafletMap.on("dragstart", () => {
+          state.leafletStartupCameraCancel?.();
+          beginBiographyPeopleMapInteractionPause("drag");
+          window.clearTimeout(state.leafletMovingClassTimer);
+          state.leafletMovingClassTimer = null;
           markUserMapInteraction({ force: true });
           hideMapCoordinateMenu();
           hideLeafletHoverCard();
           mapEl.classList.add("is-moving");
         });
         state.leafletMap.on("zoomstart", () => {
-          markUserMapInteraction({ preserveBiographyFollow: true });
+          beginBiographyPeopleMapInteractionPause("zoom");
+          window.clearTimeout(state.leafletMovingClassTimer);
+          state.leafletMovingClassTimer = null;
+          if (!state.leafletStartupCameraAnimating) markUserMapInteraction({ preserveBiographyFollow: true });
           hideMapCoordinateMenu();
           hideLeafletHoverCard();
           mapEl.classList.add("is-moving");
         });
+        state.leafletMap.on("dragend", () => endBiographyPeopleMapInteractionPause("drag"));
+        state.leafletMap.on("zoomend", () => endBiographyPeopleMapInteractionPause("zoom"));
         state.leafletMap.on("dragend moveend zoomend", () => {
-          window.setTimeout(() => mapEl.classList.remove("is-moving"), 80);
+          window.clearTimeout(state.leafletMovingClassTimer);
+          state.leafletMovingClassTimer = window.setTimeout(() => {
+            state.leafletMovingClassTimer = null;
+            mapEl.classList.remove("is-moving");
+          }, 80);
         });
         state.leafletMap.on("moveend", () => scheduleLeafletViewportRenderAfterNavigation());
         state.leafletMap.on("zoomend", () => {
           recenterFollowedBiographyCameraAfterZoom();
-          refreshLeafletPlaceNameAreaLabels();
+          state.leafletPlaceNameAreaLabelsDirty = true;
           scheduleLeafletViewportRenderAfterNavigation(180);
         });
         state.leafletMap.whenReady(() => {
-          const finishReady = () => {
+          const revealStartupPins = () => {
             window.setTimeout(() => state.leafletMap.invalidateSize(), 80);
             state.leafletStartupPinsVisibleReady = true;
-            window.setTimeout(() => scheduleLeafletStartupFullRender(), 260);
+            scheduleLeafletStartupFullRender();
+          };
+          const finishReady = () => {
             if (reason) console.warn("Using Leaflet fallback map:", reason);
             resolve();
           };
@@ -18144,12 +19771,15 @@
             setLoadingMessage("Drawing ancestral territory layers.");
             renderLeafletArchiveLayers({ polygonsOnly: true, includeBiographyPeople: false });
             window.setTimeout(() => state.leafletMap?.invalidateSize?.(), 120);
-            waitForLeafletTerritoryPaint().then(finishReady);
-            scheduleLeafletStartupFullRender();
+            waitForLeafletTerritoryPaint().then(() => {
+              finishReady();
+              window.setTimeout(revealStartupPins, 60);
+            });
           };
           if (state.sites.length || state.layers.length) {
             window.requestAnimationFrame(renderReadyLayers);
           } else {
+            revealStartupPins();
             finishReady();
           }
         });
@@ -18220,7 +19850,7 @@
       const overlay = ensureLeafletPolygonHoverOverlay();
       if (!overlay) return;
       overlay.clearLayers();
-      const features = hoverFeatureStack(Array.isArray(featureOrFeatures) ? featureOrFeatures : [featureOrFeatures])
+      const features = hoverOutlineFeatureStack(featureOrFeatures)
         .filter(feature => /Polygon/.test(feature?.geometry?.type || ""))
         .map((feature, index) => ({
           type: "Feature",
@@ -18287,7 +19917,8 @@
 
     function setActiveLeafletPolygonHovers(featureOrFeatures, sourceHint = "") {
       const stack = hoverFeatureStack(Array.isArray(featureOrFeatures) ? featureOrFeatures : [featureOrFeatures]);
-      const polygonStack = stack.filter(feature => /Polygon/.test(feature?.geometry?.type || ""));
+      const polygonStack = hoverOutlineFeatureStack(stack)
+        .filter(feature => /Polygon/.test(feature?.geometry?.type || ""));
       const key = polygonStack.map(hoverFeatureKey).join("||");
       if (key && state.activeLeafletPolygonHoverKey === key) return stack[0] || polygonStack[0] || null;
       resetLeafletPolygonHover();
@@ -18361,7 +19992,7 @@
       runWhenQuiet(() => {
         state.leafletStartupFullRenderPending = false;
         state.leafletStartupFullRenderTimer = null;
-        statusEl.textContent = `${state.sites.length} map listings loaded. Loading nearby pins one at a time.`;
+        statusEl.textContent = `${state.sites.length} map listings loaded.`;
         renderLeafletArchiveLayers({
           viewportOnly: true,
           viewportPad: 0.42,
@@ -18370,7 +20001,7 @@
           skipDetailLabels: true,
           allowStartupPins: true
         });
-      }, options.force ? 0 : 320);
+      }, options.force ? 0 : 48);
       runWhenQuiet(() => {
         state.leafletBiographyStartupDeferred = false;
         state.biographyMappedGeometryCache.clear();
@@ -18385,42 +20016,7 @@
     }
 
     function initialLeafletView() {
-      const params = new URLSearchParams(window.location.search || "");
-      if (window.location.hash || params.get("site") || params.get("wiki") || params.get("event")) {
-        return { center: LEAFLET_VIEW.center, zoom: LEAFLET_VIEW.zoom };
-      }
-      const bootstrapView = window.NLI_STARTUP_LEAFLET_VIEW;
-      if (Array.isArray(bootstrapView?.center) && Number.isFinite(Number(bootstrapView.center[0])) && Number.isFinite(Number(bootstrapView.center[1]))) {
-        return {
-          center: [Number(bootstrapView.center[0]), Number(bootstrapView.center[1])],
-          zoom: Math.max(Number(bootstrapView.zoom) || Number(LEAFLET_VIEW.zoom) || 9.7, 11.95)
-        };
-      }
-      return randomLongIslandStartupView();
-    }
-
-    function randomLongIslandStartupView() {
-      const views = LONG_ISLAND_START_VIEWS.length ? LONG_ISLAND_START_VIEWS : [{ center: LEAFLET_VIEW.center, zoom: LEAFLET_VIEW.zoom }];
-      const randomUnit = () => window.crypto?.getRandomValues
-        ? window.crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296
-        : Math.random();
-      if (views.length < 2) {
-        return {
-          center: views[0].center || LEAFLET_VIEW.center,
-          zoom: Math.max(Number(views[0].zoom) || Number(LEAFLET_VIEW.zoom) || 9.7, 11.95)
-        };
-      }
-      const scaled = randomUnit() * (views.length - 1);
-      const index = Math.min(views.length - 2, Math.floor(scaled));
-      const local = scaled - index;
-      const start = views[index]?.center || LEAFLET_VIEW.center;
-      const end = views[index + 1]?.center || start;
-      const lat = Number(start[0]) + (Number(end[0]) - Number(start[0])) * local + (randomUnit() - 0.5) * 0.035;
-      const lng = Number(start[1]) + (Number(end[1]) - Number(start[1])) * local;
-      return {
-        center: [lat, lng],
-        zoom: Math.max(Number(LEAFLET_VIEW.zoom) || 9.7, 11.95)
-      };
+      return { center: LEAFLET_VIEW.center, zoom: LEAFLET_VIEW.zoom };
     }
 
     function leafletRenderSignature() {
@@ -18459,9 +20055,31 @@
       ].join("|");
     }
 
+    let leafletZoomAnimatedSiteMarkerType = null;
+
+    function leafletZoomAnimatedSiteMarker(latlng, options = {}) {
+      if (!leafletZoomAnimatedSiteMarkerType) {
+        leafletZoomAnimatedSiteMarkerType = L.Marker.extend({
+          onAdd(map) {
+            const previousMarkerZoomAnimation = map.options.markerZoomAnimation;
+            map.options.markerZoomAnimation = true;
+            try {
+              return L.Marker.prototype.onAdd.call(this, map);
+            } finally {
+              map.options.markerZoomAnimation = previousMarkerZoomAnimation;
+            }
+          }
+        });
+      }
+      return new leafletZoomAnimatedSiteMarkerType(latlng, {
+        pane: "nli-site-markers",
+        ...options
+      });
+    }
+
     function leafletPointLayer(feature, latlng) {
       if (feature?.properties?.map_story_id) {
-        return L.marker(latlng, {
+        return leafletZoomAnimatedSiteMarker(latlng, {
           icon: L.divIcon({
             className: "leaflet-story-bubble",
             html: `<span aria-hidden="true"><span></span><span></span><span></span></span>`,
@@ -18473,12 +20091,14 @@
         });
       }
       const site = findSiteFromFeature(feature);
+      const unreadCount = site ? contentActivityUnreadCount("site", site.slug) : 0;
+      const unreadBadge = site ? `<span class="content-unread-badge map-content-unread-badge" data-content-unread-badge data-activity-content-type="site" data-activity-content-slug="${escapeHtml(site.slug)}"${unreadCount > 0 ? "" : " hidden"}>${unreadCount > 99 ? "99+" : unreadCount}</span>` : "";
       const iconUrl = site ? siteMapIconUrl(site) : rewriteMediaUrl(feature?.properties?.icon_url || "");
       if (iconUrl) {
-        return L.marker(latlng, {
+        return leafletZoomAnimatedSiteMarker(latlng, {
           icon: L.divIcon({
             className: "leaflet-site-icon",
-            html: `<img src="${escapeHtml(iconUrl)}" alt="">`,
+            html: `<img src="${escapeHtml(iconUrl)}" alt="">${unreadBadge}`,
             iconSize: [34, 34],
             iconAnchor: [17, 17],
             popupAnchor: [0, -20]
@@ -18486,10 +20106,10 @@
         });
       }
       const dotColor = siteHasHeaderImage(site) ? "#326fe3" : "#496f5d";
-      return L.marker(latlng, {
+      return leafletZoomAnimatedSiteMarker(latlng, {
         icon: L.divIcon({
           className: "leaflet-site-dot-icon",
-          html: `<span style="display:block;width:8px;height:8px;margin:5px;border-radius:999px;background:${dotColor};border:1.2px solid rgba(255,255,255,0.95);box-shadow:0 1px 3px rgba(24,32,25,0.24);"></span>`,
+          html: `<span style="display:block;width:8px;height:8px;margin:5px;border-radius:999px;background:${dotColor};border:1.2px solid rgba(255,255,255,0.95);box-shadow:0 1px 3px rgba(24,32,25,0.24);"></span>${unreadBadge}`,
           iconSize: [18, 18],
           iconAnchor: [9, 9],
           popupAnchor: [0, -10]
@@ -18502,6 +20122,9 @@
       state.leafletProgressivePointTimer = null;
       state.leafletProgressivePointToken += 1;
       state.leafletProgressivePointDripActive = false;
+      document.querySelectorAll(".nli-startup-pin-reveal").forEach(element => {
+        element.classList.remove("nli-startup-pin-reveal", "is-visible");
+      });
       try {
         state.leafletProgressivePointLayer?.clearLayers?.();
       } catch {}
@@ -18510,9 +20133,15 @@
 
     function leafletPointDistanceFromCenter(feature) {
       const coords = feature?.geometry?.coordinates || [];
+      if (feature?.geometry?.type !== "Point") return 0;
+      const projected = state.leafletMap?.latLngToContainerPoint?.([Number(coords[1]), Number(coords[0])]);
+      const size = state.leafletMap?.getSize?.();
+      if (projected && size) {
+        return Math.hypot(projected.x - size.x / 2, projected.y - size.y / 2);
+      }
       const center = state.leafletMap?.getCenter?.();
-      if (!center || feature?.geometry?.type !== "Point") return 0;
-      return Math.pow(Number(coords[0]) - Number(center.lng), 2) + Math.pow(Number(coords[1]) - Number(center.lat), 2);
+      if (!center) return 0;
+      return Math.hypot(Number(coords[0]) - Number(center.lng), Number(coords[1]) - Number(center.lat));
     }
 
     function createLeafletFeaturePoint(feature, source) {
@@ -18533,8 +20162,8 @@
           icon: L.divIcon({
             className: "leaflet-on-this-day-marker",
             html: CALENDAR_UTILS.onThisDayCalendarMarkup?.() || "",
-            iconSize: [34, 34],
-            iconAnchor: [17, 32]
+            iconSize: [27, 27],
+            iconAnchor: [13.5, 25.5]
           })
         });
         bindLeafletFeature(feature, marker, "On This Day in History");
@@ -18552,35 +20181,124 @@
       });
     }
 
+    function createLeafletAttachedCalendarEventPoint(feature) {
+      const coords = feature?.geometry?.coordinates;
+      if (!coords || feature?.geometry?.type !== "Point") return null;
+      const [offsetX = 1.15, offsetY = -1.05] = feature.properties?.attachment_offset || [];
+      const monthDay = String(feature.properties?.calendar_month_day || "");
+      const [calendarMonth, calendarDay] = monthDay.split("/").map(Number);
+      const calendarValue = Number.isFinite(calendarMonth) && Number.isFinite(calendarDay)
+        ? new Date(2024, calendarMonth - 1, calendarDay)
+        : null;
+      const marker = L.marker([coords[1], coords[0]], {
+        interactive: true,
+        zIndexOffset: 735,
+        icon: L.divIcon({
+          className: "leaflet-attached-calendar-event leaflet-calendar-date-marker",
+          html: calendarEventBadgeMarkup(calendarValue, "calendar-event-badge"),
+          iconSize: [30, 30],
+          iconAnchor: [15 - (Number(offsetX) * 10), 29 - (Number(offsetY) * 6)]
+        })
+      });
+      bindLeafletFeature(feature, marker, "Calendar event");
+      return marker;
+    }
+
+    function leafletPointMarkerKey(feature, source = "") {
+      const coords = feature?.geometry?.coordinates || [];
+      const props = feature?.properties || {};
+      return [source, hoverFeatureKey(feature), props.map_story_id || props.attention_kind || "", Number(coords[0]).toFixed(6), Number(coords[1]).toFixed(6)].join("|");
+    }
+
+    function syncLeafletViewportPointMarkers(queue = []) {
+      const registry = state.leafletPointMarkerRegistry || (state.leafletPointMarkerRegistry = new Map());
+      const wanted = new Set();
+      for (const entry of queue) {
+        if (!entry?.key) continue;
+        wanted.add(entry.key);
+        if (registry.has(entry.key)) continue;
+        const marker = entry.create?.();
+        if (!marker) continue;
+        marker.addTo(state.leafletPointArchiveLayer);
+        registry.set(entry.key, marker);
+      }
+      for (const [key, marker] of registry) {
+        if (wanted.has(key)) continue;
+        state.leafletPointArchiveLayer?.removeLayer?.(marker);
+        registry.delete(key);
+      }
+    }
+
+    function clearLeafletViewportPointMarkers() {
+      const registry = state.leafletPointMarkerRegistry;
+      if (!registry) return;
+      for (const marker of registry.values()) state.leafletPointArchiveLayer?.removeLayer?.(marker);
+      registry.clear();
+      state.leafletRenderedPointBounds = null;
+    }
+
     function startLeafletPointDrip(queue) {
       cancelLeafletPointDrip();
       if (!state.leafletPointArchiveLayer || !window.L || !Array.isArray(queue) || !queue.length) return;
-      state.leafletProgressivePointLayer = L.layerGroup().addTo(state.leafletPointArchiveLayer);
-      const layer = state.leafletProgressivePointLayer;
+      const registry = state.leafletPointMarkerRegistry || (state.leafletPointMarkerRegistry = new Map());
+      const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+      const animateStartup = !reducedMotion && !hasInitialRoute;
+      const orderedQueue = [...queue].sort((a, b) => (a.distance - b.distance) || (a.priority - b.priority));
+      if (!animateStartup) {
+        syncLeafletViewportPointMarkers(orderedQueue);
+        return;
+      }
       const token = ++state.leafletProgressivePointToken;
       state.leafletProgressivePointDripActive = true;
       let index = 0;
-      const step = () => {
-        if (token !== state.leafletProgressivePointToken || !layer || !state.leafletMap) return;
-        const perFrame = 1;
-        let added = 0;
-        while (index < queue.length && added < perFrame) {
-          const entry = queue[index++];
-          const marker = entry?.create?.();
-          if (marker) layer.addLayer(marker);
-          added += 1;
+      const startedAt = performance.now();
+      const revealDuration = 760;
+      const maximumDistance = Math.max(1, ...orderedQueue.map(entry => Number(entry.distance) || 0));
+      const revealMarker = entry => {
+        if (!entry?.key || registry.has(entry.key)) return;
+        const marker = entry.create?.();
+        if (!marker) return;
+        marker.addTo(state.leafletPointArchiveLayer);
+        registry.set(entry.key, marker);
+        const element = marker.getElement?.();
+        if (!element) return null;
+        element.classList.add("nli-startup-pin-reveal");
+        return element;
+      };
+      const step = timestamp => {
+        if (token !== state.leafletProgressivePointToken || !state.leafletMap) return;
+        if (leafletBusy()) return window.requestAnimationFrame(step);
+        const elapsed = Math.max(0, Number(timestamp) - startedAt);
+        const progress = Math.min(1, elapsed / revealDuration);
+        const easedRadius = maximumDistance * (1 - Math.pow(1 - progress, 2.4));
+        const frameStartedAt = performance.now();
+        let mountedThisFrame = 0;
+        const revealThisFrame = [];
+        while (index < orderedQueue.length) {
+          const entry = orderedQueue[index];
+          if (progress < 1 && Number(entry.distance || 0) > easedRadius) break;
+          if (mountedThisFrame > 0 && performance.now() - frameStartedAt >= 5) break;
+          index += 1;
+          mountedThisFrame += 1;
+          const element = revealMarker(entry);
+          if (element) revealThisFrame.push(element);
         }
-        if (index >= queue.length) {
-          state.leafletProgressivePointTimer = null;
-          state.leafletProgressivePointDripActive = false;
+        if (revealThisFrame.length) {
+          window.requestAnimationFrame(() => revealThisFrame.forEach(element => element.classList.add("is-visible")));
+        }
+        if (index >= orderedQueue.length) {
+          state.leafletProgressivePointTimer = null; state.leafletProgressivePointDripActive = false;
+          syncLeafletViewportPointMarkers(orderedQueue);
+          state.leafletProgressivePointTimer = window.setTimeout(() => {
+            state.leafletProgressivePointTimer = null;
+            document.querySelectorAll(".nli-startup-pin-reveal").forEach(element => {
+              element.classList.remove("nli-startup-pin-reveal", "is-visible");
+            });
+          }, 460);
           scheduleLeafletViewportRenderAfterNavigation(40);
           return;
         }
-        if (window.requestAnimationFrame) {
-          window.requestAnimationFrame(step);
-        } else {
-          state.leafletProgressivePointTimer = window.setTimeout(step, 16);
-        }
+        window.requestAnimationFrame(step);
       };
       step();
     }
@@ -18612,7 +20330,7 @@
     function showLeafletHoverCard(featureOrFeatures, event, fallbackElement = null) {
       window.clearTimeout(state.leafletHoverHideTimer);
       state.leafletHoverHideTimer = null;
-      if (!shouldBindLeafletHoverInteractions()) {
+      if (!shouldBindLeafletHoverInteractions() || leafletNoHover(event)) {
         hideLeafletHoverCard();
         return;
       }
@@ -18623,7 +20341,7 @@
         hideLeafletHoverCardVisual();
         return;
       }
-      setActiveLeafletPolygonHover(feature);
+      setActiveLeafletPolygonHovers(stack);
       rememberLeafletHoverPriority(feature, event);
       if (!state.leafletHoverCard) {
         state.leafletHoverCard = document.createElement("div");
@@ -18631,9 +20349,7 @@
         document.body.appendChild(state.leafletHoverCard);
       }
       const key = stack.map(hoverFeatureKey).join("||");
-      const previewKey = stack.length > 1
-        ? stack.map(item => `${hoverFeatureKey(item)}:${displayFeatureTitle(item?.properties)}`).join("||")
-        : leafletHoverPreviewKey(preview);
+      const previewKey = stack.length > 1 ? hoverStackPreviewKey(stack) : leafletHoverPreviewKey(preview);
       if (state.activeLeafletHoverFeatureKey !== key || state.leafletHoverCard.dataset.previewKey !== previewKey) {
         state.activeLeafletHoverFeatureKey = key;
         state.leafletHoverCard.dataset.previewKey = previewKey;
@@ -18716,13 +20432,18 @@
         const currentBounds = leafletViewportBounds(0.04);
         const baseRenderSignature = leafletRenderSignature();
         const renderContextChanged = !String(state.leafletRenderSignature || "").startsWith(`${baseRenderSignature}|`);
-        if (state.leafletRenderedPointBounds?.contains?.(currentBounds) && !renderContextChanged) return;
-        renderLeafletArchiveLayers({
-          skipIfStable: true,
-          viewportOnly: true,
-          viewportPad: 0.42,
-          pointLimit: LEAFLET_VIEWPORT_POINT_LIMIT
-        });
+        if (!state.leafletRenderedPointBounds?.contains?.(currentBounds) || renderContextChanged) {
+          renderLeafletArchiveLayers({
+            skipIfStable: true,
+            viewportOnly: true,
+            viewportPad: 0.42,
+            pointLimit: LEAFLET_VIEWPORT_POINT_LIMIT
+          });
+        }
+        if (state.leafletPlaceNameAreaLabelsDirty) {
+          state.leafletPlaceNameAreaLabelsDirty = false;
+          refreshLeafletPlaceNameAreaLabels();
+        }
       }, Math.max(120, Number(delay) || 260));
     }
 
@@ -18740,7 +20461,7 @@
     }
 
     function handleLeafletMapPointerMove(event, mapEl) {
-      if (!shouldBindLeafletHoverInteractions() || !state.leafletMap || mapEl?.classList?.contains("is-moving")) return;
+      if (!shouldBindLeafletHoverInteractions() || !state.leafletMap || leafletNoHover(event)) return;
       const target = event?.target;
       if (target?.closest?.(".leaflet-control, .leaflet-popup, .leaflet-hover-card")) return;
       const labelBinding = leafletHoverBindingForTarget(target);
@@ -18750,7 +20471,7 @@
       state.lastHoverMove = now;
       const latlng = state.leafletMap.mouseEventToLatLng?.(event);
       const feature = labelBinding
-        ? (findOriginalMapFeature(labelBinding.feature, labelBinding.source) || labelBinding.feature)
+        ? labelBinding.feature
         : bestHoverPolygonFeature(geographicPolygonFeaturesAtLngLat(latlng));
       if (feature) {
         const source = labelBinding?.source || "Territory / polygon";
@@ -18760,7 +20481,7 @@
           latlng
         };
         const stack = leafletHoverStackAtEvent(feature, hoverEvent);
-        setActiveLeafletPolygonHover(feature, source);
+        setActiveLeafletPolygonHovers(stack, source);
         showLeafletHoverCard(stack, hoverEvent, labelBinding?.element || mapEl);
       } else {
         hideLeafletHoverCard();
@@ -18805,22 +20526,27 @@
       const bindTarget = target => {
         if (!target || target.dataset?.leafletHoverBoundChild === "true") return;
         if (target.dataset) target.dataset.leafletHoverBoundChild = "true";
+        const showBoundHover = event => {
+          if (leafletNoHover(event)) return;
+          element.classList.add("is-map-hovered");
+          const hoverStack = leafletHoverStackAtEvent(resolvedFeature, event);
+          setActiveLeafletPolygonHovers(hoverStack, source);
+          showLeafletHoverCard(hoverStack, event, element);
+        };
         bindFineHoverTarget(target, {
-          enter: event => {
-            element.classList.add("is-map-hovered");
-            const hoverFeature = setActiveLeafletPolygonHover(resolvedFeature, source);
-            showLeafletHoverCard(hoverFeature, event, element);
+          enter: showBoundHover,
+          move: event => {
+            if (leafletNoHover(event)) return;
+            const hoverStack = leafletHoverStackAtEvent(resolvedFeature, event);
+            const hoverKey = hoverStack.map(hoverFeatureKey).join("||");
+            if (state.activeLeafletHoverFeatureKey !== hoverKey) showBoundHover(event);
+            else positionLeafletHoverCard(event, element);
           },
-          move: event => positionLeafletHoverCard(event, element),
           leave: () => {
             element.classList.remove("is-map-hovered");
             scheduleHideLeafletHoverCard();
           },
-          focus: event => {
-            element.classList.add("is-map-hovered");
-            const hoverFeature = setActiveLeafletPolygonHover(resolvedFeature, source);
-            showLeafletHoverCard(hoverFeature, event, element);
-          },
+          focus: showBoundHover,
           blur: () => {
             element.classList.remove("is-map-hovered");
             scheduleHideLeafletHoverCard();
@@ -18831,13 +20557,22 @@
     }
 
     function bindLeafletFeature(feature, layer, source) {
-      registerLeafletPolygonHoverLayer(feature, layer);
+      const boundFeature = findOriginalMapFeature(feature, source) || feature;
+      registerLeafletPolygonHoverLayer(boundFeature, layer);
       const identifyElement = () => {
         const element = layer.getElement?.();
         if (!element?.dataset) return;
-        const slug = feature?.properties?.directus_site_slug || feature?.properties?.slug || "";
+        const accessibleName = publicCleanText(
+          boundFeature?.properties?.map_label
+          || boundFeature?.properties?.title
+          || boundFeature?.properties?.name
+          || source
+          || "Map feature"
+        ).trim();
+        if (accessibleName) element.setAttribute("aria-label", `Open ${accessibleName}`);
+        const slug = boundFeature?.properties?.directus_site_slug || boundFeature?.properties?.slug || "";
         if (slug) element.dataset.siteSlug = slug;
-        if (feature?.properties?.place_name_area_overlay === true || feature?.properties?.place_name_area_overlay === "true") {
+        if (boundFeature?.properties?.place_name_area_overlay === true || boundFeature?.properties?.place_name_area_overlay === "true") {
           element.dataset.placeNameArea = "true";
         }
       };
@@ -18845,14 +20580,20 @@
       identifyElement();
       if (shouldBindLeafletHoverInteractions()) {
         layer.on("mouseover", event => {
-          const hoverFeature = bestLeafletHoverPolygonAtLatLng(event?.latlng, feature);
-          const resolvedHoverFeature = setActiveLeafletPolygonHover(hoverFeature, source);
-          showLeafletHoverCard(resolvedHoverFeature, event?.originalEvent || event, layer.getElement?.());
+          if (leafletNoHover(event)) return;
+          const hoverStack = leafletHoverStackAtEvent(boundFeature, event);
+          setActiveLeafletPolygonHovers(hoverStack, source);
+          showLeafletHoverCard(hoverStack, event?.originalEvent || event, layer.getElement?.());
         });
         layer.on("mousemove", event => {
-          const hoverFeature = bestLeafletHoverPolygonAtLatLng(event?.latlng, feature);
-          if (state.activeLeafletHoverFeatureKey !== hoverFeatureKey(hoverFeature)) {
-            showLeafletHoverCard(hoverFeature, event?.originalEvent || event, layer.getElement?.());
+          if (leafletNoHover(event)) return;
+          const now = performance.now();
+          if (now - state.lastHoverMove < 32) return;
+          state.lastHoverMove = now;
+          const hoverStack = leafletHoverStackAtEvent(boundFeature, event);
+          const hoverKey = hoverStack.map(hoverFeatureKey).join("||");
+          if (state.activeLeafletHoverFeatureKey !== hoverKey) {
+            showLeafletHoverCard(hoverStack, event?.originalEvent || event, layer.getElement?.());
           } else {
             positionLeafletHoverCard(event?.originalEvent || event, layer.getElement?.());
           }
@@ -18860,8 +20601,8 @@
         layer.on("mouseout", () => {
           scheduleHideLeafletHoverCard();
         });
-        layer.on("add", () => bindLeafletElementHover(feature, layer, source));
-        bindLeafletElementHover(feature, layer, source);
+        layer.on("add", () => bindLeafletElementHover(boundFeature, layer, source));
+        bindLeafletElementHover(boundFeature, layer, source);
       }
       layer.on("click", event => {
         if (event?.latlng && handleSuggestionMapPickClick({ lngLat: { lng: event.latlng.lng, lat: event.latlng.lat }, originalEvent: event.originalEvent })) return;
@@ -18869,7 +20610,9 @@
         if (event?.originalEvent && window.L?.DomEvent?.stop) window.L.DomEvent.stop(event.originalEvent);
         event?.originalEvent?.preventDefault?.();
         event?.originalEvent?.stopPropagation?.();
-        const clickFeature = bestLeafletPolygonAtLatLng(event?.latlng, feature);
+        const clickFeature = feature?.properties?.label_source_feature_key
+          ? boundFeature
+          : bestLeafletPolygonAtLatLng(event?.latlng, boundFeature);
         handleFeatureClick(clickFeature, source, event?.originalEvent || event, event?.latlng ? { lng: event.latlng.lng, lat: event.latlng.lat } : null);
       });
     }
@@ -18939,8 +20682,9 @@
 
     function renderLeafletArchiveLayers(options = {}) {
       if (!state.leafletMap || !window.L) return;
-      if (state.leafletProgressivePointDripActive && options.skipIfStable === true) return;
-      if (state.leafletProgressivePointDripActive && options.allowStartupPins === true) return;
+      // The reveal's completion pass uses the latest state, so background data
+      // refreshes can wait instead of cancelling the visible center-out motion.
+      if (state.leafletProgressivePointDripActive) return;
       if (state.leafletStartupFullRenderPending && options.polygonsOnly !== true && options.allowStartupPins !== true) {
         options = { ...options, polygonsOnly: true, includeBiographyPeople: false };
         scheduleLeafletStartupFullRender();
@@ -18967,6 +20711,7 @@
         }
         if (!state.leafletStaticArchiveLayer) state.leafletStaticArchiveLayer = L.layerGroup().addTo(state.leafletArchiveLayer);
         if (!state.leafletPointArchiveLayer) state.leafletPointArchiveLayer = L.layerGroup().addTo(state.leafletArchiveLayer);
+        if (!state.leafletPointLabelLayer) state.leafletPointLabelLayer = L.layerGroup().addTo(state.leafletArchiveLayer);
         if (!state.leafletPathArchiveLayer) state.leafletPathArchiveLayer = L.layerGroup().addTo(state.leafletArchiveLayer);
         rebuildStaticLayers = state.leafletStaticRenderSignature !== staticSignature;
         if (rebuildStaticLayers) {
@@ -18976,15 +20721,15 @@
           state.leafletStaticArchiveLayer.clearLayers();
           state.leafletPathArchiveLayer.clearLayers();
         }
-        state.leafletPointArchiveLayer.clearLayers();
+        if (!polygonsOnly) state.leafletPointLabelLayer.clearLayers();
       }
       const addCollection = (collection, source, targetLayer = state.leafletStaticArchiveLayer) => {
         if (!targetLayer) return;
         L.geoJSON(collection, {
           bubblingMouseEvents: false,
           renderer: source === "Place Name Area"
-            ? (state.leafletPlaceNameAreaRenderer || state.leafletCanvasRenderer || undefined)
-            : (state.leafletCanvasRenderer || undefined),
+            ? (state.leafletPlaceNameAreaRenderer || state.leafletArchiveRenderer || undefined)
+            : (state.leafletArchiveRenderer || undefined),
           smoothFactor: 1.6,
           style: leafletStyle,
           pointToLayer: leafletPointLayer,
@@ -18995,20 +20740,20 @@
         if (!state.waterMask?.features?.length || !state.leafletStaticArchiveLayer) return;
         L.geoJSON(state.waterMask, {
           interactive: false,
-          renderer: state.leafletCanvasRenderer || undefined,
+          renderer: state.leafletArchiveRenderer || undefined,
           smoothFactor: 1.8,
           style: {
             color: state.basemap === "blank" ? "#f6f8f3" : "#9ed8e7",
             weight: 0,
             fillColor: state.basemap === "blank" ? "#f6f8f3" : "#9ed8e7",
-            fillOpacity: state.basemap === "satellite" ? 0.78 : 0.9
+            fillOpacity: state.basemap === "satellite" ? 0.16 : 0.22
           }
         }).addTo(state.leafletStaticArchiveLayer);
       };
       if (rebuildStaticLayers && state.landMaskData?.geometry) {
         L.geoJSON(state.landMaskData, {
           interactive: false,
-          renderer: state.leafletCanvasRenderer || undefined,
+          renderer: state.leafletArchiveRenderer || undefined,
           smoothFactor: 1.8,
           style: {
             color: "#7fc7e5",
@@ -19074,6 +20819,9 @@
           if (!coords || feature.geometry?.type !== "Point") continue;
           const title = displayFeatureTitle(feature.properties || {});
           if (!title) continue;
+          const slug = feature.properties?.slug || feature.properties?.directus_site_slug || "";
+          const unreadCount = slug ? contentActivityUnreadCount("site", slug) : 0;
+          const unreadBadge = slug ? `<span class="content-unread-badge map-content-unread-badge" data-content-unread-badge data-activity-content-type="site" data-activity-content-slug="${escapeHtml(slug)}"${unreadCount > 0 ? "" : " hidden"}>${unreadCount > 99 ? "99+" : unreadCount}</span>` : "";
           const normalizedTitle = normalizeComparisonText(title);
           if (labelCollisionState.titles.has(normalizedTitle)) continue;
           const placement = placeLeafletLabel(coords, width, anchorY, labelCollisionState, Boolean(className));
@@ -19085,7 +20833,7 @@
             zIndexOffset: 650,
             icon: L.divIcon({
               className: `leaflet-polygon-label ${className || ""}`.trim(),
-              html: escapeHtml(title),
+              html: `<span class="leaflet-polygon-label-title">${escapeHtml(title)}${unreadBadge}</span>`,
               iconSize: [width, 36],
               iconAnchor: [width / 2, anchorY]
             })
@@ -19094,13 +20842,14 @@
         }
       };
       const pointDripQueue = [];
-      const enqueuePointCollection = (collection, source, priority = 20) => {
+      const enqueuePointCollection = (collection, source, priority = 20, createPoint = null) => {
         for (const feature of (collection.features || [])) {
           if (feature.geometry?.type !== "Point" || !feature.geometry?.coordinates) continue;
           pointDripQueue.push({
             priority,
             distance: leafletPointDistanceFromCenter(feature),
-            create: () => createLeafletFeaturePoint(feature, source)
+            key: leafletPointMarkerKey(feature, source),
+            create: () => createPoint ? createPoint(feature) : createLeafletFeaturePoint(feature, source)
           });
         }
       };
@@ -19110,6 +20859,7 @@
           pointDripQueue.push({
             priority: 4,
             distance: leafletPointDistanceFromCenter(feature),
+            key: leafletPointMarkerKey(feature, "On This Day in History"),
             create: () => createLeafletAttentionPoint(feature)
           });
         }
@@ -19128,7 +20878,7 @@
             weight: 3,
             opacity: 0.58,
             dashArray: "6 5",
-            renderer: state.leafletCanvasRenderer || undefined,
+            renderer: state.leafletArchiveRenderer || undefined,
             interactive: true
           }).addTo(state.leafletPathArchiveLayer || state.leafletArchiveLayer);
           bindLeafletFeature(feature, line, "Biography path");
@@ -19182,10 +20932,12 @@
         const addBiographyPersonFeature = feature => {
           const coords = feature.geometry?.coordinates;
           if (!coords || feature.geometry?.type !== "Point") return;
+          const iconLatLng = biographyPersonLeafletLatLng(coords, feature.properties?.io);
+          const labelLatLng = biographyPersonLeafletLatLng(coords, feature.properties?.lo);
           const label = feature.properties?.map_label || feature.properties?.title || "";
           const opacity = Math.max(0, Math.min(1, numeric(feature.properties?.motion_opacity, 1)));
-          const marker = L.marker([coords[1], coords[0]], {
-            interactive: true,
+          const marker = leafletZoomAnimatedSiteMarker(iconLatLng, {
+            interactive: true, pane: "tooltipPane",
             bubblingMouseEvents: false,
             zIndexOffset: 2200,
             icon: L.divIcon({
@@ -19198,17 +20950,15 @@
           }).addTo(state.leafletBiographyPeopleLayer);
           const markerElement = marker.getElement?.();
           if (markerElement) {
-            setLeafletBiographyPersonElementState(markerElement, feature, coords);
-            markerElement.dataset.lng = String(coords[0]);
-            markerElement.dataset.lat = String(coords[1]);
+            setLeafletBiographyPersonElementState(markerElement, feature);
           }
           marker.setOpacity?.(opacity);
           bindLeafletFeature(feature, marker, "Biography");
           let labelMarker = null;
           let quoteMarker = null;
           if (label) {
-            labelMarker = L.marker([coords[1], coords[0]], {
-              interactive: true,
+            labelMarker = leafletZoomAnimatedSiteMarker(labelLatLng, {
+              interactive: true, pane: "tooltipPane",
               zIndexOffset: 2180,
               icon: L.divIcon({
                 className: "leaflet-polygon-label detail leaflet-biography-person-label",
@@ -19222,9 +20972,9 @@
             bindLeafletFeature(feature, labelMarker, "Biography");
           }
           if (feature.properties?.has_quote === "true" && feature.properties?.quote_text) {
-            quoteMarker = L.marker([coords[1], coords[0]], {
-              interactive: true,
-              zIndexOffset: 2190,
+            quoteMarker = leafletZoomAnimatedSiteMarker(iconLatLng, {
+              interactive: true, pane: "tooltipPane",
+              zIndexOffset: BIOGRAPHY_PERSON_QUOTE_Z_INDEX,
               icon: L.divIcon({
                 className: "leaflet-biography-person-quote",
                 html: biographyPersonLeafletQuoteHtml(feature),
@@ -19275,19 +21025,20 @@
           type: "FeatureCollection",
           features: (filteredPolygons.features || []).filter(feature => !feature.properties?.place_name_area_overlay && !isBroadTerritoryFeature(feature))
         };
-        addCollection(importedBroadPolygons, "Territory / polygon");
         addWaterMask();
+        addCollection(importedBroadPolygons, "Territory / polygon");
         addCollection(gardinersMontaukettOverlayFeatures(), "Territory / polygon");
         addCollection(managedTerritoryPolygonFeatures, "Territory / polygon");
         addCollection(importedDetailPolygons, "Territory / polygon");
         addCollection(filteredPlaceNameAreaFeatures(), "Place Name Area");
         if (!polygonsOnly) {
           addCollection(managedDetailPolygonFeatures, "Map feature");
-          addCollection(calendarEventFeatures(), "Calendar event");
+          addCollection(calendarEventGeometryFeatures(), "Calendar event");
         }
         addLabels(polygonLabelFeatures("territory"), "", 188);
         if (!polygonsOnly) addLabels(managedSiteTerritoryLabelFeatures(), "", 156);
         refreshLeafletPlaceNameAreaLabels(labelCollisionState);
+        state.leafletPlaceNameAreaLabelsDirty = false;
         if (!polygonsOnly && !skipDetailLabels && zoom >= LEAFLET_DETAIL_LABEL_MIN_ZOOM) addLabels(polygonLabelFeaturesInLeafletBounds("detail", viewportBounds), "detail", 148);
         if (!polygonsOnly && !skipDetailLabels && zoom >= LEAFLET_MANAGED_LABEL_MIN_ZOOM) addLabels(managedSiteDetailLabelFeaturesInLeafletBounds(viewportBounds), "detail", 156);
       }
@@ -19296,24 +21047,25 @@
         enqueuePointCollection(filterViewportPoints(customIconPointFeatures), "Map pin", 8);
         enqueuePointCollection(filterViewportPoints(managedPointFeaturesWithoutCustomIcons), "Map feature", 12);
         enqueuePointCollection(filterViewportPoints(markerFeatures), "Map pin", 16);
+        enqueuePointCollection(filterViewportPoints(attachedCalendarEventFeatures()), "Calendar event", 22, createLeafletAttachedCalendarEventPoint);
+        enqueuePointCollection(filterViewportPoints(calendarEventDateBadgeFeatures()), "Calendar event", 23, createLeafletAttachedCalendarEventPoint);
         enqueuePointCollection(filterViewportPoints(calendarEventIconFeatures()), "Calendar event", 24);
-        enqueuePointCollection(filterViewportPoints(mapStoryFeatures()), "Visitor story", 28);
+        enqueuePointCollection(filterViewportPoints(mapStoryFeatures()), "Visitor story", 2);
         if (!skipDetailLabels && zoom >= SITE_POINT_LABEL_MIN_ZOOM) {
-          addLabels(managedPointFeatures, "detail", 158, 44, state.leafletPointArchiveLayer);
-          addLabels(markerFeatures, "detail", 158, 44, state.leafletPointArchiveLayer);
-          addLabels(customIconPointFeatures, "detail", 158, 44, state.leafletPointArchiveLayer);
+          addLabels(managedPointFeatures, "detail", 158, 44, state.leafletPointLabelLayer);
+          addLabels(markerFeatures, "detail", 158, 44, state.leafletPointLabelLayer);
+          addLabels(customIconPointFeatures, "detail", 158, 44, state.leafletPointLabelLayer);
         }
         pointDripQueue.sort((a, b) => (a.priority - b.priority) || (a.distance - b.distance));
         if (options.allowStartupPins === true && state.leafletStartupPointDripUsed !== true) {
           state.leafletStartupPointDripUsed = true;
           startLeafletPointDrip(pointDripQueue);
         } else {
-          for (const entry of pointDripQueue) {
-            const marker = entry?.create?.();
-            if (marker) marker.addTo(state.leafletPointArchiveLayer);
-          }
+          syncLeafletViewportPointMarkers(pointDripQueue);
         }
         state.leafletRenderedPointBounds = viewportOnly ? viewportBounds : null;
+      } else if (!biographyOnly && !polygonsOnly) {
+        clearLeafletViewportPointMarkers();
       }
       if ((biographyOnly || !polygonsOnly || includeBiographyPeople) && !skipBiographyPeople) {
         addBiographyPeople();
@@ -19420,11 +21172,7 @@
             return;
           }
           if (message.toLowerCase().includes("style")) {
-            // Do not leave the user on a solid map background when Mapbox
-            // fails to fetch its style (common during a brief network handoff
-            // on Android). Switch to the local Leaflet fallback immediately.
-            fallback(message || "Map style failed to load.");
-            return;
+            showBanner("The map style had trouble loading. Site articles are still available in the article panel after the map loads.");
           }
           window.setTimeout(finish, 800);
         });
@@ -19432,12 +21180,13 @@
     }
 
     function closeArticlePanel() {
+      stopSiteHeroCarousel();
       restoreArticleHeroToBody();
       clearBiographyPathOverlay();
       articleEl.classList.remove("open");
       document.body.classList.remove("article-panel-open");
       state.activityHiddenForArticle = true;
-      renderActivityPanel();
+      renderActivityPanel({ preserveBody: true });
       window.requestAnimationFrame(syncFloatingPanelLayout);
       state.activeContent = null;
       state.panelHistory = [];
@@ -19445,7 +21194,7 @@
       setActiveTimelineEvent(null);
       updateBackButton();
       const url = new URL(window.location.href);
-      ["site", "wiki", "event", "calendar", "page", "blog"].forEach(key => url.searchParams.delete(key));
+      ["site", "wiki", "event", "calendar", "page", "blog", "tag", "topic", "kbtag", "path"].forEach(key => url.searchParams.delete(key));
       window.history.replaceState(null, "", url);
       resetSeoMetadata();
     }
@@ -19539,8 +21288,16 @@
       articleEl.classList.add("resizing");
       articleEl.classList.remove("expanded");
       articleResizeHandle.setPointerCapture?.(event.pointerId);
-      const move = moveEvent => setArticlePanelWidth(moveEvent.clientX - articleEl.getBoundingClientRect().left);
+      const articleRect = articleEl.getBoundingClientRect(), articleLeft = articleRect.left;
+      let pendingWidth = articleRect.width, resizeFrame = null;
+      const applyPendingWidth = () => { resizeFrame = null; setArticlePanelWidth(pendingWidth); };
+      const move = moveEvent => {
+        pendingWidth = moveEvent.clientX - articleLeft;
+        if (!resizeFrame) resizeFrame = window.requestAnimationFrame(applyPendingWidth);
+      };
       const up = () => {
+        if (resizeFrame) window.cancelAnimationFrame(resizeFrame); resizeFrame = null;
+        localStorage.setItem("nli-article-panel-width", String(setArticlePanelWidth(pendingWidth)));
         articleEl.classList.remove("resizing");
         document.removeEventListener("pointermove", move);
         document.removeEventListener("pointerup", up);
@@ -19659,7 +21416,8 @@
       });
     });
     navButtons.forEach(button => {
-      button.addEventListener("click", () => {
+      button.addEventListener("click", event => {
+        if (!prepareInternalRouteClick(event, button)) return;
         openContentList(button.dataset.view);
         button.closest(".more-menu")?.removeAttribute("open");
         if (document.body.classList.contains("nav-collapsed")) mainMenuEl?.removeAttribute("open");
@@ -19677,12 +21435,100 @@
       localStorage.removeItem("nli-latest-activity-collapsed");
       state.activityHiddenForArticle = false;
       state.activityForceOpen = true;
-      markActivitySeen();
       renderActivityPanel();
     });
-    activityBodyEl?.addEventListener("click", event => {
-      const item = event.target.closest("[data-activity-kind]");
-      if (item) openActivityItem(item);
+    activityBodyEl?.addEventListener("click", async event => {
+      const card = event.target.closest("[data-activity-kind]");
+      if (!card) return;
+      const status = card.querySelector("[data-activity-card-status]");
+      if (event.target.closest("[data-activity-dismiss]")) {
+        event.preventDefault();
+        event.stopPropagation();
+        markActivityItemSeen(card.dataset.activityItemKey || "");
+        return;
+      }
+      const seeMore = event.target.closest("[data-activity-see-more]");
+      if (seeMore) {
+        const expanded = !card.classList.contains("is-expanded");
+        card.classList.toggle("is-expanded", expanded);
+        seeMore.setAttribute("aria-expanded", String(expanded));
+        seeMore.textContent = expanded ? "See less" : "See more";
+        state.activityScrollPaused = expanded || card.classList.contains("is-commenting");
+        return;
+      }
+      const commentToggle = event.target.closest("[data-activity-comment-toggle]");
+      if (commentToggle) {
+        const panel = card.querySelector("[data-activity-comment-panel]");
+        if (!panel) return;
+        const open = panel.hidden;
+        panel.hidden = !open;
+        card.classList.toggle("is-commenting", open);
+        const key = card.dataset.activityCardKey || "";
+        if (open && key) state.activityDiscussionKeys.add(key);
+        else if (key) state.activityDiscussionKeys.delete(key);
+        commentToggle.setAttribute("aria-expanded", String(open));
+        state.activityScrollPaused = open || card.classList.contains("is-expanded");
+        if (open) window.requestAnimationFrame(() => panel.focus({ preventScroll: true }));
+        return;
+      }
+      if (event.target.closest("[data-activity-login]")) {
+        openContributorLogin();
+        return;
+      }
+      const submit = event.target.closest("[data-submit-discussion]");
+      if (submit) {
+        const composer = submit.closest("[data-discussion-type]");
+        if (!composer) return;
+        if (status) status.textContent = "Posting comment...";
+        try {
+          const posted = await submitDiscussion(composer);
+          if (posted) {
+            const input = composer.querySelector("[data-discussion-input]");
+            if (input) input.value = "";
+            if (status) status.textContent = "Comment posted.";
+            renderActivityPanel({ progressive: false });
+          } else if (status) {
+            status.textContent = "";
+          }
+        } catch (error) {
+          if (status) status.textContent = error.message || "Comment could not be posted. Please try again.";
+          showBanner(error.message || "Could not submit comment.");
+        }
+        return;
+      }
+      const helpful = event.target.closest("[data-activity-helpful]");
+      if (helpful) {
+        const profile = currentContributorProfile();
+        if (!profile?.id || state.contributorSession?.pending) {
+          if (status) status.textContent = "Log in with an approved contributor account to mark this helpful.";
+          showBanner("Log in to mark this helpful.");
+          openContributorLogin();
+          return;
+        }
+        if (status) status.textContent = "Saving...";
+        try {
+          let didSave = false;
+          if (helpful.dataset.activityHelpful === "comment") {
+            didSave = await setCommentReaction(helpful.dataset.activityHelpfulId, "up");
+          } else if (helpful.dataset.activityHelpful === "user-story") {
+            didSave = await voteMapStory(helpful.dataset.activityHelpfulId, 1, { openPanel: false });
+          }
+          if (!didSave) {
+            if (status) status.textContent = "";
+            return;
+          }
+          if (status) status.textContent = "Saved.";
+          renderActivityPanel({ progressive: false });
+        } catch (error) {
+          if (status) status.textContent = error.message || "Could not save. Please try again.";
+        }
+        return;
+      }
+      const openControl = event.target.closest("[data-activity-open]");
+      if (openControl) {
+        event.preventDefault();
+        openActivityItem(card);
+      }
     });
     notificationRestoreBtn?.addEventListener("click", () => {
       state.notificationPanelOpen = !state.notificationPanelOpen;
@@ -19747,6 +21593,20 @@
     }, { capture: true });
 
     articleBodyEl.addEventListener("click", event => {
+      const heroDot = event.target.closest("[data-site-hero-dot]");
+      if (heroDot) {
+        event.preventDefault();
+        const carousel = heroDot.closest("[data-site-hero-carousel]");
+        setSiteHeroCarouselIndex(carousel, Number(heroDot.dataset.siteHeroDot || 0));
+        startSiteHeroCarousel(carousel, { restart: true });
+        return;
+      }
+      const heroCommentSlide = event.target.closest("[data-site-hero-comment]");
+      if (heroCommentSlide?.dataset.siteHeroComment) {
+        event.preventDefault();
+        jumpToQuoteComment(heroCommentSlide.dataset.siteHeroComment);
+        return;
+      }
       if (event.target.closest("[data-learning-path-toggle], [data-learning-path-start], [data-learning-path-exit], [data-learning-path-overview], [data-learning-path-complete], [data-learning-path-next], [data-learning-path-prev], [data-learning-path-filter-toggle], [data-learning-path-stop], [data-learning-path-resume]")) {
         if (handleGuidedLearningPathClick(event)) {
           event.preventDefault();
@@ -20089,7 +21949,17 @@
       }
       const deleteCommentButton = event.target.closest("[data-delete-comment]");
       if (deleteCommentButton?.dataset.deleteComment) {
-        deleteOwnComment(deleteCommentButton.dataset.deleteComment).catch(error => showBanner(error.message || "Could not delete comment."));
+        deleteComment(deleteCommentButton.dataset.deleteComment).catch(error => showBanner(error.message || "Could not delete comment."));
+        return;
+      }
+      const deletePlantObservationButton = event.target.closest("[data-delete-plant-observation]");
+      if (deletePlantObservationButton?.dataset.deletePlantObservation) {
+        removeAdminContribution("mobile_plant_observations", deletePlantObservationButton.dataset.deletePlantObservation);
+        return;
+      }
+      const deleteMapStoryButton = event.target.closest("[data-delete-map-story]");
+      if (deleteMapStoryButton?.dataset.deleteMapStory) {
+        removeAdminContribution("mobile_map_stories", deleteMapStoryButton.dataset.deleteMapStory);
         return;
       }
       const replyButton = event.target.closest("[data-reply-comment]");
@@ -20136,24 +22006,28 @@
       }
       const contentCard = event.target.closest("[data-content-slug]");
       if (contentCard) {
+        if (!prepareInternalRouteClick(event, contentCard)) return;
         const item = state.contentBySlug.get(contentCard.dataset.contentSlug);
         if (item) openSiteContent(item, { source: item.content_type === "post" ? "Blog post" : "Site page" });
         return;
       }
       const blogCard = event.target.closest("[data-blog-slug]");
       if (blogCard) {
+        if (!prepareInternalRouteClick(event, blogCard)) return;
         const item = state.blogBySlug.get(blogCard.dataset.blogSlug);
         if (item) openBlogPost(item, { source: "Blog post" });
         return;
       }
       const eventCard = event.target.closest("[data-calendar-slug]");
       if (eventCard) {
+        if (!prepareInternalRouteClick(event, eventCard)) return;
         const item = state.eventBySlug.get(eventCard.dataset.calendarSlug);
         if (item) openCalendarEvent(item, { source: "Calendar / On View" });
         return;
       }
       const wikiCard = event.target.closest("[data-wiki-slug]");
       if (wikiCard) {
+        if (!prepareInternalRouteClick(event, wikiCard)) return;
         const article = state.wikiBySlug.get(wikiCard.dataset.wikiSlug);
         if (article) openWikiArticle(article, { source: "Knowledgebase" });
         return;
@@ -20165,6 +22039,7 @@
       }
       const siteCard = event.target.closest("[data-site-slug]");
       if (siteCard) {
+        if (!prepareInternalRouteClick(event, siteCard)) return;
         const site = state.siteBySlug.get(siteCard.dataset.siteSlug);
         if (site) {
           const source = siteCard.closest(".site-list") ? "Site List" : "Knowledgebase";
@@ -20175,11 +22050,13 @@
       }
       const kbCategory = event.target.closest("[data-kb-category]");
       if (kbCategory) {
+        if (!prepareInternalRouteClick(event, kbCategory)) return;
         openKnowledgebaseCategory(kbCategory.dataset.kbCategory);
         return;
       }
       const kbTag = event.target.closest("[data-kb-tag]");
       if (kbTag) {
+        if (!prepareInternalRouteClick(event, kbTag)) return;
         openKnowledgebaseTag(kbTag.dataset.kbTag);
         return;
       }
@@ -20213,7 +22090,7 @@
     articleHeadEl.addEventListener("click", event => {
       const tagButton = event.target.closest("[data-site-tag-key]");
       if (!tagButton) return;
-      event.preventDefault();
+      if (!prepareInternalRouteClick(event, tagButton)) return;
       openSiteCategoryTag(tagButton.dataset.siteTagKey, tagButton.dataset.siteTagLabel);
     });
     articleBodyEl.addEventListener("submit", event => {
@@ -20368,6 +22245,7 @@
       document.addEventListener(type, () => scheduleMemberProfileActivityTracking(), { passive: true });
     });
     document.addEventListener("visibilitychange", () => {
+      syncBiographyPeopleVisibility(performance.now());
       if (document.hidden) scheduleMemberProfileActivityTracking({ force: true, throttleMs: 0 });
       else {
         scheduleMemberProfileActivityTracking();
@@ -20399,7 +22277,10 @@
         params.get("calendar") ||
         params.get("page") ||
         params.get("blog") ||
-        params.get("tag")
+        params.get("tag") ||
+        params.get("topic") ||
+        params.get("kbtag") ||
+        params.get("path")
       );
     }
     const hasInitialRoute = hasInitialContentRoute();
@@ -20442,6 +22323,35 @@
       if (fullArchiveDataLoaded) return Promise.resolve();
       return loadFullArchiveData();
     };
+    let activityFeedReadyPromise = null;
+    function ensureActivityFeedReady() {
+      if (fullArchiveDataLoaded && state.deferredSocialDataLoaded) return Promise.resolve(true);
+      if (activityFeedReadyPromise) return activityFeedReadyPromise;
+      activityFeedReadyPromise = (async () => {
+        // Yield once after map startup, then load the archive and community rows as one
+        // feed snapshot. This prevents the panel from swapping through compact, full,
+        // and social-data versions over tens of seconds.
+        await new Promise(resolve => window.setTimeout(resolve, 180));
+        await loadFullArchiveData();
+        const loaded = await loadDeferredSocialData();
+        if (!loaded || !state.deferredSocialDataLoaded) throw new Error("Community activity is still unavailable.");
+        renderActivityPanel({ progressive: false });
+        return true;
+      })().catch(error => {
+        console.warn("Community activity will retry when reopened.", error);
+        if (activityBodyEl && !activityPanelEl?.hidden) {
+          activityBodyEl.innerHTML = `
+            <section class="activity-group activity-feed-loading" aria-label="Community activity unavailable">
+              <p>The latest activity could not finish loading. Close and reopen this panel to retry.</p>
+            </section>
+          `;
+        }
+        return false;
+      }).finally(() => {
+        activityFeedReadyPromise = null;
+      });
+      return activityFeedReadyPromise;
+    }
 
     const initialMapDataReady = Promise.all([
       loadInitialMapData().then(loaded => loaded || loadFullArchiveData().then(() => false)),
@@ -20495,6 +22405,10 @@
 
     mapStartupReady
       .then(() => {
+        // Compact startup data can be a little behind a just-submitted story.
+        // Refresh the lightweight story collections as soon as the map source
+        // exists instead of waiting for the background social-data pass.
+        refreshMapStories({ force: true });
         runWhenMapIsQuiet(() => {
           loadFullArchiveData()
             .then(() => {
@@ -20537,6 +22451,9 @@
       const blogSlug = params.get("blog");
       const calendarSlug = params.get("calendar");
       const tagKey = params.get("tag");
+      const topicSlug = params.get("topic");
+      const knowledgebaseTag = params.get("kbtag");
+      const learningPathSlug = params.get("path");
       const eventId = params.get("event");
       const virtualPages = {
         "page-home": "home",
@@ -20592,6 +22509,23 @@
       }
       if (calendarSlug && state.eventBySlug.has(calendarSlug)) {
         openCalendarEvent(state.eventBySlug.get(calendarSlug), { source: "Shared calendar event", skipHistory: true, skipRoute: true });
+        return;
+      }
+      if (topicSlug) {
+        openKnowledgebaseCategory(topicSlug, { skipHistory: true, skipRoute: true });
+        return;
+      }
+      if (knowledgebaseTag) {
+        const displayTag = POPULAR_TAGS.find(tag => routeSlugValue(tag) === routeSlugValue(knowledgebaseTag)) || knowledgebaseTag;
+        openKnowledgebaseTag(displayTag, { skipHistory: true, skipRoute: true });
+        return;
+      }
+      if (learningPathSlug && state.learningPathBySlug.has(learningPathSlug)) {
+        openGuidedLearningPathOverview({
+          path: state.learningPathBySlug.get(learningPathSlug),
+          skipHistory: true,
+          skipRoute: true
+        });
         return;
       }
       if (tagKey) {

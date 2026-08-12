@@ -927,10 +927,10 @@
       flex-direction: column;
       align-items: stretch;
       justify-content: flex-end;
-      width: 30px;
-      height: 30px;
-      border: 2px solid #315c48;
-      border-radius: 6px;
+      width: 23px;
+      height: 23px;
+      border: 1.5px solid #315c48;
+      border-radius: 5px;
       background: #fbf7e9;
       color: #315c48;
       box-shadow: 0 4px 14px rgba(31, 49, 37, 0.22);
@@ -943,7 +943,7 @@
       content: "";
       position: absolute;
       inset: 0 0 auto;
-      height: 7px;
+      height: 5px;
       border-radius: 3px 3px 0 0;
       background: #315c48;
     }
@@ -951,13 +951,13 @@
     .mobile-calendar-event-marker .calendar-date-badge::after {
       content: "";
       position: absolute;
-      top: -4px;
-      left: 7px;
-      width: 2px;
-      height: 7px;
+      top: -3px;
+      left: 5px;
+      width: 1.5px;
+      height: 5px;
       border-radius: 2px;
       background: #315c48;
-      box-shadow: 12px 0 0 #315c48;
+      box-shadow: 10px 0 0 #315c48;
     }
 
     .mobile-calendar-event-marker .calendar-date-badge-date {
@@ -966,8 +966,8 @@
       display: grid;
       flex: 1 1 auto;
       place-items: end center;
-      padding-bottom: 3px;
-      font-size: 13px;
+      padding-bottom: 2px;
+      font-size: 8.5px;
       line-height: 1;
     }
 

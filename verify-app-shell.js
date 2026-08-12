@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-landscape-responsive-header-r82";
+const expectedBuild = "20260812-compact-month-day-calendar-r83";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -261,6 +261,10 @@ requireBundledPattern(/body\.android-device\.tablet-landscape \.mobile-activity-
 requireBundledPattern(/body\.android-device\.tablet-landscape \.mobile-more-menu\[open\] \.mobile-more-grid\s*\{[\s\S]*?repeat\(5,\s*minmax\(0,\s*1fr\)\)/, "Bundled Android landscape More menu must use the balanced five-column grid.");
 requireBundledPattern(/body\.android-device\.tablet-landscape:has\(\.mobile-more-menu\[open\]\) \.landscape-panel-resizer[\s\S]*?visibility:\s*hidden;[\s\S]*?pointer-events:\s*none;/, "Bundled Android split resize handle must stay behind open menus.");
 requireBundledPattern(/function syncLandscapeHeaderControls\(\)[\s\S]*?headerWidth < 430[\s\S]*?mobileMoreGridEl\.prepend\(loginOpenBtn\)[\s\S]*?accountButtonHomeAnchorEl\.insertAdjacentElement\("afterend", loginOpenBtn\)[\s\S]*?function setLandscapePanelWidth[\s\S]*?syncLandscapeHeaderControls\(\);/, "Bundled Android landscape must move the real account control into Menu when the map-side header becomes narrow.");
+requireBundledPattern(/function calendarMonthDay\(value = new Date\(\)\)[\s\S]*?`\$\{month\}\/\$\{day\}`[\s\S]*?function calendarBadgeMarkup[\s\S]*?calendarMonthDay\(value\)/, "Bundled Android calendar badges must show month/day instead of only the day number.");
+requireBundledPattern(/\.mobile-calendar-event-marker \.calendar-date-badge\s*\{[\s\S]*?width:\s*23px;[\s\S]*?height:\s*23px;[\s\S]*?font-size:\s*8\.5px;/, "Bundled Android calendar badge must be about 25 percent smaller and keep its month/day legible.");
+requireBundledText('element.style.width = "27px";', "Bundled Android calendar marker wrapper must be reduced from 36px to 27px.");
+requireBundledText('element.style.height = "27px";', "Bundled Android calendar marker wrapper height must be reduced from 36px to 27px.");
 for (const setting of [
   "settings.setAllowFileAccess(false)",
   "settings.setAllowFileAccessFromFileURLs(false)",

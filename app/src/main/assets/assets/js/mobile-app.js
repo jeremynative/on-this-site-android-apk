@@ -7538,8 +7538,8 @@
           const isCalendarBadge = Boolean(calendarDay);
           element.setAttribute("aria-label", `Open event: ${exhibit.title}`);
           element.className = isCalendarBadge ? "mobile-calendar-event-marker" : "mobile-exhibit-marker";
-          element.style.width = "36px";
-          element.style.height = "36px";
+          element.style.width = "27px";
+          element.style.height = "27px";
           element.style.border = "0";
           element.style.borderRadius = "0";
           element.style.background = isCalendarBadge ? "transparent" : `url(${EXHIBIT_MARKER_ICON}) center / contain no-repeat`;
