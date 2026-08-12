@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-notifications-menu-r80";
+const expectedBuild = "20260812-landscape-menu-layout-r81";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -253,6 +253,9 @@ function requireBundledPattern(pattern, message) {
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
 requireBundledText('<button class="ghost-button" id="settings-open" type="button">Notifications</button>', "Bundled Android menu must label the settings action Notifications.");
 forbidBundledText('<button class="ghost-button" id="settings-open" type="button">Alerts</button>', "Bundled Android menu must not use the old Alerts label.");
+requireBundledPattern(/body\.android-device\.tablet-landscape \.account-button\s*\{[\s\S]*?min-width:\s*118px;[\s\S]*?max-width:\s*148px;/, "Bundled Android landscape must keep the member name and points readable.");
+requireBundledPattern(/body\.android-device\.tablet-landscape \.mobile-more-menu\[open\] \.mobile-more-grid\s*\{[\s\S]*?repeat\(5,\s*minmax\(0,\s*1fr\)\)/, "Bundled Android landscape More menu must use the balanced five-column grid.");
+requireBundledPattern(/body\.android-device\.tablet-landscape:has\(\.mobile-more-menu\[open\]\) \.landscape-panel-resizer[\s\S]*?visibility:\s*hidden;[\s\S]*?pointer-events:\s*none;/, "Bundled Android split resize handle must stay behind open menus.");
 for (const setting of [
   "settings.setAllowFileAccess(false)",
   "settings.setAllowFileAccessFromFileURLs(false)",

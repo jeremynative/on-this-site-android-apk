@@ -4851,11 +4851,27 @@
       }
 
       body.android-device.tablet-landscape .account-button {
-        min-width: 74px;
-        max-width: 104px;
+        min-width: 118px;
+        max-width: 148px;
         min-height: 32px;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+
+      body.android-device.tablet-landscape header:has(.mobile-more-menu[open]),
+      body.android-device.tablet-landscape header:has(.mobile-layer-menu[open]) {
+        z-index: 1300;
+      }
+
+      body.android-device.tablet-landscape .mobile-more-menu[open] .mobile-more-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+        align-content: start;
+      }
+
+      body.android-device.tablet-landscape:has(.mobile-more-menu[open]) .landscape-panel-resizer,
+      body.android-device.tablet-landscape:has(.mobile-layer-menu[open]) .landscape-panel-resizer {
+        visibility: hidden;
+        pointer-events: none;
       }
 
       body.android-device.tablet-landscape .story-plus-button {
