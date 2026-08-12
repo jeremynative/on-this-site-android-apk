@@ -7424,7 +7424,12 @@
 
     window.onAndroidMapTap = function onAndroidMapTap(viewX, viewY, viewWidth, viewHeight, retry = false) {
       if (!state.map?.getCanvas) return false;
-      if (isMobileMapTapBlocked() && performance.now() - (state.lastAndroidUiOverlayTapAt || 0) < 300) return false;
+      // The native bridge is deliberately delayed after ACTION_UP. On slower
+      // tablets, closing a detail panel can re-render long enough that the old
+      // 300 ms shortcut expired before this same gesture reached the bridge,
+      // opening the polygon that had been underneath the X. Honor the complete
+      // overlay block window so a close gesture can never become a map tap.
+      if (isMobileMapTapBlocked()) return false;
       if (activatePendingAndroidSearchResultTap()) return true;
       if (searchEl?.value?.trim()) return false;
       const canvas = state.map.getCanvas();

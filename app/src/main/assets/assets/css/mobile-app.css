@@ -4876,7 +4876,8 @@
       }
 
       body.android-device.tablet-landscape:has(.mobile-more-menu[open]) .landscape-panel-resizer,
-      body.android-device.tablet-landscape:has(.mobile-layer-menu[open]) .landscape-panel-resizer {
+      body.android-device.tablet-landscape:has(.mobile-layer-menu[open]) .landscape-panel-resizer,
+      body.android-device.tablet-landscape:has(.sheet.open) .landscape-panel-resizer {
         visibility: hidden;
         pointer-events: none;
       }
