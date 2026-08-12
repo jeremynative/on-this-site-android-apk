@@ -371,8 +371,11 @@ public class MainActivity extends Activity {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) settings.setSafeBrowsingEnabled(true);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        settings.setLoadWithOverviewMode(true);
-        settings.setUseWideViewPort(true);
+        // The app shell has a responsive viewport. Overview/wide-viewport mode
+        // locks some tablet WebViews to their portrait compatibility width,
+        // even after Android rotates the activity into landscape.
+        settings.setLoadWithOverviewMode(false);
+        settings.setUseWideViewPort(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
