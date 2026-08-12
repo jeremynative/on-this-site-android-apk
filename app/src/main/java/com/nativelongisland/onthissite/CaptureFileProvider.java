@@ -13,20 +13,32 @@ import java.io.FileNotFoundException;
 import java.util.List;
 
 /**
- * Narrow provider for camera output owned by the app. Keeping comment captures
+ * Narrow provider for camera output owned by the app. Keeping captures
  * in app-private storage avoids MediaStore ownership and READ_MEDIA_IMAGES
  * changes across Android/Samsung camera releases.
  */
 public class CaptureFileProvider extends ContentProvider {
     static final String AUTHORITY = BuildConfig.APPLICATION_ID + ".capture";
-    private static final String CAPTURE_DIRECTORY = "comment-camera";
+    private static final String CAPTURE_DIRECTORY = "camera-captures";
 
     static Uri createCommentCaptureUri(Context context) throws Exception {
+        return createCaptureUri(context, "comment-photo-");
+    }
+
+    static Uri createPlantCaptureUri(Context context) throws Exception {
+        return createCaptureUri(context, "plant-photo-");
+    }
+
+    static Uri createWebCaptureUri(Context context) throws Exception {
+        return createCaptureUri(context, "web-photo-");
+    }
+
+    private static Uri createCaptureUri(Context context, String prefix) throws Exception {
         File directory = new File(context.getCacheDir(), CAPTURE_DIRECTORY);
         if (!directory.exists() && !directory.mkdirs()) {
             throw new Exception("Could not create the private camera directory.");
         }
-        File file = File.createTempFile("comment-photo-", ".jpg", directory);
+        File file = File.createTempFile(prefix, ".jpg", directory);
         return new Uri.Builder()
             .scheme("content")
             .authority(AUTHORITY)
@@ -41,7 +53,7 @@ public class CaptureFileProvider extends ContentProvider {
         List<String> segments = uri.getPathSegments();
         if (segments.size() != 1) throw new FileNotFoundException("Invalid capture path.");
         String name = segments.get(0);
-        if (!name.matches("comment-photo-[A-Za-z0-9._-]+\\.jpg")) {
+        if (!name.matches("(?:comment|plant|web)-photo-[A-Za-z0-9._-]+\\.jpg")) {
             throw new FileNotFoundException("Invalid capture filename.");
         }
         File directory = new File(getContext().getCacheDir(), CAPTURE_DIRECTORY);

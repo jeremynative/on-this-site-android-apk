@@ -1340,11 +1340,12 @@ public class MainActivity extends Activity {
     private boolean launchImageCaptureOrPicker(ValueCallback<Uri[]> callback) {
         pendingCameraCaptureUri = null;
         try {
-            pendingCameraCaptureUri = MediaStorePhotoHelper.createPlantPhotoUri(this);
+            pendingCameraCaptureUri = CaptureFileProvider.createWebCaptureUri(this);
             if (pendingCameraCaptureUri == null) return launchImagePickerFallback(callback);
 
             Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
             intent.putExtra(MediaStore.EXTRA_OUTPUT, pendingCameraCaptureUri);
+            intent.setClipData(ClipData.newRawUri("web-photo", pendingCameraCaptureUri));
             intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -1636,7 +1637,7 @@ public class MainActivity extends Activity {
 
     void launchPlantBridgeCamera() {
         try {
-            pendingPlantBridgeCameraUri = MediaStorePhotoHelper.createPlantPhotoUri(this);
+            pendingPlantBridgeCameraUri = CaptureFileProvider.createPlantCaptureUri(this);
             if (pendingPlantBridgeCameraUri == null) {
                 queuePlantPhoto(false, "Could not create a local photo file.", "", "", "");
                 return;
@@ -1644,6 +1645,7 @@ public class MainActivity extends Activity {
             savePendingPlantCameraUri(pendingPlantBridgeCameraUri);
             Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
             intent.putExtra(MediaStore.EXTRA_OUTPUT, pendingPlantBridgeCameraUri);
+            intent.setClipData(ClipData.newRawUri("plant-photo", pendingPlantBridgeCameraUri));
             intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 for (android.content.pm.ResolveInfo activity : getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)) {
@@ -1662,15 +1664,27 @@ public class MainActivity extends Activity {
     }
 
     private void deliverPlantBridgePhoto(Uri uri) {
+        deliverPlantBridgePhoto(uri, 0);
+    }
+
+    private void deliverPlantBridgePhoto(Uri uri, int attempt) {
         try {
-            MediaStorePhotoHelper.markPlantPhotoReady(this, uri);
             byte[] bytes = MediaStorePhotoHelper.compressedJpegBytes(this, uri);
             String base64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
             clearPendingPlantCameraUri();
             queuePlantPhoto(true, "", base64, "image/jpeg", "plant-observation-" + System.currentTimeMillis() + ".jpg");
+            getContentResolver().delete(uri, null, null);
         } catch (Exception error) {
+            if (uri != null && attempt < COMMENT_PHOTO_READ_MAX_ATTEMPTS) {
+                startupHandler.postDelayed(
+                    () -> deliverPlantBridgePhoto(uri, attempt + 1),
+                    COMMENT_PHOTO_READ_RETRY_DELAY_MS * (attempt + 1)
+                );
+                return;
+            }
             clearPendingPlantCameraUri();
-            queuePlantPhoto(false, error.getMessage(), "", "", "");
+            if (uri != null) getContentResolver().delete(uri, null, null);
+            queuePlantPhoto(false, "The captured plant photo could not be read. Please try again.", "", "", "");
         }
     }
 
@@ -2082,9 +2096,19 @@ public class MainActivity extends Activity {
             if (resultCode == RESULT_OK && pendingPlantBridgeCameraUri != null) {
                 deliverPlantBridgePhoto(pendingPlantBridgeCameraUri);
             } else {
-                if (pendingPlantBridgeCameraUri != null) getContentResolver().delete(pendingPlantBridgeCameraUri, null, null);
-                clearPendingPlantCameraUri();
-                queuePlantPhoto(false, "Plant photo was cancelled.", "", "", "");
+                // Some vendor cameras report RESULT_CANCELED immediately after a
+                // completed EXTRA_OUTPUT write. Give the private file one short
+                // chance to settle; Android Back still returns straight here.
+                Uri cancelledUri = pendingPlantBridgeCameraUri;
+                startupHandler.postDelayed(() -> {
+                    if (cancelledUri != null && MediaStorePhotoHelper.hasPhotoData(this, cancelledUri)) {
+                        deliverPlantBridgePhoto(cancelledUri);
+                        return;
+                    }
+                    if (cancelledUri != null) getContentResolver().delete(cancelledUri, null, null);
+                    clearPendingPlantCameraUri();
+                    queuePlantPhoto(false, "Plant photo was cancelled.", "", "", "");
+                }, COMMENT_PHOTO_READ_RETRY_DELAY_MS);
             }
             pendingPlantBridgeCameraUri = null;
             return;
@@ -2096,7 +2120,6 @@ public class MainActivity extends Activity {
         if (resultCode == RESULT_OK) {
             results = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
             if ((results == null || results.length == 0) && pendingCameraCaptureUri != null) {
-                MediaStorePhotoHelper.markPlantPhotoReady(this, pendingCameraCaptureUri);
                 results = new Uri[] { pendingCameraCaptureUri };
             }
         } else if (pendingCameraCaptureUri != null) {

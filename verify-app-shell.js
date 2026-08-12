@@ -310,6 +310,11 @@ requireText("COMMENT_PHOTO_READ_MAX_ATTEMPTS", "Android shell must briefly retry
 requireText("deliverCommentBridgePhoto(uri, attempt + 1)", "Android shell must retry a temporarily unreadable captured comment photo.");
 requireText("CaptureFileProvider.createCommentCaptureUri(this)", "Comment camera output must use app-private storage instead of MediaStore.");
 requireText('intent.setClipData(ClipData.newRawUri("comment-photo", pendingCommentBridgeCameraUri))', "Samsung Camera must receive the private output URI through ClipData as well as EXTRA_OUTPUT.");
+requireText("CaptureFileProvider.createPlantCaptureUri(this)", "Plant camera output must use app-private storage instead of unreliable MediaStore output.");
+requireText('intent.setClipData(ClipData.newRawUri("plant-photo", pendingPlantBridgeCameraUri))', "Plant camera must receive the private output URI through ClipData as well as EXTRA_OUTPUT.");
+requireText("CaptureFileProvider.createWebCaptureUri(this)", "Web file-input camera output must use the same compatible private capture path.");
+requireText("deliverPlantBridgePhoto(uri, attempt + 1)", "Plant camera output must briefly retry a vendor camera write before reporting failure.");
+requireText("Plant photo was cancelled.", "Android Back from Plant ID camera must return to the draft as a cancellation, not close the app.");
 if (!captureFileProvider.includes('AUTHORITY = BuildConfig.APPLICATION_ID + ".capture"')
     || !captureFileProvider.includes('context.getCacheDir()')
     || !captureFileProvider.includes('ParcelFileDescriptor.MODE_TRUNCATE')) {
