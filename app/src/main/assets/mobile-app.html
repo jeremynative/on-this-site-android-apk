@@ -4798,18 +4798,25 @@
       visibility: visible;
     }
 
-    /* A tablet in landscape has room for the map and reading surface together.
-       Keep the phone drawer model below this breakpoint, but turn the wider view
-       into a purposeful split layout instead of stretching the mobile stack. */
+    /* Android landscape has room for the map and reading surface together.
+       Keep portrait on the existing drawer model, while phones and tablets in
+       landscape use the same purposeful split layout. */
 
       body.android-device.tablet-landscape {
         --map-height: auto;
+        --landscape-panel-width: clamp(320px, 42dvw, 420px);
+      }
+
+      @media (min-height: 400px) {
+        body.android-device.tablet-landscape {
+          --landscape-panel-width: clamp(380px, 34dvw, 620px);
+        }
       }
 
       body.android-device.tablet-landscape .app,
       body.android-device.tablet-landscape .app.panel-timeline,
       body.android-device.tablet-landscape .app.panel-nearby {
-        grid-template-columns: minmax(0, 1fr) clamp(380px, 34dvw, 620px);
+        grid-template-columns: minmax(0, 1fr) var(--landscape-panel-width);
         grid-template-rows: auto minmax(0, 1fr) auto;
       }
 
@@ -4937,7 +4944,7 @@
 
       body.android-device.tablet-landscape .detail {
         inset: var(--app-top-safe) var(--app-right-safe) var(--app-bottom-safe) auto;
-        width: clamp(380px, 34dvw, 620px);
+        width: var(--landscape-panel-width);
         height: auto;
         max-height: none;
         border-radius: 16px 0 0 16px;
@@ -17790,7 +17797,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const isNativeAndroid = isAndroid && Boolean(window.AndroidApp || window.AndroidStory);
       const tabletLandscape = isAndroid && (
         document.documentElement.dataset.nativeTabletLandscape === "true"
-        || window.matchMedia("(orientation: landscape) and (min-width: 650px) and (min-height: 450px)").matches
+        || window.matchMedia("(orientation: landscape) and (min-width: 600px) and (min-height: 300px)").matches
       );
       document.body.classList.toggle("android-device", isAndroid);
       document.documentElement.classList.toggle("android-device", isAndroid);
