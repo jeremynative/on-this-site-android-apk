@@ -964,6 +964,7 @@
     const eventsOpenBtn = document.getElementById("events-open");
     const settingsOpenBtn = document.getElementById("settings-open");
     const feedbackOpenBtn = document.getElementById("feedback-open");
+    const feedbackOpenMenuBtn = document.getElementById("feedback-open-menu");
     const storyOpenBtn = document.getElementById("story-open");
     const mobileRefreshAppBtn = document.getElementById("mobile-refresh-app");
     const suggestSiteOpenBtn = document.getElementById("suggest-site-open");
@@ -16077,7 +16078,7 @@
       mapEl.querySelectorAll("[data-offline-region]").forEach(button => {
         button.addEventListener("click", () => selectOfflineRegion(button.dataset.offlineRegion || "all"));
       });
-      [loginOpenBtn, feedbackOpenBtn, locateBtn, mobileMapLocateBtn, suggestSiteOpenBtn].forEach(button => {
+      [loginOpenBtn, feedbackOpenBtn, feedbackOpenMenuBtn, locateBtn, mobileMapLocateBtn, suggestSiteOpenBtn].forEach(button => {
         if (!button) return;
         button.disabled = true;
         button.title = "Available when the app is online";
@@ -17050,7 +17051,7 @@
     window.addEventListener("resize", refreshMobileViewportLayout);
     window.addEventListener("orientationchange", () => window.setTimeout(refreshMobileViewportLayout, 280));
     window.visualViewport?.addEventListener("resize", refreshMobileViewportLayout);
-    locateBtn.addEventListener("click", locateUser);
+    locateBtn?.addEventListener("click", locateUser);
     mobileMapLocateBtn?.addEventListener("click", event => {
       event.stopPropagation();
       locateMapUser();
@@ -17224,6 +17225,7 @@
     eventsOpenBtn.addEventListener("click", () => openSheet(eventsSheetEl));
     settingsOpenBtn.addEventListener("click", () => openSheet(settingsSheetEl));
     feedbackOpenBtn.addEventListener("click", () => openSheet(feedbackSheetEl));
+    feedbackOpenMenuBtn?.addEventListener("click", () => openSheet(feedbackSheetEl));
     [feedbackNameEl, feedbackEmailEl, feedbackMessageEl].forEach(field => {
       field?.addEventListener("focus", keepFeedbackFieldVisible);
     });

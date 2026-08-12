@@ -549,6 +549,10 @@
       min-width: 0;
     }
 
+    .mobile-landscape-menu-action {
+      display: none;
+    }
+
     .mobile-layer-menu {
       position: relative;
       flex: 0 0 auto;
@@ -4799,34 +4803,69 @@
       body.android-device.tablet-landscape .app.panel-timeline,
       body.android-device.tablet-landscape .app.panel-nearby {
         grid-template-columns: minmax(0, 1fr) clamp(380px, 34dvw, 620px);
-        grid-template-rows: auto minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr) auto;
       }
 
       body.android-device.tablet-landscape header {
         grid-column: 1;
         grid-row: 1;
-        grid-template-columns: minmax(0, 1fr) minmax(250px, 0.8fr);
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: 34px 34px;
         align-items: center;
-        gap: 6px 10px;
-        padding: max(8px, var(--app-top-safe)) 12px 8px;
+        gap: 4px 6px;
+        padding: max(5px, var(--app-top-safe)) 8px 5px;
       }
 
       body.android-device.tablet-landscape .title-row {
-        grid-column: 1;
+        grid-column: 1 / -1;
         grid-row: 1;
+        min-width: 0;
+        gap: 6px;
+      }
+
+      body.android-device.tablet-landscape h1 {
+        font-size: 16px;
+        white-space: nowrap;
+      }
+
+      body.android-device.tablet-landscape .title-actions {
+        gap: 4px;
+      }
+
+      body.android-device.tablet-landscape .account-button {
+        min-width: 74px;
+        max-width: 104px;
+        min-height: 32px;
       }
 
       body.android-device.tablet-landscape .search-autocomplete {
-        grid-column: 2;
-        grid-row: 1;
+        grid-column: 1;
+        grid-row: 2;
+        min-width: 0;
+      }
+
+      body.android-device.tablet-landscape .search {
+        min-height: 32px;
+        height: 32px;
+        padding-block: 4px;
+        font-size: 13px;
       }
 
       body.android-device.tablet-landscape .quick-actions {
-        grid-column: 1 / -1;
+        grid-column: 2;
         grid-row: 2;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
-        gap: 6px;
+        grid-template-columns: auto auto;
+        gap: 4px;
+        padding: 0;
+      }
+
+      body.android-device.tablet-landscape .quick-actions > .mobile-priority-action {
+        display: none;
+      }
+
+      body.android-device.tablet-landscape .mobile-landscape-menu-action {
+        display: inline-flex;
       }
 
       body.android-device.tablet-landscape .mobile-header-instruction,
@@ -4837,12 +4876,14 @@
       body.android-device.tablet-landscape .mobile-priority-action,
       body.android-device.tablet-landscape .mobile-layer-menu > summary,
       body.android-device.tablet-landscape .mobile-more-menu > summary {
-        min-height: 36px;
+        min-height: 32px;
+        height: 32px;
+        padding-inline: 8px;
       }
 
       body.android-device.tablet-landscape .mobile-map-shell {
         grid-column: 1;
-        grid-row: 2;
+        grid-row: 2 / 4;
         min-height: 0;
         height: auto;
       }
@@ -4854,24 +4895,34 @@
 
       body.android-device.tablet-landscape .mobile-view-tabs {
         grid-column: 2;
-        grid-row: 1;
+        grid-row: 3;
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 64px 58px;
-        gap: 5px;
-        padding: max(8px, var(--app-top-safe)) 8px 8px;
+        align-self: end;
+        gap: 4px;
+        padding: 5px 8px max(5px, var(--app-bottom-safe));
+        border-top: 1px solid rgba(31, 39, 31, 0.12);
+        border-bottom: 0;
+        box-shadow: 0 -6px 16px rgba(20, 31, 23, 0.08);
       }
 
       body.android-device.tablet-landscape .mobile-view-tab {
-        min-height: 38px;
+        min-height: 34px;
         font-size: 11px;
       }
 
       body.android-device.tablet-landscape .mobile-timeline,
       body.android-device.tablet-landscape .list-panel {
         grid-column: 2;
-        grid-row: 2;
+        grid-row: 1 / 3;
         min-height: 0;
         max-height: none;
         border-radius: 0;
+      }
+
+      body.android-device.tablet-landscape .mobile-activity-button,
+      body.android-device.tablet-landscape .mobile-notification-button {
+        left: max(10px, var(--app-left-safe));
+        right: auto;
       }
 
       body.android-device.tablet-landscape .detail {
@@ -4910,18 +4961,18 @@
 
       body.android-device.tablet-landscape .app.panel-maximized {
         grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: auto minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) auto;
       }
 
       body.android-device.tablet-landscape .app.panel-maximized > .mobile-view-tabs {
         grid-column: 1;
-        grid-row: 1;
+        grid-row: 2;
       }
 
       body.android-device.tablet-landscape .app.panel-maximized > .mobile-timeline,
       body.android-device.tablet-landscape .app.panel-maximized > .list-panel {
         grid-column: 1;
-        grid-row: 2;
+        grid-row: 1;
       }
 
       body.android-device.tablet-landscape .app.panel-collapsed {
@@ -7238,7 +7289,6 @@ body.research-question-dialog-open .android-beta-prompt,
         <span class="title-actions">
           <button class="story-plus-button" id="map-story-open" type="button" title="Add to the map" aria-label="Add to the map" hidden>+</button>
           <button class="ghost-button account-button" id="login-open" type="button">Login</button>
-          <button class="locate" id="locate" type="button">Near me</button>
         </span>
       </div>
       <div class="search-autocomplete">
@@ -7354,6 +7404,8 @@ body.research-question-dialog-open .android-beta-prompt,
         <details class="mobile-more-menu">
           <summary>More</summary>
           <div class="mobile-more-grid">
+            <button class="ghost-button mobile-landscape-menu-action" data-app-page="about" type="button">About</button>
+            <button class="ghost-button mobile-landscape-menu-action" id="feedback-open-menu" type="button">Feedback</button>
             <button class="ghost-button" data-app-page="home" type="button">Home</button>
             <select class="map-style-select" id="mobile-basemap" aria-label="Map style">
               <option value="streets">Streets</option>
@@ -17994,6 +18046,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const eventsOpenBtn = document.getElementById("events-open");
     const settingsOpenBtn = document.getElementById("settings-open");
     const feedbackOpenBtn = document.getElementById("feedback-open");
+    const feedbackOpenMenuBtn = document.getElementById("feedback-open-menu");
     const storyOpenBtn = document.getElementById("story-open");
     const mobileRefreshAppBtn = document.getElementById("mobile-refresh-app");
     const suggestSiteOpenBtn = document.getElementById("suggest-site-open");
@@ -33107,7 +33160,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mapEl.querySelectorAll("[data-offline-region]").forEach(button => {
         button.addEventListener("click", () => selectOfflineRegion(button.dataset.offlineRegion || "all"));
       });
-      [loginOpenBtn, feedbackOpenBtn, locateBtn, mobileMapLocateBtn, suggestSiteOpenBtn].forEach(button => {
+      [loginOpenBtn, feedbackOpenBtn, feedbackOpenMenuBtn, locateBtn, mobileMapLocateBtn, suggestSiteOpenBtn].forEach(button => {
         if (!button) return;
         button.disabled = true;
         button.title = "Available when the app is online";
@@ -34080,7 +34133,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     window.addEventListener("resize", refreshMobileViewportLayout);
     window.addEventListener("orientationchange", () => window.setTimeout(refreshMobileViewportLayout, 280));
     window.visualViewport?.addEventListener("resize", refreshMobileViewportLayout);
-    locateBtn.addEventListener("click", locateUser);
+    locateBtn?.addEventListener("click", locateUser);
     mobileMapLocateBtn?.addEventListener("click", event => {
       event.stopPropagation();
       locateMapUser();
@@ -34254,6 +34307,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     eventsOpenBtn.addEventListener("click", () => openSheet(eventsSheetEl));
     settingsOpenBtn.addEventListener("click", () => openSheet(settingsSheetEl));
     feedbackOpenBtn.addEventListener("click", () => openSheet(feedbackSheetEl));
+    feedbackOpenMenuBtn?.addEventListener("click", () => openSheet(feedbackSheetEl));
     [feedbackNameEl, feedbackEmailEl, feedbackMessageEl].forEach(field => {
       field?.addEventListener("focus", keepFeedbackFieldVisible);
     });
