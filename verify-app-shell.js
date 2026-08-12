@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-numbered-unread-badges-r75";
+const expectedBuild = "20260812-numbered-unread-badges-r77";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1067,11 +1067,11 @@ requireBundledText('nli-mobile-activity-seen-items-v2', "Bundled Android app mus
 requireBundledText('ACTIVITY_UTILS.weightedActivityCount(mobileUnreadActivityItems())', "Bundled Android app must count grouped unread activity accurately.");
 requireBundledText('data-mobile-activity-dismiss', "Bundled Android activity cards must expose an explicit unread dismissal action.");
 requireBundledText('mobile-site-unread-badges', "Bundled Android map must expose per-site unread badges.");
-requireBundledPattern(/id:\s*"mobile-site-unread-badges"[\s\S]*?"circle-radius":\s*\["interpolate",\s*\["linear"\],\s*\["zoom"\],\s*6,\s*6,\s*12,\s*7\][\s\S]*?"circle-stroke-width":\s*0/, "Bundled Android point unread badges must stay compact and outline-free.");
-requireBundledPattern(/id:\s*`mobile-\$\{kind\}-unread-badges`[\s\S]*?"circle-radius":\s*7[\s\S]*?"circle-stroke-width":\s*0/, "Bundled Android polygon unread badges must stay compact and outline-free.");
-requireBundledPattern(/function promoteMobileUnreadBadgeLayers\(\)[\s\S]*?badgeLayers\.concat\(countLayers\)[\s\S]*?state\.map\.moveLayer\(layerId\)/, "Bundled Android unread numbers must stay above every red map badge.");
-requireBundledPattern(/id:\s*"mobile-site-unread-counts"[\s\S]*?"text-size":\s*9[\s\S]*?"text-optional":\s*false/, "Bundled Android point unread badges must always render their number.");
-requireBundledPattern(/unread_label:\s*mobileUnreadCountLabel\(unreadCount\)[\s\S]*?id:\s*"mobile-site-unread-counts"[\s\S]*?"text-field":\s*\["get",\s*"unread_label"\]/, "Bundled Android unread badges must render a preformatted count string.");
+requireBundledPattern(/function ensureMobileUnreadBadgeImages\(\)[\s\S]*?canvas\.width\s*=\s*28[\s\S]*?context\.arc\(14,\s*14,\s*12[\s\S]*?context\.fillText\(label,\s*14,\s*14\.5\)[\s\S]*?pixelRatio:\s*2/, "Bundled Android unread numbers must be baked into compact outline-free icons.");
+requireBundledPattern(/id:\s*"mobile-site-unread-badges"[\s\S]*?type:\s*"symbol"[\s\S]*?"icon-image":\s*\["get",\s*"unread_icon"\][\s\S]*?"icon-size":\s*1/, "Bundled Android point unread badges must use their numbered icon.");
+requireBundledPattern(/id:\s*`mobile-\$\{kind\}-unread-badges`[\s\S]*?type:\s*"symbol"[\s\S]*?"icon-image":\s*\["get",\s*"unread_icon"\]/, "Bundled Android polygon unread badges must use their numbered icon.");
+requireBundledPattern(/function promoteMobileUnreadBadgeLayers\(\)[\s\S]*?badgeLayers\.forEach\(layerId[\s\S]*?state\.map\.moveLayer\(layerId\)/, "Bundled Android numbered unread icons must stay above map content.");
+requireBundledPattern(/unread_icon:\s*mobileUnreadCountIcon\(unreadCount\)/, "Bundled Android map features must carry a numbered unread icon key.");
 requireBundledText('data-mobile-knowledgebase-unread-badge', "Bundled Android Knowledgebase must expose its unread count.");
 if (bundledMobileJs.includes('markMobileActivitySeen();')) {
   throw new Error("Bundled Android app must not clear all activity merely because the Community Activity feed was opened.");

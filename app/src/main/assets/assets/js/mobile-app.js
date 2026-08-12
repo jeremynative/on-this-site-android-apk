@@ -2310,7 +2310,8 @@
                 title: site.title,
                 label_size: polygonLabelSize(site),
                 unread_count: unreadCount,
-                unread_label: mobileUnreadCountLabel(unreadCount)
+                unread_label: mobileUnreadCountLabel(unreadCount),
+                unread_icon: mobileUnreadCountIcon(unreadCount)
               }
             };
           })
@@ -6141,6 +6142,7 @@
             startup_distance: mobileStartupSiteDistance(siteDisplayGeometry(site)?.coordinates),
             unread_count: unreadCount,
             unread_label: mobileUnreadCountLabel(unreadCount),
+            unread_icon: mobileUnreadCountIcon(unreadCount),
             broad: isBroadTerritory(site),
             territory_label_point: site.territory_label_point || null,
             bounds_area: geometryBoundsArea(siteDisplayGeometry(site))
@@ -13183,37 +13185,21 @@
           "icon-optional": true
         }
       });
+      ensureMobileUnreadBadgeImages();
       state.map.addLayer({
         id: "mobile-site-unread-badges",
-        type: "circle",
-        source: "mobile-sites",
-        filter: ["all", ["==", ["geometry-type"], "Point"], [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0]],
-        paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 6, 12, 7],
-          "circle-color": "#c62828",
-          "circle-stroke-width": 0,
-          "circle-translate": [9, -9]
-        }
-      });
-      state.map.addLayer({
-        id: "mobile-site-unread-counts",
         type: "symbol",
         source: "mobile-sites",
         filter: ["all", ["==", ["geometry-type"], "Point"], [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0]],
         layout: {
-          "text-field": ["get", "unread_label"],
-          "text-size": 9,
-          "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
-          "text-anchor": "center",
-          "text-offset": ["literal", [0, 0]],
-          "text-padding": 0,
-          "text-allow-overlap": true,
-          "text-ignore-placement": true,
-          "text-optional": false
+          "icon-image": ["get", "unread_icon"],
+          "icon-size": 1,
+          "icon-anchor": "center",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true
         },
         paint: {
-          "text-color": "#fff",
-          "text-translate": [9, -9]
+          "icon-translate": [9, -9]
         }
       });
       state.map.addLayer({
@@ -13397,33 +13383,17 @@
       [["detail", "mobile-detail-labels"], ["territory", "mobile-territory-labels"]].forEach(([kind, source]) => {
         state.map.addLayer({
           id: `mobile-${kind}-unread-badges`,
-          type: "circle",
-          source,
-          filter: [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
-          paint: {
-            "circle-radius": 7,
-            "circle-color": "#c62828",
-            "circle-stroke-width": 0,
-            "circle-translate": [10, -10]
-          }
-        });
-        state.map.addLayer({
-          id: `mobile-${kind}-unread-counts`,
           type: "symbol",
           source,
           filter: [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
           layout: {
-            "text-field": ["get", "unread_label"],
-            "text-size": 9,
-            "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
-            "text-anchor": "center",
-            "text-offset": ["literal", [0, 0]],
-            "text-padding": 0,
-            "text-allow-overlap": true,
-            "text-ignore-placement": true,
-            "text-optional": false
+            "icon-image": ["get", "unread_icon"],
+            "icon-size": 1,
+            "icon-anchor": "center",
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true
           },
-          paint: { "text-color": "#fff", "text-translate": [10, -10] }
+          paint: { "icon-translate": [10, -10] }
         });
       });
       state.map.addLayer({
@@ -14929,14 +14899,33 @@
         "mobile-detail-unread-badges",
         "mobile-territory-unread-badges"
       ];
-      const countLayers = [
-        "mobile-site-unread-counts",
-        "mobile-detail-unread-counts",
-        "mobile-territory-unread-counts"
-      ];
-      badgeLayers.concat(countLayers).forEach(layerId => {
+      badgeLayers.forEach(layerId => {
         if (state.map.getLayer(layerId)) state.map.moveLayer(layerId);
       });
+    }
+
+    function ensureMobileUnreadBadgeImages() {
+      if (!state.map) return;
+      for (let count = 1; count <= 100; count += 1) {
+        const label = count === 100 ? "99+" : String(count);
+        const imageId = `mobile-unread-count-${count === 100 ? "99-plus" : count}`;
+        if (state.map.hasImage(imageId)) continue;
+        const canvas = document.createElement("canvas");
+        canvas.width = 28;
+        canvas.height = 28;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        context.clearRect(0, 0, 28, 28);
+        context.fillStyle = "#c62828";
+        context.beginPath();
+        context.arc(14, 14, 12, 0, Math.PI * 2);
+        context.fill();
+        context.fillStyle = "#fff";
+        context.font = `700 ${label.length > 2 ? 11 : (label.length > 1 ? 14 : 16)}px sans-serif`;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText(label, 14, 14.5);
+        state.map.addImage(imageId, context.getImageData(0, 0, 28, 28), { pixelRatio: 2 });
+      }
     }
 
     function mobileActivitySeenItemsKey() {
@@ -14969,6 +14958,12 @@
     function mobileUnreadCountLabel(count) {
       const normalizedCount = Math.max(0, Number(count) || 0);
       return normalizedCount > 99 ? "99+" : String(normalizedCount);
+    }
+
+    function mobileUnreadCountIcon(count) {
+      const normalizedCount = Math.max(0, Math.round(Number(count) || 0));
+      if (!normalizedCount) return "";
+      return `mobile-unread-count-${normalizedCount > 99 ? "99-plus" : normalizedCount}`;
     }
 
     function markMobileActivityItemSeen(key) {
