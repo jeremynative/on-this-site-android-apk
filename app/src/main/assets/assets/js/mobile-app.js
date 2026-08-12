@@ -13182,11 +13182,10 @@
         source: "mobile-sites",
         filter: ["all", ["==", ["geometry-type"], "Point"], [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0]],
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 8.5, 12, 10.5],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 6, 12, 7],
           "circle-color": "#c62828",
-          "circle-stroke-color": "#fff",
-          "circle-stroke-width": 1.5,
-          "circle-translate": [12, -12]
+          "circle-stroke-width": 0,
+          "circle-translate": [9, -9]
         }
       });
       state.map.addLayer({
@@ -13196,14 +13195,18 @@
         filter: ["all", ["==", ["geometry-type"], "Point"], [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0]],
         layout: {
           "text-field": ["to-string", ["min", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 99]],
-          "text-size": 10,
-          "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+          "text-size": 9,
+          "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+          "text-anchor": "center",
+          "text-offset": ["literal", [0, 0]],
+          "text-padding": 0,
           "text-allow-overlap": true,
-          "text-ignore-placement": true
+          "text-ignore-placement": true,
+          "text-optional": false
         },
         paint: {
           "text-color": "#fff",
-          "text-translate": [12, -12]
+          "text-translate": [9, -9]
         }
       });
       state.map.addLayer({
@@ -13391,11 +13394,10 @@
           source,
           filter: [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
           paint: {
-            "circle-radius": 10,
+            "circle-radius": 7,
             "circle-color": "#c62828",
-            "circle-stroke-color": "#fff",
-            "circle-stroke-width": 1.5,
-            "circle-translate": [16, -16]
+            "circle-stroke-width": 0,
+            "circle-translate": [10, -10]
           }
         });
         state.map.addLayer({
@@ -13405,12 +13407,16 @@
           filter: [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
           layout: {
             "text-field": ["to-string", ["min", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 99]],
-            "text-size": 10,
-            "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+            "text-size": 9,
+            "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+            "text-anchor": "center",
+            "text-offset": ["literal", [0, 0]],
+            "text-padding": 0,
             "text-allow-overlap": true,
-            "text-ignore-placement": true
+            "text-ignore-placement": true,
+            "text-optional": false
           },
-          paint: { "text-color": "#fff", "text-translate": [16, -16] }
+          paint: { "text-color": "#fff", "text-translate": [10, -10] }
         });
       });
       state.map.addLayer({
@@ -13440,6 +13446,7 @@
           "text-halo-width": 1.5
         }
       });
+      promoteMobileUnreadBadgeLayers();
       state.mapSourceAppliedKey = state.mapSourceCacheKey || "";
       syncMobileBiographyPathLayers();
       prepareMobileStartupSiteRevealLayers();
@@ -14906,6 +14913,23 @@
       const profile = currentContributorProfile?.();
       const key = profile?.id || state.profile?.profileId || state.profile?.email || "public";
       return ACTIVITY_UTILS.lastSeenKey("nli-mobile-activity-last-seen", key);
+    }
+
+    function promoteMobileUnreadBadgeLayers() {
+      if (!state.map) return;
+      const badgeLayers = [
+        "mobile-site-unread-badges",
+        "mobile-detail-unread-badges",
+        "mobile-territory-unread-badges"
+      ];
+      const countLayers = [
+        "mobile-site-unread-counts",
+        "mobile-detail-unread-counts",
+        "mobile-territory-unread-counts"
+      ];
+      badgeLayers.concat(countLayers).forEach(layerId => {
+        if (state.map.getLayer(layerId)) state.map.moveLayer(layerId);
+      });
     }
 
     function mobileActivitySeenItemsKey() {

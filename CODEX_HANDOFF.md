@@ -1,5 +1,14 @@
 # Android APK — Codex Handoff
 
+## August 12 compact numbered unread map badges
+
+- Replaced the oversized outlined unread map circles with compact 12–14px red badges and no stroke. Point, polygon-detail, and territory badges use a 9px centered white count.
+- Fixed the missing-number regression by moving every unread count layer above every badge-circle layer after the map finishes adding its other labels and overlays. The count symbols are non-optional and ignore placement so a red circle cannot render without its number.
+- Synced the rebuilt hosted/mobile runtime from web commit `ef4fb2f9` and bumped the APK shell to `20260812-compact-unread-badges-r74`. Public Mapbox tokens remain build-time placeholders.
+- `node verify-app-shell.js`, JavaScript syntax, `git diff --check`, and `build-debug-apk.ps1` pass.
+
+Safest next action: publish the signed Obtainium release, inspect the exact APK for the compact/no-outline/required-count rules, and install it over a test device without clearing data.
+
 ## August 11 persistent content notification bundle
 
 - Synced the tested mobile runtime for persistent per-content activity notifications into both Android fallbacks. Community Activity no longer clears merely because its panel opens; each update remains unread until the visitor opens the linked site/article or explicitly presses that card's Dismiss action.

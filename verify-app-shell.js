@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260811-persistent-content-unread-r73";
+const expectedBuild = "20260812-compact-unread-badges-r74";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1067,6 +1067,10 @@ requireBundledText('nli-mobile-activity-seen-items-v2', "Bundled Android app mus
 requireBundledText('ACTIVITY_UTILS.weightedActivityCount(mobileUnreadActivityItems())', "Bundled Android app must count grouped unread activity accurately.");
 requireBundledText('data-mobile-activity-dismiss', "Bundled Android activity cards must expose an explicit unread dismissal action.");
 requireBundledText('mobile-site-unread-badges', "Bundled Android map must expose per-site unread badges.");
+requireBundledPattern(/id:\s*"mobile-site-unread-badges"[\s\S]*?"circle-radius":\s*\["interpolate",\s*\["linear"\],\s*\["zoom"\],\s*6,\s*6,\s*12,\s*7\][\s\S]*?"circle-stroke-width":\s*0/, "Bundled Android point unread badges must stay compact and outline-free.");
+requireBundledPattern(/id:\s*`mobile-\$\{kind\}-unread-badges`[\s\S]*?"circle-radius":\s*7[\s\S]*?"circle-stroke-width":\s*0/, "Bundled Android polygon unread badges must stay compact and outline-free.");
+requireBundledPattern(/function promoteMobileUnreadBadgeLayers\(\)[\s\S]*?badgeLayers\.concat\(countLayers\)[\s\S]*?state\.map\.moveLayer\(layerId\)/, "Bundled Android unread numbers must stay above every red map badge.");
+requireBundledPattern(/id:\s*"mobile-site-unread-counts"[\s\S]*?"text-size":\s*9[\s\S]*?"text-optional":\s*false/, "Bundled Android point unread badges must always render their number.");
 requireBundledText('data-mobile-knowledgebase-unread-badge', "Bundled Android Knowledgebase must expose its unread count.");
 if (bundledMobileJs.includes('markMobileActivitySeen();')) {
   throw new Error("Bundled Android app must not clear all activity merely because the Community Activity feed was opened.");
