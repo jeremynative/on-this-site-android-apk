@@ -957,6 +957,7 @@
     const locateBtn = document.getElementById("locate");
     const mobileMapLocateBtn = document.getElementById("mobile-map-locate");
     const mapStoryOpenBtn = document.getElementById("map-story-open");
+    const mapStoryOpenMenuBtn = document.getElementById("map-story-open-menu");
     const loginOpenBtn = document.getElementById("login-open");
     const rewardsOpenBtn = document.getElementById("rewards-open");
     const profilesOpenBtn = document.getElementById("profiles-open");
@@ -13924,6 +13925,7 @@
       loginSheetEl?.classList.toggle("has-profile", !!state.profile);
       if (accountSheetTitleEl) accountSheetTitleEl.textContent = state.profile ? "Contributor Account" : "Login";
       if (mapStoryOpenBtn) mapStoryOpenBtn.hidden = !isApprovedContributor();
+      if (mapStoryOpenMenuBtn) mapStoryOpenMenuBtn.hidden = !isApprovedContributor();
       if (!state.profile) {
         profileCardEl.innerHTML = `<p class="summary">Not logged in. Use one contributor account for the desktop map and mobile app.</p>`;
         updateProfileMenuButton();
@@ -17314,6 +17316,7 @@
     });
     storyOpenBtn.addEventListener("click", () => openSheet(storySheetEl));
     mapStoryOpenBtn?.addEventListener("click", openContributionSheet);
+    mapStoryOpenMenuBtn?.addEventListener("click", openContributionSheet);
     contributeStoryOpenBtn?.addEventListener("click", openMapStoryComposer);
     contributeSiteOpenBtn?.addEventListener("click", () => {
       if (requireRegisteredContributor()) openSheet(suggestSiteSheetEl);

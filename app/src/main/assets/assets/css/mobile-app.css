@@ -4829,6 +4829,12 @@
         min-width: 74px;
         max-width: 104px;
         min-height: 32px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      body.android-device.tablet-landscape .story-plus-button {
+        display: none !important;
       }
 
       body.android-device.tablet-landscape .search-autocomplete {
@@ -4907,6 +4913,8 @@
         grid-row: 1 / 3;
         min-height: 0;
         max-height: none;
+        box-sizing: border-box;
+        padding-top: var(--app-top-safe);
         border-radius: 0;
       }
 

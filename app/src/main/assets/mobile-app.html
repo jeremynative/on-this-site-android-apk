@@ -4850,6 +4850,12 @@
         min-width: 74px;
         max-width: 104px;
         min-height: 32px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      body.android-device.tablet-landscape .story-plus-button {
+        display: none !important;
       }
 
       body.android-device.tablet-landscape .search-autocomplete {
@@ -4928,6 +4934,8 @@
         grid-row: 1 / 3;
         min-height: 0;
         max-height: none;
+        box-sizing: border-box;
+        padding-top: var(--app-top-safe);
         border-radius: 0;
       }
 
@@ -7423,6 +7431,7 @@ body.research-question-dialog-open .android-beta-prompt,
           <div class="mobile-more-grid">
             <button class="ghost-button mobile-landscape-menu-action" data-app-page="about" type="button">About</button>
             <button class="ghost-button mobile-landscape-menu-action" id="feedback-open-menu" type="button">Feedback</button>
+            <button class="ghost-button mobile-landscape-menu-action" id="map-story-open-menu" type="button" hidden>Add to map</button>
             <button class="ghost-button" data-app-page="home" type="button">Home</button>
             <select class="map-style-select" id="mobile-basemap" aria-label="Map style">
               <option value="streets">Streets</option>
@@ -18056,6 +18065,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const locateBtn = document.getElementById("locate");
     const mobileMapLocateBtn = document.getElementById("mobile-map-locate");
     const mapStoryOpenBtn = document.getElementById("map-story-open");
+    const mapStoryOpenMenuBtn = document.getElementById("map-story-open-menu");
     const loginOpenBtn = document.getElementById("login-open");
     const rewardsOpenBtn = document.getElementById("rewards-open");
     const profilesOpenBtn = document.getElementById("profiles-open");
@@ -31023,6 +31033,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       loginSheetEl?.classList.toggle("has-profile", !!state.profile);
       if (accountSheetTitleEl) accountSheetTitleEl.textContent = state.profile ? "Contributor Account" : "Login";
       if (mapStoryOpenBtn) mapStoryOpenBtn.hidden = !isApprovedContributor();
+      if (mapStoryOpenMenuBtn) mapStoryOpenMenuBtn.hidden = !isApprovedContributor();
       if (!state.profile) {
         profileCardEl.innerHTML = `<p class="summary">Not logged in. Use one contributor account for the desktop map and mobile app.</p>`;
         updateProfileMenuButton();
@@ -34413,6 +34424,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     });
     storyOpenBtn.addEventListener("click", () => openSheet(storySheetEl));
     mapStoryOpenBtn?.addEventListener("click", openContributionSheet);
+    mapStoryOpenMenuBtn?.addEventListener("click", openContributionSheet);
     contributeStoryOpenBtn?.addEventListener("click", openMapStoryComposer);
     contributeSiteOpenBtn?.addEventListener("click", () => {
       if (requireRegisteredContributor()) openSheet(suggestSiteSheetEl);
