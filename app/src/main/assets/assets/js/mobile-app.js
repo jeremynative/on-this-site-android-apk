@@ -12749,7 +12749,7 @@
     }
 
     function setLocationControlsBusy(busy) {
-      locateBtn.textContent = busy ? "Finding..." : "Near me";
+      if (locateBtn) locateBtn.textContent = busy ? "Finding..." : "Near me";
       if (!mobileMapLocateBtn) return;
       mobileMapLocateBtn.disabled = busy;
       mobileMapLocateBtn.classList.toggle("is-finding", busy);
