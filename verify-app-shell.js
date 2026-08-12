@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260811-apk-center-reveal-r71";
+const expectedBuild = "20260811-plant-safe-area-r72";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -422,6 +422,12 @@ for (const side of ["top", "right", "bottom", "left"]) {
       || !new RegExp(`--app-${side}-safe:\\s*max\\([^;]*var\\(--native-${side}-safe\\)`).test(bundledMobileCss)) {
     throw new Error(`Bundled Android CSS must include the native ${side} inset in its shared safe boundary.`);
   }
+}
+if (!bundledMobileCss.includes("body.native-android-app .plant-observation-panel[open]")
+    || !bundledMobileCss.includes("padding-bottom: max(56px, calc(var(--app-bottom-safe) + 16px));")
+    || !bundledMobileCss.includes("scroll-padding-bottom: max(72px, calc(var(--app-bottom-safe) + 32px));")
+    || !bundledMobileCss.includes("body.native-android-app .plant-camera-controls")) {
+  throw new Error("Bundled Android Plant ID controls must clear three-button system navigation even during an incomplete inset update.");
 }
 for (const side of ["Top", "Right", "Bottom", "Left"]) {
   if (!bundledMobileJs.includes(`androidBridgeCssPixel("getSafeInset${side}")`)) {

@@ -1,5 +1,14 @@
 # Android APK — Codex Handoff
 
+## August 11 Plant ID system-navigation clearance
+
+- Added Plant-ID-specific Android bottom clearance so the expanded plant report form, its photo actions, and the in-app camera controls stay above gesture and three-button system navigation even if WebView briefly reports a partial inset while opening the drawer or returning from Camera.
+- The shared site drawer keeps its existing position; only Plant ID receives the extra minimum clearance, avoiding a new blank gap elsewhere in the APK.
+- Shell build ID is `20260811-plant-safe-area-r72`. Focused Plant ID/layout verification, shell verification, diff hygiene, and the debug APK build pass.
+- Android WebView QA at 412x915 with a 24 CSS-pixel native bottom inset measured 56px Plant ID bottom padding, 72px drawer scroll padding, and both 44px photo buttons fully above the system navigation region. The temporary QA package was removed and the previously installed signed APK was left intact.
+
+Safest next action: publish the signed Obtainium release, install it over the current APK without clearing data, and repeat the Plant ID open/photo-return check on a Samsung device using three-button navigation.
+
 ## August 11 APK learning-path navigation (publishing)
 
 - Replaced the APK Learn action's hard-coded Knowledgebase route with a mobile-native Learning Paths browser backed by the public `learning_paths` and `learning_path_sites` collections.
