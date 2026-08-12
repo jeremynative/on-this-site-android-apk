@@ -1063,10 +1063,9 @@
     const feedbackSheetEl = document.getElementById("feedback-sheet");
     const storySheetEl = document.getElementById("story-sheet");
     const suggestSiteSheetEl = document.getElementById("suggest-site-sheet");
-    // Register sheet dismissal before the optional feature setup below. Use
-    // capture phase so Android WebView touch/map handlers cannot swallow the
-    // contributor sheet's close control before it reaches this listener.
-    document.addEventListener("pointerdown", closeMobileSheetFromControl, true);
+    // Register sheet dismissal before the optional feature setup below. Wait
+    // for the completed click so the sheet stays over controls underneath for
+    // the entire Android tap, then consume that click during capture.
     document.addEventListener("click", closeMobileSheetFromControl, true);
     const loginEmailEl = document.getElementById("login-email");
     const loginPasswordEl = document.getElementById("login-password");

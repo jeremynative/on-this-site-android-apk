@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-contributor-profile-close-r84";
+const expectedBuild = "20260812-contributor-profile-tap-through-r85";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -50,12 +50,12 @@ const bundledCalendarUtils = fs.readFileSync("app/src/main/assets/assets/js/shar
 const styles = fs.readFileSync(stylesPath, "utf8");
 const launchBackground = fs.readFileSync(launchBackgroundPath, "utf8");
 
-if (!bundledMobileJs.includes('document.addEventListener("pointerdown", closeMobileSheetFromControl, true);')
-    || !bundledMobileJs.includes('document.addEventListener("click", closeMobileSheetFromControl, true);')
+if (!bundledMobileJs.includes('document.addEventListener("click", closeMobileSheetFromControl, true);')
     || !bundledMobileJs.includes('if (!sheet?.classList.contains("open")) return;')
     || !bundledMobileJs.includes('if (sheet === profilesSheetEl) state.expandedMobileProfileKey = "";')
+    || bundledMobileJs.includes('document.addEventListener("pointerdown", closeMobileSheetFromControl, true);')
     || bundledMobileJs.includes('document.addEventListener("pointerup", closeMobileSheetFromControl);')) {
-  throw new Error("APK contributor profile close controls must dismiss in capture phase before WebView map/profile handlers.");
+  throw new Error("APK contributor profile close must consume the completed click without exposing controls underneath during pointer-down.");
 }
 
 if (!bundledApp.includes('id="landscape-panel-resizer"')
