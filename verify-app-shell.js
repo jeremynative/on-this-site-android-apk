@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-center-first-startup-r86";
+const expectedBuild = "20260812-deferred-map-detail-r87";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -148,6 +148,9 @@ if (!bundledMobileJs.includes('const SITE_CENTER_URL = "assets/data/mobile-site-
     || !bundledMobileJs.includes("hydrateMobileSiteGeometry")
     || !bundledMobileJs.includes("idleTask(hydrateMobileSiteGeometry)")) {
   throw new Error("APK startup must use compact site centers first and hydrate full map geometry after the initial render.");
+}
+if (!/function\s+hydrateMobileSiteGeometry\(\)[\s\S]*?Promise\.all\(\[[\s\S]*?fetchMobileSiteGeometryRows\(\)[\s\S]*?ensureLandMask\(\)/.test(bundledMobileJs)) {
+  throw new Error("APK startup must defer the land mask with detailed polygon hydration instead of blocking its first render.");
 }
 for (const slug of ["coopers-beach-shinnecock-access", "watermill-center"]) {
   if (!bundledIndexSlugs.has(slug)) {
@@ -1202,7 +1205,7 @@ requireBundledText('searchDataVersion: 0', "Bundled Android app must track searc
 requireBundledText('lastSearchDataVersion: -1', "Bundled Android app must remember the last processed search data version.");
 requireBundledText('state.searchDataVersion += 1;', "Bundled Android app must mark rebuilt site data for search refresh.");
 requireBundledText('value === state.lastSearchValue && state.lastSearchDataVersion === state.searchDataVersion', "Bundled Android app must not skip same-text searches after data changes.");
-requireBundledPattern(/const\s+startupLandMask\s*=\s*isOfflineTextMode\(\)\s*\?\s*Promise\.resolve\(null\)\s*:\s*ensureLandMask\(\);[\s\S]*?await\s+loadData\(\);[\s\S]*?await\s+startupLandMask;[\s\S]*?prepareSites\(\);/, "Bundled Android app must skip the network land mask offline while retaining the normal startup order online.");
+requireBundledPattern(/const\s+startupLandMask\s*=\s*window\.NLI_MOBILE_DATA\s*&&\s*!isOfflineTextMode\(\)[\s\S]*?ensureLandMask\(\)[\s\S]*?Promise\.resolve\(null\);[\s\S]*?await\s+loadData\(\);[\s\S]*?await\s+startupLandMask;[\s\S]*?prepareSites\(\);/, "Bundled Android app must prepare its local polygon land mask while the live center-first path defers the network mask.");
 requireBundledText('enterkeyhint="search"', "Bundled Android app must request the Android keyboard search action.");
 requireBundledText('autocomplete="off"', "Bundled Android app must keep the mobile search input from fighting app results.");
 requireBundledText('function openMobileSearchResultsPage()', "Bundled Android app must include an explicit mobile search results page.");

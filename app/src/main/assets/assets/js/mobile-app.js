@@ -3152,8 +3152,11 @@
       if (state.siteGeometryPromise) return state.siteGeometryPromise;
       performance.mark?.("nli-mobile-geometry-hydration-start");
       appEl?.setAttribute("data-site-geometry", "hydrating");
-      state.siteGeometryPromise = fetchMobileSiteGeometryRows()
-        .then(rows => {
+      state.siteGeometryPromise = Promise.all([
+        fetchMobileSiteGeometryRows(),
+        ensureLandMask()
+      ])
+        .then(([rows]) => {
           const bySlug = new Map((rows || []).filter(row => row?.slug).map(row => [String(row.slug), row]));
           const byId = new Map((rows || []).filter(row => row?.id != null).map(row => [String(row.id), row]));
           let changed = false;
@@ -18093,7 +18096,9 @@
         const nativeAndroid = isNativeAndroidApp();
         state.mobileStartupRendering = true;
         setLoadingMessage("Loading sites and nearby tools.");
-        const startupLandMask = isOfflineTextMode() ? Promise.resolve(null) : ensureLandMask();
+        const startupLandMask = window.NLI_MOBILE_DATA && !isOfflineTextMode()
+          ? ensureLandMask()
+          : Promise.resolve(null);
         await loadData();
         await startupLandMask;
         setLoadingMessage("Preparing the mobile interface.");
