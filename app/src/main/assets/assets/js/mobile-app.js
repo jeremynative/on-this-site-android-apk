@@ -1063,10 +1063,11 @@
     const feedbackSheetEl = document.getElementById("feedback-sheet");
     const storySheetEl = document.getElementById("story-sheet");
     const suggestSiteSheetEl = document.getElementById("suggest-site-sheet");
-    // Register sheet dismissal before the optional feature setup below. A
-    // missing optional control must never leave a visible sheet without a
-    // working close button on Android WebView.
-    document.addEventListener("pointerup", closeMobileSheetFromControl);
+    // Register sheet dismissal before the optional feature setup below. Use
+    // capture phase so Android WebView touch/map handlers cannot swallow the
+    // contributor sheet's close control before it reaches this listener.
+    document.addEventListener("pointerdown", closeMobileSheetFromControl, true);
+    document.addEventListener("click", closeMobileSheetFromControl, true);
     const loginEmailEl = document.getElementById("login-email");
     const loginPasswordEl = document.getElementById("login-password");
     const loginSubmitBtn = document.getElementById("login-submit");
@@ -17551,17 +17552,21 @@
       const button = event.target?.closest?.("[data-close-sheet]");
       if (!button) return;
       const sheet = button.closest(".sheet");
+      if (!sheet?.classList.contains("open")) return;
+      if (event.cancelable) event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      markAndroidUiOverlayTap();
+      button.blur?.();
       if (sheet === storySheetEl) {
         closeStoryMode();
         return;
       }
-      sheet?.classList.remove("open");
+      sheet.classList.remove("open");
+      if (sheet === profilesSheetEl) state.expandedMobileProfileKey = "";
       if (sheet && mobileSheetRouteKey(sheet)) clearMobileRoute();
       syncMobilePanelAccessibility();
     }
-    document.querySelectorAll("[data-close-sheet]").forEach(button => {
-      button.addEventListener("click", closeMobileSheetFromControl);
-    });
     function showMobileProfileReview(scope, kind) {
       const comments = scope?.querySelector("[data-mobile-profile-comments]");
       const progress = scope?.querySelector("[data-mobile-profile-progress]");
