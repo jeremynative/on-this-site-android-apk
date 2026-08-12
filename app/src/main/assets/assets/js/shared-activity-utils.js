@@ -303,6 +303,61 @@
     });
   }
 
+  function contentUpdateFocusField(item = {}, activityItems = [], sectionFields = [], options = {}) {
+    const cleanText = typeof options.cleanText === "function"
+      ? options.cleanText
+      : value => String(value || "").replace(/<[^>]*>/g, " ");
+    const normalize = value => cleanText(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s'-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const stopWords = new Set([
+      "about", "after", "again", "also", "been", "being", "from", "have", "into", "more", "most",
+      "new", "site", "that", "their", "there", "these", "this", "update", "updated", "with", "your"
+    ]);
+    const tokens = value => new Set(normalize(value).split(" ").filter(token => token.length > 3 && !stopWords.has(token)));
+    const activityText = [
+      item.activity_update_summary,
+      item.activity_feed_summary,
+      ...activityItems.flatMap(activity => [
+        activity?.preview,
+        activity?.label,
+        activity?.title,
+        ...(Array.isArray(activity?.activityMembers)
+          ? activity.activityMembers.flatMap(member => [member?.preview, member?.label, member?.title])
+          : [])
+      ])
+    ].filter(Boolean).join(" ");
+    const normalizedActivity = normalize(activityText);
+    const activityTokens = tokens(activityText);
+    const candidates = sectionFields
+      .map(field => ({
+        field: field.content,
+        title: item[field.title] || field.defaultTitle || "",
+        content: item[field.content] || ""
+      }))
+      .filter(candidate => candidate.field && normalize(candidate.content));
+    if (normalize(item.why_this_matters)) {
+      candidates.push({ field: "why_this_matters", title: "Why This Matters", content: item.why_this_matters });
+    }
+    if (!candidates.length) return "";
+    const titleMatch = candidates.find(candidate => {
+      const title = normalize(candidate.title);
+      return title.length > 3 && normalizedActivity.includes(title);
+    });
+    if (titleMatch) return titleMatch.field;
+    let best = null;
+    candidates.forEach(candidate => {
+      const candidateTokens = tokens(`${candidate.title} ${candidate.content}`);
+      const overlap = [...activityTokens].filter(token => candidateTokens.has(token)).length;
+      const score = overlap + (normalize(candidate.title) && normalizedActivity.includes(normalize(candidate.title)) ? 4 : 0);
+      if (!best || score > best.score) best = { field: candidate.field, score };
+    });
+    if (best?.score > 0) return best.field;
+    return candidates.find(candidate => candidate.field === "introduction_content")?.field || candidates[0].field;
+  }
+
   function wikiActivityLabel(article = {}) {
     const created = wikiCreatedDate(article);
     const edited = contentUpdateDate(article);
@@ -557,6 +612,7 @@
     contentUpdateDate,
     contentActivityDate,
     activityNewsPreview,
+    contentUpdateFocusField,
     wikiActivityDate,
     eventActivityDate,
     siteActivityLabel,

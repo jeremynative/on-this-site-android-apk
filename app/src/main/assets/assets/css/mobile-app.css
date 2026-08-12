@@ -828,6 +828,34 @@
 
     .mobile-content-unread-badge[hidden] { display: none !important; }
 
+    .content-update-highlight {
+      position: relative;
+      border-radius: 14px;
+      outline: 2px solid rgba(198, 40, 40, 0.72);
+      outline-offset: 4px;
+      background-color: rgba(198, 40, 40, 0.07);
+      box-shadow: inset 4px 0 0 #c62828;
+      animation: content-update-highlight-pulse 1.25s ease-in-out 2;
+    }
+
+    .content-update-highlight::before {
+      content: "";
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #c62828;
+      box-shadow: 0 0 0 3px #fff, 0 3px 9px rgba(89, 23, 20, 0.3);
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    @keyframes content-update-highlight-pulse {
+      50% { background-color: rgba(198, 40, 40, 0.14); }
+    }
+
     [data-app-page="knowledgebase"] { position: relative; }
 
     .mobile-knowledgebase-unread-badge {

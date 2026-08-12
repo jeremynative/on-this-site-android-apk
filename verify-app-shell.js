@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-deferred-map-detail-r87";
+const expectedBuild = "20260812-content-focus-location-guard-r88";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -50,6 +50,20 @@ const bundledSharedSiteUtils = fs.readFileSync(bundledSharedSiteUtilsPath, "utf8
 const bundledCalendarUtils = fs.readFileSync("app/src/main/assets/assets/js/shared-calendar-utils.js", "utf8");
 const styles = fs.readFileSync(stylesPath, "utf8");
 const launchBackground = fs.readFileSync(launchBackgroundPath, "utf8");
+
+if (!bundledMobileJs.includes("function revealMobileContentUpdate(item, activityItems = [])")
+    || !bundledMobileJs.includes('target.classList.add("content-update-highlight")')
+    || !bundledMobileJs.includes('showBanner("New content highlighted.")')
+    || !bundledMobileCss.includes(".content-update-highlight::before")) {
+  throw new Error("APK unread site updates must scroll to and temporarily highlight the matching content section.");
+}
+
+if (!bundledMobileJs.includes("LOCATION_CONTROL_MAX_SCOPE_DISTANCE_MILES = 75")
+    || !bundledMobileJs.includes("function locationWithinLongIslandScope(location)")
+    || !bundledMobileJs.includes("restrictToLongIslandScope && !locationWithinLongIslandScope(nextLocation)")
+    || !bundledMobileJs.includes("You are too far from Long Island to recenter this map.")) {
+  throw new Error("APK location controls must reject far-away coordinates before recentering the Long Island map.");
+}
 
 if (!bundledMobileJs.includes('document.addEventListener("click", closeMobileSheetFromControl, true);')
     || !bundledMobileJs.includes('if (!sheet?.classList.contains("open")) return;')

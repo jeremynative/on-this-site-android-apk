@@ -169,6 +169,7 @@
     const LONG_ISLAND_BOUNDS = [[-75.15, 39.75], [-70.65, 42.05]];
     const LONG_ISLAND_VIEW_BOUNDS = [[-74.35, 40.32], [-71.48, 41.36]];
     const STARTUP_LOCATION_CENTER_BOUNDS = [[-74.25, 40.45], [-71.65, 41.25]];
+    const LOCATION_CONTROL_MAX_SCOPE_DISTANCE_MILES = 75;
     const FALLBACK_CENTER = [-72.95, 40.86];
     const MOBILE_LONG_ISLAND_START_VIEWS = [
       { center: [-73.72, 40.72], zoom: 9.25 },
@@ -2019,7 +2020,7 @@
         excludeHref: options.excludeHref
       }));
       return `
-        <section class="section${sourceNote ? " has-source" : ""}"${options.introduction ? ` data-site-introduction="section"` : ""}>
+        <section class="section${sourceNote ? " has-source" : ""}"${options.introduction ? ` data-site-introduction="section"` : ""}${options.field ? ` data-content-section-field="${escapeHtml(options.field)}"` : ""}>
           <h3>${escapeHtml(title)}</h3>
           <div class="section-content">${html}</div>
           ${sourceNote ? `
@@ -2659,7 +2660,7 @@
         })(),
         { cleanText: publicCleanText, normalizeText }
       );
-      return paragraphs.length ? `<section class="section"><h3>Why This Matters</h3>${paragraphs.map(text => `<p>${escapeHtml(text)}</p>`).join("")}</section>` : "";
+      return paragraphs.length ? `<section class="section" data-content-section-field="why_this_matters"><h3>Why This Matters</h3>${paragraphs.map(text => `<p>${escapeHtml(text)}</p>`).join("")}</section>` : "";
     }
 
     function normalizeSourceRelation(relation) {
@@ -12525,6 +12526,9 @@
         }
         return;
       }
+      const contentUpdateItems = Array.isArray(options.contentUpdateItems)
+        ? options.contentUpdateItems
+        : mobileUnreadContentActivityItems("site", slug);
       markMobileContentActivitySeen("site", slug);
       let site = state.sites.find(item => item.slug === slug);
       if (!site) return;
@@ -12580,12 +12584,13 @@
       const sections = sectionEntries.map(([title, content, field]) => {
         if (field?.content === "history_content" && moments.length) {
           renderedMoments = true;
-          return `${sourceAwareSectionHtml(title, content, { linked, excludeHref })}${historicMomentsHtml(moments, { showLocations: false })}`;
+          return `${sourceAwareSectionHtml(title, content, { linked, excludeHref, field: field?.content })}${historicMomentsHtml(moments, { showLocations: false })}`;
         }
         return sourceAwareSectionHtml(title, content, {
           linked,
           excludeHref,
-          introduction: field?.content === "introduction_content"
+          introduction: field?.content === "introduction_content",
+          field: field?.content
         });
       }).join("");
       const historyHtml = moments.length && !renderedMoments ? historicMomentsHtml(moments, { showLocations: false }) : "";
@@ -12628,6 +12633,9 @@
           content: { type: "site", slug },
           detailScrollTop: Number(options.preserveDetailScrollTop)
         });
+      }
+      if (contentUpdateItems.length && options.focusNewContent !== false) {
+        window.setTimeout(() => revealMobileContentUpdate(site, contentUpdateItems), 180);
       }
       if (!options.skipCommentRefresh) refreshCommentsNow({ rerender: false }).then(updated => {
         if (updated && state.selectedSlug === slug) {
@@ -13015,6 +13023,23 @@
       return Math.min(currentZoom + 1, Number.isFinite(maximumZoom) ? maximumZoom : currentZoom + 1);
     }
 
+    function locationDistanceFromLongIslandScope(location) {
+      if (!Array.isArray(location) || location.length < 2) return Number.POSITIVE_INFINITY;
+      const longitude = Number(location[0]);
+      const latitude = Number(location[1]);
+      if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return Number.POSITIVE_INFINITY;
+      const [southwest, northeast] = LONG_ISLAND_VIEW_BOUNDS;
+      const nearest = [
+        Math.min(Math.max(longitude, southwest[0]), northeast[0]),
+        Math.min(Math.max(latitude, southwest[1]), northeast[1])
+      ];
+      return milesBetween([longitude, latitude], nearest);
+    }
+
+    function locationWithinLongIslandScope(location) {
+      return locationDistanceFromLongIslandScope(location) <= LOCATION_CONTROL_MAX_SCOPE_DISTANCE_MILES;
+    }
+
     function applyUserLocation(position, { centerMap = false, mapZoom = NEAR_ME_ZOOM, centerBounds = null } = {}) {
       const nextLocation = [position.coords.longitude, position.coords.latitude];
       const moved = locationMovedEnough(nextLocation);
@@ -13043,7 +13068,8 @@
       silent = false,
       mapZoom = NEAR_ME_ZOOM,
       centerBounds = null,
-      zoomIfAlreadyCentered = false
+      zoomIfAlreadyCentered = false,
+      restrictToLongIslandScope = false
     } = {}) {
       if (!navigator.geolocation) {
         if (!silent) showBanner("Location is not available on this device.");
@@ -13053,6 +13079,12 @@
       return new Promise(resolve => {
         navigator.geolocation.getCurrentPosition(position => {
           const nextLocation = [position.coords.longitude, position.coords.latitude];
+          if (restrictToLongIslandScope && !locationWithinLongIslandScope(nextLocation)) {
+            setLocationControlsBusy(false);
+            if (!silent) showBanner("You are too far from Long Island to recenter this map.");
+            resolve(false);
+            return;
+          }
           const resolvedMapZoom = zoomIfAlreadyCentered && mapIsCenteredOnLocation(nextLocation)
             ? nextLocationControlZoom()
             : mapZoom;
@@ -13075,7 +13107,7 @@
     async function locateUser() {
       setMobilePanelMode("nearby");
       setNearbyPanelState("default");
-      return requestUserLocation({ centerMap: true, silent: false, mapZoom: NEAR_ME_ZOOM });
+      return requestUserLocation({ centerMap: true, silent: false, mapZoom: NEAR_ME_ZOOM, restrictToLongIslandScope: true });
     }
 
     async function locateMapUser() {
@@ -13083,7 +13115,8 @@
         centerMap: true,
         silent: false,
         mapZoom: NEAR_ME_ZOOM,
-        zoomIfAlreadyCentered: isNativeAndroidApp()
+        zoomIfAlreadyCentered: isNativeAndroidApp(),
+        restrictToLongIslandScope: true
       });
     }
 
@@ -15230,6 +15263,29 @@
       return ACTIVITY_UTILS.weightedActivityCount(mobileUnreadActivityItems().filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.key === targetKey));
     }
 
+    function mobileUnreadContentActivityItems(type, slug) {
+      const targetKey = `${String(type || "").toLowerCase()}|${String(slug || "").trim().toLowerCase()}`;
+      return mobileUnreadActivityItems().filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.key === targetKey);
+    }
+
+    function revealMobileContentUpdate(item, activityItems = []) {
+      if (!item || !activityItems.length || state.selectedSlug !== item.slug) return;
+      const field = ACTIVITY_UTILS.contentUpdateFocusField(item, activityItems, MOBILE_SITE_CONTENT_SECTION_FIELDS, {
+        cleanText: publicCleanText
+      });
+      const escapedField = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(field) : field.replace(/[^a-z0-9_-]/gi, "");
+      const target = (escapedField && detailBodyEl.querySelector(`[data-content-section-field="${escapedField}"]`))
+        || detailBodyEl.querySelector('[data-site-introduction="section"]')
+        || detailBodyEl.querySelector('[data-site-introduction="summary"]')
+        || detailBodyEl.querySelector(".section");
+      if (!target) return;
+      detailBodyEl.querySelectorAll(".content-update-highlight").forEach(element => element.classList.remove("content-update-highlight"));
+      target.classList.add("content-update-highlight");
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      showBanner("New content highlighted.");
+      window.setTimeout(() => target.classList.remove("content-update-highlight"), 8000);
+    }
+
     function mobileUnreadCountLabel(count) {
       const normalizedCount = Math.max(0, Number(count) || 0);
       return normalizedCount > 99 ? "99+" : String(normalizedCount);
@@ -15532,8 +15588,11 @@
       const slug = button?.dataset.mobileActivitySlug || "";
       const sourceType = button?.dataset.mobileActivitySourceType || "";
       const activityId = button?.dataset.mobileActivityId || "";
+      const activityItemKey = button?.dataset.mobileActivityItemKey || "";
+      const activityItem = latestMobileActivity().find(item => ACTIVITY_UTILS.activityItemKey(item) === activityItemKey);
+      const contentUpdateItems = activityItem ? [activityItem] : [];
       activitySheetEl?.classList.remove("open");
-      markMobileActivityItemSeen(button?.dataset.mobileActivityItemKey || "");
+      markMobileActivityItemSeen(activityItemKey);
       if (type === "map-story" && slug) {
         const story = state.mapStories.find(item => String(item.id) === String(slug));
         if (story && MAP_STORY_UTILS.isActive(story, state.mapStoryVotes, MAP_STORY_RULES)) {
@@ -15557,16 +15616,16 @@
         if (sourceType === "wiki" && slug) {
           const event = activityId ? state.timelineEvents.find(item => String(item.id) === String(activityId)) : null;
           openWikiArticle(slug, { timelineEventId: activityId, timelineEvent: event });
-        } else if (slug) openSite(slug, { timelineEventId: activityId });
+        } else if (slug) openSite(slug, { timelineEventId: activityId, contentUpdateItems });
       } else if (type === "support" || sourceType === "support") {
         openSupportPanel();
       } else if (type === "wiki" && slug) openWikiArticle(slug);
       else if (type === "event" && slug) {
-        if (state.siteBySlug.has(slug)) return openSite(slug);
+        if (state.siteBySlug.has(slug)) return openSite(slug, { contentUpdateItems });
         const exhibit = state.exhibits.find(item => String(item.id) === String(activityId) || String(item.slug || item.id) === String(slug));
         if (exhibit) openExhibit(exhibit);
       } else if (slug && state.wikiBySlug.has(slug)) openWikiArticle(slug);
-      else if (slug) openSite(slug);
+      else if (slug) openSite(slug, { contentUpdateItems });
       syncMobilePanelAccessibility();
     }
 
