@@ -856,9 +856,10 @@
       50% { background-color: rgba(198, 40, 40, 0.14); }
     }
 
+    [data-app-page="browse"],
     [data-app-page="knowledgebase"] { position: relative; }
 
-    .mobile-knowledgebase-unread-badge {
+    .mobile-menu-content-unread-badge {
       position: absolute;
       top: -5px;
       right: -5px;
@@ -870,6 +871,39 @@
       font-size: 8px;
       box-shadow: 0 1px 4px rgba(44, 24, 20, 0.24);
       z-index: 2;
+    }
+
+    .mobile-site-list-new-content {
+      border-color: rgba(198, 40, 40, 0.34);
+      background: rgba(198, 40, 40, 0.035);
+    }
+
+    .mobile-site-list-new-content h3 {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .mobile-site-list-new-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #c62828;
+      flex: 0 0 auto;
+    }
+
+    .mobile-site-list-new-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: start;
+    }
+
+    .mobile-site-list-dismiss {
+      min-height: 36px;
+      padding: 7px 10px;
+      color: #8e2525;
+      font-size: 12px;
     }
 
     .mobile-activity-button svg,

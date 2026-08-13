@@ -11875,12 +11875,28 @@
 
     function openBrowsePanel() {
       const sites = [...state.sites].sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
-      openInfoPanel("Browse", `${sites.length} mapped places`, `
+      const unreadSites = sites.filter(site => mobileContentUnreadCount("site", site.slug) > 0);
+      const unreadSlugs = new Set(unreadSites.map(site => site.slug));
+      const regularSites = sites.filter(site => !unreadSlugs.has(site.slug));
+      openInfoPanel("Site List", `${sites.length} mapped places`, `
         <p class="summary">Choose a place to open it inside the app.</p>
-        <section class="section compact-list">
-          ${sites.map(siteCardButton).join("") || `<p class="summary">No sites are loaded yet.</p>`}
+        ${unreadSites.length ? `
+          <section class="section compact-list mobile-site-list-new-content">
+            <h3><span class="mobile-site-list-new-dot" aria-hidden="true"></span>New content</h3>
+            <p class="detail-meta">Recently added or updated listings stay here until you open or dismiss them.</p>
+            ${unreadSites.map(site => `
+              <div class="mobile-site-list-new-row">
+                ${siteCardButton(site)}
+                <button class="action secondary mobile-site-list-dismiss" type="button" data-mobile-dismiss-site-update="${escapeHtml(site.slug)}" aria-label="Dismiss new content for ${escapeHtml(site.title || "this site")}">Dismiss</button>
+              </div>
+            `).join("")}
+          </section>
+        ` : ""}
+        <section class="section compact-list mobile-site-list-regular">
+          ${regularSites.map(siteCardButton).join("") || (unreadSites.length ? "" : `<p class="summary">No sites are loaded yet.</p>`)}
         </section>
       `);
+      refreshMobileContentUnreadBadges();
     }
 
     const MOBILE_LEARNING_PATH_PROGRESS_KEY = "nli-mobile-learning-path-progress-v1";
@@ -15465,11 +15481,23 @@
         element.classList.toggle("has-unread-activity", count > 0);
       });
       const wikiCount = ACTIVITY_UTILS.weightedActivityCount(mobileUnreadActivityItems().filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.type === "wiki"));
+      const siteCount = ACTIVITY_UTILS.weightedActivityCount(mobileUnreadActivityItems().filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.type === "site"));
+      document.querySelectorAll('.mobile-more-menu [data-app-page="browse"]').forEach(button => {
+        let badge = button.querySelector("[data-mobile-site-list-unread-badge]");
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "mobile-content-unread-badge mobile-menu-content-unread-badge mobile-site-list-unread-badge";
+          badge.dataset.mobileSiteListUnreadBadge = "";
+          button.appendChild(badge);
+        }
+        badge.textContent = siteCount > 99 ? "99+" : String(siteCount);
+        badge.hidden = siteCount <= 0;
+      });
       document.querySelectorAll('[data-app-page="knowledgebase"]').forEach(button => {
         let badge = button.querySelector("[data-mobile-knowledgebase-unread-badge]");
         if (!badge) {
           badge = document.createElement("span");
-          badge.className = "mobile-content-unread-badge mobile-knowledgebase-unread-badge";
+          badge.className = "mobile-content-unread-badge mobile-menu-content-unread-badge mobile-knowledgebase-unread-badge";
           badge.dataset.mobileKnowledgebaseUnreadBadge = "";
           button.appendChild(badge);
         }
@@ -17762,6 +17790,14 @@
         clearAddressSearch();
         renderList();
         showBanner("Search pin cleared.");
+        return;
+      }
+      const dismissSiteUpdate = event.target.closest("[data-mobile-dismiss-site-update]");
+      if (dismissSiteUpdate) {
+        event.preventDefault();
+        markMobileContentActivitySeen("site", dismissSiteUpdate.dataset.mobileDismissSiteUpdate);
+        openBrowsePanel();
+        showBanner("New site content dismissed.");
         return;
       }
       const appPageButton = event.target.closest("[data-app-page]");

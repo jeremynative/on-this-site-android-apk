@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-landscape-layout-optimization-r95";
+const expectedBuild = "20260813-site-list-unread-r96";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1181,8 +1181,8 @@ if (/id:\s*`mobile-\$\{kind\}-unread-badges`/.test(bundledMobileJs)) {
 requireBundledPattern(/function promoteMobileUnreadBadgeLayers\(\)[\s\S]*?badgeLayers\.forEach\(layerId[\s\S]*?state\.map\.moveLayer\(layerId\)/, "Bundled Android numbered unread icons must stay above map content.");
 requireBundledPattern(/unread_icon:\s*mobileUnreadCountIcon\(unreadCount\)/, "Bundled Android map features must carry a numbered unread icon key.");
 requireBundledText('data-mobile-knowledgebase-unread-badge', "Bundled Android Knowledgebase must expose its unread count.");
-if (!/\.mobile-knowledgebase-unread-badge\s*\{[\s\S]*?top:\s*-5px;[\s\S]*?right:\s*-5px;[\s\S]*?min-width:\s*14px;[\s\S]*?height:\s*14px;[\s\S]*?font-size:\s*8px;/.test(bundledMobileCss)) {
-  throw new Error("Bundled Android Knowledgebase unread badge must stay small and clear of the menu label.");
+if (!/\.mobile-menu-content-unread-badge\s*\{[\s\S]*?top:\s*-5px;[\s\S]*?right:\s*-5px;[\s\S]*?min-width:\s*14px;[\s\S]*?height:\s*14px;[\s\S]*?font-size:\s*8px;/.test(bundledMobileCss)) {
+  throw new Error("Bundled Android Site List and Knowledgebase unread badges must stay small and clear of their menu labels.");
 }
 if (bundledMobileJs.includes('markMobileActivitySeen();')) {
   throw new Error("Bundled Android app must not clear all activity merely because the Community Activity feed was opened.");
