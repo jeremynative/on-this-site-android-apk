@@ -7075,6 +7075,13 @@
       blockMobileMapTaps(durationMs);
     }
 
+    function suppressNextAndroidMapTap(durationMs = 900) {
+      const now = performance.now();
+      state.suppressNextAndroidMapTapUntil = Math.max(state.suppressNextAndroidMapTapUntil || 0, now + durationMs);
+      state.lastAndroidUiOverlayTapAt = now;
+      blockMobileMapTaps(durationMs);
+    }
+
     function isMobileMapTapBlocked() {
       return performance.now() < (state.mobilePanelTapBlockUntil || 0);
     }
@@ -7503,6 +7510,8 @@
 
     window.onAndroidMapTap = function onAndroidMapTap(viewX, viewY, viewWidth, viewHeight, retry = false) {
       if (!state.map?.getCanvas) return false;
+      const now = performance.now();
+      if (now < (state.suppressNextAndroidMapTapUntil || 0)) return false;
       if (isAndroidEditableControlTap(viewX, viewY, viewWidth, viewHeight)) {
         state.pendingAndroidSearchResultTap = null;
         return false;
@@ -17806,6 +17815,8 @@
       const appPageButton = event.target.closest("[data-app-page]");
       if (appPageButton?.dataset.appPage) {
         event.preventDefault();
+        const menuNavigation = appPageButton.closest(".mobile-more-menu, .mobile-layer-menu");
+        if (menuNavigation) suppressNextAndroidMapTap();
         document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
         openAppPage(appPageButton.dataset.appPage);
         return;

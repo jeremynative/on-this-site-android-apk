@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260813-site-list-tap-guard-r97";
+const expectedBuild = "20260813-site-list-native-tap-r98";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1185,6 +1185,8 @@ if (!/\.mobile-menu-content-unread-badge\s*\{[\s\S]*?top:\s*-5px;[\s\S]*?right:\
   throw new Error("Bundled Android Site List and Knowledgebase unread badges must stay small and clear of their menu labels.");
 }
 requireBundledPattern(/function\s+bindMobileInteractiveLayer\(layerId,\s*clickHandler\)[\s\S]*?if\s*\(isMobileMapTapBlocked\(\)\)\s*return;[\s\S]*?clickHandler\(event\)/, "Bundled Android menu actions must block same-gesture map layer clicks after the menu closes.");
+requireBundledPattern(/function\s+suppressNextAndroidMapTap\(durationMs\s*=\s*900\)[\s\S]*?suppressNextAndroidMapTapUntil[\s\S]*?window\.onAndroidMapTap[\s\S]*?suppressNextAndroidMapTapUntil/, "Bundled Android menu navigation must suppress the delayed native map bridge after the menu disappears.");
+requireBundledPattern(/appPageButton\.closest\("\.mobile-more-menu, \.mobile-layer-menu"\)[\s\S]*?suppressNextAndroidMapTap\(\)[\s\S]*?openAppPage\(appPageButton\.dataset\.appPage\)/, "Bundled Android menu navigation must arm the delayed native map-tap suppressor before opening its page.");
 if (bundledMobileJs.includes('markMobileActivitySeen();')) {
   throw new Error("Bundled Android app must not clear all activity merely because the Community Activity feed was opened.");
 }
