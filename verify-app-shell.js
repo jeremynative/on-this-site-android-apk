@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260813-site-list-unread-r96";
+const expectedBuild = "20260813-site-list-tap-guard-r97";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1184,6 +1184,7 @@ requireBundledText('data-mobile-knowledgebase-unread-badge', "Bundled Android Kn
 if (!/\.mobile-menu-content-unread-badge\s*\{[\s\S]*?top:\s*-5px;[\s\S]*?right:\s*-5px;[\s\S]*?min-width:\s*14px;[\s\S]*?height:\s*14px;[\s\S]*?font-size:\s*8px;/.test(bundledMobileCss)) {
   throw new Error("Bundled Android Site List and Knowledgebase unread badges must stay small and clear of their menu labels.");
 }
+requireBundledPattern(/function\s+bindMobileInteractiveLayer\(layerId,\s*clickHandler\)[\s\S]*?if\s*\(isMobileMapTapBlocked\(\)\)\s*return;[\s\S]*?clickHandler\(event\)/, "Bundled Android menu actions must block same-gesture map layer clicks after the menu closes.");
 if (bundledMobileJs.includes('markMobileActivitySeen();')) {
   throw new Error("Bundled Android app must not clear all activity merely because the Community Activity feed was opened.");
 }

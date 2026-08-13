@@ -13860,7 +13860,10 @@
     }
 
     function bindMobileInteractiveLayer(layerId, clickHandler) {
-      rebindMobileMapLayerEvent("click", layerId, clickHandler);
+      rebindMobileMapLayerEvent("click", layerId, event => {
+        if (isMobileMapTapBlocked()) return;
+        clickHandler(event);
+      });
       rebindMobileMapLayerEvent("mouseenter", layerId, () => state.map.getCanvas().style.cursor = "pointer");
       rebindMobileMapLayerEvent("mouseleave", layerId, () => state.map.getCanvas().style.cursor = "");
     }
