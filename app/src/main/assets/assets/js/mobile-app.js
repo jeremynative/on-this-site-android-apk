@@ -954,6 +954,7 @@
 
     const listEl = document.getElementById("site-list");
     const appEl = document.querySelector(".app");
+    const appHeaderEl = document.querySelector("header");
     const statusEl = document.getElementById("status");
     const listTitleTextEl = document.querySelector(".list-head .list-title strong");
     const loadingScreenEl = document.getElementById("loading-screen");
@@ -1007,6 +1008,9 @@
     const landscapePanelResizerEl = document.getElementById("landscape-panel-resizer");
     const accountButtonHomeAnchorEl = document.getElementById("account-button-home-anchor");
     const mobileMoreGridEl = document.querySelector(".mobile-more-grid");
+    let landscapePanelRatio = null;
+    let landscapePanelWidth = 0;
+    let landscapePanelLayoutFrame = 0;
     const mobileTimelineEl = document.querySelector(".mobile-timeline");
     const showTimelineBtn = document.getElementById("show-timeline");
     const mobileTimelineCurrentBtn = document.getElementById("mobile-timeline-current");
@@ -6107,10 +6111,30 @@
       };
     }
 
+    function storedLandscapePanelRatio() {
+      if (landscapePanelRatio !== null) return landscapePanelRatio;
+      try {
+        landscapePanelRatio = Number(localStorage.getItem(LANDSCAPE_PANEL_RATIO_KEY) || 0);
+      } catch {
+        landscapePanelRatio = 0;
+      }
+      return landscapePanelRatio;
+    }
+
+    function scheduleLandscapePanelLayout() {
+      if (landscapePanelLayoutFrame) return;
+      landscapePanelLayoutFrame = window.requestAnimationFrame(() => {
+        landscapePanelLayoutFrame = 0;
+        syncLandscapeHeaderControls();
+        positionMobileMapActionButtons();
+        state.map?.resize?.();
+      });
+    }
+
     function syncLandscapeHeaderControls() {
       if (!loginOpenBtn || !accountButtonHomeAnchorEl || !mobileMoreGridEl) return;
       const landscape = document.body.classList.contains("tablet-landscape");
-      const headerWidth = document.querySelector("header")?.getBoundingClientRect?.().width || window.innerWidth || 0;
+      const headerWidth = appHeaderEl?.getBoundingClientRect?.().width || window.innerWidth || 0;
       const accountBelongsInMenu = landscape && headerWidth < 430;
       document.body.classList.toggle("landscape-account-in-menu", accountBelongsInMenu);
       document.documentElement.classList.toggle("landscape-account-in-menu", accountBelongsInMenu);
@@ -6126,7 +6150,11 @@
       const limits = landscapePanelWidthLimits();
       const next = Math.round(Math.min(limits.max, Math.max(limits.min, Number(width) || limits.min)));
       const ratio = next / limits.total;
-      document.body.style.setProperty("--landscape-panel-width", `${next}px`);
+      landscapePanelWidth = next;
+      landscapePanelRatio = ratio;
+      if (document.body.style.getPropertyValue("--landscape-panel-width") !== `${next}px`) {
+        document.body.style.setProperty("--landscape-panel-width", `${next}px`);
+      }
       landscapePanelResizerEl?.setAttribute("aria-valuemin", String(Math.round((limits.min / limits.total) * 100)));
       landscapePanelResizerEl?.setAttribute("aria-valuemax", String(Math.round((limits.max / limits.total) * 100)));
       landscapePanelResizerEl?.setAttribute("aria-valuenow", String(Math.round(ratio * 100)));
@@ -6135,45 +6163,49 @@
           localStorage.setItem(LANDSCAPE_PANEL_RATIO_KEY, ratio.toFixed(4));
         } catch {}
       }
-      window.requestAnimationFrame(() => {
-        syncLandscapeHeaderControls();
-        positionMobileMapActionButtons();
-        state.map?.resize?.();
-      });
+      if (options.schedule !== false) scheduleLandscapePanelLayout();
     }
 
-    function restoreLandscapePanelWidth() {
+    function restoreLandscapePanelWidth(options = {}) {
       if (!document.body.classList.contains("tablet-landscape")) return;
-      let ratio = 0;
-      try {
-        ratio = Number(localStorage.getItem(LANDSCAPE_PANEL_RATIO_KEY) || 0);
-      } catch {}
+      const ratio = storedLandscapePanelRatio();
       if (ratio > 0.15 && ratio < 0.85) {
         const limits = landscapePanelWidthLimits();
-        setLandscapePanelWidth(limits.total * ratio, { persist: false });
+        setLandscapePanelWidth(limits.total * ratio, { persist: false, schedule: options.schedule });
       } else {
+        landscapePanelWidth = 0;
         document.body.style.removeProperty("--landscape-panel-width");
+        if (options.schedule !== false) scheduleLandscapePanelLayout();
       }
-      window.requestAnimationFrame(syncLandscapeHeaderControls);
     }
 
     function installLandscapePanelResize() {
       if (!landscapePanelResizerEl) return;
       let dragging = false;
-      const resizeFromPointer = event => {
-        if (!dragging) return;
+      let pointerResizeFrame = 0;
+      let pendingPointerX = 0;
+      const applyPendingPointerResize = () => {
+        pointerResizeFrame = 0;
         const rect = appEl?.getBoundingClientRect?.();
         if (!rect) return;
-        setLandscapePanelWidth(rect.right - event.clientX, { persist: false });
+        setLandscapePanelWidth(rect.right - pendingPointerX, { persist: false });
+      };
+      const resizeFromPointer = event => {
+        if (!dragging) return;
+        pendingPointerX = event.clientX;
+        if (!pointerResizeFrame) pointerResizeFrame = window.requestAnimationFrame(applyPendingPointerResize);
         event.preventDefault();
       };
       const finish = event => {
         if (!dragging) return;
+        if (pointerResizeFrame) {
+          window.cancelAnimationFrame(pointerResizeFrame);
+          applyPendingPointerResize();
+        }
         dragging = false;
         document.body.classList.remove("landscape-panel-resizing");
         landscapePanelResizerEl.releasePointerCapture?.(event.pointerId);
-        const width = parseFloat(getComputedStyle(document.body).getPropertyValue("--landscape-panel-width"));
-        if (Number.isFinite(width)) setLandscapePanelWidth(width);
+        if (landscapePanelWidth > 0) setLandscapePanelWidth(landscapePanelWidth);
       };
       landscapePanelResizerEl.addEventListener("pointerdown", event => {
         if (!document.body.classList.contains("tablet-landscape")) return;
@@ -6190,14 +6222,15 @@
         try {
           localStorage.removeItem(LANDSCAPE_PANEL_RATIO_KEY);
         } catch {}
+        landscapePanelRatio = 0;
+        landscapePanelWidth = 0;
         document.body.style.removeProperty("--landscape-panel-width");
-        restoreLandscapePanelWidth();
-        window.requestAnimationFrame(() => state.map?.resize?.());
+        scheduleLandscapePanelLayout();
       });
       landscapePanelResizerEl.addEventListener("keydown", event => {
         if (!document.body.classList.contains("tablet-landscape")) return;
         const limits = landscapePanelWidthLimits();
-        const current = parseFloat(getComputedStyle(document.body).getPropertyValue("--landscape-panel-width")) || limits.total * 0.42;
+        const current = landscapePanelWidth || limits.total * 0.42;
         let next = current;
         if (event.key === "ArrowLeft") next += 24;
         else if (event.key === "ArrowRight") next -= 24;
@@ -17460,16 +17493,23 @@
     searchEl.addEventListener("blur", stopSearchValueWatch);
     document.addEventListener("pointerdown", blockAndroidUiOverlayMapTapStart, { passive: true, capture: true });
     document.addEventListener("touchstart", blockAndroidUiOverlayMapTapStart, { passive: true, capture: true });
+    let mobileViewportLayoutFrame = 0;
+    let mobileViewportMapResizeTimer = 0;
     const refreshMobileViewportLayout = () => {
-      syncSystemSafeArea();
-      restoreNearbyPanelHeight();
-      restoreLandscapePanelWidth();
-      syncLandscapeHeaderControls();
-      positionMobileMapActionButtons();
-      window.setTimeout(() => {
+      if (mobileViewportLayoutFrame) return;
+      mobileViewportLayoutFrame = window.requestAnimationFrame(() => {
+        mobileViewportLayoutFrame = 0;
+        syncSystemSafeArea();
+        restoreNearbyPanelHeight();
+        restoreLandscapePanelWidth({ schedule: false });
+        syncLandscapeHeaderControls();
         positionMobileMapActionButtons();
-        state.map?.resize?.();
-      }, 80);
+        window.clearTimeout(mobileViewportMapResizeTimer);
+        mobileViewportMapResizeTimer = window.setTimeout(() => {
+          positionMobileMapActionButtons();
+          state.map?.resize?.();
+        }, 80);
+      });
     };
     window.addEventListener("resize", refreshMobileViewportLayout);
     window.addEventListener("orientationchange", () => window.setTimeout(refreshMobileViewportLayout, 280));

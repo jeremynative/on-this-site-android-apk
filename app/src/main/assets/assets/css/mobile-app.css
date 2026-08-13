@@ -1893,6 +1893,19 @@
       box-shadow: 0 0 0 2px rgba(73, 111, 93, 0.14);
     }
 
+    .site-card.empty-state {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .site-card.empty-state .site-copy {
+      min-width: 0;
+    }
+
+    .site-card.empty-state .site-copy h2,
+    .site-card.empty-state .site-copy p {
+      overflow-wrap: anywhere;
+    }
+
     .learning-card,
     .site-card.learning-card {
       position: relative;

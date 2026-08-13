@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-touch-bridge-optimization-r94";
+const expectedBuild = "20260812-landscape-layout-optimization-r95";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -321,7 +321,10 @@ requireBundledPattern(/body\.android-device\.tablet-landscape \.quick-actions\s*
 requireBundledPattern(/body\.android-device\.tablet-landscape \.mobile-activity-button,[\s\S]*?left:\s*max\(18px,\s*calc\(var\(--app-left-safe\) \+ 18px\)\);[\s\S]*?body\.android-device\.tablet-landscape \.mobile-notification-button\s*\{[\s\S]*?left:\s*max\(70px,\s*calc\(var\(--app-left-safe\) \+ 70px\)\);/, "Bundled Android landscape community controls must be inset from the map edge.");
 requireBundledPattern(/body\.android-device\.tablet-landscape \.mobile-more-menu\[open\] \.mobile-more-grid\s*\{[\s\S]*?repeat\(5,\s*minmax\(0,\s*1fr\)\)/, "Bundled Android landscape More menu must use the balanced five-column grid.");
 requireBundledPattern(/body\.android-device\.tablet-landscape:has\(\.mobile-more-menu\[open\]\) \.landscape-panel-resizer[\s\S]*?visibility:\s*hidden;[\s\S]*?pointer-events:\s*none;/, "Bundled Android split resize handle must stay behind open menus.");
-requireBundledPattern(/function syncLandscapeHeaderControls\(\)[\s\S]*?headerWidth < 430[\s\S]*?mobileMoreGridEl\.prepend\(loginOpenBtn\)[\s\S]*?accountButtonHomeAnchorEl\.insertAdjacentElement\("afterend", loginOpenBtn\)[\s\S]*?function setLandscapePanelWidth[\s\S]*?syncLandscapeHeaderControls\(\);/, "Bundled Android landscape must move the real account control into Menu when the map-side header becomes narrow.");
+requireBundledPattern(/function syncLandscapeHeaderControls\(\)[\s\S]*?headerWidth < 430[\s\S]*?mobileMoreGridEl\.prepend\(loginOpenBtn\)[\s\S]*?accountButtonHomeAnchorEl\.insertAdjacentElement\("afterend", loginOpenBtn\)[\s\S]*?function setLandscapePanelWidth[\s\S]*?scheduleLandscapePanelLayout\(\);/, "Bundled Android landscape must move the real account control into Menu when the map-side header becomes narrow.");
+requireBundledPattern(/function storedLandscapePanelRatio\(\)[\s\S]*?landscapePanelRatio !== null[\s\S]*?function scheduleLandscapePanelLayout\(\)[\s\S]*?if \(landscapePanelLayoutFrame\) return;/, "Bundled Android landscape must cache saved width and coalesce secondary layout work.");
+requireBundledPattern(/let pointerResizeFrame = 0;[\s\S]*?requestAnimationFrame\(applyPendingPointerResize\)[\s\S]*?cancelAnimationFrame\(pointerResizeFrame\)/, "Bundled Android divider dragging must be limited to one visual update per frame.");
+requireBundledPattern(/let mobileViewportLayoutFrame = 0;[\s\S]*?if \(mobileViewportLayoutFrame\) return;[\s\S]*?clearTimeout\(mobileViewportMapResizeTimer\)/, "Bundled Android duplicate viewport signals must share one layout pass.");
 requireBundledPattern(/function calendarMonthDay\(value = new Date\(\)\)[\s\S]*?`\$\{month\}\/\$\{day\}`[\s\S]*?function calendarBadgeMarkup[\s\S]*?calendarMonthDay\(value\)/, "Bundled Android calendar badges must show month/day instead of only the day number.");
 requireBundledPattern(/\.mobile-calendar-event-marker \.calendar-date-badge\s*\{[\s\S]*?width:\s*23px;[\s\S]*?height:\s*23px;[\s\S]*?font-size:\s*8\.5px;/, "Bundled Android calendar badge must be about 25 percent smaller and keep its month/day legible.");
 requireBundledText('element.style.width = "27px";', "Bundled Android calendar marker wrapper must be reduced from 36px to 27px.");
@@ -599,6 +602,7 @@ requireText("Intent.ACTION_VIEW", "Android shell must launch the browser compati
 requireText("LIVE_STARTUP_FALLBACK_DELAY_MS = 22000", "Android shell must let the bounded page-readiness probe finish before falling back on a cold validated connection.");
 requireText("if (!loadingBundledFallback && isAppShellUrl(url))", "Android shell must restart the readiness allowance when the main WebView page actually begins loading.");
 requireText("scheduleLiveStartupFallback();", "Android shell must schedule a bounded live startup fallback.");
+requireText("var root=document.documentElement;if(root)", "Android tablet layout injection must tolerate a transitional page without an HTML root.");
 requireText("var root=document.head||document.documentElement;if(!root)return;root.appendChild(s);", "Android shell panel protection must tolerate a transitional page without a DOM root.");
 requireText('showLoadingCover("Opening saved map...")', "Android shell must identify the saved-map fallback while it opens.");
 requireText("registerConnectivityMonitoring();", "Android shell must start runtime connectivity monitoring.");
@@ -621,6 +625,8 @@ requireText("ACTIVE_WORK_RECHECK_DELAY_MS", "Android shell must recheck deferred
 requireText("scheduleNetworkStateEvaluation(\"resume\");", "Android shell must reconcile connectivity changes that occurred while its WebView was paused.");
 requireText("APP_READINESS_MAX_ATTEMPTS", "Android shell must wait for usable content instead of accepting an empty title shell.");
 requireText("document.querySelector('.offline-map-index')", "Android readiness must verify that the offline place index rendered.");
+requireText("document.querySelector('[data-offline-region]')", "Android readiness must accept the usable offline region browser before a nearby-location result exists.");
+requireText("(?:saved|mapped) places/i.test(offlineStatus)", "Android readiness must accept either bundled offline archive after its place data renders.");
 requireText("app-readiness-timeout", "Android shell must fall back when the live page never produces usable content.");
 requireText("if (!loadingBundledFallback) return null;", "Android live mode must use deployed assets instead of stale APK-packaged site data.");
 requireText("onReceivedHttpError", "Android shell must fall back when the live mobile archive returns an HTTP error.");
