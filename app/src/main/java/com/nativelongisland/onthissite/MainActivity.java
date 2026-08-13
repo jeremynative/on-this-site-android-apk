@@ -87,7 +87,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260812-tablet-search-close-loader-r93";
+    static final String APP_VERSION = "20260812-touch-bridge-optimization-r94";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -1255,16 +1255,10 @@ public class MainActivity extends Activity {
             webTouchStartX = event.getX();
             webTouchStartY = event.getY();
             webTouchStartedAt = System.currentTimeMillis();
-            cacheAndroidUiOverlayTap(event);
-            // Claim fixed promo actions before WebView dispatches the click.
-            // Otherwise a dismiss can remove the card before the delayed map
-            // bridge runs, letting that same touch activate the map underneath.
-            cacheAndroidMobilePromoActionTap(event);
-            cacheAndroidSearchResultTap(event);
+            cacheAndroidTouchProbe(event, "down");
             return;
         }
         if (event.getActionMasked() != MotionEvent.ACTION_UP) return;
-        cacheAndroidUiOverlayTap(event);
         float dx = event.getX() - webTouchStartX;
         float dy = event.getY() - webTouchStartY;
         if ((dx * dx + dy * dy) > 144f) return;
@@ -1274,11 +1268,9 @@ public class MainActivity extends Activity {
         final int viewWidth = webView.getWidth();
         final int viewHeight = webView.getHeight();
         String script = "(function(){try{"
-            + "if(window.onAndroidUiOverlayTapStart&&window.onAndroidUiOverlayTapStart("
-            + tapX + ","
-            + tapY + ","
-            + viewWidth + ","
-            + viewHeight + "))return 'ui-overlay-tap';"
+            + "if(window.onAndroidTouchProbe&&window.onAndroidTouchProbe('up',"
+            + tapX + "," + tapY + "," + viewWidth + "," + viewHeight
+            + ")==='overlay')return 'ui-overlay-tap';"
             + "if(!window.onAndroidMapTap)return 'missing-map-tap-bridge';"
             + "return String(window.onAndroidMapTap("
             + tapX + ","
@@ -1309,46 +1301,18 @@ public class MainActivity extends Activity {
         return "application/octet-stream";
     }
 
-    private void cacheAndroidSearchResultTap(MotionEvent event) {
+    private void cacheAndroidTouchProbe(MotionEvent event, String phase) {
         if (webView == null || event == null) return;
         String script = "(function(){try{"
-            + "if(!window.onAndroidSearchResultTapStart)return 'missing-search-result-tap-bridge';"
-            + "return String(window.onAndroidSearchResultTapStart("
+            + "if(!window.onAndroidTouchProbe)return 'missing-touch-probe-bridge';"
+            + "return String(window.onAndroidTouchProbe('" + phase + "',"
             + event.getX() + ","
             + event.getY() + ","
             + webView.getWidth() + ","
             + webView.getHeight()
             + "));"
-            + "}catch(error){return 'search-result-tap-error:'+(error&&error.message?error.message:String(error));}})()";
-        webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "Search result tap bridge result: " + value));
-    }
-
-    private void cacheAndroidUiOverlayTap(MotionEvent event) {
-        if (webView == null || event == null) return;
-        String script = "(function(){try{"
-            + "if(!window.onAndroidUiOverlayTapStart)return 'missing-ui-overlay-tap-bridge';"
-            + "return String(window.onAndroidUiOverlayTapStart("
-            + event.getX() + ","
-            + event.getY() + ","
-            + webView.getWidth() + ","
-            + webView.getHeight()
-            + "));"
-            + "}catch(error){return 'ui-overlay-tap-error:'+(error&&error.message?error.message:String(error));}})()";
-        webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "UI overlay tap bridge result: " + value));
-    }
-
-    private void cacheAndroidMobilePromoActionTap(MotionEvent event) {
-        if (webView == null || event == null) return;
-        String script = "(function(){try{"
-            + "if(!window.onAndroidMobilePromoActionTap)return 'missing-mobile-promo-tap-bridge';"
-            + "return String(window.onAndroidMobilePromoActionTap("
-            + event.getX() + ","
-            + event.getY() + ","
-            + webView.getWidth() + ","
-            + webView.getHeight()
-            + "));"
-            + "}catch(error){return 'mobile-promo-tap-error:'+(error&&error.message?error.message:String(error));}})()";
-        webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "Mobile promo tap bridge result: " + value));
+            + "}catch(error){return 'touch-probe-error:'+(error&&error.message?error.message:String(error));}})()";
+        webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "Touch probe bridge result: " + value));
     }
 
     @Override

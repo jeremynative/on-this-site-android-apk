@@ -7139,10 +7139,10 @@
       return insideCanvas || (!!mapContainer && mapContainer.contains(target));
     }
 
-    function isAndroidUiOverlayTap(clientX, clientY) {
+    function isAndroidUiOverlayTap(clientX, clientY, elements = null) {
       const canvas = state.map?.getCanvas?.();
       const mapContainer = state.map?.getContainer?.();
-      for (const element of androidTapElementsAt(clientX, clientY)) {
+      for (const element of elements || androidTapElementsAt(clientX, clientY)) {
         if (isAndroidMapMarkerElement(element)) return false;
         if (isAndroidUiOverlayElement(element)) return true;
         if (element === canvas || element?.closest?.(".mapboxgl-canvas")) return false;
@@ -7184,9 +7184,25 @@
       });
     }
 
-    window.onAndroidUiOverlayTapStart = function onAndroidUiOverlayTapStart(viewX, viewY, viewWidth, viewHeight) {
-      const isOverlayTap = androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight)
-        .some(candidate => isAndroidUiOverlayTap(candidate.clientX, candidate.clientY));
+    function createAndroidTouchProbeContext(viewX, viewY, viewWidth, viewHeight) {
+      const candidates = androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight);
+      const elementsByPoint = new Map();
+      return {
+        candidates,
+        elementsAt(candidate) {
+          const key = `${candidate.clientX}:${candidate.clientY}`;
+          if (!elementsByPoint.has(key)) {
+            elementsByPoint.set(key, androidTapElementsAt(candidate.clientX, candidate.clientY));
+          }
+          return elementsByPoint.get(key);
+        }
+      };
+    }
+
+    window.onAndroidUiOverlayTapStart = function onAndroidUiOverlayTapStart(viewX, viewY, viewWidth, viewHeight, context = null) {
+      const touchContext = context || createAndroidTouchProbeContext(viewX, viewY, viewWidth, viewHeight);
+      const isOverlayTap = touchContext.candidates
+        .some(candidate => isAndroidUiOverlayTap(candidate.clientX, candidate.clientY, touchContext.elementsAt(candidate)));
       if (isOverlayTap) {
         markAndroidUiOverlayTap();
       }
@@ -7194,12 +7210,13 @@
     };
 
     // Some Android WebView builds identify a fixed, animated card as a UI
-    // overlay yet fail to dispatch its synthetic click. The native shell calls
-    // this only on touch release, after ordinary browser delivery has had the
-    // same chance to handle the gesture.
-    window.onAndroidMobilePromoActionTap = function onAndroidMobilePromoActionTap(viewX, viewY, viewWidth, viewHeight) {
-      for (const candidate of androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight)) {
-        const target = document.elementFromPoint(candidate.clientX, candidate.clientY);
+    // overlay yet fail to dispatch its synthetic click. The native shell
+    // claims this action at touch start, before a dismissed card can expose
+    // the map underneath the same gesture.
+    window.onAndroidMobilePromoActionTap = function onAndroidMobilePromoActionTap(viewX, viewY, viewWidth, viewHeight, context = null) {
+      const touchContext = context || createAndroidTouchProbeContext(viewX, viewY, viewWidth, viewHeight);
+      for (const candidate of touchContext.candidates) {
+        const target = touchContext.elementsAt(candidate)[0];
         const action = target?.closest?.("#mobile-startup-spotlight-learn, #mobile-startup-spotlight-dismiss, #mobile-startup-spotlight-close");
         if (!action || mobileStartupSpotlightEl?.hidden) continue;
         if (action === mobileStartupSpotlightLearnBtn) activateMobilePromo();
@@ -7210,27 +7227,43 @@
       return false;
     };
 
-    window.onAndroidSearchResultTapStart = function onAndroidSearchResultTapStart(viewX, viewY, viewWidth, viewHeight) {
+    window.onAndroidSearchResultTapStart = function onAndroidSearchResultTapStart(viewX, viewY, viewWidth, viewHeight, context = null) {
       state.pendingAndroidSearchResultTap = null;
       if (!searchEl?.value?.trim() || !listEl) return false;
+      const touchContext = context || createAndroidTouchProbeContext(viewX, viewY, viewWidth, viewHeight);
       // Never let the native recovery bridge reinterpret a touch in the
       // search box as a result-card tap. That can dismiss the IME after its
       // first composition update on tablet WebViews.
-      if (isAndroidEditableControlTap(viewX, viewY, viewWidth, viewHeight)) return false;
+      if (isAndroidEditableControlTap(viewX, viewY, viewWidth, viewHeight, touchContext)) return false;
       const boundsCard = androidSearchResultCardFromViewPoint(viewX, viewY, viewWidth, viewHeight);
       if (boundsCard) return cacheAndroidSearchResultCard(boundsCard);
       const nearestCard = nearestAndroidSearchResultCardFromViewPoint(viewX, viewY, viewWidth, viewHeight);
       if (nearestCard) return cacheAndroidSearchResultCard(nearestCard);
       const rawCard = nearestAndroidSearchResultCardFromRawPoint(viewX, viewY, viewWidth, viewHeight);
       if (rawCard) return cacheAndroidSearchResultCard(rawCard);
-      for (const candidate of androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight)) {
-        const target = document.elementFromPoint(candidate.clientX, candidate.clientY);
+      for (const candidate of touchContext.candidates) {
+        const target = touchContext.elementsAt(candidate)[0];
         const card = target?.closest?.(".site-card[data-slug], .site-card[data-wiki-slug]");
         if (!card || !listEl.contains(card)) continue;
         cacheAndroidSearchResultCard(card);
         return true;
       }
       return false;
+    };
+
+    // Keep Android's touch recovery work in one WebView bridge call per
+    // gesture phase. Older shells invoked three separate JavaScript probes on
+    // ACTION_DOWN, repeating coordinate conversion and main-thread dispatch.
+    window.onAndroidTouchProbe = function onAndroidTouchProbe(phase, viewX, viewY, viewWidth, viewHeight) {
+      const touchPhase = phase === "up" ? "up" : "down";
+      const touchContext = createAndroidTouchProbeContext(viewX, viewY, viewWidth, viewHeight);
+      const overlayTap = window.onAndroidUiOverlayTapStart(viewX, viewY, viewWidth, viewHeight, touchContext);
+      if (touchPhase === "up") return overlayTap ? "overlay" : "clear";
+      const promoTap = window.onAndroidMobilePromoActionTap(viewX, viewY, viewWidth, viewHeight, touchContext);
+      const searchTap = window.onAndroidSearchResultTapStart(viewX, viewY, viewWidth, viewHeight, touchContext);
+      if (promoTap) return "promo";
+      if (searchTap) return "search-result";
+      return overlayTap ? "overlay" : "clear";
     };
 
     function androidSearchResultCardFromViewPoint(viewX, viewY, viewWidth, viewHeight) {
@@ -7426,9 +7459,10 @@
       });
     }
 
-    function isAndroidEditableControlTap(viewX, viewY, viewWidth, viewHeight) {
-      return androidViewportTapCandidates(viewX, viewY, viewWidth, viewHeight).some(candidate =>
-        androidTapElementsAt(candidate.clientX, candidate.clientY).some(element =>
+    function isAndroidEditableControlTap(viewX, viewY, viewWidth, viewHeight, context = null) {
+      const touchContext = context || createAndroidTouchProbeContext(viewX, viewY, viewWidth, viewHeight);
+      return touchContext.candidates.some(candidate =>
+        touchContext.elementsAt(candidate).some(element =>
           !!element?.closest?.("input, textarea, select, [contenteditable='true']")
         )
       );
@@ -15288,24 +15322,15 @@
     }
 
     function mobileContentUnreadCount(type, slug) {
-      const targetKey = `${String(type || "").toLowerCase()}|${String(slug || "").trim().toLowerCase()}`;
-      return ACTIVITY_UTILS.weightedActivityCount(mobileUnreadActivityItems().filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.key === targetKey));
+      return ACTIVITY_UTILS.weightedActivityCount(ACTIVITY_UTILS.contentActivityItems(mobileUnreadActivityItems(), type, slug));
     }
 
     function mobileUnreadContentActivityItems(type, slug) {
-      const targetKey = `${String(type || "").toLowerCase()}|${String(slug || "").trim().toLowerCase()}`;
-      return mobileUnreadActivityItems().filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.key === targetKey);
-    }
-
-    function mobileContentUpdateActivityRecords(activityItems = []) {
-      return activityItems.flatMap(activity => [
-        activity,
-        ...(Array.isArray(activity?.activityMembers) ? activity.activityMembers : [])
-      ]).filter(Boolean);
+      return ACTIVITY_UTILS.contentActivityItems(mobileUnreadActivityItems(), type, slug);
     }
 
     function mobileActivitySpecificContentTarget(activityItems = []) {
-      const records = mobileContentUpdateActivityRecords(activityItems);
+      const records = ACTIVITY_UTILS.contentUpdateActivityRecords(activityItems);
       for (const record of records) {
         const type = String(record.type || record.kind || "").toLowerCase();
         if (type === "comment") {
@@ -15380,10 +15405,7 @@
 
     function markMobileContentActivitySeen(type, slug) {
       if (!slug) return;
-      const targetKey = `${String(type || "").toLowerCase()}|${String(slug || "").trim().toLowerCase()}`;
-      const keys = mobileUnreadActivityItems()
-        .filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.key === targetKey)
-        .flatMap(ACTIVITY_UTILS.activityItemKeys);
+      const keys = ACTIVITY_UTILS.contentActivityItemKeys(mobileUnreadActivityItems(), type, slug);
       if (!keys.length) return;
       keys.forEach(itemKey => state.mobileActivitySeenSessionKeys.add(String(itemKey)));
       ACTIVITY_UTILS.writeSeenItemKeys(mobileActivitySeenItemsKey(), keys);

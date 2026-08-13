@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260812-tablet-search-close-loader-r93";
+const expectedBuild = "20260812-touch-bridge-optimization-r94";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -8,6 +8,7 @@ const bundledAppPath = "app/src/main/assets/mobile-app.html";
 const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
 const lightweightOfflineAppPath = "app/src/main/assets/offline-app.html";
 const bundledMobileJsPath = "app/src/main/assets/assets/js/mobile-app.js";
+const bundledSharedActivityUtilsPath = "app/src/main/assets/assets/js/shared-activity-utils.js";
 const bundledMobileCssPath = "app/src/main/assets/assets/css/mobile-app.css";
 const bundledLearningCardUtilsPath = "app/src/main/assets/assets/js/shared-learning-card-utils.js";
 const bundledResearchQuestionCssPath = "app/src/main/assets/assets/css/shared-research-question.css";
@@ -42,6 +43,7 @@ const offlineInsetAudit = fs.readFileSync(offlineInsetAuditPath, "utf8");
 const bundledApp = bundledAppBytes.toString("utf8");
 const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
 const bundledMobileJs = fs.readFileSync(bundledMobileJsPath, "utf8");
+const bundledSharedActivityUtils = fs.readFileSync(bundledSharedActivityUtilsPath, "utf8");
 const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8");
 const bundledLiveRuntime = `${bundledLiveApp}\n${bundledMobileJs}\n${bundledMobileCss}`;
 const bundledLearningCardUtils = fs.readFileSync(bundledLearningCardUtilsPath, "utf8");
@@ -842,15 +844,20 @@ if (/Thread loader|bundledMobileHtml\(\)/.test(fallbackMatch[0])) {
 }
 requireText("dispatchTouchEvent", "Android shell must forward app taps into the mobile map.");
 requireText("window.onAndroidMapTap", "Android shell must call the mobile map tap bridge.");
-requireText("cacheAndroidUiOverlayTap(event);", "Android shell must pre-cache UI overlay taps before delayed map forwarding.");
-requireText("window.onAndroidUiOverlayTapStart", "Android shell must call the UI overlay tap bridge.");
-requireText("cacheAndroidMobilePromoActionTap(event);", "Android shell must forward Android touch-down events to fixed promo-card actions.");
-requireText("window.onAndroidMobilePromoActionTap", "Android shell must call the promo-card action bridge.");
+requireText('cacheAndroidTouchProbe(event, "down");', "Android shell must consolidate touch-down recovery into one JavaScript bridge call.");
+requireText("window.onAndroidTouchProbe", "Android shell must call the consolidated touch probe bridge.");
+requireText("window.onAndroidTouchProbe('up'", "Android shell must check the completed touch through the consolidated bridge before map forwarding.");
 requireText("missing-map-tap-bridge", "Android shell must log when the mobile map tap bridge is missing.");
 requireText("MAP_TAP_BRIDGE_DELAY_MS", "Android shell must delay the native map bridge until WebView UI clicks run.");
 requireText("postDelayed", "Android shell must post-delay map tap forwarding to prevent panel click-through.");
-requireText("cacheAndroidSearchResultTap(event);", "Android shell must cache search result taps before the keyboard can shift the page.");
-requireText("window.onAndroidSearchResultTapStart", "Android shell must call the search result tap bridge on touch down.");
+if (/cacheAndroid(?:UiOverlay|MobilePromoAction|SearchResult)Tap/.test(source)) {
+  throw new Error("Android shell must not retain the three redundant per-touch JavaScript bridge methods.");
+}
+const touchDispatchMatch = source.match(/private void handleWebViewTap[\s\S]*?private String mimeTypeForAsset/);
+const touchEvaluateCount = (touchDispatchMatch?.[0].match(/evaluateJavascript\(/g) || []).length;
+if (touchEvaluateCount !== 1) {
+  throw new Error(`Android touch dispatch has ${touchEvaluateCount} delayed JavaScript call sites; the optimized path must keep exactly one after the consolidated down probe.`);
+}
 requireText("MotionEvent.ACTION_UP", "Android shell must only forward completed taps.");
 requireText("action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP", "Android shell must keep map drag move frames out of the tap bridge.");
 requireText("boolean isArchiveApp = \"https\".equals(scheme) && \"nativelongisland.com\".equalsIgnoreCase(host);", "Android shell must keep only secure nativelongisland.com navigation inside the APK WebView.");
@@ -999,10 +1006,17 @@ if (/state\.map\.on\("zoom",\s*syncMapStoryMarkers\)/.test(bundledApp) || /state
 }
 requireBundledText('mobilePanelTapBlockUntil: 0', "Bundled Android app must track the panel close tap shield.");
 requireBundledText('function blockMobileMapTaps(durationMs = 240)', "Bundled Android app must block the delayed bridge without swallowing the visitor's next map tap.");
-requireBundledText('function isAndroidUiOverlayTap(clientX, clientY)', "Bundled Android app must reject drawer/header/sheet taps before trying alternate map coordinates.");
+requireBundledText('function isAndroidUiOverlayTap(clientX, clientY, elements = null)', "Bundled Android app must reject drawer/header/sheet taps before trying alternate map coordinates.");
 requireBundledText('ANDROID_UI_TAP_OVERLAY_SELECTOR', "Bundled Android app must centralize UI overlay tap targets.");
 requireBundledText('function blockAndroidUiOverlayMapTapStart(event)', "Bundled Android app must block map forwarding as soon as UI taps start.");
 requireBundledText('window.onAndroidUiOverlayTapStart', "Bundled Android app must expose the UI overlay tap bridge to the native shell.");
+requireBundledText('window.onAndroidTouchProbe = function onAndroidTouchProbe', "Bundled Android app must consolidate native touch recovery work by gesture phase.");
+requireBundledText('function createAndroidTouchProbeContext(viewX, viewY, viewWidth, viewHeight)', "Bundled Android touch probe must cache coordinate and DOM hit-test context.");
+if (!bundledSharedActivityUtils.includes('function contentActivityItems(items = [], type, slug)')
+    || !bundledSharedActivityUtils.includes('function contentActivityItemKeys(items = [], type, slug)')
+    || !bundledSharedActivityUtils.includes('function contentUpdateActivityRecords(items = [])')) {
+  throw new Error("Bundled Android app must share unread-content selection, seen-key expansion, and grouped-record helpers with desktop.");
+}
 requireBundledText('document.addEventListener("pointerdown", blockAndroidUiOverlayMapTapStart', "Bundled Android app must guard pointerdown UI taps from map click-through.");
 requireBundledText('document.addEventListener("touchstart", blockAndroidUiOverlayMapTapStart', "Bundled Android app must guard touchstart UI taps from map click-through.");
 requireBundledText('isMobileMapTapBlocked() && (!androidWebViewTap || followsAndroidOverlayTap)', "Bundled Android map bridge must reject delayed overlay taps without swallowing the next deliberate map tap.");

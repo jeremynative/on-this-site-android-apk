@@ -138,6 +138,29 @@
     return [...new Set(members.flatMap(member => activityItemKeys(member)).filter(Boolean))];
   }
 
+  function activityContentTargetKey(type, slug) {
+    const normalizedType = String(type || "").trim().toLowerCase();
+    const normalizedSlug = String(slug || "").trim().toLowerCase();
+    return normalizedType && normalizedSlug ? `${normalizedType}|${normalizedSlug}` : "";
+  }
+
+  function contentActivityItems(items = [], type, slug) {
+    const targetKey = activityContentTargetKey(type, slug);
+    if (!targetKey) return [];
+    return items.filter(item => activityContentTarget(item)?.key === targetKey);
+  }
+
+  function contentActivityItemKeys(items = [], type, slug) {
+    return [...new Set(contentActivityItems(items, type, slug).flatMap(activityItemKeys).filter(Boolean))];
+  }
+
+  function contentUpdateActivityRecords(items = []) {
+    return items.flatMap(item => [
+      item,
+      ...(Array.isArray(item?.activityMembers) ? item.activityMembers : [])
+    ]).filter(Boolean);
+  }
+
   function readSeenItemKeys(storageKey, storage = defaultStorage()) {
     try {
       const parsed = JSON.parse(storage?.getItem?.(storageKey) || "[]");
@@ -593,8 +616,12 @@
     readSeen,
     writeSeen,
     activityContentTarget,
+    activityContentTargetKey,
     activityItemKey,
     activityItemKeys,
+    contentActivityItems,
+    contentActivityItemKeys,
+    contentUpdateActivityRecords,
     readSeenItemKeys,
     writeSeenItemKeys,
     unreadItems,

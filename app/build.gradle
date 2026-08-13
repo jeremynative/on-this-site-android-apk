@@ -42,6 +42,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".qa"
+            versionNameSuffix = "-qa"
+        }
         release {
             minifyEnabled = false
             shrinkResources = false
