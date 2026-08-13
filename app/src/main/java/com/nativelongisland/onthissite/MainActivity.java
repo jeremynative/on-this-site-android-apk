@@ -87,7 +87,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260813-site-list-native-tap-r98";
+    static final String APP_VERSION = "20260813-site-list-native-tap-r99";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -146,6 +146,7 @@ public class MainActivity extends Activity {
     private float webTouchStartX;
     private float webTouchStartY;
     private long webTouchStartedAt;
+    private boolean webTouchStartedOnOverlay;
     private boolean loadingBundledFallback;
     private boolean appShellLoaded;
     private boolean runtimePermissionPromptActive;
@@ -1256,6 +1257,7 @@ public class MainActivity extends Activity {
             webTouchStartX = event.getX();
             webTouchStartY = event.getY();
             webTouchStartedAt = System.currentTimeMillis();
+            webTouchStartedOnOverlay = false;
             cacheAndroidTouchProbe(event, "down");
             return;
         }
@@ -1283,6 +1285,11 @@ public class MainActivity extends Activity {
         Log.d(LOG_TAG, "Scheduling WebView tap for map bridge: x=" + tapX + " y=" + tapY);
         webView.postDelayed(() -> {
             if (webView == null) return;
+            if (webTouchStartedOnOverlay) {
+                webTouchStartedOnOverlay = false;
+                Log.d(LOG_TAG, "Skipping map bridge because the touch began on a WebView control.");
+                return;
+            }
             Log.d(LOG_TAG, "Forwarding WebView tap to map bridge: x=" + tapX + " y=" + tapY);
             webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "Map bridge result: " + value));
         }, MAP_TAP_BRIDGE_DELAY_MS);
@@ -1313,7 +1320,13 @@ public class MainActivity extends Activity {
             + webView.getHeight()
             + "));"
             + "}catch(error){return 'touch-probe-error:'+(error&&error.message?error.message:String(error));}})()";
-        webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "Touch probe bridge result: " + value));
+        webView.evaluateJavascript(script, value -> {
+            Log.d(LOG_TAG, "Touch probe bridge result: " + value);
+            if ("down".equals(phase)) {
+                webTouchStartedOnOverlay = value != null &&
+                    (value.contains("overlay") || value.contains("promo") || value.contains("search-result"));
+            }
+        });
     }
 
     @Override

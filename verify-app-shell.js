@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260813-site-list-native-tap-r98";
+const expectedBuild = "20260813-site-list-native-tap-r99";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -856,6 +856,9 @@ requireText("window.onAndroidTouchProbe('up'", "Android shell must check the com
 requireText("missing-map-tap-bridge", "Android shell must log when the mobile map tap bridge is missing.");
 requireText("MAP_TAP_BRIDGE_DELAY_MS", "Android shell must delay the native map bridge until WebView UI clicks run.");
 requireText("postDelayed", "Android shell must post-delay map tap forwarding to prevent panel click-through.");
+requireText("webTouchStartedOnOverlay", "Android shell must retain the touch-down overlay result until the delayed map bridge runs.");
+requireText('value.contains("overlay") || value.contains("promo") || value.contains("search-result")', "Android shell must block delayed map recovery for controls identified during touch-down.");
+requireText('if (webTouchStartedOnOverlay)', "Android shell must cancel map forwarding when the gesture began on a WebView control.");
 if (/cacheAndroid(?:UiOverlay|MobilePromoAction|SearchResult)Tap/.test(source)) {
   throw new Error("Android shell must not retain the three redundant per-touch JavaScript bridge methods.");
 }
