@@ -35,6 +35,7 @@ import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
+import android.view.animation.LinearInterpolator;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.ExtractedText;
 import android.view.inputmethod.ExtractedTextRequest;
@@ -88,7 +89,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260814-native-back-navigation-r101";
+    static final String APP_VERSION = "20260814-west-to-east-loader-r102";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -122,6 +123,7 @@ public class MainActivity extends Activity {
     private TextView loadingCoverDetail;
     private LinearLayout loadingCoverActions;
     private ValueAnimator loadingOutlinePulse;
+    private View loadingProgressFill;
     private long loadingCoverShownAt;
     private long loadingCoverGeneration;
     private GeolocationPermissions.Callback pendingLocationCallback;
@@ -616,8 +618,9 @@ public class MainActivity extends Activity {
         } catch (IOException error) {
             Log.w(LOG_TAG, "Native Long Island loading outline could not be opened.", error);
         }
-        outline.setAlpha(0.34f);
+        outline.setAlpha(0.16f);
         reveal.setColorFilter(Color.rgb(47, 90, 73));
+        reveal.setClipBounds(new Rect(0, 0, 0, 0));
         islandAnimation.addView(outline, new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
@@ -627,6 +630,26 @@ public class MainActivity extends Activity {
             FrameLayout.LayoutParams.MATCH_PARENT
         ));
         card.addView(islandAnimation, new LinearLayout.LayoutParams(dp(240), dp(116)));
+
+        FrameLayout progressTrack = new FrameLayout(this);
+        GradientDrawable progressTrackBackground = new GradientDrawable();
+        progressTrackBackground.setColor(Color.rgb(222, 231, 223));
+        progressTrackBackground.setCornerRadius(dp(3));
+        progressTrack.setBackground(progressTrackBackground);
+        loadingProgressFill = new View(this);
+        GradientDrawable progressFillBackground = new GradientDrawable();
+        progressFillBackground.setColor(Color.rgb(47, 90, 73));
+        progressFillBackground.setCornerRadius(dp(3));
+        loadingProgressFill.setBackground(progressFillBackground);
+        loadingProgressFill.setPivotX(0f);
+        loadingProgressFill.setScaleX(0.02f);
+        progressTrack.addView(loadingProgressFill, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(dp(240), dp(5));
+        progressParams.topMargin = dp(3);
+        card.addView(progressTrack, progressParams);
 
         loadingCoverLabel = new TextView(this);
         loadingCoverLabel.setText(R.string.loading_app);
@@ -683,21 +706,25 @@ public class MainActivity extends Activity {
         );
         cover.addView(card, cardParams);
 
-        loadingOutlinePulse = ValueAnimator.ofFloat(0.04f, 1f);
-        loadingOutlinePulse.setDuration(1050);
-        loadingOutlinePulse.setRepeatMode(ValueAnimator.REVERSE);
+        loadingOutlinePulse = ValueAnimator.ofFloat(0f, 1f);
+        loadingOutlinePulse.setDuration(1400);
+        loadingOutlinePulse.setInterpolator(new LinearInterpolator());
+        loadingOutlinePulse.setRepeatMode(ValueAnimator.RESTART);
         loadingOutlinePulse.setRepeatCount(ValueAnimator.INFINITE);
         loadingOutlinePulse.addUpdateListener(animation -> {
             int width = reveal.getWidth();
             int height = reveal.getHeight();
-            if (width <= 0 || height <= 0) return;
             float progress = (float) animation.getAnimatedValue();
-            int center = width / 2;
-            int halfWidth = Math.max(1, Math.round(center * progress));
-            reveal.setClipBounds(new Rect(center - halfWidth, 0, center + halfWidth, height));
-            reveal.setAlpha(0.7f + (0.3f * progress));
+            if (width > 0 && height > 0) {
+                int revealedWidth = Math.max(1, Math.round(width * progress));
+                reveal.setClipBounds(new Rect(0, 0, revealedWidth, height));
+                reveal.setAlpha(0.82f + (0.18f * progress));
+            }
+            if (loadingProgressFill != null) {
+                loadingProgressFill.setPivotX(0f);
+                loadingProgressFill.setScaleX(Math.max(0.02f, progress));
+            }
         });
-        reveal.post(() -> loadingOutlinePulse.start());
         return cover;
     }
 
@@ -818,7 +845,11 @@ public class MainActivity extends Activity {
         if (loadingCoverLabel != null) loadingCoverLabel.setText(message == null || message.trim().isEmpty()
             ? "Loading On This Site"
             : message);
-        if (loadingOutlinePulse != null && !loadingOutlinePulse.isStarted()) loadingOutlinePulse.start();
+        if (loadingOutlinePulse != null) {
+            loadingOutlinePulse.cancel();
+            if (loadingProgressFill != null) loadingProgressFill.setScaleX(0.02f);
+            loadingOutlinePulse.start();
+        }
         loadingCover.animate().cancel();
         loadingCover.setAlpha(1f);
         loadingCover.setVisibility(View.VISIBLE);

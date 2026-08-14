@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260814-native-back-navigation-r101";
+const expectedBuild = "20260814-west-to-east-loader-r102";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -323,8 +323,10 @@ requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be 
 requireText("LOADING_COVER_MINIMUM_MS = 1500", "Android loading cover must remain visible long enough to show its Long Island progress animation.");
 requireText('showLoadingCover("Loading On This Site");', "Android cold startup must initialize the native loading animation timer before the WebView can finish.");
 requireText("var mapReady=!!document.querySelector('#map .mapboxgl-canvas')&&!document.querySelector('.app.mobile-map-initializing');", "Android must keep the native Long Island cover until the live map canvas finishes initializing.");
-requireText("ValueAnimator.ofFloat(0.04f, 1f)", "Android loading cover must animate the Long Island outline from its center.");
-requireText("reveal.setClipBounds(new Rect(center - halfWidth, 0, center + halfWidth, height))", "Android Long Island loader must reveal outward without stretching the graphic.");
+requireText("ValueAnimator.ofFloat(0f, 1f)", "Android loading cover must animate the Long Island outline from west to east.");
+requireText("reveal.setClipBounds(new Rect(0, 0, revealedWidth, height))", "Android Long Island loader must reveal from left to right without stretching the graphic.");
+requireText("loadingProgressFill.setScaleX(Math.max(0.02f, progress))", "Android loading cover must include an unmistakable synchronized left-to-right progress track.");
+requireText("loadingOutlinePulse.setRepeatMode(ValueAnimator.RESTART)", "Android loading progress must restart at the west edge instead of reversing direction.");
 requireBundledText('<button class="ghost-button" id="settings-open" type="button">Notifications</button>', "Bundled Android menu must label the settings action Notifications.");
 forbidBundledText('<button class="ghost-button" id="settings-open" type="button">Alerts</button>', "Bundled Android menu must not use the old Alerts label.");
 requireBundledText('<details class="mobile-more-menu">\n          <summary>Menu</summary>', "Bundled Android overflow control must be labeled Menu.");
@@ -807,7 +809,7 @@ if (/onPageFinished\(WebView view, String url\)[\s\S]{0,1000}?hideLoadingCover\(
 }
 requireText('getAssets().open("assets/images/long-island-loading-outline.png")', "Android shell must show the Long Island loading outline during cold startup.");
 requireText('loadingCoverLabel.setText(R.string.loading_app);', "Android shell must label the animated Long Island loading screen from a translatable resource.");
-requireText("ValueAnimator.ofFloat(0.04f, 1f)", "Android shell must animate the Long Island loading outline from its center.");
+requireText("ValueAnimator.ofFloat(0f, 1f)", "Android shell must animate the Long Island loading outline from west to east.");
 if (!styles.includes('<item name="android:windowBackground">@drawable/launch_background</item>')) {
   throw new Error("Android theme must show a branded launch background while WebView starts.");
 }
