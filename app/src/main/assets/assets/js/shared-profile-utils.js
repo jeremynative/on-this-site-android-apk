@@ -590,6 +590,10 @@
     if (/do not|closed|restricted|private/.test(explicit)) return "private";
     if (/learn|sensitive|approx/.test(explicit)) return "learn";
     if (/visit|public|open/.test(explicit)) return "visitable";
+    // A community resource can sit on a reservation without being a private
+    // or sensitive map entry. Respect explicit access restrictions above,
+    // but do not infer one solely from that contextual language.
+    if (normalizeText(site?.site_type || "") === "community resource") return "visitable";
     const text = normalizeText(`${site?.title || ""} ${site?.site_type || ""} ${site?.summary || ""}`);
     if (isBroadTerritorySite(site)) return "learn";
     if (/reservation|burial|sacred|private|cemetery/.test(text)) return "learn";
@@ -758,6 +762,7 @@
 
   function learnedLanguageWordsFromAttempts(attempts = [], profileIds = new Set(), options = {}) {
     const relationId = options.relationId || defaultRelationId;
+    const wordById = options.wordById || new Map();
     if (!profileIds?.size) return [];
     const words = new Map();
     (attempts || [])
@@ -765,11 +770,12 @@
       .forEach(item => {
         const id = item.word_id || String(item.english || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
         if (!id || words.has(id)) return;
+        const recordedWord = wordById.get(String(id)) || {};
         words.set(id, {
           id,
-          english: item.english,
-          algonquian: item.algonquian,
-          source: item.source,
+          english: item.english || recordedWord.english || "",
+          algonquian: item.algonquian || recordedWord.algonquian || "",
+          source: item.source || recordedWord.source || "",
           learned_at: item.answered_at,
           content_key: item.content_key
         });
@@ -1206,6 +1212,9 @@
     const homelands = Number(options.homelandsCount ?? activity.homelandsCount ?? activity.homelandCount ?? 0);
     const languageLearned = Number(options.languageLearned || 0);
     const languageCorrectAttempts = Number(options.languageCorrectAttempts || languageLearned || 0);
+    const quizzesCompleted = Number(options.quizzesCompleted || 0);
+    const plantSubmissions = Number(options.plantSubmissions || 0);
+    const storiesPosted = Number(options.storiesPosted || 0);
     const loginRewards = options.loginRewards || { totalDays: 0, currentStreak: 0, bestStreak: 0 };
     const commentIds = new Set((activity.comments || []).map(comment => String(defaultRelationId(comment.id))).filter(Boolean));
     const commentUpvotes = (activity.commentVotes || []).filter(vote =>
@@ -1247,6 +1256,9 @@
       historicRecordsCount: historicRecords,
       languageLearned,
       languageCorrectAttempts,
+      quizzesCompleted,
+      plantSubmissions,
+      storiesPosted,
       commentUpvotes,
       commentPoints,
       visitPoints,
@@ -1548,6 +1560,175 @@
     };
   }
 
+  function profileMapActivityModel(profile = {}, activity = {}, options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    const identityIds = options.identityIds instanceof Set
+      ? options.identityIds
+      : profileIdentityIds(profile, options.profiles || [], { relationId });
+    const resolveReference = typeof options.resolveReference === "function" ? options.resolveReference : () => null;
+    const imageUrl = typeof options.imageUrl === "function" ? options.imageUrl : value => String(value || "");
+    const cleanExcerpt = (value, limit = 180) => {
+      const text = String(value || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+      return text.length > limit ? `${text.slice(0, limit - 3).trim()}...` : text;
+    };
+    const coordinates = value => {
+      const pair = Array.isArray(value) ? value : [];
+      const lng = Number(pair[0]);
+      const lat = Number(pair[1]);
+      return Number.isFinite(lng) && Number.isFinite(lat) ? [lng, lat] : null;
+    };
+    const explicitCoordinates = record => coordinates(
+      record?.coordinates || record?.center || record?.geojson?.coordinates ||
+      [record?.longitude ?? record?.observation_longitude, record?.latitude ?? record?.observation_latitude]
+    );
+    const referenceFor = (sourceType, slug, title, record = {}) => {
+      const resolved = resolveReference({ sourceType, slug, title, record }) || {};
+      return {
+        sourceType: resolved.sourceType || sourceType || "site",
+        slug: resolved.slug || slug || "",
+        title: resolved.title || title || slug || "Contribution",
+        coordinates: coordinates(resolved.coordinates) || explicitCoordinates(record),
+        url: resolved.url || "",
+        image: imageUrl(resolved.image || "")
+      };
+    };
+    const items = [];
+    const add = (type, record, reference, detail = {}) => {
+      if (!record || !reference) return;
+      items.push({
+        user_id: Number(relationId(profile.id || profile.profileId)) || null,
+        activity_type: type,
+        related_type: reference.sourceType || "site",
+        related_id: detail.relatedId ?? relationId(record.id) ?? null,
+        related_slug: reference.slug || "",
+        title: reference.title || detail.title || "Contribution",
+        coordinates: reference.coordinates,
+        date_time: detail.date || "",
+        excerpt: cleanExcerpt(detail.excerpt || ""),
+        image: imageUrl(detail.image || reference.image || ""),
+        points: Number(detail.points || 0),
+        url: detail.url || reference.url || ""
+      });
+    };
+
+    uniqueVisitRecords(activity.visits || []).forEach(record => {
+      const slug = record.site_slug || "";
+      const checkedIn = hasSavedCheckinDistance(record.distance_miles);
+      add(checkedIn ? "checkin" : "visit", record, referenceFor("site", slug, record.site_title || slug, record), {
+        date: record.visited_at,
+        excerpt: checkedIn ? `Checked in nearby (${Number(record.distance_miles).toFixed(2)} mi)` : "Marked as visited",
+        points: POINT_RULES.site_visit + (checkedIn ? POINT_RULES.site_checkin : 0)
+      });
+    });
+    (activity.comments || []).forEach(record => {
+      const sourceType = String(record.source_type || "site").toLowerCase() === "wiki" ? "wiki" : "site";
+      const slug = record.site_slug || record.source_slug || "";
+      add("comment", record, referenceFor(sourceType, slug, record.site_title || record.source_title || slug, record), {
+        date: record.created_at, excerpt: record.comment, image: record.comment_image, points: POINT_RULES.approved_comment
+      });
+    });
+    (options.languageWords || []).forEach(record => {
+      const [keyType, ...slugParts] = String(record.content_key || "").split(":");
+      const sourceType = keyType === "wiki" ? "wiki" : "site";
+      const slug = record.site_slug || record.source_slug || slugParts.join(":");
+      add("language", record, referenceFor(sourceType, slug, record.content_title || record.source || slug, record), {
+        date: record.learned_at || record.answered_at,
+        excerpt: [record.english, record.algonquian].filter(Boolean).join(" - "),
+        points: POINT_RULES.vocab_guess
+      });
+    });
+    (options.plantObservations || []).forEach(record => {
+      const memberId = Number(relationId(record.member_profile));
+      if (memberId && !identityIds.has(memberId)) return;
+      if (["rejected", "deleted"].includes(String(record.status || "").toLowerCase())) return;
+      const sourceType = String(record.source_type || "site").toLowerCase() === "wiki" ? "wiki" : "site";
+      const slug = record.site_slug || record.source_slug || "";
+      add("plant", record, referenceFor(sourceType, slug, record.site_title || record.source_title || record.common_name || "Plant find", record), {
+        date: record.observed_at || record.created_at || record.date_created,
+        excerpt: [record.common_name, record.scientific_name].filter(Boolean).join(" - "),
+        image: record.photo || record.image
+      });
+    });
+    (options.stories || []).forEach(record => {
+      const memberId = Number(relationId(record.member_profile));
+      if (memberId && !identityIds.has(memberId)) return;
+      if (["rejected", "deleted"].includes(String(record.status || "").toLowerCase())) return;
+      const slug = record.attached_site_slug || record.site_slug || record.source_slug || "";
+      add("story", record, referenceFor("site", slug, record.attached_site_title || record.site_title || "Story", record), {
+        date: record.created_at || record.date_created,
+        excerpt: record.caption || record.story_text,
+        image: record.photo || record.image
+      });
+    });
+    (activity.suggestions || []).forEach(record => {
+      const approvedSlug = String(relationId(record.approved_site) || record.site_slug || "");
+      add("suggestion", record, referenceFor("site", approvedSlug, record.title || "Suggested site", record), {
+        date: record.submitted_at || record.date_created,
+        excerpt: record.introduction || record.review_note,
+        image: record.suggested_image,
+        points: POINT_RULES.suggested_site
+      });
+    });
+    const allCommentsById = new Map((options.allComments || []).map(comment => [String(relationId(comment.id)), comment]));
+    (options.interactionVotes || []).forEach(record => {
+      const memberId = Number(relationId(record.member_profile));
+      if (!memberId || !identityIds.has(memberId)) return;
+      const comment = allCommentsById.get(String(relationId(record.comment)));
+      if (!comment) return;
+      const sourceType = String(comment.source_type || "site").toLowerCase() === "wiki" ? "wiki" : "site";
+      const slug = comment.site_slug || comment.source_slug || "";
+      add("interaction", record, referenceFor(sourceType, slug, comment.site_title || comment.source_title || slug, comment), {
+        date: record.created_at,
+        excerpt: record.vote === "up" ? "Marked a community comment as helpful" : "Interacted with a community comment"
+      });
+    });
+
+    const typeOrder = ["checkin", "visit", "comment", "story", "plant", "language", "suggestion", "interaction"];
+    const mappedItems = items.filter(item => coordinates(item.coordinates));
+    const groupsByKey = new Map();
+    mappedItems.forEach(item => {
+      const key = item.related_slug
+        ? `${item.related_type}:${item.related_slug}`
+        : `coordinate:${item.coordinates.map(value => Number(value).toFixed(4)).join(",")}`;
+      const group = groupsByKey.get(key) || {
+        key, title: item.title, related_type: item.related_type, related_slug: item.related_slug,
+        coordinates: item.coordinates, url: item.url, image: item.image, items: []
+      };
+      group.items.push(item);
+      if (!group.image && item.image) group.image = item.image;
+      if (!group.url && item.url) group.url = item.url;
+      groupsByKey.set(key, group);
+    });
+    const groups = [...groupsByKey.values()].map(group => {
+      const types = [...new Set(group.items.map(item => item.activity_type))]
+        .sort((a, b) => typeOrder.indexOf(a) - typeOrder.indexOf(b));
+      const dated = group.items.slice().sort((a, b) => new Date(a.date_time || 0) - new Date(b.date_time || 0));
+      return {
+        ...group,
+        types,
+        primary_type: types[0] || "interaction",
+        first_date: dated[0]?.date_time || "",
+        latest_date: dated[dated.length - 1]?.date_time || "",
+        points: group.items.reduce((sum, item) => sum + Number(item.points || 0), 0)
+      };
+    }).sort((a, b) => new Date(a.first_date || 0) - new Date(b.first_date || 0));
+    const counts = items.reduce((totals, item) => {
+      totals[item.activity_type] = Number(totals[item.activity_type] || 0) + 1;
+      return totals;
+    }, {});
+    return {
+      user_id: Number(relationId(profile.id || profile.profileId)) || null,
+      items,
+      mappedItems,
+      groups,
+      path: groups.map(group => group.coordinates),
+      counts,
+      unmappedCount: items.length - mappedItems.length,
+      empty: items.length === 0,
+      emptyMap: groups.length === 0
+    };
+  }
+
   window.NLI_PROFILE_UTILS = {
     profileWebsiteUrl,
     normalizeAccountEmail,
@@ -1645,6 +1826,7 @@
     profileEditorPayload,
     profileActivityFeedItems,
     profileActivityFromCollections,
+    profileMapActivityModel,
     POINT_RULES
   };
 }());

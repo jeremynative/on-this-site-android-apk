@@ -3366,6 +3366,185 @@
       display: none;
     }
 
+    #profiles-sheet.profile-progress-active {
+      height: 52dvh;
+      max-height: 52dvh;
+      border-radius: 18px 18px 0 0;
+    }
+
+    #profiles-sheet.profile-progress-active .profile-sort-controls,
+    #profiles-sheet.profile-progress-active [data-mobile-profile-card]:not(.is-expanded) {
+      display: none;
+    }
+
+    #profiles-sheet.profile-progress-active .sheet-body {
+      padding-top: 10px;
+    }
+
+    body.mobile-profile-map-mode .mobile-view-tabs,
+    body.mobile-profile-map-mode .mobile-timeline,
+    body.mobile-profile-map-mode .list-panel,
+    body.mobile-profile-map-mode .mobile-startup-spotlight,
+    body.mobile-profile-map-mode .mobile-exhibit-marker,
+    body.mobile-profile-map-mode .mobile-approved-suggestion-marker,
+    body.mobile-profile-map-mode .mobile-story-marker,
+    body.mobile-profile-map-mode .mobile-plant-marker,
+    body.mobile-profile-map-mode .mobile-biography-person-marker,
+    body.mobile-profile-map-mode .mobile-calendar-event-marker,
+    body.mobile-profile-map-mode .mobile-moving-dog-marker,
+    body.mobile-profile-map-mode .mobile-moving-whale-marker,
+    body.mobile-profile-map-mode .selected-site-map-label {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+
+    .mobile-profile-progress-overview {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid rgba(49, 92, 72, 0.2);
+      border-radius: 11px;
+      background: linear-gradient(160deg, #eff6ef, #fff);
+    }
+
+    .mobile-profile-progress-heading {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .mobile-profile-progress-heading > div {
+      display: grid;
+      gap: 2px;
+    }
+
+    .mobile-profile-progress-heading span {
+      color: #52705f;
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .mobile-profile-progress-heading strong {
+      font-size: 20px;
+    }
+
+    .mobile-profile-progress-heading > b {
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: #dceadd;
+      color: #315c48;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .mobile-profile-progress-overview > p,
+    .mobile-profile-progress-empty p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .mobile-profile-progress-chips {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 3px;
+      scrollbar-width: none;
+    }
+
+    .mobile-profile-progress-chips > span {
+      flex: 0 0 auto;
+      padding: 6px 9px;
+      border: 1px solid rgba(49, 92, 72, 0.18);
+      border-radius: 999px;
+      background: #fff;
+      color: #315c48;
+      font-size: 11px;
+      font-weight: 750;
+    }
+
+    .mobile-profile-progress-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .mobile-profile-progress-stats > div {
+      display: grid;
+      gap: 1px;
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid rgba(49, 92, 72, 0.12);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.84);
+    }
+
+    .mobile-profile-progress-stats strong {
+      color: #254f3e;
+      font-size: 17px;
+    }
+
+    .mobile-profile-progress-stats span {
+      color: var(--muted);
+      font-size: 10.5px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .mobile-profile-progress-empty {
+      padding: 11px;
+      border: 1px dashed rgba(49, 92, 72, 0.28);
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .mobile-profile-map-popup {
+      display: grid;
+      gap: 7px;
+      min-width: 210px;
+      color: #1d2922;
+    }
+
+    .mobile-profile-map-popup > img {
+      width: 100%;
+      max-height: 105px;
+      border-radius: 7px;
+      object-fit: cover;
+    }
+
+    .mobile-profile-map-popup p {
+      margin: 2px 0;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .mobile-profile-map-popup button {
+      min-height: 44px;
+      border: 1px solid #315c48;
+      border-radius: 8px;
+      background: #315c48;
+      color: #fff;
+      font-weight: 800;
+    }
+
+    @media (orientation: landscape) and (min-width: 700px) {
+      #profiles-sheet.profile-progress-active {
+        top: var(--app-top-safe);
+        right: var(--app-right-safe);
+        bottom: var(--app-bottom-safe);
+        left: auto;
+        width: min(50dvw, 620px);
+        height: calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe));
+        max-height: calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe));
+        border-radius: 14px 0 0 0;
+      }
+    }
+
     .comment.reply {
       position: relative;
       grid-template-columns: 30px minmax(0, 1fr);

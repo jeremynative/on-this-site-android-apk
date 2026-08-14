@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260814-west-to-east-loader-r102";
+const expectedBuild = "20260814-contributor-progress-map-r103";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -8,6 +8,7 @@ const bundledAppPath = "app/src/main/assets/mobile-app.html";
 const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
 const lightweightOfflineAppPath = "app/src/main/assets/offline-app.html";
 const bundledMobileJsPath = "app/src/main/assets/assets/js/mobile-app.js";
+const bundledSharedProfileUtilsPath = "app/src/main/assets/assets/js/shared-profile-utils.js";
 const bundledSharedActivityUtilsPath = "app/src/main/assets/assets/js/shared-activity-utils.js";
 const bundledMobileCssPath = "app/src/main/assets/assets/css/mobile-app.css";
 const bundledLearningCardUtilsPath = "app/src/main/assets/assets/js/shared-learning-card-utils.js";
@@ -45,9 +46,29 @@ const offlineParityAudit = fs.readFileSync(offlineParityAuditPath, "utf8");
 const bundledApp = bundledAppBytes.toString("utf8");
 const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
 const bundledMobileJs = fs.readFileSync(bundledMobileJsPath, "utf8");
+const bundledSharedProfileUtils = fs.readFileSync(bundledSharedProfileUtilsPath, "utf8");
 const bundledSharedActivityUtils = fs.readFileSync(bundledSharedActivityUtilsPath, "utf8");
 const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8");
 const bundledLiveRuntime = `${bundledLiveApp}\n${bundledMobileJs}\n${bundledMobileCss}`;
+
+if (!bundledSharedProfileUtils.includes("function profileMapActivityModel(profile = {}, activity = {}, options = {})")
+    || !bundledSharedProfileUtils.includes("profileMapActivityModel,")) {
+  throw new Error("APK contributor profiles must include the shared normalized progress-map activity model.");
+}
+if (!bundledMobileJs.includes("function enterMobileProfileMapMode(profile)")
+    || !bundledMobileJs.includes("function exitMobileProfileMapMode(options = {})")
+    || !bundledMobileJs.includes('document.body.classList.add("mobile-profile-map-mode")')
+    || !bundledMobileJs.includes("mobile-profile-progress-points")
+    || !bundledMobileJs.includes("Your map is still empty.")) {
+  throw new Error("APK contributor profiles must enter, render, and cleanly exit personal progress-map mode.");
+}
+if (!/function openMobileMapTap\(event\)\s*\{\s*if \(state\.profileMapMode\) return false;/.test(bundledMobileJs)) {
+  throw new Error("APK public-map taps must not pass through contributor progress-map mode.");
+}
+if (!bundledMobileCss.includes("#profiles-sheet.profile-progress-active")
+    || !bundledMobileCss.includes("body.mobile-profile-map-mode .mobile-calendar-event-marker")) {
+  throw new Error("APK contributor progress mode must keep the map/profile split and hide unrelated calendar markers.");
+}
 const bundledLearningCardUtils = fs.readFileSync(bundledLearningCardUtilsPath, "utf8");
 const bundledResearchQuestionCss = fs.readFileSync(bundledResearchQuestionCssPath, "utf8");
 const bundledSharedSiteUtils = fs.readFileSync(bundledSharedSiteUtilsPath, "utf8");
@@ -80,7 +101,7 @@ if (!bundledMobileJs.includes("LOCATION_CONTROL_MAX_SCOPE_DISTANCE_MILES = 75")
 
 if (!bundledMobileJs.includes('document.addEventListener("click", closeMobileSheetFromControl, true);')
     || !bundledMobileJs.includes('if (!sheet?.classList.contains("open")) return;')
-    || !bundledMobileJs.includes('if (sheet === profilesSheetEl) state.expandedMobileProfileKey = "";')
+    || !/if \(sheet === profilesSheetEl\) \{\s*exitMobileProfileMapMode\(\);\s*state\.expandedMobileProfileKey = "";\s*\}/.test(bundledMobileJs)
     || bundledMobileJs.includes('document.addEventListener("pointerdown", closeMobileSheetFromControl, true);')
     || bundledMobileJs.includes('document.addEventListener("pointerup", closeMobileSheetFromControl);')) {
   throw new Error("APK contributor profile close must consume the completed click without exposing controls underneath during pointer-down.");
@@ -1400,8 +1421,9 @@ requireBundledText('if (isAndroidMapGestureActive()) {\n          state.pendingA
 requireBundledText('androidMapRefreshTimers: new Set()', "Bundled Android app must keep one cancellable map refresh chain.");
 requireBundledText('[280, 1100, 2600].forEach(delay => {', "Bundled Android paint stabilization must use a short bounded retry sequence.");
 requireBundledText('refreshAndroidMapAfterSettle("android-map-stabilize")', "Bundled Android paint stabilization must use the coalesced settle refresh.");
-if (/function\s+stabilizeAndroidMapPaint\(\)[\s\S]*?\.zoomTo\(|function\s+stabilizeAndroidMapPaint\(\)[\s\S]*?\.jumpTo\(/.test(bundledApp) ||
-    /function\s+stabilizeAndroidMapPaint\(\)[\s\S]*?\.zoomTo\(|function\s+stabilizeAndroidMapPaint\(\)[\s\S]*?\.jumpTo\(/.test(bundledLiveApp)) {
+const bundledStabilizationBody = bundledApp.match(/function\s+stabilizeAndroidMapPaint\(\)\s*\{([\s\S]*?)\n\s*function\s+/)?.[1] || "";
+const bundledLiveStabilizationBody = bundledLiveApp.match(/function\s+stabilizeAndroidMapPaint\(\)\s*\{([\s\S]*?)\n\s*function\s+/)?.[1] || "";
+if (/\.zoomTo\(|\.jumpTo\(/.test(bundledStabilizationBody) || /\.zoomTo\(|\.jumpTo\(/.test(bundledLiveStabilizationBody)) {
   throw new Error("Bundled Android map paint stabilizer must not change zoom or center without user input.");
 }
 requireBundledText('const stable = Boolean(state.map.loaded?.() && (!state.map.areTilesLoaded || state.map.areTilesLoaded()))', "Bundled Android app must stop repaint retries once the map and tiles are stable.");

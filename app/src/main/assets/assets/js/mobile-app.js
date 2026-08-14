@@ -809,6 +809,9 @@
       timelineRandomized: false,
       sortedTimelineEvents: [],
       profileActivityCache: null,
+      profileMapMode: null,
+      profileMapActivityCache: new Map(),
+      profileMapPopup: null,
       storyStream: null,
       storyRecorder: null,
       storyRecordedChunks: [],
@@ -6856,6 +6859,7 @@
     }
 
     function openMobilePolygonLayerFeature(event) {
+      if (state.profileMapMode) return false;
       if (isMobileMapTapBlocked() || state.suggestionMapPickMode) return false;
       if (mobileMapEventHandled(event)) return true;
       const pointFeature = bestMobileRenderedPointHitFeature(event);
@@ -6971,6 +6975,7 @@
     }
 
     function openMobileMapTap(event) {
+      if (state.profileMapMode) return false;
       const androidWebViewTap = event?.source === "android-webview";
       const now = performance.now();
       const followsAndroidOverlayTap = now - (state.lastAndroidUiOverlayTapAt || 0) < 300;
@@ -11572,6 +11577,7 @@
     }
 
     async function openWikiArticle(articleOrSlug, options = {}) {
+      if (state.profileMapMode) exitMobileProfileMapMode();
       clearMobileBiographyPathOverlay();
       const slug = typeof articleOrSlug === "string" ? articleOrSlug : articleOrSlug?.slug;
       if (!slug) {
@@ -12620,6 +12626,7 @@
     }
 
     async function openSite(slug, options = {}) {
+      if (state.profileMapMode) exitMobileProfileMapMode();
       const hadStartupSpotlight = Boolean(mobileStartupSpotlightEl && !mobileStartupSpotlightEl.hidden);
       hideMobileStartupSpotlight({
         deferLongIslandView: slug !== "address-result" && (hadStartupSpotlight || options.fromStartupSpotlight),
@@ -12828,7 +12835,10 @@
       const openSheet = document.querySelector(".sheet.open");
       if (openSheet) {
         if (openSheet === storySheetEl) closeStoryMode();
-        else openSheet.classList.remove("open");
+        else {
+          if (openSheet === profilesSheetEl) exitMobileProfileMapMode();
+          openSheet.classList.remove("open");
+        }
         syncMobilePanelAccessibility();
       }
       const params = new URLSearchParams(window.location.search);
@@ -12896,7 +12906,10 @@
       const openSheet = document.querySelector(".sheet.open");
       if (openSheet) {
         if (openSheet === storySheetEl) closeStoryMode();
-        else openSheet.classList.remove("open");
+        else {
+          if (openSheet === profilesSheetEl) exitMobileProfileMapMode();
+          openSheet.classList.remove("open");
+        }
         if (mobileSheetRouteKey(openSheet)) clearMobileRoute();
         syncMobilePanelAccessibility();
         return true;
@@ -14030,6 +14043,7 @@
     }
 
     function openMobileInteractivePolygonLayer(event) {
+      if (state.profileMapMode) return;
       if (mobileMapEventHandled(event)) return;
       if (handleSuggestionMapPickClick(event)) return;
       if (openMobilePolygonLayerFeature(event)) return;
@@ -14586,12 +14600,18 @@
 
     function mobileProfileStats(profile, options = {}) {
       const activity = profileActivity(profile || {});
+      const identityIds = profileIdentityIds(profile || {});
+      const plantSubmissions = (state.plantObservations || []).filter(item => identityIds.has(Number(relationId(item.member_profile))) && !["rejected", "deleted"].includes(String(item.status || "").toLowerCase())).length;
+      const storiesPosted = (state.mapStories || []).filter(item => identityIds.has(Number(relationId(item.member_profile))) && !["rejected", "deleted"].includes(String(item.status || "").toLowerCase())).length;
       const ids = canonicalPointProfileIds(profile);
       const pointsSyncing = Boolean(ids.length && !profilePointEventsAreCanonical(profile));
       const stats = PROFILE_UTILS.profileStatsFromActivity(activity, {
         homelandsCount: distinctVisitedHomelandCount(activity.visitedSites || []),
         languageLearned: learnedLanguageWords(profile).length,
         languageCorrectAttempts: languageCorrectAttemptCount(profile),
+        quizzesCompleted: 0,
+        plantSubmissions,
+        storiesPosted,
         loginRewards: loginRewardStats(profile),
         supporterPoints: profile?.is_monthly_supporter ? supportMonths(profile) * 100 : 0,
         emptyMilestone: "New Learner"
@@ -14605,6 +14625,164 @@
         });
       }
       return { ...stats, pointsSyncing: showPointsSyncing };
+    }
+
+    function mobileContributorProfileMapModel(profile) {
+      const profileKey = String(profile?.id || profile?.slug || profile?.username || "contributor");
+      const signature = [state.publicVisits.length, state.publicComments.length, state.commentVotes.length, state.languageQuizAttempts.length, state.plantObservations.length, state.mapStories.length, state.siteSuggestions.length].join(":");
+      const cacheKey = `${profileKey}:${signature}`;
+      if (state.profileMapActivityCache.has(cacheKey)) return state.profileMapActivityCache.get(cacheKey);
+      const identityIds = profileIdentityIds(profile);
+      const resolveReference = ({ sourceType, slug, title, record }) => {
+        const site = sourceType === "site" ? state.siteBySlug.get(slug || "") : null;
+        const coordinates = site?.center || geometryCenter(siteDisplayGeometry(site));
+        return {
+          sourceType,
+          slug,
+          title: site?.title || title,
+          coordinates,
+          image: site ? listingImage(site) : record?.comment_image,
+          url: ROUTE_UTILS.publicArchiveUrl({ [sourceType === "wiki" ? "wiki" : "site"]: slug }, { baseUrl: PUBLIC_ARCHIVE_BASE })
+        };
+      };
+      const model = PROFILE_UTILS.profileMapActivityModel(profile, profileActivity(profile), {
+        relationId,
+        identityIds,
+        resolveReference,
+        imageUrl: directusAssetUrl,
+        languageWords: learnedLanguageWords(profile),
+        plantObservations: state.plantObservations,
+        stories: state.mapStories,
+        interactionVotes: state.commentVotes,
+        allComments: state.publicComments
+      });
+      state.profileMapActivityCache.clear();
+      state.profileMapActivityCache.set(cacheKey, model);
+      return model;
+    }
+
+    function mobileProfileProgressSummaryHtml(profile, model = mobileContributorProfileMapModel(profile), stats = mobileProfileStats(profile, { syncRemote: false })) {
+      const rows = [
+        ["Total points", mobileProfilePointTotal(stats)],
+        ["Sites checked into", stats.checkinsCount],
+        ["Comments made", stats.commentsCount],
+        ["Language words learned", stats.languageLearned],
+        ["Quizzes completed", stats.quizzesCompleted],
+        ["Plant submissions", stats.plantSubmissions],
+        ["Stories posted", stats.storiesPosted],
+        ["Suggested sites", stats.suggestionsCount]
+      ];
+      const chips = [["checkin", "Checked-in Sites"], ["comment", "Commented On"], ["language", "Words Learned"], ["plant", "Plant Finds"], ["story", "Stories"], ["suggestion", "Suggested Sites"]]
+        .filter(([type]) => Number(model.counts[type] || 0));
+      return `
+        <section class="mobile-profile-progress-overview" data-mobile-profile-map-summary>
+          <div class="mobile-profile-progress-heading"><div><span>Personal learning path</span><strong>Progress map</strong></div><b>${model.groups.length} mapped</b></div>
+          <p>The map above is simplified to this contributor's activity, with ancestral lands kept as quiet context.</p>
+          ${model.empty ? `<div class="mobile-profile-progress-empty"><strong>Your map is still empty.</strong><p>Check in at a site, comment on a story, learn a language word, or complete a quiz to begin filling it in.</p></div>` : `<div class="mobile-profile-progress-chips">${chips.map(([type, label]) => `<span data-progress-type="${type}">${escapeHtml(label)} <b>${Number(model.counts[type] || 0)}</b></span>`).join("")}</div>`}
+          <div class="mobile-profile-progress-stats">${rows.map(([label, value]) => `<div><strong>${Number(value || 0).toLocaleString()}</strong><span>${escapeHtml(label)}</span></div>`).join("")}</div>
+          ${model.unmappedCount ? `<p class="detail-meta">${model.unmappedCount} additional progress item${model.unmappedCount === 1 ? " is" : "s are"} counted but not mapped without reliable coordinates.</p>` : ""}
+        </section>
+      `;
+    }
+
+    function mobileProfileMapPopupHtml(group) {
+      const labels = { checkin: "Checked in", visit: "Visited", comment: "Commented", language: "Learned a word", plant: "Plant find", story: "Story", suggestion: "Suggested site", interaction: "Community interaction" };
+      return `<div class="mobile-profile-map-popup">
+        ${group.image ? `<img src="${escapeHtml(group.image)}" alt="" loading="lazy" decoding="async">` : ""}
+        <strong>${escapeHtml(group.title)}</strong>
+        ${group.items.slice().sort((a, b) => new Date(b.date_time || 0) - new Date(a.date_time || 0)).map(item => `<p><b>${escapeHtml(labels[item.activity_type] || "Activity")}</b>${item.excerpt ? ` <span>${escapeHtml(item.excerpt)}</span>` : ""}</p>`).join("")}
+        ${group.related_slug ? `<button type="button" data-profile-map-source="${escapeHtml(group.related_type)}" data-profile-map-slug="${escapeHtml(group.related_slug)}">Open full ${group.related_type === "wiki" ? "article" : "site"}</button>` : ""}
+      </div>`;
+    }
+
+    const MOBILE_PROFILE_PROGRESS_LAYER_IDS = ["mobile-profile-progress-labels", "mobile-profile-progress-points", "mobile-profile-progress-path", "mobile-profile-progress-island-line", "mobile-profile-progress-island-fill"];
+    const MOBILE_PROFILE_PROGRESS_SOURCE_IDS = ["mobile-profile-progress-points", "mobile-profile-progress-path", "mobile-profile-progress-island"];
+
+    function removeMobileProfileProgressLayers() {
+      if (!state.map) return;
+      MOBILE_PROFILE_PROGRESS_LAYER_IDS.forEach(id => { if (state.map.getLayer(id)) state.map.removeLayer(id); });
+      MOBILE_PROFILE_PROGRESS_SOURCE_IDS.forEach(id => { if (state.map.getSource(id)) state.map.removeSource(id); });
+      state.profileMapPopup?.remove?.();
+      state.profileMapPopup = null;
+    }
+
+    function renderMobileProfileProgressMap() {
+      const mode = state.profileMapMode;
+      if (!mode || !state.map?.isStyleLoaded?.()) return;
+      if (mode.clickHandler && state.map.getLayer("mobile-profile-progress-points")) {
+        state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);
+        mode.clickHandler = null;
+      }
+      removeMobileProfileProgressLayers();
+      mode.layerVisibility = mode.layerVisibility || new Map();
+      for (const layer of state.map.getStyle()?.layers || []) {
+        if (!layer.id.startsWith("mobile-") || layer.id.startsWith("mobile-profile-progress-") || layer.id === "mobile-territory-polygons") continue;
+        if (!mode.layerVisibility.has(layer.id)) mode.layerVisibility.set(layer.id, state.map.getLayoutProperty(layer.id, "visibility") || "visible");
+        state.map.setLayoutProperty(layer.id, "visibility", "none");
+      }
+      if (state.map.getLayer("mobile-territory-polygons")) {
+        if (mode.territoryOpacity === undefined) mode.territoryOpacity = state.map.getPaintProperty("mobile-territory-polygons", "fill-opacity");
+        state.map.setPaintProperty("mobile-territory-polygons", "fill-opacity", 0.09);
+      }
+      if (state.landMaskData?.geometry) {
+        state.map.addSource("mobile-profile-progress-island", { type: "geojson", data: state.landMaskData });
+        state.map.addLayer({ id: "mobile-profile-progress-island-fill", type: "fill", source: "mobile-profile-progress-island", paint: { "fill-color": "#f8fbf5", "fill-opacity": 0.78 } }, "mobile-territory-polygons");
+        state.map.addLayer({ id: "mobile-profile-progress-island-line", type: "line", source: "mobile-profile-progress-island", paint: { "line-color": "#315a49", "line-width": 1.25, "line-opacity": 0.72 } });
+      }
+      const pathData = mode.model.path.length > 1 ? { type: "Feature", geometry: { type: "LineString", coordinates: mode.model.path }, properties: {} } : { type: "FeatureCollection", features: [] };
+      state.map.addSource("mobile-profile-progress-path", { type: "geojson", data: pathData });
+      state.map.addLayer({ id: "mobile-profile-progress-path", type: "line", source: "mobile-profile-progress-path", paint: { "line-color": "#315c48", "line-width": 2.2, "line-opacity": 0.62, "line-dasharray": [2, 1.5] } });
+      const features = mode.model.groups.map((group, index) => ({ type: "Feature", geometry: { type: "Point", coordinates: group.coordinates }, properties: { index, title: group.title, type: group.primary_type, count: group.items.length } }));
+      state.map.addSource("mobile-profile-progress-points", { type: "geojson", data: { type: "FeatureCollection", features } });
+      state.map.addLayer({ id: "mobile-profile-progress-points", type: "circle", source: "mobile-profile-progress-points", paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 7, 13, 11],
+        "circle-color": ["match", ["get", "type"], "checkin", "#315c48", "comment", "#b56d32", "language", "#386c86", "plant", "#5d7d3a", "story", "#72577e", "suggestion", "#9a4d38", "#52665b"],
+        "circle-stroke-color": "#fff", "circle-stroke-width": 2
+      } });
+      state.map.addLayer({ id: "mobile-profile-progress-labels", type: "symbol", source: "mobile-profile-progress-points", minzoom: 9, layout: { "text-field": ["get", "title"], "text-size": 11, "text-offset": [0, 1.35], "text-anchor": "top", "text-optional": true }, paint: { "text-color": "#173528", "text-halo-color": "#fff", "text-halo-width": 1.5 } });
+      const onClick = event => {
+        const group = mode.model.groups[Number(event.features?.[0]?.properties?.index)];
+        if (!group) return;
+        markMobileMapEventHandled(event);
+        state.profileMapPopup?.remove?.();
+        state.profileMapPopup = new mapboxgl.Popup({ closeButton: true, offset: 14 }).setLngLat(group.coordinates).setHTML(mobileProfileMapPopupHtml(group)).addTo(state.map);
+      };
+      state.map.on("click", "mobile-profile-progress-points", onClick);
+      mode.clickHandler = onClick;
+      ensureLandMask().then(mask => {
+        if (mask && state.profileMapMode === mode && !state.map.getSource("mobile-profile-progress-island")) renderMobileProfileProgressMap();
+      });
+    }
+
+    function enterMobileProfileMapMode(profile) {
+      const profileKey = String(profile?.id || profile?.slug || profile?.username || "");
+      if (state.profileMapMode?.profileKey === profileKey) return;
+      if (state.profileMapMode) exitMobileProfileMapMode({ restoreCamera: false });
+      const center = state.map?.getCenter?.();
+      state.profileMapMode = { profileKey, profile, model: mobileContributorProfileMapModel(profile), camera: center ? { center: [center.lng, center.lat], zoom: state.map.getZoom?.() } : null };
+      document.body.classList.add("mobile-profile-map-mode");
+      profilesSheetEl?.classList.add("profile-progress-active");
+      profilesSheetEl?.querySelector(".sheet-head h2")?.replaceChildren(document.createTextNode("Contributor Progress"));
+      renderMobileProfileProgressMap();
+      const bounds = state.profileMapMode.model.groups.map(group => group.coordinates);
+      if (state.map && bounds.length) state.map.fitBounds(bounds.reduce((fit, point) => fit.extend(point), new mapboxgl.LngLatBounds(bounds[0], bounds[0])), { padding: { top: 64, right: 34, bottom: Math.round(window.innerHeight * 0.53), left: 34 }, maxZoom: 12.5, duration: 0 });
+      else if (state.map) state.map.fitBounds(LONG_ISLAND_VIEW_BOUNDS, { padding: { top: 54, right: 28, bottom: Math.round(window.innerHeight * 0.53), left: 28 }, duration: 0 });
+    }
+
+    function exitMobileProfileMapMode(options = {}) {
+      const mode = state.profileMapMode;
+      if (!mode) return;
+      if (state.map) {
+        if (mode.clickHandler && state.map.getLayer("mobile-profile-progress-points")) state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);
+        removeMobileProfileProgressLayers();
+        mode.layerVisibility?.forEach((visibility, id) => { if (state.map.getLayer(id)) state.map.setLayoutProperty(id, "visibility", visibility); });
+        if (mode.territoryOpacity !== undefined && state.map.getLayer("mobile-territory-polygons")) state.map.setPaintProperty("mobile-territory-polygons", "fill-opacity", mode.territoryOpacity);
+        if (options.restoreCamera !== false && mode.camera?.center) state.map.jumpTo({ center: mode.camera.center, zoom: mode.camera.zoom });
+      }
+      state.profileMapMode = null;
+      document.body.classList.remove("mobile-profile-map-mode");
+      profilesSheetEl?.classList.remove("profile-progress-active");
+      profilesSheetEl?.querySelector(".sheet-head h2")?.replaceChildren(document.createTextNode("Contributors"));
     }
 
     function mobileProfileBadgesHtml(profile, providedStats = null) {
@@ -15904,6 +16082,7 @@
               <span class="contributor-chevron" aria-hidden="true">${expanded ? "Hide" : "Open"}</span>
             </button>
             <div class="contributor-body" ${expanded ? "" : "hidden"}>
+              ${expanded ? mobileProfileProgressSummaryHtml(profile, mobileContributorProfileMapModel(profile), stats) : ""}
               ${userSinceLine ? `<p class="detail-meta">${escapeHtml(userSinceLine)}</p>` : ""}
               ${profile.headline ? `<p class="summary">${escapeHtml(profile.headline)}</p>` : ""}
               ${profile.bio ? `<p>${escapeHtml(profile.bio)}</p>` : ""}
@@ -15950,6 +16129,7 @@
       }
       state.expandedMobileProfileKey = String(profile.id || profile.slug || profile.display_name || "");
       openSheet(profilesSheetEl);
+      enterMobileProfileMapMode(profile);
       window.setTimeout(() => {
         const selector = `[data-mobile-profile-card="${CSS.escape(String(profile.id || profile.slug || profile.display_name || ""))}"]`;
         const card = profilesListEl?.querySelector(selector);
@@ -15958,6 +16138,7 @@
     }
 
     function openSheet(sheet, options = {}) {
+      if (state.profileMapMode && sheet !== profilesSheetEl) exitMobileProfileMapMode();
       document.querySelectorAll(".sheet.open").forEach(item => item.classList.remove("open"));
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
       sheet.classList.add("open");
@@ -16625,6 +16806,7 @@
       syncExhibitMarkers();
       syncApprovedSuggestionMarkers();
       ensureMobileMovingFeatureMarkers();
+      if (state.profileMapMode) renderMobileProfileProgressMap();
     }
 
     function syncMobileLayerButtons() {
@@ -16977,8 +17159,10 @@
         state.expandedMobileProfileKey = state.expandedMobileProfileKey === key ? "" : key;
         renderProfiles();
         if (state.expandedMobileProfileKey) {
+          const profile = state.contributorProfiles.find(item => String(item.id || item.slug || item.display_name || "") === key);
+          if (profile) enterMobileProfileMapMode(profile);
           profilesListEl.querySelector(`[data-mobile-profile-card="${CSS.escape(key)}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-        }
+        } else exitMobileProfileMapMode();
         return;
       }
       const languageToggle = event.target.closest("[data-show-profile-language]");
@@ -17017,11 +17201,25 @@
       }
       const link = event.target.closest("[data-profile-site]");
       if (link?.dataset.profileSite) {
+        exitMobileProfileMapMode();
         openSite(link.dataset.profileSite);
         profilesSheetEl.classList.remove("open");
       }
     });
+    document.addEventListener("click", event => {
+      const target = event.target.closest("[data-profile-map-source][data-profile-map-slug]");
+      if (!target) return;
+      event.preventDefault();
+      const source = target.dataset.profileMapSource;
+      const slug = target.dataset.profileMapSlug;
+      exitMobileProfileMapMode();
+      profilesSheetEl?.classList.remove("open");
+      state.expandedMobileProfileKey = "";
+      if (source === "wiki") openWikiArticle(slug);
+      else openSite(slug);
+    });
     profilesSortEl?.addEventListener("change", () => {
+      exitMobileProfileMapMode();
       state.contributorSortMode = profilesSortEl.value === "points" ? "points" : "alpha";
       state.expandedMobileProfileKey = "";
       renderProfiles();
@@ -17911,7 +18109,10 @@
         return;
       }
       sheet.classList.remove("open");
-      if (sheet === profilesSheetEl) state.expandedMobileProfileKey = "";
+      if (sheet === profilesSheetEl) {
+        exitMobileProfileMapMode();
+        state.expandedMobileProfileKey = "";
+      }
       if (sheet && mobileSheetRouteKey(sheet)) clearMobileRoute();
       syncMobilePanelAccessibility();
     }
