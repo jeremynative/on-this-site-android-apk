@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260813-offline-shell-parity-r100";
+const expectedBuild = "20260814-native-back-navigation-r101";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -586,11 +586,26 @@ if (!bundledApp.includes('id="mobile-panel-size-toggle"')
     || !bundledLiveApp.includes('id="mobile-panel-size-toggle"')
     || !bundledMobileCss.includes(".app.panel-maximized")
     || !bundledMobileCss.includes("padding-bottom: var(--app-bottom-safe);")
-    || !bundledMobileJs.includes('if (state.mobilePanelState === "maximized")')
-    || !bundledMobileJs.includes('setMobileBottomPanelState("normal");')) {
-  throw new Error("Bundled Android panel controls must retain a safe map strip and support maximized-to-normal Back navigation.");
+    || !bundledMobileJs.includes('if (state.mobilePanelState !== "collapsed")')
+    || !bundledMobileJs.includes('setMobileBottomPanelState("collapsed");')) {
+  throw new Error("Bundled Android panel controls must retain a safe map strip and let Back dismiss any open bottom panel.");
+}
+if (!bundledMobileJs.includes('storySavePanelEl?.classList.contains("open")')
+    || !bundledMobileJs.includes("closePlantPhotoViewer();")
+    || !bundledMobileJs.includes("state.researchQuestionInstance.close?.();")
+    || !bundledMobileJs.includes('searchEl?.setAttribute("aria-expanded", "false")')
+    || !bundledMobileJs.includes("hideMobileStartupSpotlight();")) {
+  throw new Error("Bundled Android Back handling must dismiss the topmost app overlay before reaching the activity root.");
 }
 requireText(expectedUrl, `Android shell must load ${expectedUrl}.`);
+requireText("new AlertDialog.Builder(this)", "Android root Back must use a native confirmation dialog.");
+requireText("R.string.exit_app_title", "Android exit confirmation must use the app's Exit app title.");
+requireText("R.string.exit_app_message", "Android exit confirmation must explain what will exit.");
+requireText("R.string.exit_app_action", "Android exit confirmation must provide an explicit Exit action.");
+requireText("showExitConfirmation();", "Android Back must route an unhandled app root through exit confirmation.");
+if (/public void onBackPressed\(\)[\s\S]*?webView\.canGoBack\(\)/.test(source)) {
+  throw new Error("Android root Back must not expose internal WebView loading history instead of the exit confirmation.");
+}
 requireText("?app-version=", "Android shell must pass the app build id to the mobile web app.");
 requireText("&apk-version=", "Android shell must pass the APK version to the mobile web app.");
 requireText("&refresh=", "Android shell must use a refresh token when loading the mobile web app.");
@@ -691,6 +706,12 @@ if (!offlineInsetAudit.includes("getSafeInsetBottom")
     || !offlineInsetAudit.includes("result.detail.safe")
     || !offlineInsetAudit.includes("nativeInsetsValid")) {
   throw new Error("Android regression tooling must exercise the offline archive against native system bars.");
+}
+if (!lightweightOfflineApp.includes("window.onAndroidBackPressed=()=>")
+    || !lightweightOfflineApp.includes('document.querySelector(".mobile-more-menu[open]")')
+    || !lightweightOfflineApp.includes("if(!detail.hidden){closeDetail();return true}")
+    || !lightweightOfflineApp.includes('if(!app.classList.contains("panel-collapsed")){showMap();return true}')) {
+  throw new Error("Lightweight APK fallback must dismiss its menu, detail, and saved-place panel before exit confirmation.");
 }
 if (!offlineParityAudit.includes("sharedStylesheet")
     || !offlineParityAudit.includes("hasOnlineShellStructure")
@@ -900,8 +921,9 @@ const backHandlerMatch = source.match(/public void onBackPressed\(\) \{[\s\S]*?\
 if (!backHandlerMatch
     || !backHandlerMatch[0].includes("window.onAndroidBackPressed && window.onAndroidBackPressed()")
     || !backHandlerMatch[0].includes('if ("true".equals(handled)) return;')
-    || !backHandlerMatch[0].includes("if (webView.canGoBack())")) {
-  throw new Error("Android Back must let the web panel reduce its state before navigating WebView history or leaving the app.");
+    || !backHandlerMatch[0].includes("showExitConfirmation();")
+    || backHandlerMatch[0].includes("webView.canGoBack()")) {
+  throw new Error("Android Back must let the web UI dismiss its top layer, then confirm before exiting at the app root.");
 }
 
 if (!releaseWorkflow.includes("GITHUB_RUN_NUMBER") || !releaseWorkflow.includes("latest_apk") || !releaseWorkflow.includes("version_code=\"$run_number\"")) {

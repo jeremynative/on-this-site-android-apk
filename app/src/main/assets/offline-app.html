@@ -131,6 +131,7 @@
     $("offline-feedback").addEventListener("click",()=>openDetail("Feedback","Connection required",'<p>Feedback, comments, site suggestions, and contributions will be available after the app reconnects.</p><p class="offline-only">Your saved map and articles remain available now.</p>'));$("offline-menu-help").addEventListener("click",()=>{$("offline-menu").removeAttribute("open");$("offline-feedback").click()});
     document.querySelectorAll(".quick-actions details").forEach(menu=>menu.addEventListener("toggle",()=>{if(menu.open)document.querySelectorAll(".quick-actions details").forEach(other=>{if(other!==menu)other.removeAttribute("open")})}));
     const closeDetail=()=>{detail.classList.remove("open");detail.hidden=true};detail.querySelector(".detail-close").addEventListener("click",closeDetail);detail.addEventListener("click",e=>{if(e.target===detail)closeDetail()});addEventListener("resize",draw,{passive:true});
+    window.onAndroidBackPressed=()=>{const menu=document.querySelector(".mobile-more-menu[open]");if(menu){menu.removeAttribute("open");return true}const areas=document.querySelector(".mobile-layer-menu[open]");if(areas){areas.removeAttribute("open");return true}if(!detail.hidden){closeDetail();return true}if(!app.classList.contains("panel-collapsed")){showMap();return true}return false};
     window.NLI_APK_OFFLINE_TEXT_MODE=true;start();
   })();
   </script>

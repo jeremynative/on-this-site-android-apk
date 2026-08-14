@@ -12851,6 +12851,38 @@
     });
 
     window.onAndroidBackPressed = function onAndroidBackPressed() {
+      if (storySavePanelEl?.classList.contains("open")) {
+        storySavePanelEl.classList.remove("open");
+        return true;
+      }
+      if (plantPhotoViewerEl && !plantPhotoViewerEl.hidden) {
+        closePlantPhotoViewer();
+        return true;
+      }
+      if (languageQuizModalEl && !languageQuizModalEl.hidden) {
+        languageQuizModalEl.hidden = true;
+        return true;
+      }
+      if (state.researchQuestionInstance?.dialog && !state.researchQuestionInstance.dialog.hidden) {
+        state.researchQuestionInstance.close?.();
+        return true;
+      }
+      if (searchSuggestionsEl && !searchSuggestionsEl.hidden) {
+        searchSuggestionsEl.hidden = true;
+        searchSuggestionsEl.replaceChildren();
+        searchEl?.setAttribute("aria-expanded", "false");
+        return true;
+      }
+      const quoteSelectionPopup = document.getElementById("mobile-quote-selection-popup");
+      if (quoteSelectionPopup && !quoteSelectionPopup.hidden) {
+        hideQuoteSelectionPopup();
+        window.getSelection?.()?.removeAllRanges?.();
+        return true;
+      }
+      if (mobileStartupSpotlightEl && !mobileStartupSpotlightEl.hidden) {
+        hideMobileStartupSpotlight();
+        return true;
+      }
       const openMoreMenu = document.querySelector(".mobile-more-menu[open]");
       if (openMoreMenu) {
         openMoreMenu.removeAttribute("open");
@@ -12873,11 +12905,7 @@
         closeDetail();
         return true;
       }
-      if (state.mobilePanelState === "maximized") {
-        setMobileBottomPanelState("normal");
-        return true;
-      }
-      if (state.mobilePanelState === "normal") {
+      if (state.mobilePanelState !== "collapsed") {
         setMobileBottomPanelState("collapsed");
         return true;
       }

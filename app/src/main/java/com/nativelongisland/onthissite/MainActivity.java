@@ -3,6 +3,7 @@ package com.nativelongisland.onthissite;
 import android.Manifest;
 import android.animation.ValueAnimator;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -87,7 +88,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260813-offline-shell-parity-r100";
+    static final String APP_VERSION = "20260814-native-back-navigation-r101";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -113,6 +114,8 @@ public class MainActivity extends Activity {
     private final String bridgeCapabilityToken = UUID.randomUUID().toString();
 
     private WebView webView;
+    private AlertDialog exitConfirmationDialog;
+    private boolean backNavigationPending;
     private BillingManager billingManager;
     private View loadingCover;
     private TextView loadingCoverLabel;
@@ -1670,6 +1673,8 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         unregisterConnectivityMonitoring();
         startupHandler.removeCallbacksAndMessages(null);
+        if (exitConfirmationDialog != null) exitConfirmationDialog.dismiss();
+        exitConfirmationDialog = null;
         if (billingManager != null) billingManager.close();
         super.onDestroy();
     }
@@ -2179,20 +2184,38 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (webView == null) {
-            super.onBackPressed();
+            showExitConfirmation();
             return;
         }
-        webView.evaluateJavascript(
-            "(function(){try{return !!(window.onAndroidBackPressed && window.onAndroidBackPressed());}catch(error){return false;}})();",
-            handled -> {
-                if ("true".equals(handled)) return;
-                if (webView.canGoBack()) {
-                    webView.goBack();
-                    return;
+        if (backNavigationPending) return;
+        backNavigationPending = true;
+        try {
+            webView.evaluateJavascript(
+                "(function(){try{return !!(window.onAndroidBackPressed && window.onAndroidBackPressed());}catch(error){return false;}})();",
+                handled -> {
+                    backNavigationPending = false;
+                    if (isFinishing() || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && isDestroyed())) return;
+                    if ("true".equals(handled)) return;
+                    showExitConfirmation();
                 }
-                MainActivity.super.onBackPressed();
-            }
-        );
+            );
+        } catch (RuntimeException error) {
+            backNavigationPending = false;
+            showExitConfirmation();
+        }
+    }
+
+    private void showExitConfirmation() {
+        if (isFinishing() || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && isDestroyed())) return;
+        if (exitConfirmationDialog != null && exitConfirmationDialog.isShowing()) return;
+        exitConfirmationDialog = new AlertDialog.Builder(this)
+            .setTitle(R.string.exit_app_title)
+            .setMessage(R.string.exit_app_message)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.exit_app_action, (dialog, which) -> finish())
+            .create();
+        exitConfirmationDialog.setOnDismissListener(dialog -> exitConfirmationDialog = null);
+        exitConfirmationDialog.show();
     }
 
     @Override
