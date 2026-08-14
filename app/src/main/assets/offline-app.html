@@ -5,46 +5,67 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#eef3ed">
   <title>On This Site - Offline Archive</title>
+  <link rel="stylesheet" href="assets/css/mobile-app.css">
   <style>
-    :root{--ink:#172119;--muted:#647068;--line:#d3ddd4;--panel:#fbfcfa;--accent:#386a55;--soft:#e5efe9;--water:#b9dce7;--native-top-safe:0px;--native-right-safe:0px;--native-bottom-safe:0px;--native-left-safe:0px;--app-top-safe:max(env(safe-area-inset-top),var(--native-top-safe));--app-right-safe:max(env(safe-area-inset-right),var(--native-right-safe));--app-bottom-safe:max(env(safe-area-inset-bottom),var(--native-bottom-safe));--app-left-safe:max(env(safe-area-inset-left),var(--native-left-safe))}
-    *{box-sizing:border-box}html,body{margin:0;min-height:100%;color:var(--ink);background:#eef3ed;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:0}
-    button,input{font:inherit}button{color:inherit}.app{min-height:100vh;padding:var(--app-top-safe) var(--app-right-safe) var(--app-bottom-safe) var(--app-left-safe)}
-    .shell{width:min(920px,100%);margin:auto;padding:0 12px 22px}.masthead{position:sticky;top:0;z-index:4;display:grid;gap:10px;margin:0 -12px 14px;padding:10px 12px 12px;background:#eef3edf5;border-bottom:1px solid var(--line);backdrop-filter:blur(12px)}h1,h2,h3,p{margin:0}.brand-row{display:flex;align-items:center;justify-content:space-between;gap:10px}.brand-copy{display:grid;gap:2px;min-width:0}h1{font-size:23px;line-height:1.05;letter-spacing:-.035em}.brand-copy small{color:var(--muted);font-size:11px;font-weight:750;letter-spacing:.06em;text-transform:uppercase}.offline-pill{display:inline-flex;align-items:center;min-height:32px;padding:0 10px;border:1px solid #8ca894;border-radius:999px;background:#e5efe9;color:#285b47;font-size:12px;font-weight:800;white-space:nowrap}.note{color:var(--muted);font-size:13px;line-height:1.35}.offline-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.offline-tabs button{min-height:40px;border:1px solid #bdc9bf;border-radius:9px;background:#fff;font-size:13px;font-weight:800}.offline-tabs button:active{background:var(--soft);border-color:var(--accent)}
-    #search{width:100%;min-height:52px;padding:0 15px;border:1px solid #bdcabe;border-radius:8px;background:#fff;color:var(--ink);outline:0}#search:focus{border-color:var(--accent);box-shadow:0 0 0 3px #386a552e}
-    .offline-map-index,.archive{scroll-margin-top:134px;overflow:hidden;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:0 6px 20px #23382c19}.head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;border-bottom:1px solid var(--line)}.head h2{font-size:17px}.status{color:var(--muted);font-size:13px;text-align:right}
-    #map{position:relative;min-height:245px;background:var(--water)}#offline-map{display:block;width:100%;height:245px;touch-action:manipulation}.map-help{position:absolute;left:10px;bottom:9px;max-width:calc(100% - 20px);padding:5px 8px;border:1px solid #1721192e;border-radius:6px;background:#fbfcfae8;color:#475248;font-size:12px;pointer-events:none}
-    .regions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;padding:11px;border-top:1px solid var(--line)}.regions button{min-height:42px;padding:7px 5px;border:1px solid #bdc9bf;border-radius:7px;background:#fff;font-size:13px;font-weight:750}.regions button[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:#fff}
-    .archive{margin-top:14px}#site-list{display:grid;gap:1px;background:var(--line)}.site-card{display:grid;gap:5px;width:100%;min-height:84px;padding:13px 15px;border:0;background:#fff;text-align:left}.site-card:active{background:var(--soft)}.site-card strong{font-size:16px;line-height:1.25}.site-card span{color:var(--muted);font-size:13px;line-height:1.35}#load-more{width:100%;min-height:50px;border:0;border-top:1px solid var(--line);background:#f6f9f6;color:var(--accent);font-weight:800}#load-more[hidden]{display:none}
-    .detail{position:fixed;inset:var(--app-top-safe) var(--app-right-safe) var(--app-bottom-safe) var(--app-left-safe);z-index:10;display:grid;align-items:end;background:#0d161161}.detail[hidden]{display:none}.detail-card{max-height:100%;overflow:auto;padding:20px 20px 26px;border-radius:14px 14px 0 0;background:#fff;box-shadow:0 -10px 30px #0d16112e}.detail-head{display:grid;grid-template-columns:minmax(0,1fr) 48px;gap:12px;align-items:start;margin-bottom:18px}.detail h2{font-size:24px;line-height:1.14}.detail-close{width:48px;height:48px;border:1px solid #bdc9bf;border-radius:8px;background:#fff;font-size:23px}.detail-meta{margin-top:5px;color:var(--muted);font-size:14px}.detail-body{display:grid;gap:15px;font-size:16px;line-height:1.55}.detail-body h3{font-size:17px}.offline-only{padding:10px 12px;border-left:4px solid var(--accent);background:var(--soft);color:#35473d;font-size:14px}
-    @media(max-width:560px){.regions{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    :root{--water:#b9dce7;--soft:#e5efe9;--native-top-safe:0px;--native-right-safe:0px;--native-bottom-safe:0px;--native-left-safe:0px;--app-top-safe:max(env(safe-area-inset-top),var(--native-top-safe));--app-right-safe:max(env(safe-area-inset-right),var(--native-right-safe));--app-bottom-safe:max(env(safe-area-inset-bottom),var(--native-bottom-safe));--app-left-safe:max(env(safe-area-inset-left),var(--native-left-safe))}
+    html,body{height:100%;min-height:100%;overflow:hidden}.offline-shell{grid-template-rows:auto var(--map-height) auto minmax(0,1fr);padding-bottom:var(--app-bottom-safe);padding-left:var(--app-left-safe);padding-right:var(--app-right-safe)}
+    .offline-shell header{padding-top:max(12px,var(--app-top-safe))}.offline-pill{min-width:88px;max-width:none;border-color:var(--accent-strong);background:#edf4ef;color:var(--accent-strong);font-size:12px;font-weight:850;pointer-events:none}.offline-shell .mobile-header-instruction{padding:0;border:0;background:transparent}.offline-shell .quick-actions{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto auto}
+    .offline-shell .mobile-layer-panel,.offline-shell .mobile-more-grid{top:calc(var(--app-top-safe) + 198px)}.offline-shell .mobile-more-grid{left:max(8px,var(--app-left-safe));right:max(8px,var(--app-right-safe));width:auto}.offline-shell .regions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.offline-shell .regions button{min-height:44px;padding:7px;border:1px solid #bdc9bf;border-radius:8px;background:#fff;color:var(--accent-strong);font-size:12px;font-weight:850}.offline-shell .regions button[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:#fff}
+    .offline-map-index{position:relative;display:block;min-height:0;padding:0;overflow:hidden;background:var(--water);color:var(--ink);text-align:left}.offline-map-head{position:absolute;top:10px;left:10px;right:10px;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:10px;pointer-events:none}.offline-map-head strong,.offline-map-head .status{padding:6px 8px;border:1px solid rgba(23,33,25,.16);border-radius:7px;background:rgba(251,252,250,.94);box-shadow:0 2px 7px rgba(24,39,30,.16)}#map{position:absolute;inset:0;min-height:0;background:var(--water)}#offline-map{display:block;width:100%;height:100%;touch-action:manipulation}.map-help{position:absolute;left:10px;bottom:10px;max-width:calc(100% - 20px);margin:0;padding:6px 8px;border:1px solid rgba(23,33,25,.18);border-radius:7px;background:rgba(251,252,250,.94);color:#475248;font-size:12px;pointer-events:none}
+    .offline-shell .mobile-view-tabs{position:relative}.offline-shell .list-panel{display:block;min-height:0;overflow:hidden}.offline-shell .site-list{height:calc(100% - 49px);padding-bottom:max(24px,var(--app-bottom-safe))}.offline-shell .learning-card{display:block}.offline-shell .learning-card-body{gap:7px}.offline-shell .learning-card h2 button{touch-action:manipulation}.offline-shell .learning-card-actions{grid-template-columns:1fr}.offline-shell .learning-card-actions button{min-height:42px}.offline-shell #load-more{width:calc(100% - 20px);min-height:44px;margin:0 10px 18px;border:1px solid #bdc9bf;border-radius:8px;background:#fff;color:var(--accent-strong);font-weight:850}.offline-shell #load-more[hidden]{display:none}.offline-shell .site-list:has(+ #load-more:not([hidden])){height:calc(100% - 103px)}
+    .detail{position:fixed;inset:var(--app-top-safe) var(--app-right-safe) var(--app-bottom-safe) var(--app-left-safe);z-index:2000;display:grid;align-items:end;background:rgba(13,22,17,.38);transform:none;opacity:1;pointer-events:auto}.detail[hidden]{display:none}.detail-card{width:100%;max-height:100%;overflow:auto;padding:20px 20px 26px;border-radius:16px 16px 0 0;background:#fff;box-shadow:0 -10px 30px rgba(13,22,17,.18)}.detail-head{display:grid;grid-template-columns:minmax(0,1fr) 48px;gap:12px;align-items:start;margin-bottom:18px}.detail h2{margin:0;font-size:24px;line-height:1.14}.detail-close{width:48px;height:48px;border:1px solid #bdc9bf;border-radius:8px;background:#fff;color:var(--ink);font-size:18px}.detail-meta{margin:5px 0 0;color:var(--muted);font-size:14px}.detail-body{display:grid;gap:15px;font-size:16px;line-height:1.55}.detail-body h3,.detail-body p{margin:0}.offline-only{padding:10px 12px;border-left:4px solid var(--accent);background:var(--soft);color:#35473d;font-size:14px}
+    @media(max-height:700px){.offline-shell{--map-height:34vh}.offline-shell .mobile-layer-panel,.offline-shell .mobile-more-grid{top:calc(var(--app-top-safe) + 177px)}}
   </style>
 </head>
-<body class="offline-text-mode">
-  <main class="app"><div class="shell">
-    <header class="masthead">
-      <div class="brand-row"><div class="brand-copy"><h1>On This Site</h1><small>Native Long Island</small></div><span class="offline-pill">Offline</span></div>
-      <p class="note" id="offline-summary">Opening the saved offline archive...</p>
-      <nav class="offline-tabs" aria-label="Offline archive navigation"><button type="button" data-offline-jump="map">Map</button><button type="button" data-offline-jump="archive">Browse saved places</button></nav>
-      <input id="search" type="search" autocomplete="off" placeholder="Search saved places and histories" aria-label="Search saved places and histories">
-    </header>
-    <section class="offline-map-index" id="offline-map-section" aria-label="Offline place map">
-      <div class="head"><h2>Saved place map</h2><span class="status" id="status" role="status">Loading saved places...</span></div>
-      <div id="map" aria-label="Simplified offline map of saved places"><canvas id="offline-map"></canvas><p class="map-help">Tap a dot to open the nearest saved place.</p></div>
-      <div class="regions" aria-label="Saved areas">
-        <button type="button" data-offline-region="all" aria-pressed="true">All areas</button>
-        <button type="button" data-offline-region="west" aria-pressed="false">Western</button>
-        <button type="button" data-offline-region="central" aria-pressed="false">Central</button>
-        <button type="button" data-offline-region="east" aria-pressed="false">East End</button>
+<body class="offline-text-mode native-android-app android-device">
+  <main class="app panel-nearby offline-shell">
+    <header>
+      <div class="title-row"><h1>On This Site</h1><span class="title-actions"><span class="ghost-button account-button offline-pill">Offline</span></span></div>
+      <div class="search-autocomplete"><input class="search" id="search" type="search" autocomplete="off" enterkeyhint="search" placeholder="Search sites, towns, histories" aria-label="Search saved places and histories"></div>
+      <p class="mobile-header-instruction" id="offline-summary">Opening the saved offline archive...</p>
+      <div class="quick-actions" aria-label="Offline app actions">
+        <button class="ghost-button mobile-priority-action" id="offline-about" type="button">About</button>
+        <button class="ghost-button mobile-priority-action" id="offline-feedback" type="button">Feedback</button>
+        <details class="mobile-layer-menu" id="offline-region-menu">
+          <summary>Areas</summary>
+          <div class="mobile-layer-panel" role="group" aria-label="Saved areas">
+            <div class="regions">
+              <button type="button" data-offline-region="all" aria-pressed="true">All areas</button>
+              <button type="button" data-offline-region="west" aria-pressed="false">Western</button>
+              <button type="button" data-offline-region="central" aria-pressed="false">Central</button>
+              <button type="button" data-offline-region="east" aria-pressed="false">East End</button>
+            </div>
+          </div>
+        </details>
+        <details class="mobile-more-menu" id="offline-menu">
+          <summary>Menu</summary>
+          <div class="mobile-more-grid">
+            <button class="ghost-button" type="button" data-offline-jump="map">Map</button>
+            <button class="ghost-button" type="button" data-offline-jump="archive">Saved places</button>
+            <button class="ghost-button" id="offline-menu-about" type="button">About</button>
+            <button class="ghost-button" id="offline-menu-help" type="button">Offline help</button>
+          </div>
+        </details>
       </div>
+    </header>
+    <section class="mobile-map-shell offline-map-index" id="offline-map-section" aria-label="Offline place map">
+      <div class="offline-map-head"><strong>Saved map</strong><span class="status" id="status" role="status">Loading saved places...</span></div>
+      <div id="map" aria-label="Simplified offline map of saved places"><canvas id="offline-map"></canvas><p class="map-help">Tap a dot to open its saved article.</p></div>
     </section>
-    <section class="archive" id="offline-archive-section" aria-label="Saved text archive">
-      <div class="head"><h2>Saved places and articles</h2><span class="status" id="result-count"></span></div>
-      <div id="site-list"><button class="site-card" type="button" disabled><strong>Loading the saved archive...</strong><span>No internet connection is required.</span></button></div>
+    <div class="mobile-view-tabs" role="group" aria-label="Offline section">
+      <button class="mobile-view-tab" id="offline-tab-map" type="button" data-offline-jump="map" aria-pressed="false">Map</button>
+      <button class="mobile-view-tab" id="offline-tab-saved" type="button" data-offline-jump="archive" aria-pressed="true">Saved places</button>
+      <button class="mobile-view-tab mobile-panel-hide" id="offline-collapse" type="button" aria-label="Collapse saved places">Collapse</button>
+      <button class="mobile-view-tab mobile-panel-size" id="offline-full" type="button" aria-label="Open full-screen saved places" aria-expanded="false">Full</button>
+    </div>
+    <section class="list-panel archive" id="offline-archive-section" aria-label="Saved text archive">
+      <div class="list-head"><span class="list-title"><strong>Saved places and articles</strong></span><span class="status" id="result-count"></span></div>
+      <div class="site-list" id="site-list"><article class="site-card empty-state" role="status"><span class="site-copy"><h2>Loading the saved archive...</h2><p>No internet connection is required.</p></span></article></div>
       <button id="load-more" type="button" hidden>Show more</button>
     </section>
-  </div></main>
+  </main>
   <section class="detail" id="detail" hidden aria-modal="true" role="dialog" aria-labelledby="detail-title">
-    <article class="detail-card"><div class="detail-head"><div><h2 id="detail-title"></h2><p class="detail-meta" id="detail-meta"></p></div><button class="detail-close" type="button" aria-label="Close saved article">X</button></div><div class="detail-body" id="detail-body"></div></article>
+    <article class="detail-card"><div class="detail-head"><div><h2 id="detail-title"></h2><p class="detail-meta" id="detail-meta"></p></div><button class="detail-close" type="button" aria-label="Close saved article">x</button></div><div class="detail-body" id="detail-body"></div></article>
   </section>
   <script>
   (() => {
@@ -54,7 +75,7 @@
     const PATHS=["assets/data/mobile-site-index.json","assets/data/mobile-site-geometry.json","assets/data/mobile-wiki-index.json"];
     const LIMIT=40, B={west:-74.28,east:-71.82,south:40.48,north:41.34}, S={west:-73.42,east:-72.72};
     const state={sites:[],wikis:[],filtered:[],visible:LIMIT,region:"all",query:"",points:[]};
-    const $=id=>document.getElementById(id), search=$("search"), list=$("site-list"), status=$("status"), count=$("result-count"), summary=$("offline-summary"), more=$("load-more"), canvas=$("offline-map"), detail=$("detail"), title=$("detail-title"), meta=$("detail-meta"), body=$("detail-body");
+    const $=id=>document.getElementById(id), app=document.querySelector(".offline-shell"), search=$("search"), list=$("site-list"), status=$("status"), count=$("result-count"), summary=$("offline-summary"), more=$("load-more"), canvas=$("offline-map"), detail=$("detail"), title=$("detail-title"), meta=$("detail-meta"), body=$("detail-body"), mapTab=$("offline-tab-map"), savedTab=$("offline-tab-saved"), collapse=$("offline-collapse"), full=$("offline-full");
     const esc=v=>String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
     const text=v=>{const d=document.createElement("div");d.innerHTML=String(v||"");return String(d.textContent||"").replace(/\s+/g," ").trim()};
     const searchKey=v=>text(v).normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/['\u2018\u2019\u02bc]/gi,"").replace(/[^a-z0-9]+/gi," ").trim().toLocaleLowerCase();
@@ -74,35 +95,42 @@
       state.filtered=[...state.sites.map(x=>({...x,kind:"site"})),...state.wikis.map(x=>({...x,kind:"wiki"}))]
         .filter(x=>state.region==="all"||x.kind==="wiki"||x.region===state.region)
         .filter(x=>!q||searchKey(`${x.title||""} ${x.summary||""} ${x.address_label||""} ${x.why_this_matters||""}`).includes(q))
-        .sort((a,b)=>String(a.title||"").localeCompare(String(b.title||"")));
+        .sort((a,b)=>{if(q){const rank=x=>{const titleKey=searchKey(x.title||"");if(titleKey===q)return 0;if(titleKey.startsWith(`${q} `)||titleKey.startsWith(q))return 1;if(titleKey.includes(` ${q}`)||titleKey.includes(q))return 2;return 3},delta=rank(a)-rank(b);if(delta)return delta}return String(a.title||"").localeCompare(String(b.title||""))});
     }
     function render(){
       filter();const visible=state.filtered.slice(0,state.visible);
-      list.innerHTML=visible.length?visible.map((x,i)=>`<button class="site-card" type="button" ${x.kind==="wiki"?`data-wiki-slug="${esc(x.slug||"")}"`:`data-slug="${esc(x.slug||"")}"`} data-result-index="${i}"><strong>${esc(x.title||"Untitled")}</strong><span>${esc(x.kind==="wiki"?"Knowledgebase article":(x.address_label||x.site_type||"Mapped place"))}</span><span>${esc(text(x.summary||"").slice(0,190))}</span></button>`).join(""):`<button class="site-card" type="button" disabled><strong>No saved result found</strong><span>Try a different word or area.</span></button>`;
+      list.innerHTML=visible.length?visible.map((x,i)=>{
+        const source=x.kind==="wiki"?"Knowledgebase article":(x.site_type||"Mapped place"),location=x.kind==="wiki"?"Saved history":(x.address_label||"Saved map entry"),excerpt=text(x.summary||"").slice(0,260);
+        return `<article class="site-card learning-card nearby-feed-card" ${x.kind==="wiki"?`data-wiki-slug="${esc(x.slug||"")}"`:`data-slug="${esc(x.slug||"")}"`} data-result-index="${i}"><div class="learning-card-body"><div class="learning-card-meta"><span>${esc(source)}</span><strong>Offline</strong></div><h2><button type="button" data-result-open="${i}">${esc(x.title||"Untitled")}</button></h2><div class="learning-card-tags"><span>${esc(location)}</span></div>${excerpt?`<p class="learning-card-excerpt">${esc(excerpt)}</p>`:""}<div class="learning-card-actions"><button class="primary" type="button" data-result-open="${i}">Open saved article</button></div></div></article>`
+      }).join(""):`<article class="site-card empty-state" role="status"><span class="site-copy"><h2>No saved result found</h2><p>Try a different word or area.</p></span></article>`;
       count.textContent=`${state.filtered.length} saved`;status.textContent=state.region==="all"?`${state.sites.length} mapped places`:`${state.filtered.filter(x=>x.kind==="site").length} in this area`;more.hidden=visible.length>=state.filtered.length;more.textContent=`Show more (${state.filtered.length-visible.length} remaining)`;draw();
     }
+    function openDetail(detailTitle,detailMeta,detailHtml){title.textContent=detailTitle;meta.textContent=detailMeta;body.innerHTML=detailHtml;detail.hidden=false;detail.classList.add("open");detail.querySelector(".detail-card").scrollTop=0}
     function open(item){
-      if(!item)return;title.textContent=item.title||"Saved article";meta.textContent=item.kind==="wiki"?"Knowledgebase article":(item.address_label||item.site_type||"Mapped place");
-      const intro=text(item.summary||""),why=text(item.why_this_matters||"");body.innerHTML=`${intro?`<p>${esc(intro)}</p>`:"<p>No summary was saved for this entry.</p>"}${why?`<h3>Why this matters</h3><p>${esc(why)}</p>`:""}<p class="offline-only">This is the lightweight saved version. Full references, images, comments, accounts, and current updates return when the device reconnects.</p>`;detail.hidden=false;detail.querySelector(".detail-card").scrollTop=0;
+      if(!item)return;const intro=text(item.summary||""),why=text(item.why_this_matters||"");openDetail(item.title||"Saved article",item.kind==="wiki"?"Knowledgebase article":(item.address_label||item.site_type||"Mapped place"),`${intro?`<p>${esc(intro)}</p>`:"<p>No summary was saved for this entry.</p>"}${why?`<h3>Why this matters</h3><p>${esc(why)}</p>`:""}<p class="offline-only">This saved version remains available without a connection. Images, comments, accounts, submissions, and current updates return when the app reconnects.</p>`);
     }
+    function showMap(){app.classList.remove("panel-maximized");app.classList.add("panel-collapsed");mapTab.setAttribute("aria-pressed","true");savedTab.setAttribute("aria-pressed","false");collapse.textContent="Open";full.textContent="Full";full.setAttribute("aria-expanded","false");setTimeout(draw,60)}
+    function showArchive({maximize=false,focusSearch=false}={}){app.classList.remove("panel-collapsed");app.classList.toggle("panel-maximized",maximize);mapTab.setAttribute("aria-pressed","false");savedTab.setAttribute("aria-pressed","true");collapse.textContent="Collapse";full.textContent=maximize?"Restore":"Full";full.setAttribute("aria-expanded",maximize?"true":"false");if(focusSearch)setTimeout(()=>search.focus({preventScroll:true}),80);setTimeout(draw,60)}
     async function start(){
       try{
         const [sitePayload,geoPayload,wikiPayload]=await Promise.all(PATHS.map(load)),geo=new Map(rows(geoPayload).map(x=>[String(x.id),x]));
         state.sites=rows(sitePayload).map(x=>{const g=geo.get(String(x.id)),lon=Number(g?.center?.[0]),lat=Number(g?.center?.[1]);return{...x,longitude:Number.isFinite(lon)?lon:null,latitude:Number.isFinite(lat)?lat:null,region:region(lon)}});
-        state.wikis=rows(wikiPayload);summary.textContent=`Offline archive: ${state.sites.length} listings and ${state.wikis.length} wiki articles are saved on this device. Search or browse the map and text below.`;render();
-      }catch(error){summary.textContent="The saved archive could not be opened. Reconnect and reopen the app to refresh its offline copy.";status.textContent="Offline archive unavailable";list.innerHTML=`<button class="site-card" type="button" disabled><strong>Saved content could not load</strong><span>${esc(error?.message||"Unknown offline error")}</span></button>`}
+        state.wikis=rows(wikiPayload);summary.textContent=`Offline archive: ${state.sites.length} listings and ${state.wikis.length} wiki articles saved. Tap a pin or search below.`;render();
+      }catch(error){summary.textContent="The saved archive could not be opened. Reconnect and reopen the app to refresh its offline copy.";status.textContent="Offline archive unavailable";list.innerHTML=`<article class="site-card empty-state" role="status"><span class="site-copy"><h2>Saved content could not load</h2><p>${esc(error?.message||"Unknown offline error")}</p></span></article>`}
     }
-    search.addEventListener("input",()=>{state.query=search.value.trim();state.visible=LIMIT;render()});
+    search.addEventListener("input",()=>{state.query=search.value.trim();state.visible=LIMIT;showArchive();render()});search.addEventListener("search",()=>{state.query=search.value.trim();state.visible=LIMIT;showArchive({maximize:true});render()});
     document.querySelectorAll("[data-offline-jump]").forEach(button=>button.addEventListener("click",()=>{
-      const target=$(button.dataset.offlineJump==="map"?"offline-map-section":"offline-archive-section");
-      target?.scrollIntoView({behavior:"smooth",block:"start"});
-      if(button.dataset.offlineJump!=="map") window.setTimeout(()=>search.focus({preventScroll:true}),260);
+      button.dataset.offlineJump==="map"?showMap():showArchive({focusSearch:button.closest("#offline-menu")!==null});button.closest("details")?.removeAttribute("open");
     }));
-    document.querySelectorAll("[data-offline-region]").forEach(b=>b.addEventListener("click",()=>{state.region=b.dataset.offlineRegion||"all";state.visible=LIMIT;document.querySelectorAll("[data-offline-region]").forEach(x=>x.setAttribute("aria-pressed",x===b?"true":"false"));render()}));
+    document.querySelectorAll("[data-offline-region]").forEach(b=>b.addEventListener("click",()=>{state.region=b.dataset.offlineRegion||"all";state.visible=LIMIT;document.querySelectorAll("[data-offline-region]").forEach(x=>x.setAttribute("aria-pressed",x===b?"true":"false"));$("offline-region-menu").removeAttribute("open");showArchive();render()}));
     list.addEventListener("click",e=>{const b=e.target.closest("[data-result-index]");if(b)open(state.filtered[Number(b.dataset.resultIndex)])});
     more.addEventListener("click",()=>{state.visible+=LIMIT;render()});
     canvas.addEventListener("click",e=>{const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,n=state.points.map(p=>({...p,d:Math.hypot(p.x-x,p.y-y)})).sort((a,b)=>a.d-b.d)[0];if(n&&n.d<=22)open(n.item)});
-    detail.querySelector(".detail-close").addEventListener("click",()=>detail.hidden=true);detail.addEventListener("click",e=>{if(e.target===detail)detail.hidden=true});addEventListener("resize",draw,{passive:true});
+    collapse.addEventListener("click",()=>app.classList.contains("panel-collapsed")?showArchive():showMap());full.addEventListener("click",()=>showArchive({maximize:!app.classList.contains("panel-maximized")}));
+    $("offline-about").addEventListener("click",()=>openDetail("About On This Site","Native Long Island",'<p>On This Site is a map-based archive for learning about Native Long Island places, histories, and continuing community presence.</p><p class="offline-only">You are viewing the saved offline archive.</p>'));$("offline-menu-about").addEventListener("click",()=>{$("offline-menu").removeAttribute("open");$("offline-about").click()});
+    $("offline-feedback").addEventListener("click",()=>openDetail("Feedback","Connection required",'<p>Feedback, comments, site suggestions, and contributions will be available after the app reconnects.</p><p class="offline-only">Your saved map and articles remain available now.</p>'));$("offline-menu-help").addEventListener("click",()=>{$("offline-menu").removeAttribute("open");$("offline-feedback").click()});
+    document.querySelectorAll(".quick-actions details").forEach(menu=>menu.addEventListener("toggle",()=>{if(menu.open)document.querySelectorAll(".quick-actions details").forEach(other=>{if(other!==menu)other.removeAttribute("open")})}));
+    const closeDetail=()=>{detail.classList.remove("open");detail.hidden=true};detail.querySelector(".detail-close").addEventListener("click",closeDetail);detail.addEventListener("click",e=>{if(e.target===detail)closeDetail()});addEventListener("resize",draw,{passive:true});
     window.NLI_APK_OFFLINE_TEXT_MODE=true;start();
   })();
   </script>

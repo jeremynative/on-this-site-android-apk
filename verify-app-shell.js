@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260813-site-list-native-tap-r99";
+const expectedBuild = "20260813-offline-shell-parity-r100";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -21,6 +21,7 @@ const storyBridgePath = "app/src/main/java/com/nativelongisland/onthissite/Story
 const captureFileProviderPath = "app/src/main/java/com/nativelongisland/onthissite/CaptureFileProvider.java";
 const nativeCommentPhotoCompatPath = "app/src/main/assets/native-comment-photo-compat.js";
 const offlineInsetAuditPath = "audit-apk-offline-insets.mjs";
+const offlineParityAuditPath = "audit-apk-offline-parity.mjs";
 const bundledMobileIndexPaths = [
   "app/src/main/assets/assets/data/mobile-site-centers.json",
   "app/src/main/assets/assets/data/mobile-site-geometry.json",
@@ -40,6 +41,7 @@ const storyBridge = fs.readFileSync(storyBridgePath, "utf8");
 const captureFileProvider = fs.readFileSync(captureFileProviderPath, "utf8");
 const nativeCommentPhotoCompat = fs.readFileSync(nativeCommentPhotoCompatPath, "utf8");
 const offlineInsetAudit = fs.readFileSync(offlineInsetAuditPath, "utf8");
+const offlineParityAudit = fs.readFileSync(offlineParityAuditPath, "utf8");
 const bundledApp = bundledAppBytes.toString("utf8");
 const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
 const bundledMobileJs = fs.readFileSync(bundledMobileJsPath, "utf8");
@@ -113,11 +115,22 @@ if (!bundledMobileJs.includes("function startMobileStartupSiteReveal()")
   throw new Error("APK cold starts must use the center-out site reveal while restored, routed, offline, and reduced-motion launches skip it.");
 }
 
-if (!lightweightOfflineApp.includes('class="brand-row"')
-    || !lightweightOfflineApp.includes('class="offline-pill">Offline')
+if (!lightweightOfflineApp.includes('href="assets/css/mobile-app.css"')
+    || !lightweightOfflineApp.includes('class="title-row"')
+    || !lightweightOfflineApp.includes('class="search" id="search"')
+    || !lightweightOfflineApp.includes('class="quick-actions"')
+    || !lightweightOfflineApp.includes('class="mobile-map-shell offline-map-index"')
+    || !lightweightOfflineApp.includes('class="mobile-view-tabs"')
+    || !lightweightOfflineApp.includes('class="list-panel archive"')
+    || !lightweightOfflineApp.includes('class="site-card learning-card nearby-feed-card"')
+    || !lightweightOfflineApp.includes('class="ghost-button account-button offline-pill">Offline')
+    || !lightweightOfflineApp.includes('class="offline-text-mode native-android-app android-device"')
     || !lightweightOfflineApp.includes('data-offline-jump="map"')
-    || !lightweightOfflineApp.includes('data-offline-jump="archive"')) {
-  throw new Error("Lightweight offline archive must retain the compact On This Site header and Map/Browse navigation.");
+    || !lightweightOfflineApp.includes('data-offline-jump="archive"')
+    || !lightweightOfflineApp.includes('aria-label="Close saved article">x</button>')
+    || lightweightOfflineApp.includes('class="shell"')
+    || lightweightOfflineApp.includes('class="brand-row"')) {
+  throw new Error("Lightweight offline archive must reuse the online APK header, map, tabs, list panel, cards, and lowercase close-control styling.");
 }
 
 for (const file of bundledMobileIndexPaths) {
@@ -678,6 +691,14 @@ if (!offlineInsetAudit.includes("getSafeInsetBottom")
     || !offlineInsetAudit.includes("result.detail.safe")
     || !offlineInsetAudit.includes("nativeInsetsValid")) {
   throw new Error("Android regression tooling must exercise the offline archive against native system bars.");
+}
+if (!offlineParityAudit.includes("sharedStylesheet")
+    || !offlineParityAudit.includes("hasOnlineShellStructure")
+    || !offlineParityAudit.includes("panel-collapsed")
+    || !offlineParityAudit.includes("panel-maximized")
+    || !offlineParityAudit.includes("lowercaseClose")
+    || !offlineParityAudit.includes("ma's house")) {
+  throw new Error("Android regression tooling must compare the offline archive with the online APK shell structure and controls.");
 }
 if (lightweightOfflineApp.length > 180000) {
   throw new Error("Lightweight APK fallback must remain small enough for fast no-signal startup.");
