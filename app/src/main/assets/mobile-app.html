@@ -7049,7 +7049,7 @@
     .banner.show {
       display: block;
     }
-      </style>
+        </style>
   <style data-inline-source="assets/css/shared-research-question.css">
 .research-question-prompt {
   position: fixed;
@@ -7512,7 +7512,7 @@ body.research-question-dialog-open .research-question-prompt,
     border-radius: 8px 8px 0 0;
   }
 }
-      </style>
+        </style>
 </head>
 <body>
   <div class="loading-screen" id="loading-screen" role="status" aria-live="polite">
@@ -8276,7 +8276,7 @@ body.research-question-dialog-open .research-question-prompt,
     ]
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-utils.js">
 (function () {
   function escapeHtml(value) {
@@ -8655,7 +8655,7 @@ body.research-question-dialog-open .research-question-prompt,
     isSectionTimelineHeading
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-site-utils.js">
 (function () {
   const normalizeText = window.NLI_SHARED_UTILS?.normalizeText || (value =>
@@ -9159,7 +9159,7 @@ body.research-question-dialog-open .research-question-prompt,
     siteTerritoryFillColor
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-site-title-utils.js">
 (function () {
   const knownTitleBySlug = {
@@ -9287,7 +9287,7 @@ body.research-question-dialog-open .research-question-prompt,
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (typeof window !== "undefined") window.NLI_SITE_TITLE_UTILS = api;
 })();
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-profile-utils.js">
 (function () {
   try {
@@ -11157,7 +11157,7 @@ body.research-question-dialog-open .research-question-prompt,
     POINT_RULES
   };
 }());
-        </script>
+          </script>
   <script data-inline-source="assets/js/shared-map-story-utils.js">
 (function () {
   const relationId = window.NLI_SHARED_UTILS?.relationId || (value => {
@@ -11338,7 +11338,7 @@ body.research-question-dialog-open .research-question-prompt,
     promptForKey
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-learning-card-utils.js">
 (function (root, factory) {
   const api = factory();
@@ -11878,7 +11878,7 @@ body.research-question-dialog-open .research-question-prompt,
     createActionGuard
   };
 }));
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-activity-utils.js">
 (function () {
   const normalizeActivityDateInput = window.NLI_SHARED_UTILS?.normalizeActivityDateInput || (value => {
@@ -12635,7 +12635,7 @@ body.research-question-dialog-open .research-question-prompt,
     mergeRecentActivity
   };
 }());
-          </script>
+            </script>
   <script data-inline-source="assets/js/shared-comment-utils.js">
 (function () {
   const escapeHtml = window.NLI_SHARED_UTILS?.escapeHtml || (value => String(value || ""));
@@ -12652,9 +12652,26 @@ body.research-question-dialog-open .research-question-prompt,
     return String(value);
   }
 
+  const commentVoteIndexCache = new WeakMap();
+
+  function commentVoteIndex(votes = []) {
+    if (!Array.isArray(votes)) return new Map();
+    const cached = commentVoteIndexCache.get(votes);
+    if (cached) return cached;
+    const index = new Map();
+    votes.forEach(vote => {
+      const commentId = relationId(vote?.comment);
+      if (!commentId) return;
+      if (!index.has(commentId)) index.set(commentId, []);
+      index.get(commentId).push(vote);
+    });
+    commentVoteIndexCache.set(votes, index);
+    return index;
+  }
+
   function commentVotes(commentId, votes = []) {
     const id = String(commentId || "");
-    return (votes || []).filter(vote => String(relationId(vote.comment)) === id);
+    return commentVoteIndex(votes).get(id) || [];
   }
 
   function directusReaction(commentId, voter, votes = []) {
@@ -12665,12 +12682,16 @@ body.research-question-dialog-open .research-question-prompt,
   }
 
   function directusReactionCounts(comment, votes = []) {
-    const values = commentVotes(comment?.id, votes).map(vote => String(vote.vote || ""));
-    return {
-      up: Number(comment?.upvotes || comment?.upvote_count || 0) + values.filter(value => value === "up").length,
-      down: Number(comment?.downvotes || comment?.downvote_count || 0) + values.filter(value => value === "down").length,
-      report: Number(comment?.reports || comment?.report_count || 0) + values.filter(value => value === "report").length
+    const counts = {
+      up: Number(comment?.upvotes || comment?.upvote_count || 0),
+      down: Number(comment?.downvotes || comment?.downvote_count || 0),
+      report: Number(comment?.reports || comment?.report_count || 0)
     };
+    commentVotes(comment?.id, votes).forEach(vote => {
+      const value = String(vote?.vote || "");
+      if (value === "up" || value === "down" || value === "report") counts[value] += 1;
+    });
+    return counts;
   }
 
   function reactionCounts(comment, options) {
@@ -12804,6 +12825,37 @@ body.research-question-dialog-open .research-question-prompt,
       .sort(sortCompare);
   }
 
+  function commentThreadIndex(comments = [], options = {}) {
+    const roots = [];
+    const byId = new Map();
+    const repliesByParent = new Map();
+    const excludeRoot = typeof options.excludeRoot === "function" ? options.excludeRoot : () => false;
+    (comments || []).forEach(comment => {
+      const id = relationId(comment?.id);
+      if (id) byId.set(id, comment);
+    });
+    (comments || []).forEach(comment => {
+      const parentId = relationId(comment?.parent_comment);
+      if (!parentId || parentId === "0") {
+        if (!excludeRoot(comment)) roots.push(comment);
+        return;
+      }
+      if (!repliesByParent.has(parentId)) repliesByParent.set(parentId, []);
+      repliesByParent.get(parentId).push(comment);
+    });
+    return {
+      roots,
+      byId,
+      repliesByParent,
+      repliesFor(parentId) {
+        return repliesByParent.get(relationId(parentId)) || [];
+      },
+      parentFor(comment) {
+        return byId.get(relationId(comment?.parent_comment)) || null;
+      }
+    };
+  }
+
   function mergeSeededComments(comments = [], seededComments = [], options = {}) {
     const existing = comments || [];
     const keyFor = typeof options.keyFor === "function"
@@ -12847,7 +12899,9 @@ body.research-question-dialog-open .research-question-prompt,
   }
 
   function mergeCommentVoteRecords(target = [], records = []) {
-    return mergeRecordsByIdOrKey(target, records, "vote_key");
+    const merged = mergeRecordsByIdOrKey(target, records, "vote_key");
+    if (Array.isArray(target)) commentVoteIndexCache.delete(target);
+    return merged;
   }
 
   async function refreshRemoteCommentVote(commentId, profileId, options = {}) {
@@ -12942,6 +12996,7 @@ body.research-question-dialog-open .research-question-prompt,
     visibleToViewer,
     matchesSource,
     commentsForSource,
+    commentThreadIndex,
     mergeSeededComments,
     mergeFetchedCommentsPreservingPending,
     mergeRecordsByIdOrKey,
@@ -12955,7 +13010,7 @@ body.research-question-dialog-open .research-question-prompt,
     activityThreadHtml
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-quote-comment-utils.js">
 (function () {
   const MAX_QUOTE_LENGTH = 520;
@@ -13500,7 +13555,7 @@ body.research-question-dialog-open .research-question-prompt,
     markQuote
   };
 })();
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-timeline-utils.js">
 (function () {
   function cleanText(options, value) {
@@ -13960,7 +14015,7 @@ body.research-question-dialog-open .research-question-prompt,
     buildBiographyTimelineData
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-moderation-utils.js">
 (function () {
   const LEET = {
@@ -14037,7 +14092,7 @@ body.research-question-dialog-open .research-question-prompt,
     compact
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-plant-utils.js">
 (function () {
   const plantObservationSpecies = [
@@ -14376,7 +14431,7 @@ body.research-question-dialog-open .research-question-prompt,
     plantObservationsForSource
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-calendar-utils.js">
 (function () {
   function eventTypeLabel(value) {
@@ -14549,7 +14604,7 @@ body.research-question-dialog-open .research-question-prompt,
     onThisDayNumber
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-geometry-utils.js">
 (function () {
   function normalizeHex(value, fallback) {
@@ -14748,7 +14803,7 @@ body.research-question-dialog-open .research-question-prompt,
     pointInGeometry
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-route-utils.js">
 (function () {
   const DEFAULT_ALIASES = {
@@ -14869,7 +14924,7 @@ body.research-question-dialog-open .research-question-prompt,
     clearPasswordResetUrl
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-html-utils.js">
 (function () {
   const DESKTOP_ALLOWED_TAGS = new Set([
@@ -15240,7 +15295,7 @@ body.research-question-dialog-open .research-question-prompt,
     cleanHtml
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-directus-client.js">
 (function () {
   function normalizeUploadFileId(uploaded) {
@@ -15661,7 +15716,7 @@ body.research-question-dialog-open .research-question-prompt,
 
   window.NLI_DIRECTUS_CLIENT = { createDirectusClient, normalizeUploadFileId, uploadDirectusFile };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-media-utils.js">
 (function () {
   const DEFAULT_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
@@ -15956,7 +16011,7 @@ body.research-question-dialog-open .research-question-prompt,
     prepareJpegUploadImage
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-map-utils.js">
 (function () {
   function layerExists(map, layerId) {
@@ -16088,7 +16143,7 @@ body.research-question-dialog-open .research-question-prompt,
     scorePlaceSuggestion
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-feedback-utils.js">
 (function () {
   const MEDIA_UTILS = window.NLI_MEDIA_UTILS || {};
@@ -16457,7 +16512,7 @@ body.research-question-dialog-open .research-question-prompt,
     redeemAccountInviteCode
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/support-public-config.js">
 (function () {
   const workerUrl = "https://on-this-site-support.onthissiteny.workers.dev";
@@ -16473,7 +16528,7 @@ body.research-question-dialog-open .research-question-prompt,
     adminActivityUrl: endpoint ? `${endpoint}/support/admin/recent-activity.json` : ""
   };
 })();
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-support-utils.js">
 (function () {
   const DEFAULT_CONFIG = {
@@ -17180,7 +17235,7 @@ body.research-question-dialog-open .research-question-prompt,
     startCheckout
   };
 })();
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-research-question-utils.js">
 (function () {
   const FEEDBACK_UTILS = window.NLI_FEEDBACK_UTILS || {};
@@ -17533,7 +17588,7 @@ body.research-question-dialog-open .research-question-prompt,
 
   window.NLI_RESEARCH_QUESTION_UTILS = { init };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/language-quiz-words.js">
 window.NLI_LANGUAGE_QUIZ_WORDS = [
   ["water", "núp"], ["ocean", "cutstúk"], ["river", "seépus"], ["bay", "petápagh"], ["stone", "sun"],
@@ -17564,7 +17619,7 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
     ? "M. R. Harrington, Shinnecock Notes (1903), reprinted in Bonvillain and Stone, Languages and Lore of the Long Island Indians, p. 22"
     : "Thomas Jefferson Unkechaug/Unquachog vocabulary (1791), reprinted in Bonvillain and Stone, Languages and Lore of the Long Island Indians, pp. 17-18"
 }));
-      </script>
+        </script>
   <script data-inline-source="assets/js/userviews-tracker.js">
 (function () {
   "use strict";
@@ -17693,7 +17748,7 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", recordRoute, { once: true });
   else recordRoute();
 })();
-      </script>
+        </script>
   <script data-inline-source="assets/js/mobile-app.js">
 const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const SHARED_FIELDS = SHARED_CONFIG.fields || {};
@@ -27964,12 +28019,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const profile = currentContributorProfile();
       const canContribute = isApprovedContributor();
       const plantInputId = `plant-image-${String(item.slug || item.id || "site").replace(/[^a-z0-9_-]+/gi, "-")}`;
-      const rootComments = comments.filter(comment => !comment.parent_comment && !isPlantObservationComment(comment));
-      const repliesFor = parentId => comments.filter(comment => Number(comment.parent_comment) === Number(parentId));
+      const commentThread = COMMENT_UTILS.commentThreadIndex(comments, { excludeRoot: isPlantObservationComment });
+      const rootComments = commentThread.roots;
+      const repliesFor = parentId => commentThread.repliesFor(parentId);
       const renderComment = (comment, depth = 0) => {
         const deleted = COMMENT_UTILS.isModeratedDeleted(comment);
         const author = state.contributorProfiles.find(profile => Number(profile.id) === Number(comment.member_profile));
-        const parent = depth ? comments.find(item => Number(item.id) === Number(comment.parent_comment)) : null;
+        const parent = depth ? commentThread.parentFor(comment) : null;
         const parentAuthor = parent ? state.contributorProfiles.find(profile => Number(profile.id) === Number(parent.member_profile)) : null;
         const parentName = COMMENT_UTILS.isModeratedDeleted(parent) ? "[deleted]" : (parentAuthor?.display_name || parent?.author_name || "");
         const attachment = directusAssetUrl(comment.comment_image);
@@ -33442,8 +33498,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function mobileActivityCommentThreadHtml(card) {
       const comments = card.canonicalTarget ? commentsForSource(card.canonicalType, card.canonicalTarget) : [];
-      const roots = comments.filter(comment => !comment.parent_comment);
-      const repliesFor = parentId => comments.filter(comment => Number(comment.parent_comment) === Number(parentId));
+      const commentThread = COMMENT_UTILS.commentThreadIndex(comments);
+      const roots = commentThread.roots;
+      const repliesFor = parentId => commentThread.repliesFor(parentId);
       const renderComment = (comment, depth = 0) => {
         const author = state.contributorProfiles.find(profile => Number(profile.id) === Number(comment.member_profile));
         const name = author?.display_name || comment.author_name || "Contributor";
@@ -36405,7 +36462,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     start();
-          </script>
+            </script>
 </body>
 </html>
 

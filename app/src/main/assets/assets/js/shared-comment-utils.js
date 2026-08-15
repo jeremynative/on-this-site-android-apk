@@ -13,9 +13,26 @@
     return String(value);
   }
 
+  const commentVoteIndexCache = new WeakMap();
+
+  function commentVoteIndex(votes = []) {
+    if (!Array.isArray(votes)) return new Map();
+    const cached = commentVoteIndexCache.get(votes);
+    if (cached) return cached;
+    const index = new Map();
+    votes.forEach(vote => {
+      const commentId = relationId(vote?.comment);
+      if (!commentId) return;
+      if (!index.has(commentId)) index.set(commentId, []);
+      index.get(commentId).push(vote);
+    });
+    commentVoteIndexCache.set(votes, index);
+    return index;
+  }
+
   function commentVotes(commentId, votes = []) {
     const id = String(commentId || "");
-    return (votes || []).filter(vote => String(relationId(vote.comment)) === id);
+    return commentVoteIndex(votes).get(id) || [];
   }
 
   function directusReaction(commentId, voter, votes = []) {
@@ -26,12 +43,16 @@
   }
 
   function directusReactionCounts(comment, votes = []) {
-    const values = commentVotes(comment?.id, votes).map(vote => String(vote.vote || ""));
-    return {
-      up: Number(comment?.upvotes || comment?.upvote_count || 0) + values.filter(value => value === "up").length,
-      down: Number(comment?.downvotes || comment?.downvote_count || 0) + values.filter(value => value === "down").length,
-      report: Number(comment?.reports || comment?.report_count || 0) + values.filter(value => value === "report").length
+    const counts = {
+      up: Number(comment?.upvotes || comment?.upvote_count || 0),
+      down: Number(comment?.downvotes || comment?.downvote_count || 0),
+      report: Number(comment?.reports || comment?.report_count || 0)
     };
+    commentVotes(comment?.id, votes).forEach(vote => {
+      const value = String(vote?.vote || "");
+      if (value === "up" || value === "down" || value === "report") counts[value] += 1;
+    });
+    return counts;
   }
 
   function reactionCounts(comment, options) {
@@ -165,6 +186,37 @@
       .sort(sortCompare);
   }
 
+  function commentThreadIndex(comments = [], options = {}) {
+    const roots = [];
+    const byId = new Map();
+    const repliesByParent = new Map();
+    const excludeRoot = typeof options.excludeRoot === "function" ? options.excludeRoot : () => false;
+    (comments || []).forEach(comment => {
+      const id = relationId(comment?.id);
+      if (id) byId.set(id, comment);
+    });
+    (comments || []).forEach(comment => {
+      const parentId = relationId(comment?.parent_comment);
+      if (!parentId || parentId === "0") {
+        if (!excludeRoot(comment)) roots.push(comment);
+        return;
+      }
+      if (!repliesByParent.has(parentId)) repliesByParent.set(parentId, []);
+      repliesByParent.get(parentId).push(comment);
+    });
+    return {
+      roots,
+      byId,
+      repliesByParent,
+      repliesFor(parentId) {
+        return repliesByParent.get(relationId(parentId)) || [];
+      },
+      parentFor(comment) {
+        return byId.get(relationId(comment?.parent_comment)) || null;
+      }
+    };
+  }
+
   function mergeSeededComments(comments = [], seededComments = [], options = {}) {
     const existing = comments || [];
     const keyFor = typeof options.keyFor === "function"
@@ -208,7 +260,9 @@
   }
 
   function mergeCommentVoteRecords(target = [], records = []) {
-    return mergeRecordsByIdOrKey(target, records, "vote_key");
+    const merged = mergeRecordsByIdOrKey(target, records, "vote_key");
+    if (Array.isArray(target)) commentVoteIndexCache.delete(target);
+    return merged;
   }
 
   async function refreshRemoteCommentVote(commentId, profileId, options = {}) {
@@ -303,6 +357,7 @@
     visibleToViewer,
     matchesSource,
     commentsForSource,
+    commentThreadIndex,
     mergeSeededComments,
     mergeFetchedCommentsPreservingPending,
     mergeRecordsByIdOrKey,

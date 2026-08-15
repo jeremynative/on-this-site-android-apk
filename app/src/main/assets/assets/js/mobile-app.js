@@ -10267,12 +10267,13 @@
       const profile = currentContributorProfile();
       const canContribute = isApprovedContributor();
       const plantInputId = `plant-image-${String(item.slug || item.id || "site").replace(/[^a-z0-9_-]+/gi, "-")}`;
-      const rootComments = comments.filter(comment => !comment.parent_comment && !isPlantObservationComment(comment));
-      const repliesFor = parentId => comments.filter(comment => Number(comment.parent_comment) === Number(parentId));
+      const commentThread = COMMENT_UTILS.commentThreadIndex(comments, { excludeRoot: isPlantObservationComment });
+      const rootComments = commentThread.roots;
+      const repliesFor = parentId => commentThread.repliesFor(parentId);
       const renderComment = (comment, depth = 0) => {
         const deleted = COMMENT_UTILS.isModeratedDeleted(comment);
         const author = state.contributorProfiles.find(profile => Number(profile.id) === Number(comment.member_profile));
-        const parent = depth ? comments.find(item => Number(item.id) === Number(comment.parent_comment)) : null;
+        const parent = depth ? commentThread.parentFor(comment) : null;
         const parentAuthor = parent ? state.contributorProfiles.find(profile => Number(profile.id) === Number(parent.member_profile)) : null;
         const parentName = COMMENT_UTILS.isModeratedDeleted(parent) ? "[deleted]" : (parentAuthor?.display_name || parent?.author_name || "");
         const attachment = directusAssetUrl(comment.comment_image);
@@ -15745,8 +15746,9 @@
 
     function mobileActivityCommentThreadHtml(card) {
       const comments = card.canonicalTarget ? commentsForSource(card.canonicalType, card.canonicalTarget) : [];
-      const roots = comments.filter(comment => !comment.parent_comment);
-      const repliesFor = parentId => comments.filter(comment => Number(comment.parent_comment) === Number(parentId));
+      const commentThread = COMMENT_UTILS.commentThreadIndex(comments);
+      const roots = commentThread.roots;
+      const repliesFor = parentId => commentThread.repliesFor(parentId);
       const renderComment = (comment, depth = 0) => {
         const author = state.contributorProfiles.find(profile => Number(profile.id) === Number(comment.member_profile));
         const name = author?.display_name || comment.author_name || "Contributor";
