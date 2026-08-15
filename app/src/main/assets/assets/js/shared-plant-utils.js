@@ -33,11 +33,45 @@
     return cleaner(value || "");
   }
 
+  function defaultNormalizeText(value) {
+    return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+
   function normalize(value, options = {}) {
     const normalizer = typeof options.normalizeText === "function"
       ? options.normalizeText
-      : text => String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+      : defaultNormalizeText;
     return normalizer(value || "");
+  }
+
+  const plantReferenceIndexCache = new WeakMap();
+
+  function plantReferenceIndex(species = plantObservationSpecies, options = {}) {
+    if (!Array.isArray(species)) return [];
+    const normalizer = typeof options.normalizeText === "function" ? options.normalizeText : defaultNormalizeText;
+    let indexes = plantReferenceIndexCache.get(species);
+    if (!indexes) {
+      indexes = new Map();
+      plantReferenceIndexCache.set(species, indexes);
+    }
+    if (indexes.has(normalizer)) return indexes.get(normalizer);
+    const index = species.map(item => ({
+      item,
+      keys: [...new Set((item?.keys || []).map(key => normalizer(key)).filter(Boolean))]
+        .sort((a, b) => b.length - a.length)
+    }));
+    indexes.set(normalizer, index);
+    return index;
+  }
+
+  function plantReferenceMatch(value = "", species = plantObservationSpecies, options = {}) {
+    const haystack = normalize(value, options);
+    if (!haystack) return null;
+    const paddedHaystack = ` ${haystack} `;
+    const match = plantReferenceIndex(species, options).find(entry =>
+      entry.keys.some(key => paddedHaystack.includes(` ${key} `))
+    );
+    return match?.item || null;
   }
 
   function publicPlantText(value, fallback = "", options = {}) {
@@ -72,9 +106,9 @@
     return publicPlantText(value, fallback, options);
   }
 
-  function plantGuideMatchFromFields(fields = {}, species = plantObservationSpecies) {
-    const haystack = `${fields.name || ""} ${fields.identification || ""} ${fields.vocabulary || ""} ${fields.common_name || ""} ${fields.scientific_name || ""} ${fields.algonquian_word || ""}`.toLowerCase();
-    return species.find(item => item.keys.some(key => haystack.includes(String(key || "").toLowerCase()))) || null;
+  function plantGuideMatchFromFields(fields = {}, species = plantObservationSpecies, options = {}) {
+    const haystack = `${fields.name || ""} ${fields.identification || ""} ${fields.vocabulary || ""} ${fields.common_name || ""} ${fields.scientific_name || ""} ${fields.algonquian_word || ""}`;
+    return plantReferenceMatch(haystack, species, options);
   }
 
   function plantNativeLabel(nativeStatus = "", invasiveStatus = "", match = null) {
@@ -130,7 +164,7 @@
   }
 
   function publicPlantReferenceFor(fields = {}, species = plantObservationSpecies, options = {}) {
-    const haystack = normalize([
+    const haystack = [
       fields.common_name,
       fields.scientific_name,
       fields.name,
@@ -139,9 +173,8 @@
       fields.visitor_notes,
       fields.indigenous_context,
       fields.context
-    ].filter(Boolean).join(" "), options);
-    if (!haystack) return null;
-    return species.find(item => item.keys.some(key => haystack.includes(normalize(key, options)))) || null;
+    ].filter(Boolean).join(" ");
+    return plantReferenceMatch(haystack, species, options);
   }
 
   function knownPlantSpeciesList(item = {}) {
@@ -286,6 +319,7 @@
     publicPlantText,
     usefulPlantText,
     plantFactValue,
+    plantReferenceMatch,
     plantGuideMatchFromFields,
     plantNativeLabel,
     plantOriginText,

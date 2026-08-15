@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260815-contributor-progress-map-r105";
+const expectedBuild = "20260815-shared-plant-matcher-r106";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1276,6 +1276,8 @@ requireBundledText('function siteEditedDate(site = {}, options = {})', "Bundled 
 requireBundledText('ACTIVITY_UTILS.siteEditedDate(item, { extended: true })', "Bundled Android app must route mobile edited-date source selection through shared activity utilities.");
 requireBundledText('function plantObservationFactRows(fields = {}, match = null, options = {})', "Bundled Android app must include shared plant fact rows.");
 requireBundledText('PLANT_UTILS.plantObservationFactRows(fields, match,', "Bundled Android app must route mobile plant fact rows through shared plant utilities.");
+requireBundledText('function plantReferenceMatch(value = "", species = plantObservationSpecies, options = {})', "Bundled Android app must include the cached shared plant matcher.");
+requireBundledPattern(/function\s+plantObservationGuess[\s\S]*?PLANT_UTILS\.plantGuideMatchFromFields\([\s\S]*?PLANT_OBSERVATION_SPECIES\)/, "Bundled Android plant guesses must use the shared indexed matcher.");
 requireBundledText('function mergeRecordsByIdOrKey(target = [], records = [], keyField = "vote_key")', "Bundled Android app must include shared comment vote record merging.");
 requireBundledText('COMMENT_UTILS.mergeCommentVoteRecords(state.commentVotes, records)', "Bundled Android app must route comment vote merging through shared comment utilities.");
 requireBundledText('function commentVoterKey(profile, canVote = true)', "Bundled Android app must include the shared comment voter gate.");

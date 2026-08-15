@@ -7049,7 +7049,7 @@
     .banner.show {
       display: block;
     }
-    </style>
+      </style>
   <style data-inline-source="assets/css/shared-research-question.css">
 .research-question-prompt {
   position: fixed;
@@ -7512,7 +7512,7 @@ body.research-question-dialog-open .research-question-prompt,
     border-radius: 8px 8px 0 0;
   }
 }
-    </style>
+      </style>
 </head>
 <body>
   <div class="loading-screen" id="loading-screen" role="status" aria-live="polite">
@@ -8276,7 +8276,7 @@ body.research-question-dialog-open .research-question-prompt,
     ]
   };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-utils.js">
 (function () {
   function escapeHtml(value) {
@@ -8655,7 +8655,7 @@ body.research-question-dialog-open .research-question-prompt,
     isSectionTimelineHeading
   };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-site-utils.js">
 (function () {
   const normalizeText = window.NLI_SHARED_UTILS?.normalizeText || (value =>
@@ -9159,7 +9159,7 @@ body.research-question-dialog-open .research-question-prompt,
     siteTerritoryFillColor
   };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-site-title-utils.js">
 (function () {
   const knownTitleBySlug = {
@@ -9287,7 +9287,7 @@ body.research-question-dialog-open .research-question-prompt,
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (typeof window !== "undefined") window.NLI_SITE_TITLE_UTILS = api;
 })();
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-profile-utils.js">
 (function () {
   try {
@@ -11157,7 +11157,7 @@ body.research-question-dialog-open .research-question-prompt,
     POINT_RULES
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-map-story-utils.js">
 (function () {
   const relationId = window.NLI_SHARED_UTILS?.relationId || (value => {
@@ -11338,7 +11338,7 @@ body.research-question-dialog-open .research-question-prompt,
     promptForKey
   };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-learning-card-utils.js">
 (function (root, factory) {
   const api = factory();
@@ -11878,7 +11878,7 @@ body.research-question-dialog-open .research-question-prompt,
     createActionGuard
   };
 }));
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-activity-utils.js">
 (function () {
   const normalizeActivityDateInput = window.NLI_SHARED_UTILS?.normalizeActivityDateInput || (value => {
@@ -12635,7 +12635,7 @@ body.research-question-dialog-open .research-question-prompt,
     mergeRecentActivity
   };
 }());
-        </script>
+          </script>
   <script data-inline-source="assets/js/shared-comment-utils.js">
 (function () {
   const escapeHtml = window.NLI_SHARED_UTILS?.escapeHtml || (value => String(value || ""));
@@ -12955,7 +12955,7 @@ body.research-question-dialog-open .research-question-prompt,
     activityThreadHtml
   };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-quote-comment-utils.js">
 (function () {
   const MAX_QUOTE_LENGTH = 520;
@@ -13500,7 +13500,7 @@ body.research-question-dialog-open .research-question-prompt,
     markQuote
   };
 })();
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-timeline-utils.js">
 (function () {
   function cleanText(options, value) {
@@ -13960,7 +13960,7 @@ body.research-question-dialog-open .research-question-prompt,
     buildBiographyTimelineData
   };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-moderation-utils.js">
 (function () {
   const LEET = {
@@ -14037,7 +14037,7 @@ body.research-question-dialog-open .research-question-prompt,
     compact
   };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-plant-utils.js">
 (function () {
   const plantObservationSpecies = [
@@ -14074,11 +14074,45 @@ body.research-question-dialog-open .research-question-prompt,
     return cleaner(value || "");
   }
 
+  function defaultNormalizeText(value) {
+    return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+
   function normalize(value, options = {}) {
     const normalizer = typeof options.normalizeText === "function"
       ? options.normalizeText
-      : text => String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+      : defaultNormalizeText;
     return normalizer(value || "");
+  }
+
+  const plantReferenceIndexCache = new WeakMap();
+
+  function plantReferenceIndex(species = plantObservationSpecies, options = {}) {
+    if (!Array.isArray(species)) return [];
+    const normalizer = typeof options.normalizeText === "function" ? options.normalizeText : defaultNormalizeText;
+    let indexes = plantReferenceIndexCache.get(species);
+    if (!indexes) {
+      indexes = new Map();
+      plantReferenceIndexCache.set(species, indexes);
+    }
+    if (indexes.has(normalizer)) return indexes.get(normalizer);
+    const index = species.map(item => ({
+      item,
+      keys: [...new Set((item?.keys || []).map(key => normalizer(key)).filter(Boolean))]
+        .sort((a, b) => b.length - a.length)
+    }));
+    indexes.set(normalizer, index);
+    return index;
+  }
+
+  function plantReferenceMatch(value = "", species = plantObservationSpecies, options = {}) {
+    const haystack = normalize(value, options);
+    if (!haystack) return null;
+    const paddedHaystack = ` ${haystack} `;
+    const match = plantReferenceIndex(species, options).find(entry =>
+      entry.keys.some(key => paddedHaystack.includes(` ${key} `))
+    );
+    return match?.item || null;
   }
 
   function publicPlantText(value, fallback = "", options = {}) {
@@ -14113,9 +14147,9 @@ body.research-question-dialog-open .research-question-prompt,
     return publicPlantText(value, fallback, options);
   }
 
-  function plantGuideMatchFromFields(fields = {}, species = plantObservationSpecies) {
-    const haystack = `${fields.name || ""} ${fields.identification || ""} ${fields.vocabulary || ""} ${fields.common_name || ""} ${fields.scientific_name || ""} ${fields.algonquian_word || ""}`.toLowerCase();
-    return species.find(item => item.keys.some(key => haystack.includes(String(key || "").toLowerCase()))) || null;
+  function plantGuideMatchFromFields(fields = {}, species = plantObservationSpecies, options = {}) {
+    const haystack = `${fields.name || ""} ${fields.identification || ""} ${fields.vocabulary || ""} ${fields.common_name || ""} ${fields.scientific_name || ""} ${fields.algonquian_word || ""}`;
+    return plantReferenceMatch(haystack, species, options);
   }
 
   function plantNativeLabel(nativeStatus = "", invasiveStatus = "", match = null) {
@@ -14171,7 +14205,7 @@ body.research-question-dialog-open .research-question-prompt,
   }
 
   function publicPlantReferenceFor(fields = {}, species = plantObservationSpecies, options = {}) {
-    const haystack = normalize([
+    const haystack = [
       fields.common_name,
       fields.scientific_name,
       fields.name,
@@ -14180,9 +14214,8 @@ body.research-question-dialog-open .research-question-prompt,
       fields.visitor_notes,
       fields.indigenous_context,
       fields.context
-    ].filter(Boolean).join(" "), options);
-    if (!haystack) return null;
-    return species.find(item => item.keys.some(key => haystack.includes(normalize(key, options)))) || null;
+    ].filter(Boolean).join(" ");
+    return plantReferenceMatch(haystack, species, options);
   }
 
   function knownPlantSpeciesList(item = {}) {
@@ -14327,6 +14360,7 @@ body.research-question-dialog-open .research-question-prompt,
     publicPlantText,
     usefulPlantText,
     plantFactValue,
+    plantReferenceMatch,
     plantGuideMatchFromFields,
     plantNativeLabel,
     plantOriginText,
@@ -14342,7 +14376,7 @@ body.research-question-dialog-open .research-question-prompt,
     plantObservationsForSource
   };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-calendar-utils.js">
 (function () {
   function eventTypeLabel(value) {
@@ -14515,7 +14549,7 @@ body.research-question-dialog-open .research-question-prompt,
     onThisDayNumber
   };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-geometry-utils.js">
 (function () {
   function normalizeHex(value, fallback) {
@@ -14714,7 +14748,7 @@ body.research-question-dialog-open .research-question-prompt,
     pointInGeometry
   };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-route-utils.js">
 (function () {
   const DEFAULT_ALIASES = {
@@ -14835,7 +14869,7 @@ body.research-question-dialog-open .research-question-prompt,
     clearPasswordResetUrl
   };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-html-utils.js">
 (function () {
   const DESKTOP_ALLOWED_TAGS = new Set([
@@ -15206,7 +15240,7 @@ body.research-question-dialog-open .research-question-prompt,
     cleanHtml
   };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-directus-client.js">
 (function () {
   function normalizeUploadFileId(uploaded) {
@@ -15627,7 +15661,7 @@ body.research-question-dialog-open .research-question-prompt,
 
   window.NLI_DIRECTUS_CLIENT = { createDirectusClient, normalizeUploadFileId, uploadDirectusFile };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-media-utils.js">
 (function () {
   const DEFAULT_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
@@ -15922,7 +15956,7 @@ body.research-question-dialog-open .research-question-prompt,
     prepareJpegUploadImage
   };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-map-utils.js">
 (function () {
   function layerExists(map, layerId) {
@@ -16054,7 +16088,7 @@ body.research-question-dialog-open .research-question-prompt,
     scorePlaceSuggestion
   };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-feedback-utils.js">
 (function () {
   const MEDIA_UTILS = window.NLI_MEDIA_UTILS || {};
@@ -16423,7 +16457,7 @@ body.research-question-dialog-open .research-question-prompt,
     redeemAccountInviteCode
   };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/support-public-config.js">
 (function () {
   const workerUrl = "https://on-this-site-support.onthissiteny.workers.dev";
@@ -16439,7 +16473,7 @@ body.research-question-dialog-open .research-question-prompt,
     adminActivityUrl: endpoint ? `${endpoint}/support/admin/recent-activity.json` : ""
   };
 })();
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-support-utils.js">
 (function () {
   const DEFAULT_CONFIG = {
@@ -17146,7 +17180,7 @@ body.research-question-dialog-open .research-question-prompt,
     startCheckout
   };
 })();
-    </script>
+      </script>
   <script data-inline-source="assets/js/shared-research-question-utils.js">
 (function () {
   const FEEDBACK_UTILS = window.NLI_FEEDBACK_UTILS || {};
@@ -17499,7 +17533,7 @@ body.research-question-dialog-open .research-question-prompt,
 
   window.NLI_RESEARCH_QUESTION_UTILS = { init };
 }());
-    </script>
+      </script>
   <script data-inline-source="assets/js/language-quiz-words.js">
 window.NLI_LANGUAGE_QUIZ_WORDS = [
   ["water", "núp"], ["ocean", "cutstúk"], ["river", "seépus"], ["bay", "petápagh"], ["stone", "sun"],
@@ -17530,7 +17564,7 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
     ? "M. R. Harrington, Shinnecock Notes (1903), reprinted in Bonvillain and Stone, Languages and Lore of the Long Island Indians, p. 22"
     : "Thomas Jefferson Unkechaug/Unquachog vocabulary (1791), reprinted in Bonvillain and Stone, Languages and Lore of the Long Island Indians, pp. 17-18"
 }));
-    </script>
+      </script>
   <script data-inline-source="assets/js/userviews-tracker.js">
 (function () {
   "use strict";
@@ -17659,7 +17693,7 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", recordRoute, { once: true });
   else recordRoute();
 })();
-    </script>
+      </script>
   <script data-inline-source="assets/js/mobile-app.js">
 const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const SHARED_FIELDS = SHARED_CONFIG.fields || {};
@@ -26240,9 +26274,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function plantObservationGuess(section, analysis = null) {
       const notes = section.querySelector("[data-plant-notes]")?.value || "";
       const file = section._plantPhotoFile || section.querySelector("[data-plant-image]")?.files?.[0];
-      const names = [analysis?.commonName, analysis?.scientificName, analysis?.rawName].filter(Boolean).join(" ");
-      const haystack = `${names} ${notes} ${file?.name || ""}`.toLowerCase();
-      return PLANT_OBSERVATION_SPECIES.find(item => item.keys.some(key => haystack.includes(key))) || null;
+      return PLANT_UTILS.plantGuideMatchFromFields({
+        name: analysis?.commonName || "",
+        identification: [analysis?.scientificName, analysis?.rawName].filter(Boolean).join(" "),
+        vocabulary: `${notes} ${file?.name || ""}`
+      }, PLANT_OBSERVATION_SPECIES);
     }
 
     function analysisFromPlantGuess(guess, sourceNote = "Matched against project plant vocabulary") {
@@ -36369,7 +36405,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     start();
-        </script>
+          </script>
 </body>
 </html>
 

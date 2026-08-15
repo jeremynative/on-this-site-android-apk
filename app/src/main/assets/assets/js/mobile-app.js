@@ -8577,9 +8577,11 @@
     function plantObservationGuess(section, analysis = null) {
       const notes = section.querySelector("[data-plant-notes]")?.value || "";
       const file = section._plantPhotoFile || section.querySelector("[data-plant-image]")?.files?.[0];
-      const names = [analysis?.commonName, analysis?.scientificName, analysis?.rawName].filter(Boolean).join(" ");
-      const haystack = `${names} ${notes} ${file?.name || ""}`.toLowerCase();
-      return PLANT_OBSERVATION_SPECIES.find(item => item.keys.some(key => haystack.includes(key))) || null;
+      return PLANT_UTILS.plantGuideMatchFromFields({
+        name: analysis?.commonName || "",
+        identification: [analysis?.scientificName, analysis?.rawName].filter(Boolean).join(" "),
+        vocabulary: `${notes} ${file?.name || ""}`
+      }, PLANT_OBSERVATION_SPECIES);
     }
 
     function analysisFromPlantGuess(guess, sourceNote = "Matched against project plant vocabulary") {
