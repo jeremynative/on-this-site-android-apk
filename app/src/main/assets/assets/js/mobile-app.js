@@ -642,7 +642,7 @@
     };
     const NEAR_ME_ZOOM = 10.5;
     const STARTUP_LOCATION_ZOOM = NEAR_ME_ZOOM;
-    const SITE_CHECKIN_RADIUS_MILES = 0.05;
+    const SITE_CHECKIN_RADIUS_MILES = Number(PROFILE_UTILS.SITE_CHECKIN_RADIUS_MILES || 0.05);
     const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;
     const SITE_LABEL_MIN_ZOOM = 10.75;
     const SITE_POINT_LABEL_MIN_ZOOM = 13.35;
@@ -1422,15 +1422,9 @@
       });
     }
 
-    function siteVisitRecord(profile, site) {
-      return PROFILE_UTILS.siteVisitRecord(state.publicVisits, profile, site, {
-        relationId,
-        fallbackProfileId: state.profile?.profileId
-      });
-    }
-
     function mergeVisitRecords(records = []) {
       PROFILE_UTILS.mergeVisitRecords(state.publicVisits, records, { relationId });
+      state.profileActivityCache = null;
     }
 
     async function refreshRemoteSiteVisitsForProfileSite(profile, site) {
@@ -1445,32 +1439,8 @@
       return incoming;
     }
 
-    function siteHasCheckin(profile, site) {
-      return PROFILE_UTILS.siteHasCheckin(state.publicVisits, profile, site, {
-        relationId,
-        fallbackProfileId: state.profile?.profileId
-      });
-    }
-
     function siteHasRecordedCheckin(profile, site) {
-      if (siteHasCheckin(profile, site)) return true;
-      const profileId = Number(relationId(profile?.id || profile?.profileId || state.profile?.profileId));
-      if (!profileId || !site?.slug) return false;
-      const matchingVisits = (state.publicVisits || [])
-        .filter(visit => Number(relationId(visit.member_profile)) === profileId && String(visit.site_slug || "") === String(site.slug))
-      const visitIds = new Set(matchingVisits.map(visit => String(visit.id || "")).filter(Boolean));
-      const hasLegacyCommunityCheckin = String(site.site_type || "").trim().toLowerCase() === "community_resource" &&
-        matchingVisits.some(visit => !PROFILE_UTILS.hasSavedCheckinDistance(visit.distance_miles));
-      return hasLegacyCommunityCheckin || (state.profilePointEvents || []).some(event =>
-        Number(relationId(event.member_profile)) === profileId &&
-        String(event.event_type || "") === "site_checkin" &&
-        (String(event.source_slug || "") === String(site.slug) || visitIds.has(String(event.source_id || "")))
-      );
-    }
-
-    function siteVisitPayload(profile, site, options = {}) {
-      return PROFILE_UTILS.siteVisitPayload(profile, site, {
-        ...options,
+      return PROFILE_UTILS.siteHasRecordedCheckin(state.publicVisits, state.profilePointEvents, profile, site, {
         relationId,
         fallbackProfileId: state.profile?.profileId
       });
@@ -1479,51 +1449,22 @@
     async function recordSiteVisit(site, options = {}) {
       const profile = currentContributorProfile();
       if (!profile?.id || !isApprovedContributor() || !site?.slug) return null;
-      const distanceMiles = Number(options.distanceMiles);
-      const wantsCheckin = Number.isFinite(distanceMiles);
-      if (wantsCheckin && distanceMiles > SITE_CHECKIN_RADIUS_MILES) {
-        throw new Error(`Check-ins unlock within ${SITE_CHECKIN_RADIUS_MILES.toFixed(2)} mi of this site.`);
-      }
-      let existing = siteVisitRecord(profile, site);
-      if (!existing || (wantsCheckin && !siteHasRecordedCheckin(profile, site))) {
-        await refreshRemoteSiteVisitsForProfileSite(profile, site).catch(() => []);
-        existing = siteVisitRecord(profile, site);
-      }
-      if (existing && (!wantsCheckin || siteHasRecordedCheckin(profile, site))) return { earned: false, record: existing };
-      const payload = siteVisitPayload(profile, site, options);
-      if (!payload) return null;
-      if (existing?.id && wantsCheckin) {
-        try {
-          const committed = await commitEngagementAction("site_checkin", {
-            distance_miles: payload.distance_miles,
-            public_activity: true
-          }, existing.id);
-          Object.assign(existing, committed?.source || payload);
-          const pointEvent = committed?.data || null;
-          if (!pointEvent) throw new Error("The check-in point could not be confirmed.");
-          renderProfile();
-          renderRewards();
-          return { earned: true, checkin: true, record: existing };
-        } catch (error) {
-          throw error;
-        }
-      }
-      const committed = await commitEngagementAction("site_visit", payload);
-      const record = committed?.source || null;
-      const visitPoint = committed?.data || null;
-      if (!record) throw new Error("The visit could not be confirmed.");
-      if (!visitPoint) throw new Error("The visit point could not be confirmed.");
-      if (wantsCheckin) {
-        const checkin = await commitEngagementAction("site_checkin", {
-          distance_miles: payload.distance_miles,
-          public_activity: true
-        }, record.id);
-        const checkinPoint = checkin?.data || null;
-        if (!checkinPoint) throw new Error("The check-in point could not be confirmed.");
-      }
+      const result = await PROFILE_UTILS.syncSiteVisit({
+        profile,
+        site,
+        visits: state.publicVisits,
+        pointEvents: state.profilePointEvents,
+        relationId,
+        fallbackProfileId: state.profile?.profileId,
+        distanceMiles: options.distanceMiles,
+        radiusMiles: SITE_CHECKIN_RADIUS_MILES,
+        visitedAt: options.visitedAt,
+        refreshRemoteVisits: refreshRemoteSiteVisitsForProfileSite,
+        commitEngagementAction
+      });
       renderProfile();
       renderRewards();
-      return { earned: true, checkin: wantsCheckin, record };
+      return result;
     }
 
     function mergeSeededProfiles(profiles) {
@@ -8344,7 +8285,7 @@
           return;
         }
         if (miles > SITE_CHECKIN_RADIUS_MILES) {
-          showBanner(`Move closer to this site's map icon to check in. You are about ${miles.toFixed(2)} mi away; check-in unlocks within ${SITE_CHECKIN_RADIUS_MILES.toFixed(2)} mi.`);
+          showBanner(PROFILE_UTILS.checkinDistanceMessage(miles, { radiusMiles: SITE_CHECKIN_RADIUS_MILES }));
           return;
         }
         recordSiteVisit(site, { distanceMiles: miles })

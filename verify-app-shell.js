@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260815-indexed-comment-threads-r107";
+const expectedBuild = "20260815-indexed-checkin-state-r108";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1409,7 +1409,16 @@ if (bundledMobileJs.includes('scheduleMobilePromoStartup();')) {
   throw new Error("Bundled Android app must not open a random daily feature over Nearby during startup.");
 }
 requireBundledText('fitLongIslandMapView("android-startup-outside-long-island")', "Bundled Android app must use the Long Island overview when startup location is outside the project area.");
-requireBundledText('const SITE_CHECKIN_RADIUS_MILES = 0.05;', "Bundled Android app must require check-ins within about 260 feet.");
+if (!bundledSharedProfileUtils.includes('const SITE_CHECKIN_RADIUS_MILES = 0.05;')
+    || !bundledMobileJs.includes('const SITE_CHECKIN_RADIUS_MILES = Number(PROFILE_UTILS.SITE_CHECKIN_RADIUS_MILES || 0.05);')
+    || !bundledSharedProfileUtils.includes('function siteVisitIndex(visits = [], options = {})')
+    || !bundledSharedProfileUtils.includes('function pointEventIndex(events = [], options = {})')
+    || !bundledSharedProfileUtils.includes('async function syncSiteVisit(options = {})')
+    || !bundledMobileJs.includes('PROFILE_UTILS.siteHasRecordedCheckin(state.publicVisits, state.profilePointEvents')
+    || !bundledMobileJs.includes('PROFILE_UTILS.syncSiteVisit({')
+    || !bundledMobileJs.includes('PROFILE_UTILS.checkinDistanceMessage(miles, { radiusMiles: SITE_CHECKIN_RADIUS_MILES })')) {
+  throw new Error("Bundled Android check-ins must share the indexed 0.05-mile state and save model.");
+}
 if (!bundledLiveRuntime.includes('aria-label="Search sites, towns, and histories"')) {
   throw new Error("Bundled Android search must have an accessible name.");
 }

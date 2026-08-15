@@ -7049,7 +7049,7 @@
     .banner.show {
       display: block;
     }
-        </style>
+    </style>
   <style data-inline-source="assets/css/shared-research-question.css">
 .research-question-prompt {
   position: fixed;
@@ -7512,7 +7512,7 @@ body.research-question-dialog-open .research-question-prompt,
     border-radius: 8px 8px 0 0;
   }
 }
-        </style>
+    </style>
 </head>
 <body>
   <div class="loading-screen" id="loading-screen" role="status" aria-live="polite">
@@ -8276,7 +8276,7 @@ body.research-question-dialog-open .research-question-prompt,
     ]
   };
 }());
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-utils.js">
 (function () {
   function escapeHtml(value) {
@@ -8655,7 +8655,7 @@ body.research-question-dialog-open .research-question-prompt,
     isSectionTimelineHeading
   };
 }());
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-site-utils.js">
 (function () {
   const normalizeText = window.NLI_SHARED_UTILS?.normalizeText || (value =>
@@ -9159,7 +9159,7 @@ body.research-question-dialog-open .research-question-prompt,
     siteTerritoryFillColor
   };
 }());
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-site-title-utils.js">
 (function () {
   const knownTitleBySlug = {
@@ -9287,7 +9287,7 @@ body.research-question-dialog-open .research-question-prompt,
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (typeof window !== "undefined") window.NLI_SITE_TITLE_UTILS = api;
 })();
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-profile-utils.js">
 (function () {
   try {
@@ -9905,6 +9905,78 @@ body.research-question-dialog-open .research-question-prompt,
     return total > 0 ? `${visited} / ${total} places visited` : `${visited} places visited`;
   }
 
+  const SITE_CHECKIN_RADIUS_MILES = 0.05;
+  const siteVisitIndexCache = new WeakMap();
+  const pointEventIndexCache = new WeakMap();
+
+  function profileSiteKey(profileId, siteSlug) {
+    const id = Number(profileId);
+    const slug = String(siteSlug || "").trim().toLowerCase();
+    return id && slug ? `${id}|${slug}` : "";
+  }
+
+  function siteVisitIndex(visits = [], options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    if (!Array.isArray(visits)) return { byProfileSite: new Map(), byId: new Map() };
+    const cached = siteVisitIndexCache.get(visits);
+    if (cached && cached.relationId === relationId && cached.length === visits.length) return cached;
+    const byProfileSite = new Map();
+    const byId = new Map();
+    visits.forEach(visit => {
+      if (!visit) return;
+      const key = profileSiteKey(relationId(visit.member_profile), visit.site_slug);
+      if (key) {
+        const records = byProfileSite.get(key) || [];
+        records.push(visit);
+        byProfileSite.set(key, records);
+      }
+      const id = String(relationId(visit.id) || "");
+      if (id) byId.set(id, visit);
+    });
+    byProfileSite.forEach(records => records.sort((a, b) => String(b.visited_at || "").localeCompare(String(a.visited_at || ""))));
+    const index = { relationId, length: visits.length, byProfileSite, byId };
+    siteVisitIndexCache.set(visits, index);
+    return index;
+  }
+
+  function pointEventIndex(events = [], options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    if (!Array.isArray(events)) {
+      return { byKey: new Map(), byProfileKey: new Map(), checkinSlugsByProfile: new Map(), checkinSourceIdsByProfile: new Map() };
+    }
+    const cached = pointEventIndexCache.get(events);
+    if (cached && cached.relationId === relationId && cached.length === events.length) return cached;
+    const byKey = new Map();
+    const byProfileKey = new Map();
+    const checkinSlugsByProfile = new Map();
+    const checkinSourceIdsByProfile = new Map();
+    events.forEach(event => {
+      if (!event) return;
+      const eventKey = String(event.event_key || "");
+      const profileId = Number(relationId(event.member_profile));
+      if (eventKey && !byKey.has(eventKey)) byKey.set(eventKey, event);
+      const profileKey = eventKey && profileId ? `${profileId}|${eventKey}` : "";
+      if (profileKey && !byProfileKey.has(profileKey)) byProfileKey.set(profileKey, event);
+      if (profileId && String(event.event_type || "") === "site_checkin") {
+        const slug = String(event.source_slug || "").trim().toLowerCase();
+        const sourceId = String(relationId(event.source_id) || "");
+        if (slug) {
+          const slugs = checkinSlugsByProfile.get(profileId) || new Set();
+          slugs.add(slug);
+          checkinSlugsByProfile.set(profileId, slugs);
+        }
+        if (sourceId) {
+          const sourceIds = checkinSourceIdsByProfile.get(profileId) || new Set();
+          sourceIds.add(sourceId);
+          checkinSourceIdsByProfile.set(profileId, sourceIds);
+        }
+      }
+    });
+    const index = { relationId, length: events.length, byKey, byProfileKey, checkinSlugsByProfile, checkinSourceIdsByProfile };
+    pointEventIndexCache.set(events, index);
+    return index;
+  }
+
   function hasSavedCheckinDistance(value) {
     if (value === null || value === undefined || value === "") return false;
     return Number.isFinite(Number(value));
@@ -9916,24 +9988,50 @@ body.research-question-dialog-open .research-question-prompt,
   }
 
   function siteVisitRecord(visits = [], profile = {}, site = {}, options = {}) {
-    const relationId = options.relationId || defaultRelationId;
     const profileId = visitProfileId(profile, options);
     if (!profileId || !site?.slug) return null;
-    return (visits || []).filter(visit =>
-      Number(relationId(visit.member_profile)) === profileId &&
-      String(visit.site_slug || "") === String(site.slug || "")
-    ).sort((a, b) => String(b.visited_at || "").localeCompare(String(a.visited_at || "")))[0] || null;
+    const key = profileSiteKey(profileId, site.slug);
+    return siteVisitIndex(visits, options).byProfileSite.get(key)?.[0] || null;
   }
 
   function siteHasCheckin(visits = [], profile = {}, site = {}, options = {}) {
+    const profileId = visitProfileId(profile, options);
+    if (!profileId || !site?.slug) return false;
+    const key = profileSiteKey(profileId, site.slug);
+    return (siteVisitIndex(visits, options).byProfileSite.get(key) || []).some(visit => hasSavedCheckinDistance(visit.distance_miles));
+  }
+
+  function siteHasRecordedCheckin(visits = [], pointEvents = [], profile = {}, site = {}, options = {}) {
     const relationId = options.relationId || defaultRelationId;
     const profileId = visitProfileId(profile, options);
     if (!profileId || !site?.slug) return false;
-    return (visits || []).some(visit =>
-      Number(relationId(visit.member_profile)) === profileId &&
-      String(visit.site_slug || "") === String(site.slug || "") &&
-      hasSavedCheckinDistance(visit.distance_miles)
-    );
+    const key = profileSiteKey(profileId, site.slug);
+    const matchingVisits = siteVisitIndex(visits, options).byProfileSite.get(key) || [];
+    if (matchingVisits.some(visit => hasSavedCheckinDistance(visit.distance_miles))) return true;
+    const siteType = normalizeText(site.site_type || "");
+    if (siteType === "community resource" && matchingVisits.length) return true;
+    const eventIndex = pointEventIndex(pointEvents, options);
+    if (eventIndex.checkinSlugsByProfile.get(profileId)?.has(String(site.slug).trim().toLowerCase())) return true;
+    const sourceIds = eventIndex.checkinSourceIdsByProfile.get(profileId);
+    return Boolean(sourceIds && matchingVisits.some(visit => sourceIds.has(String(relationId(visit.id) || ""))));
+  }
+
+  function checkinDistanceStatus(value, options = {}) {
+    const distanceMiles = Number(value);
+    const radiusMiles = Number(options.radiusMiles ?? SITE_CHECKIN_RADIUS_MILES);
+    const wantsCheckin = Number.isFinite(distanceMiles);
+    return {
+      wantsCheckin,
+      allowed: !wantsCheckin || distanceMiles <= radiusMiles,
+      distanceMiles: wantsCheckin ? distanceMiles : null,
+      radiusMiles
+    };
+  }
+
+  function checkinDistanceMessage(value, options = {}) {
+    const status = checkinDistanceStatus(value, options);
+    if (!status.wantsCheckin || status.allowed) return "";
+    return `Move closer to this site's map icon to check in. You are about ${status.distanceMiles.toFixed(2)} mi away; check-in unlocks within ${status.radiusMiles.toFixed(2)} mi.`;
   }
 
   function siteVisitPayload(profile = {}, site = {}, options = {}) {
@@ -9949,6 +10047,52 @@ body.research-question-dialog-open .research-question-prompt,
     };
     if (Number.isFinite(Number(options.distanceMiles))) payload.distance_miles = Number(options.distanceMiles).toFixed(3);
     return payload;
+  }
+
+  async function syncSiteVisit(options = {}) {
+    const profile = options.profile || {};
+    const site = options.site || {};
+    const visits = Array.isArray(options.visits) ? options.visits : [];
+    const pointEvents = Array.isArray(options.pointEvents) ? options.pointEvents : [];
+    const relationId = options.relationId || defaultRelationId;
+    const sharedOptions = { relationId, fallbackProfileId: options.fallbackProfileId };
+    if (!visitProfileId(profile, sharedOptions) || !site.slug) return null;
+    const distance = checkinDistanceStatus(options.distanceMiles, { radiusMiles: options.radiusMiles });
+    if (!distance.allowed) throw new Error(checkinDistanceMessage(distance.distanceMiles, { radiusMiles: distance.radiusMiles }));
+    const hasRecordedCheckin = () => siteHasRecordedCheckin(visits, pointEvents, profile, site, sharedOptions);
+    let existing = siteVisitRecord(visits, profile, site, sharedOptions);
+    if (!existing || (distance.wantsCheckin && !hasRecordedCheckin())) {
+      if (typeof options.refreshRemoteVisits === "function") await options.refreshRemoteVisits(profile, site).catch(() => []);
+      existing = siteVisitRecord(visits, profile, site, sharedOptions);
+    }
+    if (existing && (!distance.wantsCheckin || hasRecordedCheckin())) return { earned: false, checkin: distance.wantsCheckin, record: existing };
+    if (typeof options.commitEngagementAction !== "function") throw new Error("Site visit synchronization is not configured.");
+    const payloadOptions = { ...sharedOptions, visitedAt: options.visitedAt };
+    if (distance.wantsCheckin) payloadOptions.distanceMiles = distance.distanceMiles;
+    const payload = siteVisitPayload(profile, site, payloadOptions);
+    if (!payload) return null;
+    if (existing?.id && distance.wantsCheckin) {
+      const committed = await options.commitEngagementAction("site_checkin", {
+        distance_miles: payload.distance_miles,
+        public_activity: true
+      }, existing.id);
+      const record = committed?.source || existing;
+      if (record === existing) Object.assign(existing, payload);
+      if (!committed?.data) throw new Error("The check-in point could not be confirmed.");
+      return { earned: true, checkin: true, record };
+    }
+    const committed = await options.commitEngagementAction("site_visit", payload);
+    const record = committed?.source || null;
+    if (!record) throw new Error("The visit could not be confirmed.");
+    if (!committed?.data) throw new Error("The visit point could not be confirmed.");
+    if (distance.wantsCheckin) {
+      const checkin = await options.commitEngagementAction("site_checkin", {
+        distance_miles: payload.distance_miles,
+        public_activity: true
+      }, record.id);
+      if (!checkin?.data) throw new Error("The check-in point could not be confirmed.");
+    }
+    return { earned: true, checkin: distance.wantsCheckin, record };
   }
 
   function loginRewardStatsFromDates(dates = []) {
@@ -10247,6 +10391,7 @@ body.research-question-dialog-open .research-question-prompt,
       if (index >= 0) target[index] = { ...target[index], ...record };
       else target.push(record);
     });
+    siteVisitIndexCache.delete(target);
     return target;
   }
 
@@ -10451,6 +10596,7 @@ body.research-question-dialog-open .research-question-prompt,
       if (index >= 0) target[index] = { ...target[index], ...record };
       else target.push(record);
     });
+    pointEventIndexCache.delete(target);
     return target;
   }
 
@@ -10464,10 +10610,8 @@ body.research-question-dialog-open .research-question-prompt,
     if (!key) return null;
     const relationId = options.relationId || defaultRelationId;
     const id = Number(relationId(profileId));
-    return (events || []).find(item =>
-      String(item?.event_key || "") === key &&
-      (!id || profilePointEventMemberId(item, options) === id)
-    ) || null;
+    const index = pointEventIndex(events, options);
+    return (id ? index.byProfileKey.get(`${id}|${key}`) : index.byKey.get(key)) || null;
   }
 
   function profilePointEventRequiresActiveProfile(eventType) {
@@ -11128,13 +11272,20 @@ body.research-question-dialog-open .research-question-prompt,
     isEligiblePublicVisitSite,
     publicSiteTotal,
     visitProgressLabel,
+    SITE_CHECKIN_RADIUS_MILES,
+    siteVisitIndex,
     hasSavedCheckinDistance,
     visitProfileId,
     siteVisitRecord,
     siteHasCheckin,
+    siteHasRecordedCheckin,
+    checkinDistanceStatus,
+    checkinDistanceMessage,
     siteVisitPayload,
+    syncSiteVisit,
     uniqueVisitRecords,
     mergeVisitRecords,
+    pointEventIndex,
     profileStatsFromActivity,
     profilePointEventsFromActivity,
     mergeProfilePointEvents,
@@ -11157,7 +11308,7 @@ body.research-question-dialog-open .research-question-prompt,
     POINT_RULES
   };
 }());
-          </script>
+              </script>
   <script data-inline-source="assets/js/shared-map-story-utils.js">
 (function () {
   const relationId = window.NLI_SHARED_UTILS?.relationId || (value => {
@@ -11338,7 +11489,7 @@ body.research-question-dialog-open .research-question-prompt,
     promptForKey
   };
 }());
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-learning-card-utils.js">
 (function (root, factory) {
   const api = factory();
@@ -11878,7 +12029,7 @@ body.research-question-dialog-open .research-question-prompt,
     createActionGuard
   };
 }));
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-activity-utils.js">
 (function () {
   const normalizeActivityDateInput = window.NLI_SHARED_UTILS?.normalizeActivityDateInput || (value => {
@@ -12635,7 +12786,7 @@ body.research-question-dialog-open .research-question-prompt,
     mergeRecentActivity
   };
 }());
-            </script>
+                </script>
   <script data-inline-source="assets/js/shared-comment-utils.js">
 (function () {
   const escapeHtml = window.NLI_SHARED_UTILS?.escapeHtml || (value => String(value || ""));
@@ -13010,7 +13161,7 @@ body.research-question-dialog-open .research-question-prompt,
     activityThreadHtml
   };
 }());
-        </script>
+          </script>
   <script data-inline-source="assets/js/shared-quote-comment-utils.js">
 (function () {
   const MAX_QUOTE_LENGTH = 520;
@@ -13555,7 +13706,7 @@ body.research-question-dialog-open .research-question-prompt,
     markQuote
   };
 })();
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-timeline-utils.js">
 (function () {
   function cleanText(options, value) {
@@ -14015,7 +14166,7 @@ body.research-question-dialog-open .research-question-prompt,
     buildBiographyTimelineData
   };
 }());
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-moderation-utils.js">
 (function () {
   const LEET = {
@@ -14092,7 +14243,7 @@ body.research-question-dialog-open .research-question-prompt,
     compact
   };
 }());
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-plant-utils.js">
 (function () {
   const plantObservationSpecies = [
@@ -14431,7 +14582,7 @@ body.research-question-dialog-open .research-question-prompt,
     plantObservationsForSource
   };
 }());
-        </script>
+            </script>
   <script data-inline-source="assets/js/shared-calendar-utils.js">
 (function () {
   function eventTypeLabel(value) {
@@ -14604,7 +14755,7 @@ body.research-question-dialog-open .research-question-prompt,
     onThisDayNumber
   };
 }());
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-geometry-utils.js">
 (function () {
   function normalizeHex(value, fallback) {
@@ -14803,7 +14954,7 @@ body.research-question-dialog-open .research-question-prompt,
     pointInGeometry
   };
 }());
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-route-utils.js">
 (function () {
   const DEFAULT_ALIASES = {
@@ -14924,7 +15075,7 @@ body.research-question-dialog-open .research-question-prompt,
     clearPasswordResetUrl
   };
 }());
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-html-utils.js">
 (function () {
   const DESKTOP_ALLOWED_TAGS = new Set([
@@ -15295,7 +15446,7 @@ body.research-question-dialog-open .research-question-prompt,
     cleanHtml
   };
 }());
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-directus-client.js">
 (function () {
   function normalizeUploadFileId(uploaded) {
@@ -15716,7 +15867,7 @@ body.research-question-dialog-open .research-question-prompt,
 
   window.NLI_DIRECTUS_CLIENT = { createDirectusClient, normalizeUploadFileId, uploadDirectusFile };
 }());
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-media-utils.js">
 (function () {
   const DEFAULT_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
@@ -16011,7 +16162,7 @@ body.research-question-dialog-open .research-question-prompt,
     prepareJpegUploadImage
   };
 }());
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-map-utils.js">
 (function () {
   function layerExists(map, layerId) {
@@ -16143,7 +16294,7 @@ body.research-question-dialog-open .research-question-prompt,
     scorePlaceSuggestion
   };
 }());
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-feedback-utils.js">
 (function () {
   const MEDIA_UTILS = window.NLI_MEDIA_UTILS || {};
@@ -16512,7 +16663,7 @@ body.research-question-dialog-open .research-question-prompt,
     redeemAccountInviteCode
   };
 }());
-        </script>
+    </script>
   <script data-inline-source="assets/js/support-public-config.js">
 (function () {
   const workerUrl = "https://on-this-site-support.onthissiteny.workers.dev";
@@ -16528,7 +16679,7 @@ body.research-question-dialog-open .research-question-prompt,
     adminActivityUrl: endpoint ? `${endpoint}/support/admin/recent-activity.json` : ""
   };
 })();
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-support-utils.js">
 (function () {
   const DEFAULT_CONFIG = {
@@ -17235,7 +17386,7 @@ body.research-question-dialog-open .research-question-prompt,
     startCheckout
   };
 })();
-        </script>
+    </script>
   <script data-inline-source="assets/js/shared-research-question-utils.js">
 (function () {
   const FEEDBACK_UTILS = window.NLI_FEEDBACK_UTILS || {};
@@ -17588,7 +17739,7 @@ body.research-question-dialog-open .research-question-prompt,
 
   window.NLI_RESEARCH_QUESTION_UTILS = { init };
 }());
-        </script>
+    </script>
   <script data-inline-source="assets/js/language-quiz-words.js">
 window.NLI_LANGUAGE_QUIZ_WORDS = [
   ["water", "núp"], ["ocean", "cutstúk"], ["river", "seépus"], ["bay", "petápagh"], ["stone", "sun"],
@@ -17619,7 +17770,7 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
     ? "M. R. Harrington, Shinnecock Notes (1903), reprinted in Bonvillain and Stone, Languages and Lore of the Long Island Indians, p. 22"
     : "Thomas Jefferson Unkechaug/Unquachog vocabulary (1791), reprinted in Bonvillain and Stone, Languages and Lore of the Long Island Indians, pp. 17-18"
 }));
-        </script>
+    </script>
   <script data-inline-source="assets/js/userviews-tracker.js">
 (function () {
   "use strict";
@@ -17748,7 +17899,7 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", recordRoute, { once: true });
   else recordRoute();
 })();
-        </script>
+    </script>
   <script data-inline-source="assets/js/mobile-app.js">
 const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const SHARED_FIELDS = SHARED_CONFIG.fields || {};
@@ -18394,7 +18545,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     };
     const NEAR_ME_ZOOM = 10.5;
     const STARTUP_LOCATION_ZOOM = NEAR_ME_ZOOM;
-    const SITE_CHECKIN_RADIUS_MILES = 0.05;
+    const SITE_CHECKIN_RADIUS_MILES = Number(PROFILE_UTILS.SITE_CHECKIN_RADIUS_MILES || 0.05);
     const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;
     const SITE_LABEL_MIN_ZOOM = 10.75;
     const SITE_POINT_LABEL_MIN_ZOOM = 13.35;
@@ -19174,15 +19325,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       });
     }
 
-    function siteVisitRecord(profile, site) {
-      return PROFILE_UTILS.siteVisitRecord(state.publicVisits, profile, site, {
-        relationId,
-        fallbackProfileId: state.profile?.profileId
-      });
-    }
-
     function mergeVisitRecords(records = []) {
       PROFILE_UTILS.mergeVisitRecords(state.publicVisits, records, { relationId });
+      state.profileActivityCache = null;
     }
 
     async function refreshRemoteSiteVisitsForProfileSite(profile, site) {
@@ -19197,32 +19342,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return incoming;
     }
 
-    function siteHasCheckin(profile, site) {
-      return PROFILE_UTILS.siteHasCheckin(state.publicVisits, profile, site, {
-        relationId,
-        fallbackProfileId: state.profile?.profileId
-      });
-    }
-
     function siteHasRecordedCheckin(profile, site) {
-      if (siteHasCheckin(profile, site)) return true;
-      const profileId = Number(relationId(profile?.id || profile?.profileId || state.profile?.profileId));
-      if (!profileId || !site?.slug) return false;
-      const matchingVisits = (state.publicVisits || [])
-        .filter(visit => Number(relationId(visit.member_profile)) === profileId && String(visit.site_slug || "") === String(site.slug))
-      const visitIds = new Set(matchingVisits.map(visit => String(visit.id || "")).filter(Boolean));
-      const hasLegacyCommunityCheckin = String(site.site_type || "").trim().toLowerCase() === "community_resource" &&
-        matchingVisits.some(visit => !PROFILE_UTILS.hasSavedCheckinDistance(visit.distance_miles));
-      return hasLegacyCommunityCheckin || (state.profilePointEvents || []).some(event =>
-        Number(relationId(event.member_profile)) === profileId &&
-        String(event.event_type || "") === "site_checkin" &&
-        (String(event.source_slug || "") === String(site.slug) || visitIds.has(String(event.source_id || "")))
-      );
-    }
-
-    function siteVisitPayload(profile, site, options = {}) {
-      return PROFILE_UTILS.siteVisitPayload(profile, site, {
-        ...options,
+      return PROFILE_UTILS.siteHasRecordedCheckin(state.publicVisits, state.profilePointEvents, profile, site, {
         relationId,
         fallbackProfileId: state.profile?.profileId
       });
@@ -19231,51 +19352,22 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     async function recordSiteVisit(site, options = {}) {
       const profile = currentContributorProfile();
       if (!profile?.id || !isApprovedContributor() || !site?.slug) return null;
-      const distanceMiles = Number(options.distanceMiles);
-      const wantsCheckin = Number.isFinite(distanceMiles);
-      if (wantsCheckin && distanceMiles > SITE_CHECKIN_RADIUS_MILES) {
-        throw new Error(`Check-ins unlock within ${SITE_CHECKIN_RADIUS_MILES.toFixed(2)} mi of this site.`);
-      }
-      let existing = siteVisitRecord(profile, site);
-      if (!existing || (wantsCheckin && !siteHasRecordedCheckin(profile, site))) {
-        await refreshRemoteSiteVisitsForProfileSite(profile, site).catch(() => []);
-        existing = siteVisitRecord(profile, site);
-      }
-      if (existing && (!wantsCheckin || siteHasRecordedCheckin(profile, site))) return { earned: false, record: existing };
-      const payload = siteVisitPayload(profile, site, options);
-      if (!payload) return null;
-      if (existing?.id && wantsCheckin) {
-        try {
-          const committed = await commitEngagementAction("site_checkin", {
-            distance_miles: payload.distance_miles,
-            public_activity: true
-          }, existing.id);
-          Object.assign(existing, committed?.source || payload);
-          const pointEvent = committed?.data || null;
-          if (!pointEvent) throw new Error("The check-in point could not be confirmed.");
-          renderProfile();
-          renderRewards();
-          return { earned: true, checkin: true, record: existing };
-        } catch (error) {
-          throw error;
-        }
-      }
-      const committed = await commitEngagementAction("site_visit", payload);
-      const record = committed?.source || null;
-      const visitPoint = committed?.data || null;
-      if (!record) throw new Error("The visit could not be confirmed.");
-      if (!visitPoint) throw new Error("The visit point could not be confirmed.");
-      if (wantsCheckin) {
-        const checkin = await commitEngagementAction("site_checkin", {
-          distance_miles: payload.distance_miles,
-          public_activity: true
-        }, record.id);
-        const checkinPoint = checkin?.data || null;
-        if (!checkinPoint) throw new Error("The check-in point could not be confirmed.");
-      }
+      const result = await PROFILE_UTILS.syncSiteVisit({
+        profile,
+        site,
+        visits: state.publicVisits,
+        pointEvents: state.profilePointEvents,
+        relationId,
+        fallbackProfileId: state.profile?.profileId,
+        distanceMiles: options.distanceMiles,
+        radiusMiles: SITE_CHECKIN_RADIUS_MILES,
+        visitedAt: options.visitedAt,
+        refreshRemoteVisits: refreshRemoteSiteVisitsForProfileSite,
+        commitEngagementAction
+      });
       renderProfile();
       renderRewards();
-      return { earned: true, checkin: wantsCheckin, record };
+      return result;
     }
 
     function mergeSeededProfiles(profiles) {
@@ -26096,7 +26188,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           return;
         }
         if (miles > SITE_CHECKIN_RADIUS_MILES) {
-          showBanner(`Move closer to this site's map icon to check in. You are about ${miles.toFixed(2)} mi away; check-in unlocks within ${SITE_CHECKIN_RADIUS_MILES.toFixed(2)} mi.`);
+          showBanner(PROFILE_UTILS.checkinDistanceMessage(miles, { radiusMiles: SITE_CHECKIN_RADIUS_MILES }));
           return;
         }
         recordSiteVisit(site, { distanceMiles: miles })
@@ -36462,7 +36554,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     start();
-            </script>
+                </script>
 </body>
 </html>
 

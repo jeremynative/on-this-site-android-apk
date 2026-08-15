@@ -614,6 +614,78 @@
     return total > 0 ? `${visited} / ${total} places visited` : `${visited} places visited`;
   }
 
+  const SITE_CHECKIN_RADIUS_MILES = 0.05;
+  const siteVisitIndexCache = new WeakMap();
+  const pointEventIndexCache = new WeakMap();
+
+  function profileSiteKey(profileId, siteSlug) {
+    const id = Number(profileId);
+    const slug = String(siteSlug || "").trim().toLowerCase();
+    return id && slug ? `${id}|${slug}` : "";
+  }
+
+  function siteVisitIndex(visits = [], options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    if (!Array.isArray(visits)) return { byProfileSite: new Map(), byId: new Map() };
+    const cached = siteVisitIndexCache.get(visits);
+    if (cached && cached.relationId === relationId && cached.length === visits.length) return cached;
+    const byProfileSite = new Map();
+    const byId = new Map();
+    visits.forEach(visit => {
+      if (!visit) return;
+      const key = profileSiteKey(relationId(visit.member_profile), visit.site_slug);
+      if (key) {
+        const records = byProfileSite.get(key) || [];
+        records.push(visit);
+        byProfileSite.set(key, records);
+      }
+      const id = String(relationId(visit.id) || "");
+      if (id) byId.set(id, visit);
+    });
+    byProfileSite.forEach(records => records.sort((a, b) => String(b.visited_at || "").localeCompare(String(a.visited_at || ""))));
+    const index = { relationId, length: visits.length, byProfileSite, byId };
+    siteVisitIndexCache.set(visits, index);
+    return index;
+  }
+
+  function pointEventIndex(events = [], options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    if (!Array.isArray(events)) {
+      return { byKey: new Map(), byProfileKey: new Map(), checkinSlugsByProfile: new Map(), checkinSourceIdsByProfile: new Map() };
+    }
+    const cached = pointEventIndexCache.get(events);
+    if (cached && cached.relationId === relationId && cached.length === events.length) return cached;
+    const byKey = new Map();
+    const byProfileKey = new Map();
+    const checkinSlugsByProfile = new Map();
+    const checkinSourceIdsByProfile = new Map();
+    events.forEach(event => {
+      if (!event) return;
+      const eventKey = String(event.event_key || "");
+      const profileId = Number(relationId(event.member_profile));
+      if (eventKey && !byKey.has(eventKey)) byKey.set(eventKey, event);
+      const profileKey = eventKey && profileId ? `${profileId}|${eventKey}` : "";
+      if (profileKey && !byProfileKey.has(profileKey)) byProfileKey.set(profileKey, event);
+      if (profileId && String(event.event_type || "") === "site_checkin") {
+        const slug = String(event.source_slug || "").trim().toLowerCase();
+        const sourceId = String(relationId(event.source_id) || "");
+        if (slug) {
+          const slugs = checkinSlugsByProfile.get(profileId) || new Set();
+          slugs.add(slug);
+          checkinSlugsByProfile.set(profileId, slugs);
+        }
+        if (sourceId) {
+          const sourceIds = checkinSourceIdsByProfile.get(profileId) || new Set();
+          sourceIds.add(sourceId);
+          checkinSourceIdsByProfile.set(profileId, sourceIds);
+        }
+      }
+    });
+    const index = { relationId, length: events.length, byKey, byProfileKey, checkinSlugsByProfile, checkinSourceIdsByProfile };
+    pointEventIndexCache.set(events, index);
+    return index;
+  }
+
   function hasSavedCheckinDistance(value) {
     if (value === null || value === undefined || value === "") return false;
     return Number.isFinite(Number(value));
@@ -625,24 +697,50 @@
   }
 
   function siteVisitRecord(visits = [], profile = {}, site = {}, options = {}) {
-    const relationId = options.relationId || defaultRelationId;
     const profileId = visitProfileId(profile, options);
     if (!profileId || !site?.slug) return null;
-    return (visits || []).filter(visit =>
-      Number(relationId(visit.member_profile)) === profileId &&
-      String(visit.site_slug || "") === String(site.slug || "")
-    ).sort((a, b) => String(b.visited_at || "").localeCompare(String(a.visited_at || "")))[0] || null;
+    const key = profileSiteKey(profileId, site.slug);
+    return siteVisitIndex(visits, options).byProfileSite.get(key)?.[0] || null;
   }
 
   function siteHasCheckin(visits = [], profile = {}, site = {}, options = {}) {
+    const profileId = visitProfileId(profile, options);
+    if (!profileId || !site?.slug) return false;
+    const key = profileSiteKey(profileId, site.slug);
+    return (siteVisitIndex(visits, options).byProfileSite.get(key) || []).some(visit => hasSavedCheckinDistance(visit.distance_miles));
+  }
+
+  function siteHasRecordedCheckin(visits = [], pointEvents = [], profile = {}, site = {}, options = {}) {
     const relationId = options.relationId || defaultRelationId;
     const profileId = visitProfileId(profile, options);
     if (!profileId || !site?.slug) return false;
-    return (visits || []).some(visit =>
-      Number(relationId(visit.member_profile)) === profileId &&
-      String(visit.site_slug || "") === String(site.slug || "") &&
-      hasSavedCheckinDistance(visit.distance_miles)
-    );
+    const key = profileSiteKey(profileId, site.slug);
+    const matchingVisits = siteVisitIndex(visits, options).byProfileSite.get(key) || [];
+    if (matchingVisits.some(visit => hasSavedCheckinDistance(visit.distance_miles))) return true;
+    const siteType = normalizeText(site.site_type || "");
+    if (siteType === "community resource" && matchingVisits.length) return true;
+    const eventIndex = pointEventIndex(pointEvents, options);
+    if (eventIndex.checkinSlugsByProfile.get(profileId)?.has(String(site.slug).trim().toLowerCase())) return true;
+    const sourceIds = eventIndex.checkinSourceIdsByProfile.get(profileId);
+    return Boolean(sourceIds && matchingVisits.some(visit => sourceIds.has(String(relationId(visit.id) || ""))));
+  }
+
+  function checkinDistanceStatus(value, options = {}) {
+    const distanceMiles = Number(value);
+    const radiusMiles = Number(options.radiusMiles ?? SITE_CHECKIN_RADIUS_MILES);
+    const wantsCheckin = Number.isFinite(distanceMiles);
+    return {
+      wantsCheckin,
+      allowed: !wantsCheckin || distanceMiles <= radiusMiles,
+      distanceMiles: wantsCheckin ? distanceMiles : null,
+      radiusMiles
+    };
+  }
+
+  function checkinDistanceMessage(value, options = {}) {
+    const status = checkinDistanceStatus(value, options);
+    if (!status.wantsCheckin || status.allowed) return "";
+    return `Move closer to this site's map icon to check in. You are about ${status.distanceMiles.toFixed(2)} mi away; check-in unlocks within ${status.radiusMiles.toFixed(2)} mi.`;
   }
 
   function siteVisitPayload(profile = {}, site = {}, options = {}) {
@@ -658,6 +756,52 @@
     };
     if (Number.isFinite(Number(options.distanceMiles))) payload.distance_miles = Number(options.distanceMiles).toFixed(3);
     return payload;
+  }
+
+  async function syncSiteVisit(options = {}) {
+    const profile = options.profile || {};
+    const site = options.site || {};
+    const visits = Array.isArray(options.visits) ? options.visits : [];
+    const pointEvents = Array.isArray(options.pointEvents) ? options.pointEvents : [];
+    const relationId = options.relationId || defaultRelationId;
+    const sharedOptions = { relationId, fallbackProfileId: options.fallbackProfileId };
+    if (!visitProfileId(profile, sharedOptions) || !site.slug) return null;
+    const distance = checkinDistanceStatus(options.distanceMiles, { radiusMiles: options.radiusMiles });
+    if (!distance.allowed) throw new Error(checkinDistanceMessage(distance.distanceMiles, { radiusMiles: distance.radiusMiles }));
+    const hasRecordedCheckin = () => siteHasRecordedCheckin(visits, pointEvents, profile, site, sharedOptions);
+    let existing = siteVisitRecord(visits, profile, site, sharedOptions);
+    if (!existing || (distance.wantsCheckin && !hasRecordedCheckin())) {
+      if (typeof options.refreshRemoteVisits === "function") await options.refreshRemoteVisits(profile, site).catch(() => []);
+      existing = siteVisitRecord(visits, profile, site, sharedOptions);
+    }
+    if (existing && (!distance.wantsCheckin || hasRecordedCheckin())) return { earned: false, checkin: distance.wantsCheckin, record: existing };
+    if (typeof options.commitEngagementAction !== "function") throw new Error("Site visit synchronization is not configured.");
+    const payloadOptions = { ...sharedOptions, visitedAt: options.visitedAt };
+    if (distance.wantsCheckin) payloadOptions.distanceMiles = distance.distanceMiles;
+    const payload = siteVisitPayload(profile, site, payloadOptions);
+    if (!payload) return null;
+    if (existing?.id && distance.wantsCheckin) {
+      const committed = await options.commitEngagementAction("site_checkin", {
+        distance_miles: payload.distance_miles,
+        public_activity: true
+      }, existing.id);
+      const record = committed?.source || existing;
+      if (record === existing) Object.assign(existing, payload);
+      if (!committed?.data) throw new Error("The check-in point could not be confirmed.");
+      return { earned: true, checkin: true, record };
+    }
+    const committed = await options.commitEngagementAction("site_visit", payload);
+    const record = committed?.source || null;
+    if (!record) throw new Error("The visit could not be confirmed.");
+    if (!committed?.data) throw new Error("The visit point could not be confirmed.");
+    if (distance.wantsCheckin) {
+      const checkin = await options.commitEngagementAction("site_checkin", {
+        distance_miles: payload.distance_miles,
+        public_activity: true
+      }, record.id);
+      if (!checkin?.data) throw new Error("The check-in point could not be confirmed.");
+    }
+    return { earned: true, checkin: distance.wantsCheckin, record };
   }
 
   function loginRewardStatsFromDates(dates = []) {
@@ -956,6 +1100,7 @@
       if (index >= 0) target[index] = { ...target[index], ...record };
       else target.push(record);
     });
+    siteVisitIndexCache.delete(target);
     return target;
   }
 
@@ -1160,6 +1305,7 @@
       if (index >= 0) target[index] = { ...target[index], ...record };
       else target.push(record);
     });
+    pointEventIndexCache.delete(target);
     return target;
   }
 
@@ -1173,10 +1319,8 @@
     if (!key) return null;
     const relationId = options.relationId || defaultRelationId;
     const id = Number(relationId(profileId));
-    return (events || []).find(item =>
-      String(item?.event_key || "") === key &&
-      (!id || profilePointEventMemberId(item, options) === id)
-    ) || null;
+    const index = pointEventIndex(events, options);
+    return (id ? index.byProfileKey.get(`${id}|${key}`) : index.byKey.get(key)) || null;
   }
 
   function profilePointEventRequiresActiveProfile(eventType) {
@@ -1837,13 +1981,20 @@
     isEligiblePublicVisitSite,
     publicSiteTotal,
     visitProgressLabel,
+    SITE_CHECKIN_RADIUS_MILES,
+    siteVisitIndex,
     hasSavedCheckinDistance,
     visitProfileId,
     siteVisitRecord,
     siteHasCheckin,
+    siteHasRecordedCheckin,
+    checkinDistanceStatus,
+    checkinDistanceMessage,
     siteVisitPayload,
+    syncSiteVisit,
     uniqueVisitRecords,
     mergeVisitRecords,
+    pointEventIndex,
     profileStatsFromActivity,
     profilePointEventsFromActivity,
     mergeProfilePointEvents,
