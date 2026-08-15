@@ -15570,30 +15570,27 @@
       return ACTIVITY_UTILS.lastSeenKey("nli-mobile-activity-seen-items-v2", key);
     }
 
-    let mobileActivityUnreadTaskCache = null;
+    const mobileActivityUnreadTracker = ACTIVITY_UTILS.createUnreadActivityTracker({
+      getItems: latestMobileActivity,
+      getBaseline: () => ACTIVITY_UTILS.readSeen(mobileActivityLastSeenKey()),
+      getSeenStorageKey: mobileActivitySeenItemsKey,
+      getSessionSeenKeys: () => state.mobileActivitySeenSessionKeys
+    });
 
     function mobileUnreadActivityItems() {
-      if (mobileActivityUnreadTaskCache) return mobileActivityUnreadTaskCache;
-      const persistedSeenKeys = ACTIVITY_UTILS.readSeenItemKeys(mobileActivitySeenItemsKey());
-      const seenKeys = new Set([...persistedSeenKeys, ...state.mobileActivitySeenSessionKeys]);
-      mobileActivityUnreadTaskCache = ACTIVITY_UTILS.unreadItems(latestMobileActivity(), {
-        baseline: ACTIVITY_UTILS.readSeen(mobileActivityLastSeenKey()),
-        seenKeys
-      });
-      window.setTimeout(() => { mobileActivityUnreadTaskCache = null; }, 0);
-      return mobileActivityUnreadTaskCache;
+      return mobileActivityUnreadTracker.items();
     }
 
     function mobileUnreadActivityCount() {
-      return ACTIVITY_UTILS.weightedActivityCount(mobileUnreadActivityItems());
+      return mobileActivityUnreadTracker.count();
     }
 
     function mobileContentUnreadCount(type, slug) {
-      return ACTIVITY_UTILS.weightedActivityCount(ACTIVITY_UTILS.contentActivityItems(mobileUnreadActivityItems(), type, slug));
+      return mobileActivityUnreadTracker.contentCount(type, slug);
     }
 
     function mobileUnreadContentActivityItems(type, slug) {
-      return ACTIVITY_UTILS.contentActivityItems(mobileUnreadActivityItems(), type, slug);
+      return mobileActivityUnreadTracker.contentItems(type, slug);
     }
 
     function mobileActivitySpecificContentTarget(activityItems = []) {
@@ -15657,12 +15654,8 @@
     }
 
     function markMobileActivityItemSeen(key) {
-      if (!key) return;
-      const item = latestMobileActivity().find(candidate => ACTIVITY_UTILS.activityItemKey(candidate) === key);
-      const keys = item ? ACTIVITY_UTILS.activityItemKeys(item) : [key];
-      keys.forEach(itemKey => state.mobileActivitySeenSessionKeys.add(String(itemKey)));
-      ACTIVITY_UTILS.writeSeenItemKeys(mobileActivitySeenItemsKey(), keys);
-      mobileActivityUnreadTaskCache = null;
+      const keys = mobileActivityUnreadTracker.markItem(key);
+      if (!keys.length) return;
       state.mobileActivityRenderedSignature = "";
       invalidateMapSourceCache();
       refreshMobileMapSources({ force: true });
@@ -15671,12 +15664,8 @@
     }
 
     function markMobileContentActivitySeen(type, slug) {
-      if (!slug) return;
-      const keys = ACTIVITY_UTILS.contentActivityItemKeys(mobileUnreadActivityItems(), type, slug);
+      const keys = mobileActivityUnreadTracker.markContent(type, slug);
       if (!keys.length) return;
-      keys.forEach(itemKey => state.mobileActivitySeenSessionKeys.add(String(itemKey)));
-      ACTIVITY_UTILS.writeSeenItemKeys(mobileActivitySeenItemsKey(), keys);
-      mobileActivityUnreadTaskCache = null;
       state.mobileActivityRenderedSignature = "";
       invalidateMapSourceCache();
       refreshMobileMapSources({ force: true });

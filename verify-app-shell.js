@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260814-contributor-progress-map-r103";
+const expectedBuild = "20260815-indexed-unread-activity-r104";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -987,6 +987,11 @@ for (const [label, [source, expectedCount]] of expectedPlaceholderCounts) {
     throw new Error(`Bundled Android ${label} must contain exactly ${expectedCount} Mapbox placeholder${expectedCount === 1 ? "" : "s"}, found ${count}.`);
   }
 }
+const bundledMobileMarker = 'data-inline-source="assets/js/mobile-app.js"';
+if (bundledApp.split(bundledMobileMarker).length !== 2
+    || bundledApp.includes('.replace(/\\s+([.,;:!?])/g, "<script data-inline-source=')) {
+  throw new Error("Bundled Android embedded fallback must contain one intact inline mobile runtime.");
+}
 if (!bundledApp.includes("ortnamn_och_namnvard_nr6_engelsk\\u002epdf")
     || bundledApp.includes("engel__NLI_MAPBOX_TOKEN__")) {
   throw new Error("Bundled Android citation URLs must preserve the authoritative engelsk.pdf source instead of treating sk. as a Mapbox token.");
@@ -1237,7 +1242,9 @@ requireBundledText('function writeSeen(storageKey, items = [], options = {})', "
 requireBundledText('ACTIVITY_UTILS.readSeen(mobileNotificationLastSeenKey())', "Bundled Android app must route notification unread state through shared activity utilities.");
 requireBundledText('ACTIVITY_UTILS.readSeen(mobileActivityLastSeenKey())', "Bundled Android app must route activity unread state through shared activity utilities.");
 requireBundledText('nli-mobile-activity-seen-items-v2', "Bundled Android app must persist individual activity items until their connected content is viewed or they are dismissed.");
-requireBundledText('ACTIVITY_UTILS.weightedActivityCount(mobileUnreadActivityItems())', "Bundled Android app must count grouped unread activity accurately.");
+requireBundledText('function createUnreadActivityTracker(options = {})', "Bundled Android app must include the indexed shared unread activity tracker.");
+requireBundledText('const mobileActivityUnreadTracker = ACTIVITY_UTILS.createUnreadActivityTracker({', "Bundled Android app must route unread activity through the shared tracker.");
+requireBundledText('return mobileActivityUnreadTracker.count()', "Bundled Android app must count grouped unread activity through one indexed snapshot.");
 requireBundledText('data-mobile-activity-dismiss', "Bundled Android activity cards must expose an explicit unread dismissal action.");
 requireBundledText('mobile-site-unread-badges', "Bundled Android map must expose per-site unread badges.");
 requireBundledPattern(/function ensureMobileUnreadBadgeImages\(\)[\s\S]*?canvas\.width\s*=\s*28[\s\S]*?context\.arc\(14,\s*14,\s*12[\s\S]*?context\.fillText\(label,\s*14,\s*14\.5\)[\s\S]*?pixelRatio:\s*2/, "Bundled Android unread numbers must be baked into compact outline-free icons.");

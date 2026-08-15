@@ -204,6 +204,102 @@
     return items.reduce((total, item) => total + activityItemWeight(item), 0);
   }
 
+  function createUnreadActivityTracker(options = {}) {
+    const getItems = typeof options.getItems === "function" ? options.getItems : () => [];
+    const getBaseline = typeof options.getBaseline === "function" ? options.getBaseline : () => 0;
+    const getSeenStorageKey = typeof options.getSeenStorageKey === "function" ? options.getSeenStorageKey : () => "";
+    const getSessionSeenKeys = typeof options.getSessionSeenKeys === "function" ? options.getSessionSeenKeys : () => new Set();
+    const schedule = typeof options.schedule === "function"
+      ? options.schedule
+      : callback => (typeof window !== "undefined" && window.setTimeout ? window.setTimeout(callback, 0) : setTimeout(callback, 0));
+    let snapshot = null;
+
+    function invalidate() {
+      snapshot = null;
+    }
+
+    function buildSnapshot() {
+      const persistedSeenKeys = readSeenItemKeys(getSeenStorageKey(), options.storage || defaultStorage());
+      const seenKeys = new Set([...persistedSeenKeys, ...getSessionSeenKeys()].map(String));
+      const now = typeof options.now === "function" ? Number(options.now()) : Number(options.now);
+      const items = unreadItems(getItems(), {
+        baseline: Number(getBaseline() || 0),
+        seenKeys,
+        ...(Number.isFinite(now) ? { now } : {})
+      });
+      const byTarget = new Map();
+      const countByTarget = new Map();
+      items.forEach(item => {
+        const targetKey = activityContentTarget(item)?.key;
+        if (!targetKey) return;
+        if (!byTarget.has(targetKey)) byTarget.set(targetKey, []);
+        byTarget.get(targetKey).push(item);
+        countByTarget.set(targetKey, (countByTarget.get(targetKey) || 0) + activityItemWeight(item));
+      });
+      const nextSnapshot = {
+        items,
+        total: weightedActivityCount(items),
+        byTarget,
+        countByTarget
+      };
+      snapshot = nextSnapshot;
+      schedule(() => {
+        if (snapshot === nextSnapshot) snapshot = null;
+      });
+      return nextSnapshot;
+    }
+
+    function current() {
+      return snapshot || buildSnapshot();
+    }
+
+    function targetKey(type, slug) {
+      return activityContentTargetKey(type, slug);
+    }
+
+    function markKeys(keys = []) {
+      const normalizedKeys = [...new Set(keys.map(String).filter(Boolean))];
+      if (!normalizedKeys.length) return [];
+      const sessionSeenKeys = getSessionSeenKeys();
+      normalizedKeys.forEach(key => sessionSeenKeys?.add?.(key));
+      writeSeenItemKeys(getSeenStorageKey(), normalizedKeys, {
+        storage: options.storage || defaultStorage(),
+        limit: options.limit
+      });
+      invalidate();
+      return normalizedKeys;
+    }
+
+    function markItem(key) {
+      const normalizedKey = String(key || "");
+      if (!normalizedKey) return [];
+      const item = getItems().find(candidate => activityItemKey(candidate) === normalizedKey);
+      return markKeys(item ? activityItemKeys(item) : [normalizedKey]);
+    }
+
+    function markContent(type, slug) {
+      const key = targetKey(type, slug);
+      if (!key) return [];
+      return markKeys((current().byTarget.get(key) || []).flatMap(activityItemKeys));
+    }
+
+    return {
+      invalidate,
+      items: () => current().items,
+      count: () => current().total,
+      contentItems(type, slug) {
+        const key = targetKey(type, slug);
+        return key ? (current().byTarget.get(key) || []) : [];
+      },
+      contentCount(type, slug) {
+        const key = targetKey(type, slug);
+        return key ? (current().countByTarget.get(key) || 0) : 0;
+      },
+      markItem,
+      markContent
+    };
+  }
+
   function commentLabel(sourceType = "site", options = {}) {
     if (options.plantObservation) return `${options.authorName || "Contributor"} reported a plant`;
     const normalized = String(sourceType || "").toLowerCase();
@@ -627,6 +723,7 @@
     unreadItems,
     activityItemWeight,
     weightedActivityCount,
+    createUnreadActivityTracker,
     commentLabel,
     suggestionLabel,
     suggestionDate,
