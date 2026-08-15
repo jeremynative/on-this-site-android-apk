@@ -796,6 +796,22 @@
     return correctKeys.size;
   }
 
+  function languageQuizCompletionCountFromAttempts(attempts = [], profileIds = new Set(), options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    if (!profileIds?.size) return 0;
+    const completionKeys = new Set();
+    (attempts || [])
+      .filter(item => profileIds.has(Number(relationId(item.member_profile))))
+      .forEach(item => {
+        const recordId = relationId(item.id);
+        const date = String(item.answered_at || "").slice(0, 10);
+        completionKeys.add(recordId
+          ? `id:${recordId}`
+          : `${date}|${item.content_key || ""}|${item.word_id || ""}`);
+      });
+    return completionKeys.size;
+  }
+
   function languageRemoteAttemptExists(attempts = [], profileId, contentKey, wordId, options = {}) {
     const relationId = options.relationId || defaultRelationId;
     const dateKeys = new Set([String(options.dateKey || localDateKey()).slice(0, 10)]);
@@ -1637,6 +1653,25 @@
         points: POINT_RULES.vocab_guess
       });
     });
+    const quizAttemptKeys = new Set();
+    (options.languageAttempts || []).forEach(record => {
+      const memberId = Number(relationId(record.member_profile));
+      if (!memberId || !identityIds.has(memberId)) return;
+      const recordId = relationId(record.id);
+      const date = String(record.answered_at || "").slice(0, 10);
+      const attemptKey = recordId
+        ? `id:${recordId}`
+        : `${memberId}|${date}|${record.content_key || ""}|${record.word_id || ""}`;
+      if (quizAttemptKeys.has(attemptKey)) return;
+      quizAttemptKeys.add(attemptKey);
+      const [keyType, ...slugParts] = String(record.content_key || "").split(":");
+      const sourceType = keyType === "wiki" ? "wiki" : "site";
+      const slug = record.site_slug || record.source_slug || slugParts.join(":");
+      add("quiz", record, referenceFor(sourceType, slug, record.content_title || record.source || slug || "Word quiz", record), {
+        date: record.answered_at,
+        excerpt: record.correct === false ? "Completed a word quiz" : "Completed a word quiz correctly"
+      });
+    });
     (options.plantObservations || []).forEach(record => {
       const memberId = Number(relationId(record.member_profile));
       if (memberId && !identityIds.has(memberId)) return;
@@ -1683,7 +1718,7 @@
       });
     });
 
-    const typeOrder = ["checkin", "visit", "comment", "story", "plant", "language", "suggestion", "interaction"];
+    const typeOrder = ["checkin", "visit", "comment", "story", "plant", "language", "quiz", "suggestion", "interaction"];
     const mappedItems = items.filter(item => coordinates(item.coordinates));
     const groupsByKey = new Map();
     mappedItems.forEach(item => {
@@ -1789,6 +1824,7 @@
     nextDailyLoginReward,
     learnedLanguageWordsFromAttempts,
     languageCorrectAttemptCountFromAttempts,
+    languageQuizCompletionCountFromAttempts,
     languageRemoteAttemptExists,
     languageQuizContentKey,
     languageWordPattern,

@@ -7049,7 +7049,7 @@
     .banner.show {
       display: block;
     }
-      </style>
+    </style>
   <style data-inline-source="assets/css/shared-research-question.css">
 .research-question-prompt {
   position: fixed;
@@ -7512,7 +7512,7 @@ body.research-question-dialog-open .research-question-prompt,
     border-radius: 8px 8px 0 0;
   }
 }
-      </style>
+    </style>
 </head>
 <body>
   <div class="loading-screen" id="loading-screen" role="status" aria-live="polite">
@@ -8276,7 +8276,7 @@ body.research-question-dialog-open .research-question-prompt,
     ]
   };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-utils.js">
 (function () {
   function escapeHtml(value) {
@@ -8655,7 +8655,7 @@ body.research-question-dialog-open .research-question-prompt,
     isSectionTimelineHeading
   };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-site-utils.js">
 (function () {
   const normalizeText = window.NLI_SHARED_UTILS?.normalizeText || (value =>
@@ -9159,7 +9159,7 @@ body.research-question-dialog-open .research-question-prompt,
     siteTerritoryFillColor
   };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-site-title-utils.js">
 (function () {
   const knownTitleBySlug = {
@@ -9287,7 +9287,7 @@ body.research-question-dialog-open .research-question-prompt,
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (typeof window !== "undefined") window.NLI_SITE_TITLE_UTILS = api;
 })();
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-profile-utils.js">
 (function () {
   try {
@@ -10085,6 +10085,22 @@ body.research-question-dialog-open .research-question-prompt,
         correctKeys.add(`${date}|${item.content_key || ""}|${item.word_id || ""}`);
       });
     return correctKeys.size;
+  }
+
+  function languageQuizCompletionCountFromAttempts(attempts = [], profileIds = new Set(), options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    if (!profileIds?.size) return 0;
+    const completionKeys = new Set();
+    (attempts || [])
+      .filter(item => profileIds.has(Number(relationId(item.member_profile))))
+      .forEach(item => {
+        const recordId = relationId(item.id);
+        const date = String(item.answered_at || "").slice(0, 10);
+        completionKeys.add(recordId
+          ? `id:${recordId}`
+          : `${date}|${item.content_key || ""}|${item.word_id || ""}`);
+      });
+    return completionKeys.size;
   }
 
   function languageRemoteAttemptExists(attempts = [], profileId, contentKey, wordId, options = {}) {
@@ -10928,6 +10944,25 @@ body.research-question-dialog-open .research-question-prompt,
         points: POINT_RULES.vocab_guess
       });
     });
+    const quizAttemptKeys = new Set();
+    (options.languageAttempts || []).forEach(record => {
+      const memberId = Number(relationId(record.member_profile));
+      if (!memberId || !identityIds.has(memberId)) return;
+      const recordId = relationId(record.id);
+      const date = String(record.answered_at || "").slice(0, 10);
+      const attemptKey = recordId
+        ? `id:${recordId}`
+        : `${memberId}|${date}|${record.content_key || ""}|${record.word_id || ""}`;
+      if (quizAttemptKeys.has(attemptKey)) return;
+      quizAttemptKeys.add(attemptKey);
+      const [keyType, ...slugParts] = String(record.content_key || "").split(":");
+      const sourceType = keyType === "wiki" ? "wiki" : "site";
+      const slug = record.site_slug || record.source_slug || slugParts.join(":");
+      add("quiz", record, referenceFor(sourceType, slug, record.content_title || record.source || slug || "Word quiz", record), {
+        date: record.answered_at,
+        excerpt: record.correct === false ? "Completed a word quiz" : "Completed a word quiz correctly"
+      });
+    });
     (options.plantObservations || []).forEach(record => {
       const memberId = Number(relationId(record.member_profile));
       if (memberId && !identityIds.has(memberId)) return;
@@ -10974,7 +11009,7 @@ body.research-question-dialog-open .research-question-prompt,
       });
     });
 
-    const typeOrder = ["checkin", "visit", "comment", "story", "plant", "language", "suggestion", "interaction"];
+    const typeOrder = ["checkin", "visit", "comment", "story", "plant", "language", "quiz", "suggestion", "interaction"];
     const mappedItems = items.filter(item => coordinates(item.coordinates));
     const groupsByKey = new Map();
     mappedItems.forEach(item => {
@@ -11080,6 +11115,7 @@ body.research-question-dialog-open .research-question-prompt,
     nextDailyLoginReward,
     learnedLanguageWordsFromAttempts,
     languageCorrectAttemptCountFromAttempts,
+    languageQuizCompletionCountFromAttempts,
     languageRemoteAttemptExists,
     languageQuizContentKey,
     languageWordPattern,
@@ -11302,7 +11338,7 @@ body.research-question-dialog-open .research-question-prompt,
     promptForKey
   };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-learning-card-utils.js">
 (function (root, factory) {
   const api = factory();
@@ -11842,7 +11878,7 @@ body.research-question-dialog-open .research-question-prompt,
     createActionGuard
   };
 }));
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-activity-utils.js">
 (function () {
   const normalizeActivityDateInput = window.NLI_SHARED_UTILS?.normalizeActivityDateInput || (value => {
@@ -12599,7 +12635,7 @@ body.research-question-dialog-open .research-question-prompt,
     mergeRecentActivity
   };
 }());
-      </script>
+        </script>
   <script data-inline-source="assets/js/shared-comment-utils.js">
 (function () {
   const escapeHtml = window.NLI_SHARED_UTILS?.escapeHtml || (value => String(value || ""));
@@ -12919,7 +12955,7 @@ body.research-question-dialog-open .research-question-prompt,
     activityThreadHtml
   };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-quote-comment-utils.js">
 (function () {
   const MAX_QUOTE_LENGTH = 520;
@@ -13464,7 +13500,7 @@ body.research-question-dialog-open .research-question-prompt,
     markQuote
   };
 })();
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-timeline-utils.js">
 (function () {
   function cleanText(options, value) {
@@ -13924,7 +13960,7 @@ body.research-question-dialog-open .research-question-prompt,
     buildBiographyTimelineData
   };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-moderation-utils.js">
 (function () {
   const LEET = {
@@ -14001,7 +14037,7 @@ body.research-question-dialog-open .research-question-prompt,
     compact
   };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-plant-utils.js">
 (function () {
   const plantObservationSpecies = [
@@ -14306,7 +14342,7 @@ body.research-question-dialog-open .research-question-prompt,
     plantObservationsForSource
   };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-calendar-utils.js">
 (function () {
   function eventTypeLabel(value) {
@@ -14479,7 +14515,7 @@ body.research-question-dialog-open .research-question-prompt,
     onThisDayNumber
   };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-geometry-utils.js">
 (function () {
   function normalizeHex(value, fallback) {
@@ -14678,7 +14714,7 @@ body.research-question-dialog-open .research-question-prompt,
     pointInGeometry
   };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-route-utils.js">
 (function () {
   const DEFAULT_ALIASES = {
@@ -14799,7 +14835,7 @@ body.research-question-dialog-open .research-question-prompt,
     clearPasswordResetUrl
   };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-html-utils.js">
 (function () {
   const DESKTOP_ALLOWED_TAGS = new Set([
@@ -15170,7 +15206,7 @@ body.research-question-dialog-open .research-question-prompt,
     cleanHtml
   };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-directus-client.js">
 (function () {
   function normalizeUploadFileId(uploaded) {
@@ -15591,7 +15627,7 @@ body.research-question-dialog-open .research-question-prompt,
 
   window.NLI_DIRECTUS_CLIENT = { createDirectusClient, normalizeUploadFileId, uploadDirectusFile };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-media-utils.js">
 (function () {
   const DEFAULT_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
@@ -15886,7 +15922,7 @@ body.research-question-dialog-open .research-question-prompt,
     prepareJpegUploadImage
   };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-map-utils.js">
 (function () {
   function layerExists(map, layerId) {
@@ -16018,7 +16054,7 @@ body.research-question-dialog-open .research-question-prompt,
     scorePlaceSuggestion
   };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-feedback-utils.js">
 (function () {
   const MEDIA_UTILS = window.NLI_MEDIA_UTILS || {};
@@ -16387,7 +16423,7 @@ body.research-question-dialog-open .research-question-prompt,
     redeemAccountInviteCode
   };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/support-public-config.js">
 (function () {
   const workerUrl = "https://on-this-site-support.onthissiteny.workers.dev";
@@ -16403,7 +16439,7 @@ body.research-question-dialog-open .research-question-prompt,
     adminActivityUrl: endpoint ? `${endpoint}/support/admin/recent-activity.json` : ""
   };
 })();
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-support-utils.js">
 (function () {
   const DEFAULT_CONFIG = {
@@ -17110,7 +17146,7 @@ body.research-question-dialog-open .research-question-prompt,
     startCheckout
   };
 })();
-      </script>
+    </script>
   <script data-inline-source="assets/js/shared-research-question-utils.js">
 (function () {
   const FEEDBACK_UTILS = window.NLI_FEEDBACK_UTILS || {};
@@ -17463,7 +17499,7 @@ body.research-question-dialog-open .research-question-prompt,
 
   window.NLI_RESEARCH_QUESTION_UTILS = { init };
 }());
-      </script>
+    </script>
   <script data-inline-source="assets/js/language-quiz-words.js">
 window.NLI_LANGUAGE_QUIZ_WORDS = [
   ["water", "núp"], ["ocean", "cutstúk"], ["river", "seépus"], ["bay", "petápagh"], ["stone", "sun"],
@@ -17494,7 +17530,7 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
     ? "M. R. Harrington, Shinnecock Notes (1903), reprinted in Bonvillain and Stone, Languages and Lore of the Long Island Indians, p. 22"
     : "Thomas Jefferson Unkechaug/Unquachog vocabulary (1791), reprinted in Bonvillain and Stone, Languages and Lore of the Long Island Indians, pp. 17-18"
 }));
-      </script>
+    </script>
   <script data-inline-source="assets/js/userviews-tracker.js">
 (function () {
   "use strict";
@@ -17623,7 +17659,7 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", recordRoute, { once: true });
   else recordRoute();
 })();
-      </script>
+    </script>
   <script data-inline-source="assets/js/mobile-app.js">
 const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const SHARED_FIELDS = SHARED_CONFIG.fields || {};
@@ -32236,7 +32272,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         homelandsCount: distinctVisitedHomelandCount(activity.visitedSites || []),
         languageLearned: learnedLanguageWords(profile).length,
         languageCorrectAttempts: languageCorrectAttemptCount(profile),
-        quizzesCompleted: 0,
+        quizzesCompleted: PROFILE_UTILS.languageQuizCompletionCountFromAttempts(state.languageQuizAttempts, identityIds, { relationId }),
         plantSubmissions,
         storiesPosted,
         loginRewards: loginRewardStats(profile),
@@ -32278,6 +32314,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         resolveReference,
         imageUrl: directusAssetUrl,
         languageWords: learnedLanguageWords(profile),
+        languageAttempts: state.languageQuizAttempts,
         plantObservations: state.plantObservations,
         stories: state.mapStories,
         interactionVotes: state.commentVotes,
@@ -32299,7 +32336,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         ["Stories posted", stats.storiesPosted],
         ["Suggested sites", stats.suggestionsCount]
       ];
-      const chips = [["checkin", "Checked-in Sites"], ["comment", "Commented On"], ["language", "Words Learned"], ["plant", "Plant Finds"], ["story", "Stories"], ["suggestion", "Suggested Sites"]]
+      const chips = [["checkin", "Checked-in Sites"], ["comment", "Commented On"], ["language", "Words Learned"], ["quiz", "Quizzes Completed"], ["plant", "Plant Finds"], ["story", "Stories"], ["suggestion", "Suggested Sites"]]
         .filter(([type]) => Number(model.counts[type] || 0));
       return `
         <section class="mobile-profile-progress-overview" data-mobile-profile-map-summary>
@@ -32313,7 +32350,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function mobileProfileMapPopupHtml(group) {
-      const labels = { checkin: "Checked in", visit: "Visited", comment: "Commented", language: "Learned a word", plant: "Plant find", story: "Story", suggestion: "Suggested site", interaction: "Community interaction" };
+      const labels = { checkin: "Checked in", visit: "Visited", comment: "Commented", language: "Learned a word", quiz: "Quiz completed", plant: "Plant find", story: "Story", suggestion: "Suggested site", interaction: "Community interaction" };
       return `<div class="mobile-profile-map-popup">
         ${group.image ? `<img src="${escapeHtml(group.image)}" alt="" loading="lazy" decoding="async">` : ""}
         <strong>${escapeHtml(group.title)}</strong>
@@ -32336,7 +32373,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function renderMobileProfileProgressMap() {
       const mode = state.profileMapMode;
       if (!mode || !state.map?.isStyleLoaded?.()) return;
-      if (mode.clickHandler && state.map.getLayer("mobile-profile-progress-points")) {
+      if (mode.clickHandler) {
         state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);
         mode.clickHandler = null;
       }
@@ -32363,7 +32400,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.map.addSource("mobile-profile-progress-points", { type: "geojson", data: { type: "FeatureCollection", features } });
       state.map.addLayer({ id: "mobile-profile-progress-points", type: "circle", source: "mobile-profile-progress-points", paint: {
         "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 7, 13, 11],
-        "circle-color": ["match", ["get", "type"], "checkin", "#315c48", "comment", "#b56d32", "language", "#386c86", "plant", "#5d7d3a", "story", "#72577e", "suggestion", "#9a4d38", "#52665b"],
+        "circle-color": ["match", ["get", "type"], "checkin", "#315c48", "comment", "#b56d32", "language", "#386c86", "quiz", "#7a5b2c", "plant", "#5d7d3a", "story", "#72577e", "suggestion", "#9a4d38", "#52665b"],
         "circle-stroke-color": "#fff", "circle-stroke-width": 2
       } });
       state.map.addLayer({ id: "mobile-profile-progress-labels", type: "symbol", source: "mobile-profile-progress-points", minzoom: 9, layout: { "text-field": ["get", "title"], "text-size": 11, "text-offset": [0, 1.35], "text-anchor": "top", "text-optional": true }, paint: { "text-color": "#173528", "text-halo-color": "#fff", "text-halo-width": 1.5 } });
@@ -32400,7 +32437,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const mode = state.profileMapMode;
       if (!mode) return;
       if (state.map) {
-        if (mode.clickHandler && state.map.getLayer("mobile-profile-progress-points")) state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);
+        if (mode.clickHandler) state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);
         removeMobileProfileProgressLayers();
         mode.layerVisibility?.forEach((visibility, id) => { if (state.map.getLayer(id)) state.map.setLayoutProperty(id, "visibility", visibility); });
         if (mode.territoryOpacity !== undefined && state.map.getLayer("mobile-territory-polygons")) state.map.setPaintProperty("mobile-territory-polygons", "fill-opacity", mode.territoryOpacity);
@@ -36332,7 +36369,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     start();
-      </script>
+        </script>
 </body>
 </html>
 

@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260815-indexed-unread-activity-r104";
+const expectedBuild = "20260815-contributor-progress-map-r105";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -52,6 +52,8 @@ const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8");
 const bundledLiveRuntime = `${bundledLiveApp}\n${bundledMobileJs}\n${bundledMobileCss}`;
 
 if (!bundledSharedProfileUtils.includes("function profileMapActivityModel(profile = {}, activity = {}, options = {})")
+    || !bundledSharedProfileUtils.includes("function languageQuizCompletionCountFromAttempts(attempts = [], profileIds = new Set(), options = {})")
+    || !bundledSharedProfileUtils.includes('add("quiz", record, referenceFor(')
     || !bundledSharedProfileUtils.includes("profileMapActivityModel,")) {
   throw new Error("APK contributor profiles must include the shared normalized progress-map activity model.");
 }
@@ -59,6 +61,8 @@ if (!bundledMobileJs.includes("function enterMobileProfileMapMode(profile)")
     || !bundledMobileJs.includes("function exitMobileProfileMapMode(options = {})")
     || !bundledMobileJs.includes('document.body.classList.add("mobile-profile-map-mode")')
     || !bundledMobileJs.includes("mobile-profile-progress-points")
+    || !bundledMobileJs.includes('["quiz", "Quizzes Completed"]')
+    || !bundledMobileJs.includes('if (mode.clickHandler) {\n        state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);')
     || !bundledMobileJs.includes("Your map is still empty.")) {
   throw new Error("APK contributor profiles must enter, render, and cleanly exit personal progress-map mode.");
 }

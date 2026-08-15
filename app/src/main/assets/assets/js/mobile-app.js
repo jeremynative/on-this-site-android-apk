@@ -14609,7 +14609,7 @@
         homelandsCount: distinctVisitedHomelandCount(activity.visitedSites || []),
         languageLearned: learnedLanguageWords(profile).length,
         languageCorrectAttempts: languageCorrectAttemptCount(profile),
-        quizzesCompleted: 0,
+        quizzesCompleted: PROFILE_UTILS.languageQuizCompletionCountFromAttempts(state.languageQuizAttempts, identityIds, { relationId }),
         plantSubmissions,
         storiesPosted,
         loginRewards: loginRewardStats(profile),
@@ -14651,6 +14651,7 @@
         resolveReference,
         imageUrl: directusAssetUrl,
         languageWords: learnedLanguageWords(profile),
+        languageAttempts: state.languageQuizAttempts,
         plantObservations: state.plantObservations,
         stories: state.mapStories,
         interactionVotes: state.commentVotes,
@@ -14672,7 +14673,7 @@
         ["Stories posted", stats.storiesPosted],
         ["Suggested sites", stats.suggestionsCount]
       ];
-      const chips = [["checkin", "Checked-in Sites"], ["comment", "Commented On"], ["language", "Words Learned"], ["plant", "Plant Finds"], ["story", "Stories"], ["suggestion", "Suggested Sites"]]
+      const chips = [["checkin", "Checked-in Sites"], ["comment", "Commented On"], ["language", "Words Learned"], ["quiz", "Quizzes Completed"], ["plant", "Plant Finds"], ["story", "Stories"], ["suggestion", "Suggested Sites"]]
         .filter(([type]) => Number(model.counts[type] || 0));
       return `
         <section class="mobile-profile-progress-overview" data-mobile-profile-map-summary>
@@ -14686,7 +14687,7 @@
     }
 
     function mobileProfileMapPopupHtml(group) {
-      const labels = { checkin: "Checked in", visit: "Visited", comment: "Commented", language: "Learned a word", plant: "Plant find", story: "Story", suggestion: "Suggested site", interaction: "Community interaction" };
+      const labels = { checkin: "Checked in", visit: "Visited", comment: "Commented", language: "Learned a word", quiz: "Quiz completed", plant: "Plant find", story: "Story", suggestion: "Suggested site", interaction: "Community interaction" };
       return `<div class="mobile-profile-map-popup">
         ${group.image ? `<img src="${escapeHtml(group.image)}" alt="" loading="lazy" decoding="async">` : ""}
         <strong>${escapeHtml(group.title)}</strong>
@@ -14709,7 +14710,7 @@
     function renderMobileProfileProgressMap() {
       const mode = state.profileMapMode;
       if (!mode || !state.map?.isStyleLoaded?.()) return;
-      if (mode.clickHandler && state.map.getLayer("mobile-profile-progress-points")) {
+      if (mode.clickHandler) {
         state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);
         mode.clickHandler = null;
       }
@@ -14736,7 +14737,7 @@
       state.map.addSource("mobile-profile-progress-points", { type: "geojson", data: { type: "FeatureCollection", features } });
       state.map.addLayer({ id: "mobile-profile-progress-points", type: "circle", source: "mobile-profile-progress-points", paint: {
         "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 7, 13, 11],
-        "circle-color": ["match", ["get", "type"], "checkin", "#315c48", "comment", "#b56d32", "language", "#386c86", "plant", "#5d7d3a", "story", "#72577e", "suggestion", "#9a4d38", "#52665b"],
+        "circle-color": ["match", ["get", "type"], "checkin", "#315c48", "comment", "#b56d32", "language", "#386c86", "quiz", "#7a5b2c", "plant", "#5d7d3a", "story", "#72577e", "suggestion", "#9a4d38", "#52665b"],
         "circle-stroke-color": "#fff", "circle-stroke-width": 2
       } });
       state.map.addLayer({ id: "mobile-profile-progress-labels", type: "symbol", source: "mobile-profile-progress-points", minzoom: 9, layout: { "text-field": ["get", "title"], "text-size": 11, "text-offset": [0, 1.35], "text-anchor": "top", "text-optional": true }, paint: { "text-color": "#173528", "text-halo-color": "#fff", "text-halo-width": 1.5 } });
@@ -14773,7 +14774,7 @@
       const mode = state.profileMapMode;
       if (!mode) return;
       if (state.map) {
-        if (mode.clickHandler && state.map.getLayer("mobile-profile-progress-points")) state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);
+        if (mode.clickHandler) state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);
         removeMobileProfileProgressLayers();
         mode.layerVisibility?.forEach((visibility, id) => { if (state.map.getLayer(id)) state.map.setLayoutProperty(id, "visibility", visibility); });
         if (mode.territoryOpacity !== undefined && state.map.getLayer("mobile-territory-polygons")) state.map.setPaintProperty("mobile-territory-polygons", "fill-opacity", mode.territoryOpacity);
