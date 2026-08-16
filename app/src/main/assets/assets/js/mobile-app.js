@@ -185,6 +185,7 @@
     const MOBILE_STARTUP_SITE_REVEAL_DURATION_MS = 1080;
     const MOBILE_STARTUP_SITE_REVEAL_DELAY_MS = 140;
     const MOBILE_STARTUP_SITE_REVEAL_ZOOM_DELTA = 1.15;
+    const MOBILE_MAP_INITIAL_ERROR_GRACE_MS = 5000;
     const KNOWLEDGEBASE_CATEGORIES = [
       { label: "Biography", slugs: ["mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "quashawam", "elizabeth-thunder-bird-haile-shinnecock", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "sachem-warawakmy-of-the-setauket", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "john-a-strong", "nathan-jeffrey-cuffee", "samson-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "penhawitz-sachem-of-the-canarsie", "stephen-talkhouse-pharoah", "nasseconset-sachem-of-the-nissequogue", "keeossechok-sachem-of-the-secatogue", "sunksquaws-and-indigenous-womens-leadership"] },
       { label: "Tribal Nations and Communities", entries: [["wiki", "native-long-island-overview"], ["wiki", "continued-indigenous-presence-today"], ["wiki", "the-tribes-of-long-island"], ["wiki", "western-long-island-native-communities"], ["wiki", "central-long-island-native-communities"], ["wiki", "eastern-long-island-native-communities"], ["wiki", "myth-of-the-thirteen-tribes"], ["site", "montaukett-ancestral-land"], ["site", "shinnecock-indian-reservation"], ["site", "unkechaug-indian-reservation"], ["site", "corchaug-tribe"], ["site", "manhansack-aqua-quash-awamock"], ["site", "setauket-ancestral-land"], ["site", "nissaquogue"], ["site", "matinecock"], ["site", "secatogues"], ["site", "massapequas"], ["site", "merricks"], ["site", "rockaways"], ["site", "canarsie"]] },
@@ -628,6 +629,7 @@
     const MAP_STORY_BASE_LIFETIME_MS = SHARED_MAP_STORY.baseLifetimeMs || 24 * 60 * 60 * 1000;
     const MAP_STORY_VOTE_HOUR_MS = SHARED_MAP_STORY.voteHourMs || 60 * 60 * 1000;
     const MAP_STORY_PERMANENT_SCORE = SHARED_MAP_STORY.permanentScore || 10;
+    const MAP_STORY_REFRESH_INTERVAL_MS = Math.max(60000, Number(SHARED_MAP_STORY.refreshIntervalMs || 5 * 60 * 1000));
     const DEFAULT_LAST_EDITED_LABEL = "10/01/2018";
     const MAP_STORY_PROMPTS = SHARED_MAP_STORY.prompts || [
       { key: "indigenous_memory", label: "Share a story from this place", help: "A place, view, object, plant, shoreline, or building that makes you think about Native history and presence." },
@@ -790,6 +792,8 @@
       siteSuggestions: [],
       mapStories: [],
       mapStoryVotes: [],
+      mapStoryLastRefreshAt: 0,
+      mapStoryRefreshPromise: null,
       languageQuizAttempts: [],
       profileLoginRewards: [],
       profileFollows: [],
@@ -1176,7 +1180,10 @@
         basemap: "outdoors",
         showPins: true,
         showShapes: true,
-        showBiographyPaths: false,
+        showBiographyPaths: saved.biographyPathsPreferenceSet === true
+          ? saved.showBiographyPaths === true
+          : true,
+        biographyPathsPreferenceSet: saved.biographyPathsPreferenceSet === true,
         layerCategories: {},
         eraCategories: {},
         ...saved
@@ -3542,8 +3549,20 @@
         communityRequest(() => fetchJson(`/items/mobile_site_visits?limit=80&sort=-visited_at&fields=${PUBLIC_VISIT_FIELDS}`, { cacheKey: "mobile-site-visits", ttl: 45000, fresh: false }).catch(() => currentRowsFallback(state.publicVisits)), state.publicVisits),
         siteSuggestionsRequest,
         communityRequest(() => adminAccountRegistrationsRequest().catch(() => currentRowsFallback(state.accountRegistrations)), state.accountRegistrations),
-        loadCoreData || includeCommunity ? fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.mapStories)) : Promise.resolve({ data: state.mapStories }),
-        loadCoreData || includeCommunity ? fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.mapStoryVotes)) : Promise.resolve({ data: state.mapStoryVotes }),
+        loadCoreData || includeCommunity
+          ? (state.mapStoryRefreshPromise
+              ? state.mapStoryRefreshPromise.then(() => ({ data: state.mapStories, _sharedRefresh: true }))
+              : state.mapStoryLastRefreshAt && Date.now() - state.mapStoryLastRefreshAt < 30000
+                ? Promise.resolve({ data: state.mapStories, _recent: true })
+                : fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.mapStories)))
+          : Promise.resolve({ data: state.mapStories }),
+        loadCoreData || includeCommunity
+          ? (state.mapStoryRefreshPromise
+              ? state.mapStoryRefreshPromise.then(() => ({ data: state.mapStoryVotes, _sharedRefresh: true }))
+              : state.mapStoryLastRefreshAt && Date.now() - state.mapStoryLastRefreshAt < 30000
+                ? Promise.resolve({ data: state.mapStoryVotes, _recent: true })
+                : fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.mapStoryVotes)))
+          : Promise.resolve({ data: state.mapStoryVotes }),
         signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_language_quiz_progress?limit=-1&fields=${LANGUAGE_PROGRESS_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.languageQuizAttempts)), state.languageQuizAttempts) : Promise.resolve({ ...currentRowsFallback(state.languageQuizAttempts), _skipped: true }),
         signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_profile_follows?limit=-1&fields=${FOLLOW_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileFollows)), state.profileFollows) : Promise.resolve({ ...currentRowsFallback(state.profileFollows), _skipped: true }),
         signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_profile_logins?limit=-1&fields=${LOGIN_REWARD_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileLoginRewards)), state.profileLoginRewards) : Promise.resolve({ ...currentRowsFallback(state.profileLoginRewards), _skipped: true })
@@ -3567,6 +3586,13 @@
       state.accountRegistrations = registrationsResponse.data || [];
       state.mapStories = MAP_STORY_UTILS.mergeStoryRecords(state.mapStories, storyResponse.data || []);
       state.mapStoryVotes = storyVotesResponse.data || [];
+      const reusedMapStorySnapshot = Boolean(
+        storyResponse._sharedRefresh || storyVotesResponse._sharedRefresh ||
+        storyResponse._recent || storyVotesResponse._recent
+      );
+      if (!reusedMapStorySnapshot && !storyResponse._fallback && !storyVotesResponse._fallback) {
+        state.mapStoryLastRefreshAt = Date.now();
+      }
       state.languageQuizAttempts = preserveActiveProfileRows(languageResponse.data, state.languageQuizAttempts);
       state.profileFollows = preserveActiveProfileRows(followsResponse.data, state.profileFollows, ["follower_profile", "following_profile"]);
       state.profileLoginRewards = preserveActiveProfileRows(loginRewardsResponse.data, state.profileLoginRewards);
@@ -3742,14 +3768,24 @@
       }
     }
 
-    async function refreshMapStories() {
+    async function refreshMapStories(options = {}) {
+      if (document.hidden && !options.force) return false;
+      if (state.mapStoryRefreshPromise) return state.mapStoryRefreshPromise;
+      const refreshPromise = (async () => {
       try {
         const [storyResponse, voteResponse] = await Promise.all([
-          fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 0, fresh: true }).catch(() => ({ data: state.mapStories || [] })),
-          fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 0, fresh: true }).catch(() => ({ data: state.mapStoryVotes || [] }))
+          fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 0, fresh: true }).catch(() => ({ data: state.mapStories || [], _fallback: true })),
+          fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 0, fresh: true }).catch(() => ({ data: state.mapStoryVotes || [], _fallback: true }))
         ]);
-        state.mapStories = MAP_STORY_UTILS.mergeStoryRecords(state.mapStories, storyResponse.data || []);
-        state.mapStoryVotes = voteResponse.data || state.mapStoryVotes || [];
+        const nextStories = MAP_STORY_UTILS.mergeStoryRecords(state.mapStories, storyResponse.data || []);
+        const nextVotes = voteResponse.data || state.mapStoryVotes || [];
+        const fresh = !storyResponse._fallback && !voteResponse._fallback;
+        if (fresh) state.mapStoryLastRefreshAt = Date.now();
+        if (!options.force && MAP_STORY_UTILS.storyStateSignature(nextStories, nextVotes) === MAP_STORY_UTILS.storyStateSignature(state.mapStories, state.mapStoryVotes)) {
+          return false;
+        }
+        state.mapStories = nextStories;
+        state.mapStoryVotes = nextVotes;
         syncMapStoryMarkers();
         if (activitySheetEl?.classList.contains("open")) renderMobileActivitySheet();
         if (notificationsSheetEl?.classList.contains("open")) renderMobileNotificationsSheet();
@@ -3760,11 +3796,19 @@
         console.warn("Map stories will refresh later.", error);
         return false;
       }
+      })();
+      state.mapStoryRefreshPromise = refreshPromise;
+      try {
+        return await refreshPromise;
+      } finally {
+        if (state.mapStoryRefreshPromise === refreshPromise) state.mapStoryRefreshPromise = null;
+      }
     }
 
     function startMapStoryRefresh() {
       if (state.mapStoryRefreshTimer) return;
-      state.mapStoryRefreshTimer = window.setInterval(refreshMapStories, 45000);
+      if (!state.mapStoryLastRefreshAt || Date.now() - state.mapStoryLastRefreshAt > 30000) refreshMapStories();
+      state.mapStoryRefreshTimer = window.setInterval(refreshMapStories, MAP_STORY_REFRESH_INTERVAL_MS);
     }
 
     async function refreshCommentsNow({ rerender = true } = {}) {
@@ -16690,7 +16734,11 @@
           });
           state.map.on("error", () => {
             if (!settled) {
-              if (!errorTimer) errorTimer = window.setTimeout(fallbackToOfflineIndex, 800);
+              // Android WebView can report one recoverable style or tile error
+              // while Mapbox is still assembling its first frame. Give the
+              // normal load event a bounded chance to win before replacing
+              // the map with the text-only archive.
+              if (!errorTimer) errorTimer = window.setTimeout(fallbackToOfflineIndex, MOBILE_MAP_INITIAL_ERROR_GRACE_MS);
               return;
             }
             // Mapbox can emit a tile error after `load` in Android WebView. Do
@@ -16813,12 +16861,9 @@
         const totalLayerCount = primaryStates.length + mobileLayerCategoryInputs.length + mobileLayerEraInputs.length;
         const activeLayerCount = primaryCount + categoryCount + eraCount;
         const allOn = activeLayerCount === totalLayerCount;
-        const allBulkLabelsOn = primaryStates.slice(0, 3).every(Boolean)
-          && categoryCount === mobileLayerCategoryInputs.length
-          && eraCount === mobileLayerEraInputs.length;
         const bulkActionsReady = !mobileLayerMenu.open || Date.now() >= mobileLayerBulkReadyAt;
         mobileLayerMenu.querySelector("summary").textContent = allOn ? "Labels" : `Labels ${activeLayerCount}/${totalLayerCount}`;
-        if (mobileLayerEnableAllBtn) mobileLayerEnableAllBtn.disabled = allBulkLabelsOn || !bulkActionsReady;
+        if (mobileLayerEnableAllBtn) mobileLayerEnableAllBtn.disabled = allOn || !bulkActionsReady;
         if (mobileLayerDisableAllBtn) mobileLayerDisableAllBtn.disabled = activeLayerCount === 0 || !bulkActionsReady;
       }
       if (exhibitsToggleBtn) {
@@ -16840,7 +16885,10 @@
       if (kind === "exhibits") state.settings.exhibits = visible;
       if (kind === "pins") state.settings.showPins = visible;
       if (kind === "shapes") state.settings.showShapes = visible;
-      if (kind === "biographyPaths") state.settings.showBiographyPaths = visible;
+      if (kind === "biographyPaths") {
+        state.settings.showBiographyPaths = visible;
+        state.settings.biographyPathsPreferenceSet = true;
+      }
       if (kind === "category") {
         state.settings.layerCategories = { ...(state.settings.layerCategories || {}) };
         mobileLayerCategoryInputs.forEach(input => {
@@ -16867,10 +16915,8 @@
       state.settings.exhibits = nextVisible;
       state.settings.showPins = nextVisible;
       state.settings.showShapes = nextVisible;
-      // Biography paths are a separate guided-story overlay, not a label.
-      // Keep them off during either bulk label action so "Enable all" cannot
-      // cover the map with every biography route.
-      state.settings.showBiographyPaths = false;
+      state.settings.showBiographyPaths = nextVisible;
+      state.settings.biographyPathsPreferenceSet = true;
       state.settings.layerCategories = {};
       mobileLayerCategoryInputs.forEach(input => {
         state.settings.layerCategories[input.value] = nextVisible;
@@ -18520,6 +18566,9 @@
           }).catch(() => null);
         }
         refreshAndroidMapAfterSettle("android-app-visible");
+        if (state.mapStoryRefreshTimer && Date.now() - state.mapStoryLastRefreshAt >= MAP_STORY_REFRESH_INTERVAL_MS) {
+          refreshMapStories().catch(() => null);
+        }
       }
     });
     window.addEventListener("storage", event => {

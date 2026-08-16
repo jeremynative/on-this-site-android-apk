@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260815-profile-progress-detail-r119";
+const expectedBuild = "20260815-island-loader-biography-r121";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -55,6 +55,11 @@ const bundledSharedMapStoryUtils = fs.readFileSync(bundledSharedMapStoryUtilsPat
 const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8");
 const bundledLiveRuntime = `${bundledLiveApp}\n${bundledMobileJs}\n${bundledMobileCss}`;
 
+if (bundledApp.includes('url("../images/long-island-loading-outline.png")')
+    || !bundledApp.includes('url("assets/images/long-island-loading-outline.png")')) {
+  throw new Error("APK bundled CSS asset URLs must be rebased for the root offline shell.");
+}
+
 if (!bundledSharedSearchUtils.includes("function prepareEntry(entry = {}, options = {})")
     || !bundledSharedSearchUtils.includes("function rankEntries(entries = [], value, scoreEntry, options = {})")
     || !bundledSharedSearchUtils.includes("function didYouMeanEntry(entries = [], value, matches = [], options = {})")
@@ -67,10 +72,22 @@ if (!bundledSharedSearchUtils.includes("function prepareEntry(entry = {}, option
 
 if (!bundledSharedMapStoryUtils.includes("const voteIndexCache = new WeakMap()")
     || !bundledSharedMapStoryUtils.includes("function storyVoteIndex(votes = [])")
+    || !bundledSharedMapStoryUtils.includes("const countsByStory = new Map()")
+    || !bundledSharedMapStoryUtils.includes("const membersByStory = new Map()")
+    || !bundledSharedMapStoryUtils.includes("const visitorsByStory = new Map()")
+    || !bundledSharedMapStoryUtils.includes("function storyStateSignature(stories = [], votes = [])")
     || !bundledSharedMapStoryUtils.includes("invalidateStoryVoteIndex(target)")
     || bundledSharedMapStoryUtils.includes("target.findIndex")
     || bundledSharedMapStoryUtils.includes(".filter(vote => String(relationId(vote.story))")) {
-  throw new Error("APK visitor stories must package the indexed vote lookup and linear merge implementation.");
+  throw new Error("APK visitor stories must package canonical indexed vote counts, identity lookups, signatures, and linear merging.");
+}
+if (!bundledMobileJs.includes("mapStoryRefreshPromise: null")
+    || !bundledMobileJs.includes("if (state.mapStoryRefreshPromise) return state.mapStoryRefreshPromise")
+    || !bundledMobileJs.includes("if (document.hidden && !options.force) return false")
+    || !bundledMobileJs.includes("MAP_STORY_UTILS.storyStateSignature(nextStories, nextVotes)")
+    || !bundledMobileJs.includes("window.setInterval(refreshMapStories, MAP_STORY_REFRESH_INTERVAL_MS)")
+    || bundledMobileJs.includes("window.setInterval(refreshMapStories, 45000)")) {
+  throw new Error("APK visitor story refresh must be single-flight, background-aware, change-sensitive, and use the shared interval.");
 }
 
 if (!bundledSharedProfileUtils.includes("function profileMapActivityModel(profile = {}, activity = {}, options = {})")
@@ -386,7 +403,9 @@ requireText('showLoadingCover("Loading On This Site");', "Android cold startup m
 requireText("var onlineReady=!offline&&shell&&loaderHidden&&/\\\\d+\\\\s+listings[\\\\s\\\\S]*loaded\\\\./i.test(liveStatus);", "Android must hand off from the native cover once the live archive status confirms that listings loaded, even when the nearby feed has no site cards yet.");
 requireText("ValueAnimator.ofFloat(0f, 1f)", "Android loading cover must animate the Long Island outline from west to east.");
 requireText("reveal.setClipBounds(new Rect(0, 0, revealedWidth, height))", "Android Long Island loader must reveal from left to right without stretching the graphic.");
-requireText("loadingProgressFill.setScaleX(Math.max(0.02f, progress))", "Android loading cover must include an unmistakable synchronized left-to-right progress track.");
+if (source.includes("loadingProgressFill") || source.includes("progressTrack")) {
+  throw new Error("Android loading cover must use the Long Island reveal itself, without a separate progress bar.");
+}
 requireText("loadingOutlinePulse.setRepeatMode(ValueAnimator.RESTART)", "Android loading progress must restart at the west edge instead of reversing direction.");
 requireBundledText('<button class="ghost-button" id="settings-open" type="button">Notifications</button>', "Bundled Android menu must label the settings action Notifications.");
 forbidBundledText('<button class="ghost-button" id="settings-open" type="button">Alerts</button>', "Bundled Android menu must not use the old Alerts label.");
@@ -620,20 +639,23 @@ if (!bundledResearchQuestionCss.includes("left: max(16px, var(--app-left-safe, e
   throw new Error("Bundled Android research-question controls must reserve portrait and landscape system bars.");
 }
 if (!bundledMobileJs.includes("function setAllMobileLayerVisibility(visible)")
-    || !bundledMobileJs.includes("state.settings.showBiographyPaths = false;")
+    || !bundledMobileJs.includes("showBiographyPaths: saved.biographyPathsPreferenceSet === true")
+    || !bundledMobileJs.includes("state.settings.showBiographyPaths = nextVisible;")
+    || !bundledMobileJs.includes("state.settings.biographyPathsPreferenceSet = true;")
     || !bundledMobileJs.includes("const items = mobileBiographyPathsEnabled() ? mobileMovingBiographyItems() : [];")
     || !bundledMobileJs.includes("ensureMobileMovingBiographyMarkers();")
     || !bundledMobileJs.includes("state.settings.layerCategories = {};")
     || !bundledMobileJs.includes("state.settings.eraCategories = {};")
-    || !bundledMobileJs.includes("primaryStates.slice(0, 3).every(Boolean)")
+    || !bundledMobileJs.includes("mobileLayerEnableAllBtn.disabled = allOn || !bulkActionsReady")
     || !bundledMobileJs.includes("Date.now() < mobileLayerBulkReadyAt")
     || !bundledMobileJs.includes("mobileLayerBulkReadyAt = Date.now() + 400;")) {
-  throw new Error("Bundled Android bulk labels must exclude biography paths and reject the Labels-menu opening touch.");
+  throw new Error("Bundled Android labels must default biography paths on, preserve an explicit preference, and include them in bulk controls.");
 }
 for (const [label, document] of [
   ["bundled fallback", bundledApp]
 ]) {
   if (!document.includes("Biography paths &amp; icons")
+      || !document.includes('id="mobile-layer-biography-paths" type="checkbox" checked')
       || !document.includes("const items = mobileBiographyPathsEnabled() ? mobileMovingBiographyItems() : [];")) {
     throw new Error(`${label} must hide moving biography icons with the Biography paths & icons control.`);
   }
@@ -1478,6 +1500,8 @@ requireBundledText('const NEARBY_LIST_ANDROID_DEFAULT_LIMIT = 12;', "Bundled And
 requireBundledText('data-nearby-show-more', "Bundled Android app must let users reveal more nearby places after the startup cap.");
 requireBundledText('const nativeAndroid = isNativeAndroidApp();', "Bundled Android app must cache native Android startup state.");
 requireBundledText('function waitForMapbox(timeout = 12000)', "Bundled Android app must give Mapbox enough time to load inside WebView before falling back.");
+requireBundledText('const MOBILE_MAP_INITIAL_ERROR_GRACE_MS = 5000;', "Bundled Android map must tolerate a transient first-frame Mapbox error before using the text-only fallback.");
+requireBundledText('window.setTimeout(fallbackToOfflineIndex, MOBILE_MAP_INITIAL_ERROR_GRACE_MS)', "Bundled Android map error recovery must use the bounded first-frame grace window.");
 requireBundledText('if (nativeAndroid) {\n          await new Promise(resolve => window.requestAnimationFrame(resolve));\n        }\n        await openInitialRouteFromUrl();', "Bundled Android app must keep the loading screen up during native startup instead of revealing a half-built shell.");
 requireBundledText('hideLoadingScreen();', "Bundled Android app must hide loading after map startup.");
 requireBundledText('if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) refreshMapStories();', "Bundled Android app must refresh visitor stories as soon as the map is ready.");

@@ -37,21 +37,37 @@ const inlineAssets = [
   { path: "assets/js/userviews-tracker.js", tag: "script" },
   { path: "assets/js/mobile-app.js", tag: "script" }
 ];
+const requestedPaths = new Set(process.argv.slice(2));
+const selectedAssets = requestedPaths.size
+  ? inlineAssets.filter(asset => requestedPaths.has(asset.path))
+  : inlineAssets;
+if (requestedPaths.size && selectedAssets.length !== requestedPaths.size) {
+  const known = new Set(inlineAssets.map(asset => asset.path));
+  const unknown = [...requestedPaths].filter(assetPath => !known.has(assetPath));
+  throw new Error(`Unknown bundled asset${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`);
+}
 
 for (const relativeShell of bundledShells) {
   const shellPath = path.join(root, relativeShell);
   if (!fs.existsSync(shellPath)) continue;
   let html = fs.readFileSync(shellPath, "utf8");
-  for (const asset of inlineAssets) {
+  for (const asset of selectedAssets) {
     const sourcePath = path.join(root, "app/src/main/assets", asset.path);
-    const source = fs.readFileSync(sourcePath, "utf8").trim();
+    let source = fs.readFileSync(sourcePath, "utf8").trim();
+    if (asset.tag === "style") {
+      const stylesheetDirectory = path.posix.dirname(asset.path.replace(/\\/g, "/"));
+      source = source.replace(/url\((['"]?)(\.\.\/[^)'"\s]+)\1\)/gi, (_match, quote, relativeUrl) => {
+        const rebased = path.posix.normalize(path.posix.join(stylesheetDirectory, relativeUrl));
+        return `url(${quote}${rebased}${quote})`;
+      });
+    }
     const escapedAsset = asset.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const pattern = new RegExp(
       `(^[\\t ]*<${asset.tag} data-inline-source="${escapedAsset}">)[\\s\\S]*?(^[\\t ]*</${asset.tag}>[\\t ]*$)`,
       "m"
     );
     if (!pattern.test(html)) throw new Error(`${relativeShell} is missing inline asset ${asset.path}`);
-    html = html.replace(pattern, (_, open, close) => `${open}\n${source}\n  ${close}`);
+    html = html.replace(pattern, (_, open, close) => `${open}\n${source}\n${close}`);
   }
   for (const asset of inlineAssets) {
     const marker = `data-inline-source="${asset.path}"`;

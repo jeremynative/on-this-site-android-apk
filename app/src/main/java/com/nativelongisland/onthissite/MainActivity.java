@@ -89,7 +89,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260815-profile-progress-detail-r119";
+    static final String APP_VERSION = "20260815-island-loader-biography-r121";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -123,7 +123,6 @@ public class MainActivity extends Activity {
     private TextView loadingCoverDetail;
     private LinearLayout loadingCoverActions;
     private ValueAnimator loadingOutlinePulse;
-    private View loadingProgressFill;
     private long loadingCoverShownAt;
     private long loadingCoverGeneration;
     private GeolocationPermissions.Callback pendingLocationCallback;
@@ -637,26 +636,6 @@ public class MainActivity extends Activity {
         ));
         card.addView(islandAnimation, new LinearLayout.LayoutParams(dp(240), dp(116)));
 
-        FrameLayout progressTrack = new FrameLayout(this);
-        GradientDrawable progressTrackBackground = new GradientDrawable();
-        progressTrackBackground.setColor(Color.rgb(222, 231, 223));
-        progressTrackBackground.setCornerRadius(dp(3));
-        progressTrack.setBackground(progressTrackBackground);
-        loadingProgressFill = new View(this);
-        GradientDrawable progressFillBackground = new GradientDrawable();
-        progressFillBackground.setColor(Color.rgb(47, 90, 73));
-        progressFillBackground.setCornerRadius(dp(3));
-        loadingProgressFill.setBackground(progressFillBackground);
-        loadingProgressFill.setPivotX(0f);
-        loadingProgressFill.setScaleX(0.02f);
-        progressTrack.addView(loadingProgressFill, new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ));
-        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(dp(240), dp(5));
-        progressParams.topMargin = dp(3);
-        card.addView(progressTrack, progressParams);
-
         loadingCoverLabel = new TextView(this);
         loadingCoverLabel.setText(R.string.loading_app);
         loadingCoverLabel.setTextColor(Color.rgb(18, 34, 25));
@@ -725,10 +704,6 @@ public class MainActivity extends Activity {
                 int revealedWidth = Math.max(1, Math.round(width * progress));
                 reveal.setClipBounds(new Rect(0, 0, revealedWidth, height));
                 reveal.setAlpha(0.82f + (0.18f * progress));
-            }
-            if (loadingProgressFill != null) {
-                loadingProgressFill.setPivotX(0f);
-                loadingProgressFill.setScaleX(Math.max(0.02f, progress));
             }
         });
         return cover;
@@ -853,7 +828,6 @@ public class MainActivity extends Activity {
             : message);
         if (loadingOutlinePulse != null) {
             loadingOutlinePulse.cancel();
-            if (loadingProgressFill != null) loadingProgressFill.setScaleX(0.02f);
             loadingOutlinePulse.start();
         }
         loadingCover.animate().cancel();

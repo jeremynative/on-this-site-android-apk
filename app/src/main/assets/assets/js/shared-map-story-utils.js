@@ -7,16 +7,68 @@
 
   const voteIndexCache = new WeakMap();
 
+  function voteRecordId(vote) {
+    const value = vote?.id;
+    return value === undefined || value === null || value === "" ? "" : String(value);
+  }
+
+  function voteVisitorKey(vote) {
+    return String(vote?.visitor_key || "");
+  }
+
   function buildStoryVoteIndex(votes = []) {
     const source = Array.isArray(votes) ? votes : [];
+    const records = [];
+    const idPositions = new Map();
+    const visitorPositions = new Map();
+    source.filter(Boolean).forEach(vote => {
+      const id = voteRecordId(vote);
+      const visitor = voteVisitorKey(vote);
+      const idPosition = id ? idPositions.get(id) : undefined;
+      const position = Number.isInteger(idPosition) ? idPosition : visitorPositions.get(visitor);
+      const previous = Number.isInteger(position) ? records[position] : null;
+      const record = previous ? { ...previous, ...vote } : vote;
+      const nextPosition = previous ? position : records.push(record) - 1;
+      if (previous) {
+        const previousId = voteRecordId(previous);
+        const previousVisitor = voteVisitorKey(previous);
+        if (previousId && idPositions.get(previousId) === position) idPositions.delete(previousId);
+        if (previousVisitor && visitorPositions.get(previousVisitor) === position) visitorPositions.delete(previousVisitor);
+        records[position] = record;
+      }
+      const nextId = voteRecordId(record);
+      const nextVisitor = voteVisitorKey(record);
+      if (nextId) idPositions.set(nextId, nextPosition);
+      if (nextVisitor) visitorPositions.set(nextVisitor, nextPosition);
+    });
+
     const byStory = new Map();
-    source.forEach(vote => {
+    const countsByStory = new Map();
+    const membersByStory = new Map();
+    const visitorsByStory = new Map();
+    records.forEach(vote => {
       const storyId = String(relationId(vote?.story) || "");
       if (!storyId) return;
       if (!byStory.has(storyId)) byStory.set(storyId, []);
       byStory.get(storyId).push(vote);
+      if (!countsByStory.has(storyId)) countsByStory.set(storyId, { up: 0, down: 0, score: 0 });
+      const counts = countsByStory.get(storyId);
+      const value = Number(vote?.vote);
+      if (value > 0) counts.up += 1;
+      else if (value < 0) counts.down += 1;
+      counts.score = counts.up - counts.down;
+      const memberId = String(relationId(vote?.member_profile) || "");
+      if (memberId) {
+        if (!membersByStory.has(storyId)) membersByStory.set(storyId, new Set());
+        membersByStory.get(storyId).add(memberId);
+      }
+      const visitor = voteVisitorKey(vote);
+      if (visitor) {
+        if (!visitorsByStory.has(storyId)) visitorsByStory.set(storyId, new Set());
+        visitorsByStory.get(storyId).add(visitor);
+      }
     });
-    return { source, byStory };
+    return { source, records, byStory, countsByStory, membersByStory, visitorsByStory };
   }
 
   function storyVoteIndex(votes = []) {
@@ -41,16 +93,12 @@
   }
 
   function storyVoteCounts(story, votes = []) {
-    const matchingVotes = storyVotes(story, votes);
-    let up = 0;
-    let down = 0;
-    matchingVotes.forEach(vote => {
-      const value = Number(vote?.vote);
-      if (value > 0) up += 1;
-      else if (value < 0) down += 1;
-    });
-    up = up || Number(story?.up_votes || 0);
-    down = down || Number(story?.down_votes || 0);
+    const storyId = String(story?.id || "");
+    const index = storyVoteIndex(votes);
+    const indexed = storyId ? index.countsByStory.get(storyId) : null;
+    if (indexed) return { up: indexed.up, down: indexed.down, score: indexed.score };
+    const up = Number(story?.up_votes || 0);
+    const down = Number(story?.down_votes || 0);
     return { up, down, score: up - down };
   }
 
@@ -109,17 +157,21 @@
   }
 
   function hasVisitorVote(story, votes = [], key = visitorKey()) {
-    return storyVotes(story, votes).some(vote => String(vote.visitor_key || "") === key);
+    const storyId = String(story?.id || "");
+    return Boolean(storyId && key && storyVoteIndex(votes).visitorsByStory.get(storyId)?.has(String(key)));
   }
 
   function hasMemberVote(story, votes = [], profileId) {
-    const memberId = Number(relationId(profileId));
+    const memberId = String(relationId(profileId) || "");
     if (!memberId) return false;
     const storyId = String(story?.id || "");
     const voteKey = memberVoteKey(storyId, memberId);
-    return storyVotes(story, votes).some(vote =>
-      Number(relationId(vote.member_profile)) === memberId ||
-      (voteKey && String(vote.visitor_key || "") === voteKey)
+    const index = storyVoteIndex(votes);
+    return Boolean(
+      storyId && (
+        index.membersByStory.get(storyId)?.has(memberId) ||
+        (voteKey && index.visitorsByStory.get(storyId)?.has(voteKey))
+      )
     );
   }
 
@@ -135,9 +187,8 @@
     (records || []).filter(Boolean).forEach(record => {
       const id = Number(record.id);
       const visitorKey = String(record.visitor_key || "");
-      const index = Number.isFinite(id) && id > 0
-        ? idPositions.get(id)
-        : visitorPositions.get(visitorKey);
+      const idIndex = Number.isFinite(id) && id > 0 ? idPositions.get(id) : undefined;
+      const index = Number.isInteger(idIndex) ? idIndex : visitorPositions.get(visitorKey);
       if (Number.isInteger(index)) {
         const previous = target[index] || {};
         const previousId = Number(previous.id);
@@ -200,6 +251,29 @@
     });
   }
 
+  function storyStateSignature(stories = [], votes = []) {
+    const storyPart = (stories || []).map(story => [
+      story?.id,
+      story?.status,
+      story?.expires_at,
+      story?.permanent,
+      story?.admin_permanent,
+      story?.up_votes,
+      story?.down_votes,
+      story?.vote_score,
+      story?.created_at
+    ].map(value => String(value ?? "")).join(":")).sort().join("|");
+    const votePart = storyVoteIndex(votes).records.map(vote => [
+      vote?.id,
+      relationId(vote?.story),
+      vote?.vote,
+      vote?.visitor_key,
+      relationId(vote?.member_profile),
+      vote?.created_at
+    ].map(value => String(value ?? "")).join(":")).sort().join("|");
+    return `${storyPart}::${votePart}`;
+  }
+
   function authorName(story, fallback = "Contributor") {
     return story?.author_name || fallback;
   }
@@ -239,6 +313,7 @@
     hasMemberVote,
     mergeStoryRecords,
     mergeVoteRecords,
+    storyStateSignature,
     authorName,
     quotedText,
     coordinates,

@@ -3311,7 +3311,7 @@
       background: transparent;
     }
 
-    .contributor-card {
+    .comment.contributor-card {
       display: grid;
       grid-template-columns: 1fr;
       gap: 0;
@@ -3322,7 +3322,7 @@
       overflow: hidden;
     }
 
-    .contributor-card.is-expanded {
+    .comment.contributor-card.is-expanded {
       gap: 10px;
       padding-bottom: 10px;
     }
@@ -3385,6 +3385,185 @@
 
     .contributor-body[hidden] {
       display: none;
+    }
+
+    #profiles-sheet.profile-progress-active {
+      height: 52dvh;
+      max-height: 52dvh;
+      border-radius: 18px 18px 0 0;
+    }
+
+    #profiles-sheet.profile-progress-active .profile-sort-controls,
+    #profiles-sheet.profile-progress-active [data-mobile-profile-card]:not(.is-expanded) {
+      display: none;
+    }
+
+    #profiles-sheet.profile-progress-active .sheet-body {
+      padding-top: 10px;
+    }
+
+    body.mobile-profile-map-mode .mobile-view-tabs,
+    body.mobile-profile-map-mode .mobile-timeline,
+    body.mobile-profile-map-mode .list-panel,
+    body.mobile-profile-map-mode .mobile-startup-spotlight,
+    body.mobile-profile-map-mode .mobile-exhibit-marker,
+    body.mobile-profile-map-mode .mobile-approved-suggestion-marker,
+    body.mobile-profile-map-mode .mobile-story-marker,
+    body.mobile-profile-map-mode .mobile-plant-marker,
+    body.mobile-profile-map-mode .mobile-biography-person-marker,
+    body.mobile-profile-map-mode .mobile-calendar-event-marker,
+    body.mobile-profile-map-mode .mobile-moving-dog-marker,
+    body.mobile-profile-map-mode .mobile-moving-whale-marker,
+    body.mobile-profile-map-mode .selected-site-map-label {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+
+    .mobile-profile-progress-overview {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid rgba(49, 92, 72, 0.2);
+      border-radius: 11px;
+      background: linear-gradient(160deg, #eff6ef, #fff);
+    }
+
+    .mobile-profile-progress-heading {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .mobile-profile-progress-heading > div {
+      display: grid;
+      gap: 2px;
+    }
+
+    .mobile-profile-progress-heading span {
+      color: #52705f;
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .mobile-profile-progress-heading strong {
+      font-size: 20px;
+    }
+
+    .mobile-profile-progress-heading > b {
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: #dceadd;
+      color: #315c48;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .mobile-profile-progress-overview > p,
+    .mobile-profile-progress-empty p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .mobile-profile-progress-chips {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 3px;
+      scrollbar-width: none;
+    }
+
+    .mobile-profile-progress-chips > span {
+      flex: 0 0 auto;
+      padding: 6px 9px;
+      border: 1px solid rgba(49, 92, 72, 0.18);
+      border-radius: 999px;
+      background: #fff;
+      color: #315c48;
+      font-size: 11px;
+      font-weight: 750;
+    }
+
+    .mobile-profile-progress-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .mobile-profile-progress-stats > div {
+      display: grid;
+      gap: 1px;
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid rgba(49, 92, 72, 0.12);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.84);
+    }
+
+    .mobile-profile-progress-stats strong {
+      color: #254f3e;
+      font-size: 17px;
+    }
+
+    .mobile-profile-progress-stats span {
+      color: var(--muted);
+      font-size: 10.5px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .mobile-profile-progress-empty {
+      padding: 11px;
+      border: 1px dashed rgba(49, 92, 72, 0.28);
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .mobile-profile-map-popup {
+      display: grid;
+      gap: 7px;
+      min-width: 210px;
+      color: #1d2922;
+    }
+
+    .mobile-profile-map-popup > img {
+      width: 100%;
+      max-height: 105px;
+      border-radius: 7px;
+      object-fit: cover;
+    }
+
+    .mobile-profile-map-popup p {
+      margin: 2px 0;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .mobile-profile-map-popup button {
+      min-height: 44px;
+      border: 1px solid #315c48;
+      border-radius: 8px;
+      background: #315c48;
+      color: #fff;
+      font-weight: 800;
+    }
+
+    @media (orientation: landscape) and (min-width: 700px) {
+      #profiles-sheet.profile-progress-active {
+        top: var(--app-top-safe);
+        right: var(--app-right-safe);
+        bottom: var(--app-bottom-safe);
+        left: auto;
+        width: min(50dvw, 620px);
+        height: calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe));
+        max-height: calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe));
+        border-radius: 14px 0 0 0;
+      }
     }
 
     .comment.reply {
@@ -7516,7 +7695,7 @@ body.research-question-dialog-open .android-beta-prompt,
             </label>
             <label class="mobile-layer-option" for="mobile-layer-biography-paths">
               <span>Biography paths &amp; icons</span>
-              <input id="mobile-layer-biography-paths" type="checkbox">
+              <input id="mobile-layer-biography-paths" type="checkbox" checked>
             </label>
             <label class="mobile-layer-option" for="mobile-layer-shell-middens">
               <span>Shell Middens</span>
@@ -11492,15 +11671,100 @@ body.research-question-dialog-open .android-beta-prompt,
     return value;
   });
 
+  const voteIndexCache = new WeakMap();
+
+  function voteRecordId(vote) {
+    const value = vote?.id;
+    return value === undefined || value === null || value === "" ? "" : String(value);
+  }
+
+  function voteVisitorKey(vote) {
+    return String(vote?.visitor_key || "");
+  }
+
+  function buildStoryVoteIndex(votes = []) {
+    const source = Array.isArray(votes) ? votes : [];
+    const records = [];
+    const idPositions = new Map();
+    const visitorPositions = new Map();
+    source.filter(Boolean).forEach(vote => {
+      const id = voteRecordId(vote);
+      const visitor = voteVisitorKey(vote);
+      const idPosition = id ? idPositions.get(id) : undefined;
+      const position = Number.isInteger(idPosition) ? idPosition : visitorPositions.get(visitor);
+      const previous = Number.isInteger(position) ? records[position] : null;
+      const record = previous ? { ...previous, ...vote } : vote;
+      const nextPosition = previous ? position : records.push(record) - 1;
+      if (previous) {
+        const previousId = voteRecordId(previous);
+        const previousVisitor = voteVisitorKey(previous);
+        if (previousId && idPositions.get(previousId) === position) idPositions.delete(previousId);
+        if (previousVisitor && visitorPositions.get(previousVisitor) === position) visitorPositions.delete(previousVisitor);
+        records[position] = record;
+      }
+      const nextId = voteRecordId(record);
+      const nextVisitor = voteVisitorKey(record);
+      if (nextId) idPositions.set(nextId, nextPosition);
+      if (nextVisitor) visitorPositions.set(nextVisitor, nextPosition);
+    });
+
+    const byStory = new Map();
+    const countsByStory = new Map();
+    const membersByStory = new Map();
+    const visitorsByStory = new Map();
+    records.forEach(vote => {
+      const storyId = String(relationId(vote?.story) || "");
+      if (!storyId) return;
+      if (!byStory.has(storyId)) byStory.set(storyId, []);
+      byStory.get(storyId).push(vote);
+      if (!countsByStory.has(storyId)) countsByStory.set(storyId, { up: 0, down: 0, score: 0 });
+      const counts = countsByStory.get(storyId);
+      const value = Number(vote?.vote);
+      if (value > 0) counts.up += 1;
+      else if (value < 0) counts.down += 1;
+      counts.score = counts.up - counts.down;
+      const memberId = String(relationId(vote?.member_profile) || "");
+      if (memberId) {
+        if (!membersByStory.has(storyId)) membersByStory.set(storyId, new Set());
+        membersByStory.get(storyId).add(memberId);
+      }
+      const visitor = voteVisitorKey(vote);
+      if (visitor) {
+        if (!visitorsByStory.has(storyId)) visitorsByStory.set(storyId, new Set());
+        visitorsByStory.get(storyId).add(visitor);
+      }
+    });
+    return { source, records, byStory, countsByStory, membersByStory, visitorsByStory };
+  }
+
+  function storyVoteIndex(votes = []) {
+    if (votes?.byStory instanceof Map) return votes;
+    if (!Array.isArray(votes)) return buildStoryVoteIndex([]);
+    let index = voteIndexCache.get(votes);
+    if (!index) {
+      index = buildStoryVoteIndex(votes);
+      voteIndexCache.set(votes, index);
+    }
+    return index;
+  }
+
+  function invalidateStoryVoteIndex(votes = []) {
+    if (Array.isArray(votes)) voteIndexCache.delete(votes);
+  }
+
   function storyVotes(story, votes = []) {
     const id = String(story?.id || "");
-    return (votes || []).filter(vote => String(relationId(vote.story)) === id);
+    if (!id) return [];
+    return storyVoteIndex(votes).byStory.get(id) || [];
   }
 
   function storyVoteCounts(story, votes = []) {
-    const matchingVotes = storyVotes(story, votes);
-    const up = matchingVotes.filter(vote => Number(vote.vote) > 0).length || Number(story?.up_votes || 0);
-    const down = matchingVotes.filter(vote => Number(vote.vote) < 0).length || Number(story?.down_votes || 0);
+    const storyId = String(story?.id || "");
+    const index = storyVoteIndex(votes);
+    const indexed = storyId ? index.countsByStory.get(storyId) : null;
+    if (indexed) return { up: indexed.up, down: indexed.down, score: indexed.score };
+    const up = Number(story?.up_votes || 0);
+    const down = Number(story?.down_votes || 0);
     return { up, down, score: up - down };
   }
 
@@ -11559,30 +11823,56 @@ body.research-question-dialog-open .android-beta-prompt,
   }
 
   function hasVisitorVote(story, votes = [], key = visitorKey()) {
-    return storyVotes(story, votes).some(vote => String(vote.visitor_key || "") === key);
+    const storyId = String(story?.id || "");
+    return Boolean(storyId && key && storyVoteIndex(votes).visitorsByStory.get(storyId)?.has(String(key)));
   }
 
   function hasMemberVote(story, votes = [], profileId) {
-    const memberId = Number(relationId(profileId));
+    const memberId = String(relationId(profileId) || "");
     if (!memberId) return false;
     const storyId = String(story?.id || "");
     const voteKey = memberVoteKey(storyId, memberId);
-    return storyVotes(story, votes).some(vote =>
-      Number(relationId(vote.member_profile)) === memberId ||
-      (voteKey && String(vote.visitor_key || "") === voteKey)
+    const index = storyVoteIndex(votes);
+    return Boolean(
+      storyId && (
+        index.membersByStory.get(storyId)?.has(memberId) ||
+        (voteKey && index.visitorsByStory.get(storyId)?.has(voteKey))
+      )
     );
   }
 
   function mergeVoteRecords(target = [], records = []) {
+    const idPositions = new Map();
+    const visitorPositions = new Map();
+    target.forEach((item, index) => {
+      const id = Number(item?.id);
+      const visitor = String(item?.visitor_key || "");
+      if (Number.isFinite(id) && id > 0) idPositions.set(id, index);
+      if (visitor) visitorPositions.set(visitor, index);
+    });
     (records || []).filter(Boolean).forEach(record => {
       const id = Number(record.id);
       const visitorKey = String(record.visitor_key || "");
-      const index = Number.isFinite(id) && id > 0
-        ? target.findIndex(item => Number(item.id) === id)
-        : target.findIndex(item => visitorKey && String(item.visitor_key || "") === visitorKey);
-      if (index >= 0) target[index] = { ...target[index], ...record };
-      else target.push(record);
+      const idIndex = Number.isFinite(id) && id > 0 ? idPositions.get(id) : undefined;
+      const index = Number.isInteger(idIndex) ? idIndex : visitorPositions.get(visitorKey);
+      if (Number.isInteger(index)) {
+        const previous = target[index] || {};
+        const previousId = Number(previous.id);
+        const previousVisitor = String(previous.visitor_key || "");
+        if (Number.isFinite(previousId) && idPositions.get(previousId) === index) idPositions.delete(previousId);
+        if (previousVisitor && visitorPositions.get(previousVisitor) === index) visitorPositions.delete(previousVisitor);
+        target[index] = { ...previous, ...record };
+        const nextId = Number(target[index].id);
+        const nextVisitor = String(target[index].visitor_key || "");
+        if (Number.isFinite(nextId) && nextId > 0) idPositions.set(nextId, index);
+        if (nextVisitor) visitorPositions.set(nextVisitor, index);
+      } else {
+        const nextIndex = target.push(record) - 1;
+        if (Number.isFinite(id) && id > 0) idPositions.set(id, nextIndex);
+        if (visitorKey) visitorPositions.set(visitorKey, nextIndex);
+      }
     });
+    invalidateStoryVoteIndex(target);
     return target;
   }
 
@@ -11590,9 +11880,14 @@ body.research-question-dialog-open .android-beta-prompt,
     const now = Number(options.now || Date.now());
     const localGraceMs = Math.max(0, Number(options.localGraceMs || 2 * 60 * 1000));
     const remoteById = new Map();
+    const currentById = new Map();
     (remote || []).filter(Boolean).forEach(story => {
       const id = String(story.id || "");
       if (id) remoteById.set(id, story);
+    });
+    (current || []).filter(Boolean).forEach(story => {
+      const id = String(story.id || "");
+      if (id) currentById.set(id, story);
     });
     const merged = Array.from(remoteById.values());
     const mergedIds = new Set(remoteById.keys());
@@ -11614,12 +11909,35 @@ body.research-question-dialog-open .android-beta-prompt,
     return merged.map(story => {
       const id = String(story.id || "");
       if (!id || !remoteById.has(id)) return story;
-      const previous = (current || []).find(item => String(item?.id || "") === id);
+      const previous = currentById.get(id);
       const next = { ...(previous || {}), ...story };
       delete next._pendingServerSync;
       delete next._pendingServerSyncUntil;
       return next;
     });
+  }
+
+  function storyStateSignature(stories = [], votes = []) {
+    const storyPart = (stories || []).map(story => [
+      story?.id,
+      story?.status,
+      story?.expires_at,
+      story?.permanent,
+      story?.admin_permanent,
+      story?.up_votes,
+      story?.down_votes,
+      story?.vote_score,
+      story?.created_at
+    ].map(value => String(value ?? "")).join(":")).sort().join("|");
+    const votePart = storyVoteIndex(votes).records.map(vote => [
+      vote?.id,
+      relationId(vote?.story),
+      vote?.vote,
+      vote?.visitor_key,
+      relationId(vote?.member_profile),
+      vote?.created_at
+    ].map(value => String(value ?? "")).join(":")).sort().join("|");
+    return `${storyPart}::${votePart}`;
   }
 
   function authorName(story, fallback = "Contributor") {
@@ -11645,6 +11963,9 @@ body.research-question-dialog-open .android-beta-prompt,
   }
 
   window.NLI_MAP_STORY_UTILS = {
+    buildStoryVoteIndex,
+    storyVoteIndex,
+    invalidateStoryVoteIndex,
     storyVotes,
     storyVoteCounts,
     effectiveExpiresAt,
@@ -11658,6 +11979,7 @@ body.research-question-dialog-open .android-beta-prompt,
     hasMemberVote,
     mergeStoryRecords,
     mergeVoteRecords,
+    storyStateSignature,
     authorName,
     quotedText,
     coordinates,
@@ -18327,6 +18649,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const MOBILE_STARTUP_SITE_REVEAL_DURATION_MS = 1080;
     const MOBILE_STARTUP_SITE_REVEAL_DELAY_MS = 140;
     const MOBILE_STARTUP_SITE_REVEAL_ZOOM_DELTA = 1.15;
+    const MOBILE_MAP_INITIAL_ERROR_GRACE_MS = 5000;
     const KNOWLEDGEBASE_CATEGORIES = [
       { label: "Biography", slugs: ["mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "quashawam", "elizabeth-thunder-bird-haile-shinnecock", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "sachem-warawakmy-of-the-setauket", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "john-a-strong", "nathan-jeffrey-cuffee", "samson-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "penhawitz-sachem-of-the-canarsie", "stephen-talkhouse-pharoah", "nasseconset-sachem-of-the-nissequogue", "keeossechok-sachem-of-the-secatogue", "sunksquaws-and-indigenous-womens-leadership"] },
       { label: "Tribal Nations and Communities", entries: [["wiki", "native-long-island-overview"], ["wiki", "continued-indigenous-presence-today"], ["wiki", "the-tribes-of-long-island"], ["wiki", "western-long-island-native-communities"], ["wiki", "central-long-island-native-communities"], ["wiki", "eastern-long-island-native-communities"], ["wiki", "myth-of-the-thirteen-tribes"], ["site", "montaukett-ancestral-land"], ["site", "shinnecock-indian-reservation"], ["site", "unkechaug-indian-reservation"], ["site", "corchaug-tribe"], ["site", "manhansack-aqua-quash-awamock"], ["site", "setauket-ancestral-land"], ["site", "nissaquogue"], ["site", "matinecock"], ["site", "secatogues"], ["site", "massapequas"], ["site", "merricks"], ["site", "rockaways"], ["site", "canarsie"]] },
@@ -18770,6 +19093,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const MAP_STORY_BASE_LIFETIME_MS = SHARED_MAP_STORY.baseLifetimeMs || 24 * 60 * 60 * 1000;
     const MAP_STORY_VOTE_HOUR_MS = SHARED_MAP_STORY.voteHourMs || 60 * 60 * 1000;
     const MAP_STORY_PERMANENT_SCORE = SHARED_MAP_STORY.permanentScore || 10;
+    const MAP_STORY_REFRESH_INTERVAL_MS = Math.max(60000, Number(SHARED_MAP_STORY.refreshIntervalMs || 5 * 60 * 1000));
     const DEFAULT_LAST_EDITED_LABEL = "10/01/2018";
     const MAP_STORY_PROMPTS = SHARED_MAP_STORY.prompts || [
       { key: "indigenous_memory", label: "Share a story from this place", help: "A place, view, object, plant, shoreline, or building that makes you think about Native history and presence." },
@@ -18932,6 +19256,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       siteSuggestions: [],
       mapStories: [],
       mapStoryVotes: [],
+      mapStoryLastRefreshAt: 0,
+      mapStoryRefreshPromise: null,
       languageQuizAttempts: [],
       profileLoginRewards: [],
       profileFollows: [],
@@ -19318,7 +19644,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         basemap: "outdoors",
         showPins: true,
         showShapes: true,
-        showBiographyPaths: false,
+        showBiographyPaths: saved.biographyPathsPreferenceSet === true
+          ? saved.showBiographyPaths === true
+          : true,
+        biographyPathsPreferenceSet: saved.biographyPathsPreferenceSet === true,
         layerCategories: {},
         eraCategories: {},
         ...saved
@@ -21684,8 +22013,20 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         communityRequest(() => fetchJson(`/items/mobile_site_visits?limit=80&sort=-visited_at&fields=${PUBLIC_VISIT_FIELDS}`, { cacheKey: "mobile-site-visits", ttl: 45000, fresh: false }).catch(() => currentRowsFallback(state.publicVisits)), state.publicVisits),
         siteSuggestionsRequest,
         communityRequest(() => adminAccountRegistrationsRequest().catch(() => currentRowsFallback(state.accountRegistrations)), state.accountRegistrations),
-        loadCoreData || includeCommunity ? fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.mapStories)) : Promise.resolve({ data: state.mapStories }),
-        loadCoreData || includeCommunity ? fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.mapStoryVotes)) : Promise.resolve({ data: state.mapStoryVotes }),
+        loadCoreData || includeCommunity
+          ? (state.mapStoryRefreshPromise
+              ? state.mapStoryRefreshPromise.then(() => ({ data: state.mapStories, _sharedRefresh: true }))
+              : state.mapStoryLastRefreshAt && Date.now() - state.mapStoryLastRefreshAt < 30000
+                ? Promise.resolve({ data: state.mapStories, _recent: true })
+                : fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.mapStories)))
+          : Promise.resolve({ data: state.mapStories }),
+        loadCoreData || includeCommunity
+          ? (state.mapStoryRefreshPromise
+              ? state.mapStoryRefreshPromise.then(() => ({ data: state.mapStoryVotes, _sharedRefresh: true }))
+              : state.mapStoryLastRefreshAt && Date.now() - state.mapStoryLastRefreshAt < 30000
+                ? Promise.resolve({ data: state.mapStoryVotes, _recent: true })
+                : fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.mapStoryVotes)))
+          : Promise.resolve({ data: state.mapStoryVotes }),
         signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_language_quiz_progress?limit=-1&fields=${LANGUAGE_PROGRESS_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.languageQuizAttempts)), state.languageQuizAttempts) : Promise.resolve({ ...currentRowsFallback(state.languageQuizAttempts), _skipped: true }),
         signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_profile_follows?limit=-1&fields=${FOLLOW_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileFollows)), state.profileFollows) : Promise.resolve({ ...currentRowsFallback(state.profileFollows), _skipped: true }),
         signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_profile_logins?limit=-1&fields=${LOGIN_REWARD_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileLoginRewards)), state.profileLoginRewards) : Promise.resolve({ ...currentRowsFallback(state.profileLoginRewards), _skipped: true })
@@ -21709,6 +22050,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.accountRegistrations = registrationsResponse.data || [];
       state.mapStories = MAP_STORY_UTILS.mergeStoryRecords(state.mapStories, storyResponse.data || []);
       state.mapStoryVotes = storyVotesResponse.data || [];
+      const reusedMapStorySnapshot = Boolean(
+        storyResponse._sharedRefresh || storyVotesResponse._sharedRefresh ||
+        storyResponse._recent || storyVotesResponse._recent
+      );
+      if (!reusedMapStorySnapshot && !storyResponse._fallback && !storyVotesResponse._fallback) {
+        state.mapStoryLastRefreshAt = Date.now();
+      }
       state.languageQuizAttempts = preserveActiveProfileRows(languageResponse.data, state.languageQuizAttempts);
       state.profileFollows = preserveActiveProfileRows(followsResponse.data, state.profileFollows, ["follower_profile", "following_profile"]);
       state.profileLoginRewards = preserveActiveProfileRows(loginRewardsResponse.data, state.profileLoginRewards);
@@ -21884,14 +22232,24 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
     }
 
-    async function refreshMapStories() {
+    async function refreshMapStories(options = {}) {
+      if (document.hidden && !options.force) return false;
+      if (state.mapStoryRefreshPromise) return state.mapStoryRefreshPromise;
+      const refreshPromise = (async () => {
       try {
         const [storyResponse, voteResponse] = await Promise.all([
-          fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 0, fresh: true }).catch(() => ({ data: state.mapStories || [] })),
-          fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 0, fresh: true }).catch(() => ({ data: state.mapStoryVotes || [] }))
+          fetchJson(`/items/mobile_map_stories?limit=-1&fields=${MAP_STORY_FIELDS}`, { cacheKey: "mobile-map-stories", ttl: 0, fresh: true }).catch(() => ({ data: state.mapStories || [], _fallback: true })),
+          fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 0, fresh: true }).catch(() => ({ data: state.mapStoryVotes || [], _fallback: true }))
         ]);
-        state.mapStories = MAP_STORY_UTILS.mergeStoryRecords(state.mapStories, storyResponse.data || []);
-        state.mapStoryVotes = voteResponse.data || state.mapStoryVotes || [];
+        const nextStories = MAP_STORY_UTILS.mergeStoryRecords(state.mapStories, storyResponse.data || []);
+        const nextVotes = voteResponse.data || state.mapStoryVotes || [];
+        const fresh = !storyResponse._fallback && !voteResponse._fallback;
+        if (fresh) state.mapStoryLastRefreshAt = Date.now();
+        if (!options.force && MAP_STORY_UTILS.storyStateSignature(nextStories, nextVotes) === MAP_STORY_UTILS.storyStateSignature(state.mapStories, state.mapStoryVotes)) {
+          return false;
+        }
+        state.mapStories = nextStories;
+        state.mapStoryVotes = nextVotes;
         syncMapStoryMarkers();
         if (activitySheetEl?.classList.contains("open")) renderMobileActivitySheet();
         if (notificationsSheetEl?.classList.contains("open")) renderMobileNotificationsSheet();
@@ -21902,11 +22260,19 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         console.warn("Map stories will refresh later.", error);
         return false;
       }
+      })();
+      state.mapStoryRefreshPromise = refreshPromise;
+      try {
+        return await refreshPromise;
+      } finally {
+        if (state.mapStoryRefreshPromise === refreshPromise) state.mapStoryRefreshPromise = null;
+      }
     }
 
     function startMapStoryRefresh() {
       if (state.mapStoryRefreshTimer) return;
-      state.mapStoryRefreshTimer = window.setInterval(refreshMapStories, 45000);
+      if (!state.mapStoryLastRefreshAt || Date.now() - state.mapStoryLastRefreshAt > 30000) refreshMapStories();
+      state.mapStoryRefreshTimer = window.setInterval(refreshMapStories, MAP_STORY_REFRESH_INTERVAL_MS);
     }
 
     async function refreshCommentsNow({ rerender = true } = {}) {
@@ -34832,7 +35198,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           });
           state.map.on("error", () => {
             if (!settled) {
-              if (!errorTimer) errorTimer = window.setTimeout(fallbackToOfflineIndex, 800);
+              // Android WebView can report one recoverable style or tile error
+              // while Mapbox is still assembling its first frame. Give the
+              // normal load event a bounded chance to win before replacing
+              // the map with the text-only archive.
+              if (!errorTimer) errorTimer = window.setTimeout(fallbackToOfflineIndex, MOBILE_MAP_INITIAL_ERROR_GRACE_MS);
               return;
             }
             // Mapbox can emit a tile error after `load` in Android WebView. Do
@@ -34955,12 +35325,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const totalLayerCount = primaryStates.length + mobileLayerCategoryInputs.length + mobileLayerEraInputs.length;
         const activeLayerCount = primaryCount + categoryCount + eraCount;
         const allOn = activeLayerCount === totalLayerCount;
-        const allBulkLabelsOn = primaryStates.slice(0, 3).every(Boolean)
-          && categoryCount === mobileLayerCategoryInputs.length
-          && eraCount === mobileLayerEraInputs.length;
         const bulkActionsReady = !mobileLayerMenu.open || Date.now() >= mobileLayerBulkReadyAt;
         mobileLayerMenu.querySelector("summary").textContent = allOn ? "Labels" : `Labels ${activeLayerCount}/${totalLayerCount}`;
-        if (mobileLayerEnableAllBtn) mobileLayerEnableAllBtn.disabled = allBulkLabelsOn || !bulkActionsReady;
+        if (mobileLayerEnableAllBtn) mobileLayerEnableAllBtn.disabled = allOn || !bulkActionsReady;
         if (mobileLayerDisableAllBtn) mobileLayerDisableAllBtn.disabled = activeLayerCount === 0 || !bulkActionsReady;
       }
       if (exhibitsToggleBtn) {
@@ -34982,7 +35349,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (kind === "exhibits") state.settings.exhibits = visible;
       if (kind === "pins") state.settings.showPins = visible;
       if (kind === "shapes") state.settings.showShapes = visible;
-      if (kind === "biographyPaths") state.settings.showBiographyPaths = visible;
+      if (kind === "biographyPaths") {
+        state.settings.showBiographyPaths = visible;
+        state.settings.biographyPathsPreferenceSet = true;
+      }
       if (kind === "category") {
         state.settings.layerCategories = { ...(state.settings.layerCategories || {}) };
         mobileLayerCategoryInputs.forEach(input => {
@@ -35009,10 +35379,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.settings.exhibits = nextVisible;
       state.settings.showPins = nextVisible;
       state.settings.showShapes = nextVisible;
-      // Biography paths are a separate guided-story overlay, not a label.
-      // Keep them off during either bulk label action so "Enable all" cannot
-      // cover the map with every biography route.
-      state.settings.showBiographyPaths = false;
+      state.settings.showBiographyPaths = nextVisible;
+      state.settings.biographyPathsPreferenceSet = true;
       state.settings.layerCategories = {};
       mobileLayerCategoryInputs.forEach(input => {
         state.settings.layerCategories[input.value] = nextVisible;
@@ -36662,6 +37030,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           }).catch(() => null);
         }
         refreshAndroidMapAfterSettle("android-app-visible");
+        if (state.mapStoryRefreshTimer && Date.now() - state.mapStoryLastRefreshAt >= MAP_STORY_REFRESH_INTERVAL_MS) {
+          refreshMapStories().catch(() => null);
+        }
       }
     });
     window.addEventListener("storage", event => {
@@ -36841,6 +37212,5 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
                                 </script>
 </body>
 </html>
-
 
 
