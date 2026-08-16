@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260815-indexed-search-nearby-r117";
+const expectedBuild = "20260815-indexed-story-votes-r118";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -11,6 +11,7 @@ const bundledMobileJsPath = "app/src/main/assets/assets/js/mobile-app.js";
 const bundledSharedProfileUtilsPath = "app/src/main/assets/assets/js/shared-profile-utils.js";
 const bundledSharedSearchUtilsPath = "app/src/main/assets/assets/js/shared-search-utils.js";
 const bundledSharedActivityUtilsPath = "app/src/main/assets/assets/js/shared-activity-utils.js";
+const bundledSharedMapStoryUtilsPath = "app/src/main/assets/assets/js/shared-map-story-utils.js";
 const bundledMobileCssPath = "app/src/main/assets/assets/css/mobile-app.css";
 const bundledLearningCardUtilsPath = "app/src/main/assets/assets/js/shared-learning-card-utils.js";
 const bundledResearchQuestionCssPath = "app/src/main/assets/assets/css/shared-research-question.css";
@@ -50,6 +51,7 @@ const bundledMobileJs = fs.readFileSync(bundledMobileJsPath, "utf8");
 const bundledSharedProfileUtils = fs.readFileSync(bundledSharedProfileUtilsPath, "utf8");
 const bundledSharedSearchUtils = fs.readFileSync(bundledSharedSearchUtilsPath, "utf8");
 const bundledSharedActivityUtils = fs.readFileSync(bundledSharedActivityUtilsPath, "utf8");
+const bundledSharedMapStoryUtils = fs.readFileSync(bundledSharedMapStoryUtilsPath, "utf8");
 const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8");
 const bundledLiveRuntime = `${bundledLiveApp}\n${bundledMobileJs}\n${bundledMobileCss}`;
 
@@ -61,6 +63,14 @@ if (!bundledSharedSearchUtils.includes("function prepareEntry(entry = {}, option
     || !bundledMobileJs.includes("SEARCH_UTILS.rankEntries(")
     || !bundledMobileJs.includes("const distances = state.userLocation")) {
   throw new Error("APK search and Nearby must package the shared prepared index, single-score ranking, bounded results, and distance snapshot.");
+}
+
+if (!bundledSharedMapStoryUtils.includes("const voteIndexCache = new WeakMap()")
+    || !bundledSharedMapStoryUtils.includes("function storyVoteIndex(votes = [])")
+    || !bundledSharedMapStoryUtils.includes("invalidateStoryVoteIndex(target)")
+    || bundledSharedMapStoryUtils.includes("target.findIndex")
+    || bundledSharedMapStoryUtils.includes(".filter(vote => String(relationId(vote.story))")) {
+  throw new Error("APK visitor stories must package the indexed vote lookup and linear merge implementation.");
 }
 
 if (!bundledSharedProfileUtils.includes("function profileMapActivityModel(profile = {}, activity = {}, options = {})")

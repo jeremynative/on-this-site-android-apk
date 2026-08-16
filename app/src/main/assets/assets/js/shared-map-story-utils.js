@@ -5,15 +5,52 @@
     return value;
   });
 
+  const voteIndexCache = new WeakMap();
+
+  function buildStoryVoteIndex(votes = []) {
+    const source = Array.isArray(votes) ? votes : [];
+    const byStory = new Map();
+    source.forEach(vote => {
+      const storyId = String(relationId(vote?.story) || "");
+      if (!storyId) return;
+      if (!byStory.has(storyId)) byStory.set(storyId, []);
+      byStory.get(storyId).push(vote);
+    });
+    return { source, byStory };
+  }
+
+  function storyVoteIndex(votes = []) {
+    if (votes?.byStory instanceof Map) return votes;
+    if (!Array.isArray(votes)) return buildStoryVoteIndex([]);
+    let index = voteIndexCache.get(votes);
+    if (!index) {
+      index = buildStoryVoteIndex(votes);
+      voteIndexCache.set(votes, index);
+    }
+    return index;
+  }
+
+  function invalidateStoryVoteIndex(votes = []) {
+    if (Array.isArray(votes)) voteIndexCache.delete(votes);
+  }
+
   function storyVotes(story, votes = []) {
     const id = String(story?.id || "");
-    return (votes || []).filter(vote => String(relationId(vote.story)) === id);
+    if (!id) return [];
+    return storyVoteIndex(votes).byStory.get(id) || [];
   }
 
   function storyVoteCounts(story, votes = []) {
     const matchingVotes = storyVotes(story, votes);
-    const up = matchingVotes.filter(vote => Number(vote.vote) > 0).length || Number(story?.up_votes || 0);
-    const down = matchingVotes.filter(vote => Number(vote.vote) < 0).length || Number(story?.down_votes || 0);
+    let up = 0;
+    let down = 0;
+    matchingVotes.forEach(vote => {
+      const value = Number(vote?.vote);
+      if (value > 0) up += 1;
+      else if (value < 0) down += 1;
+    });
+    up = up || Number(story?.up_votes || 0);
+    down = down || Number(story?.down_votes || 0);
     return { up, down, score: up - down };
   }
 
@@ -87,15 +124,38 @@
   }
 
   function mergeVoteRecords(target = [], records = []) {
+    const idPositions = new Map();
+    const visitorPositions = new Map();
+    target.forEach((item, index) => {
+      const id = Number(item?.id);
+      const visitor = String(item?.visitor_key || "");
+      if (Number.isFinite(id) && id > 0) idPositions.set(id, index);
+      if (visitor) visitorPositions.set(visitor, index);
+    });
     (records || []).filter(Boolean).forEach(record => {
       const id = Number(record.id);
       const visitorKey = String(record.visitor_key || "");
       const index = Number.isFinite(id) && id > 0
-        ? target.findIndex(item => Number(item.id) === id)
-        : target.findIndex(item => visitorKey && String(item.visitor_key || "") === visitorKey);
-      if (index >= 0) target[index] = { ...target[index], ...record };
-      else target.push(record);
+        ? idPositions.get(id)
+        : visitorPositions.get(visitorKey);
+      if (Number.isInteger(index)) {
+        const previous = target[index] || {};
+        const previousId = Number(previous.id);
+        const previousVisitor = String(previous.visitor_key || "");
+        if (Number.isFinite(previousId) && idPositions.get(previousId) === index) idPositions.delete(previousId);
+        if (previousVisitor && visitorPositions.get(previousVisitor) === index) visitorPositions.delete(previousVisitor);
+        target[index] = { ...previous, ...record };
+        const nextId = Number(target[index].id);
+        const nextVisitor = String(target[index].visitor_key || "");
+        if (Number.isFinite(nextId) && nextId > 0) idPositions.set(nextId, index);
+        if (nextVisitor) visitorPositions.set(nextVisitor, index);
+      } else {
+        const nextIndex = target.push(record) - 1;
+        if (Number.isFinite(id) && id > 0) idPositions.set(id, nextIndex);
+        if (visitorKey) visitorPositions.set(visitorKey, nextIndex);
+      }
     });
+    invalidateStoryVoteIndex(target);
     return target;
   }
 
@@ -103,9 +163,14 @@
     const now = Number(options.now || Date.now());
     const localGraceMs = Math.max(0, Number(options.localGraceMs || 2 * 60 * 1000));
     const remoteById = new Map();
+    const currentById = new Map();
     (remote || []).filter(Boolean).forEach(story => {
       const id = String(story.id || "");
       if (id) remoteById.set(id, story);
+    });
+    (current || []).filter(Boolean).forEach(story => {
+      const id = String(story.id || "");
+      if (id) currentById.set(id, story);
     });
     const merged = Array.from(remoteById.values());
     const mergedIds = new Set(remoteById.keys());
@@ -127,7 +192,7 @@
     return merged.map(story => {
       const id = String(story.id || "");
       if (!id || !remoteById.has(id)) return story;
-      const previous = (current || []).find(item => String(item?.id || "") === id);
+      const previous = currentById.get(id);
       const next = { ...(previous || {}), ...story };
       delete next._pendingServerSync;
       delete next._pendingServerSyncUntil;
@@ -158,6 +223,9 @@
   }
 
   window.NLI_MAP_STORY_UTILS = {
+    buildStoryVoteIndex,
+    storyVoteIndex,
+    invalidateStoryVoteIndex,
     storyVotes,
     storyVoteCounts,
     effectiveExpiresAt,
