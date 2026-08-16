@@ -16760,14 +16760,14 @@
               return;
             }
             // Mapbox can emit a tile error after `load` in Android WebView. Do
-            // not leave a live shell surrounding a blank map when it never
-            // recovers; replace only an still-unpainted canvas after a grace period.
+            // not replace an already usable map with the offline index because
+            // one tile is late; run the bounded paint stabilizer instead.
             if (postLoadRecoveryTimer) return;
             postLoadRecoveryTimer = window.setTimeout(() => {
               postLoadRecoveryTimer = null;
               if (!state.map) return;
               const tilesReady = !state.map.areTilesLoaded || state.map.areTilesLoaded();
-              if (!tilesReady) retryOrFallback(true);
+              if (!tilesReady) refreshAndroidMapAfterSettle("android-map-error");
             }, 1600);
           });
       });
