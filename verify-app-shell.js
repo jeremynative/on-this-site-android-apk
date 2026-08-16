@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260815-indexed-story-votes-r118";
+const expectedBuild = "20260815-profile-progress-detail-r119";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -97,8 +97,17 @@ if (!/function openMobileMapTap\(event\)\s*\{\s*if \(state\.profileMapMode\) ret
   throw new Error("APK public-map taps must not pass through contributor progress-map mode.");
 }
 if (!bundledMobileCss.includes("#profiles-sheet.profile-progress-active")
-    || !bundledMobileCss.includes("body.mobile-profile-map-mode .mobile-calendar-event-marker")) {
+    || !bundledMobileCss.includes("body.mobile-profile-map-mode .mobile-calendar-event-marker")
+    || !bundledMobileCss.includes(".comment.contributor-card {")) {
   throw new Error("APK contributor progress mode must keep the map/profile split and hide unrelated calendar markers.");
+}
+if (!bundledMobileJs.includes("async function ensurePublicProfileActivity(profile)")
+    || !bundledMobileJs.includes("publicProfileActivityLoaded: new Set()")
+    || !bundledMobileJs.includes("publicProfileActivityPromises: new Map()")
+    || !bundledMobileJs.includes("filter[_or][0][member_profile][_in]")
+    || !bundledMobileJs.includes("filter[_or][1][author_name][_in]")
+    || !bundledMobileJs.includes("ensurePublicProfileActivity(profile).then(updated =>")) {
+  throw new Error("APK contributor profiles must lazy-load, cache, and render contributor-targeted public activity details.");
 }
 const bundledLearningCardUtils = fs.readFileSync(bundledLearningCardUtilsPath, "utf8");
 const bundledResearchQuestionCss = fs.readFileSync(bundledResearchQuestionCssPath, "utf8");

@@ -3290,7 +3290,7 @@
       background: transparent;
     }
 
-    .contributor-card {
+    .comment.contributor-card {
       display: grid;
       grid-template-columns: 1fr;
       gap: 0;
@@ -3301,7 +3301,7 @@
       overflow: hidden;
     }
 
-    .contributor-card.is-expanded {
+    .comment.contributor-card.is-expanded {
       gap: 10px;
       padding-bottom: 10px;
     }

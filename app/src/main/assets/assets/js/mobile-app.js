@@ -849,6 +849,8 @@
       mobileActivityDrafts: new Map(),
       profileActivitySynced: false,
       profileActivitySyncPromise: null,
+      publicProfileActivityLoaded: new Set(),
+      publicProfileActivityPromises: new Map(),
       mobileStartupRendering: false,
       mobileTimelineRendered: false,
       timelineRenderLimit: TIMELINE_FEED_INITIAL_LIMIT,
@@ -6028,6 +6030,53 @@
         positionMobileMapActionButtons();
         state.map?.resize?.();
       });
+    }
+
+    function publicProfileActivityIdentity(profile) {
+      const ids = [...profileIdentityIds(profile)].map(Number).filter(Boolean).sort((a, b) => a - b);
+      if (!ids.length) return null;
+      const names = [...profileIdentityNames(profile)].filter(Boolean).sort();
+      return {
+        key: ids.join(","),
+        ids,
+        names,
+        idFilter: encodeURIComponent(ids.join(",")),
+        nameFilter: encodeURIComponent(names.join(","))
+      };
+    }
+
+    async function ensurePublicProfileActivity(profile) {
+      const identity = publicProfileActivityIdentity(profile);
+      if (!identity) return false;
+      if (state.publicProfileActivityLoaded.has(identity.key)) return true;
+      if (state.publicProfileActivityPromises.has(identity.key)) return state.publicProfileActivityPromises.get(identity.key);
+      const commentOwnerFilter = identity.names.length
+        ? `&filter[_or][0][member_profile][_in]=${identity.idFilter}&filter[_or][1][author_name][_in]=${identity.nameFilter}`
+        : `&filter[member_profile][_in]=${identity.idFilter}`;
+      const request = Promise.all([
+        fetchJson(`/items/mobile_comments?limit=-1&filter[status][_eq]=approved&filter[public_activity][_eq]=true${commentOwnerFilter}&fields=${PUBLIC_COMMENT_FIELDS}`, { fresh: true }).catch(() => null),
+        fetchJson(`/items/mobile_site_visits?limit=-1&filter[member_profile][_in]=${identity.idFilter}&fields=${PUBLIC_VISIT_FIELDS}`, { fresh: true }).catch(() => null),
+        fetchJson(`/items/mobile_plant_observations?limit=-1&filter[status][_eq]=approved&filter[member_profile][_in]=${identity.idFilter}&fields=${PLANT_OBSERVATION_FIELDS}`, { fresh: true }).catch(() => null),
+        fetchJson(`/items/site_suggestions?limit=-1&filter[author_profile][_in]=${identity.idFilter}&fields=${SITE_SUGGESTION_FIELDS}`, { fresh: true }).catch(() => null)
+      ]).then(([commentsResponse, visitsResponse, plantsResponse, suggestionsResponse]) => {
+        if (commentsResponse) {
+          COMMENT_UTILS.mergeRecordsByIdOrKey(state.publicComments, commentsResponse.data || [], "created_at");
+          state.publicComments = mergeSeededComments(state.publicComments);
+        }
+        if (visitsResponse) mergeVisitRecords(visitsResponse.data || []);
+        if (plantsResponse) mergePlantObservationRecords(plantsResponse.data || []);
+        if (suggestionsResponse) COMMENT_UTILS.mergeRecordsByIdOrKey(state.siteSuggestions, suggestionsResponse.data || [], "title");
+        state.profileActivityCache = null;
+        state.profileMapActivityCache.clear();
+        if ([commentsResponse, visitsResponse, plantsResponse, suggestionsResponse].every(Boolean)) {
+          state.publicProfileActivityLoaded.add(identity.key);
+        }
+        return [commentsResponse, visitsResponse, plantsResponse, suggestionsResponse].some(Boolean);
+      }).finally(() => {
+        state.publicProfileActivityPromises.delete(identity.key);
+      });
+      state.publicProfileActivityPromises.set(identity.key, request);
+      return request;
     }
 
     function syncLandscapeHeaderControls() {
@@ -16047,6 +16096,13 @@
       state.expandedMobileProfileKey = String(profile.id || profile.slug || profile.display_name || "");
       openSheet(profilesSheetEl);
       enterMobileProfileMapMode(profile);
+      ensurePublicProfileActivity(profile).then(updated => {
+        if (!updated || state.expandedMobileProfileKey !== String(profile.id || profile.slug || profile.display_name || "")) return;
+        if (!profilesSheetEl?.classList.contains("open") || state.profileMapMode?.profileKey !== String(profile.id || profile.slug || profile.username || "contributor")) return;
+        renderProfiles();
+        state.profileMapMode.model = mobileContributorProfileMapModel(profile);
+        renderMobileProfileProgressMap();
+      }).catch(() => {});
       window.setTimeout(() => {
         const selector = `[data-mobile-profile-card="${CSS.escape(String(profile.id || profile.slug || profile.display_name || ""))}"]`;
         const card = profilesListEl?.querySelector(selector);
