@@ -21,7 +21,10 @@
   <main class="app panel-nearby offline-shell">
     <header>
       <div class="title-row"><h1>On This Site</h1><span class="title-actions"><span class="ghost-button account-button offline-pill">Offline</span></span></div>
-      <div class="search-autocomplete"><input class="search" id="search" type="search" autocomplete="off" enterkeyhint="search" placeholder="Search sites, towns, histories" aria-label="Search saved places and histories"></div>
+      <div class="search-autocomplete">
+        <input class="search" id="search" type="search" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search" placeholder="Search sites, towns, histories" aria-label="Search saved places and histories" aria-controls="search-suggestions" aria-expanded="false">
+        <div class="search-suggestions" id="search-suggestions" role="listbox" hidden></div>
+      </div>
       <p class="mobile-header-instruction" id="offline-summary">Opening the saved offline archive...</p>
       <div class="quick-actions" aria-label="Offline app actions">
         <button class="ghost-button mobile-priority-action" id="offline-about" type="button">About</button>
@@ -67,20 +70,22 @@
   <section class="detail" id="detail" hidden aria-modal="true" role="dialog" aria-labelledby="detail-title">
     <article class="detail-card"><div class="detail-head"><div><h2 id="detail-title"></h2><p class="detail-meta" id="detail-meta"></p></div><button class="detail-close" type="button" aria-label="Close saved article">x</button></div><div class="detail-body" id="detail-body"></div></article>
   </section>
+  <script src="assets/js/shared-search-utils.js"></script>
+  <script src="assets/js/offline-archive-utils.js"></script>
   <script>
   (() => {
     const bridgeInset=name=>{try{return Math.max(0,Number(window.AndroidApp?.[name]?.())||0)}catch{return 0}};
     const syncNativeInsets=()=>{const insets={top:bridgeInset("getSafeInsetTop"),right:bridgeInset("getSafeInsetRight"),bottom:bridgeInset("getSafeInsetBottom"),left:bridgeInset("getSafeInsetLeft")};for(const [side,value] of Object.entries(insets)){document.documentElement.style.setProperty(`--native-${side}-safe`,`${Math.ceil(value)}px`)}};
     syncNativeInsets();addEventListener("nli-native-insets-changed",syncNativeInsets);
-    const PATHS=["assets/data/mobile-site-index.json","assets/data/mobile-site-geometry.json","assets/data/mobile-wiki-index.json"];
-    const LIMIT=40, B={west:-74.28,east:-71.82,south:40.48,north:41.34}, S={west:-73.42,east:-72.72};
-    const state={sites:[],wikis:[],filtered:[],visible:LIMIT,region:"all",query:"",points:[]};
-    const $=id=>document.getElementById(id), app=document.querySelector(".offline-shell"), search=$("search"), list=$("site-list"), status=$("status"), count=$("result-count"), summary=$("offline-summary"), more=$("load-more"), canvas=$("offline-map"), detail=$("detail"), title=$("detail-title"), meta=$("detail-meta"), body=$("detail-body"), mapTab=$("offline-tab-map"), savedTab=$("offline-tab-saved"), collapse=$("offline-collapse"), full=$("offline-full");
+    const PATHS=["assets/data/mobile-site-index.json","assets/data/mobile-site-centers.json","assets/data/mobile-wiki-index.json"];
+    const LIMIT=40, OFFLINE_QUERY_CACHE_LIMIT=24, B={west:-74.28,east:-71.82,south:40.48,north:41.34}, S={west:-73.42,east:-72.72}, SEARCH=window.NLI_SEARCH_UTILS, OFFLINE=window.NLI_OFFLINE_ARCHIVE_UTILS;
+    if(!SEARCH||!OFFLINE)throw Error("Saved search tools could not be opened.");
+    const state={sites:[],wikis:[],entries:[],filtered:[],visible:LIMIT,region:"all",query:"",queryCache:new Map(),points:[]};
+    const $=id=>document.getElementById(id), app=document.querySelector(".offline-shell"), search=$("search"), suggestions=$("search-suggestions"), list=$("site-list"), status=$("status"), count=$("result-count"), summary=$("offline-summary"), more=$("load-more"), canvas=$("offline-map"), detail=$("detail"), title=$("detail-title"), meta=$("detail-meta"), body=$("detail-body"), mapTab=$("offline-tab-map"), savedTab=$("offline-tab-saved"), collapse=$("offline-collapse"), full=$("offline-full");
     const esc=v=>String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
     const text=v=>{const d=document.createElement("div");d.innerHTML=String(v||"");return String(d.textContent||"").replace(/\s+/g," ").trim()};
-    const searchKey=v=>text(v).normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/['\u2018\u2019\u02bc]/gi,"").replace(/[^a-z0-9]+/gi," ").trim().toLocaleLowerCase();
-    const rows=p=>Array.isArray(p)?p:(Array.isArray(p?.rows)?p.rows:[]);
-    const region=lon=>!Number.isFinite(lon)?"all":lon<=S.west?"west":lon>=S.east?"east":"central";
+    const typeLabel=v=>String(v||"Mapped place").replace(/[_-]+/g," ").replace(/\b\w/g,letter=>letter.toUpperCase());
+    const rows=OFFLINE.rows;
     const load=async path=>{const r=await fetch(path,{cache:"no-store"});if(!r.ok)throw Error("Saved archive file could not be opened.");return r.json()};
     const pos=(lon,lat,w,h)=>[((lon-B.west)/(B.east-B.west))*w,h-((lat-B.south)/(B.north-B.south))*h];
     function draw(){
@@ -91,19 +96,21 @@
       state.points=state.filtered.filter(x=>x.kind==="site"&&Number.isFinite(x.longitude)&&Number.isFinite(x.latitude)).map(item=>{const [x,y]=pos(item.longitude,item.latitude,w,h);c.beginPath();c.arc(x,y,2.6,0,Math.PI*2);c.fillStyle="#2f6f57";c.fill();return{item,x,y}});
     }
     function filter(){
-      const q=searchKey(state.query);
-      state.filtered=[...state.sites.map(x=>({...x,kind:"site"})),...state.wikis.map(x=>({...x,kind:"wiki"}))]
-        .filter(x=>state.region==="all"||x.kind==="wiki"||x.region===state.region)
-        .filter(x=>!q||searchKey(`${x.title||""} ${x.summary||""} ${x.address_label||""} ${x.why_this_matters||""}`).includes(q))
-        .sort((a,b)=>{if(q){const rank=x=>{const titleKey=searchKey(x.title||"");if(titleKey===q)return 0;if(titleKey.startsWith(`${q} `)||titleKey.startsWith(q))return 1;if(titleKey.includes(` ${q}`)||titleKey.includes(q))return 2;return 3},delta=rank(a)-rank(b);if(delta)return delta}return String(a.title||"").localeCompare(String(b.title||""))});
+      state.filtered=OFFLINE.filterArchive(state.entries,{query:state.query,region:state.region,cache:state.queryCache,cacheLimit:OFFLINE_QUERY_CACHE_LIMIT,searchUtils:SEARCH});
+    }
+    function hideSuggestions(){suggestions.hidden=true;suggestions.replaceChildren();search.setAttribute("aria-expanded","false")}
+    function renderSuggestions(){
+      const query=SEARCH.queryModel(state.query);if(document.activeElement!==search||!query.normalized)return hideSuggestions();
+      const items=state.filtered.slice(0,5);if(!items.length)return hideSuggestions();
+      suggestions.innerHTML=items.map((item,index)=>`<button class="search-suggestion" type="button" role="option" data-offline-search-suggestion="${index}"><strong>${esc(item.title||"Untitled")}</strong><span>${esc(item.kind==="wiki"?"Knowledgebase":typeLabel(item.site_type))}</span></button>`).join("");suggestions.hidden=false;search.setAttribute("aria-expanded","true");
     }
     function render(){
       filter();const visible=state.filtered.slice(0,state.visible);
       list.innerHTML=visible.length?visible.map((x,i)=>{
-        const source=x.kind==="wiki"?"Knowledgebase article":(x.site_type||"Mapped place"),location=x.kind==="wiki"?"Saved history":(x.address_label||"Saved map entry"),excerpt=text(x.summary||"").slice(0,260);
+        const source=x.kind==="wiki"?"Knowledgebase article":typeLabel(x.site_type),location=x.kind==="wiki"?"Saved history":(x.address_label||"Saved map entry"),excerpt=text(x.summary||"").slice(0,260);
         return `<article class="site-card learning-card nearby-feed-card" ${x.kind==="wiki"?`data-wiki-slug="${esc(x.slug||"")}"`:`data-slug="${esc(x.slug||"")}"`} data-result-index="${i}"><div class="learning-card-body"><div class="learning-card-meta"><span>${esc(source)}</span><strong>Offline</strong></div><h2><button type="button" data-result-open="${i}">${esc(x.title||"Untitled")}</button></h2><div class="learning-card-tags"><span>${esc(location)}</span></div>${excerpt?`<p class="learning-card-excerpt">${esc(excerpt)}</p>`:""}<div class="learning-card-actions"><button class="primary" type="button" data-result-open="${i}">Open saved article</button></div></div></article>`
       }).join(""):`<article class="site-card empty-state" role="status"><span class="site-copy"><h2>No saved result found</h2><p>Try a different word or area.</p></span></article>`;
-      count.textContent=`${state.filtered.length} saved`;status.textContent=state.region==="all"?`${state.sites.length} mapped places`:`${state.filtered.filter(x=>x.kind==="site").length} in this area`;more.hidden=visible.length>=state.filtered.length;more.textContent=`Show more (${state.filtered.length-visible.length} remaining)`;draw();
+      count.textContent=`${state.filtered.length} saved`;status.textContent=state.region==="all"?`${state.sites.length} mapped places`:`${state.filtered.filter(x=>x.kind==="site").length} in this area`;more.hidden=visible.length>=state.filtered.length;more.textContent=`Show more (${state.filtered.length-visible.length} remaining)`;draw();renderSuggestions();
     }
     function openDetail(detailTitle,detailMeta,detailHtml){title.textContent=detailTitle;meta.textContent=detailMeta;body.innerHTML=detailHtml;detail.hidden=false;detail.classList.add("open");detail.querySelector(".detail-card").scrollTop=0}
     function open(item){
@@ -113,12 +120,13 @@
     function showArchive({maximize=false,focusSearch=false}={}){app.classList.remove("panel-collapsed");app.classList.toggle("panel-maximized",maximize);mapTab.setAttribute("aria-pressed","false");savedTab.setAttribute("aria-pressed","true");collapse.textContent="Collapse";full.textContent=maximize?"Restore":"Full";full.setAttribute("aria-expanded",maximize?"true":"false");if(focusSearch)setTimeout(()=>search.focus({preventScroll:true}),80);setTimeout(draw,60)}
     async function start(){
       try{
-        const [sitePayload,geoPayload,wikiPayload]=await Promise.all(PATHS.map(load)),geo=new Map(rows(geoPayload).map(x=>[String(x.id),x]));
-        state.sites=rows(sitePayload).map(x=>{const g=geo.get(String(x.id)),lon=Number(g?.center?.[0]),lat=Number(g?.center?.[1]);return{...x,longitude:Number.isFinite(lon)?lon:null,latitude:Number.isFinite(lat)?lat:null,region:region(lon)}});
-        state.wikis=rows(wikiPayload);summary.textContent=`Offline archive: ${state.sites.length} listings and ${state.wikis.length} wiki articles saved. Tap a pin or search below.`;render();
+        const [sitePayload,centerPayload,wikiPayload]=await Promise.all(PATHS.map(load)),archive=OFFLINE.prepareArchive(sitePayload,centerPayload,wikiPayload,{searchUtils:SEARCH,regionBoundaries:S});
+        state.sites=archive.sites;state.wikis=archive.wikis;state.entries=archive.entries;state.queryCache.clear();summary.textContent=`Offline archive: ${state.sites.length} listings and ${state.wikis.length} wiki articles saved. Tap a pin or search below.`;render();
       }catch(error){summary.textContent="The saved archive could not be opened. Reconnect and reopen the app to refresh its offline copy.";status.textContent="Offline archive unavailable";list.innerHTML=`<article class="site-card empty-state" role="status"><span class="site-copy"><h2>Saved content could not load</h2><p>${esc(error?.message||"Unknown offline error")}</p></span></article>`}
     }
-    search.addEventListener("input",()=>{state.query=search.value.trim();state.visible=LIMIT;showArchive();render()});search.addEventListener("search",()=>{state.query=search.value.trim();state.visible=LIMIT;showArchive({maximize:true});render()});
+    const submitSearch=()=>{state.query=search.value.trim();state.visible=LIMIT;showArchive({maximize:true});render();hideSuggestions();search.blur()};
+    search.addEventListener("input",()=>{state.query=search.value.trim();state.visible=LIMIT;showArchive();render()});search.addEventListener("focus",renderSuggestions);search.addEventListener("search",submitSearch);search.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();submitSearch()}else if(event.key==="Escape")hideSuggestions()});
+    suggestions.addEventListener("pointerdown",event=>event.preventDefault());suggestions.addEventListener("click",event=>{const button=event.target.closest("[data-offline-search-suggestion]");if(!button)return;const item=state.filtered[Number(button.dataset.offlineSearchSuggestion)];if(!item)return;search.value=item.title||"";state.query=search.value;state.visible=LIMIT;render();hideSuggestions();search.focus()});
     document.querySelectorAll("[data-offline-jump]").forEach(button=>button.addEventListener("click",()=>{
       button.dataset.offlineJump==="map"?showMap():showArchive({focusSearch:button.closest("#offline-menu")!==null});button.closest("details")?.removeAttribute("open");
     }));
@@ -131,7 +139,7 @@
     $("offline-feedback").addEventListener("click",()=>openDetail("Feedback","Connection required",'<p>Feedback, comments, site suggestions, and contributions will be available after the app reconnects.</p><p class="offline-only">Your saved map and articles remain available now.</p>'));$("offline-menu-help").addEventListener("click",()=>{$("offline-menu").removeAttribute("open");$("offline-feedback").click()});
     document.querySelectorAll(".quick-actions details").forEach(menu=>menu.addEventListener("toggle",()=>{if(menu.open)document.querySelectorAll(".quick-actions details").forEach(other=>{if(other!==menu)other.removeAttribute("open")})}));
     const closeDetail=()=>{detail.classList.remove("open");detail.hidden=true};detail.querySelector(".detail-close").addEventListener("click",closeDetail);detail.addEventListener("click",e=>{if(e.target===detail)closeDetail()});addEventListener("resize",draw,{passive:true});
-    window.onAndroidBackPressed=()=>{const menu=document.querySelector(".mobile-more-menu[open]");if(menu){menu.removeAttribute("open");return true}const areas=document.querySelector(".mobile-layer-menu[open]");if(areas){areas.removeAttribute("open");return true}if(!detail.hidden){closeDetail();return true}if(!app.classList.contains("panel-collapsed")){showMap();return true}return false};
+    window.onAndroidBackPressed=()=>{if(!suggestions.hidden){hideSuggestions();return true}const menu=document.querySelector(".mobile-more-menu[open]");if(menu){menu.removeAttribute("open");return true}const areas=document.querySelector(".mobile-layer-menu[open]");if(areas){areas.removeAttribute("open");return true}if(!detail.hidden){closeDetail();return true}if(!app.classList.contains("panel-collapsed")){showMap();return true}return false};
     window.NLI_APK_OFFLINE_TEXT_MODE=true;start();
   })();
   </script>

@@ -1,12 +1,13 @@
 const fs = require("fs");
 
-const expectedBuild = "20260816-shared-site-carousel-r126";
+const expectedBuild = "20260816-offline-search-parity-r127";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
 const bundledAppPath = "app/src/main/assets/mobile-app.html";
 const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
 const lightweightOfflineAppPath = "app/src/main/assets/offline-app.html";
+const offlineArchiveUtilsPath = "app/src/main/assets/assets/js/offline-archive-utils.js";
 const bundledMobileJsPath = "app/src/main/assets/assets/js/mobile-app.js";
 const bundledSharedProfileUtilsPath = "app/src/main/assets/assets/js/shared-profile-utils.js";
 const bundledSharedSearchUtilsPath = "app/src/main/assets/assets/js/shared-search-utils.js";
@@ -36,6 +37,7 @@ const bundledMobileIndexPaths = [
 const bundledAppBytes = fs.readFileSync(bundledAppPath);
 const bundledLiveAppBytes = fs.readFileSync(bundledLiveAppPath);
 const lightweightOfflineApp = fs.readFileSync(lightweightOfflineAppPath, "utf8");
+const offlineArchiveUtils = fs.readFileSync(offlineArchiveUtilsPath, "utf8");
 const source = fs.readFileSync(mainActivityPath, "utf8");
 const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
 const manifest = fs.readFileSync(manifestPath, "utf8");
@@ -785,9 +787,12 @@ requireText("mobile-app-live.html", "Android shell must include the lightweight 
 if (!lightweightOfflineApp.includes("offline-text-mode")
     || !lightweightOfflineApp.includes("offline-map-index")
     || !lightweightOfflineApp.includes("mobile-site-index.json")
-    || !lightweightOfflineApp.includes("mobile-site-geometry.json")
+    || !lightweightOfflineApp.includes("mobile-site-centers.json")
     || !lightweightOfflineApp.includes("mobile-wiki-index.json")) {
   throw new Error("Lightweight APK fallback must render the saved map and text indexes without online application startup.");
+}
+if (lightweightOfflineApp.includes('"assets/data/mobile-site-geometry.json"')) {
+  throw new Error("Lightweight APK fallback must use the compact center index instead of parsing full polygon geometry during startup.");
 }
 for (const side of ["Top", "Right", "Bottom", "Left"]) {
   if (!lightweightOfflineApp.includes(`getSafeInset${side}`)
@@ -800,11 +805,26 @@ if (!lightweightOfflineApp.includes('addEventListener("nli-native-insets-changed
     || !lightweightOfflineApp.includes("inset:var(--app-top-safe) var(--app-right-safe) var(--app-bottom-safe) var(--app-left-safe)")) {
   throw new Error("Lightweight APK fallback must refresh native insets and keep its detail dialog inside them.");
 }
-if (!lightweightOfflineApp.includes('normalize("NFKD")')
-    || !lightweightOfflineApp.includes("\\u2018\\u2019\\u02bc")
-    || !lightweightOfflineApp.includes("searchKey(state.query)")
-    || !lightweightOfflineApp.includes("searchKey(`${x.title")) {
-  throw new Error("Lightweight APK fallback search must normalize accents, apostrophes, punctuation, and spacing for forgiving offline matches.");
+if (!lightweightOfflineApp.includes('src="assets/js/shared-search-utils.js"')
+    || !lightweightOfflineApp.includes('src="assets/js/offline-archive-utils.js"')
+    || !lightweightOfflineApp.includes("OFFLINE.prepareArchive")
+    || !lightweightOfflineApp.includes("OFFLINE.filterArchive")
+    || !lightweightOfflineApp.includes("OFFLINE_QUERY_CACHE_LIMIT=24")
+    || !offlineArchiveUtils.includes("function prepareArchive(")
+    || !offlineArchiveUtils.includes("function filterArchive(")
+    || !offlineArchiveUtils.includes("searchUtils.prepareEntry")
+    || !offlineArchiveUtils.includes("searchUtils.rankEntries")
+    || !bundledSharedSearchUtils.includes("normalize(\"NFD\")")
+    || !bundledSharedSearchUtils.includes("replace(/[^a-z0-9]+/g, \" \")")) {
+  throw new Error("Lightweight APK fallback must reuse the prepared online search model and a bounded query cache for forgiving offline matches.");
+}
+if (!lightweightOfflineApp.includes('id="search-suggestions"')
+    || !lightweightOfflineApp.includes("renderSuggestions()")
+    || !lightweightOfflineApp.includes('replace(/[_-]+/g," ")')
+    || !lightweightOfflineApp.includes('event.key==="Enter"')
+    || !lightweightOfflineApp.includes("showArchive({maximize:true})")
+    || !lightweightOfflineApp.includes("if(!suggestions.hidden){hideSuggestions();return true}")) {
+  throw new Error("Lightweight APK fallback must retain online-style autocomplete, keyboard Search submission, and Back dismissal behavior.");
 }
 if (!offlineInsetAudit.includes("getSafeInsetBottom")
     || !offlineInsetAudit.includes("result.detail.safe")

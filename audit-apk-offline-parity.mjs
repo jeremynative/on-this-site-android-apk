@@ -61,6 +61,7 @@ const result = await evaluate(`new Promise(resolve => {
         const full = document.querySelector('#offline-full');
         const search = document.querySelector('#search');
         const status = document.querySelector('#status');
+        const landscape = innerWidth > innerHeight;
         const initial = { header: rect(header), map: rect(map), tabs: rect(tabs), panel: rect(panel) };
         const sharedStylesheet = [...document.styleSheets].some(sheet => String(sheet.href || '').endsWith('/assets/css/mobile-app.css'));
         const fixedViewport = document.documentElement.scrollWidth <= innerWidth + 1
@@ -70,6 +71,9 @@ const result = await evaluate(`new Promise(resolve => {
         const stacked = initial.header.bottom <= initial.map.top + 1
           && initial.map.bottom <= initial.tabs.top + 1
           && initial.tabs.bottom <= initial.panel.top + 1;
+        const split = initial.header.right <= initial.panel.left + 1
+          && initial.map.right <= initial.panel.left + 1
+          && initial.panel.bottom <= initial.tabs.top + 1;
 
         collapse.click();
         await frame();
@@ -109,15 +113,26 @@ const result = await evaluate(`new Promise(resolve => {
         };
         document.querySelector('[data-offline-region="all"]').click();
 
+        search.focus();
         search.value = "ma's";
         search.dispatchEvent(new Event('input', { bubbles: true }));
         await frame();
         const searchTitle = document.querySelector('.learning-card h2')?.textContent?.trim() || '';
+        const suggestions = document.querySelector('#search-suggestions');
         const searchState = {
           value: search.value,
           count: document.querySelector('#result-count')?.textContent?.trim() || '',
           titles: [...document.querySelectorAll('.learning-card h2')].slice(0, 5).map(item => item.textContent.trim()),
+          suggestionsVisible: Boolean(suggestions && !suggestions.hidden),
+          suggestionTitles: [...(suggestions?.querySelectorAll('strong') || [])].map(item => item.textContent.trim()),
+          suggestionSubtitles: [...(suggestions?.querySelectorAll('span') || [])].map(item => item.textContent.trim()),
         };
+        search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await frame();
+        searchState.keyboardSubmitMaximized = app.classList.contains('panel-maximized');
+        searchState.suggestionsDismissed = Boolean(suggestions?.hidden);
+        full.click();
+        await frame();
         search.value = '';
         search.dispatchEvent(new Event('input', { bubbles: true }));
         await frame();
@@ -141,9 +156,12 @@ const result = await evaluate(`new Promise(resolve => {
         return {
           url: location.href,
           viewport: [innerWidth, innerHeight],
+          landscape,
           sharedStylesheet,
           fixedViewport,
           stacked,
+          split,
+          layoutValid: landscape ? split : stacked,
           initial,
           collapsed,
           restored,
@@ -177,24 +195,36 @@ socket.close();
 const pass = !result.timeout
   && result.sharedStylesheet
   && result.fixedViewport
-  && result.stacked
+  && result.layoutValid
   && result.hasOnlineShellStructure
   && result.lowercaseClose
   && result.collapsed.classSet
   && result.collapsed.panel.height === 0
-  && result.collapsed.map.height > result.initial.map.height
+  && (result.landscape
+    ? result.collapsed.map.width > result.initial.map.width
+    : result.collapsed.map.height > result.initial.map.height)
   && result.collapsed.label === "Open"
   && !result.restored.collapsed
   && result.restored.panel.height > 0
   && result.restored.savedPressed === "true"
   && result.maximized.classSet
-  && result.maximized.header.height === 0
-  && result.maximized.map.height === 0
-  && result.maximized.panel.height > result.initial.panel.height
+  && (result.landscape
+    ? result.maximized.header.height <= 12 && result.maximized.map.height > 0 && result.maximized.map.height <= 60
+    : result.maximized.header.height === 0 && result.maximized.map.height === 0)
+  && (result.landscape
+    ? result.maximized.panel.width > result.initial.panel.width
+    : result.maximized.panel.height > result.initial.panel.height)
   && result.maximized.expanded === "true"
   && result.region.pressed === "true"
   && /in this area$/i.test(result.region.status)
   && /ma's house/i.test(result.searchTitle)
+  && (result.landscape || (
+    result.searchState.suggestionsVisible
+    && result.searchState.suggestionTitles.some(title => /ma's house/i.test(title))
+    && result.searchState.suggestionSubtitles[0] === "Community Resource"
+  ))
+  && result.searchState.keyboardSubmitMaximized
+  && result.searchState.suggestionsDismissed
   && result.drawer.open
   && result.drawer.closeText === "x"
   && result.drawer.closeHit

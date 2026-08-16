@@ -109,6 +109,7 @@ const result = await evaluate(`(() => {
   return {
     url: location.href,
     viewport: [innerWidth, innerHeight],
+    screen: [screen.width, screen.height],
     native,
     appSafe,
     safe,
@@ -143,9 +144,18 @@ const result = await evaluate(`(() => {
 socket.close();
 
 const landscape = result.viewport[0] > result.viewport[1];
-const nativeInsetsValid = landscape
+const bridgeInsetsValid = landscape
   ? result.native.top > 0 && (result.native.right > 0 || result.native.bottom > 0 || result.native.left > 0)
   : result.native.top > 0 && result.native.bottom > 0;
+const viewportExclusion = {
+  horizontal: Math.max(0, result.screen[0] - result.viewport[0]),
+  vertical: Math.max(0, result.screen[1] - result.viewport[1])
+};
+// Some WebView/device combinations are laid out inside the system bars, so
+// Android correctly reports zero content insets. In that mode the excluded
+// screen area is the safety boundary and adding CSS padding would double it.
+const viewportAlreadyInset = viewportExclusion.horizontal >= 20 || viewportExclusion.vertical >= 20;
+const nativeInsetsValid = bridgeInsetsValid || viewportAlreadyInset;
 const propagated = ["top", "right", "bottom", "left"]
   .every(side => result.appSafe[side] + 0.5 >= result.native[side]);
 const padded = ["top", "right", "bottom", "left"]
@@ -156,6 +166,9 @@ console.log(JSON.stringify({
   targetUrl: target.url,
   readiness,
   landscape,
+  bridgeInsetsValid,
+  viewportAlreadyInset,
+  viewportExclusion,
   nativeInsetsValid,
   propagated,
   padded,
