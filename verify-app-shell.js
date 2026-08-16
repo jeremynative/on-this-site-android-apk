@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260815-hardened-profile-progress-r115";
+const expectedBuild = "20260815-indexed-search-nearby-r117";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -9,6 +9,7 @@ const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
 const lightweightOfflineAppPath = "app/src/main/assets/offline-app.html";
 const bundledMobileJsPath = "app/src/main/assets/assets/js/mobile-app.js";
 const bundledSharedProfileUtilsPath = "app/src/main/assets/assets/js/shared-profile-utils.js";
+const bundledSharedSearchUtilsPath = "app/src/main/assets/assets/js/shared-search-utils.js";
 const bundledSharedActivityUtilsPath = "app/src/main/assets/assets/js/shared-activity-utils.js";
 const bundledMobileCssPath = "app/src/main/assets/assets/css/mobile-app.css";
 const bundledLearningCardUtilsPath = "app/src/main/assets/assets/js/shared-learning-card-utils.js";
@@ -47,9 +48,20 @@ const bundledApp = bundledAppBytes.toString("utf8");
 const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
 const bundledMobileJs = fs.readFileSync(bundledMobileJsPath, "utf8");
 const bundledSharedProfileUtils = fs.readFileSync(bundledSharedProfileUtilsPath, "utf8");
+const bundledSharedSearchUtils = fs.readFileSync(bundledSharedSearchUtilsPath, "utf8");
 const bundledSharedActivityUtils = fs.readFileSync(bundledSharedActivityUtilsPath, "utf8");
 const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8");
 const bundledLiveRuntime = `${bundledLiveApp}\n${bundledMobileJs}\n${bundledMobileCss}`;
+
+if (!bundledSharedSearchUtils.includes("function prepareEntry(entry = {}, options = {})")
+    || !bundledSharedSearchUtils.includes("function rankEntries(entries = [], value, scoreEntry, options = {})")
+    || !bundledSharedSearchUtils.includes("function didYouMeanEntry(entries = [], value, matches = [], options = {})")
+    || !bundledApp.includes("function initSharedSearchUtils")
+    || !bundledMobileJs.includes("state.mobileSearchIndex = [...state.sites, ...wikiSearchEntries]")
+    || !bundledMobileJs.includes("SEARCH_UTILS.rankEntries(")
+    || !bundledMobileJs.includes("const distances = state.userLocation")) {
+  throw new Error("APK search and Nearby must package the shared prepared index, single-score ranking, bounded results, and distance snapshot.");
+}
 
 if (!bundledSharedProfileUtils.includes("function profileMapActivityModel(profile = {}, activity = {}, options = {})")
     || !bundledSharedProfileUtils.includes("function profileMapActivitySignature(collections = [])")
@@ -1383,7 +1395,9 @@ requireBundledPattern(/function\s+clearMobileSearchForResultOpen\(\)[\s\S]*?stat
 requireBundledText('listTitleTextEl.textContent = showingSearch ? "Search results" : "Nearby sites";', "Bundled Android app must label the results view clearly.");
 requireBundledPattern(/function\s+installNativeAndroidSearchWatch\(\)[\s\S]*?\/Android\/i\.test\(navigator\.userAgent\)[\s\S]*?setInterval\(\(\)\s*=>\s*\{[\s\S]*?refreshMobileSearchSuggestions\(\);[\s\S]*?scheduleSearchSync\(\);[\s\S]*?\},\s*180\)/, "Bundled Android app must poll and refresh autocomplete from native field changes.");
 requireBundledText('function mobileAutocompleteCandidates(rawQuery)', "Bundled Android app must derive autocomplete candidates from the current field query.");
-requireBundledText('normalizedSearchText: normalizeText', "Bundled Android app must include normalized mobile search text.");
+requireBundledText('state.mobileSearchIndex = [...state.sites, ...wikiSearchEntries];', "Bundled Android app must prepare one normalized site and wiki search index.");
+requireBundledPattern(/fetchMobileWikiIndexRows\(\)[\s\S]*?state\.wikiArticles\s*=\s*\(response\.data\s*\|\|\s*\[\]\)\.map\(sanitizePublicWikiArticle\)[\s\S]*?rebuildMobileSearchIndex\(\)/, "Bundled Android app must add deferred knowledgebase articles to the live search index as soon as they load.");
+requireBundledText('return mobileSearchCandidates(rawQuery);', "Bundled Android autocomplete must reuse the current indexed result cache.");
 requireBundledText('function scheduleSearchSync()', "Bundled Android app must watch mobile search value changes.");
 requireBundledText('function closeDetailForSearchResults()', "Bundled Android app must close open detail sheets before search results take over.");
 requireBundledPattern(/function\s+openMobileSearchResultsPage\(\)[\s\S]*?detailEl\?\.classList\.contains\("open"\)[\s\S]*?closeDetail\(\{\s*skipRoute:\s*true,\s*blockMapTap:\s*false\s*\}\)[\s\S]*?filterSites\(\)/, "Bundled Android search must close an open detail sheet only when results are submitted.");

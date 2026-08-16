@@ -2,6 +2,7 @@
     const SHARED_FIELDS = SHARED_CONFIG.fields || {};
     const SHARED_MAP_STORY = SHARED_CONFIG.mapStory || {};
     const SHARED_UTILS = window.NLI_SHARED_UTILS || {};
+    const SEARCH_UTILS = window.NLI_SEARCH_UTILS || {};
     const formatDate = SHARED_UTILS.formatDate;
     const SITE_UTILS = window.NLI_SITE_UTILS || {};
     const SHARED_DIRECTUS = window.NLI_DIRECTUS_CLIENT || {};
@@ -873,6 +874,9 @@
       mobilePromoPayload: null,
       researchQuestionInstance: null,
       nearbyRenderLimit: 0,
+      visitableSiteList: [],
+      mobileSearchIndex: [],
+      mobileSearchResultCache: new Map(),
       searchMapSyncTimer: null,
       searchRenderSettledTimer: null,
       searchDataVersion: 0,
@@ -3506,6 +3510,7 @@
           state.wikiArticles = (response.data || []).map(sanitizePublicWikiArticle);
           state.wikiById = new Map(state.wikiArticles.map(article => [Number(article.id), article]));
           state.wikiBySlug = new Map(state.wikiArticles.map(article => [article.slug, article]));
+          rebuildMobileSearchIndex();
           clearRelatedSiteCaches();
           updateMobileHeaderInstruction();
           return response;
@@ -3841,18 +3846,21 @@
       state.sites = repairSiteTitles(state.sites)
         .map(site => {
           const displayGeometry = siteDisplayGeometry(site);
-          return {
+          const searchText = mobileListingSearchText(site);
+          return SEARCH_UTILS.prepareEntry({
             ...site,
             displayGeometry,
             center: geometryCenter(displayGeometry),
             checkinCenter: geometryCenter(site.geojson || site.display_geojson || displayGeometry),
-            searchText: mobileListingSearchText(site).toLowerCase(),
-            normalizedSearchText: normalizeText(mobileListingSearchText(site))
-          };
+            searchText,
+            resultType: "site"
+          }, { normalizeText, searchText });
         })
         .filter(site => site.title);
       state.siteBySlug = new Map(state.sites.map(site => [site.slug || "", site]));
       state.siteById = new Map(state.sites.map(site => [Number(site.id), site]));
+      state.visitableSiteList = state.sites.filter(site => !isBroadTerritory(site));
+      rebuildMobileSearchIndex({ incrementVersion: false });
       state.linkTerms = buildInternalLinkTerms();
       state.mapSites = state.sites.filter(site => (
         site.center &&
@@ -3870,6 +3878,25 @@
       performance.measure?.("nli-mobile-sites-prepare", "nli-mobile-sites-prepare-start", "nli-mobile-sites-prepare-end");
     }
 
+    function rebuildMobileSearchIndex(options = {}) {
+      if (options.incrementVersion !== false) state.searchDataVersion += 1;
+      const wikiSearchEntries = (state.wikiArticles || []).map(article => {
+        const searchText = mobileWikiSearchText(article);
+        return SEARCH_UTILS.prepareEntry({ ...article, resultType: "wiki", searchText }, {
+          normalizeText,
+          searchText,
+          body: [article.content, article.why_this_matters].map(value => stripHtml(value || "")).join(" ")
+        });
+      });
+      state.mobileSearchIndex = [...state.sites, ...wikiSearchEntries];
+      state.mobileSearchResultCache.clear();
+      state.lastAutocompleteQuery = null;
+      state.lastAutocompleteDataVersion = -1;
+      if (document.activeElement === searchEl && activeMobileSearchValue().trim()) {
+        refreshMobileSearchSuggestions();
+      }
+    }
+
     function prepareExhibits() {
       const prepared = state.exhibits
         .map(exhibit => {
@@ -3883,13 +3910,11 @@
     }
 
     function visitableSites() {
-      return state.sites.filter(site => {
-        return !isBroadTerritory(site);
-      });
+      return state.visitableSiteList;
     }
 
     function browsableSites() {
-      return isOfflineTextMode() ? [...state.sites] : visitableSites();
+      return [...(isOfflineTextMode() ? state.sites : visitableSites())];
     }
 
     function mobileStartupSpotlightCandidates() {
@@ -3950,9 +3975,12 @@
     }
 
     function sortSites() {
+      const distances = state.userLocation
+        ? new Map(state.filtered.map(site => [site, siteDistance(site, { source: "user" })]))
+        : null;
       state.filtered.sort((a, b) => {
-        const da = siteDistance(a, { source: "user" });
-        const db = siteDistance(b, { source: "user" });
+        const da = distances?.get(a) ?? null;
+        const db = distances?.get(b) ?? null;
         if (da !== null && db !== null && Math.abs(da - db) > 0.02) return da - db;
         if (da !== null && db === null) return -1;
         if (da === null && db !== null) return 1;
@@ -3995,20 +4023,20 @@
     }
 
     function mobileSiteSearchScore(site, query) {
-      const rawQuery = String(query || "").trim().toLowerCase();
-      if (!rawQuery) return 0;
-      const queryKey = normalizeText(rawQuery);
-      const compactQuery = mobileCompactSearchKey(rawQuery);
-      const terms = queryKey.split(" ").filter(term => term.length >= 2);
-      const title = normalizeText(site.title || "");
-      const slug = normalizeText(site.slug || "");
-      const address = normalizeText(site.address_label || "");
-      const type = normalizeText(site.site_type || "");
-      const summary = normalizeText(site.summary || "");
-      const full = normalizeText(site.searchText || "");
-      const compactTitle = mobileCompactSearchKey(site.title || "");
-      const compactSlug = mobileCompactSearchKey(site.slug || "");
-      const leadingTitleTerms = title.split(" ").filter(Boolean);
+      const model = SEARCH_UTILS.queryModel(query, { normalizeText });
+      if (!model.raw) return 0;
+      const queryKey = model.normalized;
+      const compactQuery = model.compact;
+      const terms = model.terms;
+      const title = site.searchTitleKey || normalizeText(site.title || "");
+      const slug = site.searchSlugKey || normalizeText(site.slug || "");
+      const address = site.searchAddressKey || normalizeText(site.address_label || "");
+      const type = site.searchTypeKey || normalizeText(site.site_type || "");
+      const summary = site.searchSummaryKey || normalizeText(site.summary || "");
+      const full = site.normalizedSearchText || normalizeText(site.searchText || "");
+      const compactTitle = site.searchCompactTitleKey || mobileCompactSearchKey(site.title || "");
+      const compactSlug = site.searchCompactSlugKey || mobileCompactSearchKey(site.slug || "");
+      const leadingTitleTerms = site.searchLeadingTitleTerms || title.split(" ").filter(Boolean);
       let score = 0;
       // Let punctuation-free typing such as "mas" strongly identify
       // "Ma's House" instead of burying it below every title beginning Mass-.
@@ -4043,29 +4071,19 @@
       ].join(" ").toLowerCase();
     }
 
-    function mobileWikiSearchResult(article) {
-      const searchText = mobileWikiSearchText(article);
-      return {
-        ...article,
-        resultType: "wiki",
-        searchText,
-        normalizedSearchText: normalizeText(searchText)
-      };
-    }
-
     function mobileWikiSearchScore(article, query) {
-      const rawQuery = String(query || "").trim().toLowerCase();
-      if (!rawQuery) return 0;
-      const queryKey = normalizeText(rawQuery);
-      const compactQuery = mobileCompactSearchKey(rawQuery);
-      const terms = queryKey.split(" ").filter(term => term.length >= 2);
-      const title = normalizeText(article.title || "");
-      const slug = normalizeText(article.slug || "");
-      const summary = normalizeText(article.summary || "");
-      const content = normalizeText(stripHtml(article.content || ""));
-      const full = normalizeText(article.searchText || mobileWikiSearchText(article));
-      const compactTitle = mobileCompactSearchKey(article.title || "");
-      const compactSlug = mobileCompactSearchKey(article.slug || "");
+      const model = SEARCH_UTILS.queryModel(query, { normalizeText });
+      if (!model.raw) return 0;
+      const queryKey = model.normalized;
+      const compactQuery = model.compact;
+      const terms = model.terms;
+      const title = article.searchTitleKey || normalizeText(article.title || "");
+      const slug = article.searchSlugKey || normalizeText(article.slug || "");
+      const summary = article.searchSummaryKey || normalizeText(article.summary || "");
+      const content = article.searchBodyKey || normalizeText(stripHtml(article.content || ""));
+      const full = article.normalizedSearchText || normalizeText(article.searchText || mobileWikiSearchText(article));
+      const compactTitle = article.searchCompactTitleKey || mobileCompactSearchKey(article.title || "");
+      const compactSlug = article.searchCompactSlugKey || mobileCompactSearchKey(article.slug || "");
       let score = 0;
       if (compactQuery && compactTitle === compactQuery) score += 1800;
       if (compactQuery && compactTitle.startsWith(compactQuery)) score += 1400;
@@ -4091,62 +4109,29 @@
         : mobileSiteSearchScore(item, query);
     }
 
-    function mobileEditDistanceWithin(left, right, maxDistance = 3) {
-      left = normalizeText(left);
-      right = normalizeText(right);
-      if (!left || !right) return maxDistance + 1;
-      if (left === right) return 0;
-      if (Math.abs(left.length - right.length) > maxDistance) return maxDistance + 1;
-      const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
-      for (let i = 1; i <= left.length; i += 1) {
-        const current = [i];
-        let rowMin = current[0];
-        for (let j = 1; j <= right.length; j += 1) {
-          const cost = left[i - 1] === right[j - 1] ? 0 : 1;
-          const value = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost);
-          current[j] = value;
-          rowMin = Math.min(rowMin, value);
-        }
-        if (rowMin > maxDistance) return maxDistance + 1;
-        for (let j = 0; j < current.length; j += 1) previous[j] = current[j];
-      }
-      return previous[right.length];
-    }
-
     function mobileDidYouMeanSearch(query, matches = []) {
-      const queryKey = normalizeText(query);
-      if (queryKey.length < 3) return null;
-      if (matches.some(item => normalizeText(item.title || "") === queryKey || normalizeText(item.title || "").startsWith(queryKey))) return null;
-      const candidates = [];
-      const addCandidate = item => {
-        const title = String(item?.title || "").trim();
-        if (!title) return;
-        const keys = new Set([
-          title,
-          String(item?.slug || "").replace(/-/g, " "),
-          ...title.split(/\s+/).filter(word => word.length >= 4),
-          ...String(item?.slug || "").split(/[-_\s]+/).filter(word => word.length >= 4)
-        ].map(value => normalizeText(value)).filter(value => value.length >= 3));
-        let best = Infinity;
-        keys.forEach(key => {
-          if (key === queryKey) best = Math.min(best, 0);
-          else if (key.startsWith(queryKey) || queryKey.startsWith(key)) best = Math.min(best, Math.abs(key.length - queryKey.length) <= 3 ? 1 : 2);
-          else if (Math.abs(key.length - queryKey.length) <= 3) best = Math.min(best, mobileEditDistanceWithin(queryKey, key, 3));
-        });
-        if (best <= Math.max(1, Math.floor(queryKey.length / 4))) candidates.push({ item, title, score: best });
-      };
-      state.sites.forEach(addCandidate);
-      (state.wikiArticles || []).forEach(addCandidate);
-      candidates.sort((a, b) => a.score - b.score || a.title.localeCompare(b.title));
-      return candidates[0] || null;
+      const item = SEARCH_UTILS.didYouMeanEntry(state.mobileSearchIndex, query, matches, { normalizeText });
+      return item ? { item, title: item.title, score: 0 } : null;
     }
 
-    function sortSearchMatches(query) {
-      state.filtered.sort((a, b) => {
-        const scoreDelta = mobileSearchResultScore(b, query) - mobileSearchResultScore(a, query);
-        if (scoreDelta) return scoreDelta;
-        return String(a.title || "").localeCompare(String(b.title || ""));
-      });
+    function mobileSearchCandidates(rawQuery) {
+      const query = SEARCH_UTILS.queryModel(rawQuery, { normalizeText });
+      if (!query.raw) return [];
+      const cacheKey = `${state.searchDataVersion}:${query.lower}:${query.compact}`;
+      const cached = state.mobileSearchResultCache.get(cacheKey);
+      if (cached) return [...cached];
+      const matching = state.mobileSearchIndex.filter(entry => SEARCH_UTILS.entryMatches(entry, query, { normalizeText }));
+      const ranked = SEARCH_UTILS.rankEntries(
+        matching,
+        query,
+        (entry, preparedQuery) => mobileSearchResultScore(entry, preparedQuery),
+        { normalizeText }
+      ).map(result => result.entry);
+      state.mobileSearchResultCache.set(cacheKey, ranked);
+      if (state.mobileSearchResultCache.size > 24) {
+        state.mobileSearchResultCache.delete(state.mobileSearchResultCache.keys().next().value);
+      }
+      return [...ranked];
     }
 
     function defaultNearbyRenderLimit() {
@@ -4195,8 +4180,6 @@
     function filterSites() {
       const rawQuery = activeMobileSearchValue().trim();
       const query = rawQuery.toLowerCase();
-      const normalizedQuery = normalizeText(rawQuery);
-      const compactQuery = mobileCompactSearchKey(rawQuery);
       if (!query) {
         clearAddressSearch();
         state.filtered = browsableSites();
@@ -4206,23 +4189,12 @@
         syncMarkers();
         return;
       }
-      const includesSearch = item => String(item.searchText || "").includes(query)
-        || String(item.normalizedSearchText || "").includes(normalizedQuery)
-        || (compactQuery.length >= 2 && (
-          mobileCompactSearchKey(item.title || "").includes(compactQuery)
-          || mobileCompactSearchKey(item.normalizedSearchText || "").includes(compactQuery)
-        ));
-      const siteMatches = state.sites.filter(includesSearch);
-      const wikiMatches = (state.wikiArticles || [])
-        .map(mobileWikiSearchResult)
-        .filter(includesSearch);
-      const matches = [...siteMatches, ...wikiMatches];
+      const matches = mobileSearchCandidates(rawQuery);
       const placeSearch = isPlaceSearchCandidate(query, matches);
       if (placeSearch) {
         state.addressSearchMode = true;
         state.addressSearchPending = query;
         state.filtered = matches;
-        sortSearchMatches(query);
         resetNearbyRenderLimit();
         renderList();
         showAndroidSearchPreviewPanel();
@@ -4230,7 +4202,6 @@
         return;
       }
       state.filtered = matches;
-      sortSearchMatches(query);
       resetNearbyRenderLimit();
       renderList();
       showAndroidSearchPreviewPanel();
@@ -5237,23 +5208,7 @@
     }
 
     function mobileAutocompleteCandidates(rawQuery) {
-      const query = String(rawQuery || "").trim().toLowerCase();
-      const normalizedQuery = normalizeText(rawQuery);
-      const compactQuery = mobileCompactSearchKey(rawQuery);
-      if (!query) return [];
-      const includesSearch = item => String(item.searchText || "").includes(query)
-        || String(item.normalizedSearchText || "").includes(normalizedQuery)
-        || (compactQuery.length >= 2 && (
-          mobileCompactSearchKey(item.title || "").includes(compactQuery)
-          || mobileCompactSearchKey(item.normalizedSearchText || "").includes(compactQuery)
-        ));
-      return [
-        ...state.sites.filter(includesSearch),
-        ...(state.wikiArticles || []).map(mobileWikiSearchResult).filter(includesSearch)
-      ].sort((left, right) =>
-        mobileSearchResultScore(right, rawQuery) - mobileSearchResultScore(left, rawQuery)
-        || String(left.title || "").localeCompare(String(right.title || ""))
-      );
+      return mobileSearchCandidates(rawQuery);
     }
 
     function refreshMobileSearchSuggestions() {
@@ -5307,7 +5262,7 @@
       `).join("")}${visiblePlaces.map((item, index) => `
         <button class="search-suggestion place-search-suggestion" type="button" role="option" data-place-suggestion="${index}">
           <strong>${escapeHtml(item.title)}</strong>
-          <span>${escapeHtml(item.featureType === "poi" ? "Place or business" : "Long Island map result")}${item.subtitle ? ` · ${escapeHtml(item.subtitle)}` : ""}</span>
+          <span>${escapeHtml(item.featureType === "poi" ? "Place or business" : "Long Island map result")}${item.subtitle ? ` &middot; ${escapeHtml(item.subtitle)}` : ""}</span>
         </button>
       `).join("")}`;
       searchSuggestionsEl.hidden = false;
