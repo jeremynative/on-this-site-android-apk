@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260815-hardened-profile-progress-r114";
+const expectedBuild = "20260815-hardened-profile-progress-r115";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -352,7 +352,7 @@ function requireBundledPattern(pattern, message) {
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
 requireText("LOADING_COVER_MINIMUM_MS = 1500", "Android loading cover must remain visible long enough to show its Long Island progress animation.");
 requireText('showLoadingCover("Loading On This Site");', "Android cold startup must initialize the native loading animation timer before the WebView can finish.");
-requireText("var onlineReady=!offline&&loaderHidden&&!!document.querySelector('.site-card[data-slug],.site-card[data-wiki-slug]');", "Android must hand off from the native cover once the live archive content is usable, while the page-owned map shield finishes initialization.");
+requireText("var onlineReady=!offline&&shell&&loaderHidden&&/\\\\d+\\\\s+listings[\\\\s\\\\S]*loaded\\\\./i.test(liveStatus);", "Android must hand off from the native cover once the live archive status confirms that listings loaded, even when the nearby feed has no site cards yet.");
 requireText("ValueAnimator.ofFloat(0f, 1f)", "Android loading cover must animate the Long Island outline from west to east.");
 requireText("reveal.setClipBounds(new Rect(0, 0, revealedWidth, height))", "Android Long Island loader must reveal from left to right without stretching the graphic.");
 requireText("loadingProgressFill.setScaleX(Math.max(0.02f, progress))", "Android loading cover must include an unmistakable synchronized left-to-right progress track.");
