@@ -1501,7 +1501,10 @@ requireBundledText('data-nearby-show-more', "Bundled Android app must let users 
 requireBundledText('const nativeAndroid = isNativeAndroidApp();', "Bundled Android app must cache native Android startup state.");
 requireBundledText('function waitForMapbox(timeout = 12000)', "Bundled Android app must give Mapbox enough time to load inside WebView before falling back.");
 requireBundledText('const MOBILE_MAP_INITIAL_ERROR_GRACE_MS = 5000;', "Bundled Android map must tolerate a transient first-frame Mapbox error before using the text-only fallback.");
-requireBundledText('window.setTimeout(fallbackToOfflineIndex, MOBILE_MAP_INITIAL_ERROR_GRACE_MS)', "Bundled Android map error recovery must use the bounded first-frame grace window.");
+requireBundledText('const MOBILE_MAP_RECOVERY_RETRY_LIMIT = 1;', "Bundled Android map must retry one warmed-cache map attempt before using the text-only fallback.");
+requireBundledText('window.setTimeout(retryOrFallback, MOBILE_MAP_INITIAL_ERROR_GRACE_MS)', "Bundled Android map recovery must use the bounded first-frame grace window.");
+requireBundledText('initMap({ recoveryAttempt: recoveryAttempt + 1 }).then(resolve)', "Bundled Android map recovery must resolve startup through the single retry attempt.");
+requireBundledText('if (!tilesReady) retryOrFallback(true)', "Bundled Android map must retry a still-unpainted post-load canvas before using the offline index.");
 requireBundledText('if (nativeAndroid) {\n          await new Promise(resolve => window.requestAnimationFrame(resolve));\n        }\n        await openInitialRouteFromUrl();', "Bundled Android app must keep the loading screen up during native startup instead of revealing a half-built shell.");
 requireBundledText('hideLoadingScreen();', "Bundled Android app must hide loading after map startup.");
 requireBundledText('if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) refreshMapStories();', "Bundled Android app must refresh visitor stories as soon as the map is ready.");

@@ -186,6 +186,7 @@
     const MOBILE_STARTUP_SITE_REVEAL_DELAY_MS = 140;
     const MOBILE_STARTUP_SITE_REVEAL_ZOOM_DELTA = 1.15;
     const MOBILE_MAP_INITIAL_ERROR_GRACE_MS = 5000;
+    const MOBILE_MAP_RECOVERY_RETRY_LIMIT = 1;
     const KNOWLEDGEBASE_CATEGORIES = [
       { label: "Biography", slugs: ["mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "quashawam", "elizabeth-thunder-bird-haile-shinnecock", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "sachem-warawakmy-of-the-setauket", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "john-a-strong", "nathan-jeffrey-cuffee", "samson-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "penhawitz-sachem-of-the-canarsie", "stephen-talkhouse-pharoah", "nasseconset-sachem-of-the-nissequogue", "keeossechok-sachem-of-the-secatogue", "sunksquaws-and-indigenous-womens-leadership"] },
       { label: "Tribal Nations and Communities", entries: [["wiki", "native-long-island-overview"], ["wiki", "continued-indigenous-presence-today"], ["wiki", "the-tribes-of-long-island"], ["wiki", "western-long-island-native-communities"], ["wiki", "central-long-island-native-communities"], ["wiki", "eastern-long-island-native-communities"], ["wiki", "myth-of-the-thirteen-tribes"], ["site", "montaukett-ancestral-land"], ["site", "shinnecock-indian-reservation"], ["site", "unkechaug-indian-reservation"], ["site", "corchaug-tribe"], ["site", "manhansack-aqua-quash-awamock"], ["site", "setauket-ancestral-land"], ["site", "nissaquogue"], ["site", "matinecock"], ["site", "secatogues"], ["site", "massapequas"], ["site", "merricks"], ["site", "rockaways"], ["site", "canarsie"]] },
@@ -16660,7 +16661,8 @@
       state.storyRecorder = null;
     }
 
-    async function initMap() {
+    async function initMap(options = {}) {
+      const recoveryAttempt = Math.max(0, Number(options.recoveryAttempt || 0));
       setLoadingMessage("Drawing the mobile map.");
       if (isOfflineTextMode()) {
         renderOfflineMapIndex();
@@ -16700,18 +16702,34 @@
           let settled = false;
           let errorTimer = null;
           let postLoadRecoveryTimer = null;
+          const clearMapAttempt = () => {
+            if (errorTimer) window.clearTimeout(errorTimer);
+            if (postLoadRecoveryTimer) window.clearTimeout(postLoadRecoveryTimer);
+            try { state.map?.remove(); } catch {}
+            state.map = null;
+          };
           const fallbackToOfflineIndex = (allowAfterLoad = false) => {
             if (settled && !allowAfterLoad) return;
             settled = true;
-            if (errorTimer) window.clearTimeout(errorTimer);
-            if (postLoadRecoveryTimer) window.clearTimeout(postLoadRecoveryTimer);
-          try { state.map?.remove(); } catch {}
-          state.map = null;
-          renderOfflineMapIndex();
-          statusEl.textContent = `${state.filtered.length || state.sites.length} saved places`;
-          showBanner("The map could not load, so saved places are still available below.");
-          resolve(false);
-        };
+            clearMapAttempt();
+            renderOfflineMapIndex();
+            statusEl.textContent = `${state.filtered.length || state.sites.length} saved places`;
+            showBanner("The map could not load, so saved places are still available below.");
+            resolve(false);
+          };
+          const retryOrFallback = (allowAfterLoad = false) => {
+            if (settled && !allowAfterLoad) return;
+            if (recoveryAttempt >= MOBILE_MAP_RECOVERY_RETRY_LIMIT) {
+              fallbackToOfflineIndex(allowAfterLoad);
+              return;
+            }
+            settled = true;
+            clearMapAttempt();
+            document.getElementById("map")?.replaceChildren();
+            window.setTimeout(() => {
+              initMap({ recoveryAttempt: recoveryAttempt + 1 }).then(resolve);
+            }, 120);
+          };
         state.map.on("load", () => {
           if (settled) return;
           addPolygonLayers();
@@ -16738,7 +16756,7 @@
               // while Mapbox is still assembling its first frame. Give the
               // normal load event a bounded chance to win before replacing
               // the map with the text-only archive.
-              if (!errorTimer) errorTimer = window.setTimeout(fallbackToOfflineIndex, MOBILE_MAP_INITIAL_ERROR_GRACE_MS);
+              if (!errorTimer) errorTimer = window.setTimeout(retryOrFallback, MOBILE_MAP_INITIAL_ERROR_GRACE_MS);
               return;
             }
             // Mapbox can emit a tile error after `load` in Android WebView. Do
@@ -16749,7 +16767,7 @@
               postLoadRecoveryTimer = null;
               if (!state.map) return;
               const tilesReady = !state.map.areTilesLoaded || state.map.areTilesLoaded();
-              if (!tilesReady) fallbackToOfflineIndex(true);
+              if (!tilesReady) retryOrFallback(true);
             }, 1600);
           });
       });
