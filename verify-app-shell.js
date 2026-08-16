@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260816-biography-layer-split-r124";
+const expectedBuild = "20260816-biography-motion-lifecycle-r125";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -653,6 +653,15 @@ if (!bundledMobileJs.includes("function setAllMobileLayerVisibility(visible)")
     || !bundledMobileJs.includes("Date.now() < mobileLayerBulkReadyAt")
     || !bundledMobileJs.includes("mobileLayerBulkReadyAt = Date.now() + 400;")) {
   throw new Error("Bundled Android labels must keep biography paths and default-on icons independent, preserve explicit preferences, and include both in bulk controls.");
+}
+if (!bundledMobileJs.includes("mobileMovingMarkerPausedAt: 0")
+    || !bundledMobileJs.includes("mobileMovingMarkerPausedDurationMs: 0")
+    || !bundledMobileJs.includes("function stopMobileMovingFeatureAnimation(now = performance.now())")
+    || !bundledMobileJs.includes("window.cancelAnimationFrame(state.mobileMovingMarkerFrame)")
+    || !bundledMobileJs.includes("state.mobileMovingMarkerPausedDurationMs += Math.max(0, now - pausedAt)")
+    || !bundledMobileJs.includes("const motionNow = Math.max(0, now - (state.mobileMovingMarkerPausedDurationMs || 0))")
+    || !bundledMobileJs.includes("syncMobileMovingFeatureVisibility(performance.now())")) {
+  throw new Error("Bundled Android moving features must pause in the background and resume without rushing along their routes.");
 }
 for (const [label, document] of [
   ["bundled fallback", bundledApp]

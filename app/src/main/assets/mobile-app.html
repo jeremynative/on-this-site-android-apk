@@ -19397,6 +19397,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileMovingWhaleMarker: null,
       mobileMovingMarkerFrame: null,
       mobileMovingMarkerLastAt: 0,
+      mobileMovingMarkerPausedAt: 0,
+      mobileMovingMarkerPausedDurationMs: 0,
       mobileMovingMarkerInteractionUntil: 0,
       mapStoryRefreshTimer: null,
       passwordResetToken: ROUTE_UTILS.passwordResetTokenFromUrl(window.location),
@@ -30012,15 +30014,43 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function updateMobileMovingFeatureMarkers(now = performance.now()) {
       if (!state.map || document.hidden || isAndroidMapGestureActive() || mobileMapCameraIsInteracting() || now < (state.mobileMovingMarkerInteractionUntil || 0)) return;
+      const motionNow = Math.max(0, now - (state.mobileMovingMarkerPausedDurationMs || 0));
       for (const entry of state.mobileMovingBiographyMarkers.values()) {
-        updateMobileMovingBiographyMarker(entry.item, entry.marker, now);
+        updateMobileMovingBiographyMarker(entry.item, entry.marker, motionNow);
       }
-      updateMobileMovingDogMarker(now);
-      updateMobileMovingWhaleMarker(now);
+      updateMobileMovingDogMarker(motionNow);
+      updateMobileMovingWhaleMarker(motionNow);
+    }
+
+    function stopMobileMovingFeatureAnimation(now = performance.now()) {
+      if (state.mobileMovingMarkerFrame && window.cancelAnimationFrame) {
+        window.cancelAnimationFrame(state.mobileMovingMarkerFrame);
+      }
+      state.mobileMovingMarkerFrame = null;
+      if (!state.mobileMovingMarkerPausedAt) state.mobileMovingMarkerPausedAt = now;
+    }
+
+    function syncMobileMovingFeatureVisibility(now = performance.now()) {
+      if (document.hidden) {
+        stopMobileMovingFeatureAnimation(now);
+        return;
+      }
+      const pausedAt = Number(state.mobileMovingMarkerPausedAt || 0);
+      if (pausedAt) {
+        state.mobileMovingMarkerPausedDurationMs += Math.max(0, now - pausedAt);
+        state.mobileMovingMarkerPausedAt = 0;
+      }
+      state.mobileMovingMarkerLastAt = now;
+      updateMobileMovingFeatureMarkers(now);
+      startMobileMovingFeatureAnimation();
     }
 
     function startMobileMovingFeatureAnimation() {
       if (state.mobileMovingMarkerFrame || !window.requestAnimationFrame) return;
+      if (document.hidden) {
+        stopMobileMovingFeatureAnimation(performance.now());
+        return;
+      }
       const tick = now => {
         if (!document.hidden && now - (state.mobileMovingMarkerLastAt || 0) >= MOBILE_MOVING_MARKER_INTERVAL_MS) {
           updateMobileMovingFeatureMarkers(now);
@@ -37065,6 +37095,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       document.addEventListener(type, () => scheduleMemberProfileActivityTracking(), { passive: true });
     });
     document.addEventListener("visibilitychange", () => {
+      syncMobileMovingFeatureVisibility(performance.now());
       if (document.hidden) {
         captureAndroidLifecycleSnapshot();
         scheduleMemberProfileActivityTracking({ force: true, throttleMs: 0 });
