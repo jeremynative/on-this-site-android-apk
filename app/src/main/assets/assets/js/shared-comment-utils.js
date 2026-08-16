@@ -323,6 +323,130 @@
     };
   }
 
+  function comparableMediaUrl(value, baseUrl = window.location.href) {
+    try {
+      const parsed = new URL(String(value || ""), baseUrl);
+      return `${parsed.origin}${parsed.pathname}`.toLowerCase();
+    } catch {
+      return String(value || "").trim().toLowerCase().split(/[?#]/)[0];
+    }
+  }
+
+  function approvedCommentPhotoSlides(comments = [], listingImage = "", options = {}) {
+    const normalizeStatus = options.normalizeStatus || normalizeCommentStatus;
+    const assetUrl = typeof options.assetUrl === "function"
+      ? options.assetUrl
+      : comment => comment?.comment_image || "";
+    const snapshotUrl = typeof options.snapshotUrl === "function"
+      ? options.snapshotUrl
+      : value => value;
+    const comparableUrl = typeof options.comparableUrl === "function"
+      ? options.comparableUrl
+      : comparableMediaUrl;
+    const authorName = typeof options.authorName === "function"
+      ? options.authorName
+      : comment => comment?.author_name || "Contributor";
+    const seen = new Set([comparableUrl(listingImage)].filter(Boolean));
+    const slides = [];
+    (comments || []).forEach(comment => {
+      if (normalizeStatus(comment) !== "approved") return;
+      const source = assetUrl(comment);
+      if (!source) return;
+      const image = snapshotUrl(source, comment);
+      const comparable = comparableUrl(image);
+      if (!image || !comparable || seen.has(comparable)) return;
+      seen.add(comparable);
+      slides.push({
+        id: String(comment?.id || ""),
+        image,
+        author: authorName(comment) || "Contributor"
+      });
+    });
+    return slides;
+  }
+
+  function visibleCarouselSlides(root) {
+    if (!root) return [];
+    return [...root.querySelectorAll("[data-site-hero-slide-index]")].filter(slide => !slide.hidden);
+  }
+
+  function setCarouselIndex(root, requestedIndex) {
+    const slides = visibleCarouselSlides(root);
+    if (!slides.length) return false;
+    const normalized = ((Number(requestedIndex) % slides.length) + slides.length) % slides.length;
+    const activeSlide = slides[normalized];
+    const activeIndex = String(activeSlide.dataset.siteHeroSlideIndex || "0");
+    root.dataset.siteHeroIndex = activeIndex;
+    root.querySelectorAll("[data-site-hero-slide-index]").forEach(slide => {
+      const active = slide === activeSlide;
+      slide.classList.toggle("is-active", active);
+      slide.setAttribute("aria-hidden", String(!active));
+      if (slide.matches("button")) slide.tabIndex = active ? 0 : -1;
+    });
+    root.querySelectorAll("[data-site-hero-dot]").forEach(dot => {
+      const active = dot.dataset.siteHeroDot === activeIndex;
+      dot.classList.toggle("is-active", active);
+      dot.setAttribute("aria-pressed", String(active));
+    });
+    return true;
+  }
+
+  function advanceCarousel(root, delta = 1) {
+    const slides = visibleCarouselSlides(root);
+    if (slides.length < 2) return false;
+    const current = slides.findIndex(slide => slide.classList.contains("is-active"));
+    return setCarouselIndex(root, current + Number(delta || 0));
+  }
+
+  function bindCarouselInteractions(root, options = {}) {
+    if (!root) return false;
+    root.querySelectorAll("[data-site-hero-comment-image]").forEach(image => {
+      if (image.dataset.siteHeroErrorBound === "true") return;
+      image.dataset.siteHeroErrorBound = "true";
+      image.addEventListener("error", () => {
+        const slide = image.closest("[data-site-hero-slide-index]");
+        const failedIndex = slide?.dataset.siteHeroSlideIndex;
+        if (slide) slide.hidden = true;
+        if (failedIndex != null) {
+          [...root.querySelectorAll("[data-site-hero-dot]")]
+            .find(dot => dot.dataset.siteHeroDot === String(failedIndex))
+            ?.setAttribute("hidden", "");
+        }
+        setCarouselIndex(root, 0);
+        options.onSlidesChanged?.(root);
+      }, { once: true });
+    });
+    if (root.dataset.siteHeroInteractionsBound === "true") return true;
+    root.dataset.siteHeroInteractionsBound = "true";
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartedAt = 0;
+    root.addEventListener("touchstart", event => {
+      if (event.touches.length !== 1) return;
+      touchStartX = event.touches[0].clientX;
+      touchStartY = event.touches[0].clientY;
+      touchStartedAt = Date.now();
+    }, { passive: true });
+    root.addEventListener("touchend", event => {
+      const touch = event.changedTouches[0];
+      if (!touch || !touchStartedAt) return;
+      const deltaX = touch.clientX - touchStartX;
+      const deltaY = touch.clientY - touchStartY;
+      const elapsed = Date.now() - touchStartedAt;
+      touchStartedAt = 0;
+      if (elapsed > 1000 || Math.abs(deltaX) < 42 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.15) return;
+      advanceCarousel(root, deltaX < 0 ? 1 : -1);
+      root.dataset.siteHeroSuppressClickUntil = String(Date.now() + 500);
+      options.onRestart?.(root);
+    }, { passive: true });
+    root.addEventListener("click", event => {
+      if (Number(root.dataset.siteHeroSuppressClickUntil || 0) <= Date.now()) return;
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
+    return true;
+  }
+
   function activityThreadHtml(comments = [], options = {}) {
     const escape = options.escapeHtml || (value => String(value || ""));
     const authorName = options.authorName || (comment => comment?.author_name || "Contributor");
@@ -368,6 +492,12 @@
     voteKey,
     votePayload,
     helpfulVotePointEvent,
+    comparableMediaUrl,
+    approvedCommentPhotoSlides,
+    visibleCarouselSlides,
+    setCarouselIndex,
+    advanceCarousel,
+    bindCarouselInteractions,
     activityThreadHtml
   };
 }());

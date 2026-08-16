@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260816-biography-motion-lifecycle-r125";
+const expectedBuild = "20260816-shared-site-carousel-r126";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1573,10 +1573,11 @@ requireBundledText('mobileBiographyPathMapPinLabel(place, order)', "Bundled Andr
 requireBundledText('id: "mobile-biography-place-labels"', "Bundled Android biography travel map pins must use collision-aware map labels.");
 requireBundledText('event && (event.title || event.description || event.date_label || event.sort_key)', "Bundled Android timeline must retain public source records without a site/wiki link.");
 forbidBundledText('event.source_type && (event.source_slug || event.source_id))', "Bundled Android timeline must not hide unlinked public source records.");
-requireBundledPattern(/function\s+approvedSiteCommentPhotoSlides\(site,\s*listingImage\s*=\s*""\)[\s\S]*?commentsForSource\("site",\s*site\)[\s\S]*?normalizeCommentStatus\(comment\)\s*===\s*"approved"[\s\S]*?comment\.comment_image/, "Bundled Android site carousels must use only approved comment photos from the current site.");
+requireBundledPattern(/function\s+approvedCommentPhotoSlides\(comments[\s\S]*?normalizeStatus\(comment\)\s*!==\s*"approved"[\s\S]*?seen\.has\(comparable\)[\s\S]*?function\s+approvedSiteCommentPhotoSlides\(site,[\s\S]*?COMMENT_UTILS\.approvedCommentPhotoSlides\(commentsForSource\("site",\s*site\),\s*listingImage/, "Bundled Android site carousels must share approved-only, deduplicated photo selection.");
 requireBundledText('data-site-hero-comment="${escapeHtml(slide.id)}"', "Bundled Android comment-photo slides must link to their source comment.");
-requireBundledPattern(/function\s+startSiteHeroCarousel\([\s\S]*?siteHeroCarouselKey[\s\S]*?if\s*\(state\.siteHeroCarouselTimer\)\s*return[\s\S]*?window\.setInterval\([\s\S]*?document\.hidden\s*\|\|\s*currentRoot\.classList\.contains\("is-compact"\)[\s\S]*?setSiteHeroCarouselIndex\(currentRoot,\s*current\s*\+\s*1\)[\s\S]*?8000\)/, "Bundled Android site photo carousels must reliably rotate every eight seconds across async article rerenders unless hidden or compact.");
-requireBundledPattern(/function\s+bindSiteHeroCarouselSwipe\(root\)[\s\S]*?touchstart[\s\S]*?touchend[\s\S]*?Math\.abs\(deltaX\)\s*<\s*42[\s\S]*?deltaX\s*<\s*0\s*\?\s*1\s*:\s*-1[\s\S]*?startSiteHeroCarousel\(root,\s*\{\s*restart:\s*true\s*\}\)/, "Bundled Android site photo carousels must support left and right touch swipes and restart their timer after manual input.");
+requireBundledPattern(/function\s+bindCarouselInteractions\(root,[\s\S]*?siteHeroErrorBound[\s\S]*?touchstart[\s\S]*?touchend[\s\S]*?advanceCarousel\(root,\s*deltaX\s*<\s*0\s*\?\s*1\s*:\s*-1\)[\s\S]*?function\s+bindSiteHeroCarouselSwipe\(root\)[\s\S]*?COMMENT_UTILS\.bindCarouselInteractions/, "Bundled Android site photo carousels must share one swipe and failed-image listener path.");
+requireBundledPattern(/function\s+siteHeroCarouselCanAdvance\([\s\S]*?detailEl\.classList\.contains\("open"\)[\s\S]*?!document\.hidden[\s\S]*?!root\.classList\.contains\("is-compact"\)[\s\S]*?function\s+startSiteHeroCarousel\([\s\S]*?window\.setTimeout\([\s\S]*?COMMENT_UTILS\.advanceCarousel\(currentRoot,\s*1\)[\s\S]*?startSiteHeroCarousel\(currentRoot\)[\s\S]*?8000\)/, "Bundled Android site photo carousels must rotate every eight seconds only while the detail and full hero are visible.");
+requireBundledPattern(/function\s+syncDetailHeroScrollState\([\s\S]*?syncSiteHeroCarouselLifecycle\(hero\)[\s\S]*?document\.addEventListener\("visibilitychange"[\s\S]*?syncSiteHeroCarouselLifecycle\(\)/, "Bundled Android site photo carousel lifecycle must follow compact and app visibility state.");
 requireBundledPattern(/\.site-hero-carousel\.hero\s*\{[\s\S]*?touch-action:\s*pan-y;[\s\S]*?overscroll-behavior-x:\s*contain;/, "Bundled Android carousels must reserve horizontal swipes while preserving vertical article scrolling.");
 requireBundledText('jumpToQuoteComment(heroCommentSlide.dataset.siteHeroComment);', "Bundled Android comment-photo slides must jump to the exact approved comment.");
 

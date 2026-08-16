@@ -9589,31 +9589,18 @@
     }
 
     function mobileHeroComparableImageUrl(value) {
-      try {
-        const parsed = new URL(String(value || ""), window.location.href);
-        return `${parsed.origin}${parsed.pathname}`.toLowerCase();
-      } catch {
-        return String(value || "").trim().toLowerCase().split(/[?#]/)[0];
-      }
+      return COMMENT_UTILS.comparableMediaUrl(value);
     }
 
     function approvedSiteCommentPhotoSlides(site, listingImage = "") {
-      const seen = new Set([mobileHeroComparableImageUrl(listingImage)].filter(Boolean));
-      return commentsForSource("site", site)
-        .filter(comment => normalizeCommentStatus(comment) === "approved" && directusAssetUrl(comment.comment_image))
-        .map(comment => {
-          const image = mobileSnapshotImageUrl(directusAssetUrl(comment.comment_image));
-          const comparable = mobileHeroComparableImageUrl(image);
-          if (!image || !comparable || seen.has(comparable)) return null;
-          seen.add(comparable);
-          const profile = state.contributorProfiles.find(item => Number(item.id) === Number(comment.member_profile));
-          return {
-            id: String(comment.id || ""),
-            image,
-            author: profile?.display_name || comment.author_name || "Contributor"
-          };
-        })
-        .filter(Boolean);
+      const authorNames = new Map(state.contributorProfiles.map(profile => [String(profile.id || ""), profile.display_name || ""]));
+      return COMMENT_UTILS.approvedCommentPhotoSlides(commentsForSource("site", site), listingImage, {
+        normalizeStatus: normalizeCommentStatus,
+        assetUrl: comment => directusAssetUrl(comment.comment_image),
+        snapshotUrl: mobileSnapshotImageUrl,
+        comparableUrl: mobileHeroComparableImageUrl,
+        authorName: comment => authorNames.get(String(relationId(comment.member_profile))) || comment.author_name || "Contributor"
+      });
     }
 
     function siteHeroCarouselHtml(site, image, imageFallback = "") {
@@ -9646,91 +9633,67 @@
       `;
     }
 
-    function stopSiteHeroCarousel() {
-      window.clearInterval(state.siteHeroCarouselTimer);
+    function stopSiteHeroCarousel(options = {}) {
+      window.clearTimeout(state.siteHeroCarouselTimer);
       state.siteHeroCarouselTimer = null;
-      state.siteHeroCarouselKey = "";
+      if (options.keepKey !== true) state.siteHeroCarouselKey = "";
     }
 
     function setSiteHeroCarouselIndex(root, requestedIndex) {
-      if (!root) return;
-      const slides = [...root.querySelectorAll("[data-site-hero-slide-index]")].filter(slide => !slide.hidden);
-      if (!slides.length) return;
-      const normalized = ((Number(requestedIndex) % slides.length) + slides.length) % slides.length;
-      const activeSlide = slides[normalized];
-      const activeIndex = String(activeSlide.dataset.siteHeroSlideIndex || "0");
-      root.dataset.siteHeroIndex = activeIndex;
-      root.querySelectorAll("[data-site-hero-slide-index]").forEach(slide => {
-        const active = slide === activeSlide;
-        slide.classList.toggle("is-active", active);
-        slide.setAttribute("aria-hidden", String(!active));
-        if (slide.matches("button")) slide.tabIndex = active ? 0 : -1;
-      });
-      root.querySelectorAll("[data-site-hero-dot]").forEach(dot => {
-        const active = dot.dataset.siteHeroDot === activeIndex;
-        dot.classList.toggle("is-active", active);
-        dot.setAttribute("aria-pressed", String(active));
-      });
+      return COMMENT_UTILS.setCarouselIndex(root, requestedIndex);
     }
 
     function bindSiteHeroCarouselSwipe(root) {
-      if (!root || root.dataset.siteHeroSwipeBound === "true") return;
-      root.dataset.siteHeroSwipeBound = "true";
-      let touchStartX = 0;
-      let touchStartY = 0;
-      let touchStartedAt = 0;
-      root.addEventListener("touchstart", event => {
-        if (event.touches.length !== 1) return;
-        touchStartX = event.touches[0].clientX;
-        touchStartY = event.touches[0].clientY;
-        touchStartedAt = Date.now();
-      }, { passive: true });
-      root.addEventListener("touchend", event => {
-        const touch = event.changedTouches[0];
-        if (!touch || !touchStartedAt) return;
-        const deltaX = touch.clientX - touchStartX;
-        const deltaY = touch.clientY - touchStartY;
-        const elapsed = Date.now() - touchStartedAt;
-        touchStartedAt = 0;
-        if (elapsed > 1000 || Math.abs(deltaX) < 42 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.15) return;
-        const slides = [...root.querySelectorAll("[data-site-hero-slide-index]")].filter(slide => !slide.hidden);
-        const current = slides.findIndex(slide => slide.classList.contains("is-active"));
-        setSiteHeroCarouselIndex(root, current + (deltaX < 0 ? 1 : -1));
-        root.dataset.siteHeroSuppressClickUntil = String(Date.now() + 500);
-        startSiteHeroCarousel(root, { restart: true });
-      }, { passive: true });
-      root.addEventListener("click", event => {
-        if (Number(root.dataset.siteHeroSuppressClickUntil || 0) <= Date.now()) return;
-        event.preventDefault();
-        event.stopPropagation();
-      }, true);
+      return COMMENT_UTILS.bindCarouselInteractions(root, {
+        onRestart: currentRoot => startSiteHeroCarousel(currentRoot, { restart: true }),
+        onSlidesChanged: currentRoot => syncSiteHeroCarouselLifecycle(currentRoot)
+      });
     }
 
-    function startSiteHeroCarousel(root = detailBodyEl?.querySelector("[data-site-hero-carousel]") || detailHeroDockEl?.querySelector("[data-site-hero-carousel]"), options = {}) {
+    function mobileSiteHeroCarouselRoot() {
+      return detailBodyEl?.querySelector("[data-site-hero-carousel]") || detailHeroDockEl?.querySelector("[data-site-hero-carousel]");
+    }
+
+    function siteHeroCarouselCanAdvance(root = mobileSiteHeroCarouselRoot()) {
+      return Boolean(
+        root?.matches?.("[data-site-hero-carousel]") &&
+        root.isConnected &&
+        detailEl.classList.contains("open") &&
+        !document.hidden &&
+        !root.classList.contains("is-compact") &&
+        COMMENT_UTILS.visibleCarouselSlides(root).length > 1
+      );
+    }
+
+    function startSiteHeroCarousel(root = mobileSiteHeroCarouselRoot(), options = {}) {
       if (!root) return;
       bindSiteHeroCarouselSwipe(root);
-      root.querySelectorAll("[data-site-hero-comment-image]").forEach(image => image.addEventListener("error", () => {
-        const slide = image.closest("[data-site-hero-slide-index]");
-        const failedIndex = slide?.dataset.siteHeroSlideIndex;
-        if (slide) slide.hidden = true;
-        if (failedIndex != null) root.querySelector(`[data-site-hero-dot="${CSS.escape(failedIndex)}"]`)?.setAttribute("hidden", "");
-        setSiteHeroCarouselIndex(root, 0);
-      }, { once: true }));
-      if (root.querySelectorAll("[data-site-hero-slide-index]").length < 2) return;
       const carouselKey = root.dataset.siteHeroSite || "";
       if (options.restart || (state.siteHeroCarouselKey && state.siteHeroCarouselKey !== carouselKey)) {
         stopSiteHeroCarousel();
       }
       state.siteHeroCarouselKey = carouselKey;
+      if (!siteHeroCarouselCanAdvance(root)) {
+        stopSiteHeroCarousel({ keepKey: true });
+        return;
+      }
       if (state.siteHeroCarouselTimer) return;
-      state.siteHeroCarouselTimer = window.setInterval(() => {
-        const currentRoot = detailBodyEl?.querySelector("[data-site-hero-carousel]") || detailHeroDockEl?.querySelector("[data-site-hero-carousel]");
-        if (!currentRoot || document.hidden || currentRoot.classList.contains("is-compact")) return;
-        bindSiteHeroCarouselSwipe(currentRoot);
-        const slides = [...currentRoot.querySelectorAll("[data-site-hero-slide-index]")].filter(slide => !slide.hidden);
-        const current = slides.findIndex(slide => slide.classList.contains("is-active"));
-        setSiteHeroCarouselIndex(currentRoot, current + 1);
+      state.siteHeroCarouselTimer = window.setTimeout(() => {
+        state.siteHeroCarouselTimer = null;
+        const currentRoot = mobileSiteHeroCarouselRoot();
+        if (!siteHeroCarouselCanAdvance(currentRoot)) return;
+        COMMENT_UTILS.advanceCarousel(currentRoot, 1);
+        startSiteHeroCarousel(currentRoot);
       }, 8000);
+    }
+
+    function syncSiteHeroCarouselLifecycle(root = mobileSiteHeroCarouselRoot()) {
+      if (!siteHeroCarouselCanAdvance(root)) {
+        stopSiteHeroCarousel({ keepKey: true });
+        return false;
+      }
+      startSiteHeroCarousel(root);
+      return true;
     }
 
     function syncDetailHeroScrollState() {
@@ -9751,6 +9714,7 @@
         restoreDetailHeroToBody({ animate: true });
       }
       if (detailHeroDockEl.contains(hero)) hero.classList.toggle("is-compact", scrollTop > 0);
+      syncSiteHeroCarouselLifecycle(hero);
     }
 
     function animateDetailHeroMove(hero, move) {
@@ -9808,6 +9772,7 @@
     }
 
     new MutationObserver(() => {
+      if (!mobileSiteHeroCarouselRoot()) stopSiteHeroCarousel();
       if (!detailHeroHomeNode || detailHeroHomeNode.isConnected) return;
       detailHeroDockEl.querySelector(".article-sticky-hero")?.remove();
       detailHeroHomeNode = null;
@@ -12774,8 +12739,8 @@
       removeUnbundledSnapshotImages(detailBodyEl);
       detailBodyEl.scrollTop = 0;
       syncDetailHeroScrollState();
-      startSiteHeroCarousel();
       detailEl.classList.add("open");
+      startSiteHeroCarousel();
       setDetailDrawerState(options.drawerState || "half");
       detailEl.classList.toggle("plant-browse-mode", plantObservationsForSource("site", site).length > 0);
       syncMobilePanelAccessibility();
@@ -18628,6 +18593,7 @@
     });
     document.addEventListener("visibilitychange", () => {
       syncMobileMovingFeatureVisibility(performance.now());
+      syncSiteHeroCarouselLifecycle();
       if (document.hidden) {
         captureAndroidLifecycleSnapshot();
         scheduleMemberProfileActivityTracking({ force: true, throttleMs: 0 });
@@ -18658,6 +18624,7 @@
       }).catch(() => null);
     });
     window.addEventListener("pagehide", () => {
+      stopSiteHeroCarousel();
       captureAndroidLifecycleSnapshot();
       scheduleMemberProfileActivityTracking({ force: true, throttleMs: 0 });
     });
