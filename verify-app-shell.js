@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260815-island-loader-biography-r121";
+const expectedBuild = "20260816-back-navigation-lifecycle-r122";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1015,6 +1015,9 @@ if (!backHandlerMatch
     || backHandlerMatch[0].includes("webView.canGoBack()")) {
   throw new Error("Android Back must let the web UI dismiss its top layer, then confirm before exiting at the app root.");
 }
+requireBundledPattern(/function dismissMobileSheet\(sheet, options = \{\}\)[\s\S]*?sheet\.contains\(activeElement\)[\s\S]*?activeElement\.blur\?\.\(\)[\s\S]*?exitMobileProfileMapMode\(\)[\s\S]*?expandedMobileProfileKey = ""[\s\S]*?clearRoute !== false[\s\S]*?return true/, "Bundled Android sheets must share one focus-safe cleanup path that fully exits contributor progress mode.");
+requireBundledPattern(/state\.suggestionMapPickMode[\s\S]*?setSuggestionMapPickMode\(false\)[\s\S]*?openSheet\(suggestSiteSheetEl, \{ skipRoute: true \}\)[\s\S]*?return true/, "Bundled Android Back must cancel map-location picking and return to the suggestion form.");
+requireBundledPattern(/registerPanelEl && !registerPanelEl\.hidden[\s\S]*?registerPanelEl\.hidden = true[\s\S]*?passwordResetPanelEl && !passwordResetPanelEl\.hidden[\s\S]*?passwordResetPanelEl\.hidden = true/, "Bundled Android Back must dismiss nested registration and password-reset panels before closing the account sheet.");
 
 if (!releaseWorkflow.includes("GITHUB_RUN_NUMBER") || !releaseWorkflow.includes("latest_apk") || !releaseWorkflow.includes("version_code=\"$run_number\"")) {
   throw new Error("Android release workflow must keep versionCode monotonic across testing and tagged releases.");

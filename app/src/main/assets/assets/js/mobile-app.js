@@ -12820,20 +12820,31 @@
       }
     }
 
+    function dismissMobileSheet(sheet, options = {}) {
+      if (!sheet?.classList.contains("open")) return false;
+      const activeElement = document.activeElement;
+      if (activeElement && sheet.contains(activeElement)) activeElement.blur?.();
+      if (sheet === storySheetEl) {
+        closeStoryMode();
+      } else {
+        sheet.classList.remove("open");
+        if (sheet === profilesSheetEl) {
+          exitMobileProfileMapMode();
+          state.expandedMobileProfileKey = "";
+        }
+      }
+      if (options.clearRoute !== false && mobileSheetRouteKey(sheet)) clearMobileRoute();
+      syncMobilePanelAccessibility();
+      return true;
+    }
+
     window.addEventListener("popstate", () => {
       const openMoreMenu = document.querySelector(".mobile-more-menu[open]");
       if (openMoreMenu) openMoreMenu.removeAttribute("open");
       const openLayerMenu = document.querySelector(".mobile-layer-menu[open]");
       if (openLayerMenu) openLayerMenu.removeAttribute("open");
       const openSheet = document.querySelector(".sheet.open");
-      if (openSheet) {
-        if (openSheet === storySheetEl) closeStoryMode();
-        else {
-          if (openSheet === profilesSheetEl) exitMobileProfileMapMode();
-          openSheet.classList.remove("open");
-        }
-        syncMobilePanelAccessibility();
-      }
+      if (openSheet) dismissMobileSheet(openSheet, { clearRoute: false });
       const params = new URLSearchParams(window.location.search);
       const siteRoute = params.get("site");
       const wikiRoute = params.get("wiki");
@@ -12870,6 +12881,11 @@
         state.researchQuestionInstance.close?.();
         return true;
       }
+      if (state.suggestionMapPickMode) {
+        setSuggestionMapPickMode(false);
+        openSheet(suggestSiteSheetEl, { skipRoute: true });
+        return true;
+      }
       if (searchSuggestionsEl && !searchSuggestionsEl.hidden) {
         searchSuggestionsEl.hidden = true;
         searchSuggestionsEl.replaceChildren();
@@ -12896,17 +12912,16 @@
         openLayerMenu.removeAttribute("open");
         return true;
       }
-      const openSheet = document.querySelector(".sheet.open");
-      if (openSheet) {
-        if (openSheet === storySheetEl) closeStoryMode();
-        else {
-          if (openSheet === profilesSheetEl) exitMobileProfileMapMode();
-          openSheet.classList.remove("open");
-        }
-        if (mobileSheetRouteKey(openSheet)) clearMobileRoute();
-        syncMobilePanelAccessibility();
+      if (registerPanelEl && !registerPanelEl.hidden) {
+        registerPanelEl.hidden = true;
         return true;
       }
+      if (passwordResetPanelEl && !passwordResetPanelEl.hidden) {
+        passwordResetPanelEl.hidden = true;
+        return true;
+      }
+      const openSheet = document.querySelector(".sheet.open");
+      if (dismissMobileSheet(openSheet)) return true;
       if (detailEl?.classList.contains("open")) {
         closeDetail();
         return true;
@@ -18148,17 +18163,7 @@
       event.stopImmediatePropagation?.();
       markAndroidUiOverlayTap();
       button.blur?.();
-      if (sheet === storySheetEl) {
-        closeStoryMode();
-        return;
-      }
-      sheet.classList.remove("open");
-      if (sheet === profilesSheetEl) {
-        exitMobileProfileMapMode();
-        state.expandedMobileProfileKey = "";
-      }
-      if (sheet && mobileSheetRouteKey(sheet)) clearMobileRoute();
-      syncMobilePanelAccessibility();
+      dismissMobileSheet(sheet);
     }
     function showMobileProfileReview(scope, kind) {
       const comments = scope?.querySelector("[data-mobile-profile-comments]");
