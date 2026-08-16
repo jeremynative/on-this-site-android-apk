@@ -3353,9 +3353,10 @@
       display: none;
     }
 
-    #profiles-sheet.profile-progress-active {
-      height: 52dvh;
-      max-height: 52dvh;
+    #profiles-sheet.profile-progress-active,
+    #login-sheet.profile-progress-active {
+      height: 44dvh;
+      max-height: 44dvh;
       border-radius: 18px 18px 0 0;
     }
 
@@ -3364,7 +3365,8 @@
       display: none;
     }
 
-    #profiles-sheet.profile-progress-active .sheet-body {
+    #profiles-sheet.profile-progress-active .sheet-body,
+    #login-sheet.profile-progress-active .sheet-body {
       padding-top: 10px;
     }
 
@@ -3377,6 +3379,8 @@
     body.mobile-profile-map-mode .mobile-story-marker,
     body.mobile-profile-map-mode .mobile-plant-marker,
     body.mobile-profile-map-mode .mobile-biography-person-marker,
+    body.mobile-profile-map-mode .mobile-moving-biography-mapbox-icon,
+    body.mobile-profile-map-mode .mobile-moving-biography-marker,
     body.mobile-profile-map-mode .mobile-calendar-event-marker,
     body.mobile-profile-map-mode .mobile-moving-dog-marker,
     body.mobile-profile-map-mode .mobile-moving-whale-marker,
@@ -3520,7 +3524,8 @@
     }
 
     @media (orientation: landscape) and (min-width: 700px) {
-      #profiles-sheet.profile-progress-active {
+      #profiles-sheet.profile-progress-active,
+      #login-sheet.profile-progress-active {
         top: var(--app-top-safe);
         right: var(--app-right-safe);
         bottom: var(--app-bottom-safe);

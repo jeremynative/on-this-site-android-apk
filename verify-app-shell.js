@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260816-password-reset-route-r137";
+const expectedBuild = "20260816-contributor-profile-journey-r138";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -114,7 +114,7 @@ if (!bundledSharedProfileUtils.includes("function profileMapActivityModel(profil
     || !bundledSharedProfileUtils.includes("profileMapActivityModel,")) {
   throw new Error("APK contributor profiles must include the shared normalized progress-map activity model.");
 }
-if (!bundledMobileJs.includes("function enterMobileProfileMapMode(profile)")
+if (!bundledMobileJs.includes("function enterMobileProfileMapMode(profile, options = {})")
     || !bundledMobileJs.includes("function exitMobileProfileMapMode(options = {})")
     || !bundledMobileJs.includes('document.body.classList.add("mobile-profile-map-mode")')
     || !bundledMobileJs.includes("function mobileProfileAncestralLandFeatures()")
@@ -130,6 +130,7 @@ if (!/function openMobileMapTap\(event\)\s*\{\s*if \(state\.profileMapMode\) ret
   throw new Error("APK public-map taps must not pass through contributor progress-map mode.");
 }
 if (!bundledMobileCss.includes("#profiles-sheet.profile-progress-active")
+    || !bundledMobileCss.includes("#login-sheet.profile-progress-active")
     || !bundledMobileCss.includes("body.mobile-profile-map-mode .mobile-calendar-event-marker")
     || !bundledMobileCss.includes(".comment.contributor-card {")) {
   throw new Error("APK contributor progress mode must keep the map/profile split and hide unrelated calendar markers.");
@@ -174,7 +175,8 @@ if (!bundledMobileJs.includes("LOCATION_CONTROL_MAX_SCOPE_DISTANCE_MILES = 75")
 
 if (!bundledMobileJs.includes('document.addEventListener("click", closeMobileSheetFromControl, true);')
     || !bundledMobileJs.includes('if (!sheet?.classList.contains("open")) return;')
-    || !/if \(sheet === profilesSheetEl\) \{\s*exitMobileProfileMapMode\(\);\s*state\.expandedMobileProfileKey = "";\s*\}/.test(bundledMobileJs)
+    || !bundledMobileJs.includes('if (sheet === state.profileMapMode?.sheet) {\n          exitMobileProfileMapMode();\n        }')
+    || !bundledMobileJs.includes('if (sheet === profilesSheetEl) {\n          state.expandedMobileProfileKey = "";\n        }')
     || bundledMobileJs.includes('document.addEventListener("pointerdown", closeMobileSheetFromControl, true);')
     || bundledMobileJs.includes('document.addEventListener("pointerup", closeMobileSheetFromControl);')) {
   throw new Error("APK contributor profile close must consume the completed click without exposing controls underneath during pointer-down.");

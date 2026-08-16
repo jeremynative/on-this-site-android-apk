@@ -1930,6 +1930,29 @@
         points: group.items.reduce((sum, item) => sum + Number(item.points || 0), 0)
       };
     }).sort((a, b) => new Date(a.first_date || 0) - new Date(b.first_date || 0));
+    const journey = mappedItems
+      .map((item, sourceIndex) => ({ item, sourceIndex, timestamp: Date.parse(item.date_time || "") }))
+      .sort((a, b) => {
+        const aTime = Number.isFinite(a.timestamp) ? a.timestamp : Number.MAX_SAFE_INTEGER;
+        const bTime = Number.isFinite(b.timestamp) ? b.timestamp : Number.MAX_SAFE_INTEGER;
+        return aTime - bTime || a.sourceIndex - b.sourceIndex;
+      })
+      .reduce((steps, entry) => {
+        const previous = steps[steps.length - 1];
+        const samePlace = previous
+          && previous.coordinates[0] === entry.item.coordinates[0]
+          && previous.coordinates[1] === entry.item.coordinates[1];
+        if (!samePlace) steps.push({ ...entry.item, order: steps.length + 1 });
+        return steps;
+      }, []);
+    const journeySegments = journey.slice(1).map((step, index) => ({
+      order: index + 2,
+      from: journey[index].coordinates,
+      to: step.coordinates,
+      date_time: step.date_time || "",
+      title: step.title,
+      activity_type: step.activity_type
+    }));
     const counts = items.reduce((totals, item) => {
       totals[item.activity_type] = Number(totals[item.activity_type] || 0) + 1;
       return totals;
@@ -1939,7 +1962,9 @@
       items,
       mappedItems,
       groups,
-      path: groups.map(group => group.coordinates),
+      journey,
+      journeySegments,
+      path: journey.map(step => step.coordinates),
       counts,
       unmappedCount: items.length - mappedItems.length,
       empty: items.length === 0,
