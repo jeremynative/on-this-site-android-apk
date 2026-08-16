@@ -155,10 +155,7 @@
       inset: 0;
       display: block;
       overflow: hidden;
-      background: linear-gradient(90deg, #2f5a49 0%, #6e9d7c 62%, #f4c95d 100%);
-      -webkit-mask: url("../images/long-island-loading-outline.png") center / contain no-repeat;
-      mask: url("../images/long-island-loading-outline.png") center / contain no-repeat;
-      clip-path: inset(0 50% 0 50%);
+      clip-path: inset(0 100% 0 0);
       animation: loading-island-fill 2200ms cubic-bezier(.2, .74, .22, 1) infinite;
       z-index: 1;
     }
@@ -166,37 +163,27 @@
     .long-island-loader span::after {
       content: "";
       position: absolute;
-      inset: -22% -55%;
-      background: linear-gradient(90deg, transparent 18%, rgba(255, 255, 255, 0.42) 50%, transparent 82%);
-      transform: translateX(-42%);
-      animation: loading-island-sheen 1250ms ease-in-out 850ms infinite;
+      inset: 0;
+      background: url("../images/long-island-loading-outline.png") center / contain no-repeat;
+      filter: invert(31%) sepia(13%) saturate(1322%) hue-rotate(101deg) brightness(91%) contrast(87%);
     }
 
     @keyframes loading-island-fill {
       0% {
-        clip-path: inset(0 50% 0 50%);
+        clip-path: inset(0 100% 0 0);
+        opacity: 0.18;
       }
-      58%,
-      78% {
+      8% {
+        opacity: 1;
+      }
+      68%,
+      84% {
         clip-path: inset(0 0 0 0);
-      }
-      100% {
-        clip-path: inset(0 50% 0 50%);
-      }
-    }
-
-    @keyframes loading-island-sheen {
-      0% {
-        transform: translateX(-42%);
-        opacity: 0;
-      }
-      20%,
-      72% {
         opacity: 1;
       }
       100% {
-        transform: translateX(42%);
         opacity: 0;
+        clip-path: inset(0 0 0 0);
       }
     }
 

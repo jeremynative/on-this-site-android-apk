@@ -874,6 +874,7 @@
       expandedLearningCardKeys: new Set(),
       mobilePanelState: "normal",
       mobilePanelPreviousOpenState: "normal",
+      mobilePanelResizeTimer: null,
       timelineScrollTop: 0,
       nearbyScrollTop: 0,
       mobileStartupSpotlightSite: null,
@@ -881,6 +882,7 @@
       mobileStartupSpotlightReturnOnDetailClose: false,
       mobilePromoKind: "",
       mobilePromoPayload: null,
+      mobilePromoPayloadCache: null,
       researchQuestionInstance: null,
       nearbyRenderLimit: 0,
       visitableSiteList: [],
@@ -5898,7 +5900,15 @@
       try {
         localStorage.setItem("nli-mobile-panel-mode", next);
       } catch {}
-      window.setTimeout(() => state.map?.resize?.(), 80);
+      scheduleMobilePanelMapResize();
+    }
+
+    function scheduleMobilePanelMapResize() {
+      if (state.mobilePanelResizeTimer) window.clearTimeout(state.mobilePanelResizeTimer);
+      state.mobilePanelResizeTimer = window.setTimeout(() => {
+        state.mobilePanelResizeTimer = null;
+        state.map?.resize?.();
+      }, 90);
     }
 
     function selectMobilePanelTab(mode) {
@@ -5975,7 +5985,7 @@
           localStorage.setItem(MOBILE_PANEL_STATE_KEY, panelState);
         } catch {}
       }
-      window.setTimeout(() => state.map?.resize?.(), 90);
+      scheduleMobilePanelMapResize();
     }
 
     function setNearbyExpanded(expanded) {
@@ -13136,7 +13146,7 @@
       mobilePromoButtons.forEach(button => button.classList.remove("is-active"));
     }
 
-    function mobilePromoPayload(kind) {
+    function buildMobilePromoPayload(kind) {
       if (kind === "event") {
         const exhibit = upcomingMobileExhibit();
         if (!exhibit) return null;
@@ -15772,6 +15782,27 @@
         }
       }
       return null;
+    }
+
+    function mobilePromoPayload(kind) {
+      const dateKey = localDateKey();
+      const timelineEvents = state.sortedTimelineEvents;
+      const sites = state.visitableSiteList;
+      const exhibits = state.exhibits;
+      const questionOpen = Boolean(state.researchQuestionInstance?.open);
+      let cache = state.mobilePromoPayloadCache;
+      if (
+        cache?.dateKey !== dateKey
+        || cache.timelineEvents !== timelineEvents
+        || cache.sites !== sites
+        || cache.exhibits !== exhibits
+        || cache.questionOpen !== questionOpen
+      ) {
+        cache = { dateKey, timelineEvents, sites, exhibits, questionOpen, payloads: new Map() };
+        state.mobilePromoPayloadCache = cache;
+      }
+      if (!cache.payloads.has(kind)) cache.payloads.set(kind, buildMobilePromoPayload(kind));
+      return cache.payloads.get(kind) || null;
     }
 
     function revealMobileContentUpdate(item, activityItems = []) {

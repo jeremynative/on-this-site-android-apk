@@ -176,10 +176,7 @@
       inset: 0;
       display: block;
       overflow: hidden;
-      background: linear-gradient(90deg, #2f5a49 0%, #6e9d7c 62%, #f4c95d 100%);
-      -webkit-mask: url("assets/images/long-island-loading-outline.png") center / contain no-repeat;
-      mask: url("assets/images/long-island-loading-outline.png") center / contain no-repeat;
-      clip-path: inset(0 50% 0 50%);
+      clip-path: inset(0 100% 0 0);
       animation: loading-island-fill 2200ms cubic-bezier(.2, .74, .22, 1) infinite;
       z-index: 1;
     }
@@ -187,37 +184,27 @@
     .long-island-loader span::after {
       content: "";
       position: absolute;
-      inset: -22% -55%;
-      background: linear-gradient(90deg, transparent 18%, rgba(255, 255, 255, 0.42) 50%, transparent 82%);
-      transform: translateX(-42%);
-      animation: loading-island-sheen 1250ms ease-in-out 850ms infinite;
+      inset: 0;
+      background: url("assets/images/long-island-loading-outline.png") center / contain no-repeat;
+      filter: invert(31%) sepia(13%) saturate(1322%) hue-rotate(101deg) brightness(91%) contrast(87%);
     }
 
     @keyframes loading-island-fill {
       0% {
-        clip-path: inset(0 50% 0 50%);
+        clip-path: inset(0 100% 0 0);
+        opacity: 0.18;
       }
-      58%,
-      78% {
+      8% {
+        opacity: 1;
+      }
+      68%,
+      84% {
         clip-path: inset(0 0 0 0);
-      }
-      100% {
-        clip-path: inset(0 50% 0 50%);
-      }
-    }
-
-    @keyframes loading-island-sheen {
-      0% {
-        transform: translateX(-42%);
-        opacity: 0;
-      }
-      20%,
-      72% {
         opacity: 1;
       }
       100% {
-        transform: translateX(42%);
         opacity: 0;
+        clip-path: inset(0 0 0 0);
       }
     }
 
@@ -19609,6 +19596,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       expandedLearningCardKeys: new Set(),
       mobilePanelState: "normal",
       mobilePanelPreviousOpenState: "normal",
+      mobilePanelResizeTimer: null,
       timelineScrollTop: 0,
       nearbyScrollTop: 0,
       mobileStartupSpotlightSite: null,
@@ -19616,6 +19604,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileStartupSpotlightReturnOnDetailClose: false,
       mobilePromoKind: "",
       mobilePromoPayload: null,
+      mobilePromoPayloadCache: null,
       researchQuestionInstance: null,
       nearbyRenderLimit: 0,
       visitableSiteList: [],
@@ -24633,7 +24622,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       try {
         localStorage.setItem("nli-mobile-panel-mode", next);
       } catch {}
-      window.setTimeout(() => state.map?.resize?.(), 80);
+      scheduleMobilePanelMapResize();
+    }
+
+    function scheduleMobilePanelMapResize() {
+      if (state.mobilePanelResizeTimer) window.clearTimeout(state.mobilePanelResizeTimer);
+      state.mobilePanelResizeTimer = window.setTimeout(() => {
+        state.mobilePanelResizeTimer = null;
+        state.map?.resize?.();
+      }, 90);
     }
 
     function selectMobilePanelTab(mode) {
@@ -24710,7 +24707,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           localStorage.setItem(MOBILE_PANEL_STATE_KEY, panelState);
         } catch {}
       }
-      window.setTimeout(() => state.map?.resize?.(), 90);
+      scheduleMobilePanelMapResize();
     }
 
     function setNearbyExpanded(expanded) {
@@ -31871,7 +31868,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobilePromoButtons.forEach(button => button.classList.remove("is-active"));
     }
 
-    function mobilePromoPayload(kind) {
+    function buildMobilePromoPayload(kind) {
       if (kind === "event") {
         const exhibit = upcomingMobileExhibit();
         if (!exhibit) return null;
@@ -34507,6 +34504,27 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         }
       }
       return null;
+    }
+
+    function mobilePromoPayload(kind) {
+      const dateKey = localDateKey();
+      const timelineEvents = state.sortedTimelineEvents;
+      const sites = state.visitableSiteList;
+      const exhibits = state.exhibits;
+      const questionOpen = Boolean(state.researchQuestionInstance?.open);
+      let cache = state.mobilePromoPayloadCache;
+      if (
+        cache?.dateKey !== dateKey
+        || cache.timelineEvents !== timelineEvents
+        || cache.sites !== sites
+        || cache.exhibits !== exhibits
+        || cache.questionOpen !== questionOpen
+      ) {
+        cache = { dateKey, timelineEvents, sites, exhibits, questionOpen, payloads: new Map() };
+        state.mobilePromoPayloadCache = cache;
+      }
+      if (!cache.payloads.has(kind)) cache.payloads.set(kind, buildMobilePromoPayload(kind));
+      return cache.payloads.get(kind) || null;
     }
 
     function revealMobileContentUpdate(item, activityItems = []) {
