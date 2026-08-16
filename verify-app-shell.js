@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260816-content-update-focus-r136";
+const expectedBuild = "20260816-password-reset-route-r137";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1565,6 +1565,7 @@ requireBundledText('const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;', "Bundled Androi
 requireBundledText('window.AndroidApp.showNotification', "Bundled Android app must use the native notification bridge.");
 requireBundledText('https://nativelongisland.com/privacy-policy.html', "Bundled Android account screen must link to the public privacy policy.");
 requireBundledText('https://nativelongisland.com/account-deletion.html', "Bundled Android account screen must expose account and data deletion.");
+requireBundledPattern(/action:\s*"password_reset_request"[\s\S]*?reset_url:\s*ROUTE_UTILS\.passwordResetReturnUrl\(window\.location\)/, "Bundled Android password-reset requests must include the clean return route.");
 if (!bundledMobileJs.includes('const androidBridgeToken = () => String(window.__NLI_ANDROID_BRIDGE_TOKEN || "")')) {
   throw new Error("Bundled Android mobile runtime must pass the native bridge capability token.");
 }

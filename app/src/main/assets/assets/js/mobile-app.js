@@ -1564,7 +1564,11 @@
       const response = await fetch("https://nativelongisland.com/account-registration.php", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "password_reset_request", email: normalizedEmail })
+        body: JSON.stringify({
+          action: "password_reset_request",
+          email: normalizedEmail,
+          reset_url: ROUTE_UTILS.passwordResetReturnUrl(window.location)
+        })
       });
       if (!response.ok) throw new Error("Could not send reset email.");
       return true;
