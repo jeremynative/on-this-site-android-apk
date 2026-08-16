@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260816-offline-search-parity-r127";
+const expectedBuild = "20260816-lifecycle-restore-r131";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -11,6 +11,7 @@ const offlineArchiveUtilsPath = "app/src/main/assets/assets/js/offline-archive-u
 const bundledMobileJsPath = "app/src/main/assets/assets/js/mobile-app.js";
 const bundledSharedProfileUtilsPath = "app/src/main/assets/assets/js/shared-profile-utils.js";
 const bundledSharedSearchUtilsPath = "app/src/main/assets/assets/js/shared-search-utils.js";
+const bundledSharedLifecycleUtilsPath = "app/src/main/assets/assets/js/shared-lifecycle-utils.js";
 const bundledSharedActivityUtilsPath = "app/src/main/assets/assets/js/shared-activity-utils.js";
 const bundledSharedMapStoryUtilsPath = "app/src/main/assets/assets/js/shared-map-story-utils.js";
 const bundledMobileCssPath = "app/src/main/assets/assets/css/mobile-app.css";
@@ -52,6 +53,7 @@ const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
 const bundledMobileJs = fs.readFileSync(bundledMobileJsPath, "utf8");
 const bundledSharedProfileUtils = fs.readFileSync(bundledSharedProfileUtilsPath, "utf8");
 const bundledSharedSearchUtils = fs.readFileSync(bundledSharedSearchUtilsPath, "utf8");
+const bundledSharedLifecycleUtils = fs.readFileSync(bundledSharedLifecycleUtilsPath, "utf8");
 const bundledSharedActivityUtils = fs.readFileSync(bundledSharedActivityUtilsPath, "utf8");
 const bundledSharedMapStoryUtils = fs.readFileSync(bundledSharedMapStoryUtilsPath, "utf8");
 const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8");
@@ -70,6 +72,18 @@ if (!bundledSharedSearchUtils.includes("function prepareEntry(entry = {}, option
     || !bundledMobileJs.includes("SEARCH_UTILS.rankEntries(")
     || !bundledMobileJs.includes("const distances = state.userLocation")) {
   throw new Error("APK search and Nearby must package the shared prepared index, single-score ranking, bounded results, and distance snapshot.");
+}
+
+if (!bundledSharedLifecycleUtils.includes("function snapshotSignature(snapshot)")
+    || !bundledSharedLifecycleUtils.includes("function createScrollRestorer(options = {})")
+    || !bundledSharedLifecycleUtils.includes("get targetScrollTop()")
+    || !bundledApp.includes("function initSharedLifecycleUtils")
+    || !bundledMobileJs.includes("LIFECYCLE_UTILS.createScrollRestorer({")
+    || !bundledMobileJs.includes("ANDROID_LIFECYCLE_WRITE_DEDUP_MS")
+    || !bundledMobileJs.includes("function cancelAndroidLifecycleDetailScrollRestore()")
+    || !bundledMobileJs.includes("androidLifecycleDetailScrollRestore.targetScrollTop")
+    || !bundledMobileJs.includes("preserveDetailScrollTop: detailBodyEl.scrollTop")) {
+  throw new Error("APK lifecycle recovery must package stable snapshots, one cancelable scroll session, and reading-position preservation.");
 }
 
 if (!bundledSharedMapStoryUtils.includes("const voteIndexCache = new WeakMap()")
@@ -464,13 +478,27 @@ for (const lifecycleRuntime of [bundledApp, bundledLiveRuntime]) {
       || !lifecycleRuntime.includes("const activeContentKey = androidLifecycleContentKey(activeContent)")
       || !lifecycleRuntime.includes("const existingContentKey = androidLifecycleContentKey(existing?.content)")
       || !lifecycleRuntime.includes("(!activeContentKey || activeContentKey === existingContentKey)")
+      || !lifecycleRuntime.includes("androidLifecycleSnapshotIsValid(existing, now)")
+      || !lifecycleRuntime.includes("ANDROID_LIFECYCLE_WRITE_DEDUP_MS")
       || !lifecycleRuntime.includes("function restoreAndroidLifecycleDetailScroll(snapshot)")
-      || !lifecycleRuntime.includes("[150, 550, 1500, 3500].forEach(delay => window.setTimeout(apply, delay))")
-      || !lifecycleRuntime.includes("}, 8000)")
+      || !lifecycleRuntime.includes("LIFECYCLE_UTILS.createScrollRestorer({")
+      || !lifecycleRuntime.includes("function cancelAndroidLifecycleDetailScrollRestore()")
       || !lifecycleRuntime.includes("preserveDetailScrollTop: detailBodyEl.scrollTop")
-      || !lifecycleRuntime.includes("drawerState: currentDetailDrawerState()")
-      || !lifecycleRuntime.includes("if (androidLifecycleContentRestored) restoreAndroidLifecycleDetailScroll(androidLifecycleSnapshot)")) {
+      || !lifecycleRuntime.includes("filterSites({ revealPanel: false })")
+      || !lifecycleRuntime.includes("const lifecycleSnapshot = options.lifecycleSnapshot || null")
+      || !lifecycleRuntime.includes("restoreAndroidLifecycleDetailScroll(detailScrollSnapshot)")
+      || !lifecycleRuntime.includes("restoreMapState: true")
+      || !lifecycleRuntime.includes("state.map.stop?.()")
+      || !lifecycleRuntime.includes("function currentAndroidLifecycleViewSnapshot()")
+      || !lifecycleRuntime.includes("function currentAndroidLifecycleReopenOptions(options = {})")
+      || !lifecycleRuntime.includes("openSite(state.selectedSite.slug, currentAndroidLifecycleReopenOptions({")) {
     throw new Error("Bundled Android runtimes must preserve meaningful lifecycle content during startup fallback navigation.");
+  }
+  if (lifecycleRuntime.includes("if (androidLifecycleContentRestored) restoreAndroidLifecycleDetailScroll(androidLifecycleSnapshot)")) {
+    throw new Error("Bundled Android runtimes must let each asynchronous content render own lifecycle scroll restoration.");
+  }
+  if (lifecycleRuntime.includes("[150, 550, 1500, 3500].forEach(delay => window.setTimeout(apply, delay))")) {
+    throw new Error("Bundled Android runtimes must not restore one article with overlapping timer batches.");
   }
 }
 for (const startupRuntime of [bundledApp, bundledLiveRuntime]) {
