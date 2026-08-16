@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260816-back-navigation-lifecycle-r122";
+const expectedBuild = "20260816-back-navigation-lifecycle-r123";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1017,6 +1017,7 @@ if (!backHandlerMatch
 }
 requireBundledPattern(/function dismissMobileSheet\(sheet, options = \{\}\)[\s\S]*?sheet\.contains\(activeElement\)[\s\S]*?activeElement\.blur\?\.\(\)[\s\S]*?exitMobileProfileMapMode\(\)[\s\S]*?expandedMobileProfileKey = ""[\s\S]*?clearRoute !== false[\s\S]*?return true/, "Bundled Android sheets must share one focus-safe cleanup path that fully exits contributor progress mode.");
 requireBundledPattern(/state\.suggestionMapPickMode[\s\S]*?setSuggestionMapPickMode\(false\)[\s\S]*?openSheet\(suggestSiteSheetEl, \{ skipRoute: true \}\)[\s\S]*?return true/, "Bundled Android Back must cancel map-location picking and return to the suggestion form.");
+requireBundledPattern(/openSheet\(suggestSiteSheetEl, \{ skipRoute: true \}\)[\s\S]*?const activeSheet = document\.querySelector\("\.sheet\.open"\)[\s\S]*?dismissMobileSheet\(activeSheet\)/, "Bundled Android Back must not shadow the sheet-opening function during map-pick recovery.");
 requireBundledPattern(/registerPanelEl && !registerPanelEl\.hidden[\s\S]*?registerPanelEl\.hidden = true[\s\S]*?passwordResetPanelEl && !passwordResetPanelEl\.hidden[\s\S]*?passwordResetPanelEl\.hidden = true/, "Bundled Android Back must dismiss nested registration and password-reset panels before closing the account sheet.");
 
 if (!releaseWorkflow.includes("GITHUB_RUN_NUMBER") || !releaseWorkflow.includes("latest_apk") || !releaseWorkflow.includes("version_code=\"$run_number\"")) {

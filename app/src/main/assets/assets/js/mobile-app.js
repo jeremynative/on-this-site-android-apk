@@ -12920,8 +12920,8 @@
         passwordResetPanelEl.hidden = true;
         return true;
       }
-      const openSheet = document.querySelector(".sheet.open");
-      if (dismissMobileSheet(openSheet)) return true;
+      const activeSheet = document.querySelector(".sheet.open");
+      if (dismissMobileSheet(activeSheet)) return true;
       if (detailEl?.classList.contains("open")) {
         closeDetail();
         return true;
