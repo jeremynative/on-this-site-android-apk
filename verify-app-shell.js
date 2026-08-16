@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260815-indexed-checkin-state-r108";
+const expectedBuild = "20260815-hardened-profile-progress-r114";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -52,6 +52,8 @@ const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8");
 const bundledLiveRuntime = `${bundledLiveApp}\n${bundledMobileJs}\n${bundledMobileCss}`;
 
 if (!bundledSharedProfileUtils.includes("function profileMapActivityModel(profile = {}, activity = {}, options = {})")
+    || !bundledSharedProfileUtils.includes("function profileMapActivitySignature(collections = [])")
+    || !bundledSharedProfileUtils.includes("const belongsToProfile = (record")
     || !bundledSharedProfileUtils.includes("function languageQuizCompletionCountFromAttempts(attempts = [], profileIds = new Set(), options = {})")
     || !bundledSharedProfileUtils.includes('add("quiz", record, referenceFor(')
     || !bundledSharedProfileUtils.includes("profileMapActivityModel,")) {
@@ -60,6 +62,9 @@ if (!bundledSharedProfileUtils.includes("function profileMapActivityModel(profil
 if (!bundledMobileJs.includes("function enterMobileProfileMapMode(profile)")
     || !bundledMobileJs.includes("function exitMobileProfileMapMode(options = {})")
     || !bundledMobileJs.includes('document.body.classList.add("mobile-profile-map-mode")')
+    || !bundledMobileJs.includes("function mobileProfileAncestralLandFeatures()")
+    || !bundledMobileJs.includes("mobile-profile-progress-context")
+    || !bundledMobileJs.includes("pointsSyncing && options.syncRemote !== false && canSyncOwnPoints")
     || !bundledMobileJs.includes("mobile-profile-progress-points")
     || !bundledMobileJs.includes('["quiz", "Quizzes Completed"]')
     || !bundledMobileJs.includes('if (mode.clickHandler) {\n        state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);')
@@ -347,7 +352,7 @@ function requireBundledPattern(pattern, message) {
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
 requireText("LOADING_COVER_MINIMUM_MS = 1500", "Android loading cover must remain visible long enough to show its Long Island progress animation.");
 requireText('showLoadingCover("Loading On This Site");', "Android cold startup must initialize the native loading animation timer before the WebView can finish.");
-requireText("var mapReady=!!document.querySelector('#map .mapboxgl-canvas')&&!document.querySelector('.app.mobile-map-initializing');", "Android must keep the native Long Island cover until the live map canvas finishes initializing.");
+requireText("var onlineReady=!offline&&loaderHidden&&!!document.querySelector('.site-card[data-slug],.site-card[data-wiki-slug]');", "Android must hand off from the native cover once the live archive content is usable, while the page-owned map shield finishes initialization.");
 requireText("ValueAnimator.ofFloat(0f, 1f)", "Android loading cover must animate the Long Island outline from west to east.");
 requireText("reveal.setClipBounds(new Rect(0, 0, revealedWidth, height))", "Android Long Island loader must reveal from left to right without stretching the graphic.");
 requireText("loadingProgressFill.setScaleX(Math.max(0.02f, progress))", "Android loading cover must include an unmistakable synchronized left-to-right progress track.");
@@ -657,6 +662,11 @@ requireText("Intent.ACTION_VIEW", "Android shell must launch the browser compati
 requireText("LIVE_STARTUP_FALLBACK_DELAY_MS = 22000", "Android shell must let the bounded page-readiness probe finish before falling back on a cold validated connection.");
 requireText("if (!loadingBundledFallback && isAppShellUrl(url))", "Android shell must restart the readiness allowance when the main WebView page actually begins loading.");
 requireText("scheduleLiveStartupFallback();", "Android shell must schedule a bounded live startup fallback.");
+requireText("Live startup timer reached; checking the rendered app before fallback.", "Android shell must probe a rendered live page before replacing it with the offline fallback.");
+requireText("prepareAndValidateAppShell(webView, currentUrl);", "Android startup timeout must recover delayed onPageFinished callbacks without trapping users behind the loading cover.");
+requireText("prepareAndValidateAppShell(view, url);", "Android shell must begin readiness checks when visible content commits instead of waiting indefinitely for map resources to finish.");
+requireText('value.contains("starting") || value.contains("empty")', "Android shell must keep probing transitional DOM states within the bounded readiness window.");
+requireText("appReadinessProbeActive && url.equals(appReadinessProbeUrl)", "Android shell must keep one bounded readiness probe chain per navigation.");
 requireText("var root=document.documentElement;if(root)", "Android tablet layout injection must tolerate a transitional page without an HTML root.");
 requireText("var root=document.head||document.documentElement;if(!root)return;root.appendChild(s);", "Android shell panel protection must tolerate a transitional page without a DOM root.");
 requireText('showLoadingCover("Opening saved map...")', "Android shell must identify the saved-map fallback while it opens.");

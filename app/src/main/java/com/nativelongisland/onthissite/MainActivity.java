@@ -89,7 +89,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260815-indexed-checkin-state-r108";
+    static final String APP_VERSION = "20260815-hardened-profile-progress-r114";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -157,6 +157,8 @@ public class MainActivity extends Activity {
     private boolean runtimePermissionPromptActive;
     private boolean locationPermissionDeniedForSession;
     private int appReadinessProbeAttempts;
+    private boolean appReadinessProbeActive;
+    private String appReadinessProbeUrl;
     private int offlineRenderProbeAttempts;
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback connectivityCallback;
@@ -175,7 +177,16 @@ public class MainActivity extends Activity {
             return;
         }
         if (webView != null && !appShellLoaded && !loadingBundledFallback) {
-            loadBundledFallback("live-startup-timeout");
+            String currentUrl = webView.getUrl();
+            if (isAppShellUrl(currentUrl)) {
+                // Some Android System WebView releases delay onPageFinished even
+                // after the app DOM and map are usable. Probe the rendered page
+                // before replacing it with the offline archive.
+                Log.i(LOG_TAG, "Live startup timer reached; checking the rendered app before fallback.");
+                prepareAndValidateAppShell(webView, currentUrl);
+            } else {
+                loadBundledFallback("live-startup-timeout");
+            }
         }
     };
     private final Runnable validatedNetworkRecovery = () -> {
@@ -514,6 +525,9 @@ public class MainActivity extends Activity {
             public void onPageCommitVisible(WebView view, String url) {
                 super.onPageCommitVisible(view, url);
                 syncTabletLandscapeClass(view);
+                // onPageFinished can be delayed indefinitely by long-lived map
+                // resources even after the interactive shell is visible.
+                prepareAndValidateAppShell(view, url);
             }
 
             @Override
@@ -554,15 +568,7 @@ public class MainActivity extends Activity {
                     loadBundledFallback("siteground-challenge");
                     return;
                 }
-                view.evaluateJavascript(
-                    "window.__NLI_ANDROID_BRIDGE_TOKEN=" + jsString(bridgeCapabilityToken),
-                    null
-                );
-                syncTabletLandscapeClass(view);
-                view.postDelayed(() -> syncTabletLandscapeClass(view), 750);
-                enforceExclusiveMobilePanels(view);
-                installNativeCommentPhotoCompatibility(view);
-                validateLoadedAppShell(url);
+                prepareAndValidateAppShell(view, url);
             }
         });
 
@@ -1001,12 +1007,35 @@ public class MainActivity extends Activity {
 
     private void validateLoadedAppShell(String url) {
         if (!isAppShellUrl(url)) return;
+        if (appReadinessProbeActive && url.equals(appReadinessProbeUrl)) return;
+        appReadinessProbeActive = true;
+        appReadinessProbeUrl = url;
         appReadinessProbeAttempts = 0;
         probeLoadedAppReadiness(url);
     }
 
+    private void prepareAndValidateAppShell(WebView view, String url) {
+        if (view == null || !isAppShellUrl(url)) return;
+        view.evaluateJavascript(
+            "window.__NLI_ANDROID_BRIDGE_TOKEN=" + jsString(bridgeCapabilityToken),
+            null
+        );
+        syncTabletLandscapeClass(view);
+        view.postDelayed(() -> syncTabletLandscapeClass(view), 750);
+        enforceExclusiveMobilePanels(view);
+        installNativeCommentPhotoCompatibility(view);
+        validateLoadedAppShell(url);
+    }
+
     private void probeLoadedAppReadiness(String url) {
-        if (webView == null || !isAppShellUrl(url) || !isAppShellUrl(webView.getUrl())) return;
+        if (webView == null
+            || appShellLoaded
+            || !url.equals(appReadinessProbeUrl)
+            || !isAppShellUrl(url)
+            || !isAppShellUrl(webView.getUrl())) {
+            if (url.equals(appReadinessProbeUrl)) appReadinessProbeActive = false;
+            return;
+        }
         webView.evaluateJavascript(
             "(function(){try{"
                 + "var shell=!!(document.getElementById('map')&&document.querySelector('.app'));"
@@ -1015,14 +1044,17 @@ public class MainActivity extends Activity {
                 + "var offline=document.body&&document.body.classList.contains('offline-text-mode');"
                 + "var offlineStatus=(document.getElementById('status')||{}).textContent||'';"
                 + "var offlineReady=offline&&!!document.querySelector('.offline-map-index')&&!!document.querySelector('[data-offline-region]')&&/\\d+\\s+(?:saved|mapped) places/i.test(offlineStatus);"
-                + "var mapReady=!!document.querySelector('#map .mapboxgl-canvas')&&!document.querySelector('.app.mobile-map-initializing');"
-                + "var onlineReady=!offline&&loaderHidden&&!!document.querySelector('.site-card[data-slug],.site-card[data-wiki-slug]')&&mapReady;"
+                // Once archive content is present, the page's own map
+                // initialization shield can safely replace the native cover.
+                + "var onlineReady=!offline&&loaderHidden&&!!document.querySelector('.site-card[data-slug],.site-card[data-wiki-slug]');"
                 + "return offlineReady||onlineReady?'ready':shell?'starting':'empty';"
                 + "}catch(error){return 'empty:'+String(error&&error.message||error);}})();",
             value -> {
+                if (appShellLoaded || !url.equals(appReadinessProbeUrl)) return;
                 if (BuildConfig.DEBUG) logLoadedAppState();
                 if (value != null && value.contains("ready")) {
                     appShellLoaded = true;
+                    appReadinessProbeActive = false;
                     dispatchPendingPlantPhoto();
                     hideLoadingCover();
                     if (loadingBundledFallback
@@ -1038,7 +1070,7 @@ public class MainActivity extends Activity {
                 }
 
                 if (value != null
-                    && value.contains("starting")
+                    && (value.contains("starting") || value.contains("empty"))
                     && appReadinessProbeAttempts < APP_READINESS_MAX_ATTEMPTS) {
                     appReadinessProbeAttempts += 1;
                     startupHandler.postDelayed(
@@ -1049,10 +1081,12 @@ public class MainActivity extends Activity {
                 }
 
                 if (runtimePermissionPromptActive) {
+                    appReadinessProbeActive = false;
                     Log.i(LOG_TAG, "Deferring app readiness fallback while a runtime permission prompt is open.");
                     return;
                 }
 
+                appReadinessProbeActive = false;
                 Log.w(LOG_TAG, "WebView did not produce usable archive content: " + safeLogUrl(url) + " probe=" + value);
                 if (!loadingBundledFallback && isAppShellUrl(url)) {
                     loadBundledFallback("app-readiness-timeout");
@@ -1514,6 +1548,8 @@ public class MainActivity extends Activity {
         lastRefreshAt = System.currentTimeMillis();
         appShellLoaded = false;
         loadingBundledFallback = false;
+        appReadinessProbeActive = false;
+        appReadinessProbeUrl = null;
         appReadinessProbeAttempts = 0;
         startupHandler.removeCallbacks(startupFallback);
         startupHandler.removeCallbacks(validatedNetworkRecovery);
@@ -1550,6 +1586,8 @@ public class MainActivity extends Activity {
         startupHandler.removeCallbacks(revealBundledFallback);
         loadingBundledFallback = true;
         appShellLoaded = false;
+        appReadinessProbeActive = false;
+        appReadinessProbeUrl = null;
         appReadinessProbeAttempts = 0;
         offlineRenderProbeAttempts = 0;
         showLoadingCover("Opening saved map...");

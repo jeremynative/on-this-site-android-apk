@@ -1611,14 +1611,19 @@
       date: record.created_at || record.login_date || "",
       points: 1
     }));
-    const comments = (activity.comments || []).map(comment => ({
-      type: "Comment",
-      title: comment.site_title || comment.source_title || "Community note",
-      detail: activityPreview(comment.comment || "Approved comment", options.commentPreviewLength || 110),
-      date: comment.created_at || "",
-      points: 1 + Number(comment.upvotes || comment.upvote_count || 0),
-      site_slug: comment.site_slug || comment.source_slug || ""
-    }));
+    const comments = (activity.comments || []).map(comment => {
+      const sourceType = String(comment.source_type || "site").toLowerCase() === "wiki" ? "wiki" : "site";
+      const sourceSlug = comment.site_slug || comment.source_slug || "";
+      return {
+        type: "Comment",
+        title: comment.site_title || comment.source_title || "Community note",
+        detail: activityPreview(comment.comment || "Approved comment", options.commentPreviewLength || 110),
+        date: comment.created_at || "",
+        points: 1 + Number(comment.upvotes || comment.upvote_count || 0),
+        site_slug: sourceType === "site" ? sourceSlug : "",
+        wiki_slug: sourceType === "wiki" ? sourceSlug : ""
+      };
+    });
     const uniqueFeedVisits = new Map();
     (activity.visits || []).forEach(visit => {
       const key = String(visit.site_slug || visit.site || visit.site_title || visit.id || "").toLowerCase();
@@ -1657,8 +1662,25 @@
         date: event.date || "",
         points: event.points || POINT_RULES.friend_invite
       }));
+    const progressLabels = {
+      plant: "Plant find",
+      story: "Story",
+      quiz: "Quiz",
+      interaction: "Community interaction"
+    };
+    const extraProgress = (options.profileMapItems || [])
+      .filter(item => Object.prototype.hasOwnProperty.call(progressLabels, item.activity_type))
+      .map(item => ({
+        type: progressLabels[item.activity_type],
+        title: item.title || "Contribution",
+        detail: activityPreview(item.excerpt || progressLabels[item.activity_type], options.commentPreviewLength || 110),
+        date: item.date_time || "",
+        points: Number(item.points || 0),
+        site_slug: item.related_type === "site" ? item.related_slug || "" : "",
+        wiki_slug: item.related_type === "wiki" ? item.related_slug || "" : ""
+      }));
     const includePurchases = options.includePurchases !== false;
-    return [...comments, ...visits, ...suggestions, ...friendInvites, ...language, ...logins, ...(includePurchases ? purchases : [])]
+    return [...comments, ...visits, ...suggestions, ...friendInvites, ...language, ...extraProgress, ...logins, ...(includePurchases ? purchases : [])]
       .sort((a, b) => activityDateValue(b.date) - activityDateValue(a.date))
       .slice(0, Number(options.limit || 14));
   }
@@ -1725,6 +1747,9 @@
     const identityIds = options.identityIds instanceof Set
       ? options.identityIds
       : profileIdentityIds(profile, options.profiles || [], { relationId });
+    const identityNames = options.identityNames instanceof Set
+      ? options.identityNames
+      : profileIdentityNames(profile);
     const resolveReference = typeof options.resolveReference === "function" ? options.resolveReference : () => null;
     const imageUrl = typeof options.imageUrl === "function" ? options.imageUrl : value => String(value || "");
     const cleanExcerpt = (value, limit = 180) => {
@@ -1745,6 +1770,7 @@
       const resolved = resolveReference({ sourceType, slug, title, record }) || {};
       return {
         sourceType: resolved.sourceType || sourceType || "site",
+        relatedId: relationId(resolved.relatedId ?? resolved.id ?? record.source_id) || null,
         slug: resolved.slug || slug || "",
         title: resolved.title || title || slug || "Contribution",
         coordinates: coordinates(resolved.coordinates) || explicitCoordinates(record),
@@ -1753,13 +1779,28 @@
       };
     };
     const items = [];
+    const belongsToProfile = (record, profileFields = ["member_profile"], nameFields = ["author_name", "submitted_by_name"]) => {
+      let hasProfileReference = false;
+      for (const field of profileFields) {
+        const rawId = relationId(record?.[field]);
+        if (rawId === null || rawId === undefined || rawId === "") continue;
+        hasProfileReference = true;
+        if (identityIds.has(Number(rawId))) return true;
+      }
+      if (hasProfileReference) return false;
+      return nameFields.some(field => {
+        const name = String(record?.[field] || "").trim().toLowerCase();
+        return Boolean(name && identityNames.has(name));
+      });
+    };
     const add = (type, record, reference, detail = {}) => {
       if (!record || !reference) return;
       items.push({
         user_id: Number(relationId(profile.id || profile.profileId)) || null,
+        activity_id: relationId(record.id) || null,
         activity_type: type,
         related_type: reference.sourceType || "site",
-        related_id: detail.relatedId ?? relationId(record.id) ?? null,
+        related_id: reference.relatedId ?? detail.relatedId ?? null,
         related_slug: reference.slug || "",
         title: reference.title || detail.title || "Contribution",
         coordinates: reference.coordinates,
@@ -1817,8 +1858,7 @@
       });
     });
     (options.plantObservations || []).forEach(record => {
-      const memberId = Number(relationId(record.member_profile));
-      if (memberId && !identityIds.has(memberId)) return;
+      if (!belongsToProfile(record)) return;
       if (["rejected", "deleted"].includes(String(record.status || "").toLowerCase())) return;
       const sourceType = String(record.source_type || "site").toLowerCase() === "wiki" ? "wiki" : "site";
       const slug = record.site_slug || record.source_slug || "";
@@ -1829,8 +1869,7 @@
       });
     });
     (options.stories || []).forEach(record => {
-      const memberId = Number(relationId(record.member_profile));
-      if (memberId && !identityIds.has(memberId)) return;
+      if (!belongsToProfile(record)) return;
       if (["rejected", "deleted"].includes(String(record.status || "").toLowerCase())) return;
       const slug = record.attached_site_slug || record.site_slug || record.source_slug || "";
       add("story", record, referenceFor("site", slug, record.attached_site_title || record.site_title || "Story", record), {
@@ -1906,6 +1945,23 @@
       empty: items.length === 0,
       emptyMap: groups.length === 0
     };
+  }
+
+  function profileMapActivitySignature(collections = []) {
+    let hash = 2166136261;
+    let count = 0;
+    (collections || []).forEach(collection => {
+      const records = Array.isArray(collection) ? collection : [];
+      count += records.length;
+      const serialized = JSON.stringify(records);
+      for (let index = 0; index < serialized.length; index += 1) {
+        hash ^= serialized.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+      hash ^= 124;
+      hash = Math.imul(hash, 16777619);
+    });
+    return `${count}:${(hash >>> 0).toString(36)}`;
   }
 
   window.NLI_PROFILE_UTILS = {
@@ -2014,6 +2070,7 @@
     profileActivityFeedItems,
     profileActivityFromCollections,
     profileMapActivityModel,
+    profileMapActivitySignature,
     POINT_RULES
   };
 }());

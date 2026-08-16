@@ -161,7 +161,7 @@
       content: "";
       position: absolute;
       inset: 0;
-      background: url("../images/long-island-loading-outline.png") center / contain no-repeat;
+      background: url("assets/images/long-island-loading-outline.png") center / contain no-repeat;
       opacity: 0.72;
       pointer-events: none;
       z-index: 2;
@@ -177,8 +177,8 @@
       display: block;
       overflow: hidden;
       background: linear-gradient(90deg, #2f5a49 0%, #6e9d7c 62%, #f4c95d 100%);
-      -webkit-mask: url("../images/long-island-loading-outline.png") center / contain no-repeat;
-      mask: url("../images/long-island-loading-outline.png") center / contain no-repeat;
+      -webkit-mask: url("assets/images/long-island-loading-outline.png") center / contain no-repeat;
+      mask: url("assets/images/long-island-loading-outline.png") center / contain no-repeat;
       clip-path: inset(0 50% 0 50%);
       animation: loading-island-fill 2200ms cubic-bezier(.2, .74, .22, 1) infinite;
       z-index: 1;
@@ -3385,185 +3385,6 @@
 
     .contributor-body[hidden] {
       display: none;
-    }
-
-    #profiles-sheet.profile-progress-active {
-      height: 52dvh;
-      max-height: 52dvh;
-      border-radius: 18px 18px 0 0;
-    }
-
-    #profiles-sheet.profile-progress-active .profile-sort-controls,
-    #profiles-sheet.profile-progress-active [data-mobile-profile-card]:not(.is-expanded) {
-      display: none;
-    }
-
-    #profiles-sheet.profile-progress-active .sheet-body {
-      padding-top: 10px;
-    }
-
-    body.mobile-profile-map-mode .mobile-view-tabs,
-    body.mobile-profile-map-mode .mobile-timeline,
-    body.mobile-profile-map-mode .list-panel,
-    body.mobile-profile-map-mode .mobile-startup-spotlight,
-    body.mobile-profile-map-mode .mobile-exhibit-marker,
-    body.mobile-profile-map-mode .mobile-approved-suggestion-marker,
-    body.mobile-profile-map-mode .mobile-story-marker,
-    body.mobile-profile-map-mode .mobile-plant-marker,
-    body.mobile-profile-map-mode .mobile-biography-person-marker,
-    body.mobile-profile-map-mode .mobile-calendar-event-marker,
-    body.mobile-profile-map-mode .mobile-moving-dog-marker,
-    body.mobile-profile-map-mode .mobile-moving-whale-marker,
-    body.mobile-profile-map-mode .selected-site-map-label {
-      opacity: 0 !important;
-      visibility: hidden !important;
-      pointer-events: none !important;
-    }
-
-    .mobile-profile-progress-overview {
-      display: grid;
-      gap: 10px;
-      padding: 12px;
-      border: 1px solid rgba(49, 92, 72, 0.2);
-      border-radius: 11px;
-      background: linear-gradient(160deg, #eff6ef, #fff);
-    }
-
-    .mobile-profile-progress-heading {
-      display: flex;
-      align-items: start;
-      justify-content: space-between;
-      gap: 10px;
-    }
-
-    .mobile-profile-progress-heading > div {
-      display: grid;
-      gap: 2px;
-    }
-
-    .mobile-profile-progress-heading span {
-      color: #52705f;
-      font-size: 10px;
-      font-weight: 850;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-
-    .mobile-profile-progress-heading strong {
-      font-size: 20px;
-    }
-
-    .mobile-profile-progress-heading > b {
-      padding: 5px 8px;
-      border-radius: 999px;
-      background: #dceadd;
-      color: #315c48;
-      font-size: 11px;
-      white-space: nowrap;
-    }
-
-    .mobile-profile-progress-overview > p,
-    .mobile-profile-progress-empty p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.4;
-    }
-
-    .mobile-profile-progress-chips {
-      display: flex;
-      gap: 6px;
-      overflow-x: auto;
-      padding-bottom: 3px;
-      scrollbar-width: none;
-    }
-
-    .mobile-profile-progress-chips > span {
-      flex: 0 0 auto;
-      padding: 6px 9px;
-      border: 1px solid rgba(49, 92, 72, 0.18);
-      border-radius: 999px;
-      background: #fff;
-      color: #315c48;
-      font-size: 11px;
-      font-weight: 750;
-    }
-
-    .mobile-profile-progress-stats {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 6px;
-    }
-
-    .mobile-profile-progress-stats > div {
-      display: grid;
-      gap: 1px;
-      min-width: 0;
-      padding: 8px;
-      border: 1px solid rgba(49, 92, 72, 0.12);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.84);
-    }
-
-    .mobile-profile-progress-stats strong {
-      color: #254f3e;
-      font-size: 17px;
-    }
-
-    .mobile-profile-progress-stats span {
-      color: var(--muted);
-      font-size: 10.5px;
-      font-weight: 700;
-      line-height: 1.2;
-    }
-
-    .mobile-profile-progress-empty {
-      padding: 11px;
-      border: 1px dashed rgba(49, 92, 72, 0.28);
-      border-radius: 9px;
-      background: rgba(255, 255, 255, 0.72);
-    }
-
-    .mobile-profile-map-popup {
-      display: grid;
-      gap: 7px;
-      min-width: 210px;
-      color: #1d2922;
-    }
-
-    .mobile-profile-map-popup > img {
-      width: 100%;
-      max-height: 105px;
-      border-radius: 7px;
-      object-fit: cover;
-    }
-
-    .mobile-profile-map-popup p {
-      margin: 2px 0;
-      font-size: 12px;
-      line-height: 1.35;
-    }
-
-    .mobile-profile-map-popup button {
-      min-height: 44px;
-      border: 1px solid #315c48;
-      border-radius: 8px;
-      background: #315c48;
-      color: #fff;
-      font-weight: 800;
-    }
-
-    @media (orientation: landscape) and (min-width: 700px) {
-      #profiles-sheet.profile-progress-active {
-        top: var(--app-top-safe);
-        right: var(--app-right-safe);
-        bottom: var(--app-bottom-safe);
-        left: auto;
-        width: min(50dvw, 620px);
-        height: calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe));
-        max-height: calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe));
-        border-radius: 14px 0 0 0;
-      }
     }
 
     .comment.reply {
@@ -7049,7 +6870,7 @@
     .banner.show {
       display: block;
     }
-    </style>
+  </style>
   <style data-inline-source="assets/css/shared-research-question.css">
 .research-question-prompt {
   position: fixed;
@@ -7071,10 +6892,102 @@
 }
 
 .research-question-prompt[hidden],
+.android-beta-prompt[hidden],
 .research-question-restore[hidden],
 .research-question-dialog[hidden],
 .research-question-support-fields[hidden] {
   display: none !important;
+}
+
+.android-beta-prompt {
+  position: fixed;
+  right: calc(50% + 221px);
+  bottom: 42px;
+  z-index: 1350;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  width: 330px;
+  padding: 10px 38px 10px 12px;
+  color: #17251e;
+  background: rgba(253, 254, 251, 0.97);
+  border: 1px solid rgba(51, 83, 67, 0.34);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(24, 43, 34, 0.2);
+  backdrop-filter: blur(8px);
+}
+
+.android-beta-prompt > div {
+  align-self: center;
+  min-width: 0;
+}
+
+.android-beta-prompt strong,
+.android-beta-prompt span {
+  display: block;
+}
+
+.android-beta-prompt strong {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.android-beta-prompt span {
+  margin-top: 2px;
+  color: #526259;
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+.android-beta-prompt-action {
+  align-self: center;
+  padding: 8px 10px;
+  color: #fff;
+  background: #315f4d;
+  border: 1px solid #315f4d;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  transition: background-color 160ms ease, transform 160ms ease;
+  white-space: nowrap;
+}
+
+.android-beta-prompt-action:hover,
+.android-beta-prompt-action:focus-visible {
+  background: #244a3c;
+  transform: translateY(-1px);
+  outline: 2px solid rgba(49, 95, 77, 0.22);
+  outline-offset: 2px;
+}
+
+.android-beta-prompt-close {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: #526259;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.android-beta-prompt-close:hover,
+.android-beta-prompt-close:focus-visible {
+  color: #17251e;
+  background: #eef3ef;
+  outline: 2px solid rgba(49, 95, 77, 0.22);
+  outline-offset: 1px;
 }
 
 .research-question-restore {
@@ -7117,6 +7030,14 @@ body:not(.timeline-collapsed) .research-question-shell-desktop .research-questio
 
 body.timeline-large .research-question-shell-desktop .research-question-restore {
   bottom: calc(50vh + 28px);
+}
+
+@media (min-width: 761px) {
+  .research-question-shell-desktop .research-question-prompt,
+  .research-question-shell-desktop .android-beta-prompt {
+    box-sizing: border-box;
+    height: 56px;
+  }
 }
 
 .research-question-prompt > div {
@@ -7407,14 +7328,47 @@ body.timeline-large .research-question-shell-desktop .research-question-restore 
 }
 
 body.article-panel-open .research-question-shell-desktop .research-question-prompt,
+body.article-panel-open .research-question-shell-desktop .android-beta-prompt,
 body:not(.timeline-collapsed) .research-question-shell-desktop .research-question-prompt,
+body:not(.timeline-collapsed) .research-question-shell-desktop .android-beta-prompt,
 body.research-question-dialog-open .research-question-prompt,
+body.research-question-dialog-open .android-beta-prompt,
 .detail.open ~ .research-question-shell .research-question-prompt,
-.sheet.open ~ .research-question-shell .research-question-prompt {
+.detail.open ~ .research-question-shell .android-beta-prompt,
+.sheet.open ~ .research-question-shell .research-question-prompt,
+.sheet.open ~ .research-question-shell .android-beta-prompt {
   display: none;
 }
 
+@media (min-width: 761px) and (max-width: 1180px) {
+  .research-question-shell-desktop .android-beta-prompt {
+    right: auto;
+    bottom: 126px;
+    left: 50%;
+    width: min(410px, calc(100vw - 32px));
+    transform: translateX(-50%);
+  }
+}
+
 @media (max-width: 760px) {
+  .research-question-shell-desktop .android-beta-prompt {
+    display: none;
+  }
+
+  .research-question-shell-mobile .android-beta-prompt {
+    right: max(16px, var(--app-right-safe, env(safe-area-inset-right)));
+    bottom: calc(16px + var(--app-bottom-safe, env(safe-area-inset-bottom)));
+    left: max(16px, var(--app-left-safe, env(safe-area-inset-left)));
+    z-index: 1450;
+    width: auto;
+    padding: 10px 42px 10px 12px;
+    transform: none;
+  }
+
+  body.native-android-app .research-question-shell-mobile .android-beta-prompt {
+    display: none !important;
+  }
+
   .research-question-shell-mobile .research-question-prompt {
     left: max(16px, var(--app-left-safe, env(safe-area-inset-left)));
     right: max(16px, var(--app-right-safe, env(safe-area-inset-right)));
@@ -7512,7 +7466,7 @@ body.research-question-dialog-open .research-question-prompt,
     border-radius: 8px 8px 0 0;
   }
 }
-    </style>
+  </style>
 </head>
 <body>
   <div class="loading-screen" id="loading-screen" role="status" aria-live="polite">
@@ -8276,7 +8230,7 @@ body.research-question-dialog-open .research-question-prompt,
     ]
   };
 }());
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-utils.js">
 (function () {
   function escapeHtml(value) {
@@ -8655,7 +8609,7 @@ body.research-question-dialog-open .research-question-prompt,
     isSectionTimelineHeading
   };
 }());
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-site-utils.js">
 (function () {
   const normalizeText = window.NLI_SHARED_UTILS?.normalizeText || (value =>
@@ -9159,7 +9113,7 @@ body.research-question-dialog-open .research-question-prompt,
     siteTerritoryFillColor
   };
 }());
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-site-title-utils.js">
 (function () {
   const knownTitleBySlug = {
@@ -9287,7 +9241,7 @@ body.research-question-dialog-open .research-question-prompt,
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (typeof window !== "undefined") window.NLI_SITE_TITLE_UTILS = api;
 })();
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-profile-utils.js">
 (function () {
   try {
@@ -10902,14 +10856,19 @@ body.research-question-dialog-open .research-question-prompt,
       date: record.created_at || record.login_date || "",
       points: 1
     }));
-    const comments = (activity.comments || []).map(comment => ({
-      type: "Comment",
-      title: comment.site_title || comment.source_title || "Community note",
-      detail: activityPreview(comment.comment || "Approved comment", options.commentPreviewLength || 110),
-      date: comment.created_at || "",
-      points: 1 + Number(comment.upvotes || comment.upvote_count || 0),
-      site_slug: comment.site_slug || comment.source_slug || ""
-    }));
+    const comments = (activity.comments || []).map(comment => {
+      const sourceType = String(comment.source_type || "site").toLowerCase() === "wiki" ? "wiki" : "site";
+      const sourceSlug = comment.site_slug || comment.source_slug || "";
+      return {
+        type: "Comment",
+        title: comment.site_title || comment.source_title || "Community note",
+        detail: activityPreview(comment.comment || "Approved comment", options.commentPreviewLength || 110),
+        date: comment.created_at || "",
+        points: 1 + Number(comment.upvotes || comment.upvote_count || 0),
+        site_slug: sourceType === "site" ? sourceSlug : "",
+        wiki_slug: sourceType === "wiki" ? sourceSlug : ""
+      };
+    });
     const uniqueFeedVisits = new Map();
     (activity.visits || []).forEach(visit => {
       const key = String(visit.site_slug || visit.site || visit.site_title || visit.id || "").toLowerCase();
@@ -10948,8 +10907,25 @@ body.research-question-dialog-open .research-question-prompt,
         date: event.date || "",
         points: event.points || POINT_RULES.friend_invite
       }));
+    const progressLabels = {
+      plant: "Plant find",
+      story: "Story",
+      quiz: "Quiz",
+      interaction: "Community interaction"
+    };
+    const extraProgress = (options.profileMapItems || [])
+      .filter(item => Object.prototype.hasOwnProperty.call(progressLabels, item.activity_type))
+      .map(item => ({
+        type: progressLabels[item.activity_type],
+        title: item.title || "Contribution",
+        detail: activityPreview(item.excerpt || progressLabels[item.activity_type], options.commentPreviewLength || 110),
+        date: item.date_time || "",
+        points: Number(item.points || 0),
+        site_slug: item.related_type === "site" ? item.related_slug || "" : "",
+        wiki_slug: item.related_type === "wiki" ? item.related_slug || "" : ""
+      }));
     const includePurchases = options.includePurchases !== false;
-    return [...comments, ...visits, ...suggestions, ...friendInvites, ...language, ...logins, ...(includePurchases ? purchases : [])]
+    return [...comments, ...visits, ...suggestions, ...friendInvites, ...language, ...extraProgress, ...logins, ...(includePurchases ? purchases : [])]
       .sort((a, b) => activityDateValue(b.date) - activityDateValue(a.date))
       .slice(0, Number(options.limit || 14));
   }
@@ -11016,6 +10992,9 @@ body.research-question-dialog-open .research-question-prompt,
     const identityIds = options.identityIds instanceof Set
       ? options.identityIds
       : profileIdentityIds(profile, options.profiles || [], { relationId });
+    const identityNames = options.identityNames instanceof Set
+      ? options.identityNames
+      : profileIdentityNames(profile);
     const resolveReference = typeof options.resolveReference === "function" ? options.resolveReference : () => null;
     const imageUrl = typeof options.imageUrl === "function" ? options.imageUrl : value => String(value || "");
     const cleanExcerpt = (value, limit = 180) => {
@@ -11036,6 +11015,7 @@ body.research-question-dialog-open .research-question-prompt,
       const resolved = resolveReference({ sourceType, slug, title, record }) || {};
       return {
         sourceType: resolved.sourceType || sourceType || "site",
+        relatedId: relationId(resolved.relatedId ?? resolved.id ?? record.source_id) || null,
         slug: resolved.slug || slug || "",
         title: resolved.title || title || slug || "Contribution",
         coordinates: coordinates(resolved.coordinates) || explicitCoordinates(record),
@@ -11044,13 +11024,28 @@ body.research-question-dialog-open .research-question-prompt,
       };
     };
     const items = [];
+    const belongsToProfile = (record, profileFields = ["member_profile"], nameFields = ["author_name", "submitted_by_name"]) => {
+      let hasProfileReference = false;
+      for (const field of profileFields) {
+        const rawId = relationId(record?.[field]);
+        if (rawId === null || rawId === undefined || rawId === "") continue;
+        hasProfileReference = true;
+        if (identityIds.has(Number(rawId))) return true;
+      }
+      if (hasProfileReference) return false;
+      return nameFields.some(field => {
+        const name = String(record?.[field] || "").trim().toLowerCase();
+        return Boolean(name && identityNames.has(name));
+      });
+    };
     const add = (type, record, reference, detail = {}) => {
       if (!record || !reference) return;
       items.push({
         user_id: Number(relationId(profile.id || profile.profileId)) || null,
+        activity_id: relationId(record.id) || null,
         activity_type: type,
         related_type: reference.sourceType || "site",
-        related_id: detail.relatedId ?? relationId(record.id) ?? null,
+        related_id: reference.relatedId ?? detail.relatedId ?? null,
         related_slug: reference.slug || "",
         title: reference.title || detail.title || "Contribution",
         coordinates: reference.coordinates,
@@ -11108,8 +11103,7 @@ body.research-question-dialog-open .research-question-prompt,
       });
     });
     (options.plantObservations || []).forEach(record => {
-      const memberId = Number(relationId(record.member_profile));
-      if (memberId && !identityIds.has(memberId)) return;
+      if (!belongsToProfile(record)) return;
       if (["rejected", "deleted"].includes(String(record.status || "").toLowerCase())) return;
       const sourceType = String(record.source_type || "site").toLowerCase() === "wiki" ? "wiki" : "site";
       const slug = record.site_slug || record.source_slug || "";
@@ -11120,8 +11114,7 @@ body.research-question-dialog-open .research-question-prompt,
       });
     });
     (options.stories || []).forEach(record => {
-      const memberId = Number(relationId(record.member_profile));
-      if (memberId && !identityIds.has(memberId)) return;
+      if (!belongsToProfile(record)) return;
       if (["rejected", "deleted"].includes(String(record.status || "").toLowerCase())) return;
       const slug = record.attached_site_slug || record.site_slug || record.source_slug || "";
       add("story", record, referenceFor("site", slug, record.attached_site_title || record.site_title || "Story", record), {
@@ -11197,6 +11190,23 @@ body.research-question-dialog-open .research-question-prompt,
       empty: items.length === 0,
       emptyMap: groups.length === 0
     };
+  }
+
+  function profileMapActivitySignature(collections = []) {
+    let hash = 2166136261;
+    let count = 0;
+    (collections || []).forEach(collection => {
+      const records = Array.isArray(collection) ? collection : [];
+      count += records.length;
+      const serialized = JSON.stringify(records);
+      for (let index = 0; index < serialized.length; index += 1) {
+        hash ^= serialized.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+      hash ^= 124;
+      hash = Math.imul(hash, 16777619);
+    });
+    return `${count}:${(hash >>> 0).toString(36)}`;
   }
 
   window.NLI_PROFILE_UTILS = {
@@ -11305,10 +11315,11 @@ body.research-question-dialog-open .research-question-prompt,
     profileActivityFeedItems,
     profileActivityFromCollections,
     profileMapActivityModel,
+    profileMapActivitySignature,
     POINT_RULES
   };
 }());
-              </script>
+                  </script>
   <script data-inline-source="assets/js/shared-map-story-utils.js">
 (function () {
   const relationId = window.NLI_SHARED_UTILS?.relationId || (value => {
@@ -11489,7 +11500,7 @@ body.research-question-dialog-open .research-question-prompt,
     promptForKey
   };
 }());
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-learning-card-utils.js">
 (function (root, factory) {
   const api = factory();
@@ -12029,7 +12040,7 @@ body.research-question-dialog-open .research-question-prompt,
     createActionGuard
   };
 }));
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-activity-utils.js">
 (function () {
   const normalizeActivityDateInput = window.NLI_SHARED_UTILS?.normalizeActivityDateInput || (value => {
@@ -12786,7 +12797,7 @@ body.research-question-dialog-open .research-question-prompt,
     mergeRecentActivity
   };
 }());
-                </script>
+                    </script>
   <script data-inline-source="assets/js/shared-comment-utils.js">
 (function () {
   const escapeHtml = window.NLI_SHARED_UTILS?.escapeHtml || (value => String(value || ""));
@@ -13161,7 +13172,7 @@ body.research-question-dialog-open .research-question-prompt,
     activityThreadHtml
   };
 }());
-          </script>
+              </script>
   <script data-inline-source="assets/js/shared-quote-comment-utils.js">
 (function () {
   const MAX_QUOTE_LENGTH = 520;
@@ -13706,7 +13717,7 @@ body.research-question-dialog-open .research-question-prompt,
     markQuote
   };
 })();
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-timeline-utils.js">
 (function () {
   function cleanText(options, value) {
@@ -14166,7 +14177,7 @@ body.research-question-dialog-open .research-question-prompt,
     buildBiographyTimelineData
   };
 }());
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-moderation-utils.js">
 (function () {
   const LEET = {
@@ -14243,7 +14254,7 @@ body.research-question-dialog-open .research-question-prompt,
     compact
   };
 }());
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-plant-utils.js">
 (function () {
   const plantObservationSpecies = [
@@ -14582,7 +14593,7 @@ body.research-question-dialog-open .research-question-prompt,
     plantObservationsForSource
   };
 }());
-            </script>
+                </script>
   <script data-inline-source="assets/js/shared-calendar-utils.js">
 (function () {
   function eventTypeLabel(value) {
@@ -14727,10 +14738,10 @@ body.research-question-dialog-open .research-question-prompt,
     });
 
     context.fillStyle = "#315c48";
-    context.font = "700 11px Arial, sans-serif";
+    context.font = "700 9px Arial, sans-serif";
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillText(calendarMonthDay(value), 19, 24);
+    context.fillText(calendarMonthDay(value), 19, 24, 23);
     map.addImage(id, context.getImageData(0, 0, canvas.width, canvas.height), { pixelRatio });
     return true;
   }
@@ -14755,7 +14766,7 @@ body.research-question-dialog-open .research-question-prompt,
     onThisDayNumber
   };
 }());
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-geometry-utils.js">
 (function () {
   function normalizeHex(value, fallback) {
@@ -14954,7 +14965,7 @@ body.research-question-dialog-open .research-question-prompt,
     pointInGeometry
   };
 }());
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-route-utils.js">
 (function () {
   const DEFAULT_ALIASES = {
@@ -15075,7 +15086,7 @@ body.research-question-dialog-open .research-question-prompt,
     clearPasswordResetUrl
   };
 }());
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-html-utils.js">
 (function () {
   const DESKTOP_ALLOWED_TAGS = new Set([
@@ -15446,7 +15457,7 @@ body.research-question-dialog-open .research-question-prompt,
     cleanHtml
   };
 }());
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-directus-client.js">
 (function () {
   function normalizeUploadFileId(uploaded) {
@@ -15867,7 +15878,7 @@ body.research-question-dialog-open .research-question-prompt,
 
   window.NLI_DIRECTUS_CLIENT = { createDirectusClient, normalizeUploadFileId, uploadDirectusFile };
 }());
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-media-utils.js">
 (function () {
   const DEFAULT_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
@@ -16162,7 +16173,7 @@ body.research-question-dialog-open .research-question-prompt,
     prepareJpegUploadImage
   };
 }());
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-map-utils.js">
 (function () {
   function layerExists(map, layerId) {
@@ -16294,7 +16305,7 @@ body.research-question-dialog-open .research-question-prompt,
     scorePlaceSuggestion
   };
 }());
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-feedback-utils.js">
 (function () {
   const MEDIA_UTILS = window.NLI_MEDIA_UTILS || {};
@@ -16663,7 +16674,7 @@ body.research-question-dialog-open .research-question-prompt,
     redeemAccountInviteCode
   };
 }());
-    </script>
+  </script>
   <script data-inline-source="assets/js/support-public-config.js">
 (function () {
   const workerUrl = "https://on-this-site-support.onthissiteny.workers.dev";
@@ -16679,7 +16690,7 @@ body.research-question-dialog-open .research-question-prompt,
     adminActivityUrl: endpoint ? `${endpoint}/support/admin/recent-activity.json` : ""
   };
 })();
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-support-utils.js">
 (function () {
   const DEFAULT_CONFIG = {
@@ -17386,12 +17397,16 @@ body.research-question-dialog-open .research-question-prompt,
     startCheckout
   };
 })();
-    </script>
+  </script>
   <script data-inline-source="assets/js/shared-research-question-utils.js">
 (function () {
   const FEEDBACK_UTILS = window.NLI_FEEDBACK_UTILS || {};
   const SUPPORT_UTILS = window.NLI_SUPPORT_UTILS || {};
   const SESSION_KEY = "nli-research-question-prompt-dismissed";
+  const ANDROID_BETA_SESSION_KEY = "nli-android-beta-prompt-dismissed";
+  const ANDROID_BETA_WEB_DISMISSED_UNTIL_KEY = "nli-android-beta-web-dismissed-until";
+  const ANDROID_BETA_WEB_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+  const ANDROID_BETA_URL = "https://play.google.com/apps/testing/com.nativelongisland.onthissite";
   let instance = null;
 
   function escapeHtml(value) {
@@ -17422,8 +17437,17 @@ body.research-question-dialog-open .research-question-prompt,
     return route || "Map home";
   }
 
-  function promptHtml() {
+  function promptHtml(platform) {
     return `
+      ${platform === "desktop" || platform === "mobile" ? `
+      <aside class="android-beta-prompt android-beta-prompt-${platform}" data-android-beta-prompt aria-label="Join the On This Site Android beta" hidden>
+        <button class="android-beta-prompt-close" type="button" data-android-beta-dismiss aria-label="Dismiss Android beta invitation">&times;</button>
+        <div>
+          <strong>Help test the Android app</strong>
+          <span>Join the closed beta.</span>
+        </div>
+        <a class="android-beta-prompt-action" href="${ANDROID_BETA_URL}" target="_blank" rel="noopener noreferrer" title="Open the On This Site closed beta in Google Play">Join beta</a>
+      </aside>` : ""}
       <aside class="research-question-prompt" data-research-question-prompt aria-label="Ask On This Site a research question" hidden>
         <button class="research-question-prompt-close" type="button" data-research-question-dismiss aria-label="Dismiss research question prompt">&times;</button>
         <div>
@@ -17509,9 +17533,10 @@ body.research-question-dialog-open .research-question-prompt,
     const identity = typeof options.getIdentity === "function" ? (options.getIdentity() || {}) : {};
     const shell = document.createElement("div");
     shell.className = `research-question-shell research-question-shell-${platform}`;
-    shell.innerHTML = promptHtml() + dialogHtml(identity);
+    shell.innerHTML = promptHtml(platform) + dialogHtml(identity);
     document.body.appendChild(shell);
 
+    const androidBetaPrompt = shell.querySelector("[data-android-beta-prompt]");
     const prompt = shell.querySelector("[data-research-question-prompt]");
     const restore = shell.querySelector("[data-research-question-restore]");
     const dialog = shell.querySelector("[data-research-question-dialog]");
@@ -17521,9 +17546,12 @@ body.research-question-dialog-open .research-question-prompt,
     const supportToggle = shell.querySelector("[data-research-support-enabled]");
     const supportFields = shell.querySelector("[data-research-support-fields]");
     const promptDismiss = shell.querySelector("[data-research-question-dismiss]");
+    const androidBetaDismiss = shell.querySelector("[data-android-beta-dismiss]");
+    const androidBetaAction = shell.querySelector(".android-beta-prompt-action");
     const showRestore = options.showRestore !== false;
     const autoPrompt = options.autoPrompt !== false;
     let promptRequested = false;
+    let androidBetaRequested = false;
     let questionSent = false;
     let checkoutAttempt = 0;
 
@@ -17535,6 +17563,33 @@ body.research-question-dialog-open .research-question-prompt,
       try { sessionStorage.setItem(SESSION_KEY, "1"); } catch {}
     }
 
+    function androidBetaDismissed() {
+      if (platform === "mobile") {
+        try {
+          return Number(localStorage.getItem(ANDROID_BETA_WEB_DISMISSED_UNTIL_KEY) || 0) > Date.now();
+        } catch {
+          return false;
+        }
+      }
+      try { return sessionStorage.getItem(ANDROID_BETA_SESSION_KEY) === "1"; } catch { return false; }
+    }
+
+    function setAndroidBetaDismissed() {
+      if (platform === "mobile") {
+        try { localStorage.setItem(ANDROID_BETA_WEB_DISMISSED_UNTIL_KEY, String(Date.now() + ANDROID_BETA_WEB_COOLDOWN_MS)); } catch {}
+        return;
+      }
+      try { sessionStorage.setItem(ANDROID_BETA_SESSION_KEY, "1"); } catch {}
+    }
+
+    function isAndroidWebBrowser() {
+      return platform === "mobile"
+        && /Android/i.test(navigator.userAgent || "")
+        && !window.AndroidApp
+        && !window.AndroidStory
+        && !document.body.classList.contains("native-android-app");
+    }
+
     function interfaceBusy() {
       if (dialog && !dialog.hidden) return false;
       return typeof options.isUiBusy === "function" && options.isUiBusy();
@@ -17542,6 +17597,10 @@ body.research-question-dialog-open .research-question-prompt,
 
     function syncPrompt() {
       prompt.hidden = !promptRequested || dismissed() || interfaceBusy();
+      if (androidBetaPrompt) {
+        const requested = platform === "desktop" ? promptRequested : androidBetaRequested;
+        androidBetaPrompt.hidden = !requested || androidBetaDismissed() || interfaceBusy();
+      }
       restore.hidden = !showRestore || !promptRequested || !prompt.hidden || !dialog.hidden;
     }
 
@@ -17612,6 +17671,13 @@ body.research-question-dialog-open .research-question-prompt,
       setDismissed();
       prompt.hidden = true;
       restore.hidden = !showRestore;
+    }
+
+    function dismissAndroidBeta(event) {
+      event?.preventDefault();
+      event?.stopPropagation();
+      setAndroidBetaDismissed();
+      if (androidBetaPrompt) androidBetaPrompt.hidden = true;
     }
 
     async function submitQuestion(event) {
@@ -17695,6 +17761,8 @@ body.research-question-dialog-open .research-question-prompt,
       submit.textContent = supportToggle.checked ? "Send question and continue to payment" : "Send question";
     });
     promptDismiss?.addEventListener("click", dismissPrompt);
+    androidBetaDismiss?.addEventListener("click", dismissAndroidBeta);
+    androidBetaAction?.addEventListener("click", setAndroidBetaDismissed);
     shell.querySelectorAll("[data-research-question-close]").forEach(control => {
       control.addEventListener("click", event => {
         event.preventDefault();
@@ -17720,6 +17788,13 @@ body.research-question-dialog-open .research-question-prompt,
         syncPrompt();
       }, Math.max(0, delay));
     }
+    if (isAndroidWebBrowser()) {
+      const androidBetaDelay = Number.isFinite(Number(options.androidBetaDelay)) ? Number(options.androidBetaDelay) : 6500;
+      window.setTimeout(() => {
+        androidBetaRequested = true;
+        syncPrompt();
+      }, Math.max(0, androidBetaDelay));
+    }
 
     instance = {
       shell,
@@ -17739,7 +17814,7 @@ body.research-question-dialog-open .research-question-prompt,
 
   window.NLI_RESEARCH_QUESTION_UTILS = { init };
 }());
-    </script>
+  </script>
   <script data-inline-source="assets/js/language-quiz-words.js">
 window.NLI_LANGUAGE_QUIZ_WORDS = [
   ["water", "núp"], ["ocean", "cutstúk"], ["river", "seépus"], ["bay", "petápagh"], ["stone", "sun"],
@@ -17770,7 +17845,7 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
     ? "M. R. Harrington, Shinnecock Notes (1903), reprinted in Bonvillain and Stone, Languages and Lore of the Long Island Indians, p. 22"
     : "Thomas Jefferson Unkechaug/Unquachog vocabulary (1791), reprinted in Bonvillain and Stone, Languages and Lore of the Long Island Indians, pp. 17-18"
 }));
-    </script>
+  </script>
   <script data-inline-source="assets/js/userviews-tracker.js">
 (function () {
   "use strict";
@@ -17899,7 +17974,7 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", recordRoute, { once: true });
   else recordRoute();
 })();
-    </script>
+  </script>
   <script data-inline-source="assets/js/mobile-app.js">
 const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const SHARED_FIELDS = SHARED_CONFIG.fields || {};
@@ -32463,7 +32538,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         supporterPoints: profile?.is_monthly_supporter ? supportMonths(profile) * 100 : 0,
         emptyMilestone: "New Learner"
       });
-      const showPointsSyncing = pointsSyncing && options.syncRemote !== false;
+      const viewer = currentContributorProfile();
+      const canSyncOwnPoints = Boolean(viewer && PROFILE_UTILS.profilesShareIdentity(profile, viewer));
+      const showPointsSyncing = pointsSyncing && options.syncRemote !== false && canSyncOwnPoints;
       if (showPointsSyncing) {
         ensureCanonicalProfilePointEvents(profile).then(updated => {
           if (!updated) return;
@@ -32476,7 +32553,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function mobileContributorProfileMapModel(profile) {
       const profileKey = String(profile?.id || profile?.slug || profile?.username || "contributor");
-      const signature = [state.publicVisits.length, state.publicComments.length, state.commentVotes.length, state.languageQuizAttempts.length, state.plantObservations.length, state.mapStories.length, state.siteSuggestions.length].join(":");
+      const signature = PROFILE_UTILS.profileMapActivitySignature([
+        state.publicVisits,
+        state.publicComments,
+        state.commentVotes,
+        state.languageQuizAttempts,
+        state.plantObservations,
+        state.mapStories,
+        state.siteSuggestions
+      ]);
       const cacheKey = `${profileKey}:${signature}`;
       if (state.profileMapActivityCache.has(cacheKey)) return state.profileMapActivityCache.get(cacheKey);
       const identityIds = profileIdentityIds(profile);
@@ -32485,6 +32570,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const coordinates = site?.center || geometryCenter(siteDisplayGeometry(site));
         return {
           sourceType,
+          relatedId: site?.id || null,
           slug,
           title: site?.title || title,
           coordinates,
@@ -32495,6 +32581,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const model = PROFILE_UTILS.profileMapActivityModel(profile, profileActivity(profile), {
         relationId,
         identityIds,
+        identityNames: profileIdentityNames(profile),
         resolveReference,
         imageUrl: directusAssetUrl,
         languageWords: learnedLanguageWords(profile),
@@ -32543,8 +32630,24 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       </div>`;
     }
 
-    const MOBILE_PROFILE_PROGRESS_LAYER_IDS = ["mobile-profile-progress-labels", "mobile-profile-progress-points", "mobile-profile-progress-path", "mobile-profile-progress-island-line", "mobile-profile-progress-island-fill"];
-    const MOBILE_PROFILE_PROGRESS_SOURCE_IDS = ["mobile-profile-progress-points", "mobile-profile-progress-path", "mobile-profile-progress-island"];
+    const MOBILE_PROFILE_PROGRESS_LAYER_IDS = ["mobile-profile-progress-labels", "mobile-profile-progress-points", "mobile-profile-progress-path", "mobile-profile-progress-territory-lines", "mobile-profile-progress-territories", "mobile-profile-progress-island-line", "mobile-profile-progress-island-fill"];
+    const MOBILE_PROFILE_PROGRESS_SOURCE_IDS = ["mobile-profile-progress-points", "mobile-profile-progress-path", "mobile-profile-progress-context", "mobile-profile-progress-island"];
+
+    function mobileProfileAncestralLandFeatures() {
+      return (state.sites || [])
+        .filter(site => {
+          const text = normalizeText(`${site?.title || ""} ${site?.slug || ""} ${site?.site_type || ""}`);
+          return site?.site_type === "territory"
+            && /ancestral|traditional/.test(text)
+            && !/hoggenoch/.test(text)
+            && /Polygon/.test(siteDisplayGeometry(site)?.type || "");
+        })
+        .map(site => ({
+          type: "Feature",
+          geometry: siteDisplayGeometry(site),
+          properties: { id: site.id, slug: site.slug, title: site.title, fillcolor: site.map_fill_color || "#6f917c" }
+        }));
+    }
 
     function removeMobileProfileProgressLayers() {
       if (!state.map) return;
@@ -32564,19 +32667,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       removeMobileProfileProgressLayers();
       mode.layerVisibility = mode.layerVisibility || new Map();
       for (const layer of state.map.getStyle()?.layers || []) {
-        if (!layer.id.startsWith("mobile-") || layer.id.startsWith("mobile-profile-progress-") || layer.id === "mobile-territory-polygons") continue;
+        if (!layer.id.startsWith("mobile-") || layer.id.startsWith("mobile-profile-progress-")) continue;
         if (!mode.layerVisibility.has(layer.id)) mode.layerVisibility.set(layer.id, state.map.getLayoutProperty(layer.id, "visibility") || "visible");
         state.map.setLayoutProperty(layer.id, "visibility", "none");
       }
-      if (state.map.getLayer("mobile-territory-polygons")) {
-        if (mode.territoryOpacity === undefined) mode.territoryOpacity = state.map.getPaintProperty("mobile-territory-polygons", "fill-opacity");
-        state.map.setPaintProperty("mobile-territory-polygons", "fill-opacity", 0.09);
-      }
       if (state.landMaskData?.geometry) {
         state.map.addSource("mobile-profile-progress-island", { type: "geojson", data: state.landMaskData });
-        state.map.addLayer({ id: "mobile-profile-progress-island-fill", type: "fill", source: "mobile-profile-progress-island", paint: { "fill-color": "#f8fbf5", "fill-opacity": 0.78 } }, "mobile-territory-polygons");
+        state.map.addLayer({ id: "mobile-profile-progress-island-fill", type: "fill", source: "mobile-profile-progress-island", paint: { "fill-color": "#f8fbf5", "fill-opacity": 0.78 } });
         state.map.addLayer({ id: "mobile-profile-progress-island-line", type: "line", source: "mobile-profile-progress-island", paint: { "line-color": "#315a49", "line-width": 1.25, "line-opacity": 0.72 } });
       }
+      state.map.addSource("mobile-profile-progress-context", { type: "geojson", data: { type: "FeatureCollection", features: mobileProfileAncestralLandFeatures() } });
+      state.map.addLayer({ id: "mobile-profile-progress-territories", type: "fill", source: "mobile-profile-progress-context", paint: { "fill-color": ["coalesce", ["get", "fillcolor"], "#6f917c"], "fill-opacity": 0.1 } });
+      state.map.addLayer({ id: "mobile-profile-progress-territory-lines", type: "line", source: "mobile-profile-progress-context", paint: { "line-color": "#496f5d", "line-width": 0.8, "line-opacity": 0.28, "line-dasharray": [2, 2] } });
       const pathData = mode.model.path.length > 1 ? { type: "Feature", geometry: { type: "LineString", coordinates: mode.model.path }, properties: {} } : { type: "FeatureCollection", features: [] };
       state.map.addSource("mobile-profile-progress-path", { type: "geojson", data: pathData });
       state.map.addLayer({ id: "mobile-profile-progress-path", type: "line", source: "mobile-profile-progress-path", paint: { "line-color": "#315c48", "line-width": 2.2, "line-opacity": 0.62, "line-dasharray": [2, 1.5] } });
@@ -32624,7 +32726,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         if (mode.clickHandler) state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);
         removeMobileProfileProgressLayers();
         mode.layerVisibility?.forEach((visibility, id) => { if (state.map.getLayer(id)) state.map.setLayoutProperty(id, "visibility", visibility); });
-        if (mode.territoryOpacity !== undefined && state.map.getLayer("mobile-territory-polygons")) state.map.setPaintProperty("mobile-territory-polygons", "fill-opacity", mode.territoryOpacity);
         if (options.restoreCamera !== false && mode.camera?.center) state.map.jumpTo({ center: mode.camera.center, zoom: mode.camera.zoom });
       }
       state.profileMapMode = null;
@@ -32682,6 +32783,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         activityPreview,
         activityDateValue,
         languageWords: learnedLanguageWords(profile),
+        profileMapItems: mobileContributorProfileMapModel(profile).items,
         loginRecords: remoteLoginRewardRecords(profile),
         includePurchases: false,
         commentPreviewLength: 104,
@@ -32698,10 +32800,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             <article class="profile-feed-row">
               <div>
                 <span class="detail-meta">${escapeHtml(item.type)} - ${escapeHtml(activityDateLabel(item.date))}</span>
-                ${item.site_slug ? `<button class="profile-feed-title" type="button" data-profile-site="${escapeHtml(item.site_slug)}">${escapeHtml(item.title)}</button>` : `<strong>${escapeHtml(item.title)}</strong>`}
+                ${item.site_slug ? `<button class="profile-feed-title" type="button" data-profile-site="${escapeHtml(item.site_slug)}">${escapeHtml(item.title)}</button>` : item.wiki_slug ? `<button class="profile-feed-title" type="button" data-profile-wiki="${escapeHtml(item.wiki_slug)}">${escapeHtml(item.title)}</button>` : `<strong>${escapeHtml(item.title)}</strong>`}
                 ${item.detail ? `<p>${escapeHtml(item.detail)}</p>` : ""}
               </div>
-              <span class="profile-feed-points" aria-label="${Number(item.points) || 0} points earned">+${Number(item.points) || 0}</span>
+              ${Number(item.points) > 0 ? `<span class="profile-feed-points" aria-label="${Number(item.points)} points earned">+${Number(item.points)}</span>` : ""}
             </article>
           `).join("") : `<p class="detail-meta">Activity will appear here after comments, visits, daily signed-in visits, or language quizzes.</p>`}
         </section>
@@ -35042,6 +35144,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         exitMobileProfileMapMode();
         openSite(link.dataset.profileSite);
         profilesSheetEl.classList.remove("open");
+        return;
+      }
+      const wikiLink = event.target.closest("[data-profile-wiki]");
+      if (wikiLink?.dataset.profileWiki) {
+        exitMobileProfileMapMode();
+        openWikiArticle(wikiLink.dataset.profileWiki);
+        profilesSheetEl.classList.remove("open");
       }
     });
     document.addEventListener("click", event => {
@@ -36554,7 +36663,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     start();
-                </script>
+                    </script>
 </body>
 </html>
 

@@ -14560,7 +14560,9 @@
         supporterPoints: profile?.is_monthly_supporter ? supportMonths(profile) * 100 : 0,
         emptyMilestone: "New Learner"
       });
-      const showPointsSyncing = pointsSyncing && options.syncRemote !== false;
+      const viewer = currentContributorProfile();
+      const canSyncOwnPoints = Boolean(viewer && PROFILE_UTILS.profilesShareIdentity(profile, viewer));
+      const showPointsSyncing = pointsSyncing && options.syncRemote !== false && canSyncOwnPoints;
       if (showPointsSyncing) {
         ensureCanonicalProfilePointEvents(profile).then(updated => {
           if (!updated) return;
@@ -14573,7 +14575,15 @@
 
     function mobileContributorProfileMapModel(profile) {
       const profileKey = String(profile?.id || profile?.slug || profile?.username || "contributor");
-      const signature = [state.publicVisits.length, state.publicComments.length, state.commentVotes.length, state.languageQuizAttempts.length, state.plantObservations.length, state.mapStories.length, state.siteSuggestions.length].join(":");
+      const signature = PROFILE_UTILS.profileMapActivitySignature([
+        state.publicVisits,
+        state.publicComments,
+        state.commentVotes,
+        state.languageQuizAttempts,
+        state.plantObservations,
+        state.mapStories,
+        state.siteSuggestions
+      ]);
       const cacheKey = `${profileKey}:${signature}`;
       if (state.profileMapActivityCache.has(cacheKey)) return state.profileMapActivityCache.get(cacheKey);
       const identityIds = profileIdentityIds(profile);
@@ -14582,6 +14592,7 @@
         const coordinates = site?.center || geometryCenter(siteDisplayGeometry(site));
         return {
           sourceType,
+          relatedId: site?.id || null,
           slug,
           title: site?.title || title,
           coordinates,
@@ -14592,6 +14603,7 @@
       const model = PROFILE_UTILS.profileMapActivityModel(profile, profileActivity(profile), {
         relationId,
         identityIds,
+        identityNames: profileIdentityNames(profile),
         resolveReference,
         imageUrl: directusAssetUrl,
         languageWords: learnedLanguageWords(profile),
@@ -14640,8 +14652,24 @@
       </div>`;
     }
 
-    const MOBILE_PROFILE_PROGRESS_LAYER_IDS = ["mobile-profile-progress-labels", "mobile-profile-progress-points", "mobile-profile-progress-path", "mobile-profile-progress-island-line", "mobile-profile-progress-island-fill"];
-    const MOBILE_PROFILE_PROGRESS_SOURCE_IDS = ["mobile-profile-progress-points", "mobile-profile-progress-path", "mobile-profile-progress-island"];
+    const MOBILE_PROFILE_PROGRESS_LAYER_IDS = ["mobile-profile-progress-labels", "mobile-profile-progress-points", "mobile-profile-progress-path", "mobile-profile-progress-territory-lines", "mobile-profile-progress-territories", "mobile-profile-progress-island-line", "mobile-profile-progress-island-fill"];
+    const MOBILE_PROFILE_PROGRESS_SOURCE_IDS = ["mobile-profile-progress-points", "mobile-profile-progress-path", "mobile-profile-progress-context", "mobile-profile-progress-island"];
+
+    function mobileProfileAncestralLandFeatures() {
+      return (state.sites || [])
+        .filter(site => {
+          const text = normalizeText(`${site?.title || ""} ${site?.slug || ""} ${site?.site_type || ""}`);
+          return site?.site_type === "territory"
+            && /ancestral|traditional/.test(text)
+            && !/hoggenoch/.test(text)
+            && /Polygon/.test(siteDisplayGeometry(site)?.type || "");
+        })
+        .map(site => ({
+          type: "Feature",
+          geometry: siteDisplayGeometry(site),
+          properties: { id: site.id, slug: site.slug, title: site.title, fillcolor: site.map_fill_color || "#6f917c" }
+        }));
+    }
 
     function removeMobileProfileProgressLayers() {
       if (!state.map) return;
@@ -14661,19 +14689,18 @@
       removeMobileProfileProgressLayers();
       mode.layerVisibility = mode.layerVisibility || new Map();
       for (const layer of state.map.getStyle()?.layers || []) {
-        if (!layer.id.startsWith("mobile-") || layer.id.startsWith("mobile-profile-progress-") || layer.id === "mobile-territory-polygons") continue;
+        if (!layer.id.startsWith("mobile-") || layer.id.startsWith("mobile-profile-progress-")) continue;
         if (!mode.layerVisibility.has(layer.id)) mode.layerVisibility.set(layer.id, state.map.getLayoutProperty(layer.id, "visibility") || "visible");
         state.map.setLayoutProperty(layer.id, "visibility", "none");
       }
-      if (state.map.getLayer("mobile-territory-polygons")) {
-        if (mode.territoryOpacity === undefined) mode.territoryOpacity = state.map.getPaintProperty("mobile-territory-polygons", "fill-opacity");
-        state.map.setPaintProperty("mobile-territory-polygons", "fill-opacity", 0.09);
-      }
       if (state.landMaskData?.geometry) {
         state.map.addSource("mobile-profile-progress-island", { type: "geojson", data: state.landMaskData });
-        state.map.addLayer({ id: "mobile-profile-progress-island-fill", type: "fill", source: "mobile-profile-progress-island", paint: { "fill-color": "#f8fbf5", "fill-opacity": 0.78 } }, "mobile-territory-polygons");
+        state.map.addLayer({ id: "mobile-profile-progress-island-fill", type: "fill", source: "mobile-profile-progress-island", paint: { "fill-color": "#f8fbf5", "fill-opacity": 0.78 } });
         state.map.addLayer({ id: "mobile-profile-progress-island-line", type: "line", source: "mobile-profile-progress-island", paint: { "line-color": "#315a49", "line-width": 1.25, "line-opacity": 0.72 } });
       }
+      state.map.addSource("mobile-profile-progress-context", { type: "geojson", data: { type: "FeatureCollection", features: mobileProfileAncestralLandFeatures() } });
+      state.map.addLayer({ id: "mobile-profile-progress-territories", type: "fill", source: "mobile-profile-progress-context", paint: { "fill-color": ["coalesce", ["get", "fillcolor"], "#6f917c"], "fill-opacity": 0.1 } });
+      state.map.addLayer({ id: "mobile-profile-progress-territory-lines", type: "line", source: "mobile-profile-progress-context", paint: { "line-color": "#496f5d", "line-width": 0.8, "line-opacity": 0.28, "line-dasharray": [2, 2] } });
       const pathData = mode.model.path.length > 1 ? { type: "Feature", geometry: { type: "LineString", coordinates: mode.model.path }, properties: {} } : { type: "FeatureCollection", features: [] };
       state.map.addSource("mobile-profile-progress-path", { type: "geojson", data: pathData });
       state.map.addLayer({ id: "mobile-profile-progress-path", type: "line", source: "mobile-profile-progress-path", paint: { "line-color": "#315c48", "line-width": 2.2, "line-opacity": 0.62, "line-dasharray": [2, 1.5] } });
@@ -14721,7 +14748,6 @@
         if (mode.clickHandler) state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);
         removeMobileProfileProgressLayers();
         mode.layerVisibility?.forEach((visibility, id) => { if (state.map.getLayer(id)) state.map.setLayoutProperty(id, "visibility", visibility); });
-        if (mode.territoryOpacity !== undefined && state.map.getLayer("mobile-territory-polygons")) state.map.setPaintProperty("mobile-territory-polygons", "fill-opacity", mode.territoryOpacity);
         if (options.restoreCamera !== false && mode.camera?.center) state.map.jumpTo({ center: mode.camera.center, zoom: mode.camera.zoom });
       }
       state.profileMapMode = null;
@@ -14779,6 +14805,7 @@
         activityPreview,
         activityDateValue,
         languageWords: learnedLanguageWords(profile),
+        profileMapItems: mobileContributorProfileMapModel(profile).items,
         loginRecords: remoteLoginRewardRecords(profile),
         includePurchases: false,
         commentPreviewLength: 104,
@@ -14795,10 +14822,10 @@
             <article class="profile-feed-row">
               <div>
                 <span class="detail-meta">${escapeHtml(item.type)} - ${escapeHtml(activityDateLabel(item.date))}</span>
-                ${item.site_slug ? `<button class="profile-feed-title" type="button" data-profile-site="${escapeHtml(item.site_slug)}">${escapeHtml(item.title)}</button>` : `<strong>${escapeHtml(item.title)}</strong>`}
+                ${item.site_slug ? `<button class="profile-feed-title" type="button" data-profile-site="${escapeHtml(item.site_slug)}">${escapeHtml(item.title)}</button>` : item.wiki_slug ? `<button class="profile-feed-title" type="button" data-profile-wiki="${escapeHtml(item.wiki_slug)}">${escapeHtml(item.title)}</button>` : `<strong>${escapeHtml(item.title)}</strong>`}
                 ${item.detail ? `<p>${escapeHtml(item.detail)}</p>` : ""}
               </div>
-              <span class="profile-feed-points" aria-label="${Number(item.points) || 0} points earned">+${Number(item.points) || 0}</span>
+              ${Number(item.points) > 0 ? `<span class="profile-feed-points" aria-label="${Number(item.points)} points earned">+${Number(item.points)}</span>` : ""}
             </article>
           `).join("") : `<p class="detail-meta">Activity will appear here after comments, visits, daily signed-in visits, or language quizzes.</p>`}
         </section>
@@ -17138,6 +17165,13 @@
       if (link?.dataset.profileSite) {
         exitMobileProfileMapMode();
         openSite(link.dataset.profileSite);
+        profilesSheetEl.classList.remove("open");
+        return;
+      }
+      const wikiLink = event.target.closest("[data-profile-wiki]");
+      if (wikiLink?.dataset.profileWiki) {
+        exitMobileProfileMapMode();
+        openWikiArticle(wikiLink.dataset.profileWiki);
         profilesSheetEl.classList.remove("open");
       }
     });
