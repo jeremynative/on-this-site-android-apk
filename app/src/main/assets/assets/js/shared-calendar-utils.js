@@ -34,6 +34,18 @@
     return true;
   }
 
+  function isCalendarEventCurrentOrUpcoming(event = {}, deps = {}) {
+    if (isCalendarEventActive(event, deps)) return true;
+    const normalizeText = deps.normalizeText || (value => String(value || "").toLowerCase().trim());
+    const localDateKey = deps.localDateKey || (() => new Date().toISOString().slice(0, 10));
+    const status = normalizeText(event.status || event.on_view_status || "");
+    if (status && !/published|current|active|on view|permanent/.test(status)) return false;
+    const today = localDateKey();
+    const start = String(event.start_datetime || event.start_date || "").slice(0, 10);
+    const end = String(event.end_datetime || event.end_date || "").slice(0, 10);
+    return Boolean(start && start >= today && (!end || end >= today));
+  }
+
   function normalizeCalendarEvents(events, deps = {}) {
     const siteCenter = deps.siteCenter || (() => null);
     return (events || [])
@@ -141,10 +153,10 @@
     });
 
     context.fillStyle = "#315c48";
-    context.font = "700 11px Arial, sans-serif";
+    context.font = "700 9px Arial, sans-serif";
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillText(calendarMonthDay(value), 19, 24);
+    context.fillText(calendarMonthDay(value), 19, 24, 23);
     map.addImage(id, context.getImageData(0, 0, canvas.width, canvas.height), { pixelRatio });
     return true;
   }
@@ -163,7 +175,9 @@
     eventDateRange,
     exhibitDateLabel: eventDateRange,
     isCalendarEventActive,
+    isCalendarEventCurrentOrUpcoming,
     isExhibitActive: isCalendarEventActive,
+    isExhibitCurrentOrUpcoming: isCalendarEventCurrentOrUpcoming,
     normalizeCalendarEvents,
     onThisDayCalendarMarkup,
     onThisDayNumber

@@ -2097,13 +2097,7 @@
     }
 
     function isExhibitCurrentOrUpcoming(exhibit) {
-      if (isExhibitActive(exhibit)) return true;
-      const status = normalizeText(exhibit?.status || exhibit?.on_view_status || "");
-      if (status && !/published|current|active|on view|permanent/.test(status)) return false;
-      const today = localDateKey();
-      const start = String(exhibit?.start_datetime || exhibit?.start_date || "").slice(0, 10);
-      const end = String(exhibit?.end_datetime || exhibit?.end_date || "").slice(0, 10);
-      return Boolean(start && start >= today && (!end || end >= today));
+      return CALENDAR_UTILS.isExhibitCurrentOrUpcoming(exhibit, { normalizeText, localDateKey });
     }
 
     function exhibitHasSiteMapPin(exhibit) {

@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260816-lifecycle-restore-r131";
+const expectedBuild = "20260816-calendar-visibility-r132";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -192,10 +192,15 @@ if (!bundledApp.includes('id="landscape-panel-resizer"')
 }
 
 if (!bundledMobileJs.includes("CALENDAR_UTILS.calendarBadgeMarkup(exhibit")
+    || !bundledMobileJs.includes("CALENDAR_UTILS.isExhibitCurrentOrUpcoming(exhibit")
     || !bundledMobileCss.includes(".mobile-calendar-event-marker .calendar-date-badge")
     || !bundledCalendarUtils.includes("function calendarBadgeMarkup")
+    || !bundledCalendarUtils.includes("function isCalendarEventCurrentOrUpcoming")
+    || !bundledCalendarUtils.includes("isExhibitCurrentOrUpcoming: isCalendarEventCurrentOrUpcoming")
+    || !bundledCalendarUtils.includes('context.font = "700 9px Arial, sans-serif"')
+    || !bundledCalendarUtils.includes("context.fillText(calendarMonthDay(value), 19, 24, 23)")
     || bundledMobileJs.includes('element.textContent = "🗓"')) {
-  throw new Error("APK event markers must use the shared dated calendar badge instead of the old emoji calendar.");
+  throw new Error("APK event markers must share current/upcoming visibility and compact dated calendar artwork with desktop.");
 }
 
 if (!bundledMobileJs.includes("function startMobileStartupSiteReveal()")
