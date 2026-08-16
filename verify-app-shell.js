@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260816-back-navigation-lifecycle-r123";
+const expectedBuild = "20260816-biography-layer-split-r124";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -639,25 +639,30 @@ if (!bundledResearchQuestionCss.includes("left: max(16px, var(--app-left-safe, e
   throw new Error("Bundled Android research-question controls must reserve portrait and landscape system bars.");
 }
 if (!bundledMobileJs.includes("function setAllMobileLayerVisibility(visible)")
-    || !bundledMobileJs.includes("showBiographyPaths: saved.biographyPathsPreferenceSet === true")
+    || !bundledMobileJs.includes("settings.showBiographyPaths = saved.biographyPathsPreferenceSet === true")
+    || !bundledMobileJs.includes("settings.showBiographyIcons = saved.biographyIconsPreferenceSet === true")
     || !bundledMobileJs.includes("state.settings.showBiographyPaths = nextVisible;")
     || !bundledMobileJs.includes("state.settings.biographyPathsPreferenceSet = true;")
-    || !bundledMobileJs.includes("const items = mobileBiographyPathsEnabled() ? mobileMovingBiographyItems() : [];")
+    || !bundledMobileJs.includes("state.settings.showBiographyIcons = nextVisible;")
+    || !bundledMobileJs.includes("state.settings.biographyIconsPreferenceSet = true;")
+    || !bundledMobileJs.includes("const items = mobileBiographyIconsEnabled() ? mobileMovingBiographyItems() : [];")
     || !bundledMobileJs.includes("ensureMobileMovingBiographyMarkers();")
     || !bundledMobileJs.includes("state.settings.layerCategories = {};")
     || !bundledMobileJs.includes("state.settings.eraCategories = {};")
     || !bundledMobileJs.includes("mobileLayerEnableAllBtn.disabled = allOn || !bulkActionsReady")
     || !bundledMobileJs.includes("Date.now() < mobileLayerBulkReadyAt")
     || !bundledMobileJs.includes("mobileLayerBulkReadyAt = Date.now() + 400;")) {
-  throw new Error("Bundled Android labels must default biography paths on, preserve an explicit preference, and include them in bulk controls.");
+  throw new Error("Bundled Android labels must keep biography paths and default-on icons independent, preserve explicit preferences, and include both in bulk controls.");
 }
 for (const [label, document] of [
   ["bundled fallback", bundledApp]
 ]) {
-  if (!document.includes("Biography paths &amp; icons")
+  if (!document.includes("Biography paths</span>")
+      || !document.includes("Biography icons</span>")
       || !document.includes('id="mobile-layer-biography-paths" type="checkbox" checked')
-      || !document.includes("const items = mobileBiographyPathsEnabled() ? mobileMovingBiographyItems() : [];")) {
-    throw new Error(`${label} must hide moving biography icons with the Biography paths & icons control.`);
+      || !document.includes('id="mobile-layer-biography-icons" type="checkbox" checked')
+      || !document.includes("const items = mobileBiographyIconsEnabled() ? mobileMovingBiographyItems() : [];")) {
+    throw new Error(`${label} must expose independent Biography paths and default-on Biography icons controls.`);
   }
 }
 if (!bundledLearningCardUtils.includes("function normalizeLearningCard(input = {}, options = {})")

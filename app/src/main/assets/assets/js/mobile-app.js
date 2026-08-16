@@ -1015,6 +1015,7 @@
     const mobileLayerPinsInput = document.getElementById("mobile-layer-pins");
     const mobileLayerShapesInput = document.getElementById("mobile-layer-shapes");
     const mobileLayerBiographyPathsInput = document.getElementById("mobile-layer-biography-paths");
+    const mobileLayerBiographyIconsInput = document.getElementById("mobile-layer-biography-icons");
     const mobileLayerCategoryInputs = [...document.querySelectorAll(".mobile-layer-category")];
     const mobileLayerEraInputs = [...document.querySelectorAll(".mobile-layer-era")];
     const collapseListBtn = document.getElementById("collapse-list");
@@ -1185,10 +1186,20 @@
           ? saved.showBiographyPaths === true
           : true,
         biographyPathsPreferenceSet: saved.biographyPathsPreferenceSet === true,
+        showBiographyIcons: true,
+        biographyIconsPreferenceSet: false,
         layerCategories: {},
         eraCategories: {},
         ...saved
       };
+      settings.showBiographyPaths = saved.biographyPathsPreferenceSet === true
+        ? saved.showBiographyPaths === true
+        : true;
+      settings.biographyPathsPreferenceSet = saved.biographyPathsPreferenceSet === true;
+      settings.showBiographyIcons = saved.biographyIconsPreferenceSet === true
+        ? saved.showBiographyIcons === true
+        : true;
+      settings.biographyIconsPreferenceSet = saved.biographyIconsPreferenceSet === true;
       settings.layerCategories = { ...(saved.layerCategories || {}) };
       settings.eraCategories = { ...(saved.eraCategories || {}) };
       return settings;
@@ -10885,6 +10896,10 @@
       return state.settings.showBiographyPaths === true;
     }
 
+    function mobileBiographyIconsEnabled() {
+      return state.settings.showBiographyIcons === true;
+    }
+
     // Keep the mobile map's visual route faithful to the reviewed desktop route:
     // routePlaces can add travel detail, while break flags deliberately prevent a
     // line from implying a journey that the source does not document.
@@ -11410,14 +11425,11 @@
 
     function ensureMobileMovingBiographyMarkers() {
       if (!state.map || !window.mapboxgl?.Marker) return;
-      if (!mobileBiographyPathsEnabled() && state.mobileMovingBiographyMarkerQueueTimer) {
+      if (!mobileBiographyIconsEnabled() && state.mobileMovingBiographyMarkerQueueTimer) {
         window.clearTimeout(state.mobileMovingBiographyMarkerQueueTimer);
         state.mobileMovingBiographyMarkerQueueTimer = null;
       }
-      // The Biography paths & icons control owns the moving biography markers
-      // as well as the Mapbox route layers. Otherwise Disable all leaves a
-      // visible, interactive biography icon behind.
-      const items = mobileBiographyPathsEnabled() ? mobileMovingBiographyItems() : [];
+      const items = mobileBiographyIconsEnabled() ? mobileMovingBiographyItems() : [];
       const wanted = new Set(items.map(item => item.slug));
       for (const [slug, entry] of state.mobileMovingBiographyMarkers) {
         if (!wanted.has(slug)) {
@@ -11429,7 +11441,7 @@
       if (!missing.length) return;
       let index = 0;
       const addNext = () => {
-        if (!mobileBiographyPathsEnabled()) {
+        if (!mobileBiographyIconsEnabled()) {
           state.mobileMovingBiographyMarkerQueueTimer = null;
           return;
         }
@@ -16871,6 +16883,7 @@
       }
       if (mobileLayerShapesInput) mobileLayerShapesInput.checked = state.settings.showShapes !== false;
       if (mobileLayerBiographyPathsInput) mobileLayerBiographyPathsInput.checked = mobileBiographyPathsEnabled();
+      if (mobileLayerBiographyIconsInput) mobileLayerBiographyIconsInput.checked = mobileBiographyIconsEnabled();
       const configured = state.settings.layerCategories || {};
       mobileLayerCategoryInputs.forEach(input => {
         input.checked = configured[input.value] !== false;
@@ -16886,7 +16899,8 @@
           state.settings.exhibits !== false,
           state.settings.showPins !== false,
           state.settings.showShapes !== false,
-          mobileBiographyPathsEnabled()
+          mobileBiographyPathsEnabled(),
+          mobileBiographyIconsEnabled()
         ];
         const primaryCount = primaryStates.filter(Boolean).length;
         const categoryCount = mobileLayerCategoryInputs.filter(input => input.checked).length;
@@ -16922,6 +16936,10 @@
         state.settings.showBiographyPaths = visible;
         state.settings.biographyPathsPreferenceSet = true;
       }
+      if (kind === "biographyIcons") {
+        state.settings.showBiographyIcons = visible;
+        state.settings.biographyIconsPreferenceSet = true;
+      }
       if (kind === "category") {
         state.settings.layerCategories = { ...(state.settings.layerCategories || {}) };
         mobileLayerCategoryInputs.forEach(input => {
@@ -16950,6 +16968,8 @@
       state.settings.showShapes = nextVisible;
       state.settings.showBiographyPaths = nextVisible;
       state.settings.biographyPathsPreferenceSet = true;
+      state.settings.showBiographyIcons = nextVisible;
+      state.settings.biographyIconsPreferenceSet = true;
       state.settings.layerCategories = {};
       mobileLayerCategoryInputs.forEach(input => {
         state.settings.layerCategories[input.value] = nextVisible;
@@ -18473,6 +18493,7 @@
     mobileLayerPinsInput?.addEventListener("change", () => setMobileLayerVisibility("pins", mobileLayerPinsInput.checked));
     mobileLayerShapesInput?.addEventListener("change", () => setMobileLayerVisibility("shapes", mobileLayerShapesInput.checked));
     mobileLayerBiographyPathsInput?.addEventListener("change", () => setMobileLayerVisibility("biographyPaths", mobileLayerBiographyPathsInput.checked));
+    mobileLayerBiographyIconsInput?.addEventListener("change", () => setMobileLayerVisibility("biographyIcons", mobileLayerBiographyIconsInput.checked));
     mobileLayerCategoryInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("category", true)));
     mobileLayerEraInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("era", true)));
     function runMobileLayerBulkAction(visible) {
