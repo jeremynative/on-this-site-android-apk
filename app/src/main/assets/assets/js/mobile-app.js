@@ -13215,6 +13215,27 @@
       return null;
     }
 
+    function mobilePromoPayload(kind) {
+      const dateKey = localDateKey();
+      const timelineEvents = state.sortedTimelineEvents;
+      const sites = state.visitableSiteList;
+      const exhibits = state.exhibits;
+      const questionOpen = Boolean(state.researchQuestionInstance?.open);
+      let cache = state.mobilePromoPayloadCache;
+      if (
+        cache?.dateKey !== dateKey
+        || cache.timelineEvents !== timelineEvents
+        || cache.sites !== sites
+        || cache.exhibits !== exhibits
+        || cache.questionOpen !== questionOpen
+      ) {
+        cache = { dateKey, timelineEvents, sites, exhibits, questionOpen, payloads: new Map() };
+        state.mobilePromoPayloadCache = cache;
+      }
+      if (!cache.payloads.has(kind)) cache.payloads.set(kind, buildMobilePromoPayload(kind));
+      return cache.payloads.get(kind) || null;
+    }
+
     function availableMobilePromoKinds() {
       return ["event", "on-this-date", "did-you-know", "learning", "question"]
         .filter(kind => Boolean(mobilePromoPayload(kind)));
@@ -15755,54 +15776,34 @@
     }
 
     function mobileActivitySpecificContentTarget(activityItems = []) {
-      const records = ACTIVITY_UTILS.contentUpdateActivityRecords(activityItems);
-      for (const record of records) {
-        const type = String(record.type || record.kind || "").toLowerCase();
-        if (type === "comment") {
-          const commentId = String(record.commentId || record.comment_id || "");
+      const candidates = ACTIVITY_UTILS.contentUpdateTargetCandidates(activityItems);
+      let discussionFallback = null;
+      for (const candidate of candidates) {
+        if (candidate.type === "comment") {
+          const commentId = candidate.id;
           const exactComment = commentId
             ? detailBodyEl.querySelector(`[data-comment-card="${CSS.escape(commentId)}"]`)
             : null;
-          return exactComment || detailBodyEl.querySelector(".discussion-section");
+          if (exactComment) return exactComment;
+          discussionFallback ||= detailBodyEl.querySelector(".discussion-section");
         }
-        if (type === "historic-moment") {
-          const activityId = String(record.activityId || record.activity_id || record.id || "");
+        if (candidate.type === "historic-moment") {
+          const activityId = candidate.id;
           const exactMoment = activityId
             ? detailBodyEl.querySelector(`#timeline-moment-${CSS.escape(activityId)}, [data-event-id="${CSS.escape(activityId)}"]`)
             : null;
           if (exactMoment) return exactMoment;
         }
-        if (type === "map-story") {
+        if (candidate.type === "map-story") {
           const hero = detailBodyEl.querySelector("[data-site-hero-carousel], .article-sticky-hero");
           if (hero) return hero;
         }
-        if (type === "site" && /^site visit$/i.test(String(record.label || ""))) {
+        if (candidate.type === "site-visit") {
           const visitActions = detailBodyEl.querySelector("[data-mobile-visit-actions]");
           if (visitActions) return visitActions.closest(".actions") || visitActions;
         }
       }
-      return null;
-    }
-
-    function mobilePromoPayload(kind) {
-      const dateKey = localDateKey();
-      const timelineEvents = state.sortedTimelineEvents;
-      const sites = state.visitableSiteList;
-      const exhibits = state.exhibits;
-      const questionOpen = Boolean(state.researchQuestionInstance?.open);
-      let cache = state.mobilePromoPayloadCache;
-      if (
-        cache?.dateKey !== dateKey
-        || cache.timelineEvents !== timelineEvents
-        || cache.sites !== sites
-        || cache.exhibits !== exhibits
-        || cache.questionOpen !== questionOpen
-      ) {
-        cache = { dateKey, timelineEvents, sites, exhibits, questionOpen, payloads: new Map() };
-        state.mobilePromoPayloadCache = cache;
-      }
-      if (!cache.payloads.has(kind)) cache.payloads.set(kind, buildMobilePromoPayload(kind));
-      return cache.payloads.get(kind) || null;
+      return discussionFallback;
     }
 
     function revealMobileContentUpdate(item, activityItems = []) {

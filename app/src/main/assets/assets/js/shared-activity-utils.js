@@ -161,6 +161,33 @@
     ]).filter(Boolean);
   }
 
+  function contentUpdateTargetCandidates(items = []) {
+    const precise = [];
+    const general = [];
+    const seen = new Set();
+    const add = (target, isPrecise = false) => {
+      const key = `${target.type}|${target.id || ""}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      (isPrecise ? precise : general).push(target);
+    };
+    contentUpdateActivityRecords(items).forEach(record => {
+      const type = String(record.kind || record.type || "").toLowerCase();
+      if (type === "comment") {
+        const id = String(record.commentId || record.comment_id || "").trim();
+        add({ type: "comment", id }, Boolean(id));
+      } else if (type === "historic-moment") {
+        const id = String(record.activityId || record.activity_id || record.id || "").trim();
+        add({ type: "historic-moment", id }, Boolean(id));
+      } else if (type === "map-story") {
+        add({ type: "map-story" });
+      } else if (type === "site" && /^site visit$/i.test(String(record.label || ""))) {
+        add({ type: "site-visit" });
+      }
+    });
+    return [...precise, ...general];
+  }
+
   function readSeenItemKeys(storageKey, storage = defaultStorage()) {
     try {
       const parsed = JSON.parse(storage?.getItem?.(storageKey) || "[]");
@@ -718,6 +745,7 @@
     contentActivityItems,
     contentActivityItemKeys,
     contentUpdateActivityRecords,
+    contentUpdateTargetCandidates,
     readSeenItemKeys,
     writeSeenItemKeys,
     unreadItems,
