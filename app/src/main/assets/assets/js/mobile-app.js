@@ -1171,6 +1171,8 @@
     const feedbackScreenshotStatusEl = document.getElementById("feedback-screenshot-status");
     const feedbackSubmitBtn = document.getElementById("feedback-submit");
 
+    const MOBILE_BIOGRAPHY_ICON_PREFERENCE_VERSION = 2;
+
     function loadSettings() {
       const storedSettings = SHARED_UTILS.readStorageJson("nli-mobile-settings", {}) || {};
       const saved = storedSettings && typeof storedSettings === "object" && !Array.isArray(storedSettings) ? storedSettings : {};
@@ -1199,10 +1201,13 @@
         ? saved.showBiographyPaths === true
         : true;
       settings.biographyPathsPreferenceSet = saved.biographyPathsPreferenceSet === true;
-      settings.showBiographyIcons = saved.biographyIconsPreferenceSet === true
+      const hasCurrentBiographyIconPreference = saved.biographyIconsPreferenceSet === true
+        && Number(saved.biographyIconsPreferenceVersion || 0) === MOBILE_BIOGRAPHY_ICON_PREFERENCE_VERSION;
+      settings.showBiographyIcons = hasCurrentBiographyIconPreference
         ? saved.showBiographyIcons === true
         : true;
-      settings.biographyIconsPreferenceSet = saved.biographyIconsPreferenceSet === true;
+      settings.biographyIconsPreferenceSet = hasCurrentBiographyIconPreference;
+      settings.biographyIconsPreferenceVersion = MOBILE_BIOGRAPHY_ICON_PREFERENCE_VERSION;
       settings.layerCategories = { ...(saved.layerCategories || {}) };
       settings.eraCategories = { ...(saved.eraCategories || {}) };
       return settings;
@@ -17038,6 +17043,7 @@
       if (kind === "biographyIcons") {
         state.settings.showBiographyIcons = visible;
         state.settings.biographyIconsPreferenceSet = true;
+        state.settings.biographyIconsPreferenceVersion = MOBILE_BIOGRAPHY_ICON_PREFERENCE_VERSION;
       }
       if (kind === "category") {
         state.settings.layerCategories = { ...(state.settings.layerCategories || {}) };
@@ -17069,6 +17075,7 @@
       state.settings.biographyPathsPreferenceSet = true;
       state.settings.showBiographyIcons = nextVisible;
       state.settings.biographyIconsPreferenceSet = true;
+      state.settings.biographyIconsPreferenceVersion = MOBILE_BIOGRAPHY_ICON_PREFERENCE_VERSION;
       state.settings.layerCategories = {};
       mobileLayerCategoryInputs.forEach(input => {
         state.settings.layerCategories[input.value] = nextVisible;

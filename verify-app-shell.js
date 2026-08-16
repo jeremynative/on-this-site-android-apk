@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260816-calendar-visibility-r132";
+const expectedBuild = "20260816-biography-icons-default-r133";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -675,7 +675,10 @@ if (!bundledResearchQuestionCss.includes("left: max(16px, var(--app-left-safe, e
 }
 if (!bundledMobileJs.includes("function setAllMobileLayerVisibility(visible)")
     || !bundledMobileJs.includes("settings.showBiographyPaths = saved.biographyPathsPreferenceSet === true")
-    || !bundledMobileJs.includes("settings.showBiographyIcons = saved.biographyIconsPreferenceSet === true")
+    || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_ICON_PREFERENCE_VERSION = 2;")
+    || !bundledMobileJs.includes("const hasCurrentBiographyIconPreference = saved.biographyIconsPreferenceSet === true")
+    || !bundledMobileJs.includes("settings.showBiographyIcons = hasCurrentBiographyIconPreference")
+    || !bundledMobileJs.includes("settings.biographyIconsPreferenceVersion = MOBILE_BIOGRAPHY_ICON_PREFERENCE_VERSION;")
     || !bundledMobileJs.includes("state.settings.showBiographyPaths = nextVisible;")
     || !bundledMobileJs.includes("state.settings.biographyPathsPreferenceSet = true;")
     || !bundledMobileJs.includes("state.settings.showBiographyIcons = nextVisible;")
@@ -687,7 +690,7 @@ if (!bundledMobileJs.includes("function setAllMobileLayerVisibility(visible)")
     || !bundledMobileJs.includes("mobileLayerEnableAllBtn.disabled = allOn || !bulkActionsReady")
     || !bundledMobileJs.includes("Date.now() < mobileLayerBulkReadyAt")
     || !bundledMobileJs.includes("mobileLayerBulkReadyAt = Date.now() + 400;")) {
-  throw new Error("Bundled Android labels must keep biography paths and default-on icons independent, preserve explicit preferences, and include both in bulk controls.");
+  throw new Error("Bundled Android labels must keep biography paths and icons independent, restore icons on for this release, preserve later explicit preferences, and include both in bulk controls.");
 }
 if (!bundledMobileJs.includes("mobileMovingMarkerPausedAt: 0")
     || !bundledMobileJs.includes("mobileMovingMarkerPausedDurationMs: 0")
