@@ -2738,7 +2738,12 @@
       detailBodyEl.querySelectorAll(".timeline-reading-focus").forEach(element => element.classList.remove("timeline-reading-focus"));
       target.classList.add("timeline-reading-focus");
       target.scrollIntoView({
-        behavior: options.behavior === "auto" ? "auto" : "smooth",
+        // Opening a site can immediately re-render after its comments refresh. A
+        // smooth scroll can still be mid-flight when that refresh preserves the
+        // temporary scroll offset, leaving the requested moment below the sheet.
+        // Exact history navigation is therefore immediate by default; callers
+        // may still explicitly request animation when no re-render can follow.
+        behavior: options.behavior === "smooth" ? "smooth" : "auto",
         block: "center"
       });
       window.setTimeout(() => target.classList.remove("timeline-reading-focus"), 8000);
