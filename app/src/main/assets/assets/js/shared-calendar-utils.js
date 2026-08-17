@@ -25,25 +25,26 @@
     if (publishStatus && !/published|current|active|on view|permanent/.test(publishStatus)) return false;
     const viewStatus = normalizeText(event.on_view_status || event.status);
     if (viewStatus && !/published|current|active|on view|permanent/.test(viewStatus)) return false;
-    if (event.is_permanent || viewStatus.includes("permanent")) return true;
     const today = localDateKey();
     const start = String(event.start_datetime || event.start_date || "").slice(0, 10);
     const end = String(event.end_datetime || event.end_date || "").slice(0, 10);
-    if (start && start > today) return false;
-    if (end && end < today) return false;
-    return true;
+    if (end) return (!start || start <= today) && end >= today;
+    if (start) return start === today;
+    return Boolean(event.is_permanent || viewStatus.includes("permanent"));
   }
 
   function isCalendarEventCurrentOrUpcoming(event = {}, deps = {}) {
-    if (isCalendarEventActive(event, deps)) return true;
     const normalizeText = deps.normalizeText || (value => String(value || "").toLowerCase().trim());
     const localDateKey = deps.localDateKey || (() => new Date().toISOString().slice(0, 10));
-    const status = normalizeText(event.status || event.on_view_status || "");
-    if (status && !/published|current|active|on view|permanent/.test(status)) return false;
+    const publishStatus = normalizeText(event.status);
+    if (publishStatus && !/published|current|active|on view|permanent|planned/.test(publishStatus)) return false;
+    const viewStatus = normalizeText(event.on_view_status);
+    if (/closed|archived|draft/.test(viewStatus)) return false;
     const today = localDateKey();
     const start = String(event.start_datetime || event.start_date || "").slice(0, 10);
     const end = String(event.end_datetime || event.end_date || "").slice(0, 10);
-    return Boolean(start && start >= today && (!end || end >= today));
+    if (end) return end >= today;
+    return Boolean(start && start >= today);
   }
 
   function normalizeCalendarEvents(events, deps = {}) {
@@ -63,7 +64,7 @@
 
   function calendarDate(value = new Date()) {
     const raw = value && typeof value === "object" && !(value instanceof Date)
-      ? (value.start_datetime || value.start_date || value.activity_feed_date || value.collection_date)
+      ? (value.start_datetime || value.start_date || value.end_datetime || value.end_date || value.collection_date)
       : value;
     if (raw instanceof Date) return raw;
     if (!raw) return null;

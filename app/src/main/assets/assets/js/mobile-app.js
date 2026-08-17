@@ -3923,6 +3923,7 @@
     function mergeCalendarEvents(events, legacyExhibits) {
       const bySlug = new Map();
       for (const item of [...events, ...legacyExhibits]) {
+        if (/^(?:archived|closed|deleted|draft|hidden)$/i.test(String(item?.status || "").trim())) continue;
         const slug = item.slug || String(item.id);
         if (!slug || bySlug.has(slug)) continue;
         bySlug.set(slug, item);
@@ -15351,9 +15352,9 @@
 
     function renderEventsList() {
       if (!eventsListEl) return;
-      const events = sortedExhibits().filter(isExhibitActive);
+      const events = sortedExhibits().filter(isExhibitCurrentOrUpcoming);
       eventsListEl.innerHTML = `
-        <p class="summary">Upcoming events, exhibits, and permanent collection moments can appear on the map and calendar list.</p>
+        <p class="summary">Current and upcoming dated events and exhibits appear on the map and calendar list.</p>
         ${events.map(exhibit => {
           const image = directusAssetUrl(exhibit.cover_image);
           return `

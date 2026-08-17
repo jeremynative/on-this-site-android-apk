@@ -47,13 +47,15 @@ if (requestedPaths.size && selectedAssets.length !== requestedPaths.size) {
   throw new Error(`Unknown bundled asset${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`);
 }
 
+const sanitizeMapboxTokens = source => source.replace(/pk\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "__NLI_MAPBOX_TOKEN__");
+
 for (const relativeShell of bundledShells) {
   const shellPath = path.join(root, relativeShell);
   if (!fs.existsSync(shellPath)) continue;
   let html = fs.readFileSync(shellPath, "utf8");
   for (const asset of selectedAssets) {
     const sourcePath = path.join(root, "app/src/main/assets", asset.path);
-    let source = fs.readFileSync(sourcePath, "utf8").trim();
+    let source = sanitizeMapboxTokens(fs.readFileSync(sourcePath, "utf8")).trim();
     if (asset.tag === "style") {
       const stylesheetDirectory = path.posix.dirname(asset.path.replace(/\\/g, "/"));
       source = source.replace(/url\((['"]?)(\.\.\/[^)'"\s]+)\1\)/gi, (_match, quote, relativeUrl) => {
@@ -73,7 +75,17 @@ for (const relativeShell of bundledShells) {
     const marker = `data-inline-source="${asset.path}"`;
     if (html.split(marker).length !== 2) throw new Error(`${relativeShell} has a duplicate or missing inline asset ${asset.path}`);
   }
-  html = html.replace(/pk\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "__NLI_MAPBOX_TOKEN__");
+  html = sanitizeMapboxTokens(html);
   fs.writeFileSync(shellPath, html);
   console.log(`Refreshed support assets in ${relativeShell}`);
+}
+
+for (const asset of selectedAssets) {
+  const sourcePath = path.join(root, "app/src/main/assets", asset.path);
+  const source = fs.readFileSync(sourcePath, "utf8");
+  const sanitized = sanitizeMapboxTokens(source);
+  if (sanitized !== source) {
+    fs.writeFileSync(sourcePath, sanitized);
+    console.log(`Restored build-time token placeholders in ${asset.path}`);
+  }
 }

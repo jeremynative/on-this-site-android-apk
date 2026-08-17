@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260817-out-of-scope-location-overview-r140";
+const expectedBuild = "20260817-calendar-future-only-r141";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -208,6 +208,15 @@ if (!bundledMobileJs.includes("CALENDAR_UTILS.calendarBadgeMarkup(exhibit")
     || !bundledCalendarUtils.includes("context.fillText(calendarMonthDay(value), 19, 24, 23)")
     || bundledMobileJs.includes('element.textContent = "🗓"')) {
   throw new Error("APK event markers must share current/upcoming visibility and compact dated calendar artwork with desktop.");
+}
+
+if (!bundledMobileJs.includes("sortedExhibits().filter(isExhibitCurrentOrUpcoming)")
+    || !bundledMobileJs.includes("archived|closed|deleted|draft|hidden")
+    || !bundledCalendarUtils.includes("if (end) return end >= today;")
+    || !bundledCalendarUtils.includes("return Boolean(start && start >= today);")
+    || bundledCalendarUtils.includes("value.activity_feed_date || value.collection_date")
+    || /Example permanent collection|Placeholder exhibit|Preservation Long Island On View/i.test(bundledApp)) {
+  throw new Error("APK calendar content must exclude filler, archived records, activity-feed pseudo-dates, and expired event markers.");
 }
 
 if (!bundledMobileJs.includes("function startMobileStartupSiteReveal()")
