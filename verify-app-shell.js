@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260817-contributor-profile-layout-r146";
+const expectedBuild = "20260817-site-camera-stability-r147";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -930,7 +930,8 @@ for (const [needle, message] of [
   ["body.mobile-content-open .mobile-notification-button", "APK floating controls must hide while content panels are open."],
   ["function mobilePanelMapPadding()", "APK map focus must account for open content panels."],
   ["function resetMobilePanelScroll(panel)", "APK panels must reset to the beginning when opened."],
-  ["const overviewZoom = 11.25", "APK detail close must return to a stable overview zoom."],
+  ["if (options.restoreMapState !== true && options.focus !== false)", "APK focus:false listing opens must preserve the visitor's camera."],
+  ["function installApkSiteCameraAudit()", "Debug APKs must expose the site-camera stability audit."],
   ["limit: options.limit || 3", "APK related sites must be capped at three."],
   ["const MOBILE_CANOE_LAND_SAMPLE_RADIUS_DEG = 0.00022", "APK canoe state must sample the moving icon footprint near narrow land."],
   ["mobileMovingLandSamples(coordinates).some", "APK canoe state must hide when any sampled point touches land."],
@@ -946,6 +947,10 @@ for (const [needle, message] of [
   [".offline-text-mode img", "APK fallback must suppress media while offline."]
 ]) {
   if (!bundledLiveRuntime.includes(needle) || !bundledApp.includes(needle)) throw new Error(message);
+}
+if (bundledLiveRuntime.includes("mobileDetailCloseMapTimer") || bundledApp.includes("mobileDetailCloseMapTimer")
+    || bundledLiveRuntime.includes("const overviewZoom = 11.25") || bundledApp.includes("const overviewZoom = 11.25")) {
+  throw new Error("APK listing close must not schedule or force a camera reset.");
 }
 if (bundledLiveRuntime.includes("fit=inside&format=webp") || bundledApp.includes("fit=inside&format=webp")) {
   throw new Error("APK map markers must not use Directus WebP transforms that add dark edge bars.");

@@ -958,8 +958,6 @@
       androidMapRefreshToken: 0,
       androidMapResizeObserver: null,
       androidMapLastSizeKey: "",
-      nearbySiteOpenTimer: null,
-      nearbySiteOpenToken: 0,
       selectedWikiSlug: "",
       androidLifecycleRestored: false,
       feedbackScreenshotFile: null,
@@ -6050,28 +6048,11 @@
     function openNearbySiteWithMapPreview(slug) {
       const site = state.sites.find(item => item.slug === slug);
       if (!site) return;
-      window.clearTimeout(state.nearbySiteOpenTimer);
-      const token = ++state.nearbySiteOpenToken;
-      state.selectedSlug = site.slug;
-      state.selectedSite = site;
-      syncActiveSiteMapLabel(site);
-      renderList();
       collapseNearbyPanelForSiteOpen();
-      if (!state.map || !site.center) {
-        openSite(slug);
-        return;
-      }
-      let opened = false;
-      const openAfterMapMove = () => {
-        if (opened || token !== state.nearbySiteOpenToken) return;
-        opened = true;
-        window.clearTimeout(state.nearbySiteOpenTimer);
-        openSite(slug, { focus: false });
-      };
-      if (typeof state.map.once === "function") state.map.once("moveend", openAfterMapMove);
-      focusSite(site, { duration: 1150, preview: true });
       animateMobileSiteMarker(site);
-      state.nearbySiteOpenTimer = window.setTimeout(openAfterMapMove, 1350);
+      // Opening a card is a content action. Keep the visitor's exact camera;
+      // the separate Map action remains available when they want to reframe.
+      openSite(slug, { focus: false });
     }
 
     function installMobileBottomPanelDrag() {
@@ -7094,10 +7075,6 @@
         if (event.touches.length !== 1) {
           state.mobileMapTouchTap.moved = true;
           return;
-        }
-        if (state.mobileDetailCloseMapTimer) {
-          window.clearTimeout(state.mobileDetailCloseMapTimer);
-          state.mobileDetailCloseMapTimer = 0;
         }
         if (state.map?.isEasing?.()) state.map.stop?.();
         const touch = event.touches[0];
@@ -12781,13 +12758,12 @@
       setDetailDrawerState(drawerState);
       syncMobilePanelAccessibility();
       resetMobilePanelScroll(detailEl);
-      if (options.restoreMapState !== true) {
+      if (options.restoreMapState !== true && options.focus !== false) {
         window.requestAnimationFrame(() => focusSite(site, {
           forPanel: true,
           center: selectedMapCenter,
           zoom: options.focusZoom,
-          preserveZoom: options.focus === false,
-          duration: options.focus === false ? 360 : 520
+          duration: 520
         }));
       }
       site = await fetchSiteDetail(site);
@@ -12925,32 +12901,6 @@
       syncMobilePanelAccessibility();
       if (returnToLongIslandView) {
         window.setTimeout(() => fitLongIslandMapView("mobile-startup-spotlight-article-closed"), 120);
-      } else if (options.settleMap !== false && state.map) {
-        const currentZoom = Number(state.map.getZoom?.());
-        const overviewZoom = 11.25;
-        if (Number.isFinite(currentZoom) && currentZoom > overviewZoom) {
-          const settleOptions = {
-            center: state.map.getCenter?.(),
-            zoom: overviewZoom,
-            padding: 0,
-            retainPadding: false
-          };
-          if (isNativeAndroidApp()) {
-            window.clearTimeout(state.mobileDetailCloseMapTimer);
-            state.mobileDetailCloseMapTimer = window.setTimeout(() => {
-              state.mobileDetailCloseMapTimer = 0;
-              state.map?.stop?.();
-              state.map?.jumpTo?.(settleOptions);
-              state.map?.triggerRepaint?.();
-            }, 700);
-          } else {
-            window.setTimeout(() => state.map?.easeTo?.({
-              ...settleOptions,
-              duration: 260,
-              essential: true
-            }), 60);
-          }
-        }
       }
     }
 
@@ -15048,6 +14998,39 @@
         const offset = candidates.find(([x, y]) => placed.every(point => Math.hypot(origin.x + x - point.x, origin.y + y - point.y) >= 29)) || [0, 0];
         marker.setOffset(offset);
         placed.push({ x: origin.x + offset[0], y: origin.y + offset[1] });
+      });
+    }
+
+    function installApkSiteCameraAudit() {
+      if (!isNativeAndroidApp() || window.AndroidApp?.isDebugBuild?.() !== true) return;
+      const snapshot = () => {
+        const center = state.map?.getCenter?.();
+        return {
+          ready: Boolean(state.map),
+          detailOpen: Boolean(detailEl?.classList.contains("open")),
+          selectedSlug: state.selectedSite?.slug || "",
+          center: center ? [Number(center.lng), Number(center.lat)] : null,
+          zoom: Number(state.map?.getZoom?.()),
+          bearing: Number(state.map?.getBearing?.()),
+          pitch: Number(state.map?.getPitch?.())
+        };
+      };
+      window.NLI_APK_SITE_CAMERA_AUDIT = Object.freeze({
+        snapshot,
+        setCamera(center, zoom) {
+          if (!state.map || !Array.isArray(center) || !center.every(Number.isFinite)) return snapshot();
+          state.map.stop?.();
+          state.map.jumpTo({ center, zoom: Number(zoom) });
+          return snapshot();
+        },
+        async open(slug) {
+          await openSite(String(slug || ""), { focus: false, skipCommentRefresh: true, skipRoute: true });
+          return snapshot();
+        },
+        close() {
+          closeDetail({ skipRoute: true, blockMapTap: false });
+          return snapshot();
+        }
       });
     }
 
@@ -18314,6 +18297,7 @@
       locateMapUser();
     });
     installApkLocationControlDebugHook();
+    installApkSiteCameraAudit();
     const blockPanelControlMapTap = event => {
       blockMobileMapTaps();
       event?.stopPropagation?.();
