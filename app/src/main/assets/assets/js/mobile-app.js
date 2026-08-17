@@ -170,6 +170,7 @@
     const LAND_MASK_VERSION = "2026-07-18-compressible-runtime-mask";
     const LONG_ISLAND_BOUNDS = [[-75.15, 39.75], [-70.65, 42.05]];
     const LONG_ISLAND_VIEW_BOUNDS = [[-74.35, 40.32], [-71.48, 41.36]];
+    const LONG_ISLAND_OVERVIEW_BOUNDS = [[-74.10, 40.52], [-71.75, 41.16]];
     const STARTUP_LOCATION_CENTER_BOUNDS = [[-74.25, 40.45], [-71.65, 41.25]];
     const LOCATION_CONTROL_MAX_SCOPE_DISTANCE_MILES = 75;
     const FALLBACK_CENTER = [-72.95, 40.86];
@@ -2727,10 +2728,17 @@
       `;
     }
 
-    function showBanner(message) {
+    let mobileBannerHideTimer = 0;
+
+    function showBanner(message, { centered = false } = {}) {
+      window.clearTimeout(mobileBannerHideTimer);
       bannerEl.textContent = message;
+      bannerEl.classList.toggle("centered", centered);
       bannerEl.classList.add("show");
-      window.setTimeout(() => bannerEl.classList.remove("show"), 3600);
+      mobileBannerHideTimer = window.setTimeout(() => {
+        bannerEl.classList.remove("show", "centered");
+        mobileBannerHideTimer = 0;
+      }, 3600);
     }
 
     function nativeAndroidBuildId() {
@@ -13091,6 +13099,24 @@
       refreshAndroidMapAfterSettle(reason);
     }
 
+    function fitAllLongIslandMapView(reason = "long-island-overview") {
+      if (!state.map?.fitBounds) {
+        fitLongIslandMapView(reason);
+        return;
+      }
+      state.map.fitBounds(LONG_ISLAND_OVERVIEW_BOUNDS, {
+        padding: { top: 28, right: 24, bottom: 28, left: 24 },
+        duration: 850,
+        essential: true
+      });
+      refreshAndroidMapAfterSettle(reason);
+    }
+
+    function showOutOfScopeLocationNotice() {
+      fitAllLongIslandMapView("android-location-outside-long-island");
+      showBanner("You are too far from Long Island to recenter this map.", { centered: true });
+    }
+
     function randomMobileLongIslandStartupView() {
       const views = MOBILE_LONG_ISLAND_START_VIEWS.length
         ? MOBILE_LONG_ISLAND_START_VIEWS
@@ -13399,7 +13425,7 @@
           const nextLocation = [position.coords.longitude, position.coords.latitude];
           if (restrictToLongIslandScope && !locationWithinLongIslandScope(nextLocation)) {
             setLocationControlsBusy(false);
-            if (!silent) showBanner("You are too far from Long Island to recenter this map.");
+            if (!silent) showOutOfScopeLocationNotice();
             resolve(false);
             return;
           }
@@ -13453,6 +13479,10 @@
             center: [state.userLocation[0] + 0.18, state.userLocation[1]],
             zoom: state.map.getZoom()
           });
+          return snapshot();
+        },
+        showOutOfScopeView() {
+          showOutOfScopeLocationNotice();
           return snapshot();
         }
       });

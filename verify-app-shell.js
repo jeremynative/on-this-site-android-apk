@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260817-loader-biography-path-default-r139";
+const expectedBuild = "20260817-out-of-scope-location-overview-r140";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -169,8 +169,13 @@ if (!bundledMobileJs.includes("function mobileActivitySpecificContentTarget(acti
 if (!bundledMobileJs.includes("LOCATION_CONTROL_MAX_SCOPE_DISTANCE_MILES = 75")
     || !bundledMobileJs.includes("function locationWithinLongIslandScope(location)")
     || !bundledMobileJs.includes("restrictToLongIslandScope && !locationWithinLongIslandScope(nextLocation)")
-    || !bundledMobileJs.includes("You are too far from Long Island to recenter this map.")) {
-  throw new Error("APK location controls must reject far-away coordinates before recentering the Long Island map.");
+    || !bundledMobileJs.includes("function fitAllLongIslandMapView")
+    || !bundledMobileJs.includes("state.map.fitBounds(LONG_ISLAND_OVERVIEW_BOUNDS")
+    || !bundledMobileJs.includes("showOutOfScopeLocationNotice();")
+    || !bundledMobileJs.includes('showBanner("You are too far from Long Island to recenter this map.", { centered: true });')
+    || !bundledMobileCss.includes(".banner.centered")
+    || !bundledMobileCss.includes("transform: translateY(-50%);")) {
+  throw new Error("APK location controls must reject far-away coordinates, fit all of Long Island, and show the warning at screen center.");
 }
 
 if (!bundledMobileJs.includes('document.addEventListener("click", closeMobileSheetFromControl, true);')
