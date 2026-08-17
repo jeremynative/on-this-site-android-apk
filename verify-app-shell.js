@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260817-contributor-progress-map-r145";
+const expectedBuild = "20260817-contributor-profile-layout-r146";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";

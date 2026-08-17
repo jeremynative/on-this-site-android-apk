@@ -14546,7 +14546,9 @@
     function renderProfile() {
       if (!profileCardEl) return;
       loginSheetEl?.classList.toggle("has-profile", !!state.profile);
-      if (accountSheetTitleEl) accountSheetTitleEl.textContent = state.profile ? "Contributor Account" : "Login";
+      if (accountSheetTitleEl) accountSheetTitleEl.textContent = state.profile
+        ? (state.profileMapMode?.sheet === loginSheetEl ? "Contributor Profile" : "Contributor Account")
+        : "Login";
       if (mapStoryOpenBtn) mapStoryOpenBtn.hidden = !isApprovedContributor();
       if (mapStoryOpenMenuBtn) mapStoryOpenMenuBtn.hidden = !isApprovedContributor();
       if (!state.profile) {
@@ -15049,24 +15051,42 @@
       });
     }
 
+    function scheduleMobileProfileProgressMapRender(mode, error = null) {
+      if (!mode || mode !== state.profileMapMode || !state.map) return;
+      if (error && mode.lastRenderWarning !== String(error?.message || error)) {
+        mode.lastRenderWarning = String(error?.message || error);
+        console.warn("Contributor progress map will retry after the map settles.", error);
+      }
+      if (!mode.styleLoadHandler) {
+        mode.styleLoadHandler = () => {
+          mode.styleLoadHandler = null;
+          if (state.profileMapMode === mode) settleMobileProfileProgressMap();
+        };
+        state.map.once("style.load", mode.styleLoadHandler);
+      }
+      if (!mode.idleHandler) {
+        mode.idleHandler = () => {
+          mode.idleHandler = null;
+          if (state.profileMapMode === mode) settleMobileProfileProgressMap();
+        };
+        state.map.once("idle", mode.idleHandler);
+      }
+      if (!mode.renderRetryTimer) {
+        const retryCount = Number(mode.renderRetryCount || 0);
+        mode.renderRetryTimer = window.setTimeout(() => {
+          mode.renderRetryTimer = null;
+          mode.renderRetryCount = retryCount + 1;
+          if (state.profileMapMode === mode) settleMobileProfileProgressMap();
+        }, retryCount < 40 ? 250 : 1000);
+      }
+    }
+
     function renderMobileProfileProgressMap() {
       const mode = state.profileMapMode;
       if (!mode || !state.map) return;
-      if (!state.map.isStyleLoaded?.()) {
-        if (!mode.styleLoadHandler) {
-          mode.styleLoadHandler = () => {
-            mode.styleLoadHandler = null;
-            if (state.profileMapMode === mode) settleMobileProfileProgressMap();
-          };
-          state.map.once("style.load", mode.styleLoadHandler);
-        }
-        if (!mode.renderRetryTimer && Number(mode.renderRetryCount || 0) < 40) {
-          mode.renderRetryTimer = window.setTimeout(() => {
-            mode.renderRetryTimer = null;
-            mode.renderRetryCount = Number(mode.renderRetryCount || 0) + 1;
-            if (state.profileMapMode === mode) settleMobileProfileProgressMap();
-          }, 250);
-        }
+      const currentStyle = state.map.getStyle?.();
+      if (!currentStyle || !Array.isArray(currentStyle.layers)) {
+        scheduleMobileProfileProgressMapRender(mode);
         return;
       }
       window.clearTimeout(mode.renderRetryTimer);
@@ -15076,6 +15096,11 @@
         state.map.off("style.load", mode.styleLoadHandler);
         mode.styleLoadHandler = null;
       }
+      if (mode.idleHandler) {
+        state.map.off("idle", mode.idleHandler);
+        mode.idleHandler = null;
+      }
+      try {
       if (mode.clickHandler) {
         state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);
         mode.clickHandler = null;
@@ -15138,6 +15163,13 @@
       ensureLandMask().then(mask => {
         if (mask && state.profileMapMode === mode && !state.map.getSource("mobile-profile-progress-island")) renderMobileProfileProgressMap();
       });
+      } catch (error) {
+        try { removeMobileProfileProgressLayers(); } catch {}
+        mode.layerVisibility?.forEach((visibility, id) => {
+          try { if (state.map.getLayer(id)) state.map.setLayoutProperty(id, "visibility", visibility); } catch {}
+        });
+        scheduleMobileProfileProgressMapRender(mode, error);
+      }
     }
 
     function fitMobileProfileProgressMap() {
@@ -15223,6 +15255,7 @@
       if (mode.resizeHandler) window.removeEventListener("resize", mode.resizeHandler);
       if (state.map) {
         if (mode.styleLoadHandler) state.map.off("style.load", mode.styleLoadHandler);
+        if (mode.idleHandler) state.map.off("idle", mode.idleHandler);
         if (mode.clickHandler) state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);
         removeMobileProfileProgressLayers();
         mode.layerVisibility?.forEach((visibility, id) => { if (state.map.getLayer(id)) state.map.setLayoutProperty(id, "visibility", visibility); });
