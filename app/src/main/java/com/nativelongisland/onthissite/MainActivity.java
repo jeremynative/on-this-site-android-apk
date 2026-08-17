@@ -1,7 +1,6 @@
 package com.nativelongisland.onthissite;
 
 import android.Manifest;
-import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Notification;
@@ -25,6 +24,7 @@ import android.os.Bundle;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.Log;
@@ -35,7 +35,6 @@ import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
-import android.view.animation.LinearInterpolator;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.ExtractedText;
 import android.view.inputmethod.ExtractedTextRequest;
@@ -89,7 +88,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260816-contributor-profile-journey-r138";
+    static final String APP_VERSION = "20260817-loader-biography-path-default-r139";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -101,6 +100,8 @@ public class MainActivity extends Activity {
     private static final long ACTIVE_WORK_RECHECK_DELAY_MS = 15000;
     private static final long OFFLINE_COVER_REVEAL_DELAY_MS = 900;
     private static final long LOADING_COVER_MINIMUM_MS = 1500;
+    private static final long LOADING_OUTLINE_REVEAL_MS = 1400;
+    private static final long LOADING_OUTLINE_CYCLE_MS = 1600;
     private static final int OFFLINE_RENDER_MAX_ATTEMPTS = 12;
     private static final long OFFLINE_RENDER_DEADLINE_MS = 12000;
     private static final int COMMENT_PHOTO_READ_MAX_ATTEMPTS = 3;
@@ -122,7 +123,27 @@ public class MainActivity extends Activity {
     private TextView loadingCoverLabel;
     private TextView loadingCoverDetail;
     private LinearLayout loadingCoverActions;
-    private ValueAnimator loadingOutlinePulse;
+    private ImageView loadingOutlineReveal;
+    private boolean loadingOutlineRevealRunning;
+    private long loadingOutlineRevealStartedAt;
+    private final Runnable loadingOutlineRevealFrame = new Runnable() {
+        @Override
+        public void run() {
+            if (!loadingOutlineRevealRunning || loadingOutlineReveal == null) return;
+            int width = loadingOutlineReveal.getWidth();
+            int height = loadingOutlineReveal.getHeight();
+            if (width > 0 && height > 0) {
+                long elapsed = Math.max(0L, SystemClock.uptimeMillis() - loadingOutlineRevealStartedAt);
+                float progress = Math.min(1f,
+                    (elapsed % LOADING_OUTLINE_CYCLE_MS) / (float) LOADING_OUTLINE_REVEAL_MS
+                );
+                int revealedWidth = Math.max(1, Math.round(width * progress));
+                loadingOutlineReveal.setClipBounds(new Rect(0, 0, revealedWidth, height));
+                loadingOutlineReveal.setAlpha(0.82f + (0.18f * progress));
+            }
+            loadingOutlineReveal.postOnAnimation(this);
+        }
+    };
     private long loadingCoverShownAt;
     private long loadingCoverGeneration;
     private GeolocationPermissions.Callback pendingLocationCallback;
@@ -691,22 +712,25 @@ public class MainActivity extends Activity {
         );
         cover.addView(card, cardParams);
 
-        loadingOutlinePulse = ValueAnimator.ofFloat(0f, 1f);
-        loadingOutlinePulse.setDuration(1400);
-        loadingOutlinePulse.setInterpolator(new LinearInterpolator());
-        loadingOutlinePulse.setRepeatMode(ValueAnimator.RESTART);
-        loadingOutlinePulse.setRepeatCount(ValueAnimator.INFINITE);
-        loadingOutlinePulse.addUpdateListener(animation -> {
-            int width = reveal.getWidth();
-            int height = reveal.getHeight();
-            float progress = (float) animation.getAnimatedValue();
-            if (width > 0 && height > 0) {
-                int revealedWidth = Math.max(1, Math.round(width * progress));
-                reveal.setClipBounds(new Rect(0, 0, revealedWidth, height));
-                reveal.setAlpha(0.82f + (0.18f * progress));
-            }
-        });
+        loadingOutlineReveal = reveal;
         return cover;
+    }
+
+    private void startLoadingOutlineReveal() {
+        stopLoadingOutlineReveal();
+        if (loadingOutlineReveal == null) return;
+        loadingOutlineRevealRunning = true;
+        loadingOutlineRevealStartedAt = SystemClock.uptimeMillis();
+        loadingOutlineReveal.setAlpha(0.82f);
+        loadingOutlineReveal.setClipBounds(new Rect(0, 0, 0, 0));
+        loadingOutlineReveal.postOnAnimation(loadingOutlineRevealFrame);
+    }
+
+    private void stopLoadingOutlineReveal() {
+        loadingOutlineRevealRunning = false;
+        if (loadingOutlineReveal != null) {
+            loadingOutlineReveal.removeCallbacks(loadingOutlineRevealFrame);
+        }
     }
 
     private void enforceExclusiveMobilePanels(WebView view) {
@@ -812,7 +836,7 @@ public class MainActivity extends Activity {
             .setDuration(180)
             .withEndAction(() -> {
                 loadingCover.setVisibility(View.GONE);
-                if (loadingOutlinePulse != null) loadingOutlinePulse.cancel();
+                stopLoadingOutlineReveal();
             })
             .start();
     }
@@ -826,10 +850,7 @@ public class MainActivity extends Activity {
         if (loadingCoverLabel != null) loadingCoverLabel.setText(message == null || message.trim().isEmpty()
             ? "Loading On This Site"
             : message);
-        if (loadingOutlinePulse != null) {
-            loadingOutlinePulse.cancel();
-            loadingOutlinePulse.start();
-        }
+        startLoadingOutlineReveal();
         loadingCover.animate().cancel();
         loadingCover.setAlpha(1f);
         loadingCover.setVisibility(View.VISIBLE);
@@ -840,7 +861,7 @@ public class MainActivity extends Activity {
         startupHandler.removeCallbacks(startupFallback);
         startupHandler.removeCallbacks(revealBundledFallback);
         startupHandler.removeCallbacks(offlineRenderDeadline);
-        if (loadingOutlinePulse != null) loadingOutlinePulse.cancel();
+        stopLoadingOutlineReveal();
         if (loadingCoverLabel != null) loadingCoverLabel.setText("This map needs a browser on this device");
         if (loadingCoverDetail != null) {
             loadingCoverDetail.setText("Open the same On This Site map in your browser. You can return here and try again after your device updates its web display service.");
@@ -1716,6 +1737,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         unregisterConnectivityMonitoring();
+        stopLoadingOutlineReveal();
         startupHandler.removeCallbacksAndMessages(null);
         if (exitConfirmationDialog != null) exitConfirmationDialog.dismiss();
         exitConfirmationDialog = null;

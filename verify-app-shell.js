@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260816-contributor-profile-journey-r138";
+const expectedBuild = "20260817-loader-biography-path-default-r139";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -424,12 +424,12 @@ requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be 
 requireText("LOADING_COVER_MINIMUM_MS = 1500", "Android loading cover must remain visible long enough to show its Long Island progress animation.");
 requireText('showLoadingCover("Loading On This Site");', "Android cold startup must initialize the native loading animation timer before the WebView can finish.");
 requireText("var onlineReady=!offline&&shell&&loaderHidden&&/\\\\d+\\\\s+listings[\\\\s\\\\S]*loaded\\\\./i.test(liveStatus);", "Android must hand off from the native cover once the live archive status confirms that listings loaded, even when the nearby feed has no site cards yet.");
-requireText("ValueAnimator.ofFloat(0f, 1f)", "Android loading cover must animate the Long Island outline from west to east.");
-requireText("reveal.setClipBounds(new Rect(0, 0, revealedWidth, height))", "Android Long Island loader must reveal from left to right without stretching the graphic.");
+requireText("loadingOutlineReveal.postOnAnimation(loadingOutlineRevealFrame)", "Android loading cover must animate even when the system animator scale is disabled.");
+requireText("loadingOutlineReveal.setClipBounds(new Rect(0, 0, revealedWidth, height))", "Android Long Island loader must reveal from left to right without stretching the graphic.");
 if (source.includes("loadingProgressFill") || source.includes("progressTrack")) {
   throw new Error("Android loading cover must use the Long Island reveal itself, without a separate progress bar.");
 }
-requireText("loadingOutlinePulse.setRepeatMode(ValueAnimator.RESTART)", "Android loading progress must restart at the west edge instead of reversing direction.");
+requireText("elapsed % LOADING_OUTLINE_CYCLE_MS", "Android loading progress must restart at the west edge instead of reversing direction.");
 requireBundledText('<button class="ghost-button" id="settings-open" type="button">Notifications</button>', "Bundled Android menu must label the settings action Notifications.");
 forbidBundledText('<button class="ghost-button" id="settings-open" type="button">Alerts</button>', "Bundled Android menu must not use the old Alerts label.");
 requireBundledText('<details class="mobile-more-menu">\n          <summary>Menu</summary>', "Bundled Android overflow control must be labeled Menu.");
@@ -676,7 +676,11 @@ if (!bundledResearchQuestionCss.includes("left: max(16px, var(--app-left-safe, e
   throw new Error("Bundled Android research-question controls must reserve portrait and landscape system bars.");
 }
 if (!bundledMobileJs.includes("function setAllMobileLayerVisibility(visible)")
-    || !bundledMobileJs.includes("settings.showBiographyPaths = saved.biographyPathsPreferenceSet === true")
+    || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_PATH_PREFERENCE_VERSION = 1;")
+    || !bundledMobileJs.includes("const hasCurrentBiographyPathPreference = saved.biographyPathsPreferenceSet === true")
+    || !bundledMobileJs.includes("settings.showBiographyPaths = hasCurrentBiographyPathPreference")
+    || !bundledMobileJs.includes(": false;\n      settings.biographyPathsPreferenceSet = hasCurrentBiographyPathPreference;")
+    || !bundledMobileJs.includes("settings.biographyPathsPreferenceVersion = MOBILE_BIOGRAPHY_PATH_PREFERENCE_VERSION;")
     || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_ICON_PREFERENCE_VERSION = 2;")
     || !bundledMobileJs.includes("const hasCurrentBiographyIconPreference = saved.biographyIconsPreferenceSet === true")
     || !bundledMobileJs.includes("settings.showBiographyIcons = hasCurrentBiographyIconPreference")
@@ -692,7 +696,7 @@ if (!bundledMobileJs.includes("function setAllMobileLayerVisibility(visible)")
     || !bundledMobileJs.includes("mobileLayerEnableAllBtn.disabled = allOn || !bulkActionsReady")
     || !bundledMobileJs.includes("Date.now() < mobileLayerBulkReadyAt")
     || !bundledMobileJs.includes("mobileLayerBulkReadyAt = Date.now() + 400;")) {
-  throw new Error("Bundled Android labels must keep biography paths and icons independent, restore icons on for this release, preserve later explicit preferences, and include both in bulk controls.");
+  throw new Error("Bundled Android labels must keep biography paths and icons independent, default paths off and icons on, preserve later explicit preferences, and include both in bulk controls.");
 }
 if (!bundledMobileJs.includes("mobileMovingMarkerPausedAt: 0")
     || !bundledMobileJs.includes("mobileMovingMarkerPausedDurationMs: 0")
@@ -969,7 +973,7 @@ if (/onPageFinished\(WebView view, String url\)[\s\S]{0,1000}?hideLoadingCover\(
 }
 requireText('getAssets().open("assets/images/long-island-loading-outline.png")', "Android shell must show the Long Island loading outline during cold startup.");
 requireText('loadingCoverLabel.setText(R.string.loading_app);', "Android shell must label the animated Long Island loading screen from a translatable resource.");
-requireText("ValueAnimator.ofFloat(0f, 1f)", "Android shell must animate the Long Island loading outline from west to east.");
+requireText("loadingOutlineReveal.postOnAnimation(loadingOutlineRevealFrame)", "Android shell must animate the Long Island loading outline from west to east without depending on animator scale.");
 if (!styles.includes('<item name="android:windowBackground">@drawable/launch_background</item>')) {
   throw new Error("Android theme must show a branded launch background while WebView starts.");
 }
