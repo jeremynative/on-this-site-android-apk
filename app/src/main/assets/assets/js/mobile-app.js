@@ -579,9 +579,9 @@
       }
     };
     const MOBILE_BASEMAPS = {
-      streets: { tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: "© OpenStreetMap contributors" },
-      satellite: { tileUrl: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attribution: "Tiles © Esri" },
-      outdoors: { tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: "© OpenStreetMap contributors" },
+      streets: { tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>' },
+      satellite: { tileUrl: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attribution: 'Tiles © <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>' },
+      outdoors: { tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>' },
       blank: null
     };
 
@@ -3282,15 +3282,20 @@
       return window.setTimeout(callback, 250);
     }
 
-    function waitForMapbox(timeout = 12000) {
-      if (window.mapboxgl?.Map) return Promise.resolve(true);
-      const script = document.getElementById("mapbox-gl-script");
+    function mobileMapRuntime() {
+      if (!window.mapboxgl?.Map && window.maplibregl?.Map) window.mapboxgl = window.maplibregl;
+      return window.mapboxgl;
+    }
+
+    function waitForMobileMapRuntime(timeout = 12000) {
+      if (mobileMapRuntime()?.Map) return Promise.resolve(true);
+      const script = document.getElementById("maplibre-gl-script");
       return new Promise(resolve => {
         let settled = false;
         const finish = value => {
           if (settled) return;
           settled = true;
-          resolve(Boolean(value && window.mapboxgl?.Map));
+          resolve(Boolean(value && mobileMapRuntime()?.Map));
         };
         const timer = window.setTimeout(() => finish(false), timeout);
         script?.addEventListener("load", () => {
@@ -6132,6 +6137,15 @@
       });
     }
 
+    function collapseMobileMapAttribution() {
+      window.requestAnimationFrame(() => {
+        document.querySelectorAll("#map .maplibregl-ctrl-attrib.maplibregl-compact-show").forEach(control => {
+          control.classList.remove("maplibregl-compact-show");
+          control.removeAttribute("open");
+        });
+      });
+    }
+
     function publicProfileActivityIdentity(profile) {
       const ids = [...profileIdentityIds(profile)].map(Number).filter(Boolean).sort((a, b) => a - b);
       if (!ids.length) return null;
@@ -7096,7 +7110,7 @@
         const tap = state.mobileMapTouchTap;
         const touch = event.changedTouches?.[0];
         if (!tap || !touch || tap.moved || performance.now() - tap.startedAt > 700) return;
-        if (event.target?.closest?.(".mapboxgl-marker button")) return;
+        if (event.target?.closest?.(".mapboxgl-marker button, .maplibregl-marker button")) return;
         const rect = canvas.getBoundingClientRect();
         const point = {
           x: touch.clientX - rect.left,
@@ -7178,7 +7192,9 @@
       ".plant-photo-viewer",
       ".language-quiz-modal",
       ".mapboxgl-control-container",
-      ".mapboxgl-ctrl"
+      ".mapboxgl-ctrl",
+      ".maplibregl-control-container",
+      ".maplibregl-ctrl"
     ].join(", ");
 
     function androidTapElementsAt(clientX, clientY) {
@@ -7191,7 +7207,7 @@
     }
 
     function isAndroidMapMarkerElement(element) {
-      return !!element?.closest?.(".mapboxgl-marker button");
+      return !!element?.closest?.(".mapboxgl-marker button, .maplibregl-marker button");
     }
 
     function isAndroidUiOverlayElement(element) {
@@ -7217,11 +7233,11 @@
       const rect = canvas?.getBoundingClientRect?.();
       const insideCanvas = !!rect && clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
       const target = document.elementFromPoint(clientX, clientY);
-      if (target === canvas || !!target?.closest?.(".mapboxgl-canvas")) return true;
+      if (target === canvas || !!target?.closest?.(".mapboxgl-canvas, .maplibregl-canvas")) return true;
       if (!target?.closest) return insideCanvas;
       if (isAndroidMapMarkerElement(target)) return true;
       if (isAndroidUiOverlayTap(clientX, clientY)) return false;
-      const mapContainer = canvas.closest?.(".mapboxgl-map") || state.map?.getContainer?.();
+      const mapContainer = canvas.closest?.(".mapboxgl-map, .maplibregl-map") || state.map?.getContainer?.();
       return insideCanvas || (!!mapContainer && mapContainer.contains(target));
     }
 
@@ -7231,15 +7247,15 @@
       for (const element of elements || androidTapElementsAt(clientX, clientY)) {
         if (isAndroidMapMarkerElement(element)) return false;
         if (isAndroidUiOverlayElement(element)) return true;
-        if (element === canvas || element?.closest?.(".mapboxgl-canvas")) return false;
-        if (mapContainer && (element === mapContainer || element?.closest?.(".mapboxgl-map"))) return false;
+        if (element === canvas || element?.closest?.(".mapboxgl-canvas, .maplibregl-canvas")) return false;
+        if (mapContainer && (element === mapContainer || element?.closest?.(".mapboxgl-map, .maplibregl-map"))) return false;
       }
       return false;
     }
 
     function openAndroidMapDomTarget(clientX, clientY) {
       const target = document.elementFromPoint(clientX, clientY);
-      const markerButton = target?.closest?.(".mapboxgl-marker button");
+      const markerButton = target?.closest?.(".mapboxgl-marker button, .maplibregl-marker button");
       if (!markerButton) return false;
       markerButton.click();
       return true;
@@ -17099,7 +17115,7 @@
         statusEl.textContent = `${state.filtered.length || state.sites.length} saved places`;
         return false;
       }
-      const ready = await waitForMapbox();
+      const ready = await waitForMobileMapRuntime();
       if (!ready) {
         const mapEl = document.getElementById("map");
         if (mapEl) {
@@ -17121,9 +17137,12 @@
         zoom: MOBILE_STARTUP_VIEW.zoom,
         minZoom: 7,
         maxBounds: LONG_ISLAND_VIEW_BOUNDS,
-        attributionControl: false
+        attributionControl: false,
+        maplibreLogo: false
       });
       state.map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
+      state.map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-left");
+      collapseMobileMapAttribution();
       state.map.on("click", event => {
         handleSuggestionMapPickClick(event);
       });
@@ -17162,13 +17181,17 @@
           };
         state.map.on("load", () => {
           if (settled) return;
+          collapseMobileMapAttribution();
           addPolygonLayers();
           syncMarkers();
           syncUserLocationMarker({ centerMap: false });
           bindAndroidMapGestureGuards();
           bindAndroidMapResizeObserver();
           stabilizeAndroidMapPaint();
-          state.map.once?.("idle", () => refreshAndroidMapAfterSettle("android-map-idle"));
+          state.map.once?.("idle", () => {
+            collapseMobileMapAttribution();
+            refreshAndroidMapAfterSettle("android-map-idle");
+          });
           state.map.on("zoomend", () => {
             syncMarkers({ auxiliary: false });
             syncMapStoryMarkers();

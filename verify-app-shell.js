@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260817-single-pass-loading-r149";
+const expectedBuild = "20260817-maplibre-renderer-r152";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -15,6 +15,9 @@ const bundledSharedLifecycleUtilsPath = "app/src/main/assets/assets/js/shared-li
 const bundledSharedActivityUtilsPath = "app/src/main/assets/assets/js/shared-activity-utils.js";
 const bundledSharedMapStoryUtilsPath = "app/src/main/assets/assets/js/shared-map-story-utils.js";
 const bundledMobileCssPath = "app/src/main/assets/assets/css/mobile-app.css";
+const mapLibreJsPath = "app/src/main/assets/assets/vendor/maplibre-gl/maplibre-gl.js";
+const mapLibreCssPath = "app/src/main/assets/assets/vendor/maplibre-gl/maplibre-gl.css";
+const mapLibreLicensePath = "app/src/main/assets/assets/vendor/maplibre-gl/LICENSE.txt";
 const bundledLearningCardUtilsPath = "app/src/main/assets/assets/js/shared-learning-card-utils.js";
 const bundledResearchQuestionCssPath = "app/src/main/assets/assets/css/shared-research-question.css";
 const bundledSharedSiteUtilsPath = "app/src/main/assets/assets/js/shared-site-utils.js";
@@ -57,7 +60,35 @@ const bundledSharedLifecycleUtils = fs.readFileSync(bundledSharedLifecycleUtilsP
 const bundledSharedActivityUtils = fs.readFileSync(bundledSharedActivityUtilsPath, "utf8");
 const bundledSharedMapStoryUtils = fs.readFileSync(bundledSharedMapStoryUtilsPath, "utf8");
 const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8");
+const mapLibreJs = fs.readFileSync(mapLibreJsPath, "utf8");
+const mapLibreCss = fs.readFileSync(mapLibreCssPath, "utf8");
+const mapLibreLicense = fs.readFileSync(mapLibreLicensePath, "utf8");
 const bundledLiveRuntime = `${bundledLiveApp}\n${bundledMobileJs}\n${bundledMobileCss}`;
+
+if (!bundledLiveApp.includes('id="maplibre-gl-script" src="assets/vendor/maplibre-gl/maplibre-gl.js')) {
+  throw new Error("Android live fallback must load the packaged self-hosted MapLibre renderer.");
+}
+if (!bundledApp.includes('data-inline-source="assets/vendor/maplibre-gl/maplibre-gl.js"')) {
+  throw new Error("Android offline snapshot must inline MapLibre instead of depending on a renderer CDN.");
+}
+if (/api\.mapbox\.com\/mapbox-gl-js|id="mapbox-gl-script"/.test(`${bundledApp}\n${bundledLiveApp}`)) {
+  throw new Error("Android shells must not load the branded Mapbox GL renderer.");
+}
+if (!bundledMobileJs.includes("function mobileMapRuntime()")
+    || !bundledMobileJs.includes("window.mapboxgl = window.maplibregl")
+    || !bundledMobileJs.includes("maplibreLogo: false")
+    || !bundledMobileJs.includes("new mapboxgl.AttributionControl({ compact: true })")
+    || !bundledMobileJs.includes("function collapseMobileMapAttribution()")
+    || !bundledMobileJs.includes('control.classList.remove("maplibregl-compact-show")')
+    || !bundledMobileJs.includes('state.map.once?.("idle", () => {\n            collapseMobileMapAttribution();')
+    || !bundledMobileJs.includes("https://www.openstreetmap.org/copyright")) {
+  throw new Error("Android map runtime must use MapLibre without an engine logo while retaining compact legal data attribution.");
+}
+if (!mapLibreJs.includes("MapLibre GL JS")
+    || !mapLibreCss.includes(".maplibregl-map")
+    || !mapLibreLicense.includes("MapLibre contributors")) {
+  throw new Error("Android assets must package the MapLibre renderer, stylesheet, and license notice.");
+}
 
 if (bundledApp.includes('url("../images/long-island-loading-outline.png")')
     || !bundledApp.includes('url("assets/images/long-island-loading-outline.png")')) {
@@ -227,7 +258,7 @@ if (!bundledMobileJs.includes("function startMobileStartupSiteReveal()")
     || !bundledMobileJs.includes("!androidLifecycleSnapshot")
     || !bundledMobileJs.includes("!routeAlreadyOpened")
     || !bundledMobileJs.includes("!reducedMotion")
-    || !bundledMobileCss.includes(".app.mobile-site-reveal-pending #map .mapboxgl-marker")
+    || !bundledMobileCss.includes(".app.mobile-site-reveal-pending #map :is(.mapboxgl-marker, .maplibregl-marker)")
     || !bundledMobileCss.includes("@keyframes mobile-startup-marker-settle")) {
   throw new Error("APK cold starts must use the center-out site reveal while restored, routed, offline, and reduced-motion launches skip it.");
 }
@@ -991,7 +1022,7 @@ if (!appBridge.includes("public boolean isDebugBuild()") || !appBridge.includes(
 }
 requireText("CookieManager.getInstance()", "Android shell must explicitly enable WebView cookies for SiteGround and app sessions.");
 requireText("setAcceptThirdPartyCookies(webView, true)", "Android shell must allow the cross-origin SiteGround session needed by the Directus-hosted app shell.");
-requireText("settings.setCacheMode(WebSettings.LOAD_DEFAULT)", "Android shell must allow WebView to cache remote Mapbox/static resources between launches.");
+requireText("settings.setCacheMode(WebSettings.LOAD_DEFAULT)", "Android shell must allow WebView to cache remote map/static resources between launches.");
 requireText("FrameLayout root = new FrameLayout(this);", "Android shell must layer a native startup cover over slow cold WebView startup.");
 requireText("webView.setBackgroundColor(Color.rgb(238, 243, 237));", "Android shell must use the app theme color behind the WebView during startup.");
 requireText("createLoadingCover", "Android shell must create a visible native loading cover before WebView content is ready.");
@@ -1146,7 +1177,7 @@ for (const [label, bytes, html, runtime] of [
   ["embedded fallback", bundledAppBytes, bundledApp, bundledApp],
   ["live fallback", bundledLiveAppBytes, bundledLiveApp, bundledLiveRuntime],
 ]) {
-  if ((html.match(/(?:^|[^A-Za-z0-9_-])[ps]k\.[A-Za-z0-9._-]+/g) || []).length) {
+  if ((runtime.match(/(?:^|[^A-Za-z0-9_-])[ps]k\.[A-Za-z0-9._-]+/g) || []).length) {
     throw new Error(`Bundled Android ${label} must keep Mapbox tokens as build-time placeholders.`);
   }
   if (bytes[0] === 0xff || bytes[0] === 0xfe || bytes[0] === 0xef || bytes.includes(0)) {
@@ -1241,7 +1272,7 @@ for (const forbidden of ["DIRECTUS_PASSWORD", "DIRECTUS_EMAIL", "NotebookLM", "n
 
 requireBundledText('const SITE_LABEL_MIN_ZOOM = 10.75;', "Bundled Android app must hold detail site labels until a closer local zoom.");
 requireBundledText('const SITE_POINT_LABEL_MIN_ZOOM = 13.35;', "Bundled Android app should show point labels at close neighborhood zoom.");
-requireBundledText('function prepareMobileSiteIconImage(image)', "Bundled Android app must normalize custom marker images before Mapbox rendering.");
+requireBundledText('function prepareMobileSiteIconImage(image)', "Bundled Android app must normalize custom marker images before map rendering.");
 requireBundledText('id: "mobile-site-point-dots"', "Bundled Android app must render visible bundled point markers without remote icon images.");
 requireBundledText('const APK_LOCAL_MAP_ICON_OVERRIDES = Object.freeze({', "Bundled Android app must map Directus marker icon ids to bundled local assets.");
 requireBundledText('if (isApkSnapshotMode() && !/^assets\\/map-icons\\//i.test(url)) return;', "Bundled Android app must ignore non-bundled marker icon URLs during snapshot startup.");
@@ -1616,8 +1647,8 @@ requireBundledText('const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 8;', "Bundled Andr
 requireBundledText('const NEARBY_LIST_ANDROID_DEFAULT_LIMIT = 12;', "Bundled Android app must keep the normal nearby tray render bounded.");
 requireBundledText('data-nearby-show-more', "Bundled Android app must let users reveal more nearby places after the startup cap.");
 requireBundledText('const nativeAndroid = isNativeAndroidApp();', "Bundled Android app must cache native Android startup state.");
-requireBundledText('function waitForMapbox(timeout = 12000)', "Bundled Android app must give Mapbox enough time to load inside WebView before falling back.");
-requireBundledText('const MOBILE_MAP_INITIAL_ERROR_GRACE_MS = 5000;', "Bundled Android map must tolerate a transient first-frame Mapbox error before using the text-only fallback.");
+requireBundledText('function waitForMobileMapRuntime(timeout = 12000)', "Bundled Android app must give the self-hosted MapLibre renderer enough time to load before falling back.");
+requireBundledText('const MOBILE_MAP_INITIAL_ERROR_GRACE_MS = 5000;', "Bundled Android map must tolerate a transient first-frame renderer error before using the text-only fallback.");
 requireBundledText('const MOBILE_MAP_RECOVERY_RETRY_LIMIT = 1;', "Bundled Android map must retry one warmed-cache map attempt before using the text-only fallback.");
 requireBundledText('window.setTimeout(retryOrFallback, MOBILE_MAP_INITIAL_ERROR_GRACE_MS)', "Bundled Android map recovery must use the bounded first-frame grace window.");
 requireBundledText('initMap({ recoveryAttempt: recoveryAttempt + 1 }).then(resolve)', "Bundled Android map recovery must resolve startup through the single retry attempt.");

@@ -1183,12 +1183,12 @@
       min-height: 190px;
     }
 
-    .app.mobile-site-reveal-pending #map .mapboxgl-marker {
+    .app.mobile-site-reveal-pending #map :is(.mapboxgl-marker, .maplibregl-marker) {
       opacity: 0 !important;
       pointer-events: none !important;
     }
 
-    .app.mobile-site-reveal-settling #map .mapboxgl-marker {
+    .app.mobile-site-reveal-settling #map :is(.mapboxgl-marker, .maplibregl-marker) {
       animation: mobile-startup-marker-settle 360ms ease-out both;
     }
 
@@ -2255,7 +2255,7 @@
         bottom: 6px;
       }
 
-      body.native-android-app .mobile-map-shell .mapboxgl-ctrl-top-right {
+      body.native-android-app .mobile-map-shell :is(.mapboxgl-ctrl-top-right, .maplibregl-ctrl-top-right) {
         display: none;
       }
 
@@ -3392,7 +3392,7 @@
       pointer-events: none !important;
     }
 
-    body.mobile-profile-map-mode #map .mapboxgl-canvas {
+    body.mobile-profile-map-mode #map :is(.mapboxgl-canvas, .maplibregl-canvas) {
       transition: opacity 160ms ease;
     }
 
@@ -4406,7 +4406,7 @@
       background: #e9efe8;
     }
 
-    .plant-observation-popup .mapboxgl-popup-content {
+    .plant-observation-popup :is(.mapboxgl-popup-content, .maplibregl-popup-content) {
       width: min(240px, calc(100vw - 42px));
       padding: 10px;
       border: 1px solid rgba(73, 111, 93, 0.16);
