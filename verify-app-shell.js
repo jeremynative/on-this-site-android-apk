@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260817-dated-history-scroll-r144";
+const expectedBuild = "20260817-contributor-progress-map-r145";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -116,13 +116,15 @@ if (!bundledSharedProfileUtils.includes("function profileMapActivityModel(profil
 }
 if (!bundledMobileJs.includes("function enterMobileProfileMapMode(profile, options = {})")
     || !bundledMobileJs.includes("function exitMobileProfileMapMode(options = {})")
-    || !bundledMobileJs.includes('document.body.classList.add("mobile-profile-map-mode")')
+    || !bundledMobileJs.includes('document.body.classList.add("mobile-profile-map-mode", "mobile-profile-map-pending")')
     || !bundledMobileJs.includes("function mobileProfileAncestralLandFeatures()")
     || !bundledMobileJs.includes("mobile-profile-progress-context")
     || !bundledMobileJs.includes("pointsSyncing && options.syncRemote !== false && canSyncOwnPoints")
     || !bundledMobileJs.includes("mobile-profile-progress-points")
     || !bundledMobileJs.includes('["quiz", "Quizzes Completed"]')
     || !bundledMobileJs.includes('if (mode.clickHandler) {\n        state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);')
+    || !bundledMobileJs.includes('state.map.once("style.load", mode.styleLoadHandler)')
+    || !bundledMobileJs.includes("positionMobileProfileMapActivityCard(card = state.profileMapPopup?.element)")
     || !bundledMobileJs.includes("Your map is still empty.")) {
   throw new Error("APK contributor profiles must enter, render, and cleanly exit personal progress-map mode.");
 }
