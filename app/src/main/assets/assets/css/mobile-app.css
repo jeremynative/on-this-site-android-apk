@@ -6501,6 +6501,19 @@
       border-top: 0;
     }
 
+    .timeline-item.timeline-reading-focus {
+      border-radius: 12px;
+      outline: 2px solid rgba(45, 91, 71, 0.58);
+      outline-offset: 3px;
+      background: rgba(45, 91, 71, 0.1);
+      box-shadow: inset 4px 0 0 rgba(45, 91, 71, 0.82);
+      animation: timeline-reading-focus-pulse 1.25s ease-in-out 2;
+    }
+
+    @keyframes timeline-reading-focus-pulse {
+      50% { background: rgba(45, 91, 71, 0.18); }
+    }
+
     .timeline-year {
       color: var(--accent-strong);
       font-size: 14px;

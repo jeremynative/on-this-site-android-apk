@@ -2729,6 +2729,22 @@
       `;
     }
 
+    function focusMobileHistoricMoment(eventId, options = {}) {
+      const normalizedId = String(eventId || "").trim();
+      if (!normalizedId) return false;
+      const escapedId = CSS.escape(normalizedId);
+      const target = detailBodyEl.querySelector(`#timeline-moment-${escapedId}, [data-event-id="${escapedId}"]`);
+      if (!target) return false;
+      detailBodyEl.querySelectorAll(".timeline-reading-focus").forEach(element => element.classList.remove("timeline-reading-focus"));
+      target.classList.add("timeline-reading-focus");
+      target.scrollIntoView({
+        behavior: options.behavior === "auto" ? "auto" : "smooth",
+        block: "center"
+      });
+      window.setTimeout(() => target.classList.remove("timeline-reading-focus"), 8000);
+      return true;
+    }
+
     let mobileBannerHideTimer = 0;
 
     function showBanner(message, { centered = false } = {}) {
@@ -5883,7 +5899,7 @@
         return;
       }
       if (target?.type === "site") {
-        openSite(target.record.slug);
+        openSite(target.record.slug, { timelineEventId: event.id, timelineEvent: event });
         return;
       }
       if (target?.type === "wiki") {
@@ -11710,7 +11726,7 @@
         });
       }
       if (event?.id) {
-        window.setTimeout(() => detailBodyEl.querySelector(`#timeline-moment-${CSS.escape(String(event.id))}`)?.scrollIntoView({ block: "start" }), 80);
+        window.setTimeout(() => focusMobileHistoricMoment(event.id), 120);
       }
       if (!options.skipCommentRefresh) refreshCommentsNow({ rerender: false }).then(updated => {
         if (updated && state.selectedWikiSlug === slug) {
@@ -12844,7 +12860,7 @@
       syncSitePlantMarkers(site);
       decorateCurrentDetailForQuoteComments("site", site);
       decorateCurrentDetailForLanguageQuiz("site", site);
-      setMobileContentRoute({ site: site.slug }, options);
+      setMobileContentRoute({ site: site.slug, event: options.timelineEventId || "" }, options);
       const detailScrollSnapshot = lifecycleSnapshot || (Number(options.preserveDetailScrollTop) > 0
         ? {
           content: { type: "site", slug },
@@ -12852,6 +12868,9 @@
         }
         : null);
       if (detailScrollSnapshot) restoreAndroidLifecycleDetailScroll(detailScrollSnapshot);
+      if (options.timelineEventId) {
+        window.setTimeout(() => focusMobileHistoricMoment(options.timelineEventId), 120);
+      }
       if (contentUpdateItems.length && options.focusNewContent !== false) {
         window.setTimeout(() => revealMobileContentUpdate(site, contentUpdateItems), 180);
       }
@@ -12865,6 +12884,8 @@
             drawerState: refreshLifecycleSnapshot ? drawerState : currentDetailDrawerState(),
             preserveDetailScrollTop: detailBodyEl.scrollTop,
             contentUpdateItems,
+            timelineEventId: options.timelineEventId,
+            timelineEvent: options.timelineEvent,
             lifecycleSnapshot: refreshLifecycleSnapshot,
             restoreMapState: options.restoreMapState === true
           });
