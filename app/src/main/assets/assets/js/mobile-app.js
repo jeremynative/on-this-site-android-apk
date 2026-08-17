@@ -654,6 +654,7 @@
     const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;
     const SITE_LABEL_MIN_ZOOM = 10.75;
     const SITE_POINT_LABEL_MIN_ZOOM = 13.35;
+    const DAILY_LEARNING_SITE_ZOOM = 14.5;
     const PLACE_NAME_AREA_LABEL_MIN_ZOOM = 10.25;
     const ATTENTION_SITE_WINDOWS = [
       {
@@ -12763,6 +12764,7 @@
         window.requestAnimationFrame(() => focusSite(site, {
           forPanel: true,
           center: selectedMapCenter,
+          zoom: options.focusZoom,
           preserveZoom: options.focus === false,
           duration: options.focus === false ? 360 : 520
         }));
@@ -13327,7 +13329,11 @@
         return;
       }
       if (payload.kind === "learning" && payload.site?.slug) {
-        openSite(payload.site.slug, { focus: true, drawerState: "half" });
+        openSite(payload.site.slug, {
+          focus: true,
+          focusZoom: DAILY_LEARNING_SITE_ZOOM,
+          drawerState: "half"
+        });
         return;
       }
       if (payload.kind === "question") state.researchQuestionInstance?.open?.();
