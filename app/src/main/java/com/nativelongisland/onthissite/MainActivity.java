@@ -88,7 +88,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260817-profile-map-camera-parity-r148";
+    static final String APP_VERSION = "20260817-single-pass-loading-r149";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -100,8 +100,10 @@ public class MainActivity extends Activity {
     private static final long ACTIVE_WORK_RECHECK_DELAY_MS = 15000;
     private static final long OFFLINE_COVER_REVEAL_DELAY_MS = 900;
     private static final long LOADING_COVER_MINIMUM_MS = 1500;
-    private static final long LOADING_OUTLINE_REVEAL_MS = 1400;
-    private static final long LOADING_OUTLINE_CYCLE_MS = 1600;
+    private static final long LOADING_OUTLINE_PRE_READY_MS = 1400;
+    private static final long LOADING_OUTLINE_COMPLETION_MS = 220;
+    private static final long LOADING_OUTLINE_COMPLETE_HOLD_MS = 120;
+    private static final float LOADING_OUTLINE_PRE_READY_MAX = 0.90f;
     private static final int OFFLINE_RENDER_MAX_ATTEMPTS = 12;
     private static final long OFFLINE_RENDER_DEADLINE_MS = 12000;
     private static final int COMMENT_PHOTO_READ_MAX_ATTEMPTS = 3;
@@ -124,8 +126,14 @@ public class MainActivity extends Activity {
     private TextView loadingCoverDetail;
     private LinearLayout loadingCoverActions;
     private ImageView loadingOutlineReveal;
+    private boolean loadingOutlinePassActive;
     private boolean loadingOutlineRevealRunning;
+    private boolean loadingOutlineCompletionRequested;
+    private boolean loadingCoverFadeStarted;
     private long loadingOutlineRevealStartedAt;
+    private long loadingOutlineCompletionStartedAt;
+    private float loadingOutlineRevealProgress;
+    private float loadingOutlineCompletionStartProgress;
     private final Runnable loadingOutlineRevealFrame = new Runnable() {
         @Override
         public void run() {
@@ -133,13 +141,45 @@ public class MainActivity extends Activity {
             int width = loadingOutlineReveal.getWidth();
             int height = loadingOutlineReveal.getHeight();
             if (width > 0 && height > 0) {
-                long elapsed = Math.max(0L, SystemClock.uptimeMillis() - loadingOutlineRevealStartedAt);
-                float progress = Math.min(1f,
-                    (elapsed % LOADING_OUTLINE_CYCLE_MS) / (float) LOADING_OUTLINE_REVEAL_MS
-                );
-                int revealedWidth = Math.max(1, Math.round(width * progress));
+                long now = SystemClock.uptimeMillis();
+                float targetProgress;
+                if (loadingOutlineCompletionRequested) {
+                    float completionProgress = Math.min(1f,
+                        Math.max(0L, now - loadingOutlineCompletionStartedAt)
+                            / (float) LOADING_OUTLINE_COMPLETION_MS
+                    );
+                    targetProgress = loadingOutlineCompletionStartProgress
+                        + ((1f - loadingOutlineCompletionStartProgress) * completionProgress);
+                } else {
+                    float preReadyProgress = Math.min(1f,
+                        Math.max(0L, now - loadingOutlineRevealStartedAt)
+                            / (float) LOADING_OUTLINE_PRE_READY_MS
+                    );
+                    targetProgress = LOADING_OUTLINE_PRE_READY_MAX * preReadyProgress;
+                }
+                loadingOutlineRevealProgress = Math.max(loadingOutlineRevealProgress, targetProgress);
+                int revealedWidth = Math.max(1, Math.round(width * loadingOutlineRevealProgress));
                 loadingOutlineReveal.setClipBounds(new Rect(0, 0, revealedWidth, height));
-                loadingOutlineReveal.setAlpha(0.82f + (0.18f * progress));
+                loadingOutlineReveal.setAlpha(0.82f + (0.18f * loadingOutlineRevealProgress));
+
+                if (loadingOutlineCompletionRequested && loadingOutlineRevealProgress >= 1f) {
+                    loadingOutlineRevealRunning = false;
+                    long completedGeneration = loadingCoverGeneration;
+                    loadingOutlineReveal.postDelayed(() -> {
+                        if (completedGeneration == loadingCoverGeneration
+                            && loadingOutlineCompletionRequested) {
+                            finishLoadingCoverDismissal();
+                        }
+                    }, LOADING_OUTLINE_COMPLETE_HOLD_MS);
+                    return;
+                }
+                if (!loadingOutlineCompletionRequested
+                    && loadingOutlineRevealProgress >= LOADING_OUTLINE_PRE_READY_MAX) {
+                    // Hold at 90% without restarting. Readiness advances the
+                    // same pass through its final 10% before the cover closes.
+                    loadingOutlineRevealRunning = false;
+                    return;
+                }
             }
             loadingOutlineReveal.postOnAnimation(this);
         }
@@ -719,8 +759,14 @@ public class MainActivity extends Activity {
     private void startLoadingOutlineReveal() {
         stopLoadingOutlineReveal();
         if (loadingOutlineReveal == null) return;
+        loadingOutlinePassActive = true;
         loadingOutlineRevealRunning = true;
+        loadingOutlineCompletionRequested = false;
+        loadingCoverFadeStarted = false;
         loadingOutlineRevealStartedAt = SystemClock.uptimeMillis();
+        loadingOutlineCompletionStartedAt = 0L;
+        loadingOutlineRevealProgress = 0f;
+        loadingOutlineCompletionStartProgress = 0f;
         loadingOutlineReveal.setAlpha(0.82f);
         loadingOutlineReveal.setClipBounds(new Rect(0, 0, 0, 0));
         loadingOutlineReveal.postOnAnimation(loadingOutlineRevealFrame);
@@ -728,6 +774,9 @@ public class MainActivity extends Activity {
 
     private void stopLoadingOutlineReveal() {
         loadingOutlineRevealRunning = false;
+        loadingOutlinePassActive = false;
+        loadingOutlineCompletionRequested = false;
+        loadingCoverFadeStarted = false;
         if (loadingOutlineReveal != null) {
             loadingOutlineReveal.removeCallbacks(loadingOutlineRevealFrame);
         }
@@ -831,6 +880,24 @@ public class MainActivity extends Activity {
             }, remaining);
             return;
         }
+        if (loadingCoverFadeStarted || loadingOutlineCompletionRequested) return;
+        loadingOutlineCompletionRequested = true;
+        loadingOutlineCompletionStartProgress = loadingOutlineRevealProgress;
+        loadingOutlineCompletionStartedAt = SystemClock.uptimeMillis();
+        loadingOutlineRevealRunning = true;
+        if (loadingOutlineReveal != null) {
+            loadingOutlineReveal.removeCallbacks(loadingOutlineRevealFrame);
+            loadingOutlineReveal.postOnAnimation(loadingOutlineRevealFrame);
+        } else {
+            finishLoadingCoverDismissal();
+        }
+    }
+
+    private void finishLoadingCoverDismissal() {
+        if (loadingCover == null
+            || loadingCover.getVisibility() != View.VISIBLE
+            || loadingCoverFadeStarted) return;
+        loadingCoverFadeStarted = true;
         loadingCover.animate()
             .alpha(0f)
             .setDuration(180)
@@ -843,17 +910,23 @@ public class MainActivity extends Activity {
 
     private void showLoadingCover(String message) {
         if (loadingCover == null) return;
-        loadingCoverGeneration += 1;
-        loadingCoverShownAt = System.currentTimeMillis();
+        boolean startNewPass = !loadingOutlinePassActive
+            || loadingOutlineCompletionRequested
+            || loadingCoverFadeStarted
+            || loadingCover.getVisibility() != View.VISIBLE;
+        if (startNewPass) {
+            loadingCoverGeneration += 1;
+            loadingCoverShownAt = System.currentTimeMillis();
+        }
         if (loadingCoverDetail != null) loadingCoverDetail.setVisibility(View.GONE);
         if (loadingCoverActions != null) loadingCoverActions.setVisibility(View.GONE);
         if (loadingCoverLabel != null) loadingCoverLabel.setText(message == null || message.trim().isEmpty()
             ? "Loading On This Site"
             : message);
-        startLoadingOutlineReveal();
         loadingCover.animate().cancel();
         loadingCover.setAlpha(1f);
         loadingCover.setVisibility(View.VISIBLE);
+        if (startNewPass) startLoadingOutlineReveal();
     }
 
     private void showWebViewCompatibilityFallback() {

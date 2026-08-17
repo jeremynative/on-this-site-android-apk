@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260817-profile-map-camera-parity-r148";
+const expectedBuild = "20260817-single-pass-loading-r149";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -445,7 +445,14 @@ requireText("loadingOutlineReveal.setClipBounds(new Rect(0, 0, revealedWidth, he
 if (source.includes("loadingProgressFill") || source.includes("progressTrack")) {
   throw new Error("Android loading cover must use the Long Island reveal itself, without a separate progress bar.");
 }
-requireText("elapsed % LOADING_OUTLINE_CYCLE_MS", "Android loading progress must restart at the west edge instead of reversing direction.");
+requireText("LOADING_OUTLINE_PRE_READY_MAX = 0.90f", "Android loading progress must hold near completion until the app is actually ready.");
+requireText("LOADING_OUTLINE_COMPLETE_HOLD_MS = 120", "Android loading progress must visibly hold its completed Long Island before the cover closes.");
+requireText("loadingOutlineRevealProgress = Math.max(loadingOutlineRevealProgress, targetProgress)", "Android loading progress must move monotonically from west to east.");
+requireText("loadingOutlineCompletionRequested && loadingOutlineRevealProgress >= 1f", "Android loading progress must reach 100 percent once before the cover closes.");
+requireText("if (startNewPass) startLoadingOutlineReveal();", "Android fallback status changes must not restart the active Long Island loading pass.");
+if (source.includes("elapsed % LOADING_OUTLINE_CYCLE_MS") || source.includes("LOADING_OUTLINE_CYCLE_MS")) {
+  throw new Error("Android loading progress must never loop back to the west edge during one load.");
+}
 requireBundledText('<button class="ghost-button" id="settings-open" type="button">Notifications</button>', "Bundled Android menu must label the settings action Notifications.");
 forbidBundledText('<button class="ghost-button" id="settings-open" type="button">Alerts</button>', "Bundled Android menu must not use the old Alerts label.");
 requireBundledText('<details class="mobile-more-menu">\n          <summary>Menu</summary>', "Bundled Android overflow control must be labeled Menu.");
