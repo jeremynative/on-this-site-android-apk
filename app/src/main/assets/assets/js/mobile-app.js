@@ -14619,7 +14619,7 @@
       if (linkedProfile && state.profileMapMode?.sheet === loginSheetEl && state.profileMapMode.profileKey === String(linkedProfile.id || linkedProfile.slug || linkedProfile.username || "")) {
         state.profileMapMode.model = profileMapModel;
         renderMobileProfileProgressMap();
-        window.requestAnimationFrame(fitMobileProfileProgressMap);
+        window.requestAnimationFrame(resizeMobileProfileProgressMap);
       }
     }
 
@@ -15155,24 +15155,10 @@
       }
     }
 
-    function fitMobileProfileProgressMap() {
+    function resizeMobileProfileProgressMap() {
       const mode = state.profileMapMode;
       if (!mode || !state.map) return;
       state.map.resize?.();
-      const mapRect = state.map.getContainer?.().getBoundingClientRect?.();
-      const sheetRect = mode.sheet?.getBoundingClientRect?.();
-      const overlapsMapFromRight = mapRect && sheetRect
-        && sheetRect.left > mapRect.left
-        && sheetRect.left < mapRect.right
-        && sheetRect.top < mapRect.bottom
-        && sheetRect.bottom > mapRect.top;
-      const padding = {
-        top: 24,
-        right: overlapsMapFromRight ? Math.max(24, Math.round(mapRect.right - sheetRect.left + 18)) : 24,
-        bottom: 24,
-        left: 24
-      };
-      state.map.fitBounds(LONG_ISLAND_VIEW_BOUNDS, { padding, maxZoom: 9.2, duration: 0 });
       window.requestAnimationFrame(() => spreadMobileProfileProgressMarkers(mode));
     }
 
@@ -15181,7 +15167,7 @@
       if (!mode || !state.map) return;
       state.map.resize?.();
       renderMobileProfileProgressMap();
-      fitMobileProfileProgressMap();
+      resizeMobileProfileProgressMap();
       positionMobileProfileMapActivityCard();
     }
 
@@ -15191,25 +15177,17 @@
       if (state.profileMapMode?.profileKey === profileKey && state.profileMapMode?.sheet === hostSheet) {
         state.profileMapMode.model = mobileContributorProfileMapModel(profile);
         renderMobileProfileProgressMap();
-        window.requestAnimationFrame(fitMobileProfileProgressMap);
+        window.requestAnimationFrame(resizeMobileProfileProgressMap);
         return;
       }
-      if (state.profileMapMode) exitMobileProfileMapMode({ restoreCamera: false });
-      const center = state.map?.getCenter?.();
-      const currentMaxBounds = state.map?.getMaxBounds?.();
-      const currentMinZoom = state.map?.getMinZoom?.();
+      if (state.profileMapMode) exitMobileProfileMapMode();
       state.profileMapMode = {
         profileKey,
         profile,
         sheet: hostSheet,
-        model: mobileContributorProfileMapModel(profile),
-        camera: center ? { center: [center.lng, center.lat], zoom: state.map.getZoom?.() } : null,
-        maxBounds: currentMaxBounds ? [currentMaxBounds.getSouthWest().toArray(), currentMaxBounds.getNorthEast().toArray()] : null,
-        minZoom: Number.isFinite(currentMinZoom) ? currentMinZoom : null
+        model: mobileContributorProfileMapModel(profile)
       };
       const mode = state.profileMapMode;
-      state.map?.setMaxBounds?.(null);
-      state.map?.setMinZoom?.(6);
       document.body.classList.add("mobile-profile-map-mode", "mobile-profile-map-pending");
       stopMobileMovingFeatureAnimation();
       hostSheet?.classList.add("profile-progress-active");
@@ -15230,7 +15208,7 @@
       }, 260);
     }
 
-    function exitMobileProfileMapMode(options = {}) {
+    function exitMobileProfileMapMode() {
       const mode = state.profileMapMode;
       if (!mode) return;
       window.clearTimeout(mode.resizeTimer);
@@ -15242,9 +15220,6 @@
         if (mode.clickHandler) state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);
         removeMobileProfileProgressLayers();
         mode.layerVisibility?.forEach((visibility, id) => { if (state.map.getLayer(id)) state.map.setLayoutProperty(id, "visibility", visibility); });
-        if (options.restoreCamera !== false && mode.camera?.center) state.map.jumpTo({ center: mode.camera.center, zoom: mode.camera.zoom });
-        if (Number.isFinite(mode.minZoom)) state.map.setMinZoom?.(mode.minZoom);
-        state.map.setMaxBounds?.(mode.maxBounds || null);
       }
       state.profileMapMode = null;
       document.body.classList.remove("mobile-profile-map-mode", "mobile-profile-map-pending");

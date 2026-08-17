@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260817-site-camera-stability-r147";
+const expectedBuild = "20260817-profile-map-camera-parity-r148";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -115,7 +115,7 @@ if (!bundledSharedProfileUtils.includes("function profileMapActivityModel(profil
   throw new Error("APK contributor profiles must include the shared normalized progress-map activity model.");
 }
 if (!bundledMobileJs.includes("function enterMobileProfileMapMode(profile, options = {})")
-    || !bundledMobileJs.includes("function exitMobileProfileMapMode(options = {})")
+    || !bundledMobileJs.includes("function exitMobileProfileMapMode()")
     || !bundledMobileJs.includes('document.body.classList.add("mobile-profile-map-mode", "mobile-profile-map-pending")')
     || !bundledMobileJs.includes("function mobileProfileAncestralLandFeatures()")
     || !bundledMobileJs.includes("mobile-profile-progress-context")
@@ -932,6 +932,7 @@ for (const [needle, message] of [
   ["function resetMobilePanelScroll(panel)", "APK panels must reset to the beginning when opened."],
   ["if (options.restoreMapState !== true && options.focus !== false)", "APK focus:false listing opens must preserve the visitor's camera."],
   ["function installApkSiteCameraAudit()", "Debug APKs must expose the site-camera stability audit."],
+  ["function resizeMobileProfileProgressMap()", "APK contributor mode must resize its overlay without refitting the geographic camera."],
   ["limit: options.limit || 3", "APK related sites must be capped at three."],
   ["const MOBILE_CANOE_LAND_SAMPLE_RADIUS_DEG = 0.00022", "APK canoe state must sample the moving icon footprint near narrow land."],
   ["mobileMovingLandSamples(coordinates).some", "APK canoe state must hide when any sampled point touches land."],
@@ -951,6 +952,13 @@ for (const [needle, message] of [
 if (bundledLiveRuntime.includes("mobileDetailCloseMapTimer") || bundledApp.includes("mobileDetailCloseMapTimer")
     || bundledLiveRuntime.includes("const overviewZoom = 11.25") || bundledApp.includes("const overviewZoom = 11.25")) {
   throw new Error("APK listing close must not schedule or force a camera reset.");
+}
+if (bundledLiveRuntime.includes("function fitMobileProfileProgressMap()") || bundledApp.includes("function fitMobileProfileProgressMap()")
+    || bundledLiveRuntime.includes("state.map.fitBounds(LONG_ISLAND_VIEW_BOUNDS, { padding, maxZoom: 9.2")
+    || bundledApp.includes("state.map.fitBounds(LONG_ISLAND_VIEW_BOUNDS, { padding, maxZoom: 9.2")
+    || bundledLiveRuntime.includes("mode.camera?.center) state.map.jumpTo")
+    || bundledApp.includes("mode.camera?.center) state.map.jumpTo")) {
+  throw new Error("APK contributor-map entry and exit must preserve the same center and zoom as the normal map.");
 }
 if (bundledLiveRuntime.includes("fit=inside&format=webp") || bundledApp.includes("fit=inside&format=webp")) {
   throw new Error("APK map markers must not use Directus WebP transforms that add dark edge bars.");
