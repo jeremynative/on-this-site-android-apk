@@ -33,7 +33,7 @@ requireMatch(workflow, /verify-native-library-compat\.js[\s\S]*?--expected=arm64
   "CI must audit the exact production native ABIs and ELF segment alignment.");
 requireMatch(workflow, /apk-native-audit[\s\S]*?app-release\.apk[\s\S]*?apk_native_root\/lib/,
   "CI must audit libraries extracted from the exact signed Obtainium APK rather than stale intermediates.");
-requireMatch(workflow, /zipalign -c -P 16 -v 4 app\/build\/outputs\/apk\/release\/app-release\.apk/,
+requireMatch(workflow, /"\$ANDROID_HOME\/build-tools\/35\.0\.0\/zipalign" -c -P 16 -v 4 app\/build\/outputs\/apk\/release\/app-release\.apk/,
   "CI must verify 16 KB ZIP alignment on the signed Obtainium APK.");
 requireMatch(workflow, /aab-native-audit[\s\S]*?base\/lib[\s\S]*?--expected=arm64-v8a,armeabi-v7a/,
   "CI must audit the native libraries packaged in the Play App Bundle.");
