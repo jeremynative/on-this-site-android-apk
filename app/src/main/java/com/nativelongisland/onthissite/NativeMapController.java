@@ -20,6 +20,7 @@ import android.util.Log;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
@@ -95,6 +96,7 @@ final class NativeMapController {
     interface Listener {
         void onFeatureSelected(String kind, String key);
         void onCameraChanged(double longitude, double latitude, double zoom);
+        void onGestureChanged(boolean active);
     }
 
     private static final String LOG_TAG = "OnThisSiteNativeMap";
@@ -170,6 +172,10 @@ final class NativeMapController {
     private boolean styleReady;
     private boolean profileMode;
     private boolean routingGesture;
+    private boolean routedGestureMoved;
+    private float routedGestureDownX;
+    private float routedGestureDownY;
+    private final float routedGestureTouchSlop;
     private boolean suppressNextCameraCallback;
     private boolean cameraGestureAwaitingIdle;
     private boolean usingOnlineArchive;
@@ -197,6 +203,7 @@ final class NativeMapController {
     NativeMapController(Activity activity, Bundle savedInstanceState, Listener listener) {
         this.activity = activity;
         this.listener = listener;
+        routedGestureTouchSlop = ViewConfiguration.get(activity).getScaledTouchSlop();
         MapLibre.getInstance(activity.getApplicationContext());
         MapLibreMapOptions options = new MapLibreMapOptions()
             .logoEnabled(false)
@@ -352,9 +359,14 @@ final class NativeMapController {
             || currentParams.height != safeHeight
             || currentParams.leftMargin != safeLeft
             || currentParams.topMargin != safeTop;
-        CameraPosition cameraToPreserve = stableCamera != null
-            ? stableCamera
-            : (map == null ? null : map.getCameraPosition());
+        // Resizing a transparent WebView overlay while a native drag or its
+        // inertia is still settling must not restore the ACTION_DOWN camera.
+        // MapLibre already preserves its center through a viewport resize.
+        CameraPosition cameraToPreserve = nativeGestureInProgress()
+            ? null
+            : (stableCamera != null
+                ? stableCamera
+                : (map == null ? null : map.getCameraPosition()));
         long expectedCameraRevision = cameraIntentRevision;
         long restoreRevision = ++viewportRestoreRevision;
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(safeWidth, safeHeight);
@@ -408,17 +420,29 @@ final class NativeMapController {
         float rootX = event.getRawX() - touchRootScreenLeft;
         float rootY = event.getRawY() - touchRootScreenTop;
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-            if (map != null) stableCamera = map.getCameraPosition();
-            cameraIntentRevision += 1;
-            cameraGestureAwaitingIdle = true;
             boolean blocked = pointInBlockedRegion(rootX, rootY);
             routingGesture = rootX >= viewportLeft
                 && rootX <= viewportRight
                 && rootY >= viewportTop
                 && rootY <= viewportInteractiveBottom
                 && !blocked;
+            if (routingGesture) {
+                routedGestureMoved = false;
+                routedGestureDownX = rootX;
+                routedGestureDownY = rootY;
+                if (map != null) stableCamera = map.getCameraPosition();
+                cameraIntentRevision += 1;
+                cameraGestureAwaitingIdle = true;
+                if (listener != null) listener.onGestureChanged(true);
+            }
         }
         if (!routingGesture) return false;
+        if (event.getActionMasked() != MotionEvent.ACTION_DOWN && !routedGestureMoved) {
+            float deltaX = rootX - routedGestureDownX;
+            float deltaY = rootY - routedGestureDownY;
+            routedGestureMoved = deltaX * deltaX + deltaY * deltaY
+                > routedGestureTouchSlop * routedGestureTouchSlop;
+        }
         MotionEvent translated = MotionEvent.obtain(event);
         translated.setLocation(rootX - viewportLeft, rootY - viewportTop);
         container.dispatchTouchEvent(translated);
@@ -426,7 +450,10 @@ final class NativeMapController {
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             routingGesture = false;
-            if (action == MotionEvent.ACTION_CANCEL) cameraGestureAwaitingIdle = false;
+            if (action == MotionEvent.ACTION_CANCEL) {
+                cameraGestureAwaitingIdle = false;
+                if (listener != null) listener.onGestureChanged(false);
+            }
         }
         return true;
     }
@@ -434,6 +461,10 @@ final class NativeMapController {
     private boolean pointInBlockedRegion(float x, float y) {
         for (RectF region : blockedTouchRegions) if (region.contains(x, y)) return true;
         return false;
+    }
+
+    private boolean nativeGestureInProgress() {
+        return routingGesture || cameraGestureAwaitingIdle;
     }
 
     private void prepareMap(MapLibreMap readyMap) {
@@ -876,12 +907,25 @@ final class NativeMapController {
         try {
             FeatureCollection collection = FeatureCollection.fromJson(featuresJson);
             movingFeaturesJson = collection.toJson();
-            if (!styleReady || map == null || map.getStyle() == null) return;
-            GeoJsonSource source = map.getStyle().getSourceAs(MOVING_FEATURE_SOURCE_ID);
-            if (source != null) source.setGeoJson(collection);
+            if (nativeGestureInProgress()) return;
+            applyMovingFeaturesToStyle(collection);
         } catch (Exception error) {
             Log.w(LOG_TAG, "Ignored malformed native moving-feature state.", error);
         }
+    }
+
+    private void applyMovingFeaturesToStyle() {
+        try {
+            applyMovingFeaturesToStyle(FeatureCollection.fromJson(movingFeaturesJson));
+        } catch (Exception error) {
+            Log.w(LOG_TAG, "Could not resume native moving features after map interaction.", error);
+        }
+    }
+
+    private void applyMovingFeaturesToStyle(FeatureCollection collection) {
+        if (!styleReady || map == null || map.getStyle() == null || collection == null) return;
+        GeoJsonSource source = map.getStyle().getSourceAs(MOVING_FEATURE_SOURCE_ID);
+        if (source != null) source.setGeoJson(collection);
     }
 
     private void setSource(Style style, String id, JSONObject collection) {
@@ -984,7 +1028,7 @@ final class NativeMapController {
     }
 
     private void applyCamera(JSONObject camera) {
-        if (camera == null || map == null) return;
+        if (camera == null || map == null || nativeGestureInProgress()) return;
         JSONArray center = camera.optJSONArray("center");
         if (center == null || center.length() < 2) return;
         double longitude = center.optDouble(0, Double.NaN);
@@ -994,7 +1038,8 @@ final class NativeMapController {
     }
 
     void updateCamera(double longitude, double latitude, double zoom) {
-        if (map == null || !Double.isFinite(longitude) || !Double.isFinite(latitude) || !Double.isFinite(zoom)) return;
+        if (map == null || nativeGestureInProgress()
+            || !Double.isFinite(longitude) || !Double.isFinite(latitude) || !Double.isFinite(zoom)) return;
         CameraPosition current = map.getCameraPosition();
         CameraPosition desired = new CameraPosition.Builder()
             .target(new LatLng(latitude, longitude))
@@ -1023,9 +1068,12 @@ final class NativeMapController {
         }
         CameraPosition position = map.getCameraPosition();
         if (position == null || listener == null) return;
-        if (cameraGestureAwaitingIdle) {
+        boolean gestureSettled = cameraGestureAwaitingIdle;
+        if (gestureSettled) {
             stableCamera = position;
             cameraGestureAwaitingIdle = false;
+            applyMovingFeaturesToStyle();
+            listener.onGestureChanged(false);
         }
         listener.onCameraChanged(
             position.target.getLongitude(),
@@ -1038,11 +1086,20 @@ final class NativeMapController {
         if (map == null || point == null || listener == null) return false;
         stableCamera = map.getCameraPosition();
         cameraGestureAwaitingIdle = false;
+        applyMovingFeaturesToStyle();
+        listener.onGestureChanged(false);
+        // MapLibre can still emit a click callback for a synthetic or low-rate
+        // drag whose ACTION_UP lands over a feature. A moved map gesture owns
+        // the release and must never open whatever marker happens to be below
+        // the finger at that moment.
+        if (routedGestureMoved) return false;
         PointF screenPoint = map.getProjection().toScreenLocation(point);
-        // Project artwork is intentionally compact, but its touch target must
-        // not be. A roughly 40 dp square makes small house, church, and place
-        // markers reliable on phones/tablets without visually enlarging them.
-        float hitRadius = Math.max(24f, activity.getResources().getDisplayMetrics().density * 20f);
+        // Project artwork is intentionally compact, and several legacy PNGs
+        // place their visible drawing low inside a transparent square. A tap
+        // on the visible house/building can therefore sit more than 20 dp from
+        // the geographic anchor. Use a 64 dp square so the artwork wins over
+        // the territory/polygon underneath without visually enlarging it.
+        float hitRadius = Math.max(32f, activity.getResources().getDisplayMetrics().density * 32f);
         RectF hitBox = new RectF(
             screenPoint.x - hitRadius,
             screenPoint.y - hitRadius,
