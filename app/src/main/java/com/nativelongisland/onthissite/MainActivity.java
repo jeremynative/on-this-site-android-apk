@@ -88,7 +88,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260818-nearby-thumbnail-parity-r163";
+    static final String APP_VERSION = "20260818-nearby-thumbnail-parity-r164";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -1002,24 +1002,18 @@ public class MainActivity extends Activity {
 
     private WebResourceResponse bundledAppResponse(Uri uri) {
         if (uri == null) return null;
-        // Live mode must use the deployed app assets so Android receives the
-        // same sites, geometry, and UI as the website. Packaged assets are
-        // reserved for a real network/server fallback.
-        if (!loadingBundledFallback) return null;
         String host = uri.getHost();
         boolean isArchiveHost = "nativelongisland.com".equalsIgnoreCase(host)
             || "directus.nativelongisland.com".equalsIgnoreCase(host);
         if (!isArchiveHost) return null;
         String path = uri.getPath();
+        if (!loadingBundledFallback) return null;
         String assetName;
         String mimeType;
         if ("nativelongisland.com".equalsIgnoreCase(host) && path != null && path.startsWith("/assets/") && !path.contains("..")) {
             assetName = path.substring(1);
             mimeType = mimeTypeForAsset(assetName);
         } else if (path != null && path.startsWith("/app/assets/") && !path.contains("..")) {
-            assetName = path.substring("/app/".length());
-            mimeType = mimeTypeForAsset(assetName);
-        } else if (path != null && path.startsWith("/app/media-cache/") && !path.contains("..")) {
             assetName = path.substring("/app/".length());
             mimeType = mimeTypeForAsset(assetName);
         } else if (loadingBundledFallback && "/app/offline-app.html".equals(path)) {

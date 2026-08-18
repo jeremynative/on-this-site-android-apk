@@ -1,10 +1,9 @@
 const fs = require("fs");
 
-const expectedBuild = "20260818-nearby-thumbnail-parity-r163";
+const expectedBuild = "20260818-nearby-thumbnail-parity-r164";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
-const bundledNearbyMediaScriptPath = "prepare-bundled-nearby-media.js";
 const bundledAppPath = "app/src/main/assets/mobile-app.html";
 const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
 const lightweightOfflineAppPath = "app/src/main/assets/offline-app.html";
@@ -48,7 +47,6 @@ const lightweightOfflineApp = fs.readFileSync(lightweightOfflineAppPath, "utf8")
 const offlineArchiveUtils = fs.readFileSync(offlineArchiveUtilsPath, "utf8");
 const source = fs.readFileSync(mainActivityPath, "utf8");
 const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
-const bundledNearbyMediaScript = fs.readFileSync(bundledNearbyMediaScriptPath, "utf8");
 const manifest = fs.readFileSync(manifestPath, "utf8");
 const appBridge = fs.readFileSync(appBridgePath, "utf8");
 const nativeMapController = fs.readFileSync(nativeMapControllerPath, "utf8");
@@ -177,20 +175,9 @@ if (!bundledMobileJs.includes('"Sewanhacky (The Isle of Shells)"')
     || !bundledMobileCss.includes("transition: opacity 420ms ease, transform 420ms ease")) {
   throw new Error("Android tablets must show the desktop historical-name rotation and pause it while backgrounded.");
 }
-if (!bundledMobileJs.includes("NLI_BUNDLED_NEARBY_MEDIA")
-    || !bundledMobileJs.includes('path.startsWith("media-cache/")')
-    || !bundledMobileCss.includes("grid-template-columns: minmax(0, 1fr) 52px")
+if (!bundledMobileCss.includes("grid-template-columns: minmax(0, 1fr) 52px")
     || !bundledMobileCss.includes("justify-content: flex-start;\n      gap: 6px;")) {
-  throw new Error("Compact Nearby rows must use packaged thumbnails and align category with distance consistently.");
-}
-if (!bundledApp.includes("data-generated-bundled-nearby-media")
-    || !bundledLiveApp.includes("data-generated-bundled-nearby-media")
-    || !bundledApp.includes('"the-point":"media-cache/')
-    || !bundledApp.includes('"west-woods":"media-cache/')
-    || !bundledNearbyMediaScript.includes("directus.nativelongisland.com/app/")
-    || !releaseWorkflow.includes("node prepare-bundled-nearby-media.js")
-    || !source.includes('path.startsWith("/app/media-cache/")')) {
-  throw new Error("Android builds must package available site thumbnails for offline Nearby rows.");
+  throw new Error("Compact Nearby rows must reserve a consistent thumbnail column and align category with distance.");
 }
 if (!source.includes("document.querySelector('.sheet.open')")
     || !source.includes("bottomOcclusion,window.innerWidth")
