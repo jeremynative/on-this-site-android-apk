@@ -88,7 +88,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260818-tablet-title-rotation-r162";
+    static final String APP_VERSION = "20260818-nearby-thumbnail-parity-r163";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -1017,6 +1017,9 @@ public class MainActivity extends Activity {
             assetName = path.substring(1);
             mimeType = mimeTypeForAsset(assetName);
         } else if (path != null && path.startsWith("/app/assets/") && !path.contains("..")) {
+            assetName = path.substring("/app/".length());
+            mimeType = mimeTypeForAsset(assetName);
+        } else if (path != null && path.startsWith("/app/media-cache/") && !path.contains("..")) {
             assetName = path.substring("/app/".length());
             mimeType = mimeTypeForAsset(assetName);
         } else if (loadingBundledFallback && "/app/offline-app.html".equals(path)) {

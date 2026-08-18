@@ -44,26 +44,34 @@
   function listingImage(site, deps = {}) {
     const file = deps.directusAssetUrl?.(site?.listing_image_file) || "";
     if (file) return file;
-    const raw = cleanImageUrl(site?.listing_image_thumb_url) || cleanImageUrl(site?.listing_image_url);
+    const raw = cleanImageUrl(site?.listing_image_thumb_url)
+      || cleanImageUrl(site?.listing_image_url)
+      || cleanImageUrl(site?.content_image_url);
     return raw ? deps.rewriteMediaUrl?.(raw) || raw : "";
   }
 
   function listingHeroImage(site, deps = {}) {
     const file = deps.directusAssetUrl?.(site?.listing_image_file) || "";
     if (file) return file;
-    const raw = cleanImageUrl(site?.listing_image_url) || cleanImageUrl(site?.listing_image_thumb_url);
+    const raw = cleanImageUrl(site?.listing_image_url)
+      || cleanImageUrl(site?.listing_image_thumb_url)
+      || cleanImageUrl(site?.content_image_url);
     return raw ? deps.rewriteMediaUrl?.(raw) || raw : "";
   }
 
   function listingImageFallback(site, deps = {}) {
     if (deps.directusAssetUrl?.(site?.listing_image_file)) return "";
-    const raw = cleanImageUrl(site?.listing_image_url) || cleanImageUrl(site?.listing_image_thumb_url);
+    const raw = cleanImageUrl(site?.listing_image_url)
+      || cleanImageUrl(site?.listing_image_thumb_url)
+      || cleanImageUrl(site?.content_image_url);
     return raw ? deps.absoluteMediaUrl?.(raw) || absoluteMediaUrl(raw, deps.baseHref) : "";
   }
 
   function listingRewrittenImageFallback(site, deps = {}) {
     if (deps.directusAssetUrl?.(site?.listing_image_file)) return "";
-    const raw = cleanImageUrl(site?.listing_image_url) || cleanImageUrl(site?.listing_image_thumb_url);
+    const raw = cleanImageUrl(site?.listing_image_url)
+      || cleanImageUrl(site?.listing_image_thumb_url)
+      || cleanImageUrl(site?.content_image_url);
     const rewritten = raw ? deps.rewriteMediaUrl?.(raw) || rewriteMediaUrl(raw, deps) : "";
     return raw && rewritten !== raw ? raw : "";
   }
