@@ -113,13 +113,18 @@ jobs:
           echo "::add-mask::$MAPBOX_TOKEN"
           gradle lintRelease assembleRelease bundleRelease --no-daemon
 
-      - name: Verify bundle has no unaudited native libraries
+      - name: Verify native ABI and 16 KB page-size compatibility
         run: |
           set -euo pipefail
-          if unzip -Z1 app/build/outputs/bundle/release/app-release.aab | grep -E '(^|/)lib/.*\.so$'; then
-            echo "Native libraries require an explicit 16 KB page-size compatibility audit."
-            exit 1
-          fi
+          apk_native_root="$RUNNER_TEMP/apk-native-audit"
+          mkdir -p "$apk_native_root"
+          unzip -q app/build/outputs/apk/release/app-release.apk 'lib/*/*.so' -d "$apk_native_root"
+          node verify-native-library-compat.js "$apk_native_root/lib" --expected=arm64-v8a,armeabi-v7a
+          zipalign -c -P 16 -v 4 app/build/outputs/apk/release/app-release.apk
+          aab_native_root="$RUNNER_TEMP/aab-native-audit"
+          mkdir -p "$aab_native_root"
+          unzip -q app/build/outputs/bundle/release/app-release.aab 'base/lib/*/*.so' -d "$aab_native_root"
+          node verify-native-library-compat.js "$aab_native_root/base/lib" --expected=arm64-v8a,armeabi-v7a
 
       - name: Prepare release APK files
         run: |

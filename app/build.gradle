@@ -4,6 +4,7 @@ plugins {
 
 dependencies {
     implementation "com.android.billingclient:billing:8.2.1"
+    implementation "org.maplibre.gl:android-sdk:13.5.0"
 }
 
 def releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
@@ -19,6 +20,12 @@ android {
 
     buildFeatures {
         buildConfig = true
+    }
+
+    androidResources {
+        // MapLibre reads PMTiles by byte range. Keeping these archives
+        // uncompressed inside the APK makes asset:// random access reliable.
+        noCompress += ["pmtiles"]
     }
 
     defaultConfig {
@@ -45,10 +52,22 @@ android {
         debug {
             applicationIdSuffix = ".qa"
             versionNameSuffix = "-qa"
+            // Keep emulator architectures in QA builds so local Android
+            // emulators remain useful for regression testing.
+            ndk {
+                abiFilters "arm64-v8a", "armeabi-v7a", "x86", "x86_64"
+            }
         }
         release {
             minifyEnabled = false
             shrinkResources = false
+            // Obtainium receives one universal phone/tablet APK. Excluding
+            // emulator-only x86 libraries removes ~25 MB while retaining both
+            // modern 64-bit ARM and legacy 32-bit ARM Android devices. The AAB
+            // carries the same supported production device set for Play.
+            ndk {
+                abiFilters "arm64-v8a", "armeabi-v7a"
+            }
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.release
             }

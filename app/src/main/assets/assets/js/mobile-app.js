@@ -813,6 +813,7 @@
       userMarker: null,
       lastLocationMarkerUpdateAt: 0,
       addressMarker: null,
+      addressSearchResult: null,
       locationWatchId: null,
       addressSearchMode: false,
       addressSearchPending: "",
@@ -928,9 +929,11 @@
       storyMarkers: new Map(),
       siteSourceListCache: new Map(),
       suggestionPublicMarkers: new Map(),
+      nativeSuggestionPin: null,
       activeSiteLabelMarker: null,
       mobileBiographyPathMarkers: [],
       mobileMovingBiographyMarkers: new Map(),
+      nativeMovingBiographyItems: [],
       mobileMovingBiographyMarkerQueueTimer: null,
       mobileMovingDogMarker: null,
       mobileMovingWhaleMarker: null,
@@ -958,6 +961,9 @@
       androidMapRefreshToken: 0,
       androidMapResizeObserver: null,
       androidMapLastSizeKey: "",
+      nativeMapStateTimer: null,
+      nativeMapStateSignature: "",
+      nativeMapBridgeInstalled: false,
       selectedWikiSlug: "",
       androidLifecycleRestored: false,
       feedbackScreenshotFile: null,
@@ -3429,7 +3435,7 @@
       const blogPosts = Number(window.NLI_MOBILE_DATA?.blogPosts?.length || headerEls[0].dataset.blogCount || 10);
       const calendarEvents = state.exhibits?.length || 0;
       const text = isOfflineTextMode()
-        ? `Offline archive: ${listings} listings and ${wikiArticles} wiki articles are available offline. Search or browse text below; maps, media, accounts, and submissions return when online.`
+        ? `Offline archive: ${listings} listings and ${wikiArticles} wiki articles are available offline. Search, browse, and use the saved map below; media, accounts, and submissions return when online.`
         : isApkSnapshotMode()
           ? `${listings} listings loaded from the APK snapshot. Click a pin or colored territory to read its article.`
         : `${listings} listings, ${wikiArticles} wiki articles, ${blogPosts} blog posts, and ${calendarEvents} calendar events loaded. Click a pin or colored territory to read its article.`;
@@ -4515,11 +4521,13 @@
       state.addressSearchMode = false;
       state.addressSearchPending = "";
       state.addressSearchToken = "";
+      state.addressSearchResult = null;
       state.filtered = state.filtered.filter(site => site.slug !== "address-result");
       if (state.addressMarker) {
         state.addressMarker.remove();
         state.addressMarker = null;
       }
+      scheduleNativeMapStateSync("address-cleared", 0);
     }
 
     async function updateAddressSearch(query) {
@@ -4708,6 +4716,10 @@
     function setAddressMarker(center, label = "Your search") {
       if (!state.map || !Array.isArray(center) || !window.mapboxgl?.Marker) return;
       if (state.addressMarker) state.addressMarker.remove();
+      state.addressSearchResult = {
+        center: center.map(Number),
+        label: String(label || "Your search")
+      };
       const territoryLine = territoryLineForPoint(center);
       const element = document.createElement("button");
       element.type = "button";
@@ -4732,6 +4744,7 @@
         if (popup) state.addressMarker.togglePopup();
         else showBanner("Your search result.");
       });
+      scheduleNativeMapStateSync("address-result", 0);
     }
 
     const SITE_SUBTITLE_OVERRIDES = {
@@ -6468,6 +6481,7 @@
             has_header_image: siteHasHeaderImage(site),
             has_icon: !!siteMapIconUrl(site),
             icon_key: mobileSiteIconKey(site),
+            native_icon_key: nativeSiteIconKey(site),
             startup_distance: mobileStartupSiteDistance(siteDisplayGeometry(site)?.coordinates),
             unread_count: unreadCount,
             unread_label: mobileUnreadCountLabel(unreadCount),
@@ -6577,6 +6591,309 @@
         state.mapSourceCacheKey = cacheKey;
       }
       return state.mapSourceCache;
+    }
+
+    function nativeMapFeatureCollection(features = []) {
+      return { type: "FeatureCollection", features: (features || []).filter(Boolean) };
+    }
+
+    function nativeMapBridgeAvailable() {
+      return Boolean(
+        isNativeAndroidApp()
+        && androidBridgeToken()
+        && window.AndroidApp?.syncNativeMapState
+        && window.AndroidApp?.syncNativeMapCamera
+        && window.AndroidApp?.syncNativeMapMovingFeatures
+      );
+    }
+
+    function nativeProfilePointFeatures(model = {}) {
+      return (model.groups || []).map((group, index) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: group.coordinates },
+        properties: {
+          index,
+          label: String(index + 1),
+          title: group.title || "Contribution",
+          slug: group.related_slug || "",
+          color: MOBILE_PROFILE_ACTIVITY_COLORS[group.primary_type] || MOBILE_PROFILE_ACTIVITY_COLORS.interaction
+        }
+      }));
+    }
+
+    function nativeExhibitPointFeatures() {
+      return (state.exhibits || [])
+        .filter(shouldShowExhibitMarker)
+        .map(exhibit => {
+          const coordinates = Array.isArray(exhibit?.center) ? exhibit.center.map(Number) : [];
+          if (coordinates.length < 2 || !coordinates.every(Number.isFinite)) return null;
+          const calendarLabel = CALENDAR_UTILS.calendarMonthDay(exhibit);
+          return {
+            type: "Feature",
+            geometry: { type: "Point", coordinates },
+            properties: {
+              event_key: String(exhibit.slug || exhibit.id || ""),
+              title: exhibit.title || "Calendar event",
+              kind: calendarLabel ? "calendar" : "exhibit",
+              calendar_label: calendarLabel || ""
+            }
+          };
+        })
+        .filter(Boolean);
+    }
+
+    function nativeUserLocationFeatures() {
+      const coordinates = Array.isArray(state.userLocation) ? state.userLocation.map(Number) : [];
+      if (coordinates.length < 2 || !coordinates.every(Number.isFinite)) return [];
+      return [{
+        type: "Feature",
+        geometry: { type: "Point", coordinates },
+        properties: { kind: "user-location" }
+      }];
+    }
+
+    function nativeCommunityContributionFeatures() {
+      const features = [];
+      activeMapStories().forEach(story => {
+        const coordinates = mapStoryDisplayCoordinates(story)?.map(Number) || [];
+        if (coordinates.length < 2 || !coordinates.every(Number.isFinite)) return;
+        features.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates },
+          properties: {
+            native_kind: "story",
+            native_key: String(story.id || ""),
+            contribution_kind: "story",
+            title: story.attached_site_title || story.title || "Visitor story"
+          }
+        });
+      });
+      approvedPlantObservationsForSite(state.selectedSite).forEach(record => {
+        const coordinates = plantObservationCoordinates(record)?.map(Number) || [];
+        if (coordinates.length < 2 || !coordinates.every(Number.isFinite)) return;
+        features.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates },
+          properties: {
+            native_kind: "plant",
+            native_key: String(record.id || plantObservationDomId(record)),
+            contribution_kind: "plant",
+            title: record.common_name || "Plant observation"
+          }
+        });
+      });
+      if (state.settings.showPins !== false) {
+        approvedSiteSuggestions().forEach(suggestion => {
+          const coordinates = suggestionCoordinates(suggestion).map(Number);
+          if (coordinates.length < 2 || !coordinates.every(Number.isFinite)) return;
+          features.push({
+            type: "Feature",
+            geometry: { type: "Point", coordinates },
+            properties: {
+              native_kind: "suggestion",
+              native_key: String(suggestion.id || suggestion.title || ""),
+              contribution_kind: "suggestion",
+              title: suggestion.title || "Approved suggested site"
+            }
+          });
+        });
+      }
+      return features;
+    }
+
+    function nativeTemporaryMapFeatures() {
+      const features = [];
+      const addressCoordinates = state.addressSearchResult?.center?.map(Number) || [];
+      if (addressCoordinates.length >= 2 && addressCoordinates.every(Number.isFinite)) {
+        features.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: addressCoordinates },
+          properties: {
+            native_kind: "search",
+            native_key: String(state.addressSearchResult.label || "Your search"),
+            temporary_kind: "search",
+            title: String(state.addressSearchResult.label || "Your search")
+          }
+        });
+      }
+      const suggestionCoordinates = state.nativeSuggestionPin?.map(Number) || [];
+      if (suggestionCoordinates.length >= 2 && suggestionCoordinates.every(Number.isFinite)) {
+        features.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: suggestionCoordinates },
+          properties: {
+            native_kind: "suggestion-draft",
+            native_key: "draft",
+            temporary_kind: "suggestion-draft",
+            title: "Suggested site pin"
+          }
+        });
+      }
+      const selectedCoordinates = state.selectedSite?.center?.map(Number) || [];
+      if (state.selectedSite?.slug && selectedCoordinates.length >= 2 && selectedCoordinates.every(Number.isFinite)) {
+        features.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: selectedCoordinates },
+          properties: {
+            native_kind: "site",
+            native_key: String(state.selectedSite.slug),
+            temporary_kind: "selected-site",
+            title: state.selectedSite.title || "Selected site"
+          }
+        });
+      }
+      return features;
+    }
+
+    function syncNativeMapCameraToAndroid() {
+      if (!nativeMapBridgeAvailable() || !state.map) return false;
+      const center = state.map.getCenter?.();
+      const zoom = Number(state.map.getZoom?.());
+      if (!center || !Number.isFinite(Number(center.lng)) || !Number.isFinite(Number(center.lat)) || !Number.isFinite(zoom)) return false;
+      window.AndroidApp.syncNativeMapCamera(androidBridgeToken(), Number(center.lng), Number(center.lat), zoom);
+      return true;
+    }
+
+    function syncNativeMapState(reason = "state") {
+      if (!nativeMapBridgeAvailable() || !state.map) return false;
+      const sourceData = cachedMobileMapSourceData();
+      const allFeatures = sourceData.sites?.features || [];
+      const profileModel = state.profileMapMode?.model || null;
+      const profileJourney = profileModel ? mobileProfileJourneyMapData(profileModel) : null;
+      const profileKey = state.profileMapMode?.profileKey || "";
+      const profileSignature = profileModel
+        ? `${profileModel.groups?.length || 0}:${profileModel.items?.length || 0}:${profileModel.journeySegments?.length || 0}:${profileModel.groups?.map(group => group.items?.map(item => item.date_time || "").join(",")).join("|") || ""}`
+        : "public";
+      const exhibitFeatures = profileModel ? [] : nativeExhibitPointFeatures();
+      const userLocationFeatures = profileModel ? [] : nativeUserLocationFeatures();
+      const communityFeatures = profileModel ? [] : nativeCommunityContributionFeatures();
+      const temporaryFeatures = profileModel ? [] : nativeTemporaryMapFeatures();
+      const userLocationSignature = userLocationFeatures[0]?.geometry?.coordinates?.join(",") || "none";
+      const communitySignature = communityFeatures.map(feature => `${feature.properties.native_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}`).join("|");
+      const temporarySignature = temporaryFeatures.map(feature => `${feature.properties.temporary_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}`).join("|");
+      const nativeBasemap = Object.prototype.hasOwnProperty.call(MOBILE_BASEMAPS, state.settings.basemap) ? state.settings.basemap : "outdoors";
+      const signature = `${state.mapSourceCacheKey || state.mapSourceRevision}|${profileKey}|${profileSignature}|basemap:${nativeBasemap}|bio-paths:${mobileBiographyPathsEnabled() ? 1 : 0}|events:${exhibitFeatures.map(feature => feature.properties.event_key).join(",")}|user:${userLocationSignature}|community:${communitySignature}|temporary:${temporarySignature}`;
+      const center = state.map.getCenter?.();
+      const payload = {
+        signature,
+        reason,
+        mode: profileModel ? "profile" : "public",
+        basemap: nativeBasemap,
+        camera: center ? { center: [Number(center.lng), Number(center.lat)], zoom: Number(state.map.getZoom?.()) } : null,
+        territories: nativeMapFeatureCollection(allFeatures.filter(feature => /Polygon/.test(feature?.geometry?.type || "") && feature?.properties?.broad === true)),
+        sitePolygons: nativeMapFeatureCollection(allFeatures.filter(feature => /Polygon/.test(feature?.geometry?.type || "") && feature?.properties?.broad !== true && !profileModel)),
+        sitePoints: nativeMapFeatureCollection(allFeatures.filter(feature => feature?.geometry?.type === "Point" && !profileModel)),
+        labels: profileModel
+          ? nativeMapFeatureCollection(sourceData.territoryLabels?.features || [])
+          : nativeMapFeatureCollection([...(sourceData.territoryLabels?.features || []), ...(sourceData.detailLabels?.features || [])]),
+        profilePath: profileJourney?.lines || nativeMapFeatureCollection(),
+        profilePoints: nativeMapFeatureCollection(profileModel ? nativeProfilePointFeatures(profileModel) : []),
+        events: nativeMapFeatureCollection(exhibitFeatures),
+        userLocation: nativeMapFeatureCollection(userLocationFeatures),
+        communityContributions: nativeMapFeatureCollection(communityFeatures),
+        temporaryMarkers: nativeMapFeatureCollection(temporaryFeatures),
+        biographyPaths: profileModel
+          ? nativeMapFeatureCollection()
+          : allMobileBiographyPathFeatureCollection({ enabled: mobileBiographyPathsEnabled() })
+      };
+      // Keep the native surface aligned with the final WebView layout before
+      // each bounded data handoff. Startup can produce an early full-screen
+      // map rectangle before the header and panels finish sizing; the state
+      // sync is the authoritative point at which those layouts are usable.
+      window.__nliSyncNativeMapViewport?.();
+      window.AndroidApp.syncNativeMapState(androidBridgeToken(), JSON.stringify(payload));
+      state.nativeMapStateSignature = signature;
+      return true;
+    }
+
+    function scheduleNativeMapStateSync(reason = "state", delay = 40) {
+      if (!nativeMapBridgeAvailable()) return;
+      window.clearTimeout(state.nativeMapStateTimer);
+      state.nativeMapStateTimer = window.setTimeout(() => {
+        state.nativeMapStateTimer = null;
+        syncNativeMapState(reason);
+      }, Math.max(0, Number(delay) || 0));
+    }
+
+    function installNativeMapBridge() {
+      if (!nativeMapBridgeAvailable() || state.nativeMapBridgeInstalled) return false;
+      state.nativeMapBridgeInstalled = true;
+      window.NLI_NATIVE_MAP_BRIDGE = Object.freeze({
+        openFeature(kind, key) {
+          if (kind === "profile") {
+            const group = state.profileMapMode?.model?.groups?.[Number(key)];
+            if (!group) return false;
+            openMobileProfileMapActivityCard(group);
+            return true;
+          }
+          if (kind === "wiki") {
+            const slug = String(key || "");
+            if (!slug || !state.wikiBySlug.has(slug)) return false;
+            openWikiArticle(slug, { focus: false });
+            return true;
+          }
+          if (kind === "event") {
+            const eventKey = String(key || "");
+            const exhibit = (state.exhibits || []).find(item => String(item.slug || item.id || "") === eventKey);
+            if (!exhibit) return false;
+            openExhibit(exhibit);
+            return true;
+          }
+          if (kind === "story") {
+            const story = (state.mapStories || []).find(item => String(item.id || "") === String(key || ""));
+            if (!story) return false;
+            focusMapStory(story, { duration: 0 });
+            openMapStory(story);
+            return true;
+          }
+          if (kind === "plant") {
+            const record = (state.plantObservations || []).find(item => String(item.id || plantObservationDomId(item)) === String(key || ""));
+            if (!record) return false;
+            const slug = String(record.source_slug || record.site_slug || "");
+            if (slug && state.siteBySlug.has(slug)) openSite(slug, { focus: false });
+            window.setTimeout(() => {
+              detailEl?.classList.add("open", "plant-browse-mode");
+              syncMobilePanelAccessibility();
+              const targetId = plantObservationDomId(record);
+              const target = detailBodyEl?.querySelector(`#${CSS.escape(targetId)}`) || detailBodyEl?.querySelector(".site-plant-grid");
+              target?.scrollIntoView({ block: "center" });
+            }, 120);
+            return true;
+          }
+          if (kind === "suggestion") {
+            const suggestion = approvedSiteSuggestions().find(item => String(item.id || item.title || "") === String(key || ""));
+            if (!suggestion) return false;
+            const coordinates = suggestionCoordinates(suggestion);
+            if (coordinates.every(Number.isFinite)) state.map?.flyTo?.({ center: coordinates, zoom: Math.max(state.map.getZoom?.() || 9, 13), duration: 0 });
+            showBanner(`${suggestion.title || "Suggested site"} is public and saved.`);
+            return true;
+          }
+          if (kind === "search") {
+            showBanner(`Search result: ${String(key || "Your search")}`);
+            return true;
+          }
+          if (kind === "suggestion-draft") {
+            showBanner("Suggestion pin set.");
+            return true;
+          }
+          const slug = String(key || "");
+          if (!slug || !state.siteBySlug.has(slug)) return false;
+          openSite(slug, { focus: false });
+          return true;
+        },
+        cameraChanged(longitude, latitude, zoom) {
+          const center = [Number(longitude), Number(latitude)];
+          const nextZoom = Number(zoom);
+          if (!state.map || !center.every(Number.isFinite) || !Number.isFinite(nextZoom)) return false;
+          state.map.jumpTo({ center, zoom: nextZoom });
+          return true;
+        },
+        sync(reason = "manual") {
+          return syncNativeMapState(reason);
+        }
+      });
+      scheduleNativeMapStateSync("bridge-install", 0);
+      return true;
     }
 
     function bestClickableFeature(features = []) {
@@ -7633,6 +7950,18 @@
       return raw ? `mobile-site-icon-${SHARED_UTILS.sanitizeDomKey(raw)}` : "";
     }
 
+    function nativeSiteIconKey(site) {
+      const raw = String(site?.map_icon || "").trim();
+      const forceBlueDot = FORCE_BLUE_DOT_SITE_SLUGS.has(String(site?.slug || "").trim());
+      const assetPath = forceBlueDot
+        ? FORCE_BLUE_DOT_LOCAL_ICON
+        : (APK_LOCAL_MAP_ICON_OVERRIDES[raw] || (SITE_UTILS.isExhibitSite(site) ? EXHIBIT_MARKER_ICON : ""));
+      if (!assetPath) return "";
+      const filename = String(assetPath).split("/").pop()?.replace(/\.png$/i, "") || "";
+      const key = SHARED_UTILS.sanitizeDomKey(filename);
+      return key ? `nli-icon-${key}` : "";
+    }
+
     function prepareMobileSiteIconImage(image) {
       const cssBoxSize = 32;
       const pixelRatio = 2;
@@ -7790,6 +8119,7 @@
           element.addEventListener("click", () => openExhibit(exhibit));
           state.exhibitMarkers.set(key, new mapboxgl.Marker({ element, anchor: isCalendarBadge || attachedSite ? "bottom" : "center", offset: attachedSite ? [23, -6] : [0, 0] }).setLngLat(exhibit.center).addTo(state.map));
         });
+      scheduleNativeMapStateSync("events", 0);
     }
 
     function approvedSiteSuggestions() {
@@ -7833,7 +8163,10 @@
           state.suggestionPublicMarkers.delete(key);
         }
       }
-      if (state.settings.showPins === false) return;
+      if (state.settings.showPins === false) {
+        scheduleNativeMapStateSync("approved-suggestions", 0);
+        return;
+      }
       approvedSiteSuggestions().forEach(suggestion => {
         const key = String(suggestion.id || suggestion.title);
         if (state.suggestionPublicMarkers.has(key)) return;
@@ -7841,6 +8174,7 @@
           .setLngLat(suggestionCoordinates(suggestion))
           .addTo(state.map));
       });
+      scheduleNativeMapStateSync("approved-suggestions", 0);
     }
 
     function mergeMapStoryVoteRecords(records = []) {
@@ -7943,6 +8277,7 @@
         if (!coords) return;
         state.storyMarkers.set(key, new mapboxgl.Marker({ element: mapStoryMarkerElement(story), anchor: "bottom", offset: mapStoryMarkerOffset(story) }).setLngLat(coords).addTo(state.map));
       });
+      scheduleNativeMapStateSync("map-stories", 0);
     }
 
     function openMapStory(story) {
@@ -8279,6 +8614,7 @@
           state.plantMarkers.delete(key);
         }
       }
+      scheduleNativeMapStateSync("plant-observations", 0);
     }
 
     function mobilePanelMapPadding() {
@@ -8429,6 +8765,7 @@
 
     function setSuggestionPin(center) {
       if (!center || center.length < 2) return;
+      state.nativeSuggestionPin = center.map(Number);
       suggestLongitudeEl.value = Number(center[0]).toFixed(6);
       suggestLatitudeEl.value = Number(center[1]).toFixed(6);
       if (state.map && window.mapboxgl?.Marker) {
@@ -8438,6 +8775,7 @@
           state.suggestionMarker.setLngLat(center);
         }
       }
+      scheduleNativeMapStateSync("suggestion-pin", 0);
       showBanner("Suggestion pin set.");
     }
 
@@ -9106,6 +9444,8 @@
         suggestLongitudeEl.value = "";
         state.suggestionMarker?.remove?.();
         state.suggestionMarker = null;
+        state.nativeSuggestionPin = null;
+        scheduleNativeMapStateSync("suggestion-pin-cleared", 0);
         renderMobileActivitySheet();
         syncApprovedSuggestionMarkers();
         updateMobileActivityUnreadBadge();
@@ -11386,6 +11726,82 @@
       return compact ? `on the way to ${compact}` : "";
     }
 
+    function removeMobileMovingDomMarkers() {
+      for (const entry of state.mobileMovingBiographyMarkers.values()) entry.marker?.remove?.();
+      state.mobileMovingBiographyMarkers.clear();
+      state.mobileMovingDogMarker?.remove?.();
+      state.mobileMovingWhaleMarker?.remove?.();
+      state.mobileMovingDogMarker = null;
+      state.mobileMovingWhaleMarker = null;
+    }
+
+    function nativeMovingFeatureCollection(now = performance.now()) {
+      if (state.profileMapMode) return nativeMapFeatureCollection();
+      const motionNow = Math.max(0, now - (state.mobileMovingMarkerPausedDurationMs || 0));
+      const showLabel = Number(state.map?.getZoom?.() || 0) >= SITE_POINT_LABEL_MIN_ZOOM;
+      const features = [];
+      (state.nativeMovingBiographyItems || []).forEach(item => {
+        const motion = mobileMovingPingPong(item.route, item.duration, item.offset, motionNow);
+        const status = mobileMovingBiographyStatus(item, motion);
+        features.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: motion.coordinates },
+          properties: {
+            native_kind: "wiki",
+            native_key: item.slug,
+            moving_kind: "biography",
+            icon_key: "nli-icon-person-biography-marker",
+            title: item.person || "Biography",
+            label: status ? `${item.person || "Biography"}\n${status}` : (item.person || "Biography"),
+            show_label: showLabel,
+            direction: motion.direction,
+            on_water: !mobileMovingPointIsOnLand(motion.coordinates)
+          }
+        });
+      });
+      const dogMotion = mobileMovingPingPong(MOBILE_DOG_ROUTE, MOBILE_DOG_ONE_WAY_MS, MOBILE_DOG_START_OFFSET_MS, motionNow);
+      features.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: dogMotion.coordinates },
+        properties: {
+          native_kind: "wiki",
+          native_key: MOVING_DOG_WIKI_SLUG,
+          moving_kind: "dog",
+          icon_key: `nli-icon-dog-moving-icon${dogMotion.direction === "left" ? "-left" : ""}`,
+          title: "Dog",
+          label: "Dog",
+          show_label: showLabel,
+          direction: dogMotion.direction
+        }
+      });
+      const whaleMotion = mobileMovingPingPong(MOBILE_WHALE_ROUTE, MOBILE_WHALE_ONE_WAY_MS, MOBILE_WHALE_START_OFFSET_MS, motionNow);
+      const whaleIsSite = state.siteBySlug.has(WHALING_FEATURE_SLUG);
+      features.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: whaleMotion.coordinates },
+        properties: {
+          native_kind: whaleIsSite ? "site" : "wiki",
+          native_key: WHALING_FEATURE_SLUG,
+          moving_kind: "whale",
+          icon_key: `nli-icon-whaling-moving-whale${whaleMotion.direction === "left" ? "-left" : ""}`,
+          title: "Whaling",
+          label: "Whaling",
+          show_label: false,
+          direction: whaleMotion.direction
+        }
+      });
+      return nativeMapFeatureCollection(features);
+    }
+
+    function syncNativeMovingFeaturesToAndroid(now = performance.now()) {
+      if (!nativeMapBridgeAvailable()) return false;
+      window.AndroidApp.syncNativeMapMovingFeatures(
+        androidBridgeToken(),
+        JSON.stringify(nativeMovingFeatureCollection(now))
+      );
+      return true;
+    }
+
     function mobileMovingBiographyHtml(item) {
       const name = item?.person || "Biography";
       return `
@@ -11446,6 +11862,15 @@
 
     function ensureMobileMovingBiographyMarkers() {
       if (!state.map || !window.mapboxgl?.Marker) return;
+      if (nativeMapBridgeAvailable()) {
+        if (state.mobileMovingBiographyMarkerQueueTimer) window.clearTimeout(state.mobileMovingBiographyMarkerQueueTimer);
+        state.mobileMovingBiographyMarkerQueueTimer = null;
+        for (const entry of state.mobileMovingBiographyMarkers.values()) entry.marker?.remove?.();
+        state.mobileMovingBiographyMarkers.clear();
+        state.nativeMovingBiographyItems = mobileBiographyIconsEnabled() ? mobileMovingBiographyItems() : [];
+        syncNativeMovingFeaturesToAndroid();
+        return;
+      }
       if (!mobileBiographyIconsEnabled() && state.mobileMovingBiographyMarkerQueueTimer) {
         window.clearTimeout(state.mobileMovingBiographyMarkerQueueTimer);
         state.mobileMovingBiographyMarkerQueueTimer = null;
@@ -11496,7 +11921,13 @@
     }
 
     function ensureMobileMovingDogMarker() {
-      if (!state.map || !window.mapboxgl?.Marker || state.mobileMovingDogMarker) return;
+      if (!state.map || !window.mapboxgl?.Marker) return;
+      if (nativeMapBridgeAvailable()) {
+        state.mobileMovingDogMarker?.remove?.();
+        state.mobileMovingDogMarker = null;
+        return;
+      }
+      if (state.mobileMovingDogMarker) return;
       const element = document.createElement("div");
       element.className = "mobile-moving-dog-mapbox-icon";
       element.innerHTML = mobileMovingDogHtml();
@@ -11539,7 +11970,13 @@
     }
 
     function ensureMobileMovingWhaleMarker() {
-      if (!state.map || !window.mapboxgl?.Marker || state.mobileMovingWhaleMarker) return;
+      if (!state.map || !window.mapboxgl?.Marker) return;
+      if (nativeMapBridgeAvailable()) {
+        state.mobileMovingWhaleMarker?.remove?.();
+        state.mobileMovingWhaleMarker = null;
+        return;
+      }
+      if (state.mobileMovingWhaleMarker) return;
       const element = document.createElement("div");
       element.className = "mobile-moving-whale-mapbox-icon";
       element.innerHTML = mobileMovingWhaleHtml();
@@ -11565,6 +12002,11 @@
 
     function updateMobileMovingFeatureMarkers(now = performance.now()) {
       if (!state.map || document.hidden || isAndroidMapGestureActive() || mobileMapCameraIsInteracting() || now < (state.mobileMovingMarkerInteractionUntil || 0)) return;
+      if (nativeMapBridgeAvailable()) {
+        removeMobileMovingDomMarkers();
+        syncNativeMovingFeaturesToAndroid(now);
+        return;
+      }
       const motionNow = Math.max(0, now - (state.mobileMovingMarkerPausedDurationMs || 0));
       for (const entry of state.mobileMovingBiographyMarkers.values()) {
         updateMobileMovingBiographyMarker(entry.item, entry.marker, motionNow);
@@ -13070,6 +13512,7 @@
     };
 
     function syncUserLocationMarker({ centerMap = false, zoom = NEAR_ME_ZOOM } = {}) {
+      scheduleNativeMapStateSync("user-location", 0);
       if (!state.map || !state.userLocation || typeof mapboxgl === "undefined") return;
       if (state.userMarker?.setLngLat) {
         state.userMarker.setLngLat(state.userLocation);
@@ -13439,6 +13882,7 @@
         saveSettings();
         setLocationControlsBusy(false);
         state.userLocation = null;
+        scheduleNativeMapStateSync("user-location-cleared", 0);
         renderCurrentTerritoryStatus();
           renderList();
           if (!silent) showBanner("Location permission was not available. Showing sites near central Long Island without personal distances.");
@@ -14334,6 +14778,7 @@
       MAP_UTILS.setGeoJsonSourceDataMany(state.map, sources);
       state.mapSourceAppliedKey = sourceKey;
       syncMobileBiographyPathLayers();
+      scheduleNativeMapStateSync("source-refresh");
     }
 
     function isAndroidMapGestureActive() {
@@ -14729,6 +15174,7 @@
     function clearActiveSiteMapLabel() {
       if (state.activeSiteLabelMarker?.remove) state.activeSiteLabelMarker.remove();
       state.activeSiteLabelMarker = null;
+      scheduleNativeMapStateSync("selected-site-cleared", 0);
     }
 
     function syncActiveSiteMapLabel(site = state.selectedSite) {
@@ -14741,6 +15187,7 @@
       state.activeSiteLabelMarker = new mapboxgl.Marker({ element, anchor: "bottom", offset: [0, -22] })
         .setLngLat(site.center)
         .addTo(state.map);
+      scheduleNativeMapStateSync("selected-site", 0);
     }
 
     function renderRewards() {
@@ -14937,9 +15384,17 @@
         card.remove();
         if (state.profileMapPopup?.element === card) state.profileMapPopup = null;
       });
-      state.map.getContainer().appendChild(card);
+      const nativeSheetHost = nativeMapBridgeAvailable()
+        ? state.profileMapMode?.sheet?.querySelector?.("[data-mobile-profile-map-summary]")
+        : null;
+      if (nativeSheetHost) {
+        card.classList.add("is-native-sheet-card");
+        nativeSheetHost.prepend(card);
+      } else {
+        state.map.getContainer().appendChild(card);
+      }
       state.profileMapPopup = { element: card, remove: () => card.remove() };
-      positionMobileProfileMapActivityCard(card);
+      if (!nativeSheetHost) positionMobileProfileMapActivityCard(card);
     }
 
     function mobileProfileJourneyMapData(model = {}) {
@@ -15193,6 +15648,7 @@
       if (state.profileMapMode?.profileKey === profileKey && state.profileMapMode?.sheet === hostSheet) {
         state.profileMapMode.model = mobileContributorProfileMapModel(profile);
         renderMobileProfileProgressMap();
+        scheduleNativeMapStateSync("profile-refresh");
         window.requestAnimationFrame(resizeMobileProfileProgressMap);
         return;
       }
@@ -15217,6 +15673,7 @@
         }, 220);
       };
       window.addEventListener("resize", mode.resizeHandler);
+      scheduleNativeMapStateSync("profile-enter", 0);
       scheduleMobilePanelMapResize();
       window.requestAnimationFrame(() => window.requestAnimationFrame(settleMobileProfileProgressMap));
       window.setTimeout(() => {
@@ -15245,6 +15702,7 @@
       loginSheetEl?.classList.remove("profile-progress-active");
       profilesSheetEl?.querySelector(".sheet-head h2")?.replaceChildren(document.createTextNode("Contributors"));
       if (accountSheetTitleEl) accountSheetTitleEl.textContent = state.profile ? "Contributor Account" : "Login";
+      scheduleNativeMapStateSync("profile-exit", 0);
       scheduleMobilePanelMapResize();
     }
 
@@ -17183,6 +17641,8 @@
           if (settled) return;
           collapseMobileMapAttribution();
           addPolygonLayers();
+          installNativeMapBridge();
+          scheduleNativeMapStateSync("map-load", 0);
           syncMarkers();
           syncUserLocationMarker({ centerMap: false });
           bindAndroidMapGestureGuards();
@@ -17196,7 +17656,10 @@
             syncMarkers({ auxiliary: false });
             syncMapStoryMarkers();
           });
-          state.map.on("moveend", loadMobileSiteIconImages);
+          state.map.on("moveend", () => {
+            loadMobileSiteIconImages();
+            syncNativeMapCameraToAndroid();
+          });
           window.setTimeout(() => {
             if (settled) return;
             settled = true;
@@ -17423,6 +17886,7 @@
       state.settings.basemapUserSet = true;
       saveSettings();
       if (mobileBasemapSelect) mobileBasemapSelect.value = next;
+      scheduleNativeMapStateSync("basemap", 0);
       if (!state.map) return;
       const style = mobileBasemapStyle(next);
       state.mapSourceAppliedKey = "";

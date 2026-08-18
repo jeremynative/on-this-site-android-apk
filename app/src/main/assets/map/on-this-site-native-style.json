@@ -1,0 +1,150 @@
+{
+  "version": 8,
+  "name": "On This Site Native",
+  "glyphs": "asset://map-font/{fontstack}/{range}.pbf",
+  "sources": {
+    "nli-basemap": {
+      "type": "vector",
+      "url": "__NLI_PM_TILES_URL__",
+      "attribution": "© OpenStreetMap contributors"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": { "background-color": "#dbecef" }
+    },
+    {
+      "id": "nli-base-earth",
+      "type": "fill",
+      "source": "nli-basemap",
+      "source-layer": "earth",
+      "paint": { "fill-color": "#f4efdc" }
+    },
+    {
+      "id": "nli-base-landcover",
+      "type": "fill",
+      "source": "nli-basemap",
+      "source-layer": "landcover",
+      "paint": {
+        "fill-color": ["match", ["get", "kind"], "grassland", "#dce8cf", "scrub", "#d8e4cc", "wood", "#cbdcc3", "#e9eadb"],
+        "fill-opacity": 0.72
+      }
+    },
+    {
+      "id": "nli-base-landuse",
+      "type": "fill",
+      "source": "nli-basemap",
+      "source-layer": "landuse",
+      "paint": {
+        "fill-color": ["match", ["get", "kind"], "park", "#d3e7c9", "cemetery", "#dce5d2", "hospital", "#eadfda", "school", "#eee4cf", "#e9eadb"],
+        "fill-opacity": 0.62
+      }
+    },
+    {
+      "id": "nli-base-water",
+      "type": "fill",
+      "source": "nli-basemap",
+      "source-layer": "water",
+      "filter": ["==", ["geometry-type"], "Polygon"],
+      "paint": { "fill-color": "#b9dce4" }
+    },
+    {
+      "id": "nli-base-water-lines",
+      "type": "line",
+      "source": "nli-basemap",
+      "source-layer": "water",
+      "filter": ["==", ["geometry-type"], "LineString"],
+      "paint": {
+        "line-color": "#9ccbd7",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.6, 14, 2.2]
+      }
+    },
+    {
+      "id": "nli-base-boundaries",
+      "type": "line",
+      "source": "nli-basemap",
+      "source-layer": "boundaries",
+      "paint": {
+        "line-color": "#9b9f95",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.5, 13, 1.1],
+        "line-dasharray": [2, 2]
+      }
+    },
+    {
+      "id": "nli-base-roads-casing",
+      "type": "line",
+      "source": "nli-basemap",
+      "source-layer": "roads",
+      "filter": ["==", ["geometry-type"], "LineString"],
+      "paint": {
+        "line-color": "#c6c5bc",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.8, 11, 2.4, 15, 6.2]
+      }
+    },
+    {
+      "id": "nli-base-roads",
+      "type": "line",
+      "source": "nli-basemap",
+      "source-layer": "roads",
+      "filter": ["==", ["geometry-type"], "LineString"],
+      "paint": {
+        "line-color": ["match", ["get", "kind"], "highway", "#f6dfb7", "major_road", "#f7e8c9", "medium_road", "#f8eed9", "#ffffff"],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.45, 11, 1.5, 15, 4.4]
+      }
+    },
+    {
+      "id": "nli-base-buildings",
+      "type": "fill",
+      "source": "nli-basemap",
+      "source-layer": "buildings",
+      "minzoom": 12,
+      "paint": {
+        "fill-color": "#ded8cc",
+        "fill-outline-color": "#c6c0b5",
+        "fill-opacity": 0.82
+      }
+    },
+    {
+      "id": "nli-base-road-labels",
+      "type": "symbol",
+      "source": "nli-basemap",
+      "source-layer": "roads",
+      "minzoom": 12,
+      "filter": ["has", "name"],
+      "layout": {
+        "symbol-placement": "line",
+        "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": 10,
+        "text-letter-spacing": 0.02
+      },
+      "paint": {
+        "text-color": "#696b63",
+        "text-halo-color": "rgba(255,255,255,0.92)",
+        "text-halo-width": 1.2
+      }
+    },
+    {
+      "id": "nli-base-place-labels",
+      "type": "symbol",
+      "source": "nli-basemap",
+      "source-layer": "places",
+      "minzoom": 7,
+      "filter": ["has", "name"],
+      "layout": {
+        "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 7, 10, 12, 13],
+        "text-max-width": 8,
+        "text-padding": 3
+      },
+      "paint": {
+        "text-color": "#4b514b",
+        "text-halo-color": "rgba(247,249,242,0.94)",
+        "text-halo-width": 1.4
+      }
+    }
+  ]
+}

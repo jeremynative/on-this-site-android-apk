@@ -3608,6 +3608,15 @@
       line-height: 1;
     }
 
+    .mobile-profile-progress-card.is-native-sheet-card {
+      position: relative;
+      inset: auto;
+      z-index: 1;
+      width: 100%;
+      max-height: 230px;
+      margin: 0 0 12px;
+    }
+
     .mobile-profile-map-popup > img {
       width: 100%;
       max-height: 68px;
