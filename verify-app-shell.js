@@ -45,11 +45,11 @@ const bundledAppBytes = fs.readFileSync(bundledAppPath);
 const bundledLiveAppBytes = fs.readFileSync(bundledLiveAppPath);
 const lightweightOfflineApp = fs.readFileSync(lightweightOfflineAppPath, "utf8");
 const offlineArchiveUtils = fs.readFileSync(offlineArchiveUtilsPath, "utf8");
-const source = fs.readFileSync(mainActivityPath, "utf8");
+const source = fs.readFileSync(mainActivityPath, "utf8").replace(/\r\n/g, "\n");
 const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
 const manifest = fs.readFileSync(manifestPath, "utf8");
 const appBridge = fs.readFileSync(appBridgePath, "utf8");
-const nativeMapController = fs.readFileSync(nativeMapControllerPath, "utf8");
+const nativeMapController = fs.readFileSync(nativeMapControllerPath, "utf8").replace(/\r\n/g, "\n");
 const nativeSiteIconManifest = JSON.parse(fs.readFileSync(nativeSiteIconManifestPath, "utf8"));
 const storyBridge = fs.readFileSync(storyBridgePath, "utf8");
 const captureFileProvider = fs.readFileSync(captureFileProviderPath, "utf8");
@@ -64,7 +64,7 @@ const bundledSharedSearchUtils = fs.readFileSync(bundledSharedSearchUtilsPath, "
 const bundledSharedLifecycleUtils = fs.readFileSync(bundledSharedLifecycleUtilsPath, "utf8");
 const bundledSharedActivityUtils = fs.readFileSync(bundledSharedActivityUtilsPath, "utf8");
 const bundledSharedMapStoryUtils = fs.readFileSync(bundledSharedMapStoryUtilsPath, "utf8");
-const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8");
+const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8").replace(/\r\n/g, "\n");
 const mapLibreJs = fs.readFileSync(mapLibreJsPath, "utf8");
 const mapLibreCss = fs.readFileSync(mapLibreCssPath, "utf8");
 const mapLibreLicense = fs.readFileSync(mapLibreLicensePath, "utf8");
@@ -176,7 +176,7 @@ if (!bundledMobileJs.includes('"Sewanhacky (The Isle of Shells)"')
   throw new Error("Android tablets must show the desktop historical-name rotation and pause it while backgrounded.");
 }
 if (!bundledMobileCss.includes("grid-template-columns: minmax(0, 1fr) 52px")
-    || !bundledMobileCss.includes("justify-content: flex-start;\n      gap: 6px;")) {
+    || !/justify-content:\s*flex-start;\s*gap:\s*6px;/.test(bundledMobileCss)) {
   throw new Error("Compact Nearby rows must reserve a consistent thumbnail column and align category with distance.");
 }
 if (!source.includes("document.querySelector('.sheet.open')")
@@ -212,7 +212,10 @@ if (!bundledMobileJs.includes("function nativeUserLocationFeatures()")
 }
 if (!nativeMapController.includes("CameraPosition cameraToPreserve = nativeGestureInProgress()")
     || !nativeMapController.includes("if (camera == null || map == null || nativeGestureInProgress()) return;")
-    || !nativeMapController.includes("if (nativeGestureInProgress()) return;\n            applyMovingFeaturesToStyle(collection);")
+    || !nativeMapController.includes("movingFeaturesJson = featuresJson;")
+    || !nativeMapController.includes("if (nativeGestureInProgress()) return;")
+    || !nativeMapController.includes("MOVING_FEATURE_MIN_UPDATE_MS")
+    || !nativeMapController.includes("mapView.postDelayed(applyLatestMovingFeaturesTask")
     || !nativeMapController.includes("boolean gestureSettled = cameraGestureAwaitingIdle;")
     || !nativeMapController.includes("applyMovingFeaturesToStyle();")
     || !nativeMapController.includes("listener.onGestureChanged(true);")
@@ -221,6 +224,20 @@ if (!nativeMapController.includes("CameraPosition cameraToPreserve = nativeGestu
 }
 if (!nativeMapController.includes("getDisplayMetrics().density * 32f")) {
   throw new Error("Native site artwork must keep a touch target large enough for transparent-padded icons.");
+}
+if (!nativeMapController.includes('new SymbolLayer("nli-site-point-labels", SITE_POINT_SOURCE_ID)')
+    || !nativeMapController.includes("sitePointLabelLayer.setMinZoom(11.4f)")
+    || !nativeMapController.includes("setTerritorySource(style, payload.optJSONObject(\"territories\"))")
+    || !nativeMapController.includes("withBundledTerritoryLabels(payload.optJSONObject(\"labels\"))")
+    || !nativeMapController.includes('setLayerVisibility(style, "nli-territory-fill", true)')
+    || !nativeMapController.includes('setLayerVisibility(style, "nli-moving-biography-icons", !profileMode)')) {
+  throw new Error("Native map labels, permanent ancestral lands, and biography icons must survive filter and zoom changes.");
+}
+if (!nativeMapController.includes("MAP_TAP_DISPATCH_DELAY_MS")
+    || !nativeMapController.includes("pendingMapTapPoint")
+    || !nativeMapController.includes("suppressNextMapTap")
+    || !nativeMapController.includes("Query the frame the user actually pressed")) {
+  throw new Error("Native map taps must remain responsive without breaking double-tap gesture handling or moving-icon hit tests.");
 }
 if (!nativeMapController.includes("event.getActionMasked() != MotionEvent.ACTION_DOWN && !routedGestureMoved")
     || !nativeMapController.includes("routedGestureMoved = deltaX * deltaX + deltaY * deltaY")
