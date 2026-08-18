@@ -4,7 +4,10 @@ plugins {
 
 dependencies {
     implementation "com.android.billingclient:billing:8.2.1"
-    implementation "org.maplibre.gl:android-sdk:13.5.0"
+    // Keep the native map available on devices without Vulkan. MapLibre 13's
+    // default artifact requires Vulkan, while the OpenGL artifact uses the
+    // same Android API with the widest supported-device coverage.
+    implementation "org.maplibre.gl:android-sdk-opengl:13.5.0"
 }
 
 def releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
