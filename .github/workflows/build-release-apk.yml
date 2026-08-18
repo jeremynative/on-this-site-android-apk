@@ -120,7 +120,7 @@ jobs:
           mkdir -p "$apk_native_root"
           unzip -q app/build/outputs/apk/release/app-release.apk 'lib/*/*.so' -d "$apk_native_root"
           node verify-native-library-compat.js "$apk_native_root/lib" --expected=arm64-v8a,armeabi-v7a
-          zipalign -c -P 16 -v 4 app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 -v 4 app/build/outputs/apk/release/app-release.apk
           aab_native_root="$RUNNER_TEMP/aab-native-audit"
           mkdir -p "$aab_native_root"
           unzip -q app/build/outputs/bundle/release/app-release.aab 'base/lib/*/*.so' -d "$aab_native_root"
