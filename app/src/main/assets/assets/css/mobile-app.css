@@ -2174,7 +2174,7 @@
     /* Keep nearby results scannable until the user explicitly opens Full view. */
     .app:not(.panel-maximized) .nearby-feed-card {
       display: grid;
-      grid-template-columns: minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr) 52px;
       min-height: 70px;
       margin-bottom: 6px;
       border-radius: 9px;
@@ -2207,6 +2207,8 @@
     }
 
     .app:not(.panel-maximized) .nearby-feed-card .learning-card-meta {
+      justify-content: flex-start;
+      gap: 6px;
       font-size: 10px;
     }
 

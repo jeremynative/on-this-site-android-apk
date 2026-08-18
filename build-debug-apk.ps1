@@ -30,6 +30,10 @@ if ($gradleCommand -eq "gradle" -and -not (Get-Command gradle -ErrorAction Silen
 
 Push-Location $projectRoot
 try {
+    & node "prepare-bundled-nearby-media.js"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Preparing bundled Nearby thumbnails failed with exit code $LASTEXITCODE."
+    }
     & $gradleCommand assembleDebug --no-daemon
     if ($LASTEXITCODE -ne 0) {
         throw "Gradle assembleDebug failed with exit code $LASTEXITCODE."

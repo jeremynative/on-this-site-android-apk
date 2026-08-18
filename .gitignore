@@ -40,3 +40,4 @@ adb-goal-*/
 adb-release-*/
 adb-agent*-qa-*/
 release-*/
+app/src/main/assets/media-cache/
