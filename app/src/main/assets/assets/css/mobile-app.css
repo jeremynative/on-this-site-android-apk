@@ -202,6 +202,10 @@
       .loading-screen .loading-card {
         transition-duration: 1ms !important;
       }
+
+      .tablet-project-title {
+        transition: none !important;
+      }
     }
 
     .timeline-map-pulse {
@@ -455,6 +459,36 @@
       font-size: 18px;
       line-height: 1.1;
       font-weight: 800;
+    }
+
+    .tablet-project-title {
+      display: none;
+    }
+
+    body.android-device.tablet-device .title-row {
+      justify-content: flex-start;
+    }
+
+    body.android-device.tablet-device .tablet-project-title {
+      display: block;
+      min-width: 0;
+      color: var(--accent-strong);
+      font-size: 13px;
+      font-weight: 720;
+      line-height: 1.15;
+      opacity: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: opacity 420ms ease, transform 420ms ease;
+    }
+
+    body.android-device.tablet-device .tablet-project-title.is-changing {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+
+    body.android-device.tablet-device .title-actions {
+      margin-left: auto;
     }
 
     .locate {

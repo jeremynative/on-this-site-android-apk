@@ -709,6 +709,10 @@
     function syncSystemSafeArea() {
       const isAndroid = /Android/i.test(navigator.userAgent);
       const isNativeAndroid = isAndroid && Boolean(window.AndroidApp || window.AndroidStory);
+      const tabletDevice = isAndroid && (
+        document.documentElement.dataset.nativeTabletLandscape === "true"
+        || Math.min(Number(window.screen?.width) || 0, Number(window.screen?.height) || 0) >= 500
+      );
       const tabletLandscape = isAndroid && (
         document.documentElement.dataset.nativeTabletLandscape === "true"
         || window.matchMedia("(orientation: landscape) and (min-width: 600px)").matches
@@ -717,6 +721,8 @@
       document.documentElement.classList.toggle("android-device", isAndroid);
       document.body.classList.toggle("native-android-app", isNativeAndroid);
       document.documentElement.classList.toggle("native-android-app", isNativeAndroid);
+      document.body.classList.toggle("tablet-device", tabletDevice);
+      document.documentElement.classList.toggle("tablet-device", tabletDevice);
       document.body.classList.toggle("tablet-landscape", tabletLandscape);
       document.documentElement.classList.toggle("tablet-landscape", tabletLandscape);
       const viewport = window.visualViewport;
@@ -3456,6 +3462,61 @@
         });
       });
     }
+
+    const TABLET_PROJECT_TITLES = [
+      "Native Long Island",
+      "Sewanhacky (The Isle of Shells)",
+      "Paumanack (The Land of Tribute)"
+    ];
+    let tabletProjectTitleIndex = 0;
+    let tabletProjectTitleTimer = null;
+
+    function scheduleTabletProjectTitleRotation() {
+      if (tabletProjectTitleTimer || document.hidden) return;
+      const titleEl = document.getElementById("tablet-project-title");
+      if (!titleEl || window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return;
+      tabletProjectTitleTimer = window.setTimeout(() => {
+        tabletProjectTitleTimer = null;
+        if (document.hidden) return;
+        titleEl.classList.add("is-changing");
+        window.setTimeout(() => {
+          if (document.hidden) {
+            titleEl.classList.remove("is-changing");
+            return;
+          }
+          tabletProjectTitleIndex = (tabletProjectTitleIndex + 1) % TABLET_PROJECT_TITLES.length;
+          titleEl.textContent = TABLET_PROJECT_TITLES[tabletProjectTitleIndex];
+          titleEl.classList.remove("is-changing");
+          scheduleTabletProjectTitleRotation();
+        }, 420);
+      }, 7000);
+    }
+
+    function installTabletProjectTitleRotation() {
+      const titleRow = document.querySelector(".title-row");
+      const mainTitle = titleRow?.querySelector("h1");
+      if (!titleRow || !mainTitle) return;
+      let titleEl = document.getElementById("tablet-project-title");
+      if (!titleEl) {
+        titleEl = document.createElement("span");
+        titleEl.id = "tablet-project-title";
+        titleEl.className = "tablet-project-title";
+        titleEl.setAttribute("aria-hidden", "true");
+        titleEl.textContent = TABLET_PROJECT_TITLES[tabletProjectTitleIndex];
+        mainTitle.insertAdjacentElement("afterend", titleEl);
+      }
+      scheduleTabletProjectTitleRotation();
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        if (tabletProjectTitleTimer) window.clearTimeout(tabletProjectTitleTimer);
+        tabletProjectTitleTimer = null;
+        document.getElementById("tablet-project-title")?.classList.remove("is-changing");
+        return;
+      }
+      scheduleTabletProjectTitleRotation();
+    });
 
     function applyMobileSiteIconUpdates(rows = []) {
       let changed = false;
@@ -19571,6 +19632,7 @@
     async function start() {
       try {
         checkAndroidAppCompatibility();
+        installTabletProjectTitleRotation();
         const nativeAndroid = isNativeAndroidApp();
         state.mobileStartupRendering = true;
         setLoadingMessage("Loading sites and nearby tools.");
