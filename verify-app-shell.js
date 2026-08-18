@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260817-maplibre-renderer-r152";
+const expectedBuild = "20260818-maplibre-native-r153";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -25,6 +25,8 @@ const stylesPath = "app/src/main/res/values/styles.xml";
 const launchBackgroundPath = "app/src/main/res/drawable/launch_background.xml";
 const manifestPath = "app/src/main/AndroidManifest.xml";
 const appBridgePath = "app/src/main/java/com/nativelongisland/onthissite/AppBridge.java";
+const nativeMapControllerPath = "app/src/main/java/com/nativelongisland/onthissite/NativeMapController.java";
+const nativeSiteIconManifestPath = "app/src/main/assets/map/site-icon-keys.json";
 const storyBridgePath = "app/src/main/java/com/nativelongisland/onthissite/StoryBridge.java";
 const captureFileProviderPath = "app/src/main/java/com/nativelongisland/onthissite/CaptureFileProvider.java";
 const nativeCommentPhotoCompatPath = "app/src/main/assets/native-comment-photo-compat.js";
@@ -46,6 +48,8 @@ const source = fs.readFileSync(mainActivityPath, "utf8");
 const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
 const manifest = fs.readFileSync(manifestPath, "utf8");
 const appBridge = fs.readFileSync(appBridgePath, "utf8");
+const nativeMapController = fs.readFileSync(nativeMapControllerPath, "utf8");
+const nativeSiteIconManifest = JSON.parse(fs.readFileSync(nativeSiteIconManifestPath, "utf8"));
 const storyBridge = fs.readFileSync(storyBridgePath, "utf8");
 const captureFileProvider = fs.readFileSync(captureFileProviderPath, "utf8");
 const nativeCommentPhotoCompat = fs.readFileSync(nativeCommentPhotoCompatPath, "utf8");
@@ -88,6 +92,86 @@ if (!mapLibreJs.includes("MapLibre GL JS")
     || !mapLibreCss.includes(".maplibregl-map")
     || !mapLibreLicense.includes("MapLibre contributors")) {
   throw new Error("Android assets must package the MapLibre renderer, stylesheet, and license notice.");
+}
+if (!nativeMapController.includes("logoEnabled(false)")
+    || !nativeMapController.includes("attributionEnabled(false)")
+    || !nativeMapController.includes("long-island-offline-20260817-z10.pmtiles")
+    || !nativeMapController.includes("https://directus.nativelongisland.com/app/map/long-island-z14.pmtiles")
+    || !nativeMapController.includes('"nli-territories"')
+    || !nativeMapController.includes('"nli-biography-paths"')
+    || !nativeMapController.includes('"nli-events"')
+    || !nativeMapController.includes('"nli-profile-points"')
+    || !nativeMapController.includes('"nli-user-location"')
+    || !nativeMapController.includes('"nli-community-contributions"')
+    || !nativeMapController.includes('"nli-temporary-markers"')
+    || !nativeMapController.includes('"nli-moving-features"')
+    || !nativeMapController.includes('"nli-moving-biography-icons"')
+    || !nativeMapController.includes('"nli-moving-dog-icons"')
+    || !nativeMapController.includes('"nli-moving-whale-icons"')
+    || !nativeMapController.includes('"nli-story-markers"')
+    || !nativeMapController.includes('"nli-plant-markers"')
+    || !nativeMapController.includes('"nli-approved-suggestion-markers"')
+    || !nativeMapController.includes('"nli-search-result-marker"')
+    || !nativeMapController.includes('"nli-satellite-layer"')
+    || !nativeMapController.includes("Tiles © Esri")
+    || !nativeMapController.includes("applyBasemapVisibility(style)")
+    || !nativeMapController.includes('return !profileMode && "satellite".equals(currentBasemap);')
+    || !nativeMapController.includes("refreshMapCreditForVisibleBasemap();")
+    || !nativeMapController.includes("== Configuration.ORIENTATION_LANDSCAPE")
+    || !nativeMapController.includes("? Gravity.TOP | Gravity.END")
+    || !nativeMapController.includes("viewportBottomOcclusion + dp(expanded ? 92 : 4)")
+    || !nativeMapController.includes("rootY <= viewportInteractiveBottom")
+    || !nativeMapController.includes('"nli-site-unread-badges"')
+    || !nativeMapController.includes('"nli-site-unread-counts"')
+    || !nativeMapController.includes('"nli-site-point-icons"')
+    || !nativeMapController.includes("addBundledMapIcons(style)")
+    || !nativeMapController.includes('readAsset("assets/data/mobile-site-index.json")')
+    || !nativeMapController.includes('readAsset("map/site-icon-keys.json")')
+    || !nativeMapController.includes('properties.put("native_icon_key", nativeIconKey)')
+    || !nativeMapController.includes("applyBundledSiteIconKeys(payload.optJSONObject(\"sitePoints\"))")
+    || !nativeMapController.includes("bundledSiteIconKeysBySlug.put(slug, nativeIconKey)")
+    || nativeMapController.includes("setOverrideSynchronousUpdate(true)")
+    || !nativeMapController.includes('featureCountWithStringProperty(sitePoints, "native_icon_key")')
+    || !nativeMapController.includes('circleRadius(17f), circleColor("#ffffff"), circleOpacity(0.72f)')
+    || !nativeMapController.includes("density * 20f")
+    || !nativeMapController.includes("Expression.stop(6, 0.72f)")
+    || !nativeMapController.includes("Expression.stop(14, 1.08f)")
+    || !nativeMapController.includes("nearestActionablePointFeature(features, screenPoint, profileMode)")
+    || !nativeMapController.includes("distance < nearestDistance - 0.25")
+    || !nativeMapController.includes('COMPACT_MAP_CREDIT = "ⓘ OSM"')
+    || !nativeMapController.includes("© OpenStreetMap contributors")) {
+  throw new Error("Native MapLibre must use self-hosted/bundled PMTiles, hide engine branding, retain legal credit, and render the required project overlays.");
+}
+if (!source.includes("document.querySelector('.sheet.open')")
+    || !source.includes("bottomOcclusion,window.innerWidth")
+    || !source.includes("private void settleNativeMapViewport()")
+    || !source.includes("settleNativeMapViewport();\n                    hideLoadingCover();")
+    || !source.includes("requestNativeMapViewportSync(900L)")
+    || !source.includes("mo.observe(document.documentElement")
+    || !source.includes("startupSyncCount>=40")
+    || !source.includes("requestAnimationFrame(function(){if(window.__nliSyncNativeMapViewport)")
+    || !appBridge.includes("double bottomOcclusion")
+    || !appBridge.includes("syncNativeMapMovingFeatures")
+    || source.includes(":not(.mobile-moving-biography-mapbox-icon)")) {
+  throw new Error("Native MapLibre must measure opaque mobile-panel overlap so credits and map gestures remain in the visible map area.");
+}
+if (!bundledMobileJs.includes("function nativeUserLocationFeatures()")
+    || !bundledMobileJs.includes("function nativeCommunityContributionFeatures()")
+    || !bundledMobileJs.includes("function nativeTemporaryMapFeatures()")
+    || !bundledMobileJs.includes("function nativeMovingFeatureCollection(")
+    || !bundledMobileJs.includes("syncNativeMapMovingFeatures(")
+    || !bundledMobileJs.includes("removeMobileMovingDomMarkers()")
+    || !bundledMobileJs.includes("function nativeSiteIconKey(site)")
+    || !bundledMobileJs.includes("native_icon_key: nativeSiteIconKey(site)")
+    || !bundledMobileJs.includes("window.__nliSyncNativeMapViewport?.();\n      window.AndroidApp.syncNativeMapState")
+    || !bundledMobileJs.includes("basemap: nativeBasemap")
+    || !bundledMobileJs.includes('scheduleNativeMapStateSync("basemap", 0)')
+    || !bundledMobileJs.includes("userLocation: nativeMapFeatureCollection(userLocationFeatures)")
+    || !bundledMobileJs.includes("communityContributions: nativeMapFeatureCollection(communityFeatures)")
+    || !bundledMobileJs.includes("temporaryMarkers: nativeMapFeatureCollection(temporaryFeatures)")
+    || !bundledMobileJs.includes('scheduleNativeMapStateSync("user-location", 0)')
+    || !bundledMobileJs.includes("unread_count")) {
+  throw new Error("The WebView/native bridge must preserve user location and unread-content state in the visible native map.");
 }
 
 if (bundledApp.includes('url("../images/long-island-loading-outline.png")')
@@ -299,6 +383,31 @@ const bundledSiteCenters = JSON.parse(fs.readFileSync(
   "app/src/main/assets/assets/data/mobile-site-centers.json",
   "utf8"
 ));
+
+const manifestIconAssets = nativeSiteIconManifest?.icon_asset_by_map_icon_id || {};
+const manifestForceBlueSlugs = new Set(nativeSiteIconManifest?.force_blue_dot_slugs || []);
+if (nativeSiteIconManifest?.version !== 1
+    || Object.keys(manifestIconAssets).length < 35
+    || manifestForceBlueSlugs.size !== 2
+    || nativeSiteIconManifest?.exhibit_icon !== "exhibit-framed-landscape-marker.png") {
+  throw new Error("Native first-frame site icon manifest is incomplete or has an unexpected schema.");
+}
+for (const filename of [...Object.values(manifestIconAssets), nativeSiteIconManifest.exhibit_icon, "blue-dot-placeholder.png"]) {
+  const assetPath = `app/src/main/assets/assets/map-icons/${filename}`;
+  if (!fs.existsSync(assetPath) || fs.statSync(assetPath).size < 50) {
+    throw new Error(`Native first-frame site icon manifest references a missing icon: ${filename}`);
+  }
+}
+const jsIconBlock = bundledMobileJs.match(/const APK_LOCAL_MAP_ICON_OVERRIDES = Object\.freeze\(\{([\s\S]*?)\n\s*\}\);/);
+if (!jsIconBlock) throw new Error("Could not inspect the APK local map-icon overrides.");
+for (const [mapIconId, filename] of Object.entries(manifestIconAssets)) {
+  const expectedJsValue = mapIconId === "45f2e7fd-636d-48e9-9e36-ed5ba2dd669e"
+    ? `"${mapIconId}": EXHIBIT_MARKER_ICON`
+    : `"${mapIconId}": "assets/map-icons/${filename}"`;
+  if (!jsIconBlock[1].includes(expectedJsValue)) {
+    throw new Error(`Native first-frame icon mapping drifted from the WebView runtime: ${mapIconId}`);
+  }
+}
 
 function siteSlugs(payload) {
   return new Set((Array.isArray(payload?.rows) ? payload.rows : [])
@@ -814,8 +923,9 @@ if (!manifest.includes("ACCESS_NETWORK_STATE")) {
 }
 requireText("hasUsableNetwork()", "Android shell must route no-network launches directly to the bundled archive.");
 requireText("OFFLINE_BASE_URL", "Android shell must keep a stable same-origin base URL for bundled offline data files.");
-requireText('OFFLINE_BASE_URL + "offline-app.html?apk-offline="', "Android shell must navigate the fallback through its intercepted app-origin asset URL.");
+requireText('String bundledUrl = OFFLINE_BASE_URL + "mobile-app-live.html?"', "Android shell must keep the normal full mobile shell when it switches to bundled offline mode.");
 requireText('"/app/offline-app.html".equals(path)', "Android shell must serve the offline document directly from APK assets.");
+requireText('"/app/mobile-app-live.html".equals(path)', "Android native map must serve the full bundled shell from the intercepted app-origin path.");
 requireText("OFFLINE_RENDER_MAX_ATTEMPTS", "Android shell must bound its offline paint checks.");
 requireText("body.innerText.trim().length>20?'painted':'waiting'", "Android shell must verify visible offline content before uncovering the WebView.");
 requireText("OFFLINE_RENDER_DEADLINE_MS", "Android shell must retain a native deadline when a failed renderer never returns JavaScript callbacks.");
@@ -874,7 +984,7 @@ requireText('"nativelongisland.com".equalsIgnoreCase(host) && path != null && pa
 requireText('path.startsWith("/app/assets/")', "Android shell must serve VPS app-shell assets from the bundled APK when available.");
 requireText('"/app/long-island-land-mask.geojson".equals(path)', "Android shell must serve the VPS app-shell land mask from the bundled APK when available.");
 requireText('"/app/long-island-land-mask-lite.json".equals(path)', "Android shell must serve the compressible lightweight VPS land mask from the bundled APK.");
-requireText("loadingBundledFallback && \"/mobile-app-live.html\".equals(path)", "Android shell must not intercept the live mobile archive unless the fallback is active.");
+requireText("loadingBundledFallback && \"/app/mobile-app-live.html\".equals(path)", "Android shell must not intercept the live mobile archive unless the fallback is active.");
 requireText("loadingBundledFallback && \"/mobile-app.html\".equals(path)", "Android shell must serve the full bundled archive when live Directus startup falls back.");
 requireText("loadingBundledFallback && \"/app/offline-app.html\".equals(path)", "Android shell must serve the lightweight offline archive through its bundled HTTPS origin.");
 requireText('assetName = "mobile-app.html";', "Android shell must serve embedded mobile data for the full archive fallback.");
@@ -1115,10 +1225,15 @@ if (!source.includes('currentUrl == null || currentUrl.isEmpty() || "about:blank
 }
 const fallbackMatch = source.match(/private void loadBundledFallback\(String reason\) \{[\s\S]*?\n    \}/);
 if (!fallbackMatch
-    || !fallbackMatch[0].includes('OFFLINE_BASE_URL + "offline-app.html?apk-offline="')
-    || !source.includes('"/app/offline-app.html".equals(path)')
+    || !fallbackMatch[0].includes('OFFLINE_BASE_URL + "mobile-app-live.html?"')
+    || !fallbackMatch[0].includes('"apk-offline="')
     || !fallbackMatch[0].includes("OFFLINE_BASE_URL")) {
-  throw new Error("No-signal startup must open the lightweight APK archive through the intercepted app-origin URL.");
+  throw new Error("No-signal startup must open the full bundled mobile shell through the intercepted app-origin URL.");
+}
+if (!source.includes("nativeMapEnabled = true;")
+    || source.includes("nativeMapQaEnabled")
+    || source.includes('getBooleanExtra("native_map_qa"')) {
+  throw new Error("Release and debug APKs must both use the production native map; it cannot remain behind a QA intent gate.");
 }
 if (/Thread loader|bundledMobileHtml\(\)/.test(fallbackMatch[0])) {
   throw new Error("No-signal startup must not parse the full bundled online application before showing saved content.");

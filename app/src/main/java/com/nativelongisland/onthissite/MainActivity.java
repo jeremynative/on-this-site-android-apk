@@ -88,7 +88,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260817-maplibre-renderer-r152";
+    static final String APP_VERSION = "20260818-maplibre-native-r153";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -118,6 +118,9 @@ public class MainActivity extends Activity {
     private final String bridgeCapabilityToken = UUID.randomUUID().toString();
 
     private WebView webView;
+    private NativeMapController nativeMapController;
+    private boolean nativeMapEnabled;
+    private boolean nativeMapBundleQaEnabled;
     private AlertDialog exitConfirmationDialog;
     private boolean backNavigationPending;
     private BillingManager billingManager;
@@ -250,7 +253,8 @@ public class MainActivity extends Activity {
         }
     };
     private final Runnable validatedNetworkRecovery = () -> {
-        if (webView == null
+        if (nativeMapBundleQaEnabled
+            || webView == null
             || !hasUsableNetwork()
             || !loadingBundledFallback
             || liveRecoveryAttemptedForCurrentNetwork) return;
@@ -265,7 +269,7 @@ public class MainActivity extends Activity {
         });
     };
     private final Runnable validatedNetworkRecoveryRetry = () -> {
-        if (webView == null || !hasUsableNetwork() || !loadingBundledFallback) return;
+        if (nativeMapBundleQaEnabled || webView == null || !hasUsableNetwork() || !loadingBundledFallback) return;
         liveRecoveryAttemptedForCurrentNetwork = false;
         Log.i(LOG_TAG, "Retrying live recovery after the validated-network backoff.");
         startupHandler.post(validatedNetworkRecovery);
@@ -332,6 +336,11 @@ public class MainActivity extends Activity {
 
         SearchAwareWebView(Context context) {
             super(context);
+        }
+
+        @Override
+        public boolean dispatchTouchEvent(MotionEvent event) {
+            return super.dispatchTouchEvent(event);
         }
 
         @Override
@@ -416,15 +425,36 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true);
+        nativeMapEnabled = true;
+        nativeMapBundleQaEnabled = BuildConfig.DEBUG
+            && getIntent().getBooleanExtra("native_map_bundle_qa", false);
 
         FrameLayout root = new FrameLayout(this);
         webView = new SearchAwareWebView(this);
         webView.setBackgroundColor(Color.rgb(238, 243, 237));
+        if (nativeMapEnabled) webView.setBackgroundColor(Color.TRANSPARENT);
         webView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         webView.setOnApplyWindowInsetsListener((view, insets) -> {
             updateNativeSafeInsets(insets);
             return insets;
         });
+        if (nativeMapEnabled) {
+            nativeMapController = new NativeMapController(this, savedInstanceState, new NativeMapController.Listener() {
+                @Override
+                public void onFeatureSelected(String kind, String key) {
+                    dispatchNativeMapFeature(kind, key);
+                }
+
+                @Override
+                public void onCameraChanged(double longitude, double latitude, double zoom) {
+                    dispatchNativeMapCamera(longitude, latitude, zoom);
+                }
+            });
+            root.addView(nativeMapController.view(), new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            ));
+        }
         root.addView(webView, new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
@@ -633,7 +663,10 @@ public class MainActivity extends Activity {
         });
 
         registerConnectivityMonitoring();
-        if (savedInstanceState != null && hasUsableNetwork()) {
+        if (nativeMapBundleQaEnabled) {
+            restorePendingPlantCameraUri();
+            loadBundledFallback("native-map-bundle-qa");
+        } else if (savedInstanceState != null && hasUsableNetwork()) {
             restorePendingPlantCameraUri();
             android.webkit.WebBackForwardList restoredState = webView.restoreState(savedInstanceState);
             lastRefreshAt = System.currentTimeMillis();
@@ -982,7 +1015,7 @@ public class MainActivity extends Activity {
         } else if (loadingBundledFallback && "/app/offline-app.html".equals(path)) {
             assetName = "offline-app.html";
             mimeType = "text/html";
-        } else if (loadingBundledFallback && "/mobile-app-live.html".equals(path)) {
+        } else if (loadingBundledFallback && "/app/mobile-app-live.html".equals(path)) {
             assetName = "mobile-app-live.html";
             mimeType = "text/html";
         } else if (loadingBundledFallback && "/mobile-app.html".equals(path)) {
@@ -1088,11 +1121,146 @@ public class MainActivity extends Activity {
             "window.__NLI_ANDROID_BRIDGE_TOKEN=" + jsString(bridgeCapabilityToken),
             null
         );
+        installNativeMapLayout(view);
         syncTabletLandscapeClass(view);
         view.postDelayed(() -> syncTabletLandscapeClass(view), 750);
         enforceExclusiveMobilePanels(view);
         installNativeCommentPhotoCompatibility(view);
         validateLoadedAppShell(url);
+    }
+
+    private void installNativeMapLayout(WebView view) {
+        if (!nativeMapEnabled || nativeMapController == null || view == null) return;
+        String token = jsString(bridgeCapabilityToken);
+        view.evaluateJavascript(
+            "(function(){try{"
+                + "if(window.__nliNativeMapLayoutInstalled)return true;"
+                + "window.__nliNativeMapLayoutInstalled=true;"
+                + "var token=" + token + ";"
+                + "var style=document.createElement('style');"
+                + "style.id='nli-native-map-style';"
+                + "style.textContent='html.nli-native-map,html.nli-native-map body{background:transparent!important;}"
+                    + "html.nli-native-map .app,html.nli-native-map .mobile-map-shell{background:transparent!important;}"
+                    + "html.nli-native-map #map{background:transparent!important;}"
+                    + "html.nli-native-map #map>.offline-map-index{visibility:hidden!important;}"
+                    + "html.nli-native-map #map .mapboxgl-canvas-container,html.nli-native-map #map .maplibregl-canvas-container,"
+                    + "html.nli-native-map #map .mapboxgl-control-container,html.nli-native-map #map .maplibregl-control-container{visibility:hidden!important;}"
+                    + "html.nli-native-map #map .mapboxgl-marker,html.nli-native-map #map .maplibregl-marker{visibility:hidden!important;}';"
+                + "document.head.appendChild(style);"
+                + "document.documentElement.classList.add('nli-native-map');"
+                + "var sync=function(){var map=document.getElementById('map');if(!map)return false;"
+                    + "var r=map.getBoundingClientRect();var visible=r.width>2&&r.height>2&&r.bottom>0&&r.right>0;"
+                    + "var panel=document.getElementById('detail');if(!panel||!panel.classList.contains('open'))panel=document.querySelector('.sheet.open');"
+                    + "var pr=panel&&panel.getBoundingClientRect();var bottomOcclusion=pr?Math.max(0,Math.min(r.bottom,pr.bottom)-Math.max(r.top,pr.top)):0;"
+                    + "window.AndroidApp.syncNativeMapViewport(token,r.left,r.top,r.width,r.height,bottomOcclusion,window.innerWidth,window.innerHeight,visible);"
+                    + "var blocked=[];document.querySelectorAll('button,a,input,select,textarea,[role=button]').forEach(function(el){"
+                        + "var marker=el.closest('.mapboxgl-marker,.maplibregl-marker');"
+                        + "if(el.disabled||el.hidden||el.closest('.mapboxgl-control-container,.maplibregl-control-container')||marker)return;"
+                        + "var s=getComputedStyle(el);if(s.display==='none'||s.visibility==='hidden'||s.pointerEvents==='none')return;"
+                        + "var b=el.getBoundingClientRect();if(b.width<2||b.height<2||b.right<=r.left||b.left>=r.right||b.bottom<=r.top||b.top>=r.bottom)return;"
+                        + "blocked.push({left:b.left-5,top:b.top-5,right:b.right+5,bottom:b.bottom+5});});"
+                    + "window.AndroidApp.syncNativeMapTouchRegions(token,JSON.stringify(blocked),window.innerWidth,window.innerHeight);return true;};"
+                + "window.__nliSyncNativeMapViewport=sync;"
+                + "window.addEventListener('resize',sync,{passive:true});window.addEventListener('scroll',sync,{passive:true});"
+                + "if(window.ResizeObserver){var ro=new ResizeObserver(sync);var map=document.getElementById('map');if(map)ro.observe(map);var app=document.querySelector('.app');if(app)ro.observe(app);window.__nliNativeMapResizeObserver=ro;}"
+                + "if(window.MutationObserver){var mt=0;var mo=new MutationObserver(function(){clearTimeout(mt);mt=setTimeout(sync,80);});mo.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','class','open','data-native-tablet-landscape']});window.__nliNativeMapMutationObserver=mo;}"
+                + "requestAnimationFrame(function(){sync();requestAnimationFrame(sync);});"
+                + "setTimeout(sync,250);setTimeout(sync,900);setTimeout(sync,2200);setTimeout(sync,5000);"
+                + "var startupSyncCount=0;var startupSyncTimer=setInterval(function(){sync();startupSyncCount+=1;if(startupSyncCount>=40)clearInterval(startupSyncTimer);},500);window.__nliNativeMapStartupSyncTimer=startupSyncTimer;return true;"
+            + "}catch(error){return false;}})()",
+            value -> Log.d(LOG_TAG, "Native map layout installed: " + value)
+        );
+    }
+
+    private void requestNativeMapViewportSync(long delayMs) {
+        if (!nativeMapEnabled || nativeMapController == null || webView == null) return;
+        webView.postDelayed(() -> webView.evaluateJavascript(
+            "(function(){try{return !!(window.__nliSyncNativeMapViewport&&window.__nliSyncNativeMapViewport());}catch(error){return false;}})()",
+            null
+        ), Math.max(0L, delayMs));
+    }
+
+    private void settleNativeMapViewport() {
+        requestNativeMapViewportSync(0L);
+        requestNativeMapViewportSync(240L);
+        requestNativeMapViewportSync(900L);
+    }
+
+    void syncNativeMapViewport(
+        double cssLeft,
+        double cssTop,
+        double cssWidth,
+        double cssHeight,
+        double cssBottomOcclusion,
+        double cssViewportWidth,
+        double cssViewportHeight,
+        boolean visible
+    ) {
+        if (!nativeMapEnabled || nativeMapController == null || webView == null) return;
+        double safeViewportWidth = Math.max(1.0, cssViewportWidth);
+        double safeViewportHeight = Math.max(1.0, cssViewportHeight);
+        float scaleX = (float) (webView.getWidth() / safeViewportWidth);
+        float scaleY = (float) (webView.getHeight() / safeViewportHeight);
+        int[] webViewLocation = new int[2];
+        webView.getLocationOnScreen(webViewLocation);
+        nativeMapController.updateViewport(
+            (float) cssLeft * scaleX,
+            (float) cssTop * scaleY,
+            (float) cssWidth * scaleX,
+            (float) cssHeight * scaleY,
+            (float) Math.max(0.0, cssBottomOcclusion) * scaleY,
+            visible,
+            webViewLocation[0],
+            webViewLocation[1]
+        );
+    }
+
+    void syncNativeMapTouchRegions(String regionsJson, double cssViewportWidth, double cssViewportHeight) {
+        if (!nativeMapEnabled || nativeMapController == null || webView == null) return;
+        double safeViewportWidth = Math.max(1.0, cssViewportWidth);
+        double safeViewportHeight = Math.max(1.0, cssViewportHeight);
+        nativeMapController.updateBlockedTouchRegions(
+            regionsJson,
+            (float) (webView.getWidth() / safeViewportWidth),
+            (float) (webView.getHeight() / safeViewportHeight)
+        );
+    }
+
+    void syncNativeMapState(String stateJson) {
+        if (!nativeMapEnabled || nativeMapController == null) return;
+        nativeMapController.applyState(stateJson);
+    }
+
+    void syncNativeMapMovingFeatures(String featuresJson) {
+        if (!nativeMapEnabled || nativeMapController == null) return;
+        nativeMapController.updateMovingFeatures(featuresJson);
+    }
+
+    void syncNativeMapCamera(double longitude, double latitude, double zoom) {
+        if (!nativeMapEnabled || nativeMapController == null) return;
+        nativeMapController.updateCamera(longitude, latitude, zoom);
+    }
+
+    private void dispatchNativeMapFeature(String kind, String key) {
+        if (webView == null || !nativeMapEnabled) return;
+        String script = "(function(){try{"
+            + "var k=" + JSONObject.quote(kind == null ? "" : kind) + ";"
+            + "var v=" + JSONObject.quote(key == null ? "" : key) + ";"
+            + "var b=window.NLI_NATIVE_MAP_BRIDGE;"
+            + "if(b&&b.openFeature)return b.openFeature(k,v);"
+            + "if(k==='wiki'&&typeof openWikiArticle==='function'){openWikiArticle(v,{focus:false});return true;}"
+            + "if(k==='site'&&typeof openSite==='function'){openSite(v,{focus:false});return true;}"
+            + "return false;}catch(e){return false;}})()";
+        webView.evaluateJavascript(script, null);
+    }
+
+    private void dispatchNativeMapCamera(double longitude, double latitude, double zoom) {
+        if (webView == null || !nativeMapEnabled) return;
+        String script = "(function(){try{var b=window.NLI_NATIVE_MAP_BRIDGE;"
+            + "return b&&b.cameraChanged?b.cameraChanged("
+            + longitude + "," + latitude + "," + zoom
+            + "):false;}catch(e){return false;}})()";
+        webView.evaluateJavascript(script, null);
     }
 
     private void probeLoadedAppReadiness(String url) {
@@ -1125,6 +1293,11 @@ public class MainActivity extends Activity {
                     appShellLoaded = true;
                     appReadinessProbeActive = false;
                     dispatchPendingPlantPhoto();
+                    // Early document measurements can still reflect the
+                    // temporary full-screen startup map. Re-measure at the
+                    // exact archive-ready handoff before revealing native map
+                    // pixels, then once more after the final layout settles.
+                    settleNativeMapViewport();
                     hideLoadingCover();
                     if (loadingBundledFallback
                         && hasUsableNetwork()
@@ -1262,6 +1435,7 @@ public class MainActivity extends Activity {
 
     private void handleNetworkStateChange(String reason) {
         if (webView == null) return;
+        if (nativeMapBundleQaEnabled) return;
         boolean validated = hasUsableNetwork();
         if (networkStateInitialized && validated == lastValidatedNetworkState) {
             if (validated && loadingBundledFallback && !liveRecoveryAttemptedForCurrentNetwork) {
@@ -1344,6 +1518,14 @@ public class MainActivity extends Activity {
     }
 
     private String androidApkStartupScript() {
+        if (nativeMapBundleQaEnabled) {
+            return "<script>(function(){"
+                + "window.NLI_APK_SNAPSHOT_MODE=true;"
+                + "window.NLI_APK_OFFLINE_TEXT_MODE=false;"
+                + "window.NLI_APK_FALLBACK_REASON='native-map-bundle-qa';"
+                + "window.NLI_DISABLE_DIRECTUS_RUNTIME=false;"
+                + "})();</script>";
+        }
         String script = "(function(){"
             + "if(window.__nliAndroidGeoGateInstalled)return;"
             + "window.__nliAndroidGeoGateInstalled=true;"
@@ -1468,6 +1650,11 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
+        // The staged native map sits behind the transparent WebView. Route and
+        // consume its gesture before the legacy WebView map-tap bridge sees it;
+        // otherwise one physical tap both moves the native camera and opens a
+        // stale JavaScript-map feature underneath.
+        if (nativeMapController != null && nativeMapController.routeTouchEvent(event)) return true;
         int action = event == null ? MotionEvent.ACTION_CANCEL : event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP) {
             handleWebViewTap(event);
@@ -1665,9 +1852,14 @@ public class MainActivity extends Activity {
         // Navigate to a real app-origin URL and serve it from packaged assets
         // in shouldInterceptRequest(). This commits more reliably than
         // loadDataWithBaseURL() on older Android System WebView versions.
-        webView.loadUrl(
-            OFFLINE_BASE_URL + "offline-app.html?apk-offline=" + System.currentTimeMillis()
-        );
+        // Keep the same mobile shell and native-map layout when connectivity
+        // drops. androidApkStartupScript() switches this bundled copy into its
+        // read-only snapshot mode and blocks Directus writes; the separate
+        // legacy offline page cannot host the native map or the normal panels.
+        String bundledUrl = OFFLINE_BASE_URL + "mobile-app-live.html?"
+            + (nativeMapBundleQaEnabled ? "native-map-bundle-qa=" : "apk-offline=")
+            + System.currentTimeMillis();
+        webView.loadUrl(bundledUrl);
         startupHandler.postDelayed(revealBundledFallback, OFFLINE_COVER_REVEAL_DELAY_MS);
         startupHandler.postDelayed(offlineRenderDeadline, OFFLINE_RENDER_DEADLINE_MS);
         if (retryValidatedNetwork) {
@@ -1759,12 +1951,20 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        if (nativeMapController != null) nativeMapController.onStart();
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
+        if (nativeMapController != null) nativeMapController.onResume();
         if (webView != null) {
             webView.onResume();
             webView.post(webView::requestApplyInsets);
             syncTabletLandscapeClass(webView);
+            settleNativeMapViewport();
             scheduleNetworkStateEvaluation("resume");
         }
         if (billingManager != null) billingManager.restorePurchases();
@@ -1776,6 +1976,7 @@ public class MainActivity extends Activity {
         if (webView != null) {
             webView.post(webView::requestApplyInsets);
             syncTabletLandscapeClass(webView);
+            settleNativeMapViewport();
         }
     }
 
@@ -1790,13 +1991,16 @@ public class MainActivity extends Activity {
                     + ";var root=document.documentElement;if(root){root.dataset.nativeTabletLandscape=enabled?'true':'false';"
                     + "root.classList.toggle('tablet-landscape',enabled);}"
                     + "var body=document.body;if(body){body.dataset.nativeTabletLandscape=enabled?'true':'false';"
-                    + "body.classList.toggle('tablet-landscape',enabled);}})()"
+                    + "body.classList.toggle('tablet-landscape',enabled);}"
+                    + "requestAnimationFrame(function(){if(window.__nliSyncNativeMapViewport)window.__nliSyncNativeMapViewport();"
+                    + "requestAnimationFrame(function(){if(window.__nliSyncNativeMapViewport)window.__nliSyncNativeMapViewport();});});})()"
             );
         });
     }
 
     @Override
     protected void onPause() {
+        if (nativeMapController != null) nativeMapController.onPause();
         if (webView != null) {
             webView.evaluateJavascript(
                 "(function(){try{if(window.__nliCaptureAndroidLifecycleSnapshot){window.__nliCaptureAndroidLifecycleSnapshot();return true;}return false;}catch(error){return false;}})();",
@@ -1808,6 +2012,18 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onStop() {
+        if (nativeMapController != null) nativeMapController.onStop();
+        super.onStop();
+    }
+
+    @Override
+    public void onLowMemory() {
+        super.onLowMemory();
+        if (nativeMapController != null) nativeMapController.onLowMemory();
+    }
+
+    @Override
     protected void onDestroy() {
         unregisterConnectivityMonitoring();
         stopLoadingOutlineReveal();
@@ -1815,6 +2031,8 @@ public class MainActivity extends Activity {
         if (exitConfirmationDialog != null) exitConfirmationDialog.dismiss();
         exitConfirmationDialog = null;
         if (billingManager != null) billingManager.close();
+        if (nativeMapController != null) nativeMapController.onDestroy();
+        nativeMapController = null;
         super.onDestroy();
     }
 
@@ -2360,6 +2578,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
+        if (nativeMapController != null) nativeMapController.onSaveInstanceState(outState);
         Log.d(LOG_TAG, "Skipping oversized WebView saveState; lightweight app snapshot is stored in localStorage.");
     }
 }

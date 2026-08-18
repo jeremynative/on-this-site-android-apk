@@ -40,6 +40,64 @@ class AppBridge {
     }
 
     @JavascriptInterface
+    public void syncNativeMapViewport(
+        String token,
+        double left,
+        double top,
+        double width,
+        double height,
+        double bottomOcclusion,
+        double viewportWidth,
+        double viewportHeight,
+        boolean visible
+    ) {
+        if (!activity.validBridgeToken(token)) return;
+        activity.runOnUiThread(() -> activity.syncNativeMapViewport(
+            left,
+            top,
+            width,
+            height,
+            bottomOcclusion,
+            viewportWidth,
+            viewportHeight,
+            visible
+        ));
+    }
+
+    @JavascriptInterface
+    public void syncNativeMapTouchRegions(
+        String token,
+        String regionsJson,
+        double viewportWidth,
+        double viewportHeight
+    ) {
+        if (!activity.validBridgeToken(token)) return;
+        activity.runOnUiThread(() -> activity.syncNativeMapTouchRegions(
+            regionsJson,
+            viewportWidth,
+            viewportHeight
+        ));
+    }
+
+    @JavascriptInterface
+    public void syncNativeMapState(String token, String stateJson) {
+        if (!activity.validBridgeToken(token)) return;
+        activity.runOnUiThread(() -> activity.syncNativeMapState(stateJson));
+    }
+
+    @JavascriptInterface
+    public void syncNativeMapMovingFeatures(String token, String featuresJson) {
+        if (!activity.validBridgeToken(token)) return;
+        activity.runOnUiThread(() -> activity.syncNativeMapMovingFeatures(featuresJson));
+    }
+
+    @JavascriptInterface
+    public void syncNativeMapCamera(String token, double longitude, double latitude, double zoom) {
+        if (!activity.validBridgeToken(token)) return;
+        activity.runOnUiThread(() -> activity.syncNativeMapCamera(longitude, latitude, zoom));
+    }
+
+    @JavascriptInterface
     public float getSafeInsetTop() {
         return activity.safeInsetTopCss();
     }
