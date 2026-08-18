@@ -2044,14 +2044,11 @@
 
     function listingImage(site) {
       if (isOfflineTextMode()) return "";
-      const bundled = window.NLI_BUNDLED_NEARBY_MEDIA?.[String(site?.slug || "")];
-      if (isApkSnapshotMode() && bundled) return bundled;
       return MEDIA_UTILS.listingHeroImage(site, { directusAssetUrl, rewriteMediaUrl });
     }
 
     function listingImageFallback(site) {
       if (isOfflineTextMode()) return "";
-      if (isApkSnapshotMode() && window.NLI_BUNDLED_NEARBY_MEDIA?.[String(site?.slug || "")]) return "";
       return MEDIA_UTILS.listingRewrittenImageFallback(site, { directusAssetUrl, rewriteMediaUrl });
     }
 
@@ -2062,9 +2059,9 @@
       try {
         const parsed = new URL(value, window.location.href);
         const path = parsed.pathname.replace(/^\/+/, "");
-        return path.startsWith("assets/") || path.startsWith("media-cache/") || path.startsWith("app/media-cache/");
+        return path.startsWith("assets/");
       } catch {
-        return /^(?:assets\/|\.\/assets\/|media-cache\/|\.\/media-cache\/)/i.test(value);
+        return /^(?:assets\/|\.\/assets\/)/i.test(value);
       }
     }
 

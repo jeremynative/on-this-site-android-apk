@@ -29,9 +29,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Prepare bundled Nearby thumbnails
-        run: node prepare-bundled-nearby-media.js
-
       - name: Verify Android app shell
         run: node verify-app-shell.js
 
