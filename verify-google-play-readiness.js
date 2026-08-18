@@ -25,18 +25,20 @@ requireMatch(rootGradle, /com\.android\.application"\s+version\s+"8\.(?:1[0-9]|[
 requireMatch(appGradle, /compileSdk\s*=\s*36/, "Google Play build must compile with API 36.");
 requireMatch(appGradle, /targetSdk\s*=\s*36/, "Google Play build must target API 36.");
 requireMatch(workflow, /platforms;android-36/, "CI must install Android platform 36.");
-requireMatch(workflow, /assembleRelease bundleRelease/, "CI must build both the Obtainium APK and Play AAB.");
-requireMatch(workflow, /lintRelease assembleRelease bundleRelease/, "CI must run Android lint before publishing either artifact.");
-requireMatch(appGradle, /release\s*\{[\s\S]*?abiFilters\s+"arm64-v8a",\s*"armeabi-v7a"/,
-  "Release packaging must retain both production ARM ABIs while excluding emulator-only native libraries.");
+requireMatch(workflow, /RELEASE_ABIS="arm64-v8a,armeabi-v7a" gradle lintRelease assembleRelease/,
+  "CI must build and lint the compact Obtainium APK with both production ARM ABIs.");
+requireMatch(workflow, /RELEASE_ABIS="arm64-v8a,armeabi-v7a,x86,x86_64" gradle bundleRelease/,
+  "CI must build the Play AAB with all supported ABIs for per-device delivery.");
+requireMatch(appGradle, /releaseNativeAbis[\s\S]*?RELEASE_ABIS[\s\S]*?abiFilters\.addAll\(releaseNativeAbis\)/,
+  "Release packaging must accept the audited distribution-specific ABI list.");
 requireMatch(workflow, /verify-native-library-compat\.js[\s\S]*?--expected=arm64-v8a,armeabi-v7a/,
   "CI must audit the exact production native ABIs and ELF segment alignment.");
 requireMatch(workflow, /apk-native-audit[\s\S]*?app-release\.apk[\s\S]*?apk_native_root\/lib/,
   "CI must audit libraries extracted from the exact signed Obtainium APK rather than stale intermediates.");
 requireMatch(workflow, /"\$ANDROID_HOME\/build-tools\/35\.0\.0\/zipalign" -c -P 16 -v 4 app\/build\/outputs\/apk\/release\/app-release\.apk/,
   "CI must verify 16 KB ZIP alignment on the signed Obtainium APK.");
-requireMatch(workflow, /aab-native-audit[\s\S]*?base\/lib[\s\S]*?--expected=arm64-v8a,armeabi-v7a/,
-  "CI must audit the native libraries packaged in the Play App Bundle.");
+requireMatch(workflow, /aab-native-audit[\s\S]*?base\/lib[\s\S]*?--expected=arm64-v8a,armeabi-v7a,x86,x86_64/,
+  "CI must audit all four native architectures packaged in the Play App Bundle.");
 requireMatch(workflow, /app\/build\/outputs\/bundle\/release\/app-release\.aab/,
   "CI must retain the Play App Bundle as an artifact.");
 requireMatch(manifest, /android:allowBackup="false"/, "Backups must remain disabled for account-bearing app data.");

@@ -111,7 +111,8 @@ jobs:
             exit 1
           fi
           echo "::add-mask::$MAPBOX_TOKEN"
-          gradle lintRelease assembleRelease bundleRelease --no-daemon
+          RELEASE_ABIS="arm64-v8a,armeabi-v7a" gradle lintRelease assembleRelease --no-daemon
+          RELEASE_ABIS="arm64-v8a,armeabi-v7a,x86,x86_64" gradle bundleRelease --no-daemon
 
       - name: Verify native ABI and 16 KB page-size compatibility
         run: |
@@ -124,7 +125,7 @@ jobs:
           aab_native_root="$RUNNER_TEMP/aab-native-audit"
           mkdir -p "$aab_native_root"
           unzip -q app/build/outputs/bundle/release/app-release.aab 'base/lib/*/*.so' -d "$aab_native_root"
-          node verify-native-library-compat.js "$aab_native_root/base/lib" --expected=arm64-v8a,armeabi-v7a
+          node verify-native-library-compat.js "$aab_native_root/base/lib" --expected=arm64-v8a,armeabi-v7a,x86,x86_64
 
       - name: Prepare release APK files
         run: |

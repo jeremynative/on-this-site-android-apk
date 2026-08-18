@@ -12,6 +12,10 @@ def hasReleaseSigning = releaseKeystorePath
     && System.getenv("ANDROID_KEYSTORE_PASSWORD")
     && System.getenv("ANDROID_KEY_ALIAS")
     && System.getenv("ANDROID_KEY_PASSWORD")
+def releaseNativeAbis = (System.getenv("RELEASE_ABIS") ?: "arm64-v8a,armeabi-v7a")
+    .split(",")
+    .collect { it.trim() }
+    .findAll { it }
 
 android {
     namespace = "com.nativelongisland.onthissite"
@@ -61,12 +65,11 @@ android {
         release {
             minifyEnabled = false
             shrinkResources = false
-            // Obtainium receives one universal phone/tablet APK. Excluding
-            // emulator-only x86 libraries removes ~25 MB while retaining both
-            // modern 64-bit ARM and legacy 32-bit ARM Android devices. The AAB
-            // carries the same supported production device set for Play.
+            // Obtainium receives one compact universal ARM APK. CI overrides
+            // RELEASE_ABIS for the Play AAB so Google can continue serving
+            // x86/x86_64 devices through per-device bundle splits.
             ndk {
-                abiFilters "arm64-v8a", "armeabi-v7a"
+                abiFilters.addAll(releaseNativeAbis)
             }
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.release
