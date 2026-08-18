@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260818-maplibre-native-r154";
+const expectedBuild = "20260818-map-gesture-icons-r158";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -133,7 +133,7 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || nativeMapController.includes("setOverrideSynchronousUpdate(true)")
     || !nativeMapController.includes('featureCountWithStringProperty(sitePoints, "native_icon_key")')
     || !nativeMapController.includes('circleRadius(17f), circleColor("#ffffff"), circleOpacity(0.72f)')
-    || !nativeMapController.includes("density * 20f")
+    || !nativeMapController.includes("density * 32f")
     || !nativeMapController.includes("Expression.stop(6, 0.72f)")
     || !nativeMapController.includes("Expression.stop(14, 1.08f)")
     || !nativeMapController.includes("nearestActionablePointFeature(features, screenPoint, profileMode)")
@@ -172,6 +172,38 @@ if (!bundledMobileJs.includes("function nativeUserLocationFeatures()")
     || !bundledMobileJs.includes('scheduleNativeMapStateSync("user-location", 0)')
     || !bundledMobileJs.includes("unread_count")) {
   throw new Error("The WebView/native bridge must preserve user location and unread-content state in the visible native map.");
+}
+if (!nativeMapController.includes("CameraPosition cameraToPreserve = nativeGestureInProgress()")
+    || !nativeMapController.includes("if (camera == null || map == null || nativeGestureInProgress()) return;")
+    || !nativeMapController.includes("if (nativeGestureInProgress()) return;\n            applyMovingFeaturesToStyle(collection);")
+    || !nativeMapController.includes("boolean gestureSettled = cameraGestureAwaitingIdle;")
+    || !nativeMapController.includes("applyMovingFeaturesToStyle();")
+    || !nativeMapController.includes("listener.onGestureChanged(true);")
+    || !nativeMapController.includes("listener.onGestureChanged(false);")) {
+  throw new Error("Native map gestures must own the camera and pause moving-source updates until camera idle.");
+}
+if (!nativeMapController.includes("getDisplayMetrics().density * 32f")) {
+  throw new Error("Native site artwork must keep a touch target large enough for transparent-padded icons.");
+}
+if (!nativeMapController.includes("event.getActionMasked() != MotionEvent.ACTION_DOWN && !routedGestureMoved")
+    || !nativeMapController.includes("routedGestureMoved = deltaX * deltaX + deltaY * deltaY")
+    || !nativeMapController.includes("if (routedGestureMoved) return false;")) {
+  throw new Error("A moved native map gesture must not open a site or territory when the finger is released.");
+}
+if (!bundledMobileJs.includes("nativeMapCameraEcho: null")
+    || !bundledMobileJs.includes("const matchesNativeCamera = Math.abs")
+    || !bundledMobileJs.includes("state.nativeMapCameraEcho = {")) {
+  throw new Error("The hidden WebView map must not echo a native camera update back into MapLibre Native.");
+}
+if (!source.includes("private void dispatchNativeMapGesture(boolean active)")
+    || !bundledMobileJs.includes("gestureChanged(active)")
+    || !bundledMobileJs.includes("if (active) markAndroidMapGestureActive();")) {
+  throw new Error("Native touch activity must pause hidden-WebView map refresh and moving-feature work.");
+}
+if (!source.includes("notificationPermissionPromptedForSession")
+    || !source.includes("notificationPermissionRequestInFlight")
+    || !source.includes("&& !runtimePermissionPromptActive")) {
+  throw new Error("Passive proximity checks must not stack Android notification permission dialogs.");
 }
 
 if (bundledApp.includes('url("../images/long-island-loading-outline.png")')
@@ -1758,6 +1790,12 @@ if (!bundledMobileJs.includes('const androidBridgeToken = () => String(window.__
   throw new Error("Bundled Android mobile runtime must pass the native bridge capability token.");
 }
 requireBundledText('localStorage.getItem("nli-proximity-alert-date") === todayKey', "Bundled Android app must limit nearby site notifications to once per day.");
+const proximityReservation = bundledMobileJs.indexOf('localStorage.setItem("nli-proximity-alert-date", todayKey);', bundledMobileJs.indexOf("function checkProximityAlerts()"));
+const proximityDelivery = bundledMobileJs.indexOf('notifyUser("On This Site nearby"', bundledMobileJs.indexOf("function checkProximityAlerts()"));
+if (proximityReservation < 0 || proximityDelivery < 0 || proximityReservation > proximityDelivery
+    || !bundledMobileJs.includes("state.proximityAlertInFlight")) {
+  throw new Error("Nearby-site alerts must reserve their daily throttle before asynchronous notification delivery.");
+}
 requireBundledText('const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 8;', "Bundled Android app must keep the first nearby tray render small.");
 requireBundledText('const NEARBY_LIST_ANDROID_DEFAULT_LIMIT = 12;', "Bundled Android app must keep the normal nearby tray render bounded.");
 requireBundledText('data-nearby-show-more', "Bundled Android app must let users reveal more nearby places after the startup cap.");

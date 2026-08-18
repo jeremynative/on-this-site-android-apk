@@ -88,7 +88,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260818-maplibre-native-r154";
+    static final String APP_VERSION = "20260818-map-gesture-icons-r158";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -219,6 +219,8 @@ public class MainActivity extends Activity {
     private boolean appShellLoaded;
     private boolean runtimePermissionPromptActive;
     private boolean locationPermissionDeniedForSession;
+    private boolean notificationPermissionPromptedForSession;
+    private boolean notificationPermissionRequestInFlight;
     private int appReadinessProbeAttempts;
     private boolean appReadinessProbeActive;
     private String appReadinessProbeUrl;
@@ -448,6 +450,11 @@ public class MainActivity extends Activity {
                 @Override
                 public void onCameraChanged(double longitude, double latitude, double zoom) {
                     dispatchNativeMapCamera(longitude, latitude, zoom);
+                }
+
+                @Override
+                public void onGestureChanged(boolean active) {
+                    dispatchNativeMapGesture(active);
                 }
             });
             root.addView(nativeMapController.view(), new FrameLayout.LayoutParams(
@@ -1260,6 +1267,14 @@ public class MainActivity extends Activity {
             + "return b&&b.cameraChanged?b.cameraChanged("
             + longitude + "," + latitude + "," + zoom
             + "):false;}catch(e){return false;}})()";
+        webView.evaluateJavascript(script, null);
+    }
+
+    private void dispatchNativeMapGesture(boolean active) {
+        if (webView == null || !nativeMapEnabled) return;
+        String script = "(function(){try{var b=window.NLI_NATIVE_MAP_BRIDGE;"
+            + "return b&&b.gestureChanged?b.gestureChanged(" + active + "):false;"
+            + "}catch(e){return false;}})()";
         webView.evaluateJavascript(script, null);
     }
 
@@ -2371,7 +2386,16 @@ public class MainActivity extends Activity {
 
     boolean showNearbyNotification(String title, String body) {
         if (!hasNotificationPermission()) {
-            if (Build.VERSION.SDK_INT >= 33) {
+            // A passive location callback must never stack Android permission
+            // activities. The location watcher can report several fixes while
+            // one prompt is resolving, which previously produced a new dialog
+            // and fallback banner for every fix and starved map input.
+            if (Build.VERSION.SDK_INT >= 33
+                && !notificationPermissionPromptedForSession
+                && !notificationPermissionRequestInFlight
+                && !runtimePermissionPromptActive) {
+                notificationPermissionPromptedForSession = true;
+                notificationPermissionRequestInFlight = true;
                 beginRuntimePermissionPrompt();
                 requestPermissions(new String[] { Manifest.permission.POST_NOTIFICATIONS }, NOTIFICATION_REQUEST);
             }
@@ -2457,6 +2481,11 @@ public class MainActivity extends Activity {
                 suppressResumeRefreshAfterPermissionPrompt();
                 if (granted) launchCommentBridgeCamera();
                 else queueCommentPhoto(false, "Camera permission is needed to take a comment photo.", "", "", "");
+                return;
+            }
+
+            if (requestCode == NOTIFICATION_REQUEST) {
+                notificationPermissionRequestInFlight = false;
             }
         } finally {
             finishRuntimePermissionPrompt();

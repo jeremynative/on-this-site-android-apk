@@ -964,6 +964,8 @@
       nativeMapStateTimer: null,
       nativeMapStateSignature: "",
       nativeMapBridgeInstalled: false,
+      nativeMapCameraEcho: null,
+      proximityAlertInFlight: false,
       selectedWikiSlug: "",
       androidLifecycleRestored: false,
       feedbackScreenshotFile: null,
@@ -6750,6 +6752,18 @@
       const center = state.map.getCenter?.();
       const zoom = Number(state.map.getZoom?.());
       if (!center || !Number.isFinite(Number(center.lng)) || !Number.isFinite(Number(center.lat)) || !Number.isFinite(zoom)) return false;
+      const echo = state.nativeMapCameraEcho;
+      if (echo) {
+        const isFresh = performance.now() - Number(echo.at || 0) < 1500;
+        const matchesNativeCamera = Math.abs(Number(center.lng) - Number(echo.longitude)) < 0.00002
+          && Math.abs(Number(center.lat) - Number(echo.latitude)) < 0.00002
+          && Math.abs(zoom - Number(echo.zoom)) < 0.02;
+        if (isFresh && matchesNativeCamera) {
+          state.nativeMapCameraEcho = null;
+          return false;
+        }
+        if (!isFresh) state.nativeMapCameraEcho = null;
+      }
       window.AndroidApp.syncNativeMapCamera(androidBridgeToken(), Number(center.lng), Number(center.lat), zoom);
       return true;
     }
@@ -6885,7 +6899,18 @@
           const center = [Number(longitude), Number(latitude)];
           const nextZoom = Number(zoom);
           if (!state.map || !center.every(Number.isFinite) || !Number.isFinite(nextZoom)) return false;
+          state.nativeMapCameraEcho = {
+            longitude: center[0],
+            latitude: center[1],
+            zoom: nextZoom,
+            at: performance.now()
+          };
           state.map.jumpTo({ center, zoom: nextZoom });
+          return true;
+        },
+        gestureChanged(active) {
+          if (active) markAndroidMapGestureActive();
+          else markAndroidMapGestureSettled();
           return true;
         },
         sync(reason = "manual") {
@@ -13980,7 +14005,7 @@
       const hour = new Date().getHours();
       if (hour < 9 || hour > 17) return;
       const todayKey = localDateKey();
-      if (localStorage.getItem("nli-proximity-alert-date") === todayKey) return;
+      if (state.proximityAlertInFlight || localStorage.getItem("nli-proximity-alert-date") === todayKey) return;
       const profile = currentContributorProfile();
       const nearby = visitableSites()
         .filter(site => !isBroadTerritory(site))
@@ -13989,9 +14014,15 @@
         .filter(item => Number.isFinite(item.miles) && item.miles <= SITE_VISIT_ALERT_RADIUS_MILES)
         .sort((a, b) => a.miles - b.miles)[0];
       if (!nearby) return;
+      // Reserve the daily alert before crossing the async native bridge. When
+      // notification permission is unavailable, notifyUser falls back to an
+      // in-app banner; waiting for a successful system notification caused
+      // every GPS fix to repeat both the permission prompt and the banner.
+      state.proximityAlertInFlight = true;
+      localStorage.setItem("nli-proximity-alert-date", todayKey);
       notifyUser("On This Site nearby", `You are within ${nearby.miles.toFixed(1)} mi of ${nearby.site.title}.`)
-        .then(sent => {
-          if (sent) localStorage.setItem("nli-proximity-alert-date", todayKey);
+        .finally(() => {
+          state.proximityAlertInFlight = false;
         });
     }
 
