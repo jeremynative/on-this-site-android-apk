@@ -22,4 +22,6 @@ The native renderer receives one cached state snapshot from the existing mobile 
 
 The APK already packages the project's map-marker PNGs under `assets/map-icons`. MapLibre Native normalizes those images to a consistent 64-pixel transparent canvas and references them through each site's `native_icon_key`; listings without a packaged custom icon keep the small default project point.
 
+The Obtainium APK packages `arm64-v8a` and `armeabi-v7a` to keep the universal download compact. The Google Play App Bundle packages those plus `x86` and `x86_64`; Play then delivers only the architecture needed by each tester's device.
+
 MapLibre Native feature taps are routed back to the existing content, contributor, story, plant, event, and suggestion UI. The renderer does not duplicate those API calls or contribution forms.
