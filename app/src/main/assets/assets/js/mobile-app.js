@@ -2338,6 +2338,7 @@
               properties: {
                 slug: site.slug,
                 title: site.title,
+                label_kind: kind,
                 label_size: labelSize,
                 unread_count: unreadCount,
                 unread_label: mobileUnreadCountLabel(unreadCount),
@@ -4725,7 +4726,7 @@
       const territoryLine = territoryLineForPoint(center);
       const element = document.createElement("button");
       element.type = "button";
-      element.className = "user-location-dot";
+      element.className = "user-location-dot address-location-dot";
       element.setAttribute("aria-label", "Your search result");
       const popupHtml = `
         <div style="max-width:190px">
@@ -5183,7 +5184,7 @@
         : "";
       const commentCount = Number(card.counts?.comments || 0);
       return `
-        <article class="site-card learning-card nearby-feed-card${!isWiki && card.item.slug === state.selectedSlug ? " active" : ""}" ${buttonAttrs} ${resultAttrs} data-learning-card-key="${escapeHtml(card.key)}">
+        <article class="site-card learning-card nearby-feed-card${card.imageUrl ? " has-thumbnail" : ""}${!isWiki && card.item.slug === state.selectedSlug ? " active" : ""}" ${buttonAttrs} ${resultAttrs} data-learning-card-key="${escapeHtml(card.key)}">
           ${learningCardImageHtml(card, isWiki ? `data-nearby-open-wiki="${escapeHtml(card.item.slug)}"` : `data-nearby-open="${escapeHtml(card.item.slug)}"`, card.item.listing_image_alt || "", { hideWhenMissing: true })}
           <div class="learning-card-body">
             <div class="learning-card-meta">

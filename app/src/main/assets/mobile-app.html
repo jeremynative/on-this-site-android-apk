@@ -237,13 +237,33 @@
     }
 
     .user-location-dot {
+      display: grid;
+      width: 20px;
+      height: 20px;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.58);
+      box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.2);
+      place-items: center;
+      pointer-events: none;
+    }
+
+    .user-location-dot:not(.address-location-dot)::after {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #2f80ed;
+      content: "";
+    }
+
+    .address-location-dot {
+      display: block;
       width: 14px;
       height: 14px;
       border: 2px solid #ffffff;
-      border-radius: 50%;
       background: #245fdd;
       box-shadow: 0 0 0 4px rgba(36, 95, 221, 0.16);
-      pointer-events: none;
+      pointer-events: auto;
     }
 
     .selected-site-map-label {
@@ -2136,6 +2156,61 @@
       border-color: var(--accent);
       background: var(--accent);
       color: #fff;
+    }
+
+    /* Keep nearby results scannable until the user explicitly opens Full view. */
+    .app:not(.panel-maximized) .nearby-feed-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      min-height: 70px;
+      margin-bottom: 6px;
+      border-radius: 9px;
+      box-shadow: 0 2px 8px rgba(24, 33, 26, 0.06);
+    }
+
+    .app:not(.panel-maximized) .nearby-feed-card.has-thumbnail {
+      grid-template-columns: minmax(0, 1fr) 52px;
+    }
+
+    .app:not(.panel-maximized) .nearby-feed-card .learning-card-body {
+      grid-column: 1;
+      grid-row: 1;
+      gap: 4px;
+      min-width: 0;
+      padding: 9px 10px;
+    }
+
+    .app:not(.panel-maximized) .nearby-feed-card .learning-card-media {
+      grid-column: 2;
+      grid-row: 1;
+      align-self: start;
+      width: 52px;
+      height: 52px;
+      min-height: 0;
+      max-height: none;
+      margin: 9px 9px 0 0;
+      aspect-ratio: 1;
+      border-radius: 7px;
+    }
+
+    .app:not(.panel-maximized) .nearby-feed-card .learning-card-meta {
+      font-size: 10px;
+    }
+
+    .app:not(.panel-maximized) .nearby-feed-card h2 {
+      overflow: hidden;
+      font-size: 15px;
+      line-height: 1.18;
+      text-overflow: ellipsis;
+    }
+
+    .app:not(.panel-maximized) .nearby-feed-card :is(
+      .learning-card-tags,
+      .learning-card-excerpt,
+      .learning-card-see-more,
+      .learning-card-actions
+    ) {
+      display: none;
     }
 
     .thumb {
@@ -19716,6 +19791,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       activeSiteLabelMarker: null,
       mobileBiographyPathMarkers: [],
       mobileMovingBiographyMarkers: new Map(),
+      nativeMovingBiographyItems: [],
       mobileMovingBiographyMarkerQueueTimer: null,
       mobileMovingDogMarker: null,
       mobileMovingWhaleMarker: null,
@@ -19746,6 +19822,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       nativeMapStateTimer: null,
       nativeMapStateSignature: "",
       nativeMapBridgeInstalled: false,
+      nativeMapCameraEcho: null,
+      proximityAlertInFlight: false,
       selectedWikiSlug: "",
       androidLifecycleRestored: false,
       feedbackScreenshotFile: null,
@@ -21118,6 +21196,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
               properties: {
                 slug: site.slug,
                 title: site.title,
+                label_kind: kind,
                 label_size: labelSize,
                 unread_count: unreadCount,
                 unread_label: mobileUnreadCountLabel(unreadCount),
@@ -23505,7 +23584,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const territoryLine = territoryLineForPoint(center);
       const element = document.createElement("button");
       element.type = "button";
-      element.className = "user-location-dot";
+      element.className = "user-location-dot address-location-dot";
       element.setAttribute("aria-label", "Your search result");
       const popupHtml = `
         <div style="max-width:190px">
@@ -23963,7 +24042,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         : "";
       const commentCount = Number(card.counts?.comments || 0);
       return `
-        <article class="site-card learning-card nearby-feed-card${!isWiki && card.item.slug === state.selectedSlug ? " active" : ""}" ${buttonAttrs} ${resultAttrs} data-learning-card-key="${escapeHtml(card.key)}">
+        <article class="site-card learning-card nearby-feed-card${card.imageUrl ? " has-thumbnail" : ""}${!isWiki && card.item.slug === state.selectedSlug ? " active" : ""}" ${buttonAttrs} ${resultAttrs} data-learning-card-key="${escapeHtml(card.key)}">
           ${learningCardImageHtml(card, isWiki ? `data-nearby-open-wiki="${escapeHtml(card.item.slug)}"` : `data-nearby-open="${escapeHtml(card.item.slug)}"`, card.item.listing_image_alt || "", { hideWhenMissing: true })}
           <div class="learning-card-body">
             <div class="learning-card-meta">
@@ -25385,6 +25464,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         && androidBridgeToken()
         && window.AndroidApp?.syncNativeMapState
         && window.AndroidApp?.syncNativeMapCamera
+        && window.AndroidApp?.syncNativeMapMovingFeatures
       );
     }
 
@@ -25531,6 +25611,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const center = state.map.getCenter?.();
       const zoom = Number(state.map.getZoom?.());
       if (!center || !Number.isFinite(Number(center.lng)) || !Number.isFinite(Number(center.lat)) || !Number.isFinite(zoom)) return false;
+      const echo = state.nativeMapCameraEcho;
+      if (echo) {
+        const isFresh = performance.now() - Number(echo.at || 0) < 1500;
+        const matchesNativeCamera = Math.abs(Number(center.lng) - Number(echo.longitude)) < 0.00002
+          && Math.abs(Number(center.lat) - Number(echo.latitude)) < 0.00002
+          && Math.abs(zoom - Number(echo.zoom)) < 0.02;
+        if (isFresh && matchesNativeCamera) {
+          state.nativeMapCameraEcho = null;
+          return false;
+        }
+        if (!isFresh) state.nativeMapCameraEcho = null;
+      }
       window.AndroidApp.syncNativeMapCamera(androidBridgeToken(), Number(center.lng), Number(center.lat), zoom);
       return true;
     }
@@ -25577,6 +25669,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           ? nativeMapFeatureCollection()
           : allMobileBiographyPathFeatureCollection({ enabled: mobileBiographyPathsEnabled() })
       };
+      // Keep the native surface aligned with the final WebView layout before
+      // each bounded data handoff. Startup can produce an early full-screen
+      // map rectangle before the header and panels finish sizing; the state
+      // sync is the authoritative point at which those layouts are usable.
+      window.__nliSyncNativeMapViewport?.();
       window.AndroidApp.syncNativeMapState(androidBridgeToken(), JSON.stringify(payload));
       state.nativeMapStateSignature = signature;
       return true;
@@ -25661,7 +25758,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           const center = [Number(longitude), Number(latitude)];
           const nextZoom = Number(zoom);
           if (!state.map || !center.every(Number.isFinite) || !Number.isFinite(nextZoom)) return false;
+          state.nativeMapCameraEcho = {
+            longitude: center[0],
+            latitude: center[1],
+            zoom: nextZoom,
+            at: performance.now()
+          };
           state.map.jumpTo({ center, zoom: nextZoom });
+          return true;
+        },
+        gestureChanged(active) {
+          if (active) markAndroidMapGestureActive();
+          else markAndroidMapGestureSettled();
           return true;
         },
         sync(reason = "manual") {
@@ -30502,6 +30610,82 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return compact ? `on the way to ${compact}` : "";
     }
 
+    function removeMobileMovingDomMarkers() {
+      for (const entry of state.mobileMovingBiographyMarkers.values()) entry.marker?.remove?.();
+      state.mobileMovingBiographyMarkers.clear();
+      state.mobileMovingDogMarker?.remove?.();
+      state.mobileMovingWhaleMarker?.remove?.();
+      state.mobileMovingDogMarker = null;
+      state.mobileMovingWhaleMarker = null;
+    }
+
+    function nativeMovingFeatureCollection(now = performance.now()) {
+      if (state.profileMapMode) return nativeMapFeatureCollection();
+      const motionNow = Math.max(0, now - (state.mobileMovingMarkerPausedDurationMs || 0));
+      const showLabel = Number(state.map?.getZoom?.() || 0) >= SITE_POINT_LABEL_MIN_ZOOM;
+      const features = [];
+      (state.nativeMovingBiographyItems || []).forEach(item => {
+        const motion = mobileMovingPingPong(item.route, item.duration, item.offset, motionNow);
+        const status = mobileMovingBiographyStatus(item, motion);
+        features.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: motion.coordinates },
+          properties: {
+            native_kind: "wiki",
+            native_key: item.slug,
+            moving_kind: "biography",
+            icon_key: "nli-icon-person-biography-marker",
+            title: item.person || "Biography",
+            label: status ? `${item.person || "Biography"}\n${status}` : (item.person || "Biography"),
+            show_label: showLabel,
+            direction: motion.direction,
+            on_water: !mobileMovingPointIsOnLand(motion.coordinates)
+          }
+        });
+      });
+      const dogMotion = mobileMovingPingPong(MOBILE_DOG_ROUTE, MOBILE_DOG_ONE_WAY_MS, MOBILE_DOG_START_OFFSET_MS, motionNow);
+      features.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: dogMotion.coordinates },
+        properties: {
+          native_kind: "wiki",
+          native_key: MOVING_DOG_WIKI_SLUG,
+          moving_kind: "dog",
+          icon_key: `nli-icon-dog-moving-icon${dogMotion.direction === "left" ? "-left" : ""}`,
+          title: "Dog",
+          label: "Dog",
+          show_label: showLabel,
+          direction: dogMotion.direction
+        }
+      });
+      const whaleMotion = mobileMovingPingPong(MOBILE_WHALE_ROUTE, MOBILE_WHALE_ONE_WAY_MS, MOBILE_WHALE_START_OFFSET_MS, motionNow);
+      const whaleIsSite = state.siteBySlug.has(WHALING_FEATURE_SLUG);
+      features.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: whaleMotion.coordinates },
+        properties: {
+          native_kind: whaleIsSite ? "site" : "wiki",
+          native_key: WHALING_FEATURE_SLUG,
+          moving_kind: "whale",
+          icon_key: `nli-icon-whaling-moving-whale${whaleMotion.direction === "left" ? "-left" : ""}`,
+          title: "Whaling",
+          label: "Whaling",
+          show_label: false,
+          direction: whaleMotion.direction
+        }
+      });
+      return nativeMapFeatureCollection(features);
+    }
+
+    function syncNativeMovingFeaturesToAndroid(now = performance.now()) {
+      if (!nativeMapBridgeAvailable()) return false;
+      window.AndroidApp.syncNativeMapMovingFeatures(
+        androidBridgeToken(),
+        JSON.stringify(nativeMovingFeatureCollection(now))
+      );
+      return true;
+    }
+
     function mobileMovingBiographyHtml(item) {
       const name = item?.person || "Biography";
       return `
@@ -30562,6 +30746,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function ensureMobileMovingBiographyMarkers() {
       if (!state.map || !window.mapboxgl?.Marker) return;
+      if (nativeMapBridgeAvailable()) {
+        if (state.mobileMovingBiographyMarkerQueueTimer) window.clearTimeout(state.mobileMovingBiographyMarkerQueueTimer);
+        state.mobileMovingBiographyMarkerQueueTimer = null;
+        for (const entry of state.mobileMovingBiographyMarkers.values()) entry.marker?.remove?.();
+        state.mobileMovingBiographyMarkers.clear();
+        state.nativeMovingBiographyItems = mobileBiographyIconsEnabled() ? mobileMovingBiographyItems() : [];
+        syncNativeMovingFeaturesToAndroid();
+        return;
+      }
       if (!mobileBiographyIconsEnabled() && state.mobileMovingBiographyMarkerQueueTimer) {
         window.clearTimeout(state.mobileMovingBiographyMarkerQueueTimer);
         state.mobileMovingBiographyMarkerQueueTimer = null;
@@ -30612,7 +30805,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function ensureMobileMovingDogMarker() {
-      if (!state.map || !window.mapboxgl?.Marker || state.mobileMovingDogMarker) return;
+      if (!state.map || !window.mapboxgl?.Marker) return;
+      if (nativeMapBridgeAvailable()) {
+        state.mobileMovingDogMarker?.remove?.();
+        state.mobileMovingDogMarker = null;
+        return;
+      }
+      if (state.mobileMovingDogMarker) return;
       const element = document.createElement("div");
       element.className = "mobile-moving-dog-mapbox-icon";
       element.innerHTML = mobileMovingDogHtml();
@@ -30655,7 +30854,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function ensureMobileMovingWhaleMarker() {
-      if (!state.map || !window.mapboxgl?.Marker || state.mobileMovingWhaleMarker) return;
+      if (!state.map || !window.mapboxgl?.Marker) return;
+      if (nativeMapBridgeAvailable()) {
+        state.mobileMovingWhaleMarker?.remove?.();
+        state.mobileMovingWhaleMarker = null;
+        return;
+      }
+      if (state.mobileMovingWhaleMarker) return;
       const element = document.createElement("div");
       element.className = "mobile-moving-whale-mapbox-icon";
       element.innerHTML = mobileMovingWhaleHtml();
@@ -30681,6 +30886,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function updateMobileMovingFeatureMarkers(now = performance.now()) {
       if (!state.map || document.hidden || isAndroidMapGestureActive() || mobileMapCameraIsInteracting() || now < (state.mobileMovingMarkerInteractionUntil || 0)) return;
+      if (nativeMapBridgeAvailable()) {
+        removeMobileMovingDomMarkers();
+        syncNativeMovingFeaturesToAndroid(now);
+        return;
+      }
       const motionNow = Math.max(0, now - (state.mobileMovingMarkerPausedDurationMs || 0));
       for (const entry of state.mobileMovingBiographyMarkers.values()) {
         updateMobileMovingBiographyMarker(entry.item, entry.marker, motionNow);
@@ -32654,7 +32864,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const hour = new Date().getHours();
       if (hour < 9 || hour > 17) return;
       const todayKey = localDateKey();
-      if (localStorage.getItem("nli-proximity-alert-date") === todayKey) return;
+      if (state.proximityAlertInFlight || localStorage.getItem("nli-proximity-alert-date") === todayKey) return;
       const profile = currentContributorProfile();
       const nearby = visitableSites()
         .filter(site => !isBroadTerritory(site))
@@ -32663,9 +32873,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         .filter(item => Number.isFinite(item.miles) && item.miles <= SITE_VISIT_ALERT_RADIUS_MILES)
         .sort((a, b) => a.miles - b.miles)[0];
       if (!nearby) return;
+      // Reserve the daily alert before crossing the async native bridge. When
+      // notification permission is unavailable, notifyUser falls back to an
+      // in-app banner; waiting for a successful system notification caused
+      // every GPS fix to repeat both the permission prompt and the banner.
+      state.proximityAlertInFlight = true;
+      localStorage.setItem("nli-proximity-alert-date", todayKey);
       notifyUser("On This Site nearby", `You are within ${nearby.miles.toFixed(1)} mi of ${nearby.site.title}.`)
-        .then(sent => {
-          if (sent) localStorage.setItem("nli-proximity-alert-date", todayKey);
+        .finally(() => {
+          state.proximityAlertInFlight = false;
         });
     }
 

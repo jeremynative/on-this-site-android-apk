@@ -546,10 +546,10 @@ final class NativeMapController {
             addBundledMapIcons(style);
 
             style.addLayer(new FillLayer("nli-territory-fill", TERRITORY_SOURCE_ID).withProperties(
-                fillColor(Expression.get("fillcolor")), fillOpacity(0.17f)
+                fillColor(Expression.get("fillcolor")), fillOpacity(0.24f)
             ));
             style.addLayer(new LineLayer("nli-territory-line", TERRITORY_SOURCE_ID).withProperties(
-                lineColor("#496f5d"), lineWidth(0.9f), lineOpacity(0.42f), lineDasharray(new Float[] { 2f, 2f })
+                lineColor("#496f5d"), lineWidth(0.9f), lineOpacity(0.58f), lineDasharray(new Float[] { 2f, 2f })
             ));
             style.addLayer(new FillLayer("nli-site-polygon-fill", SITE_POLYGON_SOURCE_ID).withProperties(
                 fillColor(Expression.get("fillcolor")), fillOpacity(0.22f)
@@ -557,15 +557,15 @@ final class NativeMapController {
             style.addLayer(new LineLayer("nli-site-polygon-line", SITE_POLYGON_SOURCE_ID).withProperties(
                 lineColor("#315a49"), lineWidth(0.9f), lineOpacity(0.45f)
             ));
-            // Draw location first as a ring so a project site icon at the
-            // user's exact position (for example Ma's House) remains legible.
+            // Draw a quiet translucent location target below project icons so
+            // nearby site artwork remains legible at the user's exact point.
             style.addLayer(new CircleLayer("nli-user-location-outer", USER_LOCATION_SOURCE_ID).withProperties(
-                circleRadius(17f), circleColor("#ffffff"), circleOpacity(0.72f),
-                circleStrokeColor("#2f80ed"), circleStrokeWidth(3f)
+                circleRadius(15f), circleColor("#ffffff"), circleOpacity(0.5f),
+                circleStrokeWidth(0f)
             ));
             style.addLayer(new CircleLayer("nli-user-location-inner", USER_LOCATION_SOURCE_ID).withProperties(
-                circleRadius(5f), circleColor("#2f80ed"), circleOpacity(1f),
-                circleStrokeColor("#cfe1ff"), circleStrokeWidth(2f)
+                circleRadius(4f), circleColor("#2f80ed"), circleOpacity(1f),
+                circleStrokeWidth(0f)
             ));
             // Keep a quiet project dot underneath every point. It is normally
             // covered by the custom image, but prevents a site from becoming
@@ -626,7 +626,19 @@ final class NativeMapController {
                     textAllowOverlap(true), textIgnorePlacement(true),
                     textTranslate(new Float[] { 8f, -8f })
                 ));
-            SymbolLayer projectLabelLayer = new SymbolLayer("nli-map-labels", LABEL_SOURCE_ID).withProperties(
+            SymbolLayer territoryLabelLayer = new SymbolLayer("nli-territory-labels", LABEL_SOURCE_ID)
+                .withFilter(Expression.eq(Expression.get("label_kind"), Expression.literal("territory")))
+                .withProperties(
+                    textField(Expression.get("title")), textFont(new String[] { "Noto Sans Regular" }),
+                    textSize(10f), textColor("#20251f"),
+                    textHaloColor("rgba(255,255,255,0.94)"), textHaloWidth(1.3f),
+                    textOptional(true), textAllowOverlap(false), textIgnorePlacement(false)
+                );
+            territoryLabelLayer.setMinZoom(6.2f);
+            style.addLayer(territoryLabelLayer);
+            SymbolLayer projectLabelLayer = new SymbolLayer("nli-map-labels", LABEL_SOURCE_ID)
+                .withFilter(Expression.neq(Expression.get("label_kind"), Expression.literal("territory")))
+                .withProperties(
                 textField(Expression.get("title")), textFont(new String[] { "Noto Sans Regular" }),
                 textSize(11f), textColor("#20251f"),
                 textHaloColor("rgba(255,255,255,0.94)"), textHaloWidth(1.3f),
@@ -1094,6 +1106,17 @@ final class NativeMapController {
         // the finger at that moment.
         if (routedGestureMoved) return false;
         PointF screenPoint = map.getProjection().toScreenLocation(point);
+        if (!profileMode) {
+            List<Feature> territoryLabels = map.queryRenderedFeatures(screenPoint, "nli-territory-labels");
+            if (territoryLabels != null) {
+                for (Feature territoryLabel : territoryLabels) {
+                    if (territoryLabel != null && territoryLabel.hasProperty("slug")) {
+                        listener.onFeatureSelected("site", territoryLabel.getStringProperty("slug"));
+                        return true;
+                    }
+                }
+            }
+        }
         // Project artwork is intentionally compact, and several legacy PNGs
         // place their visible drawing low inside a transparent square. A tap
         // on the visible house/building can therefore sit more than 20 dp from
@@ -1331,6 +1354,7 @@ final class NativeMapController {
                     .put("id", row.optInt("id"))
                     .put("slug", slug)
                     .put("title", BUNDLED_TERRITORY_TITLES[territoryIndex])
+                    .put("label_kind", "territory")
                     .put("broad", true)
                     .put("fillcolor", BUNDLED_TERRITORY_COLORS[territoryIndex]);
                 features.put(new JSONObject()
