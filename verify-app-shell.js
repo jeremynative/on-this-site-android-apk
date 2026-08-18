@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260818-offline-territory-taps-r161";
+const expectedBuild = "20260818-tablet-title-rotation-r162";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -167,6 +167,13 @@ if (!expandedMapHitQuery || expandedMapHitQuery.includes('"nli-territory-fill"')
 if (!bundledMobileJs.includes('else if (nativeAndroid && isApkSnapshotMode()) {\n          setMobilePanelMode("timeline");\n          setMobileBottomPanelState("collapsed", { persist: false });')
     || !bundledMobileJs.includes("Finding your location with device GPS. In airplane mode this can take a little longer.")) {
   throw new Error("Offline APK startup must use a collapsed Timeline and explain airplane-mode GPS requests.");
+}
+if (!bundledMobileJs.includes('"Sewanhacky (The Isle of Shells)"')
+    || !bundledMobileJs.includes('"Paumanack (The Land of Tribute)"')
+    || !bundledMobileJs.includes('document.addEventListener("visibilitychange"')
+    || !bundledMobileCss.includes("body.android-device.tablet-device .tablet-project-title")
+    || !bundledMobileCss.includes("transition: opacity 420ms ease, transform 420ms ease")) {
+  throw new Error("Android tablets must show the desktop historical-name rotation and pause it while backgrounded.");
 }
 if (!source.includes("document.querySelector('.sheet.open')")
     || !source.includes("bottomOcclusion,window.innerWidth")
