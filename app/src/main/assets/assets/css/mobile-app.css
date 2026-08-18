@@ -216,13 +216,33 @@
     }
 
     .user-location-dot {
+      display: grid;
+      width: 20px;
+      height: 20px;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.58);
+      box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.2);
+      place-items: center;
+      pointer-events: none;
+    }
+
+    .user-location-dot:not(.address-location-dot)::after {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #2f80ed;
+      content: "";
+    }
+
+    .address-location-dot {
+      display: block;
       width: 14px;
       height: 14px;
       border: 2px solid #ffffff;
-      border-radius: 50%;
       background: #245fdd;
       box-shadow: 0 0 0 4px rgba(36, 95, 221, 0.16);
-      pointer-events: none;
+      pointer-events: auto;
     }
 
     .selected-site-map-label {
@@ -2115,6 +2135,61 @@
       border-color: var(--accent);
       background: var(--accent);
       color: #fff;
+    }
+
+    /* Keep nearby results scannable until the user explicitly opens Full view. */
+    .app:not(.panel-maximized) .nearby-feed-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      min-height: 70px;
+      margin-bottom: 6px;
+      border-radius: 9px;
+      box-shadow: 0 2px 8px rgba(24, 33, 26, 0.06);
+    }
+
+    .app:not(.panel-maximized) .nearby-feed-card.has-thumbnail {
+      grid-template-columns: minmax(0, 1fr) 52px;
+    }
+
+    .app:not(.panel-maximized) .nearby-feed-card .learning-card-body {
+      grid-column: 1;
+      grid-row: 1;
+      gap: 4px;
+      min-width: 0;
+      padding: 9px 10px;
+    }
+
+    .app:not(.panel-maximized) .nearby-feed-card .learning-card-media {
+      grid-column: 2;
+      grid-row: 1;
+      align-self: start;
+      width: 52px;
+      height: 52px;
+      min-height: 0;
+      max-height: none;
+      margin: 9px 9px 0 0;
+      aspect-ratio: 1;
+      border-radius: 7px;
+    }
+
+    .app:not(.panel-maximized) .nearby-feed-card .learning-card-meta {
+      font-size: 10px;
+    }
+
+    .app:not(.panel-maximized) .nearby-feed-card h2 {
+      overflow: hidden;
+      font-size: 15px;
+      line-height: 1.18;
+      text-overflow: ellipsis;
+    }
+
+    .app:not(.panel-maximized) .nearby-feed-card :is(
+      .learning-card-tags,
+      .learning-card-excerpt,
+      .learning-card-see-more,
+      .learning-card-actions
+    ) {
+      display: none;
     }
 
     .thumb {

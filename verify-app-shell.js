@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260818-map-gesture-icons-r158";
+const expectedBuild = "20260818-soft-location-nearby-list-r159";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -57,7 +57,7 @@ const offlineInsetAudit = fs.readFileSync(offlineInsetAuditPath, "utf8");
 const offlineParityAudit = fs.readFileSync(offlineParityAuditPath, "utf8");
 const bundledApp = bundledAppBytes.toString("utf8");
 const bundledLiveApp = bundledLiveAppBytes.toString("utf8");
-const bundledMobileJs = fs.readFileSync(bundledMobileJsPath, "utf8");
+const bundledMobileJs = fs.readFileSync(bundledMobileJsPath, "utf8").replace(/\r\n/g, "\n");
 const bundledSharedProfileUtils = fs.readFileSync(bundledSharedProfileUtilsPath, "utf8");
 const bundledSharedSearchUtils = fs.readFileSync(bundledSharedSearchUtilsPath, "utf8");
 const bundledSharedLifecycleUtils = fs.readFileSync(bundledSharedLifecycleUtilsPath, "utf8");
@@ -84,7 +84,7 @@ if (!bundledMobileJs.includes("function mobileMapRuntime()")
     || !bundledMobileJs.includes("new mapboxgl.AttributionControl({ compact: true })")
     || !bundledMobileJs.includes("function collapseMobileMapAttribution()")
     || !bundledMobileJs.includes('control.classList.remove("maplibregl-compact-show")')
-    || !bundledMobileJs.includes('state.map.once?.("idle", () => {\n            collapseMobileMapAttribution();')
+    || !/state\.map\.once\?\.\("idle", \(\) => \{\r?\n\s+collapseMobileMapAttribution\(\);/.test(bundledMobileJs)
     || !bundledMobileJs.includes("https://www.openstreetmap.org/copyright")) {
   throw new Error("Android map runtime must use MapLibre without an engine logo while retaining compact legal data attribution.");
 }
@@ -92,6 +92,13 @@ if (!mapLibreJs.includes("MapLibre GL JS")
     || !mapLibreCss.includes(".maplibregl-map")
     || !mapLibreLicense.includes("MapLibre contributors")) {
   throw new Error("Android assets must package the MapLibre renderer, stylesheet, and license notice.");
+}
+if (!bundledMobileCss.includes("background: rgba(255, 255, 255, 0.58);")
+    || !bundledMobileCss.includes(".app:not(.panel-maximized) .nearby-feed-card.has-thumbnail")
+    || !bundledMobileCss.includes("grid-template-columns: minmax(0, 1fr) 52px;")
+    || !bundledMobileJs.includes('element.className = "user-location-dot address-location-dot";')
+    || !bundledMobileJs.includes('card.imageUrl ? " has-thumbnail" : ""')) {
+  throw new Error("Android mobile UI must use a soft user-location target and compact nearby-result thumbnails outside Full view.");
 }
 if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes("attributionEnabled(false)")
@@ -132,7 +139,13 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes("bundledSiteIconKeysBySlug.put(slug, nativeIconKey)")
     || nativeMapController.includes("setOverrideSynchronousUpdate(true)")
     || !nativeMapController.includes('featureCountWithStringProperty(sitePoints, "native_icon_key")')
-    || !nativeMapController.includes('circleRadius(17f), circleColor("#ffffff"), circleOpacity(0.72f)')
+    || !nativeMapController.includes('circleRadius(15f), circleColor("#ffffff"), circleOpacity(0.5f)')
+    || !nativeMapController.includes('circleRadius(4f), circleColor("#2f80ed"), circleOpacity(1f)')
+    || !nativeMapController.includes("circleStrokeWidth(0f)")
+    || !nativeMapController.includes('new SymbolLayer("nli-territory-labels", LABEL_SOURCE_ID)')
+    || !nativeMapController.includes('.put("label_kind", "territory")')
+    || !nativeMapController.includes("territoryLabelLayer.setMinZoom(6.2f)")
+    || !nativeMapController.includes('map.queryRenderedFeatures(screenPoint, "nli-territory-labels")')
     || !nativeMapController.includes("density * 32f")
     || !nativeMapController.includes("Expression.stop(6, 0.72f)")
     || !nativeMapController.includes("Expression.stop(14, 1.08f)")
