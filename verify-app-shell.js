@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260818-soft-location-nearby-list-r159";
+const expectedBuild = "20260818-single-startup-loader-r160";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -23,6 +23,7 @@ const bundledResearchQuestionCssPath = "app/src/main/assets/assets/css/shared-re
 const bundledSharedSiteUtilsPath = "app/src/main/assets/assets/js/shared-site-utils.js";
 const stylesPath = "app/src/main/res/values/styles.xml";
 const launchBackgroundPath = "app/src/main/res/drawable/launch_background.xml";
+const android12StylesPath = "app/src/main/res/values-v31/styles.xml";
 const manifestPath = "app/src/main/AndroidManifest.xml";
 const appBridgePath = "app/src/main/java/com/nativelongisland/onthissite/AppBridge.java";
 const nativeMapControllerPath = "app/src/main/java/com/nativelongisland/onthissite/NativeMapController.java";
@@ -311,6 +312,7 @@ const bundledSharedSiteUtils = fs.readFileSync(bundledSharedSiteUtilsPath, "utf8
 const bundledCalendarUtils = fs.readFileSync("app/src/main/assets/assets/js/shared-calendar-utils.js", "utf8");
 const styles = fs.readFileSync(stylesPath, "utf8");
 const launchBackground = fs.readFileSync(launchBackgroundPath, "utf8");
+const android12Styles = fs.readFileSync(android12StylesPath, "utf8");
 
 if (!bundledMobileJs.includes("function revealMobileContentUpdate(item, activityItems = [])")
     || !bundledMobileJs.includes('target.classList.add("content-update-highlight")')
@@ -1199,8 +1201,12 @@ requireText("loadingOutlineReveal.postOnAnimation(loadingOutlineRevealFrame)", "
 if (!styles.includes('<item name="android:windowBackground">@drawable/launch_background</item>')) {
   throw new Error("Android theme must show a branded launch background while WebView starts.");
 }
-if (!launchBackground.includes('android:color="#EEF3ED"') || !launchBackground.includes('@drawable/ic_launcher_foreground')) {
-  throw new Error("Android launch background must use the app theme color and centered app icon.");
+if (!launchBackground.includes('android:color="#EEF3ED"') || launchBackground.includes('@drawable/ic_launcher_foreground')) {
+  throw new Error("Android launch background must be a plain app-theme bridge so it does not duplicate the animated loader.");
+}
+if (!android12Styles.includes('<item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>')
+    || !android12Styles.includes('<item name="android:windowSplashScreenBackground">#EEF3ED</item>')) {
+  throw new Error("Android 12+ system splash must stay blank so the Long Island loader appears exactly once.");
 }
 if (source.includes("settings.setCacheMode(WebSettings.LOAD_NO_CACHE)")) {
   throw new Error("Android shell must not disable the whole WebView cache; only the bundled archive document should be refreshed.");
