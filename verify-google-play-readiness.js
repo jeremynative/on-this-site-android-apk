@@ -50,6 +50,12 @@ requireMatch(manifest, /android:dataExtractionRules="@xml\/data_extraction_rules
 requireMatch(manifest, /com\.android\.vending\.BILLING/, "Google Play Billing permission is missing.");
 requireMatch(appGradle, /com\.android\.billingclient:billing:8\.2\.1/,
   "Google Play Billing 8.2.1 dependency is missing.");
+requireMatch(appGradle, /org\.maplibre\.gl:android-sdk-opengl:13\.5\.0/,
+  "Production MapLibre must use the OpenGL backend for broad Play device compatibility.");
+forbid(appGradle, "org.maplibre.gl:android-sdk:13.5.0",
+  "The default MapLibre 13 artifact requires Vulkan and removes thousands of supported Play devices.");
+forbid(appGradle, "org.maplibre.gl:android-sdk-vulkan",
+  "The Vulkan-only MapLibre artifact cannot be used for the production Play build.");
 requireMatch(manifest, /android:name="\.CaptureFileProvider"[\s\S]*?android:exported="false"/,
   "The capture provider must remain private.");
 for (const permission of [
