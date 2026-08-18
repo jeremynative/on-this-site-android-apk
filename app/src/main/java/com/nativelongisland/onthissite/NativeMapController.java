@@ -13,6 +13,7 @@ import android.graphics.PointF;
 import android.graphics.RectF;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -101,6 +102,8 @@ final class NativeMapController {
 
     private static final String LOG_TAG = "OnThisSiteNativeMap";
     private static final int MAX_STATE_BYTES = 12 * 1024 * 1024;
+    private static final long MOVING_FEATURE_MIN_UPDATE_MS = 480L;
+    private static final long MAP_TAP_DISPATCH_DELAY_MS = 300L;
     private static final String EMPTY_FEATURE_COLLECTION = "{\"type\":\"FeatureCollection\",\"features\":[]}";
     private static final String ISLAND_SOURCE_ID = "nli-island";
     private static final String TERRITORY_SOURCE_ID = "nli-territories";
@@ -178,6 +181,16 @@ final class NativeMapController {
     private final float routedGestureTouchSlop;
     private boolean suppressNextCameraCallback;
     private boolean cameraGestureAwaitingIdle;
+    private boolean suppressNextMapTap;
+    private LatLng pendingMapTapPoint;
+    private float pendingMapTapX;
+    private float pendingMapTapY;
+    private long pendingMapTapAt;
+    private final Runnable dispatchPendingMapTapTask = () -> {
+        LatLng point = pendingMapTapPoint;
+        pendingMapTapPoint = null;
+        if (point != null) handleMapClick(point);
+    };
     private boolean usingOnlineArchive;
     private boolean offlineFallbackAttempted;
     private float viewportLeft;
@@ -193,6 +206,8 @@ final class NativeMapController {
     private String pendingStateJson;
     private String currentStateJson;
     private String movingFeaturesJson = EMPTY_FEATURE_COLLECTION;
+    private long lastMovingFeatureApplyAt;
+    private final Runnable applyLatestMovingFeaturesTask = this::applyMovingFeaturesToStyle;
     private final JSONObject bundledSiteIconKeysBySlug = new JSONObject();
     private String lastStateSignature = "";
     private String currentBasemap = "outdoors";
@@ -420,6 +435,17 @@ final class NativeMapController {
         float rootX = event.getRawX() - touchRootScreenLeft;
         float rootY = event.getRawY() - touchRootScreenTop;
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            if (pendingMapTapPoint != null
+                && SystemClock.uptimeMillis() - pendingMapTapAt <= ViewConfiguration.getDoubleTapTimeout()) {
+                float tapDeltaX = rootX - pendingMapTapX;
+                float tapDeltaY = rootY - pendingMapTapY;
+                float doubleTapSlop = routedGestureTouchSlop * 4f;
+                if (tapDeltaX * tapDeltaX + tapDeltaY * tapDeltaY <= doubleTapSlop * doubleTapSlop) {
+                    mapView.removeCallbacks(dispatchPendingMapTapTask);
+                    pendingMapTapPoint = null;
+                    suppressNextMapTap = true;
+                }
+            }
             boolean blocked = pointInBlockedRegion(rootX, rootY);
             routingGesture = rootX >= viewportLeft
                 && rootX <= viewportRight
@@ -449,10 +475,26 @@ final class NativeMapController {
         translated.recycle();
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            LatLng tappedPoint = action == MotionEvent.ACTION_UP && !routedGestureMoved && map != null
+                ? map.getProjection().fromScreenLocation(new PointF(rootX - viewportLeft, rootY - viewportTop))
+                : null;
             routingGesture = false;
             if (action == MotionEvent.ACTION_CANCEL) {
                 cameraGestureAwaitingIdle = false;
                 if (listener != null) listener.onGestureChanged(false);
+            } else if (suppressNextMapTap) {
+                suppressNextMapTap = false;
+            } else if (tappedPoint != null) {
+                // Use a short, bounded delay so a genuine double tap can keep
+                // zooming without opening the feature underneath it. This is
+                // substantially faster than MapLibre's delayed map-click
+                // callback while preserving familiar map interaction.
+                pendingMapTapPoint = tappedPoint;
+                pendingMapTapX = rootX;
+                pendingMapTapY = rootY;
+                pendingMapTapAt = SystemClock.uptimeMillis();
+                mapView.removeCallbacks(dispatchPendingMapTapTask);
+                mapView.postDelayed(dispatchPendingMapTapTask, MAP_TAP_DISPATCH_DELAY_MS);
             }
         }
         return true;
@@ -476,7 +518,6 @@ final class NativeMapController {
         map.setMaxZoomPreference(18.0);
         stableCamera = map.getCameraPosition();
         map.addOnCameraIdleListener(this::notifyCameraChanged);
-        map.addOnMapClickListener(this::handleMapClick);
         mapView.addOnDidFailLoadingMapListener(error -> {
             if (!usingOnlineArchive || offlineFallbackAttempted || map == null) return;
             offlineFallbackAttempted = true;
@@ -646,6 +687,21 @@ final class NativeMapController {
             );
             projectLabelLayer.setMinZoom(8.1f);
             style.addLayer(projectLabelLayer);
+            SymbolLayer sitePointLabelLayer = new SymbolLayer("nli-site-point-labels", SITE_POINT_SOURCE_ID)
+                .withProperties(
+                    textField(Expression.get("title")), textFont(new String[] { "Noto Sans Regular" }),
+                    textSize(Expression.interpolate(
+                        Expression.linear(), Expression.zoom(),
+                        Expression.stop(11.4, 10f),
+                        Expression.stop(16, 13f)
+                    )),
+                    textColor("#183528"),
+                    textHaloColor("rgba(255,255,255,0.94)"), textHaloWidth(1.5f),
+                    textOffset(new Float[] { 0f, -1.45f }), textAnchor(Property.TEXT_ANCHOR_BOTTOM),
+                    textOptional(true), textAllowOverlap(false), textIgnorePlacement(false)
+                );
+            sitePointLabelLayer.setMinZoom(11.4f);
+            style.addLayer(sitePointLabelLayer);
             style.addLayer(new LineLayer("nli-biography-path-lines", BIOGRAPHY_PATH_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("kind"), Expression.literal("path")))
                 .withProperties(
@@ -770,7 +826,13 @@ final class NativeMapController {
             style.addLayer(new SymbolLayer("nli-moving-biography-icons", MOVING_FEATURE_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("moving_kind"), Expression.literal("biography")))
                 .withProperties(
-                    iconImage(Expression.get("icon_key")), iconSize(0.44f),
+                    iconImage(Expression.get("icon_key")),
+                    iconSize(Expression.interpolate(
+                        Expression.linear(), Expression.zoom(),
+                        Expression.stop(6, 0.62f),
+                        Expression.stop(10, 0.72f),
+                        Expression.stop(14, 0.86f)
+                    )),
                     iconAllowOverlap(true), iconIgnorePlacement(true)
                 ));
             style.addLayer(new SymbolLayer("nli-moving-dog-icons", MOVING_FEATURE_SOURCE_ID)
@@ -881,11 +943,11 @@ final class NativeMapController {
                 applyCamera(payload.optJSONObject("camera"));
                 return;
             }
-            setSource(style, TERRITORY_SOURCE_ID, payload.optJSONObject("territories"));
+            setTerritorySource(style, payload.optJSONObject("territories"));
             setSource(style, SITE_POLYGON_SOURCE_ID, payload.optJSONObject("sitePolygons"));
             JSONObject sitePoints = applyBundledSiteIconKeys(payload.optJSONObject("sitePoints"));
             setSource(style, SITE_POINT_SOURCE_ID, sitePoints);
-            setSource(style, LABEL_SOURCE_ID, payload.optJSONObject("labels"));
+            setSource(style, LABEL_SOURCE_ID, withBundledTerritoryLabels(payload.optJSONObject("labels")));
             setSource(style, BIOGRAPHY_PATH_SOURCE_ID, payload.optJSONObject("biographyPaths"));
             setSource(style, EVENT_SOURCE_ID, payload.optJSONObject("events"));
             setSource(style, USER_LOCATION_SOURCE_ID, payload.optJSONObject("userLocation"));
@@ -916,13 +978,14 @@ final class NativeMapController {
 
     void updateMovingFeatures(String featuresJson) {
         if (featuresJson == null || featuresJson.isEmpty() || featuresJson.length() > 256 * 1024) return;
-        try {
-            FeatureCollection collection = FeatureCollection.fromJson(featuresJson);
-            movingFeaturesJson = collection.toJson();
-            if (nativeGestureInProgress()) return;
-            applyMovingFeaturesToStyle(collection);
-        } catch (Exception error) {
-            Log.w(LOG_TAG, "Ignored malformed native moving-feature state.", error);
+        movingFeaturesJson = featuresJson;
+        if (nativeGestureInProgress()) return;
+        long elapsed = SystemClock.uptimeMillis() - lastMovingFeatureApplyAt;
+        mapView.removeCallbacks(applyLatestMovingFeaturesTask);
+        if (elapsed >= MOVING_FEATURE_MIN_UPDATE_MS) {
+            applyMovingFeaturesToStyle();
+        } else {
+            mapView.postDelayed(applyLatestMovingFeaturesTask, MOVING_FEATURE_MIN_UPDATE_MS - elapsed);
         }
     }
 
@@ -937,7 +1000,34 @@ final class NativeMapController {
     private void applyMovingFeaturesToStyle(FeatureCollection collection) {
         if (!styleReady || map == null || map.getStyle() == null || collection == null) return;
         GeoJsonSource source = map.getStyle().getSourceAs(MOVING_FEATURE_SOURCE_ID);
-        if (source != null) source.setGeoJson(collection);
+        if (source != null) {
+            source.setGeoJson(collection);
+            lastMovingFeatureApplyAt = SystemClock.uptimeMillis();
+        }
+    }
+
+    private void setTerritorySource(Style style, JSONObject collection) throws Exception {
+        GeoJsonSource source = style.getSourceAs(TERRITORY_SOURCE_ID);
+        if (source == null) return;
+        if (featureCount(collection) >= BUNDLED_TERRITORY_SLUGS.length) {
+            source.setGeoJson(FeatureCollection.fromJson(collection.toString()));
+        } else {
+            source.setGeoJson(FeatureCollection.fromJson(buildBundledTerritoryGeoJson(false)));
+        }
+    }
+
+    private JSONObject withBundledTerritoryLabels(JSONObject collection) throws Exception {
+        JSONObject merged = new JSONObject(buildBundledTerritoryGeoJson(true));
+        JSONArray features = merged.getJSONArray("features");
+        JSONArray incoming = collection == null ? null : collection.optJSONArray("features");
+        if (incoming == null) return merged;
+        for (int index = 0; index < incoming.length(); index++) {
+            JSONObject feature = incoming.optJSONObject(index);
+            JSONObject properties = feature == null ? null : feature.optJSONObject("properties");
+            if (properties == null || "territory".equals(properties.optString("label_kind", ""))) continue;
+            features.put(feature);
+        }
+        return merged;
     }
 
     private void setSource(Style style, String id, JSONObject collection) {
@@ -991,6 +1081,12 @@ final class NativeMapController {
         setLayerVisibility(style, "nli-site-polygon-line", !profileMode);
         setLayerVisibility(style, "nli-site-point-circles", !profileMode);
         setLayerVisibility(style, "nli-site-point-icons", !profileMode);
+        setLayerVisibility(style, "nli-site-point-labels", !profileMode);
+        // The 13 ancestral lands remain available as permanent map context,
+        // independent of the ordinary boundary/label filters.
+        setLayerVisibility(style, "nli-territory-fill", true);
+        setLayerVisibility(style, "nli-territory-line", true);
+        setLayerVisibility(style, "nli-territory-labels", true);
         setLayerVisibility(style, "nli-biography-path-lines", !profileMode);
         setLayerVisibility(style, "nli-biography-path-points", !profileMode);
         setLayerVisibility(style, "nli-biography-path-numbers", !profileMode);
@@ -1098,8 +1194,11 @@ final class NativeMapController {
         if (map == null || point == null || listener == null) return false;
         stableCamera = map.getCameraPosition();
         cameraGestureAwaitingIdle = false;
-        applyMovingFeaturesToStyle();
         listener.onGestureChanged(false);
+        // Query the frame the user actually pressed. Applying the latest
+        // moving-feature payload here can relocate a biography icon between
+        // ACTION_UP and hit testing, making the visible person impossible to
+        // select. The normal animation sync resumes immediately afterward.
         // MapLibre can still emit a click callback for a synthetic or low-rate
         // drag whose ACTION_UP lands over a feature. A moved map gesture owns
         // the release and must never open whatever marker happens to be below
@@ -1126,24 +1225,11 @@ final class NativeMapController {
                 "nli-moving-feature-labels", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons",
                 "nli-calendar-event-labels", "nli-calendar-event-circles", "nli-exhibit-circles",
                 "nli-biography-path-numbers", "nli-biography-path-points", "nli-biography-path-labels",
-                "nli-site-point-icons", "nli-site-point-circles");
+                "nli-site-point-labels", "nli-site-point-icons", "nli-site-point-circles");
             if (exactPoints == null) exactPoints = Collections.emptyList();
             Feature exactPoint = nearestActionablePointFeature(exactPoints, screenPoint, false);
             if (dispatchActionablePointFeature(exactPoint, false)) return true;
 
-            List<Feature> territorySurfaces = map.queryRenderedFeatures(
-                screenPoint,
-                "nli-territory-fill",
-                "nli-territory-line"
-            );
-            if (territorySurfaces != null) {
-                for (Feature territorySurface : territorySurfaces) {
-                    if (territorySurface != null && territorySurface.hasProperty("slug")) {
-                        listener.onFeatureSelected("site", territorySurface.getStringProperty("slug"));
-                        return true;
-                    }
-                }
-            }
         }
         // Project artwork is intentionally compact, and several legacy PNGs
         // place their visible drawing low inside a transparent square. A tap
@@ -1165,7 +1251,7 @@ final class NativeMapController {
             "nli-moving-feature-labels", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons",
             "nli-calendar-event-labels", "nli-calendar-event-circles", "nli-exhibit-circles",
             "nli-biography-path-numbers", "nli-biography-path-points", "nli-biography-path-labels",
-            "nli-site-point-icons", "nli-site-point-circles", "nli-site-polygon-fill");
+            "nli-site-point-labels", "nli-site-point-icons", "nli-site-point-circles", "nli-site-polygon-fill");
         if (features == null) features = Collections.emptyList();
         Feature nearestPoint = nearestActionablePointFeature(features, screenPoint, profileMode);
         if (dispatchActionablePointFeature(nearestPoint, profileMode)) return true;
@@ -1178,6 +1264,24 @@ final class NativeMapController {
             if (feature.hasProperty("slug")) {
                 listener.onFeatureSelected("site", feature.getStringProperty("slug"));
                 return true;
+            }
+        }
+        if (!profileMode) {
+            // The permanent ancestral-land surface is deliberately broad.
+            // Give compact project pins and specific polygons their full
+            // accessible hit area before falling back to that background.
+            List<Feature> territorySurfaces = map.queryRenderedFeatures(
+                screenPoint,
+                "nli-territory-fill",
+                "nli-territory-line"
+            );
+            if (territorySurfaces != null) {
+                for (Feature territorySurface : territorySurfaces) {
+                    if (territorySurface != null && territorySurface.hasProperty("slug")) {
+                        listener.onFeatureSelected("site", territorySurface.getStringProperty("slug"));
+                        return true;
+                    }
+                }
             }
         }
         return false;

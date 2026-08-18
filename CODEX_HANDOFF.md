@@ -1,5 +1,16 @@
 # Android APK — Codex Handoff
 
+## August 18 native map labels, permanent territories, biography icons, and touch responsiveness
+
+- Added a dedicated native point-site title layer at zoom 11.4+ while retaining the existing polygon and ancestral-land labels. Point labels participate in exact and expanded hit testing.
+- Made the 13 bundled ancestral territories and their labels a permanent fallback whenever the WebView filter/state payload is empty or incomplete. Their fill, dotted boundary, and label layers stay visible independently of ordinary boundary toggles and in profile mode.
+- Increased moving biography-person icon size across zoom levels and fixed their hit testing by querying the rendered frame before accepting a newer moving-source position.
+- Coalesced moving-feature GeoJSON updates to 480 ms and replaced the slow native click callback with a bounded 300 ms app-owned tap confirmation that cancels on a second tap. Specific pins and site polygons now receive their accessible hit area before the broad territory beneath them.
+- Hardened `verify-app-shell.js` for CRLF worktrees and added assertions for point labels, permanent territories, biography visibility, moving-source throttling, and tap confirmation.
+- Tablet QA passed at zoom 8.4, 9.2, 11.2, 12.3, and 14.5; portrait and landscape; online self-hosted z14 and fully offline bundled z10; boundaries disabled; pin, polygon, biography, drag, panel, and rotation interactions. `assembleDebug`, `lintDebug`, `node verify-app-shell.js`, and `git diff --check` pass with no AndroidRuntime fatal.
+
+Current working branch is `fix/lightweight-nearby-media-rebased` based on origin/main, with the focused native-map and verifier changes pending commit/release. QA screenshots are untracked and must not be committed. Safest next action is to commit, push, publish the signed Obtainium/Play artifacts, verify the exact signed APK, then restore the production app in portrait with normal Wi-Fi and rotation settings.
+
 ## August 12 compact numbered unread map badges
 
 - Replaced the oversized outlined unread map circles with compact 12–14px red badges and no stroke. Point, polygon-detail, and territory badges use a 9px centered white count.
