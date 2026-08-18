@@ -1116,6 +1116,34 @@ final class NativeMapController {
                     }
                 }
             }
+            // A directly pressed marker must still beat the territory painted
+            // underneath it. Only after checking the exact pixel do we let the
+            // enclosing territory beat the much wider accessibility hit box.
+            List<Feature> exactPoints = map.queryRenderedFeatures(screenPoint,
+                "nli-suggestion-draft-label", "nli-suggestion-draft-marker", "nli-search-result-marker",
+                "nli-approved-suggestion-labels", "nli-approved-suggestion-markers",
+                "nli-plant-markers", "nli-story-markers", "nli-selected-site-label",
+                "nli-moving-feature-labels", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons",
+                "nli-calendar-event-labels", "nli-calendar-event-circles", "nli-exhibit-circles",
+                "nli-biography-path-numbers", "nli-biography-path-points", "nli-biography-path-labels",
+                "nli-site-point-icons", "nli-site-point-circles");
+            if (exactPoints == null) exactPoints = Collections.emptyList();
+            Feature exactPoint = nearestActionablePointFeature(exactPoints, screenPoint, false);
+            if (dispatchActionablePointFeature(exactPoint, false)) return true;
+
+            List<Feature> territorySurfaces = map.queryRenderedFeatures(
+                screenPoint,
+                "nli-territory-fill",
+                "nli-territory-line"
+            );
+            if (territorySurfaces != null) {
+                for (Feature territorySurface : territorySurfaces) {
+                    if (territorySurface != null && territorySurface.hasProperty("slug")) {
+                        listener.onFeatureSelected("site", territorySurface.getStringProperty("slug"));
+                        return true;
+                    }
+                }
+            }
         }
         // Project artwork is intentionally compact, and several legacy PNGs
         // place their visible drawing low inside a transparent square. A tap
@@ -1137,37 +1165,10 @@ final class NativeMapController {
             "nli-moving-feature-labels", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons",
             "nli-calendar-event-labels", "nli-calendar-event-circles", "nli-exhibit-circles",
             "nli-biography-path-numbers", "nli-biography-path-points", "nli-biography-path-labels",
-            "nli-site-point-icons", "nli-site-point-circles", "nli-site-polygon-fill", "nli-territory-fill");
+            "nli-site-point-icons", "nli-site-point-circles", "nli-site-polygon-fill");
         if (features == null) features = Collections.emptyList();
         Feature nearestPoint = nearestActionablePointFeature(features, screenPoint, profileMode);
-        if (nearestPoint != null) {
-            if (profileMode && nearestPoint.hasProperty("index")) {
-                listener.onFeatureSelected(
-                    "profile",
-                    String.valueOf(nearestPoint.getNumberProperty("index").intValue())
-                );
-                return true;
-            }
-            if (nearestPoint.hasProperty("event_key")) {
-                listener.onFeatureSelected("event", nearestPoint.getStringProperty("event_key"));
-                return true;
-            }
-            if (nearestPoint.hasProperty("native_kind") && nearestPoint.hasProperty("native_key")) {
-                listener.onFeatureSelected(
-                    nearestPoint.getStringProperty("native_kind"),
-                    nearestPoint.getStringProperty("native_key")
-                );
-                return true;
-            }
-            if (nearestPoint.hasProperty("wiki_slug")) {
-                listener.onFeatureSelected("wiki", nearestPoint.getStringProperty("wiki_slug"));
-                return true;
-            }
-            if (nearestPoint.hasProperty("slug")) {
-                listener.onFeatureSelected("site", nearestPoint.getStringProperty("slug"));
-                return true;
-            }
-        }
+        if (dispatchActionablePointFeature(nearestPoint, profileMode)) return true;
         for (Feature feature : features) {
             if (feature == null || feature.properties() == null) continue;
             if (feature.hasProperty("wiki_slug")) {
@@ -1178,6 +1179,37 @@ final class NativeMapController {
                 listener.onFeatureSelected("site", feature.getStringProperty("slug"));
                 return true;
             }
+        }
+        return false;
+    }
+
+    private boolean dispatchActionablePointFeature(Feature feature, boolean profileOnly) {
+        if (feature == null) return false;
+        if (profileOnly && feature.hasProperty("index")) {
+            listener.onFeatureSelected(
+                "profile",
+                String.valueOf(feature.getNumberProperty("index").intValue())
+            );
+            return true;
+        }
+        if (feature.hasProperty("event_key")) {
+            listener.onFeatureSelected("event", feature.getStringProperty("event_key"));
+            return true;
+        }
+        if (feature.hasProperty("native_kind") && feature.hasProperty("native_key")) {
+            listener.onFeatureSelected(
+                feature.getStringProperty("native_kind"),
+                feature.getStringProperty("native_key")
+            );
+            return true;
+        }
+        if (feature.hasProperty("wiki_slug")) {
+            listener.onFeatureSelected("wiki", feature.getStringProperty("wiki_slug"));
+            return true;
+        }
+        if (feature.hasProperty("slug")) {
+            listener.onFeatureSelected("site", feature.getStringProperty("slug"));
+            return true;
         }
         return false;
     }

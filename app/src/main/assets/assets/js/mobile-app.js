@@ -18049,6 +18049,9 @@
       if (findNearby) {
         event?.preventDefault?.();
         event?.stopPropagation?.();
+        if (isApkSnapshotMode()) {
+          showBanner("Finding your location with device GPS. In airplane mode this can take a little longer.");
+        }
         locateUser();
         return true;
       }
@@ -19600,6 +19603,9 @@
         // was already open (for example after taking a photo in a draft).
         if (androidLifecycleSnapshot?.content) {
           restoreAndroidLifecyclePanels(androidLifecycleSnapshot);
+        } else if (nativeAndroid && isApkSnapshotMode()) {
+          setMobilePanelMode("timeline");
+          setMobileBottomPanelState("collapsed", { persist: false });
         } else {
           setMobilePanelMode("nearby");
           setMobileBottomPanelState("normal", { persist: false });

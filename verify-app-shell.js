@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260818-single-startup-loader-r160";
+const expectedBuild = "20260818-offline-territory-taps-r161";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -147,6 +147,10 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes('.put("label_kind", "territory")')
     || !nativeMapController.includes("territoryLabelLayer.setMinZoom(6.2f)")
     || !nativeMapController.includes('map.queryRenderedFeatures(screenPoint, "nli-territory-labels")')
+    || !nativeMapController.includes("Feature exactPoint = nearestActionablePointFeature(exactPoints, screenPoint, false)")
+    || !nativeMapController.includes("dispatchActionablePointFeature(exactPoint, false)")
+    || !nativeMapController.includes("List<Feature> territorySurfaces = map.queryRenderedFeatures(")
+    || !nativeMapController.includes('"nli-territory-fill",\n                "nli-territory-line"')
     || !nativeMapController.includes("density * 32f")
     || !nativeMapController.includes("Expression.stop(6, 0.72f)")
     || !nativeMapController.includes("Expression.stop(14, 1.08f)")
@@ -155,6 +159,14 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes('COMPACT_MAP_CREDIT = "ⓘ OSM"')
     || !nativeMapController.includes("© OpenStreetMap contributors")) {
   throw new Error("Native MapLibre must use self-hosted/bundled PMTiles, hide engine branding, retain legal credit, and render the required project overlays.");
+}
+const expandedMapHitQuery = nativeMapController.match(/List<Feature> features = map\.queryRenderedFeatures\(hitBox,[\s\S]*?\);/)?.[0] || "";
+if (!expandedMapHitQuery || expandedMapHitQuery.includes('"nli-territory-fill"')) {
+  throw new Error("Expanded pin hit testing must not steal exact offline territory polygon taps.");
+}
+if (!bundledMobileJs.includes('else if (nativeAndroid && isApkSnapshotMode()) {\n          setMobilePanelMode("timeline");\n          setMobileBottomPanelState("collapsed", { persist: false });')
+    || !bundledMobileJs.includes("Finding your location with device GPS. In airplane mode this can take a little longer.")) {
+  throw new Error("Offline APK startup must use a collapsed Timeline and explain airplane-mode GPS requests.");
 }
 if (!source.includes("document.querySelector('.sheet.open')")
     || !source.includes("bottomOcclusion,window.innerWidth")
