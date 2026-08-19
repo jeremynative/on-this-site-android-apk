@@ -104,6 +104,12 @@ class AppBridge {
     }
 
     @JavascriptInterface
+    public void syncNativeMapCameraPose(String token, double longitude, double latitude, double zoom, double bearing, double tilt) {
+        if (!activity.validBridgeToken(token)) return;
+        activity.runOnUiThread(() -> activity.syncNativeMapCamera(longitude, latitude, zoom, bearing, tilt));
+    }
+
+    @JavascriptInterface
     public float getSafeInsetTop() {
         return activity.safeInsetTopCss();
     }

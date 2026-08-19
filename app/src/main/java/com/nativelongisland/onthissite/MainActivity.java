@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260819-site-hero-scroll-frame-r177";
+    static final String APP_VERSION = "20260819-native-map-pitch-rotate-r178";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -478,8 +478,8 @@ public class MainActivity extends Activity {
                 }
 
                 @Override
-                public void onCameraChanged(double longitude, double latitude, double zoom) {
-                    dispatchNativeMapCamera(longitude, latitude, zoom);
+                public void onCameraChanged(double longitude, double latitude, double zoom, double bearing, double tilt) {
+                    dispatchNativeMapCamera(longitude, latitude, zoom, bearing, tilt);
                 }
 
                 @Override
@@ -1275,6 +1275,11 @@ public class MainActivity extends Activity {
         nativeMapController.updateCamera(longitude, latitude, zoom);
     }
 
+    void syncNativeMapCamera(double longitude, double latitude, double zoom, double bearing, double tilt) {
+        if (!nativeMapEnabled || nativeMapController == null) return;
+        nativeMapController.updateCamera(longitude, latitude, zoom, bearing, tilt);
+    }
+
     private void dispatchNativeMapFeature(String kind, String key) {
         if (webView == null || !nativeMapEnabled) return;
         String script = "(function(){try{"
@@ -1288,11 +1293,11 @@ public class MainActivity extends Activity {
         webView.evaluateJavascript(script, null);
     }
 
-    private void dispatchNativeMapCamera(double longitude, double latitude, double zoom) {
+    private void dispatchNativeMapCamera(double longitude, double latitude, double zoom, double bearing, double tilt) {
         if (webView == null || !nativeMapEnabled) return;
         String script = "(function(){try{var b=window.NLI_NATIVE_MAP_BRIDGE;"
             + "return b&&b.cameraChanged?b.cameraChanged("
-            + longitude + "," + latitude + "," + zoom
+            + longitude + "," + latitude + "," + zoom + "," + bearing + "," + tilt
             + "):false;}catch(e){return false;}})()";
         webView.evaluateJavascript(script, null);
     }

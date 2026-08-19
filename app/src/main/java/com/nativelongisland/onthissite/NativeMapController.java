@@ -98,7 +98,7 @@ import static org.maplibre.android.style.layers.PropertyFactory.visibility;
 final class NativeMapController {
     interface Listener {
         void onFeatureSelected(String kind, String key);
-        void onCameraChanged(double longitude, double latitude, double zoom);
+        void onCameraChanged(double longitude, double latitude, double zoom, double bearing, double tilt);
         void onGestureChanged(boolean active);
     }
 
@@ -233,8 +233,8 @@ final class NativeMapController {
             .logoEnabled(false)
             .attributionEnabled(false)
             .compassEnabled(false)
-            .rotateGesturesEnabled(false)
-            .tiltGesturesEnabled(false)
+            .rotateGesturesEnabled(true)
+            .tiltGesturesEnabled(true)
             .textureMode(true)
             .foregroundLoadColor(Color.rgb(232, 241, 237))
             .camera(new CameraPosition.Builder()
@@ -510,6 +510,11 @@ final class NativeMapController {
             }
         }
         if (!routingGesture) return false;
+        if (event.getPointerCount() > 1 || event.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN) {
+            // A two-finger rotate/tilt may begin without moving pointer zero
+            // beyond touch slop. Never reinterpret that gesture as a site tap.
+            routedGestureMoved = true;
+        }
         if (event.getActionMasked() != MotionEvent.ACTION_DOWN && !routedGestureMoved) {
             float deltaX = rootX - routedGestureDownX;
             float deltaY = rootY - routedGestureDownY;
@@ -561,6 +566,8 @@ final class NativeMapController {
         map.getUiSettings().setLogoEnabled(false);
         map.getUiSettings().setAttributionEnabled(false);
         map.getUiSettings().setCompassEnabled(false);
+        map.getUiSettings().setRotateGesturesEnabled(true);
+        map.getUiSettings().setTiltGesturesEnabled(true);
         map.setMinZoomPreference(6.0);
         map.setMaxZoomPreference(18.0);
         stableCamera = map.getCameraPosition();
@@ -1273,16 +1280,26 @@ final class NativeMapController {
         double longitude = center.optDouble(0, Double.NaN);
         double latitude = center.optDouble(1, Double.NaN);
         double zoom = camera.optDouble("zoom", Double.NaN);
-        updateCamera(longitude, latitude, zoom);
+        double bearing = camera.optDouble("bearing", Double.NaN);
+        double tilt = camera.optDouble("pitch", Double.NaN);
+        updateCamera(longitude, latitude, zoom, bearing, tilt);
     }
 
     void updateCamera(double longitude, double latitude, double zoom) {
+        updateCamera(longitude, latitude, zoom, Double.NaN, Double.NaN);
+    }
+
+    void updateCamera(double longitude, double latitude, double zoom, double bearing, double tilt) {
         if (map == null || nativeGestureInProgress()
             || !Double.isFinite(longitude) || !Double.isFinite(latitude) || !Double.isFinite(zoom)) return;
         CameraPosition current = map.getCameraPosition();
+        double desiredBearing = Double.isFinite(bearing) ? bearing : (current == null ? 0.0 : current.bearing);
+        double desiredTilt = Double.isFinite(tilt) ? tilt : (current == null ? 0.0 : current.tilt);
         CameraPosition desired = new CameraPosition.Builder()
             .target(new LatLng(latitude, longitude))
             .zoom(Math.max(6.0, Math.min(18.0, zoom)))
+            .bearing(desiredBearing)
+            .tilt(Math.max(0.0, Math.min(60.0, desiredTilt)))
             .build();
         stableCamera = desired;
         if (sameCamera(current, desired)) return;
@@ -1297,7 +1314,9 @@ final class NativeMapController {
         if (first == null || second == null || first.target == null || second.target == null) return false;
         return Math.abs(first.target.getLongitude() - second.target.getLongitude()) < 0.00001
             && Math.abs(first.target.getLatitude() - second.target.getLatitude()) < 0.00001
-            && Math.abs(first.zoom - second.zoom) < 0.01;
+            && Math.abs(first.zoom - second.zoom) < 0.01
+            && Math.abs(first.bearing - second.bearing) < 0.1
+            && Math.abs(first.tilt - second.tilt) < 0.1;
     }
 
     private void notifyCameraChanged() {
@@ -1318,7 +1337,9 @@ final class NativeMapController {
         listener.onCameraChanged(
             position.target.getLongitude(),
             position.target.getLatitude(),
-            position.zoom
+            position.zoom,
+            position.bearing,
+            position.tilt
         );
     }
 
