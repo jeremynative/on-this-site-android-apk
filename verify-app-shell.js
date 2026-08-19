@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260819-native-map-pitch-rotate-r178";
+const expectedBuild = "20260819-native-ui-audit-r182";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -133,8 +133,7 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes("applyBasemapVisibility(style)")
     || !nativeMapController.includes('return !profileMode && "satellite".equals(currentBasemap);')
     || !nativeMapController.includes("refreshMapCreditForVisibleBasemap();")
-    || !nativeMapController.includes("== Configuration.ORIENTATION_LANDSCAPE")
-    || !nativeMapController.includes("? Gravity.TOP | Gravity.END")
+    || !nativeMapController.includes("params.gravity = Gravity.BOTTOM | Gravity.END")
     || !nativeMapController.includes("viewportBottomOcclusion + dp(expanded ? 92 : 4)")
     || !nativeMapController.includes("rootY <= viewportInteractiveBottom")
     || !nativeMapController.includes('"nli-site-unread-badges"')
@@ -172,9 +171,9 @@ const expandedMapHitQuery = nativeMapController.match(/List<Feature> features = 
 if (!expandedMapHitQuery || expandedMapHitQuery.includes('"nli-territory-fill"')) {
   throw new Error("Expanded pin hit testing must not steal exact offline territory polygon taps.");
 }
-if (!bundledMobileJs.includes('else if (nativeAndroid && isApkSnapshotMode()) {\n          setMobilePanelMode("timeline");\n          setMobileBottomPanelState("collapsed", { persist: false });')
+if (!bundledMobileJs.includes('else if (nativeAndroid) {\n          setMobilePanelMode("timeline");\n          setMobileBottomPanelState("collapsed", { persist: false });')
     || !bundledMobileJs.includes("Finding your location with device GPS. In airplane mode this can take a little longer.")) {
-  throw new Error("Offline APK startup must use a collapsed Timeline and explain airplane-mode GPS requests.");
+  throw new Error("Android startup must use a collapsed Timeline and explain airplane-mode GPS requests.");
 }
 if (!bundledMobileJs.includes('"Sewanhacky (The Isle of Shells)"')
     || !bundledMobileJs.includes('"Paumanack (The Land of Tribute)"')

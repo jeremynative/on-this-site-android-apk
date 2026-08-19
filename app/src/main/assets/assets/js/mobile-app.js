@@ -6141,7 +6141,10 @@
     }
 
     function restoreNearbyPanelHeight() {
-      restoreMobileBottomPanelState();
+      // Viewport and orientation changes must preserve the panel the visitor
+      // is actually using. Re-reading storage here used to turn a deliberately
+      // collapsed cold-start into an open panel whenever Android rotated.
+      setMobileBottomPanelState(state.mobilePanelState || "normal", { persist: false });
     }
 
     function setNearbyPanelState(nextState) {
@@ -17940,7 +17943,10 @@
         maplibreLogo: false
       });
       state.map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
-      state.map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-left");
+      // Keep the lower-left edge free for the daily feature shortcuts. The
+      // compact attribution sits beneath the native location control on the
+      // opposite edge without competing for the same touch area.
+      state.map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right");
       collapseMobileMapAttribution();
       state.map.on("click", event => {
         handleSuggestionMapPickClick(event);
@@ -19926,7 +19932,7 @@
         // was already open (for example after taking a photo in a draft).
         if (androidLifecycleSnapshot?.content) {
           restoreAndroidLifecyclePanels(androidLifecycleSnapshot);
-        } else if (nativeAndroid && isApkSnapshotMode()) {
+        } else if (nativeAndroid) {
           setMobilePanelMode("timeline");
           setMobileBottomPanelState("collapsed", { persist: false });
         } else {
