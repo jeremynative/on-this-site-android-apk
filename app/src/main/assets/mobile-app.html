@@ -19875,6 +19875,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       androidMapLastSizeKey: "",
       nativeMapStateTimer: null,
       nativeMapStateSignature: "",
+      nativeMapBaseSignature: "",
       nativeMapBridgeInstalled: false,
       nativeMapCameraEcho: null,
       proximityAlertInFlight: false,
@@ -25768,14 +25769,30 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const communitySignature = communityFeatures.map(feature => `${feature.properties.native_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}`).join("|");
       const temporarySignature = temporaryFeatures.map(feature => `${feature.properties.temporary_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}`).join("|");
       const nativeBasemap = Object.prototype.hasOwnProperty.call(MOBILE_BASEMAPS, state.settings.basemap) ? state.settings.basemap : "outdoors";
-      const signature = `${state.mapSourceCacheKey || state.mapSourceRevision}|${profileKey}|${profileSignature}|basemap:${nativeBasemap}|bio-paths:${mobileBiographyPathsEnabled() ? 1 : 0}|events:${exhibitFeatures.map(feature => feature.properties.event_key).join(",")}|user:${userLocationSignature}|community:${communitySignature}|temporary:${temporarySignature}`;
+      const baseSignature = `${state.mapSourceCacheKey || state.mapSourceRevision}|${profileKey}|${profileSignature}|basemap:${nativeBasemap}|bio-paths:${mobileBiographyPathsEnabled() ? 1 : 0}|events:${exhibitFeatures.map(feature => feature.properties.event_key).join(",")}`;
+      const transientSignature = `user:${userLocationSignature}|community:${communitySignature}|temporary:${temporarySignature}`;
+      const signature = `${baseSignature}|${transientSignature}`;
       const center = state.map.getCenter?.();
-      const payload = {
+      const transientPayload = {
         signature,
+        baseSignature,
+        transientSignature,
         reason,
         mode: profileModel ? "profile" : "public",
         basemap: nativeBasemap,
         camera: center ? { center: [Number(center.lng), Number(center.lat)], zoom: Number(state.map.getZoom?.()) } : null,
+        userLocation: nativeMapFeatureCollection(userLocationFeatures),
+        communityContributions: nativeMapFeatureCollection(communityFeatures),
+        temporaryMarkers: nativeMapFeatureCollection(temporaryFeatures)
+      };
+      if (state.nativeMapBaseSignature === baseSignature && typeof window.AndroidApp.syncNativeMapTransientState === "function") {
+        window.__nliSyncNativeMapViewport?.();
+        window.AndroidApp.syncNativeMapTransientState(androidBridgeToken(), JSON.stringify(transientPayload));
+        state.nativeMapStateSignature = signature;
+        return true;
+      }
+      const payload = {
+        ...transientPayload,
         territories: nativeMapFeatureCollection(allFeatures.filter(feature => /Polygon/.test(feature?.geometry?.type || "") && feature?.properties?.broad === true)),
         sitePolygons: nativeMapFeatureCollection(allFeatures.filter(feature => /Polygon/.test(feature?.geometry?.type || "") && feature?.properties?.broad !== true && !profileModel)),
         sitePoints: nativeMapFeatureCollection(allFeatures.filter(feature => feature?.geometry?.type === "Point" && !profileModel)),
@@ -25785,9 +25802,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         profilePath: profileJourney?.lines || nativeMapFeatureCollection(),
         profilePoints: nativeMapFeatureCollection(profileModel ? nativeProfilePointFeatures(profileModel) : []),
         events: nativeMapFeatureCollection(exhibitFeatures),
-        userLocation: nativeMapFeatureCollection(userLocationFeatures),
-        communityContributions: nativeMapFeatureCollection(communityFeatures),
-        temporaryMarkers: nativeMapFeatureCollection(temporaryFeatures),
         biographyPaths: profileModel
           ? nativeMapFeatureCollection()
           : allMobileBiographyPathFeatureCollection({ enabled: mobileBiographyPathsEnabled() })
@@ -25799,6 +25813,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       window.__nliSyncNativeMapViewport?.();
       window.AndroidApp.syncNativeMapState(androidBridgeToken(), JSON.stringify(payload));
       state.nativeMapStateSignature = signature;
+      state.nativeMapBaseSignature = baseSignature;
       return true;
     }
 
@@ -25874,7 +25889,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           }
           const slug = String(key || "");
           if (!slug || !state.siteBySlug.has(slug)) return false;
-          openSite(slug, { focus: false });
+          openSite(slug, { focus: true });
           return true;
         },
         cameraChanged(longitude, latitude, zoom) {

@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260819-site-open-performance-r171";
+const expectedBuild = "20260819-transient-map-updates-r172";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -981,6 +981,28 @@ if (!bundledMobileJs.includes("mobileMovingMarkerPausedAt: 0")
     || !bundledMobileJs.includes("const motionNow = Math.max(0, now - (state.mobileMovingMarkerPausedDurationMs || 0))")
     || !bundledMobileJs.includes("syncMobileMovingFeatureVisibility(performance.now())")) {
   throw new Error("Bundled Android moving features must use due-work timers, pause in the background, and resume without rushing along their routes.");
+}
+if (!bundledMobileJs.includes("const baseSignature =")
+    || !bundledMobileJs.includes("const transientSignature =")
+    || !bundledMobileJs.includes("baseSignature,\n        transientSignature,")
+    || !bundledMobileJs.includes('typeof window.AndroidApp.syncNativeMapTransientState === "function"')
+    || !bundledMobileJs.includes("JSON.stringify(transientPayload)")) {
+  throw new Error("APK map state must separate stable map layers from selected-site, user-location, and community updates.");
+}
+if (!bundledMobileJs.includes('const slug = String(key || "");\n          if (!slug || !state.siteBySlug.has(slug)) return false;\n          openSite(slug, { focus: true });')) {
+  throw new Error("Native APK map taps must center the selected site using the visible panel-aware map padding.");
+}
+if (!nativeMapController.includes('private String lastBaseStateSignature = "";')
+    || !nativeMapController.includes("boolean baseStateChanged = baseSignature.isEmpty() || !baseSignature.equals(lastBaseStateSignature);")
+    || !nativeMapController.includes("if (baseStateChanged) {")
+    || !nativeMapController.includes('Log.d(LOG_TAG, "Applied transient native map state"')) {
+  throw new Error("APK site selection must update transient sources without rebuilding all native map layers.");
+}
+if (!appBridge.includes("public void syncNativeMapTransientState(String token, String stateJson)")
+    || !source.includes("void syncNativeMapTransientState(String stateJson)")
+    || !nativeMapController.includes("void applyTransientState(String stateJson)")
+    || !nativeMapController.includes('Log.d(LOG_TAG, "Applied compact transient native map state"')) {
+  throw new Error("APK must route compact selection/location updates without replacing the cached full map state.");
 }
 if (!bundledMobileJs.includes("const mobileMovingRouteModelCache = new WeakMap();")
     || !bundledMobileJs.includes("function mobileMovingRouteModel(route = [])")
