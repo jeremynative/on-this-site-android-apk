@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260819-site-hero-scroll-frame-r177";
+const expectedBuild = "20260819-native-map-pitch-rotate-r178";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -261,6 +261,20 @@ if (!nativeMapController.includes("event.getActionMasked() != MotionEvent.ACTION
     || !nativeMapController.includes("routedGestureMoved = deltaX * deltaX + deltaY * deltaY")
     || !nativeMapController.includes("if (routedGestureMoved) return false;")) {
   throw new Error("A moved native map gesture must not open a site or territory when the finger is released.");
+}
+if (!nativeMapController.includes(".rotateGesturesEnabled(true)")
+    || !nativeMapController.includes(".tiltGesturesEnabled(true)")
+    || !nativeMapController.includes("setRotateGesturesEnabled(true)")
+    || !nativeMapController.includes("setTiltGesturesEnabled(true)")
+    || !nativeMapController.includes("event.getPointerCount() > 1")) {
+  throw new Error("The APK native map must support two-finger rotation and tilt without turning a multi-touch gesture into a site tap.");
+}
+if (!nativeMapController.includes(".bearing(desiredBearing)")
+    || !nativeMapController.includes(".tilt(Math.max(0.0, Math.min(60.0, desiredTilt)))")
+    || !appBridge.includes("syncNativeMapCameraPose")
+    || !bundledMobileJs.includes("AndroidApp.syncNativeMapCameraPose")
+    || !bundledMobileJs.includes("cameraChanged(longitude, latitude, zoom, bearing, pitch)")) {
+  throw new Error("Native/WebView camera synchronization must preserve bearing and pitch after a rotate or tilt gesture.");
 }
 if (!bundledMobileJs.includes("nativeMapCameraEcho: null")
     || !bundledMobileJs.includes("const matchesNativeCamera = Math.abs")

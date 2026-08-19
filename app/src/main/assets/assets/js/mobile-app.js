@@ -6844,20 +6844,30 @@
       if (!nativeMapBridgeAvailable() || !state.map) return false;
       const center = state.map.getCenter?.();
       const zoom = Number(state.map.getZoom?.());
+      const rawBearing = Number(state.map.getBearing?.());
+      const rawPitch = Number(state.map.getPitch?.());
+      const bearing = Number.isFinite(rawBearing) ? rawBearing : 0;
+      const pitch = Number.isFinite(rawPitch) ? rawPitch : 0;
       if (!center || !Number.isFinite(Number(center.lng)) || !Number.isFinite(Number(center.lat)) || !Number.isFinite(zoom)) return false;
       const echo = state.nativeMapCameraEcho;
       if (echo) {
         const isFresh = performance.now() - Number(echo.at || 0) < 1500;
         const matchesNativeCamera = Math.abs(Number(center.lng) - Number(echo.longitude)) < 0.00002
           && Math.abs(Number(center.lat) - Number(echo.latitude)) < 0.00002
-          && Math.abs(zoom - Number(echo.zoom)) < 0.02;
+          && Math.abs(zoom - Number(echo.zoom)) < 0.02
+          && Math.abs(bearing - Number(echo.bearing)) < 0.1
+          && Math.abs(pitch - Number(echo.pitch)) < 0.1;
         if (isFresh && matchesNativeCamera) {
           state.nativeMapCameraEcho = null;
           return false;
         }
         if (!isFresh) state.nativeMapCameraEcho = null;
       }
-      window.AndroidApp.syncNativeMapCamera(androidBridgeToken(), Number(center.lng), Number(center.lat), zoom);
+      if (typeof window.AndroidApp.syncNativeMapCameraPose === "function") {
+        window.AndroidApp.syncNativeMapCameraPose(androidBridgeToken(), Number(center.lng), Number(center.lat), zoom, bearing, pitch);
+      } else {
+        window.AndroidApp.syncNativeMapCamera(androidBridgeToken(), Number(center.lng), Number(center.lat), zoom);
+      }
       return true;
     }
 
@@ -6891,7 +6901,12 @@
         reason,
         mode: profileModel ? "profile" : "public",
         basemap: nativeBasemap,
-        camera: center ? { center: [Number(center.lng), Number(center.lat)], zoom: Number(state.map.getZoom?.()) } : null,
+        camera: center ? {
+          center: [Number(center.lng), Number(center.lat)],
+          zoom: Number(state.map.getZoom?.()),
+          bearing: Number(state.map.getBearing?.()) || 0,
+          pitch: Number(state.map.getPitch?.()) || 0
+        } : null,
         userLocation: nativeMapFeatureCollection(userLocationFeatures),
         communityContributions: nativeMapFeatureCollection(communityFeatures),
         temporaryMarkers: nativeMapFeatureCollection(temporaryFeatures)
@@ -7009,17 +7024,26 @@
           openSite(slug, { focus: true });
           return true;
         },
-        cameraChanged(longitude, latitude, zoom) {
+        cameraChanged(longitude, latitude, zoom, bearing, pitch) {
           const center = [Number(longitude), Number(latitude)];
           const nextZoom = Number(zoom);
+          const nextBearing = Number(bearing);
+          const nextPitch = Number(pitch);
           if (!state.map || !center.every(Number.isFinite) || !Number.isFinite(nextZoom)) return false;
           state.nativeMapCameraEcho = {
             longitude: center[0],
             latitude: center[1],
             zoom: nextZoom,
+            bearing: Number.isFinite(nextBearing) ? nextBearing : 0,
+            pitch: Number.isFinite(nextPitch) ? nextPitch : 0,
             at: performance.now()
           };
-          state.map.jumpTo({ center, zoom: nextZoom });
+          state.map.jumpTo({
+            center,
+            zoom: nextZoom,
+            bearing: Number.isFinite(nextBearing) ? nextBearing : state.map.getBearing?.(),
+            pitch: Number.isFinite(nextPitch) ? nextPitch : state.map.getPitch?.()
+          });
           return true;
         },
         gestureChanged(active) {
