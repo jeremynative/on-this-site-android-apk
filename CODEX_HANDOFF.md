@@ -1,5 +1,15 @@
 # Android APK — Codex Handoff
 
+## August 18 startup map settled-frame handoff and APK size audit
+
+- Fixed the native APK handoff that uncovered the map while detailed site geometry, deferred calendar/timeline data, the intentional site reveal, moving biography features, camera state, and native viewport were still changing.
+- The Long Island loading cover now remains over both online and offline startup until the WebView is complete and the native renderer has held a fully composed frame stable for 900 ms. It still animates only once and does not restart during live-to-saved fallback.
+- Physical iPlay QA passed repeated online and airplane/offline cold starts. Online startup now applied one complete native state (13 territories, 49 polygons, 388 sites, 51 custom icons, 2 events) before reveal; one-second screenshots showed a stable camera, controls, panels, and map from the first visible frame onward. Offline startup revealed only after the saved map index, region controls, bundled native state, and viewport were ready. No fatal exception or ANR was logged.
+- `node verify-app-shell.js`, `git diff --check`, `assembleDebug`, and final `lintDebug` pass. Product changes are limited to `MainActivity.java`, `NativeMapController.java`, and `verify-app-shell.js`; build marker is `20260818-startup-map-settle-r165`.
+- APK size was measured rather than inferred from the 57.46 MB multi-ABI debug build. The current signed universal ARM Obtainium APK is about 33.25 MB: MapLibre's arm64 and 32-bit native libraries account for about 17.9 MB, the offline PMTiles map 5.1 MB, and bundled app/data assets about 5.8 MB. The startup fix adds negligible size. Google Play's AAB already delivers ABI-specific splits. A future arm64-only Obtainium asset should reduce the common download to roughly 25 MB, provided a separate 32-bit fallback is retained and updater asset selection is verified.
+
+Current branch is `fix/startup-map-settle`, based on `origin/main` at `8d158b3`, with the focused files pending commit/publication. Safest next action is to commit, push, merge, verify the signed Obtainium release byte-for-byte, install it over production, and restore the tablet's normal Wi-Fi, sleep, and rotation settings.
+
 ## August 18 native map labels, permanent territories, biography icons, and touch responsiveness
 
 - Added a dedicated native point-site title layer at zoom 11.4+ while retaining the existing polygon and ancestral-land labels. Point labels participate in exact and expanded hit testing.
