@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260819-map-motion-efficiency-r170";
+const expectedBuild = "20260819-site-open-performance-r171";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -989,6 +989,18 @@ if (!bundledMobileJs.includes("const mobileMovingRouteModelCache = new WeakMap()
     || !bundledMobileJs.includes("state.mobileMovingLandStateCache.has(cacheKey)")
     || !bundledMobileJs.includes("MOBILE_MOVING_LAND_CACHE_MAX")) {
   throw new Error("Bundled Android moving features must reuse route geometry and bounded shoreline results.");
+}
+const openSiteStart = bundledMobileJs.indexOf("    async function openSite(slug, options = {}) {");
+const openSiteEnd = bundledMobileJs.indexOf("\n    function closeDetail(options = {})", openSiteStart);
+const openSiteImplementation = openSiteStart >= 0 && openSiteEnd > openSiteStart
+  ? bundledMobileJs.slice(openSiteStart, openSiteEnd)
+  : "";
+if (!openSiteImplementation
+    || openSiteImplementation.includes("renderList();")
+    || !openSiteImplementation.includes("syncNearbySelectedCard(slug);")
+    || !openSiteImplementation.includes("await Promise.all([detailPromise, timelinePromise, sourceListPromise])")
+    || !openSiteImplementation.includes("void Promise.all([\n          refreshRemoteSiteVisitsForProfileSite")) {
+  throw new Error("Bundled Android site opening must avoid feed rebuilds and run detail work concurrently without blocking on contributor refreshes.");
 }
 for (const [label, document] of [
   ["bundled fallback", bundledApp]
