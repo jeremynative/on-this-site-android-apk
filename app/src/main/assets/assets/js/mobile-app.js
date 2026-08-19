@@ -13603,7 +13603,7 @@
       return false;
     };
 
-    function syncUserLocationMarker({ centerMap = false, zoom = NEAR_ME_ZOOM } = {}) {
+    function syncUserLocationMarker({ centerMap = false, zoom = NEAR_ME_ZOOM, duration = 850 } = {}) {
       scheduleNativeMapStateSync("user-location", 0);
       if (!state.map || !state.userLocation || typeof mapboxgl === "undefined") return;
       if (state.userMarker?.setLngLat) {
@@ -13615,7 +13615,7 @@
         element.setAttribute("aria-hidden", "true");
         state.userMarker = new mapboxgl.Marker({ element, anchor: "center" }).setLngLat(state.userLocation).addTo(state.map);
       }
-      if (centerMap) state.map.easeTo({ center: state.userLocation, zoom, duration: 850 });
+      if (centerMap) state.map.easeTo({ center: state.userLocation, zoom, duration });
     }
 
     function fitLongIslandMapView(reason = "long-island-view") {
@@ -13918,6 +13918,23 @@
       return locationDistanceFromLongIslandScope(location) <= LOCATION_CONTROL_MAX_SCOPE_DISTANCE_MILES;
     }
 
+    function centerMapOnKnownUserLocation({ zoomIfAlreadyCentered = false } = {}) {
+      const nextLocation = Array.isArray(state.userLocation) ? state.userLocation.map(Number) : [];
+      if (nextLocation.length < 2 || !nextLocation.every(Number.isFinite)) return false;
+      if (!locationWithinLongIslandScope(nextLocation)) {
+        showOutOfScopeLocationNotice();
+        return true;
+      }
+      const resolvedMapZoom = zoomIfAlreadyCentered && mapIsCenteredOnLocation(nextLocation)
+        ? nextLocationControlZoom()
+        : NEAR_ME_ZOOM;
+      setLocationControlsBusy(false);
+      syncUserLocationMarker({ centerMap: true, zoom: resolvedMapZoom, duration: 425 });
+      refreshAndroidMapAfterSettle("android-known-location-center");
+      startLocationWatch();
+      return true;
+    }
+
     function applyUserLocation(position, { centerMap = false, mapZoom = NEAR_ME_ZOOM, centerBounds = null } = {}) {
       const nextLocation = [position.coords.longitude, position.coords.latitude];
       const moved = locationMovedEnough(nextLocation);
@@ -13947,7 +13964,8 @@
       mapZoom = NEAR_ME_ZOOM,
       centerBounds = null,
       zoomIfAlreadyCentered = false,
-      restrictToLongIslandScope = false
+      restrictToLongIslandScope = false,
+      positionOptions = null
     } = {}) {
       if (!navigator.geolocation) {
         if (!silent) showBanner("Location is not available on this device.");
@@ -13979,7 +13997,7 @@
           renderList();
           if (!silent) showBanner("Location permission was not available. Showing sites near central Long Island without personal distances.");
           resolve(false);
-      }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+      }, positionOptions || { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
       });
     }
 
@@ -13990,12 +14008,14 @@
     }
 
     async function locateMapUser() {
+      if (centerMapOnKnownUserLocation({ zoomIfAlreadyCentered: isNativeAndroidApp() })) return true;
       return requestUserLocation({
         centerMap: true,
         silent: false,
         mapZoom: NEAR_ME_ZOOM,
         zoomIfAlreadyCentered: isNativeAndroidApp(),
-        restrictToLongIslandScope: true
+        restrictToLongIslandScope: true,
+        positionOptions: { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
       });
     }
 

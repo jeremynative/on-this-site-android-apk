@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260818-android16-back-r168";
+const expectedBuild = "20260818-instant-user-location-r169";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1458,6 +1458,12 @@ if (!bundledMobileJs.includes('const MAPBOX_PUBLIC_TOKEN = "__NLI_MAPBOX_TOKEN__
 }
 if (!bundledMobileJs.includes("function mapIsCenteredOnLocation(location, tolerancePixels = 12)")) {
   throw new Error("Bundled mobile JavaScript must detect when the map is centered on the user.");
+}
+if (!bundledMobileJs.includes("function centerMapOnKnownUserLocation({ zoomIfAlreadyCentered = false } = {})")
+    || !bundledMobileJs.includes("duration: 425")
+    || !bundledMobileJs.includes("if (centerMapOnKnownUserLocation({ zoomIfAlreadyCentered: isNativeAndroidApp() })) return true;")
+    || !bundledMobileJs.includes("positionOptions: { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }")) {
+  throw new Error("Bundled mobile JavaScript must recenter immediately from the known user location and use a bounded cached first fix.");
 }
 if (!bundledMobileJs.includes("zoomIfAlreadyCentered: isNativeAndroidApp()")) {
   throw new Error("Bundled mobile JavaScript must enable repeated location zoom only in the APK.");
