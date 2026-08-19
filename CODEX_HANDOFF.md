@@ -1030,3 +1030,11 @@ Safest next action: leave 0.1.462 installed through Obtainium and report only ne
 - Preserve the pre-existing modified generated map/data files, modified audit helper, and untracked screenshots/XML. Only the two security commits were pushed.
 
 Safest next action: refresh Obtainium on the S25 and install 0.1.463 when convenient. No debug APK was installed on the physical phone.
+## 2026-08-19 Android map-motion optimization
+
+- Branch `optimize/shared-runtime-android-20260819` refactors the bundled moving biography/dog/whale runtime without changing visible cadence or public behavior.
+- The runtime now uses a due-work timer at the existing 180 ms cadence instead of waking on every animation frame, memoizes route geometry, and bounds/reuses shoreline checks while clearing them whenever land-mask geometry changes.
+- Bundled support assets were refreshed and the native build marker is `20260819-map-motion-efficiency-r170`.
+- `verify-app-shell.js`, Google Play readiness, JavaScript syntax, whitespace checks, debug APK build, and `lintDebug` passed. The QA APK installed without replacing the production app; the bundled offline archive reached its complete 439-listing/93-wiki UI with no fatal/ANR logs. Full online motion/location verification should be repeated after the matching web runtime is live.
+- No schema, auth, API, environment, content, or production-app data changes were made.
+- Safest next action: commit/push and merge, publish the next Obtainium APK, then run the online WebView and location audits on the connected S25 against the deployed shared runtime.
