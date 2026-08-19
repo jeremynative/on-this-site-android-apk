@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260818-apk-size-offline-r167";
+const expectedBuild = "20260818-android16-back-r168";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1018,6 +1018,9 @@ requireText("R.string.exit_app_title", "Android exit confirmation must use the a
 requireText("R.string.exit_app_message", "Android exit confirmation must explain what will exit.");
 requireText("R.string.exit_app_action", "Android exit confirmation must provide an explicit Exit action.");
 requireText("showExitConfirmation();", "Android Back must route an unhandled app root through exit confirmation.");
+requireText("backInvokedCallback = this::handleAppBackNavigation;", "Android 13+ Back must use the supported platform callback.");
+requireText("registerOnBackInvokedCallback(", "Android 13+ Back callback must be registered.");
+requireText("unregisterOnBackInvokedCallback(backInvokedCallback)", "Android Back callback must be released with the activity.");
 if (/public void onBackPressed\(\)[\s\S]*?webView\.canGoBack\(\)/.test(source)) {
   throw new Error("Android root Back must not expose internal WebView loading history instead of the exit confirmation.");
 }
@@ -1387,7 +1390,7 @@ if (source.includes("applyApkTimelineTrayFix")
     || source.includes("android-apk-timeline-fix")) {
   throw new Error("Android shell must not inject the obsolete single-card Timeline tray override into the vertical feed.");
 }
-const backHandlerMatch = source.match(/public void onBackPressed\(\) \{[\s\S]*?\n    \}/);
+const backHandlerMatch = source.match(/private void handleAppBackNavigation\(\) \{[\s\S]*?\n    \}/);
 if (!backHandlerMatch
     || !backHandlerMatch[0].includes("window.onAndroidBackPressed && window.onAndroidBackPressed()")
     || !backHandlerMatch[0].includes('if ("true".equals(handled)) return;')

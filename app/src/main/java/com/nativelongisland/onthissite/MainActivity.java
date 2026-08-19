@@ -43,6 +43,8 @@ import android.view.inputmethod.InputConnectionWrapper;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 import android.widget.FrameLayout;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -88,7 +90,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260818-apk-size-offline-r167";
+    static final String APP_VERSION = "20260818-android16-back-r168";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -125,6 +127,7 @@ public class MainActivity extends Activity {
     private boolean nativeMapBundleQaEnabled;
     private AlertDialog exitConfirmationDialog;
     private boolean backNavigationPending;
+    private OnBackInvokedCallback backInvokedCallback;
     private BillingManager billingManager;
     private View loadingCover;
     private TextView loadingCoverLabel;
@@ -439,6 +442,18 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Android 16 no longer dispatches Activity.onBackPressed() to apps that
+        // target API 36. Register the supported platform callback so both the
+        // three-button Back key and predictive-back gesture keep using the
+        // app's panel-first navigation and root exit confirmation.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            backInvokedCallback = this::handleAppBackNavigation;
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                backInvokedCallback
+            );
+        }
 
         if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true);
         nativeMapEnabled = true;
@@ -2086,6 +2101,10 @@ public class MainActivity extends Activity {
         unregisterConnectivityMonitoring();
         stopLoadingOutlineReveal();
         startupHandler.removeCallbacksAndMessages(null);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && backInvokedCallback != null) {
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backInvokedCallback);
+            backInvokedCallback = null;
+        }
         if (exitConfirmationDialog != null) exitConfirmationDialog.dismiss();
         exitConfirmationDialog = null;
         if (billingManager != null) billingManager.close();
@@ -2612,6 +2631,10 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        handleAppBackNavigation();
+    }
+
+    private void handleAppBackNavigation() {
         if (webView == null) {
             showExitConfirmation();
             return;
