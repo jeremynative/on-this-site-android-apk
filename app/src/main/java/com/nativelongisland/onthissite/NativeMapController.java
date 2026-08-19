@@ -204,12 +204,14 @@ final class NativeMapController {
     private float touchRootScreenLeft;
     private float touchRootScreenTop;
     private String pendingStateJson;
+    private String pendingTransientStateJson;
     private String currentStateJson;
     private String movingFeaturesJson = EMPTY_FEATURE_COLLECTION;
     private long lastMovingFeatureApplyAt;
     private final Runnable applyLatestMovingFeaturesTask = this::applyMovingFeaturesToStyle;
     private final JSONObject bundledSiteIconKeysBySlug = new JSONObject();
     private String lastStateSignature = "";
+    private String lastBaseStateSignature = "";
     private String currentBasemap = "outdoors";
     private CameraPosition stableCamera;
     private long cameraIntentRevision;
@@ -576,6 +578,7 @@ final class NativeMapController {
         markStartupVisualChange();
         usingOnlineArchive = preferOnlineArchive;
         lastStateSignature = "";
+        lastBaseStateSignature = "";
         if (currentStateJson != null) pendingStateJson = currentStateJson;
         String styleJson = BASE_STYLE_JSON;
         try {
@@ -907,6 +910,11 @@ final class NativeMapController {
                 pendingStateJson = null;
                 applyState(stateJson);
             }
+            if (pendingTransientStateJson != null) {
+                String transientStateJson = pendingTransientStateJson;
+                pendingTransientStateJson = null;
+                applyTransientState(transientStateJson);
+            }
             Log.i(LOG_TAG, "MapLibre Native renderer is ready ("
                 + (usingOnlineArchive ? "self-hosted z14" : "bundled z10") + ").");
         } catch (Exception error) {
@@ -977,6 +985,7 @@ final class NativeMapController {
         try {
             JSONObject payload = new JSONObject(stateJson);
             String signature = payload.optString("signature", "");
+            String baseSignature = payload.optString("baseSignature", signature);
             profileMode = "profile".equals(payload.optString("mode", "public"));
             String nextBasemap = normalizeBasemap(payload.optString("basemap", "outdoors"));
             if (!nextBasemap.equals(currentBasemap)) {
@@ -984,50 +993,104 @@ final class NativeMapController {
                 collapseMapCredit();
             }
             Style style = map.getStyle();
-            JSONObject candidateSitePoints = applyBundledSiteIconKeys(payload.optJSONObject("sitePoints"));
-            boolean nextStartupStateReady = featureCount(candidateSitePoints) > 0;
-            boolean startupStateChanged = !startupStateReady
-                || signature.isEmpty()
-                || !signature.equals(lastStateSignature);
-            startupStateReady = startupStateReady || nextStartupStateReady;
-            if (startupVisualTracking && nextStartupStateReady && startupStateChanged) {
-                markStartupVisualChange();
-            }
             if (!signature.isEmpty() && signature.equals(lastStateSignature)) {
                 applyModeVisibility(style);
                 applyCamera(payload.optJSONObject("camera"));
                 return;
             }
-            setTerritorySource(style, payload.optJSONObject("territories"));
-            setSource(style, SITE_POLYGON_SOURCE_ID, payload.optJSONObject("sitePolygons"));
-            JSONObject sitePoints = candidateSitePoints;
-            setSource(style, SITE_POINT_SOURCE_ID, sitePoints);
-            setSource(style, LABEL_SOURCE_ID, withBundledTerritoryLabels(payload.optJSONObject("labels")));
-            setSource(style, BIOGRAPHY_PATH_SOURCE_ID, payload.optJSONObject("biographyPaths"));
-            setSource(style, EVENT_SOURCE_ID, payload.optJSONObject("events"));
+            boolean baseStateChanged = baseSignature.isEmpty() || !baseSignature.equals(lastBaseStateSignature);
+            if (baseStateChanged) {
+                JSONObject sitePoints = applyBundledSiteIconKeys(payload.optJSONObject("sitePoints"));
+                boolean nextStartupStateReady = featureCount(sitePoints) > 0;
+                boolean startupStateChanged = !startupStateReady || baseSignature.isEmpty() || !baseSignature.equals(lastBaseStateSignature);
+                startupStateReady = startupStateReady || nextStartupStateReady;
+                if (startupVisualTracking && nextStartupStateReady && startupStateChanged) markStartupVisualChange();
+                setTerritorySource(style, payload.optJSONObject("territories"));
+                setSource(style, SITE_POLYGON_SOURCE_ID, payload.optJSONObject("sitePolygons"));
+                setSource(style, SITE_POINT_SOURCE_ID, sitePoints);
+                setSource(style, LABEL_SOURCE_ID, withBundledTerritoryLabels(payload.optJSONObject("labels")));
+                setSource(style, BIOGRAPHY_PATH_SOURCE_ID, payload.optJSONObject("biographyPaths"));
+                setSource(style, EVENT_SOURCE_ID, payload.optJSONObject("events"));
+                setSource(style, PROFILE_PATH_SOURCE_ID, payload.optJSONObject("profilePath"));
+                setSource(style, PROFILE_POINT_SOURCE_ID, payload.optJSONObject("profilePoints"));
+                Log.i(LOG_TAG, "Applied native map base state " + payload.optString("mode", "public")
+                    + ": territories=" + featureCount(payload.optJSONObject("territories"))
+                    + ", polygons=" + featureCount(payload.optJSONObject("sitePolygons"))
+                    + ", points=" + featureCount(sitePoints)
+                    + ", customIcons=" + featureCountWithStringProperty(sitePoints, "native_icon_key")
+                    + ", biographyPaths=" + featureCount(payload.optJSONObject("biographyPaths"))
+                    + ", events=" + featureCount(payload.optJSONObject("events"))
+                    + ", journey=" + featureCount(payload.optJSONObject("profilePath"))
+                    + ", profilePoints=" + featureCount(payload.optJSONObject("profilePoints")));
+                lastBaseStateSignature = baseSignature;
+            }
             setSource(style, USER_LOCATION_SOURCE_ID, payload.optJSONObject("userLocation"));
             setSource(style, COMMUNITY_SOURCE_ID, payload.optJSONObject("communityContributions"));
             setSource(style, TEMPORARY_SOURCE_ID, payload.optJSONObject("temporaryMarkers"));
-            setSource(style, PROFILE_PATH_SOURCE_ID, payload.optJSONObject("profilePath"));
-            setSource(style, PROFILE_POINT_SOURCE_ID, payload.optJSONObject("profilePoints"));
-            Log.i(LOG_TAG, "Applied native map state " + payload.optString("mode", "public")
-                + ": territories=" + featureCount(payload.optJSONObject("territories"))
-                + ", polygons=" + featureCount(payload.optJSONObject("sitePolygons"))
-                + ", points=" + featureCount(sitePoints)
-                + ", customIcons=" + featureCountWithStringProperty(sitePoints, "native_icon_key")
-                + ", biographyPaths=" + featureCount(payload.optJSONObject("biographyPaths"))
-                + ", events=" + featureCount(payload.optJSONObject("events"))
-                + ", userLocation=" + featureCount(payload.optJSONObject("userLocation"))
-                + ", community=" + featureCount(payload.optJSONObject("communityContributions"))
-                + ", temporary=" + featureCount(payload.optJSONObject("temporaryMarkers"))
-                + ", journey=" + featureCount(payload.optJSONObject("profilePath"))
-                + ", profilePoints=" + featureCount(payload.optJSONObject("profilePoints")));
+            if (!baseStateChanged) {
+                Log.d(LOG_TAG, "Applied transient native map state"
+                    + ": userLocation=" + featureCount(payload.optJSONObject("userLocation"))
+                    + ", community=" + featureCount(payload.optJSONObject("communityContributions"))
+                    + ", temporary=" + featureCount(payload.optJSONObject("temporaryMarkers")));
+            } else {
+                Log.i(LOG_TAG, "Applied native map transient layers"
+                    + ": userLocation=" + featureCount(payload.optJSONObject("userLocation"))
+                    + ", community=" + featureCount(payload.optJSONObject("communityContributions"))
+                    + ", temporary=" + featureCount(payload.optJSONObject("temporaryMarkers")));
+            }
             lastStateSignature = signature;
             applyModeVisibility(style);
             applyCamera(payload.optJSONObject("camera"));
             mapView.invalidate();
         } catch (Exception error) {
             Log.e(LOG_TAG, "Ignored invalid native map state.", error);
+        }
+    }
+
+    void applyTransientState(String stateJson) {
+        if (stateJson == null || stateJson.isEmpty() || stateJson.length() > 512 * 1024) return;
+        if (!styleReady || map == null || map.getStyle() == null) {
+            pendingTransientStateJson = stateJson;
+            return;
+        }
+        try {
+            JSONObject payload = new JSONObject(stateJson);
+            String signature = payload.optString("signature", "");
+            Style style = map.getStyle();
+            if (!signature.isEmpty() && signature.equals(lastStateSignature)) {
+                applyCamera(payload.optJSONObject("camera"));
+                return;
+            }
+            setSource(style, USER_LOCATION_SOURCE_ID, payload.optJSONObject("userLocation"));
+            setSource(style, COMMUNITY_SOURCE_ID, payload.optJSONObject("communityContributions"));
+            setSource(style, TEMPORARY_SOURCE_ID, payload.optJSONObject("temporaryMarkers"));
+            boolean pointsUpdated = payload.has("sitePoints");
+            boolean labelsUpdated = payload.has("labels");
+            if (pointsUpdated) {
+                setSource(style, SITE_POINT_SOURCE_ID, applyBundledSiteIconKeys(payload.optJSONObject("sitePoints")));
+            }
+            if (labelsUpdated) {
+                setSource(style, LABEL_SOURCE_ID, withBundledTerritoryLabels(payload.optJSONObject("labels")));
+            }
+            if ((pointsUpdated || labelsUpdated) && currentStateJson != null && !currentStateJson.isEmpty()) {
+                JSONObject cachedState = new JSONObject(currentStateJson);
+                if (pointsUpdated) cachedState.put("sitePoints", payload.optJSONObject("sitePoints"));
+                if (labelsUpdated) cachedState.put("labels", payload.optJSONObject("labels"));
+                currentStateJson = cachedState.toString();
+            }
+            lastStateSignature = signature;
+            applyModeVisibility(style);
+            applyCamera(payload.optJSONObject("camera"));
+            mapView.invalidate();
+            Log.d(LOG_TAG, "Applied compact transient native map state"
+                + ": bytes=" + stateJson.length()
+                + ", userLocation=" + featureCount(payload.optJSONObject("userLocation"))
+                + ", community=" + featureCount(payload.optJSONObject("communityContributions"))
+                + ", temporary=" + featureCount(payload.optJSONObject("temporaryMarkers"))
+                + ", sitePointsUpdated=" + pointsUpdated
+                + ", labelsUpdated=" + labelsUpdated);
+        } catch (Exception error) {
+            Log.e(LOG_TAG, "Ignored invalid transient native map state.", error);
         }
     }
 

@@ -86,6 +86,12 @@ class AppBridge {
     }
 
     @JavascriptInterface
+    public void syncNativeMapTransientState(String token, String stateJson) {
+        if (!activity.validBridgeToken(token)) return;
+        activity.runOnUiThread(() -> activity.syncNativeMapTransientState(stateJson));
+    }
+
+    @JavascriptInterface
     public void syncNativeMapMovingFeatures(String token, String featuresJson) {
         if (!activity.validBridgeToken(token)) return;
         activity.runOnUiThread(() -> activity.syncNativeMapMovingFeatures(featuresJson));

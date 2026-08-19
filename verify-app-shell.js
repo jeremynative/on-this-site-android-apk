@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260819-site-open-performance-r171";
+const expectedBuild = "20260819-transient-map-updates-r173";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -982,6 +982,34 @@ if (!bundledMobileJs.includes("mobileMovingMarkerPausedAt: 0")
     || !bundledMobileJs.includes("syncMobileMovingFeatureVisibility(performance.now())")) {
   throw new Error("Bundled Android moving features must use due-work timers, pause in the background, and resume without rushing along their routes.");
 }
+if (!bundledMobileJs.includes("const baseSignature =")
+    || !bundledMobileJs.includes("const transientSignature =")
+    || !bundledMobileJs.includes("nativeMapBaseRevision")
+    || !bundledMobileJs.includes("nativeMapPointRevision")
+    || !bundledMobileJs.includes("invalidateMapSourceCache({ nativeBase: false })")
+    || !bundledMobileJs.includes("baseSignature,\n        transientSignature,")
+    || !bundledMobileJs.includes('typeof window.AndroidApp.syncNativeMapTransientState === "function"')
+    || !bundledMobileJs.includes("JSON.stringify(transientPayload)")) {
+  throw new Error("APK map state must separate stable map layers from selected-site, user-location, and community updates.");
+}
+if (!bundledMobileJs.includes('const slug = String(key || "");\n          if (!slug || !state.siteBySlug.has(slug)) return false;\n          openSite(slug, { focus: true });')) {
+  throw new Error("Native APK map taps must center the selected site using the visible panel-aware map padding.");
+}
+if (!nativeMapController.includes('private String lastBaseStateSignature = "";')
+    || !nativeMapController.includes("boolean baseStateChanged = baseSignature.isEmpty() || !baseSignature.equals(lastBaseStateSignature);")
+    || !nativeMapController.includes("if (baseStateChanged) {")
+    || !nativeMapController.includes('Log.d(LOG_TAG, "Applied transient native map state"')) {
+  throw new Error("APK site selection must update transient sources without rebuilding all native map layers.");
+}
+if (!appBridge.includes("public void syncNativeMapTransientState(String token, String stateJson)")
+    || !source.includes("void syncNativeMapTransientState(String stateJson)")
+    || !nativeMapController.includes("void applyTransientState(String stateJson)")
+    || !nativeMapController.includes('payload.has("sitePoints")')
+    || !nativeMapController.includes('setSource(style, SITE_POINT_SOURCE_ID, applyBundledSiteIconKeys(payload.optJSONObject("sitePoints")))')
+    || !nativeMapController.includes('payload.has("labels")')
+    || !nativeMapController.includes('Log.d(LOG_TAG, "Applied compact transient native map state"')) {
+  throw new Error("APK must route compact selection/location updates without replacing the cached full map state.");
+}
 if (!bundledMobileJs.includes("const mobileMovingRouteModelCache = new WeakMap();")
     || !bundledMobileJs.includes("function mobileMovingRouteModel(route = [])")
     || !bundledMobileJs.includes("mobileMovingRouteModelCache.set(route, model)")
@@ -1561,7 +1589,7 @@ if (bundledApp.includes("showRandomMobileStartupSpotlight") || bundledLiveRuntim
 requireBundledText("autoPrompt: false", "Bundled Android app must disable the legacy competing question timer.");
 requireBundledText("showRestore: false", "Bundled Android app must use the unified question restore bubble.");
 requireBundledText('"text-opacity": ["interpolate", ["linear"], ["zoom"], SITE_POINT_LABEL_MIN_ZOOM, 0, SITE_POINT_LABEL_MIN_ZOOM + 0.35, 1]', "Bundled Android point labels must fade in around the local-area zoom threshold.");
-requireBundledPattern(/mapSourceRevision:\s*0[\s\S]*?mapSourceAppliedKey:\s*""[\s\S]*?function\s+invalidateMapSourceCache\(\)[\s\S]*?state\.mapSourceRevision\s*\+=\s*1;[\s\S]*?function\s+refreshMobileMapSources\(options\s*=\s*\{\}\)[\s\S]*?state\.mapSourceAppliedKey\s*===\s*sourceKey\)\s*return;[\s\S]*?state\.mapSourceAppliedKey\s*=\s*sourceKey;/, "Bundled Android map source refresh must skip repeated identical GeoJSON setData work.");
+requireBundledPattern(/mapSourceRevision:\s*0[\s\S]*?mapSourceAppliedKey:\s*""[\s\S]*?function\s+invalidateMapSourceCache\(options\s*=\s*\{\}\)[\s\S]*?state\.mapSourceRevision\s*\+=\s*1;[\s\S]*?function\s+refreshMobileMapSources\(options\s*=\s*\{\}\)[\s\S]*?state\.mapSourceAppliedKey\s*===\s*sourceKey\)\s*return;[\s\S]*?state\.mapSourceAppliedKey\s*=\s*sourceKey;/, "Bundled Android map source refresh must skip repeated identical GeoJSON setData work.");
 requireBundledPattern(/state\.map\.on\("zoomend",\s*\(\)\s*=>\s*\{[\s\S]*?syncMarkers\(\{\s*auxiliary:\s*false\s*\}\);[\s\S]*?syncMapStoryMarkers\(\);[\s\S]*?\}\);/, "Bundled Android zoom should refresh marker offsets once on zoomend without full auxiliary marker work.");
 requireBundledPattern(/function\s+mapStoryMarkerOffset\(story\)[\s\S]*?zoom\s*>=\s*11\)\s*return\s*\[0,\s*-22\];[\s\S]*?return\s*\[0,\s*-28\];/, "Bundled Android attached stories must stay visually close to their listing at overview zoom.");
 if (/state\.map\.on\("zoom",\s*syncMapStoryMarkers\)/.test(bundledApp) || /state\.map\.on\("zoom",\s*syncMapStoryMarkers\)/.test(bundledLiveApp)) {

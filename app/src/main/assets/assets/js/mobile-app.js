@@ -973,6 +973,10 @@
       androidMapLastSizeKey: "",
       nativeMapStateTimer: null,
       nativeMapStateSignature: "",
+      nativeMapBaseSignature: "",
+      nativeMapBaseRevision: 0,
+      nativeMapPointSignature: "",
+      nativeMapPointRevision: 0,
       nativeMapBridgeInstalled: false,
       nativeMapCameraEcho: null,
       proximityAlertInFlight: false,
@@ -2318,10 +2322,15 @@
       return state.mapSites.filter(siteVisibleInMobileLayers);
     }
 
-    function invalidateMapSourceCache() {
+    function invalidateMapSourceCache(options = {}) {
       state.mapSourceCache = null;
       state.mapSourceCacheKey = "";
       state.mapSourceRevision += 1;
+      if (options.nativeBase === false) {
+        state.nativeMapPointRevision += 1;
+      } else {
+        state.nativeMapBaseRevision += 1;
+      }
     }
 
     function polygonLabelCollection(kind = "all", sites = state.mapSites) {
@@ -6866,14 +6875,36 @@
       const communitySignature = communityFeatures.map(feature => `${feature.properties.native_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}`).join("|");
       const temporarySignature = temporaryFeatures.map(feature => `${feature.properties.temporary_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}`).join("|");
       const nativeBasemap = Object.prototype.hasOwnProperty.call(MOBILE_BASEMAPS, state.settings.basemap) ? state.settings.basemap : "outdoors";
-      const signature = `${state.mapSourceCacheKey || state.mapSourceRevision}|${profileKey}|${profileSignature}|basemap:${nativeBasemap}|bio-paths:${mobileBiographyPathsEnabled() ? 1 : 0}|events:${exhibitFeatures.map(feature => feature.properties.event_key).join(",")}|user:${userLocationSignature}|community:${communitySignature}|temporary:${temporarySignature}`;
+      const baseSignature = `${state.nativeMapBaseRevision}|${profileKey}|${profileSignature}|basemap:${nativeBasemap}|bio-paths:${mobileBiographyPathsEnabled() ? 1 : 0}|events:${exhibitFeatures.map(feature => feature.properties.event_key).join(",")}`;
+      const pointSignature = `${state.nativeMapPointRevision}|${allFeatures.filter(feature => feature?.geometry?.type === "Point").length}`;
+      const transientSignature = `user:${userLocationSignature}|community:${communitySignature}|temporary:${temporarySignature}`;
+      const signature = `${baseSignature}|points:${pointSignature}|${transientSignature}`;
       const center = state.map.getCenter?.();
-      const payload = {
+      const transientPayload = {
         signature,
+        baseSignature,
+        transientSignature,
         reason,
         mode: profileModel ? "profile" : "public",
         basemap: nativeBasemap,
         camera: center ? { center: [Number(center.lng), Number(center.lat)], zoom: Number(state.map.getZoom?.()) } : null,
+        userLocation: nativeMapFeatureCollection(userLocationFeatures),
+        communityContributions: nativeMapFeatureCollection(communityFeatures),
+        temporaryMarkers: nativeMapFeatureCollection(temporaryFeatures)
+      };
+      if (state.nativeMapBaseSignature === baseSignature && typeof window.AndroidApp.syncNativeMapTransientState === "function") {
+        if (state.nativeMapPointSignature !== pointSignature) {
+          transientPayload.sitePoints = nativeMapFeatureCollection(allFeatures.filter(feature => feature?.geometry?.type === "Point"));
+          transientPayload.labels = nativeMapFeatureCollection([...(sourceData.territoryLabels?.features || []), ...(sourceData.detailLabels?.features || [])]);
+        }
+        window.__nliSyncNativeMapViewport?.();
+        window.AndroidApp.syncNativeMapTransientState(androidBridgeToken(), JSON.stringify(transientPayload));
+        state.nativeMapStateSignature = signature;
+        state.nativeMapPointSignature = pointSignature;
+        return true;
+      }
+      const payload = {
+        ...transientPayload,
         territories: nativeMapFeatureCollection(allFeatures.filter(feature => /Polygon/.test(feature?.geometry?.type || "") && feature?.properties?.broad === true)),
         sitePolygons: nativeMapFeatureCollection(allFeatures.filter(feature => /Polygon/.test(feature?.geometry?.type || "") && feature?.properties?.broad !== true && !profileModel)),
         sitePoints: nativeMapFeatureCollection(allFeatures.filter(feature => feature?.geometry?.type === "Point" && !profileModel)),
@@ -6883,9 +6914,6 @@
         profilePath: profileJourney?.lines || nativeMapFeatureCollection(),
         profilePoints: nativeMapFeatureCollection(profileModel ? nativeProfilePointFeatures(profileModel) : []),
         events: nativeMapFeatureCollection(exhibitFeatures),
-        userLocation: nativeMapFeatureCollection(userLocationFeatures),
-        communityContributions: nativeMapFeatureCollection(communityFeatures),
-        temporaryMarkers: nativeMapFeatureCollection(temporaryFeatures),
         biographyPaths: profileModel
           ? nativeMapFeatureCollection()
           : allMobileBiographyPathFeatureCollection({ enabled: mobileBiographyPathsEnabled() })
@@ -6897,6 +6925,8 @@
       window.__nliSyncNativeMapViewport?.();
       window.AndroidApp.syncNativeMapState(androidBridgeToken(), JSON.stringify(payload));
       state.nativeMapStateSignature = signature;
+      state.nativeMapBaseSignature = baseSignature;
+      state.nativeMapPointSignature = pointSignature;
       return true;
     }
 
@@ -6972,7 +7002,7 @@
           }
           const slug = String(key || "");
           if (!slug || !state.siteBySlug.has(slug)) return false;
-          openSite(slug, { focus: false });
+          openSite(slug, { focus: true });
           return true;
         },
         cameraChanged(longitude, latitude, zoom) {
@@ -16738,7 +16768,7 @@
       const keys = mobileActivityUnreadTracker.markItem(key);
       if (!keys.length) return;
       state.mobileActivityRenderedSignature = "";
-      invalidateMapSourceCache();
+      invalidateMapSourceCache({ nativeBase: false });
       refreshMobileMapSources({ force: true });
       updateMobileActivityUnreadBadge();
       renderMobileActivitySheet();
@@ -16748,7 +16778,7 @@
       const keys = mobileActivityUnreadTracker.markContent(type, slug);
       if (!keys.length) return;
       state.mobileActivityRenderedSignature = "";
-      invalidateMapSourceCache();
+      invalidateMapSourceCache({ nativeBase: false });
       refreshMobileMapSources({ force: true });
       updateMobileActivityUnreadBadge();
       if (activitySheetEl?.classList.contains("open")) renderMobileActivitySheet();
