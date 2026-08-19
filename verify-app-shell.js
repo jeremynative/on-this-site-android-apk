@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260819-transient-map-updates-r173";
+const expectedBuild = "20260819-stable-profile-map-r174";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -334,11 +334,19 @@ if (!bundledMobileJs.includes("function enterMobileProfileMapMode(profile, optio
 if (!/function openMobileMapTap\(event\)\s*\{\s*if \(state\.profileMapMode\) return false;/.test(bundledMobileJs)) {
   throw new Error("APK public-map taps must not pass through contributor progress-map mode.");
 }
+if (!bundledMobileJs.includes('loginSheetEl?.classList.contains("open") && state.profileMapMode?.sheet === loginSheetEl')
+    || !bundledMobileJs.includes("dismissMobileSheet(loginSheetEl)")
+    || !bundledMobileJs.includes("state.profileMapMode?.profileKey === mapProfileKey")
+    || !bundledMobileJs.includes("dismissMobileSheet(profilesSheetEl)")) {
+  throw new Error("APK contributor/account profile controls must toggle the same open profile closed.");
+}
 if (!bundledMobileCss.includes("#profiles-sheet.profile-progress-active")
     || !bundledMobileCss.includes("#login-sheet.profile-progress-active")
+    || !bundledMobileCss.includes("body.mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header")
+    || !bundledMobileJs.includes('document.body.classList.toggle("mobile-contributor-sheet-open", contributorSheetOpen)')
     || !bundledMobileCss.includes("body.mobile-profile-map-mode .mobile-calendar-event-marker")
     || !bundledMobileCss.includes(".comment.contributor-card {")) {
-  throw new Error("APK contributor progress mode must keep the map/profile split and hide unrelated calendar markers.");
+  throw new Error("APK contributor progress mode must keep the map/profile split, stable viewport, and hide unrelated calendar markers.");
 }
 if (!bundledMobileJs.includes("async function ensurePublicProfileActivity(profile)")
     || !bundledMobileJs.includes("publicProfileActivityLoaded: new Set()")

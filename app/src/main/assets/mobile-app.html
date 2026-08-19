@@ -5587,13 +5587,13 @@
       body.android-device.tablet-landscape .app.panel-collapsed > .mobile-timeline,
       body.android-device.tablet-landscape .app.panel-collapsed > .list-panel { grid-row: 4; }
 
-    body.mobile-content-open .app header {
+    body.mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header {
       gap: 0;
       padding-top: max(7px, var(--app-top-safe));
       padding-bottom: 7px;
     }
 
-    body.mobile-content-open .app header > :not(.title-row) {
+    body.mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header > :not(.title-row) {
       display: none !important;
     }
 
@@ -36130,7 +36130,15 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         showBanner("Contributor profile is not public yet.");
         return;
       }
-      state.expandedMobileProfileKey = String(profile.id || profile.slug || profile.display_name || "");
+      const resolvedProfileKey = String(profile.id || profile.slug || profile.display_name || "");
+      const mapProfileKey = String(profile.id || profile.slug || profile.username || "");
+      if (profilesSheetEl?.classList.contains("open")
+        && state.expandedMobileProfileKey === resolvedProfileKey
+        && state.profileMapMode?.profileKey === mapProfileKey) {
+        dismissMobileSheet(profilesSheetEl);
+        return;
+      }
+      state.expandedMobileProfileKey = resolvedProfileKey;
       openSheet(profilesSheetEl);
       enterMobileProfileMapMode(profile);
       ensurePublicProfileActivity(profile).then(updated => {
@@ -36189,6 +36197,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function openContributorAccountSheet() {
+      if (loginSheetEl?.classList.contains("open") && state.profileMapMode?.sheet === loginSheetEl) {
+        dismissMobileSheet(loginSheetEl);
+        return;
+      }
       try {
         renderProfile();
       } catch (error) {
@@ -36335,9 +36347,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const detailOpen = detailEl?.classList.contains("open");
       detailEl?.toggleAttribute("inert", !detailOpen);
       detailEl?.setAttribute("aria-hidden", detailOpen ? "false" : "true");
+      const contributorSheetOpen = Boolean(loginSheetEl?.classList.contains("open") || profilesSheetEl?.classList.contains("open"));
       document.body.classList.toggle("mobile-content-open", Boolean(detailOpen || sheetOpen));
       document.body.classList.toggle("mobile-detail-open", Boolean(detailOpen));
       document.body.classList.toggle("mobile-sheet-open", Boolean(sheetOpen));
+      document.body.classList.toggle("mobile-contributor-sheet-open", contributorSheetOpen);
       window.requestAnimationFrame(() => {
         positionMobileMapActionButtons();
         state.map?.resize?.();
@@ -37215,6 +37229,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const toggle = event.target.closest("[data-toggle-mobile-profile]");
       if (toggle?.dataset.toggleMobileProfile) {
         const key = toggle.dataset.toggleMobileProfile;
+        if (state.expandedMobileProfileKey === key
+          && state.profileMapMode?.profileKey === key
+          && profilesSheetEl?.classList.contains("open")) {
+          dismissMobileSheet(profilesSheetEl);
+          return;
+        }
         state.expandedMobileProfileKey = state.expandedMobileProfileKey === key ? "" : key;
         renderProfiles();
         if (state.expandedMobileProfileKey) {

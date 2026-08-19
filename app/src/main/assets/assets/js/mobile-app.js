@@ -17228,7 +17228,15 @@
         showBanner("Contributor profile is not public yet.");
         return;
       }
-      state.expandedMobileProfileKey = String(profile.id || profile.slug || profile.display_name || "");
+      const resolvedProfileKey = String(profile.id || profile.slug || profile.display_name || "");
+      const mapProfileKey = String(profile.id || profile.slug || profile.username || "");
+      if (profilesSheetEl?.classList.contains("open")
+        && state.expandedMobileProfileKey === resolvedProfileKey
+        && state.profileMapMode?.profileKey === mapProfileKey) {
+        dismissMobileSheet(profilesSheetEl);
+        return;
+      }
+      state.expandedMobileProfileKey = resolvedProfileKey;
       openSheet(profilesSheetEl);
       enterMobileProfileMapMode(profile);
       ensurePublicProfileActivity(profile).then(updated => {
@@ -17287,6 +17295,10 @@
     }
 
     function openContributorAccountSheet() {
+      if (loginSheetEl?.classList.contains("open") && state.profileMapMode?.sheet === loginSheetEl) {
+        dismissMobileSheet(loginSheetEl);
+        return;
+      }
       try {
         renderProfile();
       } catch (error) {
@@ -17433,9 +17445,11 @@
       const detailOpen = detailEl?.classList.contains("open");
       detailEl?.toggleAttribute("inert", !detailOpen);
       detailEl?.setAttribute("aria-hidden", detailOpen ? "false" : "true");
+      const contributorSheetOpen = Boolean(loginSheetEl?.classList.contains("open") || profilesSheetEl?.classList.contains("open"));
       document.body.classList.toggle("mobile-content-open", Boolean(detailOpen || sheetOpen));
       document.body.classList.toggle("mobile-detail-open", Boolean(detailOpen));
       document.body.classList.toggle("mobile-sheet-open", Boolean(sheetOpen));
+      document.body.classList.toggle("mobile-contributor-sheet-open", contributorSheetOpen);
       window.requestAnimationFrame(() => {
         positionMobileMapActionButtons();
         state.map?.resize?.();
@@ -18313,6 +18327,12 @@
       const toggle = event.target.closest("[data-toggle-mobile-profile]");
       if (toggle?.dataset.toggleMobileProfile) {
         const key = toggle.dataset.toggleMobileProfile;
+        if (state.expandedMobileProfileKey === key
+          && state.profileMapMode?.profileKey === key
+          && profilesSheetEl?.classList.contains("open")) {
+          dismissMobileSheet(profilesSheetEl);
+          return;
+        }
         state.expandedMobileProfileKey = state.expandedMobileProfileKey === key ? "" : key;
         renderProfiles();
         if (state.expandedMobileProfileKey) {
