@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260818-nearby-thumbnail-parity-r164";
+const expectedBuild = "20260818-startup-map-settle-r165";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -666,7 +666,24 @@ function requireBundledPattern(pattern, message) {
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
 requireText("LOADING_COVER_MINIMUM_MS = 1500", "Android loading cover must remain visible long enough to show its Long Island progress animation.");
 requireText('showLoadingCover("Loading On This Site");', "Android cold startup must initialize the native loading animation timer before the WebView can finish.");
-requireText("var onlineReady=!offline&&shell&&loaderHidden&&/\\\\d+\\\\s+listings[\\\\s\\\\S]*loaded\\\\./i.test(liveStatus);", "Android must hand off from the native cover once the live archive status confirms that listings loaded, even when the nearby feed has no site cards yet.");
+requireText("STARTUP_VISUAL_STABLE_MS = 900", "Android must keep the Long Island cover over late map state and camera updates for a final stable paint window.");
+requireText("app.classList.contains('mobile-map-initializing')", "Android startup readiness must wait for the in-map initialization shield to finish.");
+requireText("app.classList.contains('mobile-site-reveal-pending')", "Android startup readiness must wait for the intentional site reveal to finish behind the native cover.");
+requireText("app.classList.contains('mobile-site-reveal-settling')", "Android startup readiness must not expose the marker settling animation.");
+requireText("window.__nliNativeStartupGeometryRequested=true", "Android startup must begin detailed geometry hydration as soon as the compact archive text is ready.");
+requireText("Promise.resolve(hydrate()).catch(function(){return false;}).then(function(){window.__nliNativeStartupGeometryReady=true;})", "Android startup must share the existing geometry promise and record its bounded completion.");
+requireText("window.__nliNativeStartupDeferredRequested=true;window.__nliNativeStartupDeferredReady=false", "Android startup must pull the already-scheduled core timeline and event data forward behind the native cover without duplicating community requests.");
+requireText("window.__nliNativeStartupDeferredReady=true", "Android startup must wait until its one shared core-data request settles before uncovering the map.");
+requireText("archiveTextReady&&geometryReady&&deferredReady&&mapUiReady", "Android must require loaded archive text, hydrated geometry, core event data, and a settled map viewport before handing off from the native cover.");
+requireText("nativeMapController.isStartupVisualStable(STARTUP_VISUAL_STABLE_MS)", "Android readiness probes must include native style, viewport, state, and camera stability.");
+requireText("var archiveReady=offline&&!!document.querySelector('.offline-map-index')", "Offline startup must keep the Long Island cover until the saved map index and region controls are fully rendered.");
+if (!nativeMapController.includes("void beginStartupVisualTracking()")
+    || !nativeMapController.includes("boolean isStartupVisualStable(long stableWindowMs)")
+    || !nativeMapController.includes("void finishStartupVisualTracking()")
+    || !nativeMapController.includes("if (!usingOnlineArchive) startupStateReady = true;")
+    || !nativeMapController.includes("markStartupVisualChange();")) {
+  throw new Error("Native map startup must track late state, viewport, moving-feature, and camera changes behind the Long Island cover.");
+}
 requireText("loadingOutlineReveal.postOnAnimation(loadingOutlineRevealFrame)", "Android loading cover must animate even when the system animator scale is disabled.");
 requireText("loadingOutlineReveal.setClipBounds(new Rect(0, 0, revealedWidth, height))", "Android Long Island loader must reveal from left to right without stretching the graphic.");
 if (source.includes("loadingProgressFill") || source.includes("progressTrack")) {
@@ -1014,7 +1031,7 @@ requireText('String bundledUrl = OFFLINE_BASE_URL + "mobile-app-live.html?"', "A
 requireText('"/app/offline-app.html".equals(path)', "Android shell must serve the offline document directly from APK assets.");
 requireText('"/app/mobile-app-live.html".equals(path)', "Android native map must serve the full bundled shell from the intercepted app-origin path.");
 requireText("OFFLINE_RENDER_MAX_ATTEMPTS", "Android shell must bound its offline paint checks.");
-requireText("body.innerText.trim().length>20?'painted':'waiting'", "Android shell must verify visible offline content before uncovering the WebView.");
+requireText("return app&&archiveReady?'painted':'waiting'", "Android shell must verify the complete saved map index instead of generic body text before uncovering the WebView.");
 requireText("OFFLINE_RENDER_DEADLINE_MS", "Android shell must retain a native deadline when a failed renderer never returns JavaScript callbacks.");
 requireText("offlineRenderDeadline", "Android shell must escape a permanently unavailable WebView renderer.");
 requireText("showWebViewCompatibilityFallback", "Android shell must provide an app-owned fallback when WebView cannot render.");

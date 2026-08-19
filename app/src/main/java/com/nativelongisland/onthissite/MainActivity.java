@@ -88,7 +88,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260818-nearby-thumbnail-parity-r164";
+    static final String APP_VERSION = "20260818-startup-map-settle-r165";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -104,6 +104,7 @@ public class MainActivity extends Activity {
     private static final long LOADING_OUTLINE_COMPLETION_MS = 220;
     private static final long LOADING_OUTLINE_COMPLETE_HOLD_MS = 120;
     private static final float LOADING_OUTLINE_PRE_READY_MAX = 0.90f;
+    private static final long STARTUP_VISUAL_STABLE_MS = 900;
     private static final int OFFLINE_RENDER_MAX_ATTEMPTS = 12;
     private static final long OFFLINE_RENDER_DEADLINE_MS = 12000;
     private static final int COMMENT_PHOTO_READ_MAX_ATTEMPTS = 3;
@@ -293,11 +294,23 @@ public class MainActivity extends Activity {
             "(function(){try{"
                 + "var app=document.querySelector('.app');"
                 + "var body=document.body;"
-                + "return app&&body&&body.innerText&&body.innerText.trim().length>20?'painted':'waiting';"
+                + "var offline=body&&body.classList.contains('offline-text-mode');"
+                + "var status=(document.getElementById('status')||{}).textContent||'';"
+                + "var archiveReady=offline&&!!document.querySelector('.offline-map-index')&&!!document.querySelector('[data-offline-region]')&&/\\d+\\s+(?:saved|mapped) places/i.test(status);"
+                + "return app&&archiveReady?'painted':'waiting';"
                 + "}catch(error){return 'waiting';}})();",
             value -> {
                 if (webView == null || !loadingBundledFallback) return;
                 if (value != null && value.contains("painted")) {
+                    requestNativeMapViewportSync(0L);
+                    if (nativeMapEnabled
+                        && nativeMapController != null
+                        && !nativeMapController.isStartupVisualStable(STARTUP_VISUAL_STABLE_MS)
+                        && offlineRenderProbeAttempts < OFFLINE_RENDER_MAX_ATTEMPTS) {
+                        offlineRenderProbeAttempts += 1;
+                        startupHandler.postDelayed(revealBundledFallback, APP_READINESS_RETRY_DELAY_MS);
+                        return;
+                    }
                     appShellLoaded = true;
                     hideLoadingCover();
                     return;
@@ -944,6 +957,7 @@ public class MainActivity extends Activity {
             .withEndAction(() -> {
                 loadingCover.setVisibility(View.GONE);
                 stopLoadingOutlineReveal();
+                if (nativeMapController != null) nativeMapController.finishStartupVisualTracking();
             })
             .start();
     }
@@ -957,6 +971,7 @@ public class MainActivity extends Activity {
         if (startNewPass) {
             loadingCoverGeneration += 1;
             loadingCoverShownAt = System.currentTimeMillis();
+            if (nativeMapController != null) nativeMapController.beginStartupVisualTracking();
         }
         if (loadingCoverDetail != null) loadingCoverDetail.setVisibility(View.GONE);
         if (loadingCoverActions != null) loadingCoverActions.setVisibility(View.GONE);
@@ -1295,13 +1310,43 @@ public class MainActivity extends Activity {
                 // Once archive content is present, the page's own map
                 // initialization shield can safely replace the native cover.
                 + "var liveStatus=((document.querySelector('.mobile-header-instruction')||{}).textContent||'').trim();"
-                + "var onlineReady=!offline&&shell&&loaderHidden&&/\\d+\\s+listings[\\s\\S]*loaded\\./i.test(liveStatus);"
+                + "var app=document.querySelector('.app');"
+                + "var archiveTextReady=/\\d+\\s+listings[\\s\\S]*loaded\\./i.test(liveStatus);"
+                + "if(!offline&&shell&&archiveTextReady&&!window.__nliNativeStartupGeometryRequested){"
+                    + "window.__nliNativeStartupGeometryRequested=true;window.__nliNativeStartupGeometryReady=false;"
+                    + "var hydrate=typeof hydrateMobileSiteGeometry==='function'?hydrateMobileSiteGeometry:null;"
+                    + "if(!hydrate){window.__nliNativeStartupGeometryReady=true;}else{Promise.resolve(hydrate()).catch(function(){return false;}).then(function(){window.__nliNativeStartupGeometryReady=true;});}}"
+                + "if(!offline&&shell&&archiveTextReady&&!window.__nliNativeStartupDeferredRequested&&typeof loadDeferredData==='function'){"
+                    + "window.__nliNativeStartupDeferredRequested=true;window.__nliNativeStartupDeferredReady=false;"
+                    + "Promise.resolve(loadDeferredData({includeCommunity:false})).catch(function(){return false;}).then(function(){window.__nliNativeStartupDeferredReady=true;});}"
+                + "var geometryStatus=app&&app.getAttribute('data-site-geometry');"
+                + "var geometryReady=offline||window.__nliNativeStartupGeometryReady===true||geometryStatus==='loaded'||geometryStatus==='deferred';"
+                + "var deferredReady=offline||window.__nliNativeStartupDeferredReady===true;"
+                + "var mapBusy=!!(app&&(app.classList.contains('mobile-map-initializing')||app.classList.contains('mobile-site-reveal-pending')||app.classList.contains('mobile-site-reveal-settling')));"
+                + "var mapBox=document.getElementById('map');var mapRect=mapBox&&mapBox.getBoundingClientRect();"
+                + "var mapUiReady=!!(mapRect&&mapRect.width>2&&mapRect.height>2&&!mapBusy&&window.__nliNativeMapLayoutInstalled);"
+                + "var onlineReady=!offline&&shell&&loaderHidden&&archiveTextReady&&geometryReady&&deferredReady&&mapUiReady;"
                 + "return offlineReady||onlineReady?'ready':shell?'starting':'empty';"
                 + "}catch(error){return 'empty:'+String(error&&error.message||error);}})();",
             value -> {
                 if (appShellLoaded || !url.equals(appReadinessProbeUrl)) return;
                 if (BuildConfig.DEBUG) logLoadedAppState();
+                if (BuildConfig.DEBUG && nativeMapController != null) {
+                    Log.i(LOG_TAG, "Startup readiness " + value + " native=" + nativeMapController.startupVisualStatus());
+                }
                 if (value != null && value.contains("ready")) {
+                    requestNativeMapViewportSync(0L);
+                    if (nativeMapEnabled
+                        && nativeMapController != null
+                        && !nativeMapController.isStartupVisualStable(STARTUP_VISUAL_STABLE_MS)
+                        && appReadinessProbeAttempts < APP_READINESS_MAX_ATTEMPTS) {
+                        appReadinessProbeAttempts += 1;
+                        startupHandler.postDelayed(
+                            () -> probeLoadedAppReadiness(url),
+                            APP_READINESS_RETRY_DELAY_MS
+                        );
+                        return;
+                    }
                     appShellLoaded = true;
                     appReadinessProbeActive = false;
                     dispatchPendingPlantPhoto();
@@ -1858,6 +1903,7 @@ public class MainActivity extends Activity {
         appReadinessProbeUrl = null;
         appReadinessProbeAttempts = 0;
         offlineRenderProbeAttempts = 0;
+        if (nativeMapController != null) nativeMapController.beginStartupVisualTracking();
         showLoadingCover("Opening saved map...");
         Log.w(LOG_TAG, "Loading bundled mobile archive fallback: " + reason);
         webView.stopLoading();

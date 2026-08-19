@@ -214,6 +214,11 @@ final class NativeMapController {
     private CameraPosition stableCamera;
     private long cameraIntentRevision;
     private long viewportRestoreRevision;
+    private boolean startupVisualTracking = true;
+    private boolean startupStateReady;
+    private boolean startupViewportReady;
+    private boolean startupMovingFeaturesSeen;
+    private long lastStartupVisualChangeAt = SystemClock.uptimeMillis();
 
     NativeMapController(Activity activity, Bundle savedInstanceState, Listener listener) {
         this.activity = activity;
@@ -339,6 +344,38 @@ final class NativeMapController {
         return styleReady;
     }
 
+    void beginStartupVisualTracking() {
+        startupVisualTracking = true;
+        startupStateReady = false;
+        startupViewportReady = container.getVisibility() == View.VISIBLE
+            && container.getWidth() > 1
+            && container.getHeight() > 1;
+        startupMovingFeaturesSeen = false;
+        lastStartupVisualChangeAt = SystemClock.uptimeMillis();
+    }
+
+    boolean isStartupVisualStable(long stableWindowMs) {
+        if (!styleReady || !startupStateReady || !startupViewportReady) return false;
+        long stableFor = SystemClock.uptimeMillis() - lastStartupVisualChangeAt;
+        return stableFor >= Math.max(0L, stableWindowMs);
+    }
+
+    String startupVisualStatus() {
+        return "style=" + styleReady
+            + ",state=" + startupStateReady
+            + ",viewport=" + startupViewportReady
+            + ",moving=" + startupMovingFeaturesSeen
+            + ",stableMs=" + Math.max(0L, SystemClock.uptimeMillis() - lastStartupVisualChangeAt);
+    }
+
+    void finishStartupVisualTracking() {
+        startupVisualTracking = false;
+    }
+
+    private void markStartupVisualChange() {
+        if (startupVisualTracking) lastStartupVisualChangeAt = SystemClock.uptimeMillis();
+    }
+
     void setVisible(boolean visible) {
         container.setVisibility(visible ? View.VISIBLE : View.GONE);
         if (visible) mapView.invalidate();
@@ -374,6 +411,12 @@ final class NativeMapController {
             || currentParams.height != safeHeight
             || currentParams.leftMargin != safeLeft
             || currentParams.topMargin != safeTop;
+        boolean nextStartupViewportReady = visible && safeWidth > 1 && safeHeight > 1;
+        if (startupVisualTracking
+            && (boundsChanged || nextStartupViewportReady != startupViewportReady)) {
+            markStartupVisualChange();
+        }
+        startupViewportReady = nextStartupViewportReady;
         // Resizing a transparent WebView overlay while a native drag or its
         // inertia is still settling must not restore the ACTION_DOWN camera.
         // MapLibre already preserves its center through a viewport resize.
@@ -530,6 +573,7 @@ final class NativeMapController {
     private void loadNativeStyle(boolean preferOnlineArchive) {
         if (map == null) return;
         styleReady = false;
+        markStartupVisualChange();
         usingOnlineArchive = preferOnlineArchive;
         lastStateSignature = "";
         if (currentStateJson != null) pendingStateJson = currentStateJson;
@@ -855,6 +899,8 @@ final class NativeMapController {
                     textOffset(new Float[] { 0f, -2.3f }), textAllowOverlap(true), textIgnorePlacement(true)
                 ));
             styleReady = true;
+            if (!usingOnlineArchive) startupStateReady = true;
+            markStartupVisualChange();
             applyModeVisibility(style);
             if (pendingStateJson != null) {
                 String stateJson = pendingStateJson;
@@ -938,6 +984,15 @@ final class NativeMapController {
                 collapseMapCredit();
             }
             Style style = map.getStyle();
+            JSONObject candidateSitePoints = applyBundledSiteIconKeys(payload.optJSONObject("sitePoints"));
+            boolean nextStartupStateReady = featureCount(candidateSitePoints) > 0;
+            boolean startupStateChanged = !startupStateReady
+                || signature.isEmpty()
+                || !signature.equals(lastStateSignature);
+            startupStateReady = startupStateReady || nextStartupStateReady;
+            if (startupVisualTracking && nextStartupStateReady && startupStateChanged) {
+                markStartupVisualChange();
+            }
             if (!signature.isEmpty() && signature.equals(lastStateSignature)) {
                 applyModeVisibility(style);
                 applyCamera(payload.optJSONObject("camera"));
@@ -945,7 +1000,7 @@ final class NativeMapController {
             }
             setTerritorySource(style, payload.optJSONObject("territories"));
             setSource(style, SITE_POLYGON_SOURCE_ID, payload.optJSONObject("sitePolygons"));
-            JSONObject sitePoints = applyBundledSiteIconKeys(payload.optJSONObject("sitePoints"));
+            JSONObject sitePoints = candidateSitePoints;
             setSource(style, SITE_POINT_SOURCE_ID, sitePoints);
             setSource(style, LABEL_SOURCE_ID, withBundledTerritoryLabels(payload.optJSONObject("labels")));
             setSource(style, BIOGRAPHY_PATH_SOURCE_ID, payload.optJSONObject("biographyPaths"));
@@ -979,6 +1034,15 @@ final class NativeMapController {
     void updateMovingFeatures(String featuresJson) {
         if (featuresJson == null || featuresJson.isEmpty() || featuresJson.length() > 256 * 1024) return;
         movingFeaturesJson = featuresJson;
+        if (startupVisualTracking && !startupMovingFeaturesSeen) {
+            try {
+                JSONArray features = new JSONObject(featuresJson).optJSONArray("features");
+                if (features != null && features.length() > 0) {
+                    startupMovingFeaturesSeen = true;
+                    markStartupVisualChange();
+                }
+            } catch (Exception ignored) {}
+        }
         if (nativeGestureInProgress()) return;
         long elapsed = SystemClock.uptimeMillis() - lastMovingFeatureApplyAt;
         mapView.removeCallbacks(applyLatestMovingFeaturesTask);
@@ -1155,6 +1219,7 @@ final class NativeMapController {
             .build();
         stableCamera = desired;
         if (sameCamera(current, desired)) return;
+        markStartupVisualChange();
         cameraIntentRevision += 1;
         cameraGestureAwaitingIdle = false;
         suppressNextCameraCallback = true;
