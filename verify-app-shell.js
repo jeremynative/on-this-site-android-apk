@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260818-startup-map-settle-r165";
+const expectedBuild = "20260818-startup-controls-settle-r166";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -667,14 +667,17 @@ requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be 
 requireText("LOADING_COVER_MINIMUM_MS = 1500", "Android loading cover must remain visible long enough to show its Long Island progress animation.");
 requireText('showLoadingCover("Loading On This Site");', "Android cold startup must initialize the native loading animation timer before the WebView can finish.");
 requireText("STARTUP_VISUAL_STABLE_MS = 900", "Android must keep the Long Island cover over late map state and camera updates for a final stable paint window.");
+requireText("STARTUP_DOM_STABLE_MS = 650", "Android must keep the Long Island cover over the final promo controls and unread-count update.");
 requireText("app.classList.contains('mobile-map-initializing')", "Android startup readiness must wait for the in-map initialization shield to finish.");
 requireText("app.classList.contains('mobile-site-reveal-pending')", "Android startup readiness must wait for the intentional site reveal to finish behind the native cover.");
 requireText("app.classList.contains('mobile-site-reveal-settling')", "Android startup readiness must not expose the marker settling animation.");
 requireText("window.__nliNativeStartupGeometryRequested=true", "Android startup must begin detailed geometry hydration as soon as the compact archive text is ready.");
 requireText("Promise.resolve(hydrate()).catch(function(){return false;}).then(function(){window.__nliNativeStartupGeometryReady=true;})", "Android startup must share the existing geometry promise and record its bounded completion.");
-requireText("window.__nliNativeStartupDeferredRequested=true;window.__nliNativeStartupDeferredReady=false", "Android startup must pull the already-scheduled core timeline and event data forward behind the native cover without duplicating community requests.");
-requireText("window.__nliNativeStartupDeferredReady=true", "Android startup must wait until its one shared core-data request settles before uncovering the map.");
-requireText("archiveTextReady&&geometryReady&&deferredReady&&mapUiReady", "Android must require loaded archive text, hydrated geometry, core event data, and a settled map viewport before handing off from the native cover.");
+requireText("window.__nliNativeStartupDeferredRequested=true;window.__nliNativeStartupDeferredReady=false", "Android startup must pull the already-scheduled deferred data pass forward behind the native cover without duplicating requests.");
+requireText("loadDeferredData({includeCommunity:true})", "Android startup must include the existing community badge and promo-control refresh before uncovering the map.");
+requireText("window.__nliNativeStartupDeferredReady=true", "Android startup must wait until its one shared deferred-data request settles before uncovering the map.");
+requireText("window.__nliNativeStartupDomSignature", "Android startup must track the visible promo controls and unread badges until their DOM state settles.");
+requireText("archiveTextReady&&geometryReady&&deferredReady&&mapUiReady&&startupDomStable", "Android must require loaded archive text, hydrated geometry, deferred data, a settled map viewport, and stable controls before handing off from the native cover.");
 requireText("nativeMapController.isStartupVisualStable(STARTUP_VISUAL_STABLE_MS)", "Android readiness probes must include native style, viewport, state, and camera stability.");
 requireText("var archiveReady=offline&&!!document.querySelector('.offline-map-index')", "Offline startup must keep the Long Island cover until the saved map index and region controls are fully rendered.");
 if (!nativeMapController.includes("void beginStartupVisualTracking()")
