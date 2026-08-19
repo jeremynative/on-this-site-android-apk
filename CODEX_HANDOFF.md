@@ -1,5 +1,27 @@
 # Android APK — Codex Handoff
 
+## August 18 Android 16 Back navigation repair
+
+- Root cause: API 36 apps on Android 16 no longer receive the legacy `Activity.onBackPressed()` callback. The existing panel-first JavaScript handler and native exit dialog were correct but unreachable on the S25 Ultra.
+- `MainActivity` now registers Android's supported `OnBackInvokedCallback` on API 33+, routes it through the same panel-first handler used on older Android versions, and unregisters it during activity destruction. The legacy override remains for API 23–32.
+- Build marker is `20260818-android16-back-r168`. The shell verifier now requires platform callback registration, lifecycle cleanup, and the existing web-layer/exit-dialog contract.
+- `node verify-app-shell.js`, `git diff --check`, `assembleDebug`, and `lintDebug` pass.
+- Exact final QA was installed separately as `com.nativelongisland.onthissite.qa` over wireless ADB. On the S25, Back closed Ma's House while keeping the QA activity foregrounded, then dismissed the remaining search/panel state, then displayed the native `Exit app?` dialog with Cancel and Exit. A cleared-data cold start also reached the dialog after collapsing the default bottom panel. No fatal exception or ANR was logged.
+- QA was removed. Signed production `0.1.578` and its data remain untouched and foregrounded; device `stay_on_while_plugged_in` remains restored to `15`.
+
+Current branch is `fix/android-back-dispatch` based on `origin/main` at `78be3e7`. Safest next action is to commit, push, publish the next signed Obtainium release, then upload that exact workflow AAB to Play closed testing after confirming how Play handles the already-reviewing 0.1.578 release.
+
+## August 18 Google Play 0.1.578 submission and S25 install
+
+- Uploaded exact workflow `32205332662` artifact `on-this-site-play-bundle` (`app-release.aab`, 23,333,609 bytes, SHA-256 `481DB13A95961B907E54A356E68FD05C7A1366779761FEE36C12A1079073EDEC`) to Google Play closed-testing Alpha at 100% rollout.
+- Play recognized `578 (0.1.578)`, target SDK 36, four ABIs, the embedded ReTrace mapping, zero lost devices in every form-factor category, and an estimated 11.7 MB new-install download. The only warning is optional native debug symbols.
+- Publishing Overview confirmed `1 change sent for review` and currently shows `Changes in review`. The prior 0.1.568 release remains available to testers until review completes; 0 testers are currently opted in.
+- Installed exact public APK SHA-256 `93C2A3CC6F2140AE73A5D33DE40D7B9A69984BC7AEF5952ED3E6A440603F22F7` over the S25 Ultra's 0.1.577 install. Package state verified version code/name `578` / `0.1.578`, preserved first-install time `2026-06-01 10:41:17`, and update time `2026-08-18 21:50:21`.
+- The S25 USB connection became unavailable after launch evidence was captured on-device, before it could be pulled. On a brief reconnect, the original `stay_on_while_plugged_in` value `15` was restored and read back successfully. Wireless ADB at `192.168.50.193:5555` then enabled the complete smoke pass: exact 0.1.578 cold-launched in 680 ms, rendered 439 listings / 93 wiki articles, opened Ma's House, and remained alive with no app fatal exception or ANR.
+- The smoke pass confirmed one pre-existing APK regression: Android Back leaves the app for the prior Android activity instead of closing an open site panel. After closing the panel with its X, Back also leaves without showing the required exit-confirmation dialog. This needs a focused lifecycle/back-dispatch fix before the next APK release; it is not a crash and does not block the current Play review.
+
+Current branch is `optimize/apk-size-startup` at `b68be74`; its remote feature branch is gone because PR `#15` merged to main as `78be3e7f5d2d63870bb3eef43b0c23a84d4c426b`. Safest next action is to wait for Play review, then verify the Alpha tester-facing version is 0.1.578. Implement and physically verify Android Back panel-closing and exit-confirmation behavior as the next focused APK change; the S25 stay-on setting is already restored.
+
 ## August 18 APK size reduction and modular offline archive
 
 - Release packaging now excludes four redundant assets: the 9.7 MB legacy self-contained mobile shell, its 2.9 MB bundled duplicate, the desktop-only 1.15 MB map runtime, and the superseded 3.85 MB full-resolution land mask. Their maintained source files remain in the repository; only Android packaging excludes them.
