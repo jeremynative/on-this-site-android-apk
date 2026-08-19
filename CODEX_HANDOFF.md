@@ -1,5 +1,16 @@
 # Android APK — Codex Handoff
 
+## August 18 APK size reduction and modular offline archive
+
+- Release packaging now excludes four redundant assets: the 9.7 MB legacy self-contained mobile shell, its 2.9 MB bundled duplicate, the desktop-only 1.15 MB map runtime, and the superseded 3.85 MB full-resolution land mask. Their maintained source files remain in the repository; only Android packaging excludes them.
+- The legacy `/mobile-app.html` fallback URL now reuses the current modular `mobile-app-live.html` shell. Cold airplane-mode testing initially exposed two Directus-only configuration requests that blocked that modular shell; APK snapshot mode now bypasses those requests and loads its packaged site, geometry, wiki, and timeline indexes directly.
+- Release builds now enable R8 code optimization and resource shrinking with explicit WebView JavaScript-interface keep rules. A non-debuggable `optimizedQa` build type provides future real-device coverage of the same shrinker behavior without replacing the production package.
+- Signed-release-equivalent universal ARM size fell from 33,257,124 bytes to 27,032,583 bytes: 6,224,541 bytes / 18.72% smaller. The 5,350,542-byte PMTiles offline basemap, modular shell, site index, lightweight land mask, both ARM ABIs, and MapLibre native renderer remain packaged.
+- Physical iPlay QA passed cleared-data cold starts for the minified build in both validated-Wi-Fi and airplane/offline modes. Online rendered the 439-listing/93-wiki live map; offline rendered the 439-listing/93-wiki saved archive and native bundled map. Menu/panel interaction and a JavaScript-to-Android location bridge call remained functional. No AndroidRuntime fatal or ANR was logged.
+- `node verify-app-shell.js`, `node verify-google-play-readiness.js`, JavaScript syntax, `git diff --check`, `lintRelease`, `assembleRelease`, and the exact APK entry/mapping audit pass. The CDP-only offline audit scripts were not applicable without their local Chrome debugging endpoint; their real-device equivalents passed.
+
+Current branch is `optimize/apk-size-startup`, based on `origin/main` at `cb94e8f` / public `apk-577`. Build marker is `20260818-apk-size-offline-r167`. Publish through the signed GitHub workflow, verify the public APK size/hash, then install it over production without clearing app data.
+
 ## August 18 startup map settled-frame handoff and APK size audit
 
 - Follow-up build marker `20260818-startup-controls-settle-r166` closes the last signed-release gap found after `0.1.576`: the Daily map feature dock and activity/notification badge totals could still refresh during the first visible second. Startup now shares the app's existing full deferred-data promise, waits for its promo/badge refresh, and requires that DOM signature to remain stable before the cover fades. This does not add duplicate requests.

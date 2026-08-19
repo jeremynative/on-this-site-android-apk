@@ -1,9 +1,10 @@
 const fs = require("fs");
 
-const expectedBuild = "20260818-startup-controls-settle-r166";
+const expectedBuild = "20260818-apk-size-offline-r167";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
+const gradleBuildPath = "app/build.gradle";
 const bundledAppPath = "app/src/main/assets/mobile-app.html";
 const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
 const lightweightOfflineAppPath = "app/src/main/assets/offline-app.html";
@@ -47,6 +48,7 @@ const lightweightOfflineApp = fs.readFileSync(lightweightOfflineAppPath, "utf8")
 const offlineArchiveUtils = fs.readFileSync(offlineArchiveUtilsPath, "utf8");
 const source = fs.readFileSync(mainActivityPath, "utf8").replace(/\r\n/g, "\n");
 const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
+const gradleBuild = fs.readFileSync(gradleBuildPath, "utf8");
 const manifest = fs.readFileSync(manifestPath, "utf8");
 const appBridge = fs.readFileSync(appBridgePath, "utf8");
 const nativeMapController = fs.readFileSync(nativeMapControllerPath, "utf8").replace(/\r\n/g, "\n");
@@ -1089,13 +1091,23 @@ requireText("appShellLoaded = true;", "Android shell must remember when the app 
 requireText('"directus.nativelongisland.com".equalsIgnoreCase(host)', "Android shell must treat the VPS-hosted app shell as an archive host.");
 requireText('"nativelongisland.com".equalsIgnoreCase(host) && path != null && path.startsWith("/assets/")', "Android shell must not intercept Directus root asset URLs as bundled app assets.");
 requireText('path.startsWith("/app/assets/")', "Android shell must serve VPS app-shell assets from the bundled APK when available.");
-requireText('"/app/long-island-land-mask.geojson".equals(path)', "Android shell must serve the VPS app-shell land mask from the bundled APK when available.");
 requireText('"/app/long-island-land-mask-lite.json".equals(path)', "Android shell must serve the compressible lightweight VPS land mask from the bundled APK.");
 requireText("loadingBundledFallback && \"/app/mobile-app-live.html\".equals(path)", "Android shell must not intercept the live mobile archive unless the fallback is active.");
 requireText("loadingBundledFallback && \"/mobile-app.html\".equals(path)", "Android shell must serve the full bundled archive when live Directus startup falls back.");
 requireText("loadingBundledFallback && \"/app/offline-app.html\".equals(path)", "Android shell must serve the lightweight offline archive through its bundled HTTPS origin.");
-requireText('assetName = "mobile-app.html";', "Android shell must serve embedded mobile data for the full archive fallback.");
-requireText("mobile-app.html", "Android shell must include the bundled mobile app fallback asset.");
+requireText('assetName = "mobile-app-live.html";', "Android shell must reuse the modular bundled shell for the legacy fallback URL.");
+for (const excludedAsset of ["mobile-app.html", "mobile-app-live-bundled.html", "long-island-land-mask.geojson", "native-long-island-map.js"]) {
+  if (!gradleBuild.includes(excludedAsset)) throw new Error(`Release packaging must exclude redundant asset ${excludedAsset}.`);
+}
+if (!gradleBuild.includes("minifyEnabled = true")
+    || !gradleBuild.includes("shrinkResources = true")
+    || !gradleBuild.includes('proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"')) {
+  throw new Error("Release packaging must retain R8 code and resource shrinking with the project keep rules.");
+}
+if (!bundledMobileJs.includes("const apkSnapshotMode = isApkSnapshotMode();")
+    || !bundledMobileJs.includes("apkSnapshotMode\n            ? Promise.resolve({ data: [] })")) {
+  throw new Error("The modular APK snapshot must not block cold offline startup on Directus-only configuration requests.");
+}
 requireText("mobile-app-live.html", "Android shell must include the lightweight Directus-backed mobile app fallback asset.");
 if (!lightweightOfflineApp.includes("offline-text-mode")
     || !lightweightOfflineApp.includes("offline-map-index")
@@ -1161,7 +1173,6 @@ if (!offlineParityAudit.includes("sharedStylesheet")
 if (lightweightOfflineApp.length > 180000) {
   throw new Error("Lightweight APK fallback must remain small enough for fast no-signal startup.");
 }
-requireText("long-island-land-mask.geojson", "Android shell must include the bundled land mask fallback asset.");
 requireText("long-island-land-mask-lite.json", "Android shell must include the lightweight land mask asset.");
 requireText("BuildConfig.MAPBOX_TOKEN", "Android shell must inject the Mapbox token from build configuration.");
 requireText('"assets/js/mobile-app.js".equals(assetName)', "Android shell must inject the build-time Mapbox token into its local mobile runtime asset.");

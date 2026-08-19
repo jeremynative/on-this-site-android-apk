@@ -33,6 +33,9 @@ android {
         // MapLibre reads PMTiles by byte range. Keeping these archives
         // uncompressed inside the APK makes asset:// random access reliable.
         noCompress += ["pmtiles"]
+        // Keep source snapshots available for parity verification without
+        // shipping duplicate self-contained shells or desktop-only map files.
+        ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~:mobile-app.html:mobile-app-live-bundled.html:long-island-land-mask.geojson:native-long-island-map.js"
     }
 
     defaultConfig {
@@ -66,8 +69,9 @@ android {
             }
         }
         release {
-            minifyEnabled = false
-            shrinkResources = false
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             // Obtainium receives one compact universal ARM APK. CI overrides
             // RELEASE_ABIS for the Play AAB so Google can continue serving
             // x86/x86_64 devices through per-device bundle splits.
@@ -77,6 +81,13 @@ android {
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.release
             }
+        }
+        optimizedQa {
+            initWith release
+            applicationIdSuffix = ".qa"
+            versionNameSuffix = "-optimized-qa"
+            signingConfig = signingConfigs.debug
+            debuggable = false
         }
     }
 }

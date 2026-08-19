@@ -3408,12 +3408,17 @@
       let siteGeometryRows;
       let layersResponse;
       let supportResponse;
+      const apkSnapshotMode = isApkSnapshotMode();
       try {
         [sitesResponse, siteGeometryRows, layersResponse, supportResponse] = await Promise.all([
           fetchMobileSiteIndexRows().then(data => ({ data })),
           fetchMobileSiteCenterRows(),
-          fetchJson("/items/map_layers?limit=1&filter[slug][_eq]=native-long-island-base-map&fields=id,title,slug,layer_type,style_json,visible_by_default,description", { cacheKey: "mobile-layers-base", ttl: 300000, fresh: false }),
-          fetchJson(`/items/project_support_settings?limit=1&filter[key][_eq]=native-long-island&fields=${SUPPORT_FIELDS}`, { cacheKey: "mobile-support", ttl: 300000, fresh: false }).catch(() => ({ data: [] }))
+          apkSnapshotMode
+            ? Promise.resolve({ data: [] })
+            : fetchJson("/items/map_layers?limit=1&filter[slug][_eq]=native-long-island-base-map&fields=id,title,slug,layer_type,style_json,visible_by_default,description", { cacheKey: "mobile-layers-base", ttl: 300000, fresh: false }),
+          apkSnapshotMode
+            ? Promise.resolve({ data: [] })
+            : fetchJson(`/items/project_support_settings?limit=1&filter[key][_eq]=native-long-island&fields=${SUPPORT_FIELDS}`, { cacheKey: "mobile-support", ttl: 300000, fresh: false }).catch(() => ({ data: [] }))
         ]);
       } catch (error) {
         if (isNativeAndroidApp() && !/\/mobile-app\.html$/i.test(location.pathname || "")) {
