@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260819-stable-profile-map-r174";
+const expectedBuild = "20260819-location-longpress-r175";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -390,6 +390,19 @@ if (!bundledMobileJs.includes("LOCATION_CONTROL_MAX_SCOPE_DISTANCE_MILES = 75")
     || !bundledMobileCss.includes(".banner.centered")
     || !bundledMobileCss.includes("transform: translateY(-50%);")) {
   throw new Error("APK location controls must reject far-away coordinates, fit all of Long Island, and show the warning at screen center.");
+}
+
+if (!bundledMobileJs.includes("LOCATION_CONTROL_LONG_PRESS_MS = 600")
+    || !bundledMobileJs.includes("function installApkLocationControlLongPress()")
+    || !bundledMobileJs.includes("window.onAndroidLocationControlLongPress")
+    || !bundledMobileJs.includes('return "location-control";')
+    || !bundledMobileJs.includes('mobileMapLocateBtn.addEventListener("touchstart", startPress')
+    || !bundledMobileJs.includes('mobileMapLocateBtn.addEventListener("touchend", finishPress)')
+    || !bundledMobileJs.includes("function showApkLocationOverview")
+    || !bundledMobileJs.includes("suppressNextApkLocationControlClick")
+    || !bundledMobileJs.includes("Showing all of Long Island. Tap the location button to return to your location.")
+    || !bundledMobileCss.includes(".mobile-map-locate.is-long-pressing")) {
+  throw new Error("APK location control must show all of Long Island on a held press without firing the normal location tap.");
 }
 
 if (!bundledMobileJs.includes('document.addEventListener("click", closeMobileSheetFromControl, true);')
@@ -1436,10 +1449,10 @@ requireText('if (webTouchStartedOnOverlay)', "Android shell must cancel map forw
 if (/cacheAndroid(?:UiOverlay|MobilePromoAction|SearchResult)Tap/.test(source)) {
   throw new Error("Android shell must not retain the three redundant per-touch JavaScript bridge methods.");
 }
-const touchDispatchMatch = source.match(/private void handleWebViewTap[\s\S]*?private String mimeTypeForAsset/);
+const touchDispatchMatch = source.match(/private boolean handleWebViewTap[\s\S]*?private String mimeTypeForAsset/);
 const touchEvaluateCount = (touchDispatchMatch?.[0].match(/evaluateJavascript\(/g) || []).length;
-if (touchEvaluateCount !== 1) {
-  throw new Error(`Android touch dispatch has ${touchEvaluateCount} delayed JavaScript call sites; the optimized path must keep exactly one after the consolidated down probe.`);
+if (touchEvaluateCount !== 2) {
+  throw new Error(`Android touch dispatch has ${touchEvaluateCount} JavaScript call sites; it must keep one map-tap call plus the targeted location long-press call.`);
 }
 requireText("MotionEvent.ACTION_UP", "Android shell must only forward completed taps.");
 requireText("action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP", "Android shell must keep map drag move frames out of the tap bridge.");

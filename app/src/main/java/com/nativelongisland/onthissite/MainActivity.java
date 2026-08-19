@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260819-stable-profile-map-r174";
+    static final String APP_VERSION = "20260819-location-longpress-r175";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -220,6 +220,7 @@ public class MainActivity extends Activity {
     private float webTouchStartY;
     private long webTouchStartedAt;
     private boolean webTouchStartedOnOverlay;
+    private boolean webTouchStartedOnLocationControl;
     private boolean loadingBundledFallback;
     private boolean appShellLoaded;
     private boolean runtimePermissionPromptActive;
@@ -1647,21 +1648,33 @@ public class MainActivity extends Activity {
         return "<script>" + script + "</script>";
     }
 
-    private void handleWebViewTap(MotionEvent event) {
-        if (webView == null || event == null) return;
+    private boolean handleWebViewTap(MotionEvent event) {
+        if (webView == null || event == null) return false;
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
             webTouchStartX = event.getX();
             webTouchStartY = event.getY();
             webTouchStartedAt = System.currentTimeMillis();
             webTouchStartedOnOverlay = false;
+            webTouchStartedOnLocationControl = false;
             cacheAndroidTouchProbe(event, "down");
-            return;
+            return false;
         }
-        if (event.getActionMasked() != MotionEvent.ACTION_UP) return;
+        if (event.getActionMasked() != MotionEvent.ACTION_UP) return false;
         float dx = event.getX() - webTouchStartX;
         float dy = event.getY() - webTouchStartY;
-        if ((dx * dx + dy * dy) > 144f) return;
-        if (System.currentTimeMillis() - webTouchStartedAt > 700) return;
+        long touchDuration = System.currentTimeMillis() - webTouchStartedAt;
+        boolean startedOnLocationControl = webTouchStartedOnLocationControl;
+        webTouchStartedOnLocationControl = false;
+        if ((dx * dx + dy * dy) > 144f) return false;
+        if (startedOnLocationControl && touchDuration >= 600L) {
+            webTouchStartedOnOverlay = false;
+            webView.evaluateJavascript(
+                "window.onAndroidLocationControlLongPress&&window.onAndroidLocationControlLongPress()",
+                value -> Log.d(LOG_TAG, "Location long-press bridge result: " + value)
+            );
+            return true;
+        }
+        if (touchDuration > 700) return false;
         final float tapX = event.getX();
         final float tapY = event.getY();
         final int viewWidth = webView.getWidth();
@@ -1689,6 +1702,7 @@ public class MainActivity extends Activity {
             Log.d(LOG_TAG, "Forwarding WebView tap to map bridge: x=" + tapX + " y=" + tapY);
             webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "Map bridge result: " + value));
         }, MAP_TAP_BRIDGE_DELAY_MS);
+        return false;
     }
 
     private String mimeTypeForAsset(String assetName) {
@@ -1719,8 +1733,9 @@ public class MainActivity extends Activity {
         webView.evaluateJavascript(script, value -> {
             Log.d(LOG_TAG, "Touch probe bridge result: " + value);
             if ("down".equals(phase)) {
+                webTouchStartedOnLocationControl = value != null && value.contains("location-control");
                 webTouchStartedOnOverlay = value != null &&
-                    (value.contains("overlay") || value.contains("promo") || value.contains("search-result"));
+                    (value.contains("overlay") || value.contains("promo") || value.contains("search-result") || value.contains("location-control"));
             }
         });
     }
@@ -1734,7 +1749,7 @@ public class MainActivity extends Activity {
         if (nativeMapController != null && nativeMapController.routeTouchEvent(event)) return true;
         int action = event == null ? MotionEvent.ACTION_CANCEL : event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP) {
-            handleWebViewTap(event);
+            if (handleWebViewTap(event)) return true;
         }
         return super.dispatchTouchEvent(event);
     }
