@@ -74,10 +74,15 @@ const audit = await evaluate(`(async () => {
   const button = document.querySelector("#mobile-map-locate");
   const snapshot = label => ({ label, ...window.NLI_APK_LOCATION_CONTROL_AUDIT.snapshot() });
   const press = async label => {
+    const startedAt = performance.now();
     button.click();
-    await waitFor(() => !button.disabled, 12000);
-    await wait(1050);
-    return snapshot(label);
+    const centeredWithinBudget = await waitFor(
+      () => window.NLI_APK_LOCATION_CONTROL_AUDIT.snapshot().centered && !button.disabled,
+      900
+    );
+    const elapsedMs = Math.round(performance.now() - startedAt);
+    await wait(80);
+    return { ...snapshot(label), centeredWithinBudget, elapsedMs };
   };
 
   window.NLI_APK_LOCATION_CONTROL_AUDIT.moveAway();
@@ -96,6 +101,7 @@ const audit = await evaluate(`(async () => {
   const passed = (
     !awayBeforeFirstPress.centered
     && recentered.centered
+    && recentered.centeredWithinBudget
     && near(recentered.zoom, 10.5)
     && zoomedOnce.centered
     && near(zoomedOnce.zoom, recentered.zoom + 1)
@@ -103,6 +109,7 @@ const audit = await evaluate(`(async () => {
     && near(zoomedTwice.zoom, zoomedOnce.zoom + 1)
     && !awayBeforeReset.centered
     && resetRecenter.centered
+    && resetRecenter.centeredWithinBudget
     && near(resetRecenter.zoom, 10.5)
   );
 
