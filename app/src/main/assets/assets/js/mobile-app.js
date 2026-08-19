@@ -175,6 +175,7 @@
     const LONG_ISLAND_OVERVIEW_BOUNDS = [[-74.10, 40.52], [-71.75, 41.16]];
     const STARTUP_LOCATION_CENTER_BOUNDS = [[-74.25, 40.45], [-71.65, 41.25]];
     const LOCATION_CONTROL_MAX_SCOPE_DISTANCE_MILES = 75;
+    const LOCATION_CONTROL_LONG_PRESS_MS = 600;
     const FALLBACK_CENTER = [-72.95, 40.86];
     const MOBILE_LONG_ISLAND_START_VIEWS = [
       { center: [-73.72, 40.72], zoom: 9.25 },
@@ -7811,7 +7812,11 @@
     window.onAndroidTouchProbe = function onAndroidTouchProbe(phase, viewX, viewY, viewWidth, viewHeight) {
       const touchPhase = phase === "up" ? "up" : "down";
       const touchContext = createAndroidTouchProbeContext(viewX, viewY, viewWidth, viewHeight);
+      const locationControlTap = touchContext.candidates.some(candidate =>
+        touchContext.elementsAt(candidate).some(element => element?.closest?.("#mobile-map-locate"))
+      );
       const overlayTap = window.onAndroidUiOverlayTapStart(viewX, viewY, viewWidth, viewHeight, touchContext);
+      if (locationControlTap) return "location-control";
       if (touchPhase === "up") return overlayTap ? "overlay" : "clear";
       const promoTap = window.onAndroidMobilePromoActionTap(viewX, viewY, viewWidth, viewHeight, touchContext);
       const searchTap = window.onAndroidSearchResultTapStart(viewX, viewY, viewWidth, viewHeight, touchContext);
@@ -14089,6 +14094,85 @@
       });
     }
 
+    let suppressNextApkLocationControlClick = false;
+    let apkLocationControlSuppressionTimer = 0;
+    let lastApkLocationOverviewAt = 0;
+
+    function showApkLocationOverview(reason = "android-location-long-press-overview") {
+      const now = Date.now();
+      if (now - lastApkLocationOverviewAt < 800) return true;
+      lastApkLocationOverviewAt = now;
+      suppressNextApkLocationControlClick = true;
+      fitAllLongIslandMapView(reason);
+      showBanner("Showing all of Long Island. Tap the location button to return to your location.", { centered: true });
+      navigator.vibrate?.(20);
+      return true;
+    }
+
+    window.onAndroidLocationControlLongPress = function onAndroidLocationControlLongPress() {
+      if (!isNativeAndroidApp()) return false;
+      showApkLocationOverview("android-native-location-long-press-overview");
+      // The native shell consumes ACTION_UP, so no synthetic click remains to suppress.
+      suppressNextApkLocationControlClick = false;
+      window.clearTimeout(apkLocationControlSuppressionTimer);
+      return true;
+    };
+
+    function installApkLocationControlLongPress() {
+      if (!mobileMapLocateBtn || !isNativeAndroidApp()) return;
+      let pressTimer = 0;
+      let pressActive = false;
+      let longPressTriggered = false;
+      const clearPressTimer = () => {
+        window.clearTimeout(pressTimer);
+        pressTimer = 0;
+      };
+      const finishPress = event => {
+        if (!pressActive) return;
+        clearPressTimer();
+        pressActive = false;
+        mobileMapLocateBtn.classList.remove("is-long-pressing");
+        if (!longPressTriggered) return;
+        event.preventDefault();
+        event.stopPropagation();
+        longPressTriggered = false;
+        window.clearTimeout(apkLocationControlSuppressionTimer);
+        apkLocationControlSuppressionTimer = window.setTimeout(() => {
+          suppressNextApkLocationControlClick = false;
+        }, 700);
+      };
+      const startPress = () => {
+        if (mobileMapLocateBtn.disabled) return;
+        clearPressTimer();
+        pressActive = true;
+        longPressTriggered = false;
+        mobileMapLocateBtn.classList.add("is-long-pressing");
+        pressTimer = window.setTimeout(() => {
+          pressTimer = 0;
+          longPressTriggered = true;
+          mobileMapLocateBtn.classList.remove("is-long-pressing");
+          showApkLocationOverview();
+        }, LOCATION_CONTROL_LONG_PRESS_MS);
+      };
+      mobileMapLocateBtn.addEventListener("touchstart", startPress, { passive: true });
+      mobileMapLocateBtn.addEventListener("touchend", finishPress);
+      mobileMapLocateBtn.addEventListener("touchcancel", finishPress);
+      mobileMapLocateBtn.addEventListener("pointerdown", event => {
+        if (event.pointerType === "touch" || !event.isPrimary || event.button > 0) return;
+        startPress();
+      });
+      mobileMapLocateBtn.addEventListener("pointerup", event => {
+        if (event.pointerType !== "touch") finishPress(event);
+      });
+      mobileMapLocateBtn.addEventListener("pointercancel", event => {
+        if (event.pointerType !== "touch") finishPress(event);
+      });
+      mobileMapLocateBtn.addEventListener("pointerleave", event => {
+        if (event.pointerType !== "touch") finishPress(event);
+      });
+      mobileMapLocateBtn.addEventListener("contextmenu", event => event.preventDefault());
+    }
+
     function installApkLocationControlDebugHook() {
       if (!isNativeAndroidApp() || window.AndroidApp?.isDebugBuild?.() !== true) return;
       const snapshot = () => ({
@@ -18965,8 +19049,15 @@
     window.addEventListener("orientationchange", () => window.setTimeout(refreshMobileViewportLayout, 280));
     window.visualViewport?.addEventListener("resize", refreshMobileViewportLayout);
     locateBtn?.addEventListener("click", locateUser);
+    installApkLocationControlLongPress();
     mobileMapLocateBtn?.addEventListener("click", event => {
       event.stopPropagation();
+      if (suppressNextApkLocationControlClick) {
+        event.preventDefault();
+        suppressNextApkLocationControlClick = false;
+        window.clearTimeout(apkLocationControlSuppressionTimer);
+        return;
+      }
       locateMapUser();
     });
     installApkLocationControlDebugHook();
