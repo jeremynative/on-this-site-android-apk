@@ -1064,6 +1064,20 @@ final class NativeMapController {
             setSource(style, USER_LOCATION_SOURCE_ID, payload.optJSONObject("userLocation"));
             setSource(style, COMMUNITY_SOURCE_ID, payload.optJSONObject("communityContributions"));
             setSource(style, TEMPORARY_SOURCE_ID, payload.optJSONObject("temporaryMarkers"));
+            boolean pointsUpdated = payload.has("sitePoints");
+            boolean labelsUpdated = payload.has("labels");
+            if (pointsUpdated) {
+                setSource(style, SITE_POINT_SOURCE_ID, applyBundledSiteIconKeys(payload.optJSONObject("sitePoints")));
+            }
+            if (labelsUpdated) {
+                setSource(style, LABEL_SOURCE_ID, withBundledTerritoryLabels(payload.optJSONObject("labels")));
+            }
+            if ((pointsUpdated || labelsUpdated) && currentStateJson != null && !currentStateJson.isEmpty()) {
+                JSONObject cachedState = new JSONObject(currentStateJson);
+                if (pointsUpdated) cachedState.put("sitePoints", payload.optJSONObject("sitePoints"));
+                if (labelsUpdated) cachedState.put("labels", payload.optJSONObject("labels"));
+                currentStateJson = cachedState.toString();
+            }
             lastStateSignature = signature;
             applyModeVisibility(style);
             applyCamera(payload.optJSONObject("camera"));
@@ -1072,7 +1086,9 @@ final class NativeMapController {
                 + ": bytes=" + stateJson.length()
                 + ", userLocation=" + featureCount(payload.optJSONObject("userLocation"))
                 + ", community=" + featureCount(payload.optJSONObject("communityContributions"))
-                + ", temporary=" + featureCount(payload.optJSONObject("temporaryMarkers")));
+                + ", temporary=" + featureCount(payload.optJSONObject("temporaryMarkers"))
+                + ", sitePointsUpdated=" + pointsUpdated
+                + ", labelsUpdated=" + labelsUpdated);
         } catch (Exception error) {
             Log.e(LOG_TAG, "Ignored invalid transient native map state.", error);
         }

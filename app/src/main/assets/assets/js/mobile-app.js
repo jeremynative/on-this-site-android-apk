@@ -974,6 +974,9 @@
       nativeMapStateTimer: null,
       nativeMapStateSignature: "",
       nativeMapBaseSignature: "",
+      nativeMapBaseRevision: 0,
+      nativeMapPointSignature: "",
+      nativeMapPointRevision: 0,
       nativeMapBridgeInstalled: false,
       nativeMapCameraEcho: null,
       proximityAlertInFlight: false,
@@ -2319,10 +2322,15 @@
       return state.mapSites.filter(siteVisibleInMobileLayers);
     }
 
-    function invalidateMapSourceCache() {
+    function invalidateMapSourceCache(options = {}) {
       state.mapSourceCache = null;
       state.mapSourceCacheKey = "";
       state.mapSourceRevision += 1;
+      if (options.nativeBase === false) {
+        state.nativeMapPointRevision += 1;
+      } else {
+        state.nativeMapBaseRevision += 1;
+      }
     }
 
     function polygonLabelCollection(kind = "all", sites = state.mapSites) {
@@ -6867,9 +6875,10 @@
       const communitySignature = communityFeatures.map(feature => `${feature.properties.native_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}`).join("|");
       const temporarySignature = temporaryFeatures.map(feature => `${feature.properties.temporary_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}`).join("|");
       const nativeBasemap = Object.prototype.hasOwnProperty.call(MOBILE_BASEMAPS, state.settings.basemap) ? state.settings.basemap : "outdoors";
-      const baseSignature = `${state.mapSourceCacheKey || state.mapSourceRevision}|${profileKey}|${profileSignature}|basemap:${nativeBasemap}|bio-paths:${mobileBiographyPathsEnabled() ? 1 : 0}|events:${exhibitFeatures.map(feature => feature.properties.event_key).join(",")}`;
+      const baseSignature = `${state.nativeMapBaseRevision}|${profileKey}|${profileSignature}|basemap:${nativeBasemap}|bio-paths:${mobileBiographyPathsEnabled() ? 1 : 0}|events:${exhibitFeatures.map(feature => feature.properties.event_key).join(",")}`;
+      const pointSignature = `${state.nativeMapPointRevision}|${allFeatures.filter(feature => feature?.geometry?.type === "Point").length}`;
       const transientSignature = `user:${userLocationSignature}|community:${communitySignature}|temporary:${temporarySignature}`;
-      const signature = `${baseSignature}|${transientSignature}`;
+      const signature = `${baseSignature}|points:${pointSignature}|${transientSignature}`;
       const center = state.map.getCenter?.();
       const transientPayload = {
         signature,
@@ -6884,9 +6893,14 @@
         temporaryMarkers: nativeMapFeatureCollection(temporaryFeatures)
       };
       if (state.nativeMapBaseSignature === baseSignature && typeof window.AndroidApp.syncNativeMapTransientState === "function") {
+        if (state.nativeMapPointSignature !== pointSignature) {
+          transientPayload.sitePoints = nativeMapFeatureCollection(allFeatures.filter(feature => feature?.geometry?.type === "Point"));
+          transientPayload.labels = nativeMapFeatureCollection([...(sourceData.territoryLabels?.features || []), ...(sourceData.detailLabels?.features || [])]);
+        }
         window.__nliSyncNativeMapViewport?.();
         window.AndroidApp.syncNativeMapTransientState(androidBridgeToken(), JSON.stringify(transientPayload));
         state.nativeMapStateSignature = signature;
+        state.nativeMapPointSignature = pointSignature;
         return true;
       }
       const payload = {
@@ -6912,6 +6926,7 @@
       window.AndroidApp.syncNativeMapState(androidBridgeToken(), JSON.stringify(payload));
       state.nativeMapStateSignature = signature;
       state.nativeMapBaseSignature = baseSignature;
+      state.nativeMapPointSignature = pointSignature;
       return true;
     }
 
@@ -16753,7 +16768,7 @@
       const keys = mobileActivityUnreadTracker.markItem(key);
       if (!keys.length) return;
       state.mobileActivityRenderedSignature = "";
-      invalidateMapSourceCache();
+      invalidateMapSourceCache({ nativeBase: false });
       refreshMobileMapSources({ force: true });
       updateMobileActivityUnreadBadge();
       renderMobileActivitySheet();
@@ -16763,7 +16778,7 @@
       const keys = mobileActivityUnreadTracker.markContent(type, slug);
       if (!keys.length) return;
       state.mobileActivityRenderedSignature = "";
-      invalidateMapSourceCache();
+      invalidateMapSourceCache({ nativeBase: false });
       refreshMobileMapSources({ force: true });
       updateMobileActivityUnreadBadge();
       if (activitySheetEl?.classList.contains("open")) renderMobileActivitySheet();
