@@ -88,7 +88,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260818-startup-controls-settle-r166";
+    static final String APP_VERSION = "20260818-apk-size-offline-r167";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -1039,14 +1039,11 @@ public class MainActivity extends Activity {
             assetName = "mobile-app-live.html";
             mimeType = "text/html";
         } else if (loadingBundledFallback && "/mobile-app.html".equals(path)) {
-            assetName = "mobile-app.html";
+            // The legacy fallback URL now reuses the modular offline shell.
+            // Its scripts and data are already packaged and intercepted below,
+            // so a second 9+ MB inline copy is unnecessary.
+            assetName = "mobile-app-live.html";
             mimeType = "text/html";
-        } else if ("/long-island-land-mask.geojson".equals(path)) {
-            assetName = "long-island-land-mask.geojson";
-            mimeType = "application/geo+json";
-        } else if ("/app/long-island-land-mask.geojson".equals(path)) {
-            assetName = "long-island-land-mask.geojson";
-            mimeType = "application/geo+json";
         } else if ("/long-island-land-mask-lite.json".equals(path)) {
             assetName = "long-island-land-mask-lite.json";
             mimeType = "application/json";
@@ -1070,17 +1067,13 @@ public class MainActivity extends Activity {
     }
 
     private InputStream bundledAssetStream(String assetName) throws IOException {
-        if ("mobile-app.html".equals(assetName) || "mobile-app-live.html".equals(assetName)) {
+        if ("mobile-app-live.html".equals(assetName)) {
             return new ByteArrayInputStream(bundledMobileHtml(assetName).getBytes(StandardCharsets.UTF_8));
         }
         if ("assets/js/mobile-app.js".equals(assetName)) {
             return new ByteArrayInputStream(injectMapboxToken(readBundledTextAsset(assetName)).getBytes(StandardCharsets.UTF_8));
         }
         return getAssets().open(assetName);
-    }
-
-    private String bundledMobileHtml() throws IOException {
-        return bundledMobileHtml("mobile-app.html");
     }
 
     private String bundledMobileHtml(String assetName) throws IOException {
