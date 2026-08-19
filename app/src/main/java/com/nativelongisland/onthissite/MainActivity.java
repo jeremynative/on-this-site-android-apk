@@ -88,7 +88,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260818-startup-map-settle-r165";
+    static final String APP_VERSION = "20260818-startup-controls-settle-r166";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -105,6 +105,7 @@ public class MainActivity extends Activity {
     private static final long LOADING_OUTLINE_COMPLETE_HOLD_MS = 120;
     private static final float LOADING_OUTLINE_PRE_READY_MAX = 0.90f;
     private static final long STARTUP_VISUAL_STABLE_MS = 900;
+    private static final long STARTUP_DOM_STABLE_MS = 650;
     private static final int OFFLINE_RENDER_MAX_ATTEMPTS = 12;
     private static final long OFFLINE_RENDER_DEADLINE_MS = 12000;
     private static final int COMMENT_PHOTO_READ_MAX_ATTEMPTS = 3;
@@ -1318,14 +1319,20 @@ public class MainActivity extends Activity {
                     + "if(!hydrate){window.__nliNativeStartupGeometryReady=true;}else{Promise.resolve(hydrate()).catch(function(){return false;}).then(function(){window.__nliNativeStartupGeometryReady=true;});}}"
                 + "if(!offline&&shell&&archiveTextReady&&!window.__nliNativeStartupDeferredRequested&&typeof loadDeferredData==='function'){"
                     + "window.__nliNativeStartupDeferredRequested=true;window.__nliNativeStartupDeferredReady=false;"
-                    + "Promise.resolve(loadDeferredData({includeCommunity:false})).catch(function(){return false;}).then(function(){window.__nliNativeStartupDeferredReady=true;});}"
+                    + "Promise.resolve(loadDeferredData({includeCommunity:true})).catch(function(){return false;}).then(function(){window.__nliNativeStartupDeferredReady=true;});}"
                 + "var geometryStatus=app&&app.getAttribute('data-site-geometry');"
                 + "var geometryReady=offline||window.__nliNativeStartupGeometryReady===true||geometryStatus==='loaded'||geometryStatus==='deferred';"
                 + "var deferredReady=offline||window.__nliNativeStartupDeferredReady===true;"
                 + "var mapBusy=!!(app&&(app.classList.contains('mobile-map-initializing')||app.classList.contains('mobile-site-reveal-pending')||app.classList.contains('mobile-site-reveal-settling')));"
                 + "var mapBox=document.getElementById('map');var mapRect=mapBox&&mapBox.getBoundingClientRect();"
                 + "var mapUiReady=!!(mapRect&&mapRect.width>2&&mapRect.height>2&&!mapBusy&&window.__nliNativeMapLayoutInstalled);"
-                + "var onlineReady=!offline&&shell&&loaderHidden&&archiveTextReady&&geometryReady&&deferredReady&&mapUiReady;"
+                + "var promoDock=document.getElementById('mobile-promo-dock');"
+                + "var promoKinds=promoDock?[].slice.call(promoDock.querySelectorAll('[data-mobile-promo-kind]')).map(function(button){return (button.hidden?'0':'1')+':'+(button.getAttribute('data-mobile-promo-kind')||'');}).join(','):'none';"
+                + "var unreadBadges=[].slice.call(document.querySelectorAll('[data-mobile-activity-unread-badge],[data-mobile-notification-unread-badge]')).map(function(badge){return (badge.hidden?'0':'1')+':'+String(badge.textContent||'').trim();}).join(',');"
+                + "var startupDomSignature=(promoDock&&promoDock.hidden?'0':'1')+'|'+promoKinds+'|'+unreadBadges;var startupDomNow=Date.now();"
+                + "if(window.__nliNativeStartupDomSignature!==startupDomSignature){window.__nliNativeStartupDomSignature=startupDomSignature;window.__nliNativeStartupDomChangedAt=startupDomNow;}"
+                + "var startupDomStable=startupDomNow-Number(window.__nliNativeStartupDomChangedAt||startupDomNow)>=" + STARTUP_DOM_STABLE_MS + ";"
+                + "var onlineReady=!offline&&shell&&loaderHidden&&archiveTextReady&&geometryReady&&deferredReady&&mapUiReady&&startupDomStable;"
                 + "return offlineReady||onlineReady?'ready':shell?'starting':'empty';"
                 + "}catch(error){return 'empty:'+String(error&&error.message||error);}})();",
             value -> {
