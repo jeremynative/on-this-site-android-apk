@@ -1082,6 +1082,7 @@
     detailHeroDockEl.setAttribute("tabindex", "-1");
     detailHeroDockEl.setAttribute("aria-label", "Show the full site image");
     detailHeadEl?.appendChild(detailHeroDockEl);
+    let detailHeroMoveRevision = 0;
     let detailHeroHomeNode = null;
     const bannerEl = document.getElementById("banner");
     const languageQuizModalEl = document.getElementById("language-quiz-modal");
@@ -10254,28 +10255,24 @@
     }
 
     function animateDetailHeroMove(hero, move) {
-      const first = hero.getBoundingClientRect();
-      move();
-      const last = hero.getBoundingClientRect();
-      if (!first.width || !first.height || !last.width || !last.height) return;
-      const dx = first.left - last.left;
-      const dy = first.top - last.top;
-      const sx = first.width / last.width;
-      const sy = first.height / last.height;
+      const revision = ++detailHeroMoveRevision;
       hero.classList.add("is-moving");
-      hero.style.transformOrigin = "top left";
       hero.style.transition = "none";
-      hero.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+      hero.style.opacity = "0";
+      hero.style.transform = "none";
+      move();
       hero.getBoundingClientRect();
       window.requestAnimationFrame(() => {
-        hero.style.transition = "transform 240ms ease, border-radius 240ms ease, box-shadow 240ms ease";
-        hero.style.transform = "translate(0, 0) scale(1, 1)";
+        if (revision !== detailHeroMoveRevision || !hero.isConnected) return;
+        hero.style.transition = "opacity 180ms ease";
+        hero.style.opacity = "1";
         window.setTimeout(() => {
+          if (revision !== detailHeroMoveRevision) return;
           hero.classList.remove("is-moving");
+          hero.style.opacity = "";
           hero.style.transform = "";
-          hero.style.transformOrigin = "";
           hero.style.transition = "";
-        }, 280);
+        }, 220);
       });
     }
 
