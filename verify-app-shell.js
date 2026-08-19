@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260819-map-labels-biography-fade-r176";
+const expectedBuild = "20260819-site-hero-scroll-frame-r177";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -102,6 +102,12 @@ if (!bundledMobileCss.includes("background: rgba(255, 255, 255, 0.58);")
     || !bundledMobileJs.includes('element.className = "user-location-dot address-location-dot";')
     || !bundledMobileJs.includes('card.imageUrl ? " has-thumbnail" : ""')) {
   throw new Error("Android mobile UI must use a soft user-location target and compact nearby-result thumbnails outside Full view.");
+}
+if (!/\.detail-hero-dock\s*\{[^}]*overflow:\s*hidden;[^}]*contain:\s*paint;/s.test(bundledMobileCss)
+    || !bundledMobileJs.includes('hero.style.transition = "opacity 180ms ease";')
+    || !bundledMobileJs.includes('hero.style.opacity = "0";')
+    || bundledMobileJs.includes("scale(${sx}, ${sy})")) {
+  throw new Error("Android listing headers must fade inside the clipped compact frame instead of scaling outside the panel.");
 }
 if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes("attributionEnabled(false)")

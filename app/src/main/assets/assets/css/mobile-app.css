@@ -5623,6 +5623,9 @@
       align-self: center;
       justify-self: end;
       width: 54px;
+      overflow: hidden;
+      contain: paint;
+      border-radius: 8px;
       cursor: pointer;
       pointer-events: auto;
     }

@@ -1051,3 +1051,11 @@ Safest next action: refresh Obtainium on the S25 and install 0.1.463 when conven
 - `verify-app-shell.js`, JavaScript syntax, whitespace, and the debug APK build passed. The separate QA app was installed on USB tablet `T811MA256GB23516041180`; its live native map reached ready state with 13 territories, and a screenshot captured during a 3.5-second drag retained ancestral-land titles, basemap text, site marks, and biography artwork. No fatal/native-map errors appeared in logcat.
 - The production/Obtainium app was not replaced during QA.
 - Safest next action: merge and publish the signed Obtainium build, install it when convenient, and leave the older Google Play review undisturbed unless a new Play submission is explicitly requested.
+
+## 2026-08-19 listing featured-image scroll-frame fix
+
+- Branch `fix/site-header-scroll-frame-20260819` removes the scale/translate FLIP animation that could paint a full-size listing hero outside its compact sticky-header frame during fast panel scrolling. The hero now moves at its final dimensions and fades in, with revision guards preventing stale transition cleanup during rapid direction changes.
+- The compact hero dock now clips overflow and uses paint containment. Native build marker is `20260819-site-hero-scroll-frame-r177`; the hosted live-shell asset hashes were refreshed without changing schema, authentication, APIs, or environment configuration.
+- `verify-app-shell.js`, JavaScript syntax, whitespace checks, and the debug APK build passed. The QA build was installed alongside the production app on USB tablet `T811MA256GB23516041180`. Ma's House was opened, scrolled rapidly into compact mode, and the resulting thumbnail stayed fully inside the header. CDP measured identical 54 x 44 CSS-pixel hero/dock bounds, `overflow: hidden`, `contain: paint`, `transform: none`, and no fatal/ANR logs.
+- The production/Obtainium app and existing Google Play review were not replaced during QA.
+- Safest next action: commit/push and merge this branch, confirm the signed Obtainium release, and leave Google Play untouched unless a new submission is explicitly requested.
