@@ -1038,3 +1038,9 @@ Safest next action: refresh Obtainium on the S25 and install 0.1.463 when conven
 - `verify-app-shell.js`, Google Play readiness, JavaScript syntax, whitespace checks, debug APK build, and `lintDebug` passed. The QA APK installed without replacing the production app; the bundled offline archive reached its complete 439-listing/93-wiki UI with no fatal/ANR logs. Full online motion/location verification should be repeated after the matching web runtime is live.
 - No schema, auth, API, environment, content, or production-app data changes were made.
 - Safest next action: commit/push and merge, publish the next Obtainium APK, then run the online WebView and location audits on the connected S25 against the deployed shared runtime.
+## 2026-08-19 site-open interaction regression follow-up
+
+- Branch `fix/site-open-interaction-performance-20260819` removes the expensive full Nearby-feed rebuild that ran on every site selection and changes the detail, timeline, and source loads from sequential to concurrent work.
+- Logged-in visit/points reconciliation now refreshes the rendered visit controls in the background instead of blocking the first complete article render.
+- The matching hosted mobile runtime is being updated in parallel. Native marker is `20260819-site-open-performance-r171`.
+- Safest next action: run the shell verifier/build, merge, wait for signed publication, and test repeated site opens on the S25 against the live hosted runtime.

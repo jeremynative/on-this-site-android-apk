@@ -5362,6 +5362,15 @@
       renderSearchSuggestions();
     }
 
+    function syncNearbySelectedCard(slug = state.selectedSlug) {
+      listEl?.querySelectorAll?.(".nearby-feed-card.active").forEach(card => card.classList.remove("active"));
+      const selectedSlug = String(slug || "");
+      if (!selectedSlug) return;
+      const selectedCard = [...(listEl?.querySelectorAll?.('.nearby-feed-card[data-result-kind="site"]') || [])]
+        .find(card => card.dataset.resultSlug === selectedSlug);
+      selectedCard?.classList.add("active");
+    }
+
     function applyAddressSearchFeature(feature) {
       if (!feature?.center) return false;
       const addressSite = {
@@ -13330,7 +13339,7 @@
       const lifecycleSnapshot = options.lifecycleSnapshot || null;
       const drawerState = lifecycleSnapshot?.detailDrawerState || options.drawerState || "half";
       syncActiveSiteMapLabel(site);
-      renderList();
+      syncNearbySelectedCard(slug);
       detailTitleEl.innerHTML = mobileSiteTitleHtml(site);
       detailBodyEl.innerHTML = mobileDetailLoadingHtml(site);
       detailEl.classList.add("open");
@@ -13345,27 +13354,29 @@
           duration: 520
         }));
       }
-      site = await fetchSiteDetail(site);
-      if (state.selectedSlug !== slug) return;
+      const detailPromise = fetchSiteDetail(site);
+      const timelinePromise = ensureTimelineDetailsForSource("site", site.id, site.slug);
+      const sourceListPromise = Array.isArray(site.source_list)
+        ? Promise.resolve(site.source_list)
+        : fetchSiteSources(site);
       if (isApprovedContributor()) {
         const profile = currentContributorProfile();
-        await Promise.all([
+        void Promise.all([
           refreshRemoteSiteVisitsForProfileSite(profile, site),
           refreshRemotePointEventsForProfileId(relationId(profile?.id || profile?.profileId || state.profile?.profileId))
-        ]).catch(() => []);
+        ]).then(() => {
+          if (state.selectedSlug === slug) refreshMobileVisitActions(state.selectedSite || site);
+        }).catch(() => []);
       }
+      const [fullSite, , sourceList] = await Promise.all([detailPromise, timelinePromise, sourceListPromise]);
+      site = fullSite;
       if (state.selectedSlug !== slug) return;
       state.selectedSite = site;
       syncActiveSiteMapLabel(site);
       const image = mobileSnapshotImageUrl(listingImage(site));
       const imageFallback = mobileSnapshotImageUrl(listingImageFallback(site));
-      await ensureTimelineDetailsForSource("site", site.id, site.slug);
-      if (state.selectedSlug !== slug) return;
       const moments = timelineEventsForSource("site", site.id, site.slug);
-      if (!Array.isArray(site.source_list)) {
-        const sourceList = await fetchSiteSources(site);
-        if (sourceList.length) site = { ...site, source_list: sourceList };
-      }
+      if ((!Array.isArray(site.source_list) || !site.source_list.length) && sourceList.length) site = { ...site, source_list: sourceList };
       let renderedMoments = false;
       const sectionEntries = contentSections(site);
       const linked = new Set();
