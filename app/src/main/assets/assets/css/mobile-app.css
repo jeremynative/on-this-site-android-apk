@@ -6935,6 +6935,11 @@
     .mobile-moving-biography-marker {
       width: 44px;
       height: 44px;
+      transition: opacity 180ms linear;
+    }
+
+    .mobile-moving-biography-marker[data-motion-phase="reset"] {
+      transition: none;
     }
 
     .mobile-moving-biography-shell {

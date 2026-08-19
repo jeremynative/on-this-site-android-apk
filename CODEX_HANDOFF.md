@@ -1044,3 +1044,10 @@ Safest next action: refresh Obtainium on the S25 and install 0.1.463 when conven
 - Logged-in visit/points reconciliation now refreshes the rendered visit controls in the background instead of blocking the first complete article render.
 - The matching hosted mobile runtime is being updated in parallel. Native marker is `20260819-site-open-performance-r171`.
 - Safest next action: run the shell verifier/build, merge, wait for signed publication, and test repeated site opens on the S25 against the live hosted runtime.
+## 2026-08-19 persistent map labels and biography endpoint fading
+
+- Branch `fix/map-labels-motion-20260819` adds a forward-only biography route cycle to the APK: fade out at the final point, reset invisibly to the first point, then fade back in. Both the WebView fallback and native MapLibre payload carry the motion phase/opacity, and native icon/title layers render that opacity.
+- Native build marker is `20260819-map-labels-biography-fade-r176`.
+- `verify-app-shell.js`, JavaScript syntax, whitespace, and the debug APK build passed. The separate QA app was installed on USB tablet `T811MA256GB23516041180`; its live native map reached ready state with 13 territories, and a screenshot captured during a 3.5-second drag retained ancestral-land titles, basemap text, site marks, and biography artwork. No fatal/native-map errors appeared in logcat.
+- The production/Obtainium app was not replaced during QA.
+- Safest next action: merge and publish the signed Obtainium build, install it when convenient, and leave the older Google Play review undisturbed unless a new Play submission is explicitly requested.

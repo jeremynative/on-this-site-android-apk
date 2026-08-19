@@ -69,6 +69,7 @@ import static org.maplibre.android.style.layers.PropertyFactory.fillOpacity;
 import static org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap;
 import static org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement;
 import static org.maplibre.android.style.layers.PropertyFactory.iconImage;
+import static org.maplibre.android.style.layers.PropertyFactory.iconOpacity;
 import static org.maplibre.android.style.layers.PropertyFactory.iconSize;
 import static org.maplibre.android.style.layers.PropertyFactory.lineColor;
 import static org.maplibre.android.style.layers.PropertyFactory.lineDasharray;
@@ -84,6 +85,7 @@ import static org.maplibre.android.style.layers.PropertyFactory.textHaloWidth;
 import static org.maplibre.android.style.layers.PropertyFactory.textIgnorePlacement;
 import static org.maplibre.android.style.layers.PropertyFactory.textOptional;
 import static org.maplibre.android.style.layers.PropertyFactory.textOffset;
+import static org.maplibre.android.style.layers.PropertyFactory.textOpacity;
 import static org.maplibre.android.style.layers.PropertyFactory.textSize;
 import static org.maplibre.android.style.layers.PropertyFactory.textTranslate;
 import static org.maplibre.android.style.layers.PropertyFactory.visibility;
@@ -880,6 +882,7 @@ final class NativeMapController {
                         Expression.stop(10, 0.72f),
                         Expression.stop(14, 0.86f)
                     )),
+                    iconOpacity(Expression.coalesce(Expression.get("motion_opacity"), Expression.literal(1f))),
                     iconAllowOverlap(true), iconIgnorePlacement(true)
                 ));
             style.addLayer(new SymbolLayer("nli-moving-dog-icons", MOVING_FEATURE_SOURCE_ID)
@@ -899,7 +902,8 @@ final class NativeMapController {
                 .withProperties(
                     textField(Expression.get("label")), textFont(new String[] { "Noto Sans Bold" }), textSize(10f),
                     textColor("#1f2d25"), textHaloColor("rgba(255,255,255,0.96)"), textHaloWidth(1.25f),
-                    textOffset(new Float[] { 0f, -2.3f }), textAllowOverlap(true), textIgnorePlacement(true)
+                    textOffset(new Float[] { 0f, -2.3f }), textAllowOverlap(true), textIgnorePlacement(true),
+                    textOpacity(Expression.coalesce(Expression.get("motion_opacity"), Expression.literal(1f)))
                 ));
             styleReady = true;
             if (!usingOnlineArchive) startupStateReady = true;

@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260819-location-longpress-r175";
+const expectedBuild = "20260819-map-labels-biography-fade-r176";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -223,6 +223,16 @@ if (!nativeMapController.includes("CameraPosition cameraToPreserve = nativeGestu
     || !nativeMapController.includes("listener.onGestureChanged(true);")
     || !nativeMapController.includes("listener.onGestureChanged(false);")) {
   throw new Error("Native map gestures must own the camera and pause moving-source updates until camera idle.");
+}
+if (!bundledMobileJs.includes("function mobileMovingBiographyLoop")
+    || !bundledMobileJs.includes('phase: "fade-out"')
+    || !bundledMobileJs.includes('phase: "reset"')
+    || !bundledMobileJs.includes('phase: "fade-in"')
+    || !bundledMobileJs.includes("motion_opacity: Number(motion.opacity.toFixed(3))")
+    || !bundledMobileCss.includes('.mobile-moving-biography-marker[data-motion-phase="reset"]')
+    || !nativeMapController.includes('iconOpacity(Expression.coalesce(Expression.get("motion_opacity")')
+    || !nativeMapController.includes('textOpacity(Expression.coalesce(Expression.get("motion_opacity")')) {
+  throw new Error("Biography icons and titles must fade at the route end, reset invisibly, and fade back in at the start on Android.");
 }
 if (!nativeMapController.includes("getDisplayMetrics().density * 32f")) {
   throw new Error("Native site artwork must keep a touch target large enough for transparent-padded icons.");

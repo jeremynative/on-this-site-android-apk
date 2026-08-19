@@ -96,6 +96,8 @@
     const mobileMovingRouteModelCache = new WeakMap();
     const MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS = 720000;
     const MOBILE_BIOGRAPHY_MARKER_STAGGER_MS = 85;
+    const MOBILE_BIOGRAPHY_MARKER_FADE_MS = 1600;
+    const MOBILE_BIOGRAPHY_MARKER_RESET_MS = 650;
     const MOBILE_WHALE_ONE_WAY_MS = 900000;
     const MOBILE_WHALE_START_OFFSET_MS = MOBILE_WHALE_ONE_WAY_MS * 0.78;
     const MOBILE_WHALE_ROUTE = Object.freeze([
@@ -11807,6 +11809,34 @@
       };
     }
 
+    function mobileMovingBiographyLoop(route = [], travelMs = MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS, offsetMs = 0, now = performance.now()) {
+      const routeDuration = Math.max(1000, travelMs);
+      const cycle = routeDuration + (MOBILE_BIOGRAPHY_MARKER_FADE_MS * 2) + MOBILE_BIOGRAPHY_MARKER_RESET_MS;
+      let elapsed = (((now + offsetMs) % cycle) + cycle) % cycle;
+      if (elapsed <= routeDuration) {
+        const progress = Math.max(0, Math.min(1, elapsed / routeDuration));
+        return {
+          coordinates: mobileMovingCoordinateAt(route, progress) || route[0] || [FALLBACK_CENTER[0], FALLBACK_CENTER[1]],
+          direction: "right",
+          progress,
+          opacity: 1,
+          phase: "moving"
+        };
+      }
+      elapsed -= routeDuration;
+      const last = route[route.length - 1] || route[0] || [FALLBACK_CENTER[0], FALLBACK_CENTER[1]];
+      const first = route[0] || last;
+      if (elapsed <= MOBILE_BIOGRAPHY_MARKER_FADE_MS) {
+        return { coordinates: last, direction: "right", progress: 1, opacity: 1 - (elapsed / MOBILE_BIOGRAPHY_MARKER_FADE_MS), phase: "fade-out" };
+      }
+      elapsed -= MOBILE_BIOGRAPHY_MARKER_FADE_MS;
+      if (elapsed <= MOBILE_BIOGRAPHY_MARKER_RESET_MS) {
+        return { coordinates: first, direction: "right", progress: 0, opacity: 0, phase: "reset" };
+      }
+      elapsed -= MOBILE_BIOGRAPHY_MARKER_RESET_MS;
+      return { coordinates: first, direction: "right", progress: 0, opacity: Math.min(1, elapsed / MOBILE_BIOGRAPHY_MARKER_FADE_MS), phase: "fade-in" };
+    }
+
     function mobileMovingRouteDuration(route = []) {
       const totalMiles = mobileMovingRouteModel(route).total;
       return Math.max(360000, Math.min(1440000, totalMiles * 42000));
@@ -11903,7 +11933,7 @@
       const showLabel = Number(state.map?.getZoom?.() || 0) >= SITE_POINT_LABEL_MIN_ZOOM;
       const features = [];
       (state.nativeMovingBiographyItems || []).forEach(item => {
-        const motion = mobileMovingPingPong(item.route, item.duration, item.offset, motionNow);
+        const motion = mobileMovingBiographyLoop(item.route, item.duration, item.offset, motionNow);
         const status = mobileMovingBiographyStatus(item, motion);
         features.push({
           type: "Feature",
@@ -11916,6 +11946,8 @@
             title: item.person || "Biography",
             label: status ? `${item.person || "Biography"}\n${status}` : (item.person || "Biography"),
             show_label: showLabel,
+            motion_opacity: Number(motion.opacity.toFixed(3)),
+            motion_phase: motion.phase,
             direction: motion.direction,
             on_water: !mobileMovingPointIsOnLand(motion.coordinates)
           }
@@ -12010,12 +12042,14 @@
     }
 
     function updateMobileMovingBiographyMarker(item, marker, now = performance.now()) {
-      const motion = mobileMovingPingPong(item.route, item.duration, item.offset, now);
+      const motion = mobileMovingBiographyLoop(item.route, item.duration, item.offset, now);
       marker.setLngLat(motion.coordinates);
       const element = marker.getElement?.();
       const button = element?.querySelector?.(".mobile-moving-biography-marker");
       if (!button) return;
       button.dataset.direction = motion.direction;
+      button.dataset.motionPhase = motion.phase;
+      button.style.opacity = String(Math.max(0, Math.min(1, motion.opacity)));
       button.dataset.showLabel = state.map?.getZoom?.() >= SITE_POINT_LABEL_MIN_ZOOM ? "true" : "false";
       button.dataset.onWater = mobileMovingPointIsOnLand(motion.coordinates) ? "false" : "true";
       const status = button.querySelector(".mobile-moving-biography-status");
