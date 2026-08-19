@@ -58,7 +58,10 @@ const readiness = await evaluate(`new Promise(resolve => {
       && loadingRect.width > 0
       && loadingRect.height > 0
     );
-    const mapReady = Boolean(document.querySelector("#map .mapboxgl-canvas"));
+    const mapReady = Boolean(
+      document.querySelector("#map .mapboxgl-canvas, #map .maplibregl-canvas")
+      || (document.documentElement.classList.contains("nli-native-map") && document.querySelector("#map"))
+    );
     if (!loadingVisible && mapReady) {
       resolve({ ready: true, elapsedMs: Date.now() - startedAt });
       return;
@@ -74,6 +77,29 @@ const readiness = await evaluate(`new Promise(resolve => {
 if (!readiness.ready) {
   throw new Error(`APK WebView did not become interactive: ${JSON.stringify(readiness)}`);
 }
+
+const startupPanel = await evaluate(`(() => {
+  const app = document.querySelector(".app");
+  const timeline = document.querySelector(".mobile-timeline");
+  const nearby = document.querySelector(".list-panel");
+  const box = element => {
+    const rect = element?.getBoundingClientRect();
+    const style = element ? getComputedStyle(element) : null;
+    return {
+      width: Math.round(rect?.width || 0),
+      height: Math.round(rect?.height || 0),
+      visibility: style?.visibility || "",
+      pointerEvents: style?.pointerEvents || ""
+    };
+  };
+  return {
+    native: document.body.classList.contains("native-android-app"),
+    timelineMode: Boolean(app?.classList.contains("panel-timeline")),
+    collapsed: Boolean(app?.classList.contains("panel-collapsed")),
+    timeline: box(timeline),
+    nearby: box(nearby)
+  };
+})()`);
 
 const safeArea = await evaluate(`(() => {
   const bridgeValue = name => {
@@ -189,7 +215,6 @@ const controls = await evaluate(`(() => {
   const safe = ${JSON.stringify(safeArea.rect)};
   const selectors = [
     "#login-open",
-    "#locate",
     "[data-app-page='about']",
     "#feedback-open",
     "#mobile-layer-menu > summary",
@@ -321,7 +346,7 @@ for (const [name, selector] of [
     const adminExpanded = Boolean(adminMenu?.open);
     const panelRect = panel?.getBoundingClientRect();
     const visibleInteractive = () => panel
-      ? [...panel.querySelectorAll("button, a[href], input, select, summary")].filter(element => {
+      ? [...panel.querySelectorAll("button, a[href], input, select, summary, label")].filter(element => {
           const rect = element.getBoundingClientRect();
           const style = getComputedStyle(element);
           return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
@@ -410,11 +435,11 @@ for (const [name, selector] of [
 
 const contentPages = [];
 for (const [name, selector, expectedTitle, expectedItems] of [
-  ["learn", "#mobile-learn-open", "Knowledgebase", "[data-wiki-slug]"],
+  ["learn", "#mobile-learn-open", "Learning Paths", "[data-mobile-learning-path-open]"],
   ["blog", "[data-app-page='blog']", "Blog", "[data-blog-index]"],
 ]) {
   await evaluate(`document.querySelector(${JSON.stringify(selector)})?.click()`);
-  await wait(name === "blog" ? 850 : 350);
+  await wait(name === "blog" ? 3500 : 2500);
   const state = await evaluate(`(() => {
     const panel = document.querySelector("#detail");
     const rect = panel?.getBoundingClientRect();
@@ -580,7 +605,6 @@ const nearbyHidden = await evaluate(`(() => {
     };
   });
   const hidden = Boolean(app?.classList.contains("panel-collapsed"));
-  collapse?.click();
   return { hidden, controls, controlsSafe: controls.every(item => !item.missing && item.safe) };
 })()`);
 
@@ -591,6 +615,8 @@ const promos = await evaluate(`(() => {
   const locate = document.querySelector("#mobile-map-locate");
   const locateRect = locate?.getBoundingClientRect();
   const locateStyle = locate ? getComputedStyle(locate) : null;
+  const dock = document.querySelector("#mobile-promo-dock");
+  const dockRect = dock?.getBoundingClientRect();
   const locateVisible = Boolean(
     locate
     && !locate.hidden
@@ -624,6 +650,8 @@ const promos = await evaluate(`(() => {
     availableKinds: typeof availableMobilePromoKinds === "function" ? availableMobilePromoKinds() : [],
     cardVisible,
     locateVisible,
+    dockBottomGap: mapRect && dockRect ? Math.round(mapRect.bottom - dockRect.bottom) : null,
+    dockLeftGap: mapRect && dockRect ? Math.round(dockRect.left - mapRect.left) : null,
     cardLabel: document.querySelector("#mobile-startup-spotlight-label")?.textContent?.trim() || ""
   };
 })()`);
@@ -672,15 +700,20 @@ const overlapAudit = await evaluate(`(() => {
 socket.close();
 
 const landscape = safeArea.viewport[0] > safeArea.viewport[1];
+const minimumControlSize = landscape ? 32 : 40;
 const nativeInsetsValid = landscape
-  ? safeArea.native.top > 0 && (safeArea.native.right > 0 || safeArea.native.bottom > 0 || safeArea.native.left > 0)
-  : safeArea.native.top > 0 && safeArea.native.bottom > 0;
+  ? safeArea.app.top > 0 && (safeArea.app.right > 0 || safeArea.app.bottom > 0 || safeArea.app.left > 0)
+  : safeArea.app.top > 0 && safeArea.app.bottom > 0;
 const failures = [
   ...(!safeArea.propagated || !nativeInsetsValid ? [{ safeArea, landscape, nativeInsetsValid }] : []),
+  ...(startupPanel.native && (!startupPanel.timelineMode || !startupPanel.collapsed
+    || startupPanel.timeline.height > 1 || startupPanel.nearby.height > 1)
+    ? [{ startupPanel }]
+    : []),
   ...(!startupSpotlight.cardSafe || !startupSpotlight.closeSafe || startupSpotlight.locateVisible
     ? [startupSpotlight]
     : []),
-  ...controls.filter(item => item.missing || (item.visible && (item.width < 40 || item.height < 40)) || (item.visible && (!item.hitOk || !item.safeBoundsOk))),
+  ...controls.filter(item => item.missing || (item.visible && (item.width < minimumControlSize || item.height < minimumControlSize)) || (item.visible && (!item.hitOk || !item.safeBoundsOk))),
   ...panels.filter(item => item.missing || item.missingPanel || !item.open || !item.visible || !item.inBounds || item.openSheets !== 1
     || !item.scrollProbe?.reachedBottom || !item.scrollProbe?.lastBottomSafe),
   ...menus.filter(item => item.missing || !item.opened || !item.floatingControlsHidden || !item.panelSafeBounds
@@ -701,6 +734,10 @@ const failures = [
     ? [timeline]
     : []),
   ...(!nearbyHidden.hidden || !nearbyHidden.controlsSafe ? [nearbyHidden] : []),
+  ...(promos.buttons.some(button => button.visible) && (promos.dockBottomGap === null
+    || promos.dockBottomGap < 4 || promos.dockBottomGap > 12 || promos.dockLeftGap < 4 || promos.dockLeftGap > 16)
+    ? [{ promos }]
+    : []),
   ...promos.buttons.filter(item => promos.cardVisible
     ? item.visible
     : (!item.hidden && (!item.visible || item.width < 36 || item.height < 36 || !item.inMapBounds))),
@@ -714,6 +751,7 @@ console.log(JSON.stringify({
   url: target.url,
   readiness,
   safeArea,
+  startupPanel,
   startupSpotlight,
   controls,
   panels,

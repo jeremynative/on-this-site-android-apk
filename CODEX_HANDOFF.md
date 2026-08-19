@@ -1059,3 +1059,12 @@ Safest next action: refresh Obtainium on the S25 and install 0.1.463 when conven
 - `verify-app-shell.js`, JavaScript syntax, whitespace checks, and the debug APK build passed. The QA build was installed alongside the production app on USB tablet `T811MA256GB23516041180`. Ma's House was opened, scrolled rapidly into compact mode, and the resulting thumbnail stayed fully inside the header. CDP measured identical 54 x 44 CSS-pixel hero/dock bounds, `overflow: hidden`, `contain: paint`, `transform: none`, and no fatal/ANR logs.
 - The production/Obtainium app and existing Google Play review were not replaced during QA.
 - Safest next action: commit/push and merge this branch, confirm the signed Obtainium release, and leave Google Play untouched unless a new submission is explicitly requested.
+
+## 2026-08-19 APK/tablet responsive UI audit
+
+- Branch `fix/apk-ui-audit-20260819` makes native Android cold launches map-first: Timeline is selected but collapsed, so Nearby no longer opens into a redundant or empty content area.
+- Daily/on-this-date/learning shortcut controls now sit deliberately along the lower-left map edge. Map attribution moved to the lower-right beneath the location control in both WebView and native/offline map renderers.
+- Tablet landscape collapsed mode uses one compact Menu/Labels header row. Full panel mode now hides the otherwise unused map/header strip, and resize/orientation changes preserve the current panel state instead of unexpectedly reopening it.
+- Native build marker is `20260819-native-ui-audit-r182`. `verify-app-shell.js`, JavaScript/runtime checks, whitespace checks, and the debug APK build passed. The separate QA app was tested on USB tablet `T811MA256GB23516041180`; the cold-start interaction audit passed with zero failures in portrait, and landscape screenshots confirmed the compact map-first layout, menus, labels, full panels, and lower-edge controls. The production app on the tablet was not replaced.
+- The matching shared web runtime was merged through web PR #32 and its SiteGround/VPS workflow `32310778179` succeeded. Direct readback confirmed the deployed shell uses the new panel, attribution, and edge-control rules.
+- Safest next action: push/merge this Android branch and verify the resulting signed Obtainium release. Leave Google Play untouched unless a new submission is explicitly requested.

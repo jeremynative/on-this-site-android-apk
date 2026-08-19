@@ -1276,9 +1276,12 @@
       display: inline-flex;
     }
 
-    body.native-android-app .mobile-map-locate,
-    body.native-android-app .mobile-promo-dock {
+    body.native-android-app .mobile-map-locate {
       bottom: 44px;
+    }
+
+    body.native-android-app .mobile-promo-dock {
+      bottom: 8px;
     }
 
     @media (min-height: 700px) {
@@ -2375,7 +2378,7 @@
 
       body.native-android-app .mobile-map-locate {
         right: 12px;
-        bottom: 6px;
+        bottom: 44px;
       }
 
       body.native-android-app .mobile-map-shell :is(.mapboxgl-ctrl-top-right, .maplibregl-ctrl-top-right) {
@@ -5365,6 +5368,19 @@
         padding: 0;
       }
 
+      /* When the content panel is collapsed the map owns the full tablet
+         width, so the two remaining header controls can share one row. This
+         removes the otherwise empty second header row on the map-first view. */
+      body.android-device.tablet-landscape .app.panel-collapsed .quick-actions {
+        grid-template-columns: 96px 96px;
+        grid-template-rows: 32px;
+      }
+
+      body.android-device.tablet-landscape .app.panel-collapsed .mobile-layer-menu {
+        grid-column: 2;
+        grid-row: 1;
+      }
+
       body.android-device.tablet-landscape .mobile-more-menu {
         grid-column: 1;
         grid-row: 1;
@@ -5541,6 +5557,11 @@
       body.android-device.tablet-landscape .app.panel-maximized {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: minmax(0, 1fr) auto;
+      }
+
+      body.android-device.tablet-landscape .app.panel-maximized > header,
+      body.android-device.tablet-landscape .app.panel-maximized > .mobile-map-shell {
+        display: none;
       }
 
       body.android-device.tablet-landscape .app.panel-maximized > .landscape-panel-resizer,

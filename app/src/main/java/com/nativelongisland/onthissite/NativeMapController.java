@@ -2,7 +2,6 @@ package com.nativelongisland.onthissite;
 
 import android.app.Activity;
 import android.content.Context;
-import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -202,7 +201,6 @@ final class NativeMapController {
     private float viewportInteractiveBottom;
     private int viewportBottomOcclusion;
     private boolean mapCreditExpanded;
-    private boolean mapCreditAtTopRight;
     private float touchRootScreenLeft;
     private float touchRootScreenTop;
     private String pendingStateJson;
@@ -251,7 +249,7 @@ final class NativeMapController {
         FrameLayout.LayoutParams creditParams = new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.BOTTOM | Gravity.START
+            Gravity.BOTTOM | Gravity.END
         );
         creditParams.setMargins(dp(6), dp(4), dp(6), dp(4));
         container.addView(mapCreditView, creditParams);
@@ -306,13 +304,9 @@ final class NativeMapController {
     private void setMapCreditExpanded(boolean expanded) {
         mapCreditExpanded = expanded;
         FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) mapCreditView.getLayoutParams();
-        params.gravity = mapCreditAtTopRight
-            ? Gravity.TOP | Gravity.END
-            : Gravity.BOTTOM | Gravity.START;
-        params.topMargin = mapCreditAtTopRight ? dp(6) : 0;
-        params.bottomMargin = mapCreditAtTopRight
-            ? 0
-            : viewportBottomOcclusion + dp(expanded ? 92 : 4);
+        params.gravity = Gravity.BOTTOM | Gravity.END;
+        params.topMargin = 0;
+        params.bottomMargin = viewportBottomOcclusion + dp(expanded ? 92 : 4);
         mapCreditView.setLayoutParams(params);
     }
 
@@ -405,8 +399,6 @@ final class NativeMapController {
         viewportBottom = safeTop + safeHeight;
         viewportBottomOcclusion = Math.min(safeHeight - 1, Math.max(0, Math.round(bottomOcclusion)));
         viewportInteractiveBottom = viewportBottom - viewportBottomOcclusion;
-        mapCreditAtTopRight = activity.getResources().getConfiguration().orientation
-            == Configuration.ORIENTATION_LANDSCAPE;
         touchRootScreenLeft = rootScreenLeft;
         touchRootScreenTop = rootScreenTop;
         FrameLayout.LayoutParams currentParams = (FrameLayout.LayoutParams) container.getLayoutParams();
