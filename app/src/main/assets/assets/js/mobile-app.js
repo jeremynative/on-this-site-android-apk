@@ -92,6 +92,8 @@
     const MOVING_DOG_ICON_URL = "assets/map-icons/dog-moving-icon.png";
     const MOVING_DOG_WIKI_SLUG = "dog-ceremonialism";
     const MOBILE_MOVING_MARKER_INTERVAL_MS = 180;
+    const MOBILE_MOVING_LAND_CACHE_MAX = 4000;
+    const mobileMovingRouteModelCache = new WeakMap();
     const MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS = 720000;
     const MOBILE_BIOGRAPHY_MARKER_STAGGER_MS = 85;
     const MOBILE_WHALE_ONE_WAY_MS = 900000;
@@ -943,11 +945,13 @@
       mobileMovingBiographyMarkerQueueTimer: null,
       mobileMovingDogMarker: null,
       mobileMovingWhaleMarker: null,
-      mobileMovingMarkerFrame: null,
+      mobileMovingMarkerTimer: null,
       mobileMovingMarkerLastAt: 0,
       mobileMovingMarkerPausedAt: 0,
       mobileMovingMarkerPausedDurationMs: 0,
       mobileMovingMarkerInteractionUntil: 0,
+      mobileMovingLandCacheGeometry: null,
+      mobileMovingLandStateCache: new Map(),
       mapStoryRefreshTimer: null,
       passwordResetToken: ROUTE_UTILS.passwordResetTokenFromUrl(window.location),
       plantMarkers: new Map(),
@@ -11708,16 +11712,28 @@
       if (options.focus !== false) focusMobileBiographyPathPlace(path, 0, { zoom: 10.9, duration: 760 });
     }
 
-    function mobileMovingRouteSegments(route = []) {
-      return route.slice(0, -1).map((start, index) => {
+    function mobileMovingRouteModel(route = []) {
+      if (!Array.isArray(route)) return { segments: [], total: 0 };
+      const cached = mobileMovingRouteModelCache.get(route);
+      if (cached) return cached;
+      const segments = route.slice(0, -1).map((start, index) => {
         const end = route[index + 1];
         return { start, end, distance: milesBetween(start, end) || 0 };
       }).filter(segment => segment.start?.every(Number.isFinite) && segment.end?.every(Number.isFinite));
+      const model = {
+        segments,
+        total: segments.reduce((sum, segment) => sum + segment.distance, 0)
+      };
+      mobileMovingRouteModelCache.set(route, model);
+      return model;
+    }
+
+    function mobileMovingRouteSegments(route = []) {
+      return mobileMovingRouteModel(route).segments;
     }
 
     function mobileMovingCoordinateAt(route = [], progress = 0) {
-      const segments = mobileMovingRouteSegments(route);
-      const total = segments.reduce((sum, segment) => sum + segment.distance, 0);
+      const { segments, total } = mobileMovingRouteModel(route);
       if (!segments.length || total <= 0) return route[0] || null;
       let remaining = Math.max(0, Math.min(1, progress)) * total;
       for (const segment of segments) {
@@ -11748,7 +11764,7 @@
     }
 
     function mobileMovingRouteDuration(route = []) {
-      const totalMiles = mobileMovingRouteSegments(route).reduce((sum, segment) => sum + segment.distance, 0);
+      const totalMiles = mobileMovingRouteModel(route).total;
       return Math.max(360000, Math.min(1440000, totalMiles * 42000));
     }
 
@@ -11774,11 +11790,21 @@
 
     function mobileMovingPointIsOnLand(coordinates = []) {
       // Before land data arrives, use the safe canoe state.
-      if (!coordinates.every(Number.isFinite) || !state.landMaskData?.geometry) return false;
+      const geometry = state.landMaskData?.geometry || null;
+      if (!coordinates.every(Number.isFinite) || !geometry) return false;
+      if (state.mobileMovingLandCacheGeometry !== geometry) {
+        state.mobileMovingLandCacheGeometry = geometry;
+        state.mobileMovingLandStateCache.clear();
+      }
+      const cacheKey = `${Number(coordinates[0]).toFixed(4)},${Number(coordinates[1]).toFixed(4)}`;
+      if (state.mobileMovingLandStateCache.has(cacheKey)) return state.mobileMovingLandStateCache.get(cacheKey);
       try {
-        return mobileMovingLandSamples(coordinates).some(sample =>
-          pointInGeometry(sample, state.landMaskData.geometry)
-        );
+        const result = mobileMovingLandSamples(coordinates).some(sample => pointInGeometry(sample, geometry));
+        if (state.mobileMovingLandStateCache.size >= MOBILE_MOVING_LAND_CACHE_MAX) {
+          state.mobileMovingLandStateCache.delete(state.mobileMovingLandStateCache.keys().next().value);
+        }
+        state.mobileMovingLandStateCache.set(cacheKey, result);
+        return result;
       } catch {
         return false;
       }
@@ -12108,10 +12134,8 @@
     }
 
     function stopMobileMovingFeatureAnimation(now = performance.now()) {
-      if (state.mobileMovingMarkerFrame && window.cancelAnimationFrame) {
-        window.cancelAnimationFrame(state.mobileMovingMarkerFrame);
-      }
-      state.mobileMovingMarkerFrame = null;
+      window.clearTimeout(state.mobileMovingMarkerTimer);
+      state.mobileMovingMarkerTimer = null;
       if (!state.mobileMovingMarkerPausedAt) state.mobileMovingMarkerPausedAt = now;
     }
 
@@ -12131,19 +12155,24 @@
     }
 
     function startMobileMovingFeatureAnimation() {
-      if (state.mobileMovingMarkerFrame || !window.requestAnimationFrame) return;
+      if (state.mobileMovingMarkerTimer) return;
       if (document.hidden) {
         stopMobileMovingFeatureAnimation(performance.now());
         return;
       }
-      const tick = now => {
-        if (!document.hidden && now - (state.mobileMovingMarkerLastAt || 0) >= MOBILE_MOVING_MARKER_INTERVAL_MS) {
-          updateMobileMovingFeatureMarkers(now);
-          state.mobileMovingMarkerLastAt = now;
+      const tick = () => {
+        state.mobileMovingMarkerTimer = null;
+        if (document.hidden) {
+          stopMobileMovingFeatureAnimation(performance.now());
+          return;
         }
-        state.mobileMovingMarkerFrame = window.requestAnimationFrame(tick);
+        const now = performance.now();
+        updateMobileMovingFeatureMarkers(now);
+        state.mobileMovingMarkerLastAt = now;
+        state.mobileMovingMarkerTimer = window.setTimeout(tick, MOBILE_MOVING_MARKER_INTERVAL_MS);
       };
-      state.mobileMovingMarkerFrame = window.requestAnimationFrame(tick);
+      const elapsed = performance.now() - (state.mobileMovingMarkerLastAt || 0);
+      state.mobileMovingMarkerTimer = window.setTimeout(tick, Math.max(0, MOBILE_MOVING_MARKER_INTERVAL_MS - elapsed));
     }
 
     async function ensureMobileMovingFeatureMarkers() {

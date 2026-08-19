@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260818-instant-user-location-r169";
+const expectedBuild = "20260819-map-motion-efficiency-r170";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -877,7 +877,8 @@ for (const [label, document] of [
   if (!document.includes("if (path?.animate === false) return null;")) {
     throw new Error(`${label} must animate reviewed multi-stop biographies unless they explicitly opt out.`);
   }
-  if (!document.includes("!state.landMaskData?.geometry) return false;")) {
+  if (!document.includes("const geometry = state.landMaskData?.geometry || null;")
+      || !document.includes("!geometry) return false;")) {
     throw new Error(`${label} must show the safe canoe state until land data is available.`);
   }
   if (document.includes("if (path?.animate !== true) return null;")) {
@@ -973,11 +974,21 @@ if (!bundledMobileJs.includes("function setAllMobileLayerVisibility(visible)")
 if (!bundledMobileJs.includes("mobileMovingMarkerPausedAt: 0")
     || !bundledMobileJs.includes("mobileMovingMarkerPausedDurationMs: 0")
     || !bundledMobileJs.includes("function stopMobileMovingFeatureAnimation(now = performance.now())")
-    || !bundledMobileJs.includes("window.cancelAnimationFrame(state.mobileMovingMarkerFrame)")
+    || !bundledMobileJs.includes("window.clearTimeout(state.mobileMovingMarkerTimer)")
+    || !bundledMobileJs.includes("state.mobileMovingMarkerTimer = window.setTimeout(tick, MOBILE_MOVING_MARKER_INTERVAL_MS)")
+    || bundledMobileJs.includes("window.requestAnimationFrame(tick)")
     || !bundledMobileJs.includes("state.mobileMovingMarkerPausedDurationMs += Math.max(0, now - pausedAt)")
     || !bundledMobileJs.includes("const motionNow = Math.max(0, now - (state.mobileMovingMarkerPausedDurationMs || 0))")
     || !bundledMobileJs.includes("syncMobileMovingFeatureVisibility(performance.now())")) {
-  throw new Error("Bundled Android moving features must pause in the background and resume without rushing along their routes.");
+  throw new Error("Bundled Android moving features must use due-work timers, pause in the background, and resume without rushing along their routes.");
+}
+if (!bundledMobileJs.includes("const mobileMovingRouteModelCache = new WeakMap();")
+    || !bundledMobileJs.includes("function mobileMovingRouteModel(route = [])")
+    || !bundledMobileJs.includes("mobileMovingRouteModelCache.set(route, model)")
+    || !bundledMobileJs.includes("mobileMovingLandStateCache: new Map()")
+    || !bundledMobileJs.includes("state.mobileMovingLandStateCache.has(cacheKey)")
+    || !bundledMobileJs.includes("MOBILE_MOVING_LAND_CACHE_MAX")) {
+  throw new Error("Bundled Android moving features must reuse route geometry and bounded shoreline results.");
 }
 for (const [label, document] of [
   ["bundled fallback", bundledApp]
