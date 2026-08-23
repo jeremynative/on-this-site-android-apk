@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260823-ancestral-land-launcher-r183";
+const expectedBuild = "20260823-real-ancestral-land-launcher-r184";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1393,13 +1393,15 @@ const ancestralLauncherColors = [
   "#081078", "#66FF00", "#B52CBF", "#F4FFAD", "#26100D", "#AD6323", "#08FFC5",
   "#FF26DB", "#5454FF", "#FFDBF3", "#FFD93D", "#FF1F1F", "#66FF00"
 ];
-if (!launcherBackground.includes("#EEF3ED")) {
-  throw new Error("Android launcher icon must retain the calm project-background color.");
+if (!launcherBackground.includes("#071A33")) {
+  throw new Error("Android launcher icon must retain the dark-blue project background.");
 }
 if (!launcherForeground.includes("<clip-path")
     || launcherForeground.includes("M54,18c-14.3")
+    || launcherForeground.includes("L15.18,24")
+    || !launcherForeground.includes('android:strokeColor="#E8F0EA"')
     || ancestralLauncherColors.some(color => !launcherForeground.includes(`android:fillColor="${color}"`))) {
-  throw new Error("Android launcher foreground must use the Long Island silhouette and all 13 ancestral-land colors instead of the old map pin.");
+  throw new Error("Android launcher foreground must use the real 13 ancestral-land shapes inside the Long Island silhouette.");
 }
 if (!launcherMonochrome.includes('android:fillColor="#FFFFFFFF"')
     || launcherMonochrome.includes("M54,18c-14.3")) {
@@ -1407,6 +1409,8 @@ if (!launcherMonochrome.includes('android:fillColor="#FFFFFFFF"')
 }
 if (!legacyLauncher.includes("<clip-path")
     || !legacyRoundLauncher.includes("<clip-path")
+    || !legacyLauncher.includes('android:fillColor="#071A33"')
+    || !legacyRoundLauncher.includes('android:fillColor="#071A33"')
     || ancestralLauncherColors.some(color => !legacyLauncher.includes(`android:fillColor="${color}"`))
     || ancestralLauncherColors.some(color => !legacyRoundLauncher.includes(`android:fillColor="${color}"`))) {
   throw new Error("Legacy and round Android launchers must receive the same 13-color Long Island icon.");
