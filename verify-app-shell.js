@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260819-native-ui-audit-r182";
+const expectedBuild = "20260823-ancestral-land-launcher-r183";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -24,6 +24,11 @@ const bundledResearchQuestionCssPath = "app/src/main/assets/assets/css/shared-re
 const bundledSharedSiteUtilsPath = "app/src/main/assets/assets/js/shared-site-utils.js";
 const stylesPath = "app/src/main/res/values/styles.xml";
 const launchBackgroundPath = "app/src/main/res/drawable/launch_background.xml";
+const launcherBackgroundPath = "app/src/main/res/drawable/ic_launcher_background.xml";
+const launcherForegroundPath = "app/src/main/res/drawable/ic_launcher_foreground.xml";
+const launcherMonochromePath = "app/src/main/res/drawable/ic_launcher_monochrome.xml";
+const legacyLauncherPath = "app/src/main/res/mipmap-anydpi/ic_launcher.xml";
+const legacyRoundLauncherPath = "app/src/main/res/mipmap-anydpi/ic_launcher_round.xml";
 const android12StylesPath = "app/src/main/res/values-v31/styles.xml";
 const manifestPath = "app/src/main/AndroidManifest.xml";
 const appBridgePath = "app/src/main/java/com/nativelongisland/onthissite/AppBridge.java";
@@ -67,6 +72,11 @@ const bundledSharedLifecycleUtils = fs.readFileSync(bundledSharedLifecycleUtilsP
 const bundledSharedActivityUtils = fs.readFileSync(bundledSharedActivityUtilsPath, "utf8");
 const bundledSharedMapStoryUtils = fs.readFileSync(bundledSharedMapStoryUtilsPath, "utf8");
 const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8").replace(/\r\n/g, "\n");
+const launcherBackground = fs.readFileSync(launcherBackgroundPath, "utf8");
+const launcherForeground = fs.readFileSync(launcherForegroundPath, "utf8");
+const launcherMonochrome = fs.readFileSync(launcherMonochromePath, "utf8");
+const legacyLauncher = fs.readFileSync(legacyLauncherPath, "utf8");
+const legacyRoundLauncher = fs.readFileSync(legacyRoundLauncherPath, "utf8");
 const mapLibreJs = fs.readFileSync(mapLibreJsPath, "utf8");
 const mapLibreCss = fs.readFileSync(mapLibreCssPath, "utf8");
 const mapLibreLicense = fs.readFileSync(mapLibreLicensePath, "utf8");
@@ -1378,6 +1388,28 @@ if (!styles.includes('<item name="android:windowBackground">@drawable/launch_bac
 }
 if (!launchBackground.includes('android:color="#EEF3ED"') || launchBackground.includes('@drawable/ic_launcher_foreground')) {
   throw new Error("Android launch background must be a plain app-theme bridge so it does not duplicate the animated loader.");
+}
+const ancestralLauncherColors = [
+  "#081078", "#66FF00", "#B52CBF", "#F4FFAD", "#26100D", "#AD6323", "#08FFC5",
+  "#FF26DB", "#5454FF", "#FFDBF3", "#FFD93D", "#FF1F1F", "#66FF00"
+];
+if (!launcherBackground.includes("#EEF3ED")) {
+  throw new Error("Android launcher icon must retain the calm project-background color.");
+}
+if (!launcherForeground.includes("<clip-path")
+    || launcherForeground.includes("M54,18c-14.3")
+    || ancestralLauncherColors.some(color => !launcherForeground.includes(`android:fillColor="${color}"`))) {
+  throw new Error("Android launcher foreground must use the Long Island silhouette and all 13 ancestral-land colors instead of the old map pin.");
+}
+if (!launcherMonochrome.includes('android:fillColor="#FFFFFFFF"')
+    || launcherMonochrome.includes("M54,18c-14.3")) {
+  throw new Error("Android themed icons must use a monochrome Long Island silhouette instead of the old map pin.");
+}
+if (!legacyLauncher.includes("<clip-path")
+    || !legacyRoundLauncher.includes("<clip-path")
+    || ancestralLauncherColors.some(color => !legacyLauncher.includes(`android:fillColor="${color}"`))
+    || ancestralLauncherColors.some(color => !legacyRoundLauncher.includes(`android:fillColor="${color}"`))) {
+  throw new Error("Legacy and round Android launchers must receive the same 13-color Long Island icon.");
 }
 if (!android12Styles.includes('<item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>')
     || !android12Styles.includes('<item name="android:windowSplashScreenBackground">#EEF3ED</item>')) {
