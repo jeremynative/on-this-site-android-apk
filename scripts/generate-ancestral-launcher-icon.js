@@ -3,11 +3,14 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const siteIndexPath = path.join(root, "app/src/main/assets/assets/data/mobile-site-index.json");
+const siteGeometryPath = path.join(root, "app/src/main/assets/assets/data/mobile-site-geometry.json");
 const landMaskPath = path.join(root, "app/src/main/assets/long-island-land-mask-lite.json");
 const drawableDir = path.join(root, "app/src/main/res/drawable");
 const legacyIconPath = path.join(root, "app/src/main/res/mipmap-anydpi/ic_launcher.xml");
 const legacyRoundIconPath = path.join(root, "app/src/main/res/mipmap-anydpi/ic_launcher_round.xml");
 const previewDir = path.join(root, "build/launcher-icon-preview");
+const launcherBackground = "#071A33";
+const territoryBoundary = "#E8F0EA";
 
 const territorySlugs = [
   "canarsie-traditional-land",
@@ -33,10 +36,10 @@ const bounds = {
 };
 
 const frame = {
-  left: 16,
-  right: 92,
-  top: 31,
-  bottom: 77
+  left: 14,
+  right: 94,
+  top: 29,
+  bottom: 79
 };
 
 function project(point) {
@@ -71,7 +74,7 @@ function simplifyOpen(points, tolerance) {
   return left.slice(0, -1).concat(right);
 }
 
-function simplifyRing(points, tolerance = 1.5) {
+function simplifyRing(points, tolerance = 0.7) {
   if (!Array.isArray(points) || points.length < 4) return [];
   const open = points.slice(0, -1).map(project);
   if (open.length < 3) return [];
@@ -121,58 +124,59 @@ function formatNumber(value) {
   return Number(value.toFixed(2)).toString();
 }
 
-function longIslandPathData(geometry) {
+function geometryPathData(geometry, tolerance = 0.7, minimumArea = 0.2) {
   return coordinateRings(geometry.coordinates)
     .filter(ringWithinIconScope)
-    .map(ring => simplifyRing(ring))
-    .filter(ring => ring.length >= 3 && Math.abs(signedArea(ring)) >= 3)
+    .map(ring => simplifyRing(ring, tolerance))
+    .filter(ring => ring.length >= 3 && Math.abs(signedArea(ring)) >= minimumArea)
     .map(ring => `M${ring.map(([x, y]) => `${formatNumber(x)},${formatNumber(y)}`).join("L")}Z`)
     .join("");
 }
 
-function bandPath(index, count) {
-  const width = (frame.right - frame.left) / count;
-  const left = frame.left + index * width - 0.12;
-  const right = frame.left + (index + 1) * width + 0.12;
-  const upperShift = index % 2 === 0 ? -0.7 : 0.7;
-  const lowerShift = index % 3 === 0 ? 0.9 : -0.45;
-  return `M${formatNumber(left + upperShift)},24L${formatNumber(right + upperShift)},24L${formatNumber(right + lowerShift)},84L${formatNumber(left + lowerShift)},84Z`;
-}
-
 function vectorMosaic(territories, outlinePath, indent = "    ") {
-  const bands = territories.map((territory, index) => [
+  const territoryPaths = territories.map(territory => [
     `${indent}    <path`,
     `${indent}        android:fillColor="${territory.color}"`,
-    `${indent}        android:pathData="${bandPath(index, territories.length)}" />`
+    `${indent}        android:fillType="evenOdd"`,
+    `${indent}        android:strokeColor="${territoryBoundary}"`,
+    `${indent}        android:strokeWidth="0.36"`,
+    `${indent}        android:strokeLineJoin="round"`,
+    `${indent}        android:pathData="${territory.pathData}" />`
   ].join("\n")).join("\n");
   return [
     `${indent}<group>`,
     `${indent}    <clip-path`,
     `${indent}        android:fillType="evenOdd"`,
     `${indent}        android:pathData="${outlinePath}" />`,
-    bands,
+    territoryPaths,
     `${indent}</group>`,
     `${indent}<path`,
     `${indent}    android:fillColor="#00000000"`,
     `${indent}    android:fillType="evenOdd"`,
-    `${indent}    android:strokeColor="#315F4F"`,
-    `${indent}    android:strokeWidth="0.45"`,
+    `${indent}    android:strokeColor="${territoryBoundary}"`,
+    `${indent}    android:strokeWidth="0.72"`,
     `${indent}    android:strokeLineJoin="round"`,
     `${indent}    android:pathData="${outlinePath}" />`
   ].join("\n");
 }
 
 const siteIndexData = JSON.parse(fs.readFileSync(siteIndexPath, "utf8"));
+const siteGeometryData = JSON.parse(fs.readFileSync(siteGeometryPath, "utf8"));
 const landMaskData = JSON.parse(fs.readFileSync(landMaskPath, "utf8"));
 const siteBySlug = new Map(siteIndexData.rows.map(row => [row.slug, row]));
+const geometryBySlug = new Map(siteGeometryData.rows.map(row => [row.slug, row.display_geojson]));
 
 const territories = territorySlugs.map(slug => {
   const siteRow = siteBySlug.get(slug);
+  const geometry = geometryBySlug.get(slug);
   if (!/^#[0-9a-f]{6}$/i.test(siteRow?.map_fill_color || "")) throw new Error(`Missing map color for ${slug}`);
-  return { slug, color: siteRow.map_fill_color.toUpperCase() };
+  if (!geometry?.coordinates) throw new Error(`Missing map geometry for ${slug}`);
+  const pathData = geometryPathData(geometry);
+  if (!pathData) throw new Error(`Generated empty map geometry for ${slug}`);
+  return { slug, color: siteRow.map_fill_color.toUpperCase(), pathData };
 });
 
-const outlinePath = longIslandPathData(landMaskData.geometry);
+const outlinePath = geometryPathData(landMaskData.geometry, 0.7, 0.2);
 if (!outlinePath) throw new Error("Generated empty Long Island launcher silhouette");
 
 const foreground = `<vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -201,22 +205,22 @@ const legacy = `<vector xmlns:android="http://schemas.android.com/apk/res/androi
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:fillColor="#EEF3ED" android:pathData="M0,0h108v108h-108z" />
+    <path android:fillColor="${launcherBackground}" android:pathData="M0,0h108v108h-108z" />
 ${vectorMosaic(territories, outlinePath)}
 </vector>
 `;
 
-const svgBands = territories.map((territory, index) =>
-  `<path fill="${territory.color}" d="${bandPath(index, territories.length)}"/>`
+const svgTerritories = territories.map(territory =>
+  `<path fill="${territory.color}" fill-rule="evenodd" stroke="${territoryBoundary}" stroke-width="0.36" stroke-linejoin="round" d="${territory.pathData}"/>`
 ).join("\n      ");
 
 const preview = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="864" height="864">
-  <rect width="108" height="108" rx="24" fill="#EEF3ED"/>
+  <rect width="108" height="108" rx="24" fill="${launcherBackground}"/>
   <defs><clipPath id="long-island"><path fill-rule="evenodd" d="${outlinePath}"/></clipPath></defs>
   <g clip-path="url(#long-island)">
-      ${svgBands}
+      ${svgTerritories}
   </g>
-  <path fill="none" stroke="#315F4F" stroke-width="0.45" stroke-linejoin="round" fill-rule="evenodd" d="${outlinePath}"/>
+  <path fill="none" stroke="${territoryBoundary}" stroke-width="0.72" stroke-linejoin="round" fill-rule="evenodd" d="${outlinePath}"/>
 </svg>
 `;
 
