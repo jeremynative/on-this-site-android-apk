@@ -1,5 +1,14 @@
 # Android APK — Codex Handoff
 
+## August 23 ancestral-land Long Island launcher icon
+
+- Replaced the former green map-pin launcher artwork with a Long Island silhouette divided across the exact 13 ancestral-land colors stored in the bundled site catalog. Adaptive, round, legacy, and Android themed/monochrome icon modes now share the Long Island identity.
+- Added `scripts/generate-ancestral-launcher-icon.js`, which derives the simplified launcher-safe silhouette from the bundled Long Island land mask and reads the palette from the 13 canonical territory rows. This keeps future icon regeneration tied to project data instead of hand-copied artwork.
+- Bumped the native shell marker to `20260823-ancestral-land-launcher-r183` and extended `verify-app-shell.js` so the old pin cannot silently return and every launcher mode must retain the new silhouette and palette.
+- `verify-app-shell.js`, Google Play readiness, `git diff --check`, `assembleDebug`, and `lintDebug` pass. The separate QA package installed on the USB tablet and Android Recents rendered the new multicolor Long Island icon correctly; the QA package was removed afterward and the production app/data were not touched.
+
+Current branch is `fix/apk-ancestral-land-icon-20260823`, based on `origin/main` at `a8700e4`. Safest next action is to merge this focused icon change, wait for the signed APK/AAB workflow, verify the exact published Obtainium icon, and upload that workflow's AAB to Google Play closed testing when the release is ready.
+
 ## August 18 Android 16 Back navigation repair
 
 - Root cause: API 36 apps on Android 16 no longer receive the legacy `Activity.onBackPressed()` callback. The existing panel-first JavaScript handler and native exit dialog were correct but unreachable on the S25 Ultra.
