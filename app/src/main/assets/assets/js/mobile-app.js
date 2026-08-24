@@ -88,6 +88,7 @@
     const EXHIBIT_MARKER_ICON = "assets/map-icons/exhibit-framed-landscape-marker.png";
     const BIOGRAPHY_PERSON_ICON_URL = "assets/map-icons/person-biography-marker.png";
     const WHALING_WHALE_ICON_URL = "assets/map-icons/whaling-moving-whale.png";
+    const AMETHYST_SHIP_ICON_URL = "assets/map-icons/amethyst-moving-bark.png";
     const WHALING_FEATURE_SLUG = "whaling";
     const MOVING_DOG_ICON_URL = "assets/map-icons/dog-moving-icon.png";
     const MOVING_DOG_WIKI_SLUG = "dog-ceremonialism";
@@ -109,6 +110,14 @@
       [-72.50, 40.74],
       [-72.24, 40.79],
       [-71.98, 40.84]
+    ]);
+    const MOBILE_AMETHYST_SHIP_ONE_WAY_MS = 480000;
+    const MOBILE_AMETHYST_SHIP_ROUTE = Object.freeze([
+      [-72.293, 40.998],
+      [-72.17, 40.985],
+      [-72.03, 40.975],
+      [-71.88, 40.985],
+      [-71.70, 41.01]
     ]);
     const MOBILE_DOG_ONE_WAY_MS = 1020000;
     const MOBILE_DOG_START_OFFSET_MS = MOBILE_DOG_ONE_WAY_MS * 0.35;
@@ -948,6 +957,7 @@
       mobileMovingBiographyMarkerQueueTimer: null,
       mobileMovingDogMarker: null,
       mobileMovingWhaleMarker: null,
+      mobileMovingAmethystShipMarker: null,
       mobileMovingMarkerTimer: null,
       mobileMovingMarkerLastAt: 0,
       mobileMovingMarkerPausedAt: 0,
@@ -7513,6 +7523,11 @@
         ? { slug: WHALING_FEATURE_SLUG, title: "Whaling", feature_kind: "moving-whale" }
         : { wiki_slug: WHALING_FEATURE_SLUG, title: "Whaling", feature_kind: "moving-whale" };
       consider(state.mobileMovingWhaleMarker, whalingProperties);
+      consider(state.mobileMovingAmethystShipMarker, {
+        wiki_slug: WHALING_FEATURE_SLUG,
+        title: "Amethyst: global Shinnecock whaling",
+        feature_kind: "moving-ship"
+      });
       return best?.feature || null;
     }
 
@@ -11947,8 +11962,10 @@
       state.mobileMovingBiographyMarkers.clear();
       state.mobileMovingDogMarker?.remove?.();
       state.mobileMovingWhaleMarker?.remove?.();
+      state.mobileMovingAmethystShipMarker?.remove?.();
       state.mobileMovingDogMarker = null;
       state.mobileMovingWhaleMarker = null;
+      state.mobileMovingAmethystShipMarker = null;
     }
 
     function nativeMovingFeatureCollection(now = performance.now()) {
@@ -12006,6 +12023,23 @@
           label: "Whaling",
           show_label: false,
           direction: whaleMotion.direction
+        }
+      });
+      const shipMotion = mobileMovingBiographyLoop(MOBILE_AMETHYST_SHIP_ROUTE, MOBILE_AMETHYST_SHIP_ONE_WAY_MS, 0, motionNow);
+      features.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: shipMotion.coordinates },
+        properties: {
+          native_kind: "wiki",
+          native_key: WHALING_FEATURE_SLUG,
+          moving_kind: "ship",
+          icon_key: "nli-icon-amethyst-moving-bark",
+          title: "Amethyst: global Shinnecock whaling",
+          label: "Amethyst: global Shinnecock whaling",
+          show_label: false,
+          motion_opacity: Number(shipMotion.opacity.toFixed(3)),
+          motion_phase: shipMotion.phase,
+          direction: "right"
         }
       });
       return nativeMapFeatureCollection(features);
@@ -12220,6 +12254,43 @@
       button.dataset.direction = motion.direction;
     }
 
+    function mobileMovingAmethystShipHtml() {
+      return `
+        <button class="mobile-moving-amethyst-ship-marker" type="button" aria-label="Open Amethyst and global Shinnecock whaling history">
+          <span class="mobile-moving-amethyst-ship-shell" aria-hidden="true"><img src="${escapeHtml(AMETHYST_SHIP_ICON_URL)}" alt=""></span>
+        </button>
+      `;
+    }
+
+    function ensureMobileMovingAmethystShipMarker() {
+      if (!state.map || !window.mapboxgl?.Marker) return;
+      if (nativeMapBridgeAvailable()) {
+        state.mobileMovingAmethystShipMarker?.remove?.();
+        state.mobileMovingAmethystShipMarker = null;
+        return;
+      }
+      if (state.mobileMovingAmethystShipMarker) return;
+      const element = document.createElement("div");
+      element.className = "mobile-moving-amethyst-ship-mapbox-icon";
+      element.innerHTML = mobileMovingAmethystShipHtml();
+      state.mobileMovingAmethystShipMarker = new mapboxgl.Marker({ element, anchor: "center" })
+        .setLngLat(MOBILE_AMETHYST_SHIP_ROUTE[0])
+        .addTo(state.map);
+      bindMobileMovingMarkerButton(element.querySelector(".mobile-moving-amethyst-ship-marker"), () => {
+        openWikiArticle(WHALING_FEATURE_SLUG, { focus: false, mapCenter: MOBILE_AMETHYST_SHIP_ROUTE[0] });
+      });
+    }
+
+    function updateMobileMovingAmethystShipMarker(now = performance.now()) {
+      if (!state.mobileMovingAmethystShipMarker) return;
+      const motion = mobileMovingBiographyLoop(MOBILE_AMETHYST_SHIP_ROUTE, MOBILE_AMETHYST_SHIP_ONE_WAY_MS, 0, now);
+      state.mobileMovingAmethystShipMarker.setLngLat(motion.coordinates);
+      const button = state.mobileMovingAmethystShipMarker.getElement?.()?.querySelector?.(".mobile-moving-amethyst-ship-marker");
+      if (!button) return;
+      button.dataset.motionPhase = motion.phase;
+      button.style.opacity = String(Math.max(0, Math.min(1, motion.opacity)));
+    }
+
     function updateMobileMovingFeatureMarkers(now = performance.now()) {
       if (!state.map || document.hidden || isAndroidMapGestureActive() || mobileMapCameraIsInteracting() || now < (state.mobileMovingMarkerInteractionUntil || 0)) return;
       if (nativeMapBridgeAvailable()) {
@@ -12233,6 +12304,7 @@
       }
       updateMobileMovingDogMarker(motionNow);
       updateMobileMovingWhaleMarker(motionNow);
+      updateMobileMovingAmethystShipMarker(motionNow);
     }
 
     function stopMobileMovingFeatureAnimation(now = performance.now()) {
@@ -12281,6 +12353,7 @@
       if (!state.map) return;
       ensureMobileMovingDogMarker();
       ensureMobileMovingWhaleMarker();
+      ensureMobileMovingAmethystShipMarker();
       ensureMobileMovingBiographyMarkers();
       ensureLandMask().then(() => updateMobileMovingFeatureMarkers()).catch(() => {});
       updateMobileMovingFeatureMarkers();

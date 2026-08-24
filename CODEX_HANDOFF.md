@@ -1,5 +1,14 @@
 # Android APK — Codex Handoff
 
+## August 23 Amethyst global-whaling route
+
+- Added a small generic nineteenth-century bark that leaves Sag Harbor on a slow one-way eastbound route, fades at the route end, and resets invisibly. It is explicitly an illustrative global-whaling route rather than a reconstruction of the lost <em>Amethyst</em>.
+- The WebView and native MapLibre paths share the same moving feature, open the Whaling article when selected, hide during contributor-profile map mode, and preserve the newer Android bearing/pitch camera synchronization.
+- Added the four new Hunter/Shoemaker Historic Moments to the packaged timeline index. The live Directus content remains the source of truth; a later complete offline snapshot rebuild can embed the expanded article bodies.
+- Build marker is `20260823-amethyst-global-whaling-r185`. `verify-app-shell.js`, JavaScript syntax, `git diff --check`, `assembleDebug`, and `lintDebug` pass.
+
+Current branch is `feature/amethyst-moving-ship-r2-20260823`, based on `origin/main` at `944e49e8`. Safest next action is to merge this focused change and verify the signed Obtainium workflow; do not replace the Google Play release unless separately requested.
+
 ## August 23 ancestral-land Long Island launcher icon
 
 - Replaced the former green map-pin launcher artwork with a Long Island silhouette divided across the exact 13 ancestral-land colors stored in the bundled site catalog. Adaptive, round, legacy, and Android themed/monochrome icon modes now share the Long Island identity.
