@@ -3512,6 +3512,7 @@
     body.mobile-profile-map-mode .mobile-calendar-event-marker,
     body.mobile-profile-map-mode .mobile-moving-dog-marker,
     body.mobile-profile-map-mode .mobile-moving-whale-marker,
+    body.mobile-profile-map-mode .mobile-moving-amethyst-ship-marker,
     body.mobile-profile-map-mode .selected-site-map-label {
       opacity: 0 !important;
       visibility: hidden !important;
@@ -6925,7 +6926,8 @@
 
     .mobile-moving-biography-mapbox-icon,
     .mobile-moving-dog-mapbox-icon,
-    .mobile-moving-whale-mapbox-icon {
+    .mobile-moving-whale-mapbox-icon,
+    .mobile-moving-amethyst-ship-mapbox-icon {
       display: grid;
       place-items: center;
       overflow: visible;
@@ -6943,7 +6945,8 @@
 
     .mobile-moving-biography-marker,
     .mobile-moving-dog-marker,
-    .mobile-moving-whale-marker {
+    .mobile-moving-whale-marker,
+    .mobile-moving-amethyst-ship-marker {
       appearance: none;
       position: relative;
       display: grid;
@@ -7129,6 +7132,36 @@
       max-width: 56px !important;
       max-height: 29px !important;
       height: auto;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 3px rgba(12, 29, 47, 0.34));
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .mobile-moving-amethyst-ship-mapbox-icon {
+      width: 68px !important;
+      height: 44px !important;
+      z-index: 4;
+    }
+
+    .mobile-moving-amethyst-ship-marker {
+      width: 68px;
+      height: 44px;
+      transition: opacity 180ms linear;
+    }
+
+    .mobile-moving-amethyst-ship-marker[data-motion-phase="reset"] {
+      transition: none;
+      pointer-events: none;
+    }
+
+    .mobile-moving-amethyst-ship-shell,
+    .mobile-moving-amethyst-ship-shell img {
+      display: block;
+      width: 56px !important;
+      max-width: 56px !important;
+      height: auto;
+      max-height: 34px !important;
       object-fit: contain;
       filter: drop-shadow(0 2px 3px rgba(12, 29, 47, 0.34));
       pointer-events: none;

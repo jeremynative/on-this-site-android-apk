@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260823-real-ancestral-land-launcher-r184";
+const expectedBuild = "20260823-amethyst-global-whaling-r185";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -34,6 +34,7 @@ const manifestPath = "app/src/main/AndroidManifest.xml";
 const appBridgePath = "app/src/main/java/com/nativelongisland/onthissite/AppBridge.java";
 const nativeMapControllerPath = "app/src/main/java/com/nativelongisland/onthissite/NativeMapController.java";
 const nativeSiteIconManifestPath = "app/src/main/assets/map/site-icon-keys.json";
+const amethystShipIconPath = "app/src/main/assets/assets/map-icons/amethyst-moving-bark.png";
 const storyBridgePath = "app/src/main/java/com/nativelongisland/onthissite/StoryBridge.java";
 const captureFileProviderPath = "app/src/main/java/com/nativelongisland/onthissite/CaptureFileProvider.java";
 const nativeCommentPhotoCompatPath = "app/src/main/assets/native-comment-photo-compat.js";
@@ -134,6 +135,9 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes('"nli-moving-biography-icons"')
     || !nativeMapController.includes('"nli-moving-dog-icons"')
     || !nativeMapController.includes('"nli-moving-whale-icons"')
+    || !nativeMapController.includes('new SymbolLayer("nli-moving-ship-icons", MOVING_FEATURE_SOURCE_ID)')
+    || !nativeMapController.includes('Expression.literal("ship")')
+    || !nativeMapController.includes('iconSize(0.34f)')
     || !nativeMapController.includes('"nli-story-markers"')
     || !nativeMapController.includes('"nli-plant-markers"')
     || !nativeMapController.includes('"nli-approved-suggestion-markers"')
@@ -176,6 +180,15 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes('COMPACT_MAP_CREDIT = "ⓘ OSM"')
     || !nativeMapController.includes("© OpenStreetMap contributors")) {
   throw new Error("Native MapLibre must use self-hosted/bundled PMTiles, hide engine branding, retain legal credit, and render the required project overlays.");
+}
+if (!fs.existsSync(amethystShipIconPath) || fs.statSync(amethystShipIconPath).size < 10000) {
+  throw new Error("Android must bundle the reviewed generic Amethyst-era bark icon.");
+}
+if (!bundledMobileJs.includes('moving_kind: "ship"')
+    || !bundledMobileJs.includes('icon_key: "nli-icon-amethyst-moving-bark"')
+    || !bundledMobileJs.includes("MOBILE_AMETHYST_SHIP_ONE_WAY_MS")
+    || !bundledMobileCss.includes("mobile-moving-amethyst-ship-marker")) {
+  throw new Error("Android web/native bridge must carry the one-way Amethyst global-whaling route and its fading ship marker.");
 }
 const expandedMapHitQuery = nativeMapController.match(/List<Feature> features = map\.queryRenderedFeatures\(hitBox,[\s\S]*?\);/)?.[0] || "";
 if (!expandedMapHitQuery || expandedMapHitQuery.includes('"nli-territory-fill"')) {

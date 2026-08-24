@@ -896,6 +896,13 @@ final class NativeMapController {
                     iconImage(Expression.get("icon_key")), iconSize(0.88f),
                     iconAllowOverlap(true), iconIgnorePlacement(true)
                 ));
+            style.addLayer(new SymbolLayer("nli-moving-ship-icons", MOVING_FEATURE_SOURCE_ID)
+                .withFilter(Expression.eq(Expression.get("moving_kind"), Expression.literal("ship")))
+                .withProperties(
+                    iconImage(Expression.get("icon_key")), iconSize(0.34f),
+                    iconOpacity(Expression.coalesce(Expression.get("motion_opacity"), Expression.literal(1f))),
+                    iconAllowOverlap(true), iconIgnorePlacement(true)
+                ));
             style.addLayer(new SymbolLayer("nli-moving-feature-labels", MOVING_FEATURE_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("show_label"), Expression.literal(true)))
                 .withProperties(
@@ -1242,6 +1249,7 @@ final class NativeMapController {
         setLayerVisibility(style, "nli-moving-biography-icons", !profileMode);
         setLayerVisibility(style, "nli-moving-dog-icons", !profileMode);
         setLayerVisibility(style, "nli-moving-whale-icons", !profileMode);
+        setLayerVisibility(style, "nli-moving-ship-icons", !profileMode);
         setLayerVisibility(style, "nli-moving-feature-labels", !profileMode);
         applyBasemapVisibility(style);
         refreshMapCreditForVisibleBasemap();
@@ -1367,7 +1375,7 @@ final class NativeMapController {
                 "nli-suggestion-draft-label", "nli-suggestion-draft-marker", "nli-search-result-marker",
                 "nli-approved-suggestion-labels", "nli-approved-suggestion-markers",
                 "nli-plant-markers", "nli-story-markers", "nli-selected-site-label",
-                "nli-moving-feature-labels", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons",
+                "nli-moving-feature-labels", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons", "nli-moving-ship-icons",
                 "nli-calendar-event-labels", "nli-calendar-event-circles", "nli-exhibit-circles",
                 "nli-biography-path-numbers", "nli-biography-path-points", "nli-biography-path-labels",
                 "nli-site-point-labels", "nli-site-point-icons", "nli-site-point-circles");
@@ -1393,7 +1401,7 @@ final class NativeMapController {
             "nli-suggestion-draft-label", "nli-suggestion-draft-marker", "nli-search-result-marker",
             "nli-approved-suggestion-labels", "nli-approved-suggestion-markers",
             "nli-plant-markers", "nli-story-markers", "nli-selected-site-label",
-            "nli-moving-feature-labels", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons",
+            "nli-moving-feature-labels", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons", "nli-moving-ship-icons",
             "nli-calendar-event-labels", "nli-calendar-event-circles", "nli-exhibit-circles",
             "nli-biography-path-numbers", "nli-biography-path-points", "nli-biography-path-labels",
             "nli-site-point-labels", "nli-site-point-icons", "nli-site-point-circles", "nli-site-polygon-fill");

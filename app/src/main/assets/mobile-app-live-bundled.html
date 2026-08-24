@@ -1297,9 +1297,12 @@
       display: inline-flex;
     }
 
-    body.native-android-app .mobile-map-locate,
-    body.native-android-app .mobile-promo-dock {
+    body.native-android-app .mobile-map-locate {
       bottom: 44px;
+    }
+
+    body.native-android-app .mobile-promo-dock {
+      bottom: 8px;
     }
 
     @media (min-height: 700px) {
@@ -2396,7 +2399,7 @@
 
       body.native-android-app .mobile-map-locate {
         right: 12px;
-        bottom: 6px;
+        bottom: 44px;
       }
 
       body.native-android-app .mobile-map-shell :is(.mapboxgl-ctrl-top-right, .maplibregl-ctrl-top-right) {
@@ -3530,6 +3533,7 @@
     body.mobile-profile-map-mode .mobile-calendar-event-marker,
     body.mobile-profile-map-mode .mobile-moving-dog-marker,
     body.mobile-profile-map-mode .mobile-moving-whale-marker,
+    body.mobile-profile-map-mode .mobile-moving-amethyst-ship-marker,
     body.mobile-profile-map-mode .selected-site-map-label {
       opacity: 0 !important;
       visibility: hidden !important;
@@ -5386,6 +5390,19 @@
         padding: 0;
       }
 
+      /* When the content panel is collapsed the map owns the full tablet
+         width, so the two remaining header controls can share one row. This
+         removes the otherwise empty second header row on the map-first view. */
+      body.android-device.tablet-landscape .app.panel-collapsed .quick-actions {
+        grid-template-columns: 96px 96px;
+        grid-template-rows: 32px;
+      }
+
+      body.android-device.tablet-landscape .app.panel-collapsed .mobile-layer-menu {
+        grid-column: 2;
+        grid-row: 1;
+      }
+
       body.android-device.tablet-landscape .mobile-more-menu {
         grid-column: 1;
         grid-row: 1;
@@ -5564,6 +5581,11 @@
         grid-template-rows: minmax(0, 1fr) auto;
       }
 
+      body.android-device.tablet-landscape .app.panel-maximized > header,
+      body.android-device.tablet-landscape .app.panel-maximized > .mobile-map-shell {
+        display: none;
+      }
+
       body.android-device.tablet-landscape .app.panel-maximized > .landscape-panel-resizer,
       body.android-device.tablet-landscape .app.panel-collapsed > .landscape-panel-resizer {
         display: none;
@@ -5644,6 +5666,9 @@
       align-self: center;
       justify-self: end;
       width: 54px;
+      overflow: hidden;
+      contain: paint;
+      border-radius: 8px;
       cursor: pointer;
       pointer-events: auto;
     }
@@ -6922,7 +6947,8 @@
 
     .mobile-moving-biography-mapbox-icon,
     .mobile-moving-dog-mapbox-icon,
-    .mobile-moving-whale-mapbox-icon {
+    .mobile-moving-whale-mapbox-icon,
+    .mobile-moving-amethyst-ship-mapbox-icon {
       display: grid;
       place-items: center;
       overflow: visible;
@@ -6940,7 +6966,8 @@
 
     .mobile-moving-biography-marker,
     .mobile-moving-dog-marker,
-    .mobile-moving-whale-marker {
+    .mobile-moving-whale-marker,
+    .mobile-moving-amethyst-ship-marker {
       appearance: none;
       position: relative;
       display: grid;
@@ -6956,6 +6983,11 @@
     .mobile-moving-biography-marker {
       width: 44px;
       height: 44px;
+      transition: opacity 180ms linear;
+    }
+
+    .mobile-moving-biography-marker[data-motion-phase="reset"] {
+      transition: none;
     }
 
     .mobile-moving-biography-shell {
@@ -7121,6 +7153,36 @@
       max-width: 56px !important;
       max-height: 29px !important;
       height: auto;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 3px rgba(12, 29, 47, 0.34));
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .mobile-moving-amethyst-ship-mapbox-icon {
+      width: 68px !important;
+      height: 44px !important;
+      z-index: 4;
+    }
+
+    .mobile-moving-amethyst-ship-marker {
+      width: 68px;
+      height: 44px;
+      transition: opacity 180ms linear;
+    }
+
+    .mobile-moving-amethyst-ship-marker[data-motion-phase="reset"] {
+      transition: none;
+      pointer-events: none;
+    }
+
+    .mobile-moving-amethyst-ship-shell,
+    .mobile-moving-amethyst-ship-shell img {
+      display: block;
+      width: 56px !important;
+      max-width: 56px !important;
+      height: auto;
+      max-height: 34px !important;
       object-fit: contain;
       filter: drop-shadow(0 2px 3px rgba(12, 29, 47, 0.34));
       pointer-events: none;
@@ -19004,6 +19066,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const EXHIBIT_MARKER_ICON = "assets/map-icons/exhibit-framed-landscape-marker.png";
     const BIOGRAPHY_PERSON_ICON_URL = "assets/map-icons/person-biography-marker.png";
     const WHALING_WHALE_ICON_URL = "assets/map-icons/whaling-moving-whale.png";
+    const AMETHYST_SHIP_ICON_URL = "assets/map-icons/amethyst-moving-bark.png";
     const WHALING_FEATURE_SLUG = "whaling";
     const MOVING_DOG_ICON_URL = "assets/map-icons/dog-moving-icon.png";
     const MOVING_DOG_WIKI_SLUG = "dog-ceremonialism";
@@ -19012,6 +19075,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const mobileMovingRouteModelCache = new WeakMap();
     const MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS = 720000;
     const MOBILE_BIOGRAPHY_MARKER_STAGGER_MS = 85;
+    const MOBILE_BIOGRAPHY_MARKER_FADE_MS = 1600;
+    const MOBILE_BIOGRAPHY_MARKER_RESET_MS = 650;
     const MOBILE_WHALE_ONE_WAY_MS = 900000;
     const MOBILE_WHALE_START_OFFSET_MS = MOBILE_WHALE_ONE_WAY_MS * 0.78;
     const MOBILE_WHALE_ROUTE = Object.freeze([
@@ -19023,6 +19088,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       [-72.50, 40.74],
       [-72.24, 40.79],
       [-71.98, 40.84]
+    ]);
+    const MOBILE_AMETHYST_SHIP_ONE_WAY_MS = 480000;
+    const MOBILE_AMETHYST_SHIP_ROUTE = Object.freeze([
+      [-72.293, 40.998],
+      [-72.17, 40.985],
+      [-72.03, 40.975],
+      [-71.88, 40.985],
+      [-71.70, 41.01]
     ]);
     const MOBILE_DOG_ONE_WAY_MS = 1020000;
     const MOBILE_DOG_START_OFFSET_MS = MOBILE_DOG_ONE_WAY_MS * 0.35;
@@ -19862,6 +19935,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileMovingBiographyMarkerQueueTimer: null,
       mobileMovingDogMarker: null,
       mobileMovingWhaleMarker: null,
+      mobileMovingAmethystShipMarker: null,
       mobileMovingMarkerTimer: null,
       mobileMovingMarkerLastAt: 0,
       mobileMovingMarkerPausedAt: 0,
@@ -19996,6 +20070,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     detailHeroDockEl.setAttribute("tabindex", "-1");
     detailHeroDockEl.setAttribute("aria-label", "Show the full site image");
     detailHeadEl?.appendChild(detailHeroDockEl);
+    let detailHeroMoveRevision = 0;
     let detailHeroHomeNode = null;
     const bannerEl = document.getElementById("banner");
     const languageQuizModalEl = document.getElementById("language-quiz-modal");
@@ -25054,7 +25129,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function restoreNearbyPanelHeight() {
-      restoreMobileBottomPanelState();
+      // Viewport and orientation changes must preserve the panel the visitor
+      // is actually using. Re-reading storage here used to turn a deliberately
+      // collapsed cold-start into an open panel whenever Android rotated.
+      setMobileBottomPanelState(state.mobilePanelState || "normal", { persist: false });
     }
 
     function setNearbyPanelState(nextState) {
@@ -25757,20 +25835,30 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!nativeMapBridgeAvailable() || !state.map) return false;
       const center = state.map.getCenter?.();
       const zoom = Number(state.map.getZoom?.());
+      const rawBearing = Number(state.map.getBearing?.());
+      const rawPitch = Number(state.map.getPitch?.());
+      const bearing = Number.isFinite(rawBearing) ? rawBearing : 0;
+      const pitch = Number.isFinite(rawPitch) ? rawPitch : 0;
       if (!center || !Number.isFinite(Number(center.lng)) || !Number.isFinite(Number(center.lat)) || !Number.isFinite(zoom)) return false;
       const echo = state.nativeMapCameraEcho;
       if (echo) {
         const isFresh = performance.now() - Number(echo.at || 0) < 1500;
         const matchesNativeCamera = Math.abs(Number(center.lng) - Number(echo.longitude)) < 0.00002
           && Math.abs(Number(center.lat) - Number(echo.latitude)) < 0.00002
-          && Math.abs(zoom - Number(echo.zoom)) < 0.02;
+          && Math.abs(zoom - Number(echo.zoom)) < 0.02
+          && Math.abs(bearing - Number(echo.bearing)) < 0.1
+          && Math.abs(pitch - Number(echo.pitch)) < 0.1;
         if (isFresh && matchesNativeCamera) {
           state.nativeMapCameraEcho = null;
           return false;
         }
         if (!isFresh) state.nativeMapCameraEcho = null;
       }
-      window.AndroidApp.syncNativeMapCamera(androidBridgeToken(), Number(center.lng), Number(center.lat), zoom);
+      if (typeof window.AndroidApp.syncNativeMapCameraPose === "function") {
+        window.AndroidApp.syncNativeMapCameraPose(androidBridgeToken(), Number(center.lng), Number(center.lat), zoom, bearing, pitch);
+      } else {
+        window.AndroidApp.syncNativeMapCamera(androidBridgeToken(), Number(center.lng), Number(center.lat), zoom);
+      }
       return true;
     }
 
@@ -25804,7 +25892,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         reason,
         mode: profileModel ? "profile" : "public",
         basemap: nativeBasemap,
-        camera: center ? { center: [Number(center.lng), Number(center.lat)], zoom: Number(state.map.getZoom?.()) } : null,
+        camera: center ? {
+          center: [Number(center.lng), Number(center.lat)],
+          zoom: Number(state.map.getZoom?.()),
+          bearing: Number(state.map.getBearing?.()) || 0,
+          pitch: Number(state.map.getPitch?.()) || 0
+        } : null,
         userLocation: nativeMapFeatureCollection(userLocationFeatures),
         communityContributions: nativeMapFeatureCollection(communityFeatures),
         temporaryMarkers: nativeMapFeatureCollection(temporaryFeatures)
@@ -25922,17 +26015,26 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           openSite(slug, { focus: true });
           return true;
         },
-        cameraChanged(longitude, latitude, zoom) {
+        cameraChanged(longitude, latitude, zoom, bearing, pitch) {
           const center = [Number(longitude), Number(latitude)];
           const nextZoom = Number(zoom);
+          const nextBearing = Number(bearing);
+          const nextPitch = Number(pitch);
           if (!state.map || !center.every(Number.isFinite) || !Number.isFinite(nextZoom)) return false;
           state.nativeMapCameraEcho = {
             longitude: center[0],
             latitude: center[1],
             zoom: nextZoom,
+            bearing: Number.isFinite(nextBearing) ? nextBearing : 0,
+            pitch: Number.isFinite(nextPitch) ? nextPitch : 0,
             at: performance.now()
           };
-          state.map.jumpTo({ center, zoom: nextZoom });
+          state.map.jumpTo({
+            center,
+            zoom: nextZoom,
+            bearing: Number.isFinite(nextBearing) ? nextBearing : state.map.getBearing?.(),
+            pitch: Number.isFinite(nextPitch) ? nextPitch : state.map.getPitch?.()
+          });
           return true;
         },
         gestureChanged(active) {
@@ -26399,6 +26501,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         ? { slug: WHALING_FEATURE_SLUG, title: "Whaling", feature_kind: "moving-whale" }
         : { wiki_slug: WHALING_FEATURE_SLUG, title: "Whaling", feature_kind: "moving-whale" };
       consider(state.mobileMovingWhaleMarker, whalingProperties);
+      consider(state.mobileMovingAmethystShipMarker, {
+        wiki_slug: WHALING_FEATURE_SLUG,
+        title: "Amethyst: global Shinnecock whaling",
+        feature_kind: "moving-ship"
+      });
       return best?.feature || null;
     }
 
@@ -29168,28 +29275,24 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function animateDetailHeroMove(hero, move) {
-      const first = hero.getBoundingClientRect();
-      move();
-      const last = hero.getBoundingClientRect();
-      if (!first.width || !first.height || !last.width || !last.height) return;
-      const dx = first.left - last.left;
-      const dy = first.top - last.top;
-      const sx = first.width / last.width;
-      const sy = first.height / last.height;
+      const revision = ++detailHeroMoveRevision;
       hero.classList.add("is-moving");
-      hero.style.transformOrigin = "top left";
       hero.style.transition = "none";
-      hero.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+      hero.style.opacity = "0";
+      hero.style.transform = "none";
+      move();
       hero.getBoundingClientRect();
       window.requestAnimationFrame(() => {
-        hero.style.transition = "transform 240ms ease, border-radius 240ms ease, box-shadow 240ms ease";
-        hero.style.transform = "translate(0, 0) scale(1, 1)";
+        if (revision !== detailHeroMoveRevision || !hero.isConnected) return;
+        hero.style.transition = "opacity 180ms ease";
+        hero.style.opacity = "1";
         window.setTimeout(() => {
+          if (revision !== detailHeroMoveRevision) return;
           hero.classList.remove("is-moving");
+          hero.style.opacity = "";
           hero.style.transform = "";
-          hero.style.transformOrigin = "";
           hero.style.transition = "";
-        }, 280);
+        }, 220);
       });
     }
 
@@ -30723,6 +30826,34 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       };
     }
 
+    function mobileMovingBiographyLoop(route = [], travelMs = MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS, offsetMs = 0, now = performance.now()) {
+      const routeDuration = Math.max(1000, travelMs);
+      const cycle = routeDuration + (MOBILE_BIOGRAPHY_MARKER_FADE_MS * 2) + MOBILE_BIOGRAPHY_MARKER_RESET_MS;
+      let elapsed = (((now + offsetMs) % cycle) + cycle) % cycle;
+      if (elapsed <= routeDuration) {
+        const progress = Math.max(0, Math.min(1, elapsed / routeDuration));
+        return {
+          coordinates: mobileMovingCoordinateAt(route, progress) || route[0] || [FALLBACK_CENTER[0], FALLBACK_CENTER[1]],
+          direction: "right",
+          progress,
+          opacity: 1,
+          phase: "moving"
+        };
+      }
+      elapsed -= routeDuration;
+      const last = route[route.length - 1] || route[0] || [FALLBACK_CENTER[0], FALLBACK_CENTER[1]];
+      const first = route[0] || last;
+      if (elapsed <= MOBILE_BIOGRAPHY_MARKER_FADE_MS) {
+        return { coordinates: last, direction: "right", progress: 1, opacity: 1 - (elapsed / MOBILE_BIOGRAPHY_MARKER_FADE_MS), phase: "fade-out" };
+      }
+      elapsed -= MOBILE_BIOGRAPHY_MARKER_FADE_MS;
+      if (elapsed <= MOBILE_BIOGRAPHY_MARKER_RESET_MS) {
+        return { coordinates: first, direction: "right", progress: 0, opacity: 0, phase: "reset" };
+      }
+      elapsed -= MOBILE_BIOGRAPHY_MARKER_RESET_MS;
+      return { coordinates: first, direction: "right", progress: 0, opacity: Math.min(1, elapsed / MOBILE_BIOGRAPHY_MARKER_FADE_MS), phase: "fade-in" };
+    }
+
     function mobileMovingRouteDuration(route = []) {
       const totalMiles = mobileMovingRouteModel(route).total;
       return Math.max(360000, Math.min(1440000, totalMiles * 42000));
@@ -30809,8 +30940,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.mobileMovingBiographyMarkers.clear();
       state.mobileMovingDogMarker?.remove?.();
       state.mobileMovingWhaleMarker?.remove?.();
+      state.mobileMovingAmethystShipMarker?.remove?.();
       state.mobileMovingDogMarker = null;
       state.mobileMovingWhaleMarker = null;
+      state.mobileMovingAmethystShipMarker = null;
     }
 
     function nativeMovingFeatureCollection(now = performance.now()) {
@@ -30819,7 +30952,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const showLabel = Number(state.map?.getZoom?.() || 0) >= SITE_POINT_LABEL_MIN_ZOOM;
       const features = [];
       (state.nativeMovingBiographyItems || []).forEach(item => {
-        const motion = mobileMovingPingPong(item.route, item.duration, item.offset, motionNow);
+        const motion = mobileMovingBiographyLoop(item.route, item.duration, item.offset, motionNow);
         const status = mobileMovingBiographyStatus(item, motion);
         features.push({
           type: "Feature",
@@ -30832,6 +30965,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             title: item.person || "Biography",
             label: status ? `${item.person || "Biography"}\n${status}` : (item.person || "Biography"),
             show_label: showLabel,
+            motion_opacity: Number(motion.opacity.toFixed(3)),
+            motion_phase: motion.phase,
             direction: motion.direction,
             on_water: !mobileMovingPointIsOnLand(motion.coordinates)
           }
@@ -30866,6 +31001,23 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           label: "Whaling",
           show_label: false,
           direction: whaleMotion.direction
+        }
+      });
+      const shipMotion = mobileMovingBiographyLoop(MOBILE_AMETHYST_SHIP_ROUTE, MOBILE_AMETHYST_SHIP_ONE_WAY_MS, 0, motionNow);
+      features.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: shipMotion.coordinates },
+        properties: {
+          native_kind: "wiki",
+          native_key: WHALING_FEATURE_SLUG,
+          moving_kind: "ship",
+          icon_key: "nli-icon-amethyst-moving-bark",
+          title: "Amethyst: global Shinnecock whaling",
+          label: "Amethyst: global Shinnecock whaling",
+          show_label: false,
+          motion_opacity: Number(shipMotion.opacity.toFixed(3)),
+          motion_phase: shipMotion.phase,
+          direction: "right"
         }
       });
       return nativeMapFeatureCollection(features);
@@ -30926,12 +31078,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function updateMobileMovingBiographyMarker(item, marker, now = performance.now()) {
-      const motion = mobileMovingPingPong(item.route, item.duration, item.offset, now);
+      const motion = mobileMovingBiographyLoop(item.route, item.duration, item.offset, now);
       marker.setLngLat(motion.coordinates);
       const element = marker.getElement?.();
       const button = element?.querySelector?.(".mobile-moving-biography-marker");
       if (!button) return;
       button.dataset.direction = motion.direction;
+      button.dataset.motionPhase = motion.phase;
+      button.style.opacity = String(Math.max(0, Math.min(1, motion.opacity)));
       button.dataset.showLabel = state.map?.getZoom?.() >= SITE_POINT_LABEL_MIN_ZOOM ? "true" : "false";
       button.dataset.onWater = mobileMovingPointIsOnLand(motion.coordinates) ? "false" : "true";
       const status = button.querySelector(".mobile-moving-biography-status");
@@ -31078,6 +31232,43 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       button.dataset.direction = motion.direction;
     }
 
+    function mobileMovingAmethystShipHtml() {
+      return `
+        <button class="mobile-moving-amethyst-ship-marker" type="button" aria-label="Open Amethyst and global Shinnecock whaling history">
+          <span class="mobile-moving-amethyst-ship-shell" aria-hidden="true"><img src="${escapeHtml(AMETHYST_SHIP_ICON_URL)}" alt=""></span>
+        </button>
+      `;
+    }
+
+    function ensureMobileMovingAmethystShipMarker() {
+      if (!state.map || !window.mapboxgl?.Marker) return;
+      if (nativeMapBridgeAvailable()) {
+        state.mobileMovingAmethystShipMarker?.remove?.();
+        state.mobileMovingAmethystShipMarker = null;
+        return;
+      }
+      if (state.mobileMovingAmethystShipMarker) return;
+      const element = document.createElement("div");
+      element.className = "mobile-moving-amethyst-ship-mapbox-icon";
+      element.innerHTML = mobileMovingAmethystShipHtml();
+      state.mobileMovingAmethystShipMarker = new mapboxgl.Marker({ element, anchor: "center" })
+        .setLngLat(MOBILE_AMETHYST_SHIP_ROUTE[0])
+        .addTo(state.map);
+      bindMobileMovingMarkerButton(element.querySelector(".mobile-moving-amethyst-ship-marker"), () => {
+        openWikiArticle(WHALING_FEATURE_SLUG, { focus: false, mapCenter: MOBILE_AMETHYST_SHIP_ROUTE[0] });
+      });
+    }
+
+    function updateMobileMovingAmethystShipMarker(now = performance.now()) {
+      if (!state.mobileMovingAmethystShipMarker) return;
+      const motion = mobileMovingBiographyLoop(MOBILE_AMETHYST_SHIP_ROUTE, MOBILE_AMETHYST_SHIP_ONE_WAY_MS, 0, now);
+      state.mobileMovingAmethystShipMarker.setLngLat(motion.coordinates);
+      const button = state.mobileMovingAmethystShipMarker.getElement?.()?.querySelector?.(".mobile-moving-amethyst-ship-marker");
+      if (!button) return;
+      button.dataset.motionPhase = motion.phase;
+      button.style.opacity = String(Math.max(0, Math.min(1, motion.opacity)));
+    }
+
     function updateMobileMovingFeatureMarkers(now = performance.now()) {
       if (!state.map || document.hidden || isAndroidMapGestureActive() || mobileMapCameraIsInteracting() || now < (state.mobileMovingMarkerInteractionUntil || 0)) return;
       if (nativeMapBridgeAvailable()) {
@@ -31091,6 +31282,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
       updateMobileMovingDogMarker(motionNow);
       updateMobileMovingWhaleMarker(motionNow);
+      updateMobileMovingAmethystShipMarker(motionNow);
     }
 
     function stopMobileMovingFeatureAnimation(now = performance.now()) {
@@ -31139,6 +31331,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!state.map) return;
       ensureMobileMovingDogMarker();
       ensureMobileMovingWhaleMarker();
+      ensureMobileMovingAmethystShipMarker();
       ensureMobileMovingBiographyMarkers();
       ensureLandMask().then(() => updateMobileMovingFeatureMarkers()).catch(() => {});
       updateMobileMovingFeatureMarkers();
@@ -36801,7 +36994,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         maplibreLogo: false
       });
       state.map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
-      state.map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-left");
+      // Keep the lower-left edge free for the daily feature shortcuts. The
+      // compact attribution sits beneath the native location control on the
+      // opposite edge without competing for the same touch area.
+      state.map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right");
       collapseMobileMapAttribution();
       state.map.on("click", event => {
         handleSuggestionMapPickClick(event);
@@ -38787,7 +38983,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         // was already open (for example after taking a photo in a draft).
         if (androidLifecycleSnapshot?.content) {
           restoreAndroidLifecyclePanels(androidLifecycleSnapshot);
-        } else if (nativeAndroid && isApkSnapshotMode()) {
+        } else if (nativeAndroid) {
           setMobilePanelMode("timeline");
           setMobileBottomPanelState("collapsed", { persist: false });
         } else {
