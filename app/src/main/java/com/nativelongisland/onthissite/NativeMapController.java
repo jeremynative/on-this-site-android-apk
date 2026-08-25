@@ -37,6 +37,7 @@ import org.maplibre.android.maps.Style;
 import org.maplibre.android.style.expressions.Expression;
 import org.maplibre.android.style.layers.CircleLayer;
 import org.maplibre.android.style.layers.FillLayer;
+import org.maplibre.android.style.layers.Layer;
 import org.maplibre.android.style.layers.LineLayer;
 import org.maplibre.android.style.layers.Property;
 import org.maplibre.android.style.layers.RasterLayer;
@@ -121,6 +122,17 @@ final class NativeMapController {
     private static final String MOVING_FEATURE_SOURCE_ID = "nli-moving-features";
     private static final String SATELLITE_SOURCE_ID = "nli-satellite";
     private static final String SATELLITE_LAYER_ID = "nli-satellite-layer";
+    private static final String BASE_WATER_LAYER_ID = "nli-base-water";
+    private static final String TERRITORY_FILL_LAYER_ID = "nli-territory-fill";
+    private static final String TERRITORY_LINE_LAYER_ID = "nli-territory-line";
+    private static final String TERRITORY_SATELLITE_FILL_LAYER_ID = "nli-territory-fill-satellite";
+    private static final String TERRITORY_SATELLITE_LINE_LAYER_ID = "nli-territory-line-satellite";
+    private static final String SITE_LAND_FILL_LAYER_ID = "nli-site-land-polygon-fill";
+    private static final String SITE_LAND_LINE_LAYER_ID = "nli-site-land-polygon-line";
+    private static final String SITE_LAND_SATELLITE_FILL_LAYER_ID = "nli-site-land-polygon-fill-satellite";
+    private static final String SITE_LAND_SATELLITE_LINE_LAYER_ID = "nli-site-land-polygon-line-satellite";
+    private static final String SITE_NON_LAND_FILL_LAYER_ID = "nli-site-polygon-fill";
+    private static final String SITE_NON_LAND_LINE_LAYER_ID = "nli-site-polygon-line";
     private static final String SATELLITE_TILE_URL =
         "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
     private static final String OFFLINE_PMTILES_ASSET = "map/long-island-offline-20260817-z10.pmtiles";
@@ -634,18 +646,53 @@ final class NativeMapController {
             addSource(style, MOVING_FEATURE_SOURCE_ID, movingFeaturesJson);
             addBundledMapIcons(style);
 
-            style.addLayer(new FillLayer("nli-territory-fill", TERRITORY_SOURCE_ID).withProperties(
+            addLandLayerBelowBaseWater(style, new FillLayer(TERRITORY_FILL_LAYER_ID, TERRITORY_SOURCE_ID).withProperties(
                 fillColor(Expression.get("fillcolor")), fillOpacity(0.24f)
             ));
-            style.addLayer(new LineLayer("nli-territory-line", TERRITORY_SOURCE_ID).withProperties(
+            addLandLayerBelowBaseWater(style, new LineLayer(TERRITORY_LINE_LAYER_ID, TERRITORY_SOURCE_ID).withProperties(
                 lineColor("#496f5d"), lineWidth(0.9f), lineOpacity(0.58f), lineDasharray(new Float[] { 2f, 2f })
             ));
-            style.addLayer(new FillLayer("nli-site-polygon-fill", SITE_POLYGON_SOURCE_ID).withProperties(
+            addLandLayerBelowBaseWater(style, new FillLayer(SITE_LAND_FILL_LAYER_ID, SITE_POLYGON_SOURCE_ID)
+                .withFilter(Expression.eq(Expression.get("geometry_surface"), Expression.literal("land")))
+                .withProperties(
+                    fillColor(Expression.get("fillcolor")), fillOpacity(0.22f)
+                ));
+            addLandLayerBelowBaseWater(style, new LineLayer(SITE_LAND_LINE_LAYER_ID, SITE_POLYGON_SOURCE_ID)
+                .withFilter(Expression.eq(Expression.get("geometry_surface"), Expression.literal("land")))
+                .withProperties(
+                    lineColor("#315a49"), lineWidth(0.9f), lineOpacity(0.45f)
+                ));
+            style.addLayer(new FillLayer(SITE_NON_LAND_FILL_LAYER_ID, SITE_POLYGON_SOURCE_ID)
+                .withFilter(Expression.neq(Expression.get("geometry_surface"), Expression.literal("land")))
+                .withProperties(
                 fillColor(Expression.get("fillcolor")), fillOpacity(0.22f)
+                ));
+            style.addLayer(new LineLayer(SITE_NON_LAND_LINE_LAYER_ID, SITE_POLYGON_SOURCE_ID)
+                .withFilter(Expression.neq(Expression.get("geometry_surface"), Expression.literal("land")))
+                .withProperties(
+                    lineColor("#315a49"), lineWidth(0.9f), lineOpacity(0.45f)
+                ));
+
+            // The satellite raster has no vector water mask. Keep a second,
+            // normally hidden set of reviewed land overlays above the imagery
+            // so switching basemaps does not make all land polygons disappear.
+            style.addLayer(new FillLayer(TERRITORY_SATELLITE_FILL_LAYER_ID, TERRITORY_SOURCE_ID).withProperties(
+                fillColor(Expression.get("fillcolor")), fillOpacity(0.24f), visibility(Property.NONE)
             ));
-            style.addLayer(new LineLayer("nli-site-polygon-line", SITE_POLYGON_SOURCE_ID).withProperties(
-                lineColor("#315a49"), lineWidth(0.9f), lineOpacity(0.45f)
+            style.addLayer(new LineLayer(TERRITORY_SATELLITE_LINE_LAYER_ID, TERRITORY_SOURCE_ID).withProperties(
+                lineColor("#496f5d"), lineWidth(0.9f), lineOpacity(0.58f),
+                lineDasharray(new Float[] { 2f, 2f }), visibility(Property.NONE)
             ));
+            style.addLayer(new FillLayer(SITE_LAND_SATELLITE_FILL_LAYER_ID, SITE_POLYGON_SOURCE_ID)
+                .withFilter(Expression.eq(Expression.get("geometry_surface"), Expression.literal("land")))
+                .withProperties(
+                    fillColor(Expression.get("fillcolor")), fillOpacity(0.22f), visibility(Property.NONE)
+                ));
+            style.addLayer(new LineLayer(SITE_LAND_SATELLITE_LINE_LAYER_ID, SITE_POLYGON_SOURCE_ID)
+                .withFilter(Expression.eq(Expression.get("geometry_surface"), Expression.literal("land")))
+                .withProperties(
+                    lineColor("#315a49"), lineWidth(0.9f), lineOpacity(0.45f), visibility(Property.NONE)
+                ));
             // Draw a quiet translucent location target below project icons so
             // nearby site artwork remains legible at the user's exact point.
             style.addLayer(new CircleLayer("nli-user-location-outer", USER_LOCATION_SOURCE_ID).withProperties(
@@ -1212,17 +1259,35 @@ final class NativeMapController {
         return collection;
     }
 
+    private void addLandLayerBelowBaseWater(Style style, Layer layer) {
+        if (style == null || layer == null) return;
+        if (style.getLayer(BASE_WATER_LAYER_ID) != null) {
+            style.addLayerBelow(layer, BASE_WATER_LAYER_ID);
+        } else {
+            // The blank emergency style has no vector shoreline. In that case
+            // the reviewed display geometry remains the authoritative fallback.
+            style.addLayer(layer);
+        }
+    }
+
     private void applyModeVisibility(Style style) {
         if (style == null) return;
-        setLayerVisibility(style, "nli-site-polygon-fill", !profileMode);
-        setLayerVisibility(style, "nli-site-polygon-line", !profileMode);
+        boolean satelliteBasemap = "satellite".equals(currentBasemap);
+        setLayerVisibility(style, SITE_NON_LAND_FILL_LAYER_ID, !profileMode);
+        setLayerVisibility(style, SITE_NON_LAND_LINE_LAYER_ID, !profileMode);
+        setLayerVisibility(style, SITE_LAND_FILL_LAYER_ID, !profileMode && !satelliteBasemap);
+        setLayerVisibility(style, SITE_LAND_LINE_LAYER_ID, !profileMode && !satelliteBasemap);
+        setLayerVisibility(style, SITE_LAND_SATELLITE_FILL_LAYER_ID, !profileMode && satelliteBasemap);
+        setLayerVisibility(style, SITE_LAND_SATELLITE_LINE_LAYER_ID, !profileMode && satelliteBasemap);
         setLayerVisibility(style, "nli-site-point-circles", !profileMode);
         setLayerVisibility(style, "nli-site-point-icons", !profileMode);
         setLayerVisibility(style, "nli-site-point-labels", !profileMode);
         // The 13 ancestral lands remain available as permanent map context,
         // independent of the ordinary boundary/label filters.
-        setLayerVisibility(style, "nli-territory-fill", true);
-        setLayerVisibility(style, "nli-territory-line", true);
+        setLayerVisibility(style, TERRITORY_FILL_LAYER_ID, !satelliteBasemap);
+        setLayerVisibility(style, TERRITORY_LINE_LAYER_ID, !satelliteBasemap);
+        setLayerVisibility(style, TERRITORY_SATELLITE_FILL_LAYER_ID, satelliteBasemap);
+        setLayerVisibility(style, TERRITORY_SATELLITE_LINE_LAYER_ID, satelliteBasemap);
         setLayerVisibility(style, "nli-territory-labels", true);
         setLayerVisibility(style, "nli-biography-path-lines", !profileMode);
         setLayerVisibility(style, "nli-biography-path-points", !profileMode);
@@ -1404,7 +1469,8 @@ final class NativeMapController {
             "nli-moving-feature-labels", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons", "nli-moving-ship-icons",
             "nli-calendar-event-labels", "nli-calendar-event-circles", "nli-exhibit-circles",
             "nli-biography-path-numbers", "nli-biography-path-points", "nli-biography-path-labels",
-            "nli-site-point-labels", "nli-site-point-icons", "nli-site-point-circles", "nli-site-polygon-fill");
+            "nli-site-point-labels", "nli-site-point-icons", "nli-site-point-circles",
+            SITE_LAND_FILL_LAYER_ID, SITE_LAND_SATELLITE_FILL_LAYER_ID, SITE_NON_LAND_FILL_LAYER_ID);
         if (features == null) features = Collections.emptyList();
         Feature nearestPoint = nearestActionablePointFeature(features, screenPoint, profileMode);
         if (dispatchActionablePointFeature(nearestPoint, profileMode)) return true;
@@ -1425,8 +1491,10 @@ final class NativeMapController {
             // accessible hit area before falling back to that background.
             List<Feature> territorySurfaces = map.queryRenderedFeatures(
                 screenPoint,
-                "nli-territory-fill",
-                "nli-territory-line"
+                TERRITORY_FILL_LAYER_ID,
+                TERRITORY_LINE_LAYER_ID,
+                TERRITORY_SATELLITE_FILL_LAYER_ID,
+                TERRITORY_SATELLITE_LINE_LAYER_ID
             );
             if (territorySurfaces != null) {
                 for (Feature territorySurface : territorySurfaces) {

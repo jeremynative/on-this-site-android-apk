@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260823-amethyst-global-whaling-r185";
+const expectedBuild = "20260825-polygon-basemap-alignment-r187";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -13,6 +13,7 @@ const bundledMobileJsPath = "app/src/main/assets/assets/js/mobile-app.js";
 const bundledSharedProfileUtilsPath = "app/src/main/assets/assets/js/shared-profile-utils.js";
 const bundledSharedSearchUtilsPath = "app/src/main/assets/assets/js/shared-search-utils.js";
 const bundledSharedLifecycleUtilsPath = "app/src/main/assets/assets/js/shared-lifecycle-utils.js";
+const bundledSharedMapUtilsPath = "app/src/main/assets/assets/js/shared-map-utils.js";
 const bundledSharedActivityUtilsPath = "app/src/main/assets/assets/js/shared-activity-utils.js";
 const bundledSharedMapStoryUtilsPath = "app/src/main/assets/assets/js/shared-map-story-utils.js";
 const bundledMobileCssPath = "app/src/main/assets/assets/css/mobile-app.css";
@@ -70,6 +71,7 @@ const bundledMobileJs = fs.readFileSync(bundledMobileJsPath, "utf8").replace(/\r
 const bundledSharedProfileUtils = fs.readFileSync(bundledSharedProfileUtilsPath, "utf8");
 const bundledSharedSearchUtils = fs.readFileSync(bundledSharedSearchUtilsPath, "utf8");
 const bundledSharedLifecycleUtils = fs.readFileSync(bundledSharedLifecycleUtilsPath, "utf8");
+const bundledSharedMapUtils = fs.readFileSync(bundledSharedMapUtilsPath, "utf8");
 const bundledSharedActivityUtils = fs.readFileSync(bundledSharedActivityUtilsPath, "utf8");
 const bundledSharedMapStoryUtils = fs.readFileSync(bundledSharedMapStoryUtilsPath, "utf8");
 const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8").replace(/\r\n/g, "\n");
@@ -101,6 +103,22 @@ if (!bundledMobileJs.includes("function mobileMapRuntime()")
     || !/state\.map\.once\?\.\("idle", \(\) => \{\r?\n\s+collapseMobileMapAttribution\(\);/.test(bundledMobileJs)
     || !bundledMobileJs.includes("https://www.openstreetmap.org/copyright")) {
   throw new Error("Android map runtime must use MapLibre without an engine logo while retaining compact legal data attribution.");
+}
+if (!bundledSharedMapUtils.includes("function basemapWaterBoundaryLayerId(map)")
+    || !bundledSharedMapUtils.includes("function addLandLayerBeneathBasemapWater(map, layer)")
+    || !bundledMobileJs.includes('geometry_surface: normalizeComparisonText(site.geometry_surface || "")')
+    || !bundledMobileJs.includes('geometry_surface: normalizeComparisonText(feature.properties?.place_name_surface || site?.geometry_surface || "review")')
+    || !bundledMobileJs.includes('id: "mobile-site-land-polygons"')
+    || !bundledMobileJs.includes('id: "mobile-site-land-lines"')
+    || !bundledMobileJs.includes('id: "mobile-place-name-area-land-fill"')
+    || !bundledMobileJs.includes('id: "mobile-place-name-area-land-line"')
+    || !bundledMobileJs.includes('MAP_UTILS.addLandLayerBeneathBasemapWater(state.map, layer)')
+    || !bundledMobileJs.includes('["==", ["get", "geometry_surface"], "land"]')
+    || !bundledMobileJs.includes('["!=", ["get", "geometry_surface"], "land"]')
+    || !bundledApp.includes('id: "mobile-site-land-polygons"')
+    || !bundledApp.includes('id: "mobile-place-name-area-land-fill"')
+    || !bundledApp.includes("function addLandLayerBeneathBasemapWater(map, layer)")) {
+  throw new Error("Android WebView and offline fallbacks must route site and reviewed place-name land polygons beneath vector water while preserving non-land overlays.");
 }
 if (!mapLibreJs.includes("MapLibre GL JS")
     || !mapLibreCss.includes(".maplibregl-map")
@@ -171,7 +189,7 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes("Feature exactPoint = nearestActionablePointFeature(exactPoints, screenPoint, false)")
     || !nativeMapController.includes("dispatchActionablePointFeature(exactPoint, false)")
     || !nativeMapController.includes("List<Feature> territorySurfaces = map.queryRenderedFeatures(")
-    || !nativeMapController.includes('"nli-territory-fill",\n                "nli-territory-line"')
+    || !nativeMapController.includes("TERRITORY_FILL_LAYER_ID,\n                TERRITORY_LINE_LAYER_ID")
     || !nativeMapController.includes("density * 32f")
     || !nativeMapController.includes("Expression.stop(6, 0.72f)")
     || !nativeMapController.includes("Expression.stop(14, 1.08f)")
@@ -269,9 +287,22 @@ if (!nativeMapController.includes('new SymbolLayer("nli-site-point-labels", SITE
     || !nativeMapController.includes("sitePointLabelLayer.setMinZoom(11.4f)")
     || !nativeMapController.includes("setTerritorySource(style, payload.optJSONObject(\"territories\"))")
     || !nativeMapController.includes("withBundledTerritoryLabels(payload.optJSONObject(\"labels\"))")
-    || !nativeMapController.includes('setLayerVisibility(style, "nli-territory-fill", true)')
+    || !nativeMapController.includes("setLayerVisibility(style, TERRITORY_FILL_LAYER_ID, !satelliteBasemap)")
     || !nativeMapController.includes('setLayerVisibility(style, "nli-moving-biography-icons", !profileMode)')) {
   throw new Error("Native map labels, permanent ancestral lands, and biography icons must survive filter and zoom changes.");
+}
+if (!nativeMapController.includes('BASE_WATER_LAYER_ID = "nli-base-water"')
+    || !nativeMapController.includes("style.addLayerBelow(layer, BASE_WATER_LAYER_ID)")
+    || !nativeMapController.includes("addLandLayerBelowBaseWater(style, new FillLayer(TERRITORY_FILL_LAYER_ID")
+    || !nativeMapController.includes("addLandLayerBelowBaseWater(style, new FillLayer(SITE_LAND_FILL_LAYER_ID")
+    || !nativeMapController.includes('Expression.eq(Expression.get("geometry_surface"), Expression.literal("land"))')
+    || !nativeMapController.includes('Expression.neq(Expression.get("geometry_surface"), Expression.literal("land"))')
+    || !nativeMapController.includes("SITE_LAND_SATELLITE_FILL_LAYER_ID")
+    || !nativeMapController.includes("SITE_LAND_SATELLITE_LINE_LAYER_ID")
+    || !nativeMapController.includes("setLayerVisibility(style, SITE_LAND_SATELLITE_FILL_LAYER_ID, !profileMode && satelliteBasemap)")
+    || !nativeMapController.includes("SITE_LAND_FILL_LAYER_ID, SITE_LAND_SATELLITE_FILL_LAYER_ID, SITE_NON_LAND_FILL_LAYER_ID")
+    || !nativeMapController.includes("TERRITORY_SATELLITE_FILL_LAYER_ID,\n                TERRITORY_SATELLITE_LINE_LAYER_ID")) {
+  throw new Error("Native land polygons must render below vector water and roads, retain reviewed satellite overlays, and remain selectable on every basemap.");
 }
 if (!nativeMapController.includes("MAP_TAP_DISPATCH_DELAY_MS")
     || !nativeMapController.includes("pendingMapTapPoint")

@@ -6594,6 +6594,7 @@
             unread_count: unreadCount,
             unread_label: mobileUnreadCountLabel(unreadCount),
             unread_icon: mobileUnreadCountIcon(unreadCount),
+            geometry_surface: normalizeComparisonText(site.geometry_surface || ""),
             broad: isBroadTerritory(site),
             territory_label_point: site.territory_label_point || null,
             bounds_area: geometryBoundsArea(siteDisplayGeometry(site))
@@ -6642,6 +6643,7 @@
               site_type: site?.site_type || "placename",
               feature_category: "placename",
               place_name_area_overlay: true,
+              geometry_surface: normalizeComparisonText(feature.properties?.place_name_surface || site?.geometry_surface || "review"),
               layer_categories: [...categories].join(" "),
               fillcolor: feature.properties?.fillcolor || (approximate ? "#c98a38" : "#78b943"),
               linecolor: "#315b50",
@@ -7128,11 +7130,13 @@
         "mobile-site-unread-badges",
         "mobile-site-point-hit",
         "mobile-place-name-area-labels",
+        "mobile-place-name-area-land-fill",
         "mobile-place-name-area-fill",
         "mobile-detail-labels",
         "mobile-detail-labels-unread",
         "mobile-territory-labels",
         "mobile-territory-labels-unread",
+        "mobile-site-land-polygons",
         "mobile-site-polygons",
         "mobile-territory-polygons"
       ];
@@ -7147,9 +7151,11 @@
         "mobile-detail-labels",
         "mobile-detail-labels-unread",
         "mobile-place-name-area-labels",
+        "mobile-place-name-area-land-fill",
         "mobile-place-name-area-fill",
         "mobile-territory-labels",
         "mobile-territory-labels-unread",
+        "mobile-site-land-polygons",
         "mobile-site-polygons",
         "mobile-territory-polygons"
       ];
@@ -7168,7 +7174,7 @@
       ));
       if (detailLabel) return detailLabel;
       const renderedPolygon = bestClickableFeature(renderedFeatures.filter(feature =>
-        feature?.layer?.id === "mobile-place-name-area-fill" || feature?.layer?.id === "mobile-site-polygons" || feature?.layer?.id === "mobile-territory-polygons"
+        feature?.layer?.id === "mobile-place-name-area-land-fill" || feature?.layer?.id === "mobile-place-name-area-fill" || feature?.layer?.id === "mobile-site-land-polygons" || feature?.layer?.id === "mobile-site-polygons" || feature?.layer?.id === "mobile-territory-polygons"
       ));
       if (renderedPolygon) return renderedPolygon;
       const territoryLabel = bestClickableFeature(renderedFeatures.filter(feature =>
@@ -7180,8 +7186,10 @@
 
     function isMobilePolygonLayerFeature(feature) {
       const layerId = feature?.layer?.id || "";
-      return layerId === "mobile-site-polygons" ||
+      return layerId === "mobile-site-land-polygons" ||
+        layerId === "mobile-site-polygons" ||
         layerId === "mobile-territory-polygons" ||
+        layerId === "mobile-place-name-area-land-fill" ||
         layerId === "mobile-place-name-area-fill" ||
         layerId === "mobile-place-name-area-labels" ||
         layerId === "mobile-detail-labels" ||
@@ -14514,6 +14522,10 @@
       }));
     }
 
+    function addMobileLandLayer(layer) {
+      MAP_UTILS.addLandLayerBeneathBasemapWater(state.map, layer);
+    }
+
     function addPolygonLayers() {
       if (!state.map || state.map.getSource("mobile-sites")) return;
       if (!state.mobileStyleImageMissingBound) {
@@ -14532,7 +14544,7 @@
       state.map.addSource("mobile-site-attention", { type: "geojson", data: sourceData.attention });
       state.map.addSource("mobile-place-name-area-labels", { type: "geojson", data: sourceData.placeNameAreaLabels });
       state.map.addSource("mobile-biography-paths", { type: "geojson", data: allMobileBiographyPathFeatureCollection({ enabled: mobileBiographyPathsEnabled() }) });
-      state.map.addLayer({
+      addMobileLandLayer({
         id: "mobile-territory-polygons",
         type: "fill",
         source: "mobile-sites",
@@ -14542,11 +14554,32 @@
           "fill-opacity": ["min", ["coalesce", ["to-number", ["get", "opacity"]], 0.18], 0.28]
         }
       });
+      addMobileLandLayer({
+        id: "mobile-place-name-area-land-fill",
+        type: "fill",
+        source: "mobile-sites",
+        filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["==", ["get", "place_name_area_overlay"], true], ["==", ["get", "geometry_surface"], "land"]],
+        paint: {
+          "fill-color": ["coalesce", ["get", "fillcolor"], "#15988f"],
+          "fill-opacity": ["min", ["coalesce", ["to-number", ["get", "opacity"]], 0.42], 0.32]
+        }
+      });
+      addMobileLandLayer({
+        id: "mobile-place-name-area-land-line",
+        type: "line",
+        source: "mobile-sites",
+        filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["==", ["get", "place_name_area_overlay"], true], ["==", ["get", "geometry_surface"], "land"]],
+        paint: {
+          "line-color": ["coalesce", ["get", "linecolor"], "#315b50"],
+          "line-opacity": ["coalesce", ["to-number", ["get", "lineopacity"]], 0.3],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.4, 12, 0.8, 16, 1.1]
+        }
+      });
       state.map.addLayer({
         id: "mobile-place-name-area-fill",
         type: "fill",
         source: "mobile-sites",
-        filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["==", ["get", "place_name_area_overlay"], true]],
+        filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["==", ["get", "place_name_area_overlay"], true], ["!=", ["get", "geometry_surface"], "land"]],
         paint: {
           "fill-color": ["coalesce", ["get", "fillcolor"], "#15988f"],
           "fill-opacity": ["min", ["coalesce", ["to-number", ["get", "opacity"]], 0.42], 0.32]
@@ -14556,28 +14589,57 @@
         id: "mobile-place-name-area-line",
         type: "line",
         source: "mobile-sites",
-        filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["==", ["get", "place_name_area_overlay"], true]],
+        filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["==", ["get", "place_name_area_overlay"], true], ["!=", ["get", "geometry_surface"], "land"]],
         paint: {
           "line-color": ["coalesce", ["get", "linecolor"], "#315b50"],
           "line-opacity": ["coalesce", ["to-number", ["get", "lineopacity"]], 0.3],
           "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.4, 12, 0.8, 16, 1.1]
         }
       });
+      addMobileLandLayer({
+        id: "mobile-site-land-polygons",
+        type: "fill",
+        source: "mobile-sites",
+        filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["!=", ["get", "broad"], true], ["!=", ["get", "place_name_area_overlay"], true], ["==", ["get", "geometry_surface"], "land"]],
+        paint: {
+          "fill-color": ["coalesce", ["get", "fillcolor"], "#7b9b68"],
+          "fill-opacity": [
+            "case",
+            ["any",
+              ["==", ["get", "geometry_refinement"], SHORELINE_REFINED_GEOMETRY_NOTE],
+              ["==", ["get", "geometry_refinement"], SHINNECOCK_HILLS_REFINED_GEOMETRY_NOTE]
+            ],
+            ["min", ["coalesce", ["to-number", ["get", "opacity"]], 0.42], 0.42],
+            ["min", ["coalesce", ["to-number", ["get", "opacity"]], 0.2], 0.28]
+          ]
+        }
+      });
       state.map.addLayer({
         id: "mobile-site-polygons",
         type: "fill",
         source: "mobile-sites",
-        filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["!=", ["get", "broad"], true], ["!=", ["get", "place_name_area_overlay"], true]],
+        filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["!=", ["get", "broad"], true], ["!=", ["get", "place_name_area_overlay"], true], ["!=", ["get", "geometry_surface"], "land"]],
         paint: {
           "fill-color": ["coalesce", ["get", "fillcolor"], "#7b9b68"],
           "fill-opacity": ["min", ["coalesce", ["to-number", ["get", "opacity"]], 0.2], 0.28]
+        }
+      });
+      addMobileLandLayer({
+        id: "mobile-site-land-lines",
+        type: "line",
+        source: "mobile-sites",
+        filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["!=", ["get", "place_name_area_overlay"], true], ["!=", ["get", "site_type"], "placename"], ["==", ["get", "geometry_surface"], "land"]],
+        paint: {
+          "line-color": "#2f5a49",
+          "line-opacity": 0.34,
+          "line-width": 1
         }
       });
       state.map.addLayer({
         id: "mobile-site-lines",
         type: "line",
         source: "mobile-sites",
-        filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["!=", ["get", "place_name_area_overlay"], true], ["!=", ["get", "site_type"], "placename"]],
+        filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["!=", ["get", "place_name_area_overlay"], true], ["!=", ["get", "site_type"], "placename"], ["!=", ["get", "geometry_surface"], "land"]],
         paint: {
           "line-color": "#2f5a49",
           "line-opacity": 0.34,
@@ -15112,7 +15174,7 @@
           if (handleSuggestionMapPickClick(event)) return;
           if (openMobileMapTap(event)) markMobileMapEventHandled(event);
         }));
-      ["mobile-place-name-area-fill", "mobile-place-name-area-labels", "mobile-site-polygons", "mobile-territory-polygons", "mobile-detail-labels", "mobile-detail-labels-unread", "mobile-territory-labels", "mobile-territory-labels-unread"]
+      ["mobile-place-name-area-land-fill", "mobile-place-name-area-fill", "mobile-place-name-area-labels", "mobile-site-land-polygons", "mobile-site-polygons", "mobile-territory-polygons", "mobile-detail-labels", "mobile-detail-labels-unread", "mobile-territory-labels", "mobile-territory-labels-unread"]
         .forEach(layerId => bindMobileInteractiveLayer(layerId, openMobileInteractivePolygonLayer));
       if (!state.mobileMapLayerEventsBound) {
         state.mobileMapLayerEventsBound = true;
