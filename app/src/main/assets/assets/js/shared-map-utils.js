@@ -38,6 +38,23 @@
     return (layerIds || []).filter(layerId => layerExists(map, layerId));
   }
 
+  function basemapWaterBoundaryLayerId(map) {
+    const layers = map?.getStyle?.()?.layers || [];
+    const boundaryLayer = layers.find(layer =>
+      ["fill", "line"].includes(layer?.type) &&
+      ["water", "waterway"].includes(layer?.["source-layer"])
+    );
+    return boundaryLayer && layerExists(map, boundaryLayer.id) ? boundaryLayer.id : null;
+  }
+
+  function addLandLayerBeneathBasemapWater(map, layer) {
+    if (!map?.addLayer || !layer) return null;
+    const beforeId = basemapWaterBoundaryLayerId(map);
+    if (beforeId) map.addLayer(layer, beforeId);
+    else map.addLayer(layer);
+    return beforeId;
+  }
+
   function queryRenderedFeaturesAround(map, point, layerIds = [], radius = 0, options = {}) {
     if (!map?.queryRenderedFeatures || !point) return options.fallback || [];
     const x = Number(point.x);
@@ -122,6 +139,8 @@
     setLayerVisibility,
     setLayerVisibilityMany,
     existingLayerIds,
+    basemapWaterBoundaryLayerId,
+    addLandLayerBeneathBasemapWater,
     queryRenderedFeaturesAround,
     rebindLayerEvent,
     bindPointerCursor,
