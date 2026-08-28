@@ -1,8 +1,8 @@
 (function () {
   const DESKTOP_ALLOWED_TAGS = new Set([
-    "A", "ABBR", "B", "BLOCKQUOTE", "BR", "CAPTION", "CITE", "DIV", "EM",
+    "A", "ABBR", "B", "BLOCKQUOTE", "BR", "CAPTION", "CITE", "DETAILS", "DIV", "EM",
     "FIGCAPTION", "FIGURE", "H1", "H2", "H3", "H4", "HR", "I", "IFRAME", "IMG", "LI",
-    "OL", "P", "SPAN", "STRONG", "SUP", "TABLE", "TBODY", "TD", "TH", "THEAD", "TR", "U", "UL"
+    "OL", "P", "SPAN", "STRONG", "SUMMARY", "SUP", "TABLE", "TBODY", "TD", "TH", "THEAD", "TR", "U", "UL"
   ]);
   const DESKTOP_ALLOWED_ATTRS = new Set(["allow", "allowfullscreen", "class", "data-src", "frameborder", "height", "href", "referrerpolicy", "src", "title", "width", "alt"]);
   const TIMELINE_SECTION_TITLE_PATTERN = /history|colonial|land loss|excavation|preservation|disruption|vandalism/i;
