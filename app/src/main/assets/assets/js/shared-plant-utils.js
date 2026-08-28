@@ -280,6 +280,8 @@
       member_profile: relationId(record?.member_profile) || null,
       photo: record?.photo || null,
       status: record?.status || "pending",
+      photo_taken_at: record?.public_submitted_at || record?.photo_taken_at || record?.created_at || "",
+      public_submitted_at: record?.public_submitted_at || "",
       created_at: record?.created_at || "",
       _structured: true
     };
@@ -296,9 +298,31 @@
   }
 
   function plantObservationDateValue(record = {}) {
-    const raw = record.created_at || record.public_submitted_at || record.comment?.created_at || "";
+    const raw = record.photo_taken_at || record.public_submitted_at || record.created_at || record.comment?.created_at || "";
     const time = raw ? new Date(raw).getTime() : 0;
     return Number.isFinite(time) ? time : 0;
+  }
+
+  function plantObservationSeason(record = {}) {
+    const time = plantObservationDateValue(record);
+    if (!time) return "Unknown season";
+    const month = new Date(time).getMonth() + 1;
+    if (month >= 3 && month <= 5) return "Spring";
+    if (month >= 6 && month <= 8) return "Summer";
+    if (month >= 9 && month <= 11) return "Fall";
+    return "Winter";
+  }
+
+  function plantObservationSeasonGroups(observations = []) {
+    const order = ["Spring", "Summer", "Fall", "Winter", "Unknown season"];
+    const groups = new Map(order.map(label => [label, []]));
+    (observations || []).forEach(record => groups.get(plantObservationSeason(record)).push(record));
+    return order
+      .map(label => ({
+        label,
+        observations: groups.get(label).sort((a, b) => plantObservationDateValue(b) - plantObservationDateValue(a))
+      }))
+      .filter(group => group.observations.length);
   }
 
   function plantObservationsForSource(observations = [], sourceType = "site", item = {}, options = {}) {
@@ -332,6 +356,9 @@
     knownPlantStatsText,
     plantStatusLabel,
     plantObservationRecordFields,
+    plantObservationDateValue,
+    plantObservationSeason,
+    plantObservationSeasonGroups,
     plantObservationsForSource
   };
 }());

@@ -9330,9 +9330,10 @@
       };
     }
 
-    function plantObservationPayload({ site, discussion, profile, analysis, guess, notes, imageId }) {
+    function plantObservationPayload({ site, discussion, profile, analysis, guess, notes, imageId, photoTakenAt }) {
       const resolvedProfile = profile?.id ? profile : currentContributorProfile();
       const submittedAt = new Date().toISOString();
+      const capturedAt = photoTakenAt && Number.isFinite(new Date(photoTakenAt).getTime()) ? new Date(photoTakenAt).toISOString() : submittedAt;
       const location = state.userLocation && Number.isFinite(Number(state.userLocation.lat)) && Number.isFinite(Number(state.userLocation.lng))
         ? state.userLocation
         : null;
@@ -9366,7 +9367,7 @@
         observation_latitude: location ? Number(location.lat) : null,
         observation_longitude: location ? Number(location.lng) : null,
         observation_location_source: location ? "user_location_at_submission" : "",
-        public_submitted_at: submittedAt,
+        public_submitted_at: capturedAt,
         created_at: submittedAt
       };
     }
@@ -9380,6 +9381,8 @@
       const compressed = section._plantPhotoFile;
       const original = section._plantOriginalPhotoFile;
       const sizeLabel = compressed ? `${Math.round(compressed.size / 1024)} KB compressed from ${original ? `${Math.round(original.size / 1024)} KB` : "camera photo"}` : "";
+      const photoTakenAt = section._plantPhotoTakenAt || "";
+      const photoSeason = photoTakenAt ? PLANT_UTILS.plantObservationSeason({ photo_taken_at: photoTakenAt }) : "";
       if (!analysis) {
         if (submitButton) {
           submitButton.disabled = true;
@@ -9432,6 +9435,7 @@
           <span>${plantWikiLinkHtml(indigenousLabel, guideMatch)}</span>
           <div class="plant-context-tags">
             <span>${escapeHtml(nativeBadge)}</span>
+            ${photoSeason ? `<span>${escapeHtml(photoSeason)} observation</span>` : ""}
             <span>No harvesting</span>
             <span>${escapeHtml(confidenceLabel)}</span>
           </div>
@@ -9447,10 +9451,98 @@
             ${analysis.visualEvidence ? `<p>${escapeHtml(analysis.visualEvidence)}</p>` : ""}
             ${analysis.aiExplanation ? `<p>${escapeHtml(analysis.aiExplanation)}</p>` : ""}
             ${sizeLabel ? `<p>${escapeHtml(sizeLabel)}</p>` : ""}
+            ${photoTakenAt ? `<p>Photo date: ${escapeHtml(new Date(photoTakenAt).toLocaleDateString())}</p>` : ""}
             ${analysis.source ? `<p>Source: ${escapeHtml(analysis.source)}</p>` : ""}
           </details>
         </div>
       `;
+    }
+
+    function parsePlantExifDate(value) {
+      const match = String(value || "").trim().match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+      if (!match) return "";
+      const date = new Date(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3]),
+        Number(match[4]),
+        Number(match[5]),
+        Number(match[6])
+      );
+      return Number.isFinite(date.getTime()) ? date.toISOString() : "";
+    }
+
+    async function jpegPlantPhotoTakenAt(file) {
+      if (!file || !/jpe?g/i.test(String(file.type || file.name || "")) || typeof file.arrayBuffer !== "function") return "";
+      try {
+        const exifProbe = typeof file.slice === "function" ? file.slice(0, 512 * 1024) : file;
+        const view = new DataView(await exifProbe.arrayBuffer());
+        if (view.byteLength < 16 || view.getUint16(0, false) !== 0xffd8) return "";
+        let markerOffset = 2;
+        while (markerOffset + 10 < view.byteLength) {
+          if (view.getUint8(markerOffset) !== 0xff) break;
+          const marker = view.getUint8(markerOffset + 1);
+          const segmentLength = view.getUint16(markerOffset + 2, false);
+          if (segmentLength < 2 || markerOffset + 2 + segmentLength > view.byteLength) break;
+          const payloadOffset = markerOffset + 4;
+          if (marker === 0xe1 && view.getUint32(payloadOffset, false) === 0x45786966 && view.getUint16(payloadOffset + 4, false) === 0) {
+            const tiffOffset = payloadOffset + 6;
+            const byteOrder = view.getUint16(tiffOffset, false);
+            const littleEndian = byteOrder === 0x4949;
+            if (!littleEndian && byteOrder !== 0x4d4d) return "";
+            const get16 = offset => view.getUint16(offset, littleEndian);
+            const get32 = offset => view.getUint32(offset, littleEndian);
+            if (get16(tiffOffset + 2) !== 42) return "";
+            const readAscii = entryOffset => {
+              const count = get32(entryOffset + 4);
+              const start = count <= 4 ? entryOffset + 8 : tiffOffset + get32(entryOffset + 8);
+              if (!count || start < 0 || start + count > view.byteLength) return "";
+              let textValue = "";
+              for (let index = 0; index < count; index += 1) {
+                const code = view.getUint8(start + index);
+                if (!code) break;
+                textValue += String.fromCharCode(code);
+              }
+              return textValue;
+            };
+            const entries = ifdOffset => {
+              const count = get16(ifdOffset);
+              const values = new Map();
+              for (let index = 0; index < count; index += 1) {
+                const entryOffset = ifdOffset + 2 + (index * 12);
+                if (entryOffset + 12 > view.byteLength) break;
+                values.set(get16(entryOffset), entryOffset);
+              }
+              return values;
+            };
+            const rootEntries = entries(tiffOffset + get32(tiffOffset + 4));
+            const exifPointer = rootEntries.get(0x8769);
+            if (exifPointer) {
+              const exifEntries = entries(tiffOffset + get32(exifPointer + 8));
+              for (const tag of [0x9003, 0x9004]) {
+                const entry = exifEntries.get(tag);
+                const parsed = entry ? parsePlantExifDate(readAscii(entry)) : "";
+                if (parsed) return parsed;
+              }
+            }
+            const modifiedEntry = rootEntries.get(0x0132);
+            return modifiedEntry ? parsePlantExifDate(readAscii(modifiedEntry)) : "";
+          }
+          markerOffset += 2 + segmentLength;
+        }
+      } catch (error) {
+        console.warn("Could not read the plant photo capture date", error);
+      }
+      return "";
+    }
+
+    async function plantPhotoTakenAt(file) {
+      const exifDate = await jpegPlantPhotoTakenAt(file);
+      if (exifDate) return exifDate;
+      const modified = Number(file?.lastModified || 0);
+      const earliestUsefulDate = new Date(2000, 0, 1).getTime();
+      if (modified >= earliestUsefulDate && modified <= Date.now() + 86400000) return new Date(modified).toISOString();
+      return new Date().toISOString();
     }
 
     async function processPlantCameraPhoto(section) {
@@ -9469,6 +9561,7 @@
           button.textContent = "Compressing photo...";
         }
         section._plantOriginalPhotoFile = file;
+        section._plantPhotoTakenAt = await plantPhotoTakenAt(file);
         const compressed = await compressPlantImage(file);
         section._plantPhotoFile = compressed;
         if (section._plantPreviewUrl) URL.revokeObjectURL(section._plantPreviewUrl);
@@ -9512,7 +9605,7 @@
       }
     }
 
-    function capturePlantVideoFrame(video) {
+    function capturePlantVideoFrame(video, digitalZoom = 1) {
       const width = video.videoWidth || 1280;
       const height = video.videoHeight || 720;
       const canvas = document.createElement("canvas");
@@ -9520,7 +9613,12 @@
       const scale = Math.min(1, maxEdge / Math.max(width, height));
       canvas.width = Math.max(1, Math.round(width * scale));
       canvas.height = Math.max(1, Math.round(height * scale));
-      canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+      const zoom = Math.max(1, Number(digitalZoom || 1));
+      const sourceWidth = width / zoom;
+      const sourceHeight = height / zoom;
+      const sourceX = (width - sourceWidth) / 2;
+      const sourceY = (height - sourceHeight) / 2;
+      canvas.getContext("2d").drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
       return new Promise((resolve, reject) => {
         canvas.toBlob(blob => {
           if (!blob) {
@@ -9532,15 +9630,77 @@
       });
     }
 
+    function plantCameraTouchDistance(touches) {
+      if (!touches || touches.length < 2) return 0;
+      return Math.hypot(touches[1].clientX - touches[0].clientX, touches[1].clientY - touches[0].clientY);
+    }
+
+    async function setPlantCameraZoom(overlay, requestedZoom) {
+      const zoomState = overlay?._plantCameraZoomState;
+      if (!zoomState) return;
+      const value = Math.min(zoomState.max, Math.max(zoomState.min, Number(requestedZoom || zoomState.min)));
+      zoomState.value = value;
+      zoomState.output.textContent = `${value.toFixed(value < 2 ? 1 : 0)}x`;
+      zoomState.output.classList.add("visible");
+      window.clearTimeout(zoomState.indicatorTimer);
+      zoomState.indicatorTimer = window.setTimeout(() => zoomState.output.classList.remove("visible"), 650);
+      if (zoomState.optical) {
+        try {
+          await zoomState.track.applyConstraints({ advanced: [{ zoom: value }] });
+          zoomState.video.style.transform = "";
+          return;
+        } catch (error) {
+          console.warn("Optical camera zoom was unavailable; using centered digital zoom instead.", error);
+          zoomState.optical = false;
+          zoomState.min = 1;
+          zoomState.max = 4;
+          zoomState.step = 0.1;
+          zoomState.value = Math.min(4, Math.max(1, value));
+        }
+      }
+      zoomState.output.textContent = `${zoomState.value.toFixed(zoomState.value < 2 ? 1 : 0)}x`;
+      zoomState.video.style.transform = `scale(${zoomState.value})`;
+    }
+
+    function bindPlantCameraZoom(overlay, video, track) {
+      const output = overlay.querySelector("[data-plant-camera-zoom-value]");
+      const capabilities = typeof track?.getCapabilities === "function" ? track.getCapabilities() : {};
+      const settings = typeof track?.getSettings === "function" ? track.getSettings() : {};
+      const optical = Number.isFinite(Number(capabilities?.zoom?.min)) && Number.isFinite(Number(capabilities?.zoom?.max))
+        && Number(capabilities.zoom.max) > Number(capabilities.zoom.min);
+      const min = optical ? Number(capabilities.zoom.min) : 1;
+      const max = optical ? Number(capabilities.zoom.max) : 4;
+      const step = optical ? Math.max(0.1, Number(capabilities.zoom.step || 0.1)) : 0.1;
+      const value = Math.min(max, Math.max(min, Number(settings?.zoom || min || 1)));
+      overlay._plantCameraZoomState = { optical, track, video, output, min, max, step, value, indicatorTimer: 0 };
+      output.textContent = `${value.toFixed(value < 2 ? 1 : 0)}x`;
+      let pinchDistance = 0;
+      let pinchZoom = value;
+      video.addEventListener("touchstart", event => {
+        if (event.touches.length !== 2) return;
+        pinchDistance = plantCameraTouchDistance(event.touches);
+        pinchZoom = overlay._plantCameraZoomState?.value || 1;
+      }, { passive: true });
+      video.addEventListener("touchmove", event => {
+        if (event.touches.length !== 2 || !pinchDistance) return;
+        event.preventDefault();
+        setPlantCameraZoom(overlay, pinchZoom * (plantCameraTouchDistance(event.touches) / pinchDistance));
+      }, { passive: false });
+      video.addEventListener("touchend", event => {
+        if (event.touches.length < 2) pinchDistance = 0;
+      }, { passive: true });
+      setPlantCameraZoom(overlay, value);
+    }
+
     async function openInAppPlantCamera(section) {
       if (!navigator.mediaDevices?.getUserMedia) return false;
       stopPlantCameraStream();
       const overlay = document.createElement("div");
       overlay.className = "plant-camera-overlay";
       overlay.innerHTML = `
-        <video autoplay playsinline muted></video>
+        <div class="plant-camera-preview"><video autoplay playsinline muted></video><output class="plant-camera-zoom-indicator" data-plant-camera-zoom-value aria-live="polite">1.0x</output></div>
         <div class="plant-camera-controls">
-          <p class="plant-camera-help">Frame the plant clearly, then capture. Stay on public paths and do not pick or disturb plants.</p>
+          <p class="plant-camera-help">Frame the plant clearly. Pinch the live image to zoom, then capture. Stay on public paths and do not pick or disturb plants.</p>
           <button class="action" type="button" data-plant-capture>Capture</button>
           <button class="ghost-button" type="button" data-plant-cancel>Cancel</button>
         </div>
@@ -9559,6 +9719,7 @@
         });
         video.srcObject = plantCameraStream;
         await video.play();
+        bindPlantCameraZoom(overlay, video, plantCameraStream.getVideoTracks()[0]);
       } catch (error) {
         stopPlantCameraStream();
         return false;
@@ -9569,7 +9730,8 @@
         button.textContent = "Capturing...";
         button.disabled = true;
         try {
-          const file = await capturePlantVideoFrame(video);
+          const zoomState = overlay._plantCameraZoomState;
+          const file = await capturePlantVideoFrame(video, zoomState?.optical ? 1 : zoomState?.value || 1);
           stopPlantCameraStream();
           await processPlantPhotoFile(section, file);
         } catch (error) {
@@ -10009,7 +10171,7 @@
       const profileId = Number(profile?.id || 0);
       return (state.plantObservations || []).filter(record => {
         if (profileId && Number(relationId(record.member_profile)) !== profileId) return false;
-        const date = String(record.public_submitted_at || record.created_at || "").slice(0, 10);
+        const date = String(record.created_at || record.public_submitted_at || "").slice(0, 10);
         return date === today;
       }).length;
     }
@@ -10024,7 +10186,7 @@
         statusFilter = record => !["deleted", "expired", "hidden", "rejected"].includes(normalizeCommentStatus(record));
       } else if (kind === "plants") {
         records = state.plantObservations;
-        dateFields = ["public_submitted_at", "created_at"];
+        dateFields = ["created_at", "public_submitted_at"];
         statusFilter = record => !["deleted", "rejected"].includes(normalizeCommentStatus(record));
       }
       return PROFILE_UTILS.contributorDailyLimitState({
@@ -10579,12 +10741,17 @@
     function plantObservationGridHtml(sourceType, item) {
       const observations = plantObservationsForSource(sourceType, item);
       if (!observations.length) return "";
+      const seasonGroups = PLANT_UTILS.plantObservationSeasonGroups(observations);
       return `
         <div class="site-plant-grid" aria-label="Plants reported at this site">
           <h4>Plants Identified at This Site</h4>
           <p class="detail-meta">${escapeHtml(knownPlantStatsText(item, observations))}</p>
-          <div class="site-plant-cards">
-            ${observations.slice(0, 8).map(comment => {
+          <div class="site-plant-seasons">
+            ${seasonGroups.map(group => `
+              <section class="site-plant-season" aria-label="${escapeHtml(group.label)} plant observations">
+                <h5>${escapeHtml(group.label)} <span>${group.observations.length}</span></h5>
+                <div class="site-plant-cards">
+            ${group.observations.map(comment => {
               const fields = enrichedPlantObservationFields(comment.fields || comment);
               const sourceRecord = comment.comment || comment;
               const author = state.contributorProfiles.find(profile => Number(profile.id) === Number(relationId(sourceRecord.member_profile)));
@@ -10603,6 +10770,7 @@
               const plantWiki = plantWikiArticleForMatch(guideMatch, commonName);
               const cardId = plantObservationDomId(sourceRecord);
               const detailsId = `${cardId}-details`;
+              const photoDate = fields.photo_taken_at || sourceRecord.public_submitted_at || sourceRecord.created_at || "";
               const detailLines = [
                 fields.source ? `Identification source: ${fields.source}` : "",
                 fields.guidance ? `Visitor guidance: ${publicPlantText(fields.guidance)}` : "",
@@ -10626,7 +10794,7 @@
                     ${fields.visitor_notes ? `<span class="site-plant-card-context">${escapeHtml(fields.visitor_notes)}</span>` : ""}
                     <span class="site-plant-card-meta">
                       ${author ? `<button class="site-plant-contributor" type="button" data-open-mobile-profile="${escapeHtml(contributorKey)}">${escapeHtml(contributor)}</button>` : escapeHtml(contributor)}
-                      ${sourceRecord.created_at ? ` - ${escapeHtml(new Date(sourceRecord.created_at).toLocaleDateString())}` : ""}${fields.confidence ? ` - ${escapeHtml(fields.confidence)}% confidence` : ""}
+                      ${photoDate ? ` - photographed ${escapeHtml(new Date(photoDate).toLocaleDateString())}` : ""}${fields.confidence ? ` - ${escapeHtml(fields.confidence)}% confidence` : ""}
                     </span>
                     ${guideMatch ? (plantWiki?.slug
                       ? `<button class="site-plant-card-action" type="button" data-open-plant-wiki="${escapeHtml(plantWiki.slug)}">Open plant wiki</button>`
@@ -10642,6 +10810,9 @@
                 </article>
               `;
             }).join("")}
+                </div>
+              </section>
+            `).join("")}
           </div>
         </div>
       `;
@@ -11195,7 +11366,16 @@
       try {
         imageId = await uploadDirectusFile(image, `Plant observation - ${site?.title || "On This Site"}`, { requireAuth: true });
         if (button) button.textContent = "Submitting...";
-        const observationPayload = plantObservationPayload({ site, discussion, profile, analysis: section._plantAnalysis, guess, notes, imageId });
+        const observationPayload = plantObservationPayload({
+          site,
+          discussion,
+          profile,
+          analysis: section._plantAnalysis,
+          guess,
+          notes,
+          imageId,
+          photoTakenAt: section._plantPhotoTakenAt
+        });
         const createdObservation = await postDirectusItem("mobile_plant_observations", observationPayload, { requireAuth: true });
         mergePlantObservationRecords([{
           id: createdObservation.data?.id || `plant-${Date.now()}`,
@@ -18132,7 +18312,10 @@
       if (mobileBasemapSelect) mobileBasemapSelect.value = savedBasemap;
       state.map = new mapboxgl.Map({
         container: "map",
-        style: mobileBasemapStyle(savedBasemap),
+        // Android displays its own MapLibre Native map. Keep this hidden
+        // browser map as a lightweight state/bridge surface instead of
+        // downloading and painting a second raster basemap underneath it.
+        style: isNativeAndroidApp() ? mobileBasemapStyle("blank") : mobileBasemapStyle(savedBasemap),
         center: MOBILE_STARTUP_VIEW.center,
         zoom: MOBILE_STARTUP_VIEW.zoom,
         minZoom: 7,
@@ -18154,11 +18337,18 @@
           let settled = false;
           let errorTimer = null;
           let postLoadRecoveryTimer = null;
+          let nativeBridgeTimer = null;
           const clearMapAttempt = () => {
             if (errorTimer) window.clearTimeout(errorTimer);
             if (postLoadRecoveryTimer) window.clearTimeout(postLoadRecoveryTimer);
+            if (nativeBridgeTimer) window.clearTimeout(nativeBridgeTimer);
             try { state.map?.remove(); } catch {}
             state.map = null;
+          };
+          const resolveMapReady = () => {
+            if (settled) return;
+            settled = true;
+            resolve(true);
           };
           const fallbackToOfflineIndex = (allowAfterLoad = false) => {
             if (settled && !allowAfterLoad) return;
@@ -18182,8 +18372,15 @@
               initMap({ recoveryAttempt: recoveryAttempt + 1 }).then(resolve);
             }, 120);
           };
+        if (isNativeAndroidApp()) {
+          nativeBridgeTimer = window.setTimeout(() => {
+            nativeBridgeTimer = null;
+            installNativeMapBridge();
+            scheduleNativeMapStateSync("native-bridge-shell-ready", 0);
+            resolveMapReady();
+          }, 360);
+        }
         state.map.on("load", () => {
-          if (settled) return;
           collapseMobileMapAttribution();
           addPolygonLayers();
           installNativeMapBridge();
@@ -18206,9 +18403,7 @@
             syncNativeMapCameraToAndroid();
           });
           window.setTimeout(() => {
-            if (settled) return;
-            settled = true;
-            resolve(true);
+            resolveMapReady();
           }, 160);
           });
           state.map.on("error", () => {
@@ -19148,6 +19343,7 @@
         plantPanel._plantAnalysis = null;
         plantPanel._plantPhotoFile = null;
         plantPanel._plantOriginalPhotoFile = null;
+        plantPanel._plantPhotoTakenAt = "";
         if (plantPanel._plantPreviewUrl) URL.revokeObjectURL(plantPanel._plantPreviewUrl);
         plantPanel._plantPreviewUrl = "";
         const input = plantPanel.querySelector("[data-plant-image]");
