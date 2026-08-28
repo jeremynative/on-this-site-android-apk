@@ -306,6 +306,13 @@ if (!nativeMapController.includes('BASE_WATER_LAYER_ID = "nli-base-water"')
 }
 if (!nativeMapController.includes("MAP_TAP_DISPATCH_DELAY_MS")
     || !nativeMapController.includes("pendingMapTapPoint")
+    || !nativeMapController.includes("capturePendingMovingFeature")
+    || !nativeMapController.includes("pendingMapTapFeatureKind")
+    || !nativeMapController.includes("pendingMapTapFeatureLongitude")
+    || !nativeMapController.includes("dispatchPendingMovingFeature(featureKind, featureKey, featureLongitude, featureLatitude)")
+    || !nativeMapController.includes("listener.onFeatureSelected(featureKind, featureKey, featureLongitude, featureLatitude)")
+    || !nativeMapController.includes("map.setPadding(0, 0, 0, viewportBottomOcclusion)")
+    || !source.includes("mtSettled=setTimeout(sync,420)")
     || !nativeMapController.includes("suppressNextMapTap")
     || !nativeMapController.includes("Query the frame the user actually pressed")) {
   throw new Error("Native map taps must remain responsive without breaking double-tap gesture handling or moving-icon hit tests.");
@@ -1096,8 +1103,10 @@ if (!bundledMobileJs.includes("const baseSignature =")
     || !bundledMobileJs.includes("JSON.stringify(transientPayload)")) {
   throw new Error("APK map state must separate stable map layers from selected-site, user-location, and community updates.");
 }
-if (!bundledMobileJs.includes('const slug = String(key || "");\n          if (!slug || !state.siteBySlug.has(slug)) return false;\n          openSite(slug, { focus: true });')) {
-  throw new Error("Native APK map taps must center the selected site using the visible panel-aware map padding.");
+if (!bundledMobileJs.includes("openFeature(kind, key, mapCenter = null)")
+    || !bundledMobileJs.includes("openWikiArticle(slug, { focus: false, mapCenter: selectedMapCenter })")
+    || !bundledMobileJs.includes("? { focus: false, mapCenter: selectedMapCenter }")) {
+  throw new Error("Native APK map taps must preserve moving-feature coordinates and center selected content within the visible panel-aware map area.");
 }
 if (!nativeMapController.includes('private String lastBaseStateSignature = "";')
     || !nativeMapController.includes("boolean baseStateChanged = baseSignature.isEmpty() || !baseSignature.equals(lastBaseStateSignature);")

@@ -7002,7 +7002,10 @@
       if (!nativeMapBridgeAvailable() || state.nativeMapBridgeInstalled) return false;
       state.nativeMapBridgeInstalled = true;
       window.NLI_NATIVE_MAP_BRIDGE = Object.freeze({
-        openFeature(kind, key) {
+        openFeature(kind, key, mapCenter = null) {
+          const selectedMapCenter = Array.isArray(mapCenter) && mapCenter.length >= 2 && mapCenter.map(Number).every(Number.isFinite)
+            ? mapCenter.map(Number)
+            : null;
           if (kind === "profile") {
             const group = state.profileMapMode?.model?.groups?.[Number(key)];
             if (!group) return false;
@@ -7012,7 +7015,7 @@
           if (kind === "wiki") {
             const slug = String(key || "");
             if (!slug || !state.wikiBySlug.has(slug)) return false;
-            openWikiArticle(slug, { focus: false });
+            openWikiArticle(slug, { focus: false, mapCenter: selectedMapCenter });
             return true;
           }
           if (kind === "event") {
@@ -7061,7 +7064,9 @@
           }
           const slug = String(key || "");
           if (!slug || !state.siteBySlug.has(slug)) return false;
-          openSite(slug, { focus: true });
+          openSite(slug, selectedMapCenter
+            ? { focus: false, mapCenter: selectedMapCenter }
+            : { focus: true });
           return true;
         },
         cameraChanged(longitude, latitude, zoom, bearing, pitch) {
@@ -8854,14 +8859,21 @@
       };
     }
 
+    function mobilePanelMapOffset() {
+      const padding = mobilePanelMapPadding();
+      return [
+        Math.round((padding.left - padding.right) / 2),
+        Math.round((padding.top - padding.bottom) / 2)
+      ];
+    }
+
     function focusMobileCoordinateInVisibleMap(coordinates, options = {}) {
       if (!state.map || !Array.isArray(coordinates) || !coordinates.every(Number.isFinite)) return;
       const currentZoom = Number(state.map.getZoom?.()) || 10;
       state.map.easeTo?.({
         center: coordinates,
         zoom: Number.isFinite(Number(options.zoom)) ? Number(options.zoom) : currentZoom,
-        padding: mobilePanelMapPadding(),
-        retainPadding: false,
+        ...(nativeMapBridgeAvailable() ? {} : { offset: mobilePanelMapOffset() }),
         duration: Number.isFinite(Number(options.duration)) ? Number(options.duration) : 420,
         essential: true
       });
@@ -12429,6 +12441,11 @@
       resetMobilePanelScroll(detailEl);
       if (options.mapCenter?.every?.(Number.isFinite)) {
         window.requestAnimationFrame(() => focusMobileCoordinateInVisibleMap(options.mapCenter, { duration: 420 }));
+        window.setTimeout(() => {
+          if (state.selectedWikiSlug === slug && detailEl?.classList.contains("open")) {
+            focusMobileCoordinateInVisibleMap(options.mapCenter, { duration: 220 });
+          }
+        }, 360);
       }
       article = await fetchWikiDetail(article || slug);
       if (!article) {

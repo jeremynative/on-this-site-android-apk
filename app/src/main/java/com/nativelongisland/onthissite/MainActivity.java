@@ -473,8 +473,8 @@ public class MainActivity extends Activity {
         if (nativeMapEnabled) {
             nativeMapController = new NativeMapController(this, savedInstanceState, new NativeMapController.Listener() {
                 @Override
-                public void onFeatureSelected(String kind, String key) {
-                    dispatchNativeMapFeature(kind, key);
+                public void onFeatureSelected(String kind, String key, double longitude, double latitude) {
+                    dispatchNativeMapFeature(kind, key, longitude, latitude);
                 }
 
                 @Override
@@ -1192,7 +1192,7 @@ public class MainActivity extends Activity {
                 + "window.__nliSyncNativeMapViewport=sync;"
                 + "window.addEventListener('resize',sync,{passive:true});window.addEventListener('scroll',sync,{passive:true});"
                 + "if(window.ResizeObserver){var ro=new ResizeObserver(sync);var map=document.getElementById('map');if(map)ro.observe(map);var app=document.querySelector('.app');if(app)ro.observe(app);window.__nliNativeMapResizeObserver=ro;}"
-                + "if(window.MutationObserver){var mt=0;var mo=new MutationObserver(function(){clearTimeout(mt);mt=setTimeout(sync,80);});mo.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','class','open','data-native-tablet-landscape']});window.__nliNativeMapMutationObserver=mo;}"
+                + "if(window.MutationObserver){var mt=0,mtSettled=0;var mo=new MutationObserver(function(){clearTimeout(mt);clearTimeout(mtSettled);mt=setTimeout(sync,80);mtSettled=setTimeout(sync,420);});mo.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','class','open','data-native-tablet-landscape']});window.__nliNativeMapMutationObserver=mo;}"
                 + "requestAnimationFrame(function(){sync();requestAnimationFrame(sync);});"
                 + "setTimeout(sync,250);setTimeout(sync,900);setTimeout(sync,2200);setTimeout(sync,5000);"
                 + "var startupSyncCount=0;var startupSyncTimer=setInterval(function(){sync();startupSyncCount+=1;if(startupSyncCount>=40)clearInterval(startupSyncTimer);},500);window.__nliNativeMapStartupSyncTimer=startupSyncTimer;return true;"
@@ -1280,15 +1280,19 @@ public class MainActivity extends Activity {
         nativeMapController.updateCamera(longitude, latitude, zoom, bearing, tilt);
     }
 
-    private void dispatchNativeMapFeature(String kind, String key) {
+    private void dispatchNativeMapFeature(String kind, String key, double longitude, double latitude) {
         if (webView == null || !nativeMapEnabled) return;
+        String coordinateJson = Double.isFinite(longitude) && Double.isFinite(latitude)
+            ? "[" + longitude + "," + latitude + "]"
+            : "null";
         String script = "(function(){try{"
             + "var k=" + JSONObject.quote(kind == null ? "" : kind) + ";"
             + "var v=" + JSONObject.quote(key == null ? "" : key) + ";"
+            + "var c=" + coordinateJson + ";"
             + "var b=window.NLI_NATIVE_MAP_BRIDGE;"
-            + "if(b&&b.openFeature)return b.openFeature(k,v);"
-            + "if(k==='wiki'&&typeof openWikiArticle==='function'){openWikiArticle(v,{focus:false});return true;}"
-            + "if(k==='site'&&typeof openSite==='function'){openSite(v,{focus:false});return true;}"
+            + "if(b&&b.openFeature)return b.openFeature(k,v,c);"
+            + "if(k==='wiki'&&typeof openWikiArticle==='function'){openWikiArticle(v,{focus:false,mapCenter:c});return true;}"
+            + "if(k==='site'&&typeof openSite==='function'){openSite(v,{focus:false,mapCenter:c});return true;}"
             + "return false;}catch(e){return false;}})()";
         webView.evaluateJavascript(script, null);
     }
