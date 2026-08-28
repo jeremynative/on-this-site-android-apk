@@ -47,6 +47,7 @@ import org.maplibre.android.style.sources.RasterSource;
 import org.maplibre.android.style.sources.TileSet;
 import org.maplibre.geojson.Feature;
 import org.maplibre.geojson.FeatureCollection;
+import org.maplibre.geojson.Point;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -97,7 +98,10 @@ import static org.maplibre.android.style.layers.PropertyFactory.visibility;
  */
 final class NativeMapController {
     interface Listener {
-        void onFeatureSelected(String kind, String key);
+        void onFeatureSelected(String kind, String key, double longitude, double latitude);
+        default void onFeatureSelected(String kind, String key) {
+            onFeatureSelected(kind, key, Double.NaN, Double.NaN);
+        }
         void onCameraChanged(double longitude, double latitude, double zoom, double bearing, double tilt);
         void onGestureChanged(boolean active);
     }
@@ -199,10 +203,24 @@ final class NativeMapController {
     private float pendingMapTapX;
     private float pendingMapTapY;
     private long pendingMapTapAt;
+    private String pendingMapTapFeatureKind = "";
+    private String pendingMapTapFeatureKey = "";
+    private double pendingMapTapFeatureLongitude = Double.NaN;
+    private double pendingMapTapFeatureLatitude = Double.NaN;
     private final Runnable dispatchPendingMapTapTask = () -> {
         LatLng point = pendingMapTapPoint;
+        String featureKind = pendingMapTapFeatureKind;
+        String featureKey = pendingMapTapFeatureKey;
+        double featureLongitude = pendingMapTapFeatureLongitude;
+        double featureLatitude = pendingMapTapFeatureLatitude;
         pendingMapTapPoint = null;
-        if (point != null) handleMapClick(point);
+        pendingMapTapFeatureKind = "";
+        pendingMapTapFeatureKey = "";
+        pendingMapTapFeatureLongitude = Double.NaN;
+        pendingMapTapFeatureLatitude = Double.NaN;
+        if (point == null) return;
+        if (dispatchPendingMovingFeature(featureKind, featureKey, featureLongitude, featureLatitude)) return;
+        handleMapClick(point);
     };
     private boolean usingOnlineArchive;
     private boolean offlineFallbackAttempted;
@@ -411,6 +429,7 @@ final class NativeMapController {
         viewportBottom = safeTop + safeHeight;
         viewportBottomOcclusion = Math.min(safeHeight - 1, Math.max(0, Math.round(bottomOcclusion)));
         viewportInteractiveBottom = viewportBottom - viewportBottomOcclusion;
+        if (map != null) map.setPadding(0, 0, 0, viewportBottomOcclusion);
         touchRootScreenLeft = rootScreenLeft;
         touchRootScreenTop = rootScreenTop;
         FrameLayout.LayoutParams currentParams = (FrameLayout.LayoutParams) container.getLayoutParams();
@@ -494,6 +513,10 @@ final class NativeMapController {
                 if (tapDeltaX * tapDeltaX + tapDeltaY * tapDeltaY <= doubleTapSlop * doubleTapSlop) {
                     mapView.removeCallbacks(dispatchPendingMapTapTask);
                     pendingMapTapPoint = null;
+                    pendingMapTapFeatureKind = "";
+                    pendingMapTapFeatureKey = "";
+                    pendingMapTapFeatureLongitude = Double.NaN;
+                    pendingMapTapFeatureLatitude = Double.NaN;
                     suppressNextMapTap = true;
                 }
             }
@@ -549,10 +572,59 @@ final class NativeMapController {
                 pendingMapTapX = rootX;
                 pendingMapTapY = rootY;
                 pendingMapTapAt = SystemClock.uptimeMillis();
+                capturePendingMovingFeature(new PointF(rootX - viewportLeft, rootY - viewportTop));
                 mapView.removeCallbacks(dispatchPendingMapTapTask);
                 mapView.postDelayed(dispatchPendingMapTapTask, MAP_TAP_DISPATCH_DELAY_MS);
             }
         }
+        return true;
+    }
+
+    private void capturePendingMovingFeature(PointF screenPoint) {
+        pendingMapTapFeatureKind = "";
+        pendingMapTapFeatureKey = "";
+        pendingMapTapFeatureLongitude = Double.NaN;
+        pendingMapTapFeatureLatitude = Double.NaN;
+        if (map == null || screenPoint == null || profileMode) return;
+        float hitRadius = Math.max(32f, activity.getResources().getDisplayMetrics().density * 32f);
+        RectF hitBox = new RectF(
+            screenPoint.x - hitRadius,
+            screenPoint.y - hitRadius,
+            screenPoint.x + hitRadius,
+            screenPoint.y + hitRadius
+        );
+        List<Feature> features = map.queryRenderedFeatures(
+            hitBox,
+            "nli-moving-feature-labels",
+            "nli-moving-biography-icons",
+            "nli-moving-dog-icons",
+            "nli-moving-whale-icons",
+            "nli-moving-ship-icons"
+        );
+        if (features == null || features.isEmpty()) return;
+        Feature nearest = nearestActionablePointFeature(features, screenPoint, false);
+        if (nearest == null || !nearest.hasProperty("native_kind") || !nearest.hasProperty("native_key")) return;
+        pendingMapTapFeatureKind = nearest.getStringProperty("native_kind");
+        pendingMapTapFeatureKey = nearest.getStringProperty("native_key");
+        if (nearest.geometry() instanceof Point) {
+            Point coordinate = (Point) nearest.geometry();
+            pendingMapTapFeatureLongitude = coordinate.longitude();
+            pendingMapTapFeatureLatitude = coordinate.latitude();
+        }
+    }
+
+    private boolean dispatchPendingMovingFeature(
+        String featureKind,
+        String featureKey,
+        double featureLongitude,
+        double featureLatitude
+    ) {
+        if (featureKind == null || featureKind.isEmpty()
+            || featureKey == null || featureKey.isEmpty()
+            || listener == null) return false;
+        cameraGestureAwaitingIdle = false;
+        listener.onGestureChanged(false);
+        listener.onFeatureSelected(featureKind, featureKey, featureLongitude, featureLatitude);
         return true;
     }
 
@@ -567,6 +639,7 @@ final class NativeMapController {
 
     private void prepareMap(MapLibreMap readyMap) {
         map = readyMap;
+        map.setPadding(0, 0, 0, viewportBottomOcclusion);
         map.getUiSettings().setLogoEnabled(false);
         map.getUiSettings().setAttributionEnabled(false);
         map.getUiSettings().setCompassEnabled(false);
