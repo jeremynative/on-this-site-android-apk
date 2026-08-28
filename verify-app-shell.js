@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260825-polygon-basemap-alignment-r187";
+const expectedBuild = "20260828-plant-camera-seasons-r189";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -16,6 +16,7 @@ const bundledSharedLifecycleUtilsPath = "app/src/main/assets/assets/js/shared-li
 const bundledSharedMapUtilsPath = "app/src/main/assets/assets/js/shared-map-utils.js";
 const bundledSharedActivityUtilsPath = "app/src/main/assets/assets/js/shared-activity-utils.js";
 const bundledSharedMapStoryUtilsPath = "app/src/main/assets/assets/js/shared-map-story-utils.js";
+const bundledSharedPlantUtilsPath = "app/src/main/assets/assets/js/shared-plant-utils.js";
 const bundledMobileCssPath = "app/src/main/assets/assets/css/mobile-app.css";
 const mapLibreJsPath = "app/src/main/assets/assets/vendor/maplibre-gl/maplibre-gl.js";
 const mapLibreCssPath = "app/src/main/assets/assets/vendor/maplibre-gl/maplibre-gl.css";
@@ -74,6 +75,7 @@ const bundledSharedLifecycleUtils = fs.readFileSync(bundledSharedLifecycleUtilsP
 const bundledSharedMapUtils = fs.readFileSync(bundledSharedMapUtilsPath, "utf8");
 const bundledSharedActivityUtils = fs.readFileSync(bundledSharedActivityUtilsPath, "utf8");
 const bundledSharedMapStoryUtils = fs.readFileSync(bundledSharedMapStoryUtilsPath, "utf8");
+const bundledSharedPlantUtils = fs.readFileSync(bundledSharedPlantUtilsPath, "utf8");
 const bundledMobileCss = fs.readFileSync(bundledMobileCssPath, "utf8").replace(/\r\n/g, "\n");
 const launcherBackground = fs.readFileSync(launcherBackgroundPath, "utf8");
 const launcherForeground = fs.readFileSync(launcherForegroundPath, "utf8");
@@ -84,6 +86,24 @@ const mapLibreJs = fs.readFileSync(mapLibreJsPath, "utf8");
 const mapLibreCss = fs.readFileSync(mapLibreCssPath, "utf8");
 const mapLibreLicense = fs.readFileSync(mapLibreLicensePath, "utf8");
 const bundledLiveRuntime = `${bundledLiveApp}\n${bundledMobileJs}\n${bundledMobileCss}`;
+
+if (!bundledMobileJs.includes("function bindPlantCameraZoom(overlay, video, track)")
+    || !bundledMobileJs.includes("applyConstraints({ advanced: [{ zoom: value }] })")
+    || !bundledMobileJs.includes("capturePlantVideoFrame(video, zoomState?.optical ? 1 : zoomState?.value || 1)")
+    || !bundledMobileJs.includes("section._plantPhotoTakenAt = await plantPhotoTakenAt(file)")
+    || !bundledMobileJs.includes("public_submitted_at: capturedAt")
+    || !bundledMobileCss.includes(".plant-camera-zoom-indicator")
+    || !bundledMobileJs.includes("Pinch the live image to zoom")
+    || bundledMobileJs.includes('data-plant-camera-zoom type="range"')
+    || !bundledMobileCss.includes("padding-bottom: max(80px, calc(var(--app-bottom-safe) + 28px));")
+    || !bundledSharedPlantUtils.includes("function plantObservationSeasonGroups(observations = [])")) {
+  throw new Error("Android plant camera must support optical or centered digital zoom and group submitted photos by capture season.");
+}
+
+if (!source.includes("effectiveMapBottom=pr&&pr.top>r.bottom")
+    || !source.includes("effectiveMapHeight=Math.max(r.height,effectiveMapBottom-r.top)")) {
+  throw new Error("Native map viewport must extend to an open content panel instead of leaving a blank gap.");
+}
 
 if (!bundledLiveApp.includes('id="maplibre-gl-script" src="assets/vendor/maplibre-gl/maplibre-gl.js')) {
   throw new Error("Android live fallback must load the packaged self-hosted MapLibre renderer.");
@@ -788,16 +808,25 @@ function requireBundledPattern(pattern, message) {
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
 requireText("LOADING_COVER_MINIMUM_MS = 1500", "Android loading cover must remain visible long enough to show its Long Island progress animation.");
 requireText('showLoadingCover("Loading On This Site");', "Android cold startup must initialize the native loading animation timer before the WebView can finish.");
-requireText("STARTUP_VISUAL_STABLE_MS = 900", "Android must keep the Long Island cover over late map state and camera updates for a final stable paint window.");
-requireText("STARTUP_DOM_STABLE_MS = 650", "Android must keep the Long Island cover over the final promo controls and unread-count update.");
+requireText("STARTUP_VISUAL_STABLE_MS = 600", "Android must keep a bounded stability window without delaying the first usable map.");
+requireText("STARTUP_DOM_STABLE_MS = 350", "Android must settle the initial controls without waiting on idle community data.");
+requireText("listings[\\\\s\\\\S]*loaded\\\\b", "Android readiness must accept both live and APK snapshot loaded messages.");
+if (!bundledMobileJs.includes('style: isNativeAndroidApp() ? mobileBasemapStyle("blank") : mobileBasemapStyle(savedBasemap)')) {
+  throw new Error("Android must not download and paint a duplicate hidden raster basemap under the native map.");
+}
+if (!bundledMobileJs.includes('scheduleNativeMapStateSync("native-bridge-shell-ready", 0)')
+    || !bundledMobileJs.includes("nativeBridgeTimer = window.setTimeout")) {
+  throw new Error("Android must release startup once the lightweight native bridge is ready instead of waiting on hidden browser tiles.");
+}
 requireText("app.classList.contains('mobile-map-initializing')", "Android startup readiness must wait for the in-map initialization shield to finish.");
 requireText("app.classList.contains('mobile-site-reveal-pending')", "Android startup readiness must wait for the intentional site reveal to finish behind the native cover.");
 requireText("app.classList.contains('mobile-site-reveal-settling')", "Android startup readiness must not expose the marker settling animation.");
 requireText("window.__nliNativeStartupGeometryRequested=true", "Android startup must begin detailed geometry hydration as soon as the compact archive text is ready.");
 requireText("Promise.resolve(hydrate()).catch(function(){return false;}).then(function(){window.__nliNativeStartupGeometryReady=true;})", "Android startup must share the existing geometry promise and record its bounded completion.");
-requireText("window.__nliNativeStartupDeferredRequested=true;window.__nliNativeStartupDeferredReady=false", "Android startup must pull the already-scheduled deferred data pass forward behind the native cover without duplicating requests.");
-requireText("loadDeferredData({includeCommunity:true})", "Android startup must include the existing community badge and promo-control refresh before uncovering the map.");
-requireText("window.__nliNativeStartupDeferredReady=true", "Android startup must wait until its one shared deferred-data request settles before uncovering the map.");
+requireText("var deferredReady=true", "Android startup must leave the page's existing idle community-data pass out of the first-paint gate.");
+if (source.includes("window.__nliNativeStartupDeferredRequested")) {
+  throw new Error("Android startup must not duplicate or pull the deferred community request in front of the first usable map.");
+}
 requireText("window.__nliNativeStartupDomSignature", "Android startup must track the visible promo controls and unread badges until their DOM state settles.");
 requireText("archiveTextReady&&geometryReady&&deferredReady&&mapUiReady&&startupDomStable", "Android must require loaded archive text, hydrated geometry, deferred data, a settled map viewport, and stable controls before handing off from the native cover.");
 requireText("nativeMapController.isStartupVisualStable(STARTUP_VISUAL_STABLE_MS)", "Android readiness probes must include native style, viewport, state, and camera stability.");

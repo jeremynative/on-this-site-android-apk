@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260825-polygon-basemap-alignment-r187";
+    static final String APP_VERSION = "20260828-plant-camera-seasons-r189";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -106,8 +106,8 @@ public class MainActivity extends Activity {
     private static final long LOADING_OUTLINE_COMPLETION_MS = 220;
     private static final long LOADING_OUTLINE_COMPLETE_HOLD_MS = 120;
     private static final float LOADING_OUTLINE_PRE_READY_MAX = 0.90f;
-    private static final long STARTUP_VISUAL_STABLE_MS = 900;
-    private static final long STARTUP_DOM_STABLE_MS = 650;
+    private static final long STARTUP_VISUAL_STABLE_MS = 600;
+    private static final long STARTUP_DOM_STABLE_MS = 350;
     private static final int OFFLINE_RENDER_MAX_ATTEMPTS = 12;
     private static final long OFFLINE_RENDER_DEADLINE_MS = 12000;
     private static final int COMMENT_PHOTO_READ_MAX_ATTEMPTS = 3;
@@ -1180,8 +1180,9 @@ public class MainActivity extends Activity {
                 + "var sync=function(){var map=document.getElementById('map');if(!map)return false;"
                     + "var r=map.getBoundingClientRect();var visible=r.width>2&&r.height>2&&r.bottom>0&&r.right>0;"
                     + "var panel=document.getElementById('detail');if(!panel||!panel.classList.contains('open'))panel=document.querySelector('.sheet.open');"
-                    + "var pr=panel&&panel.getBoundingClientRect();var bottomOcclusion=pr?Math.max(0,Math.min(r.bottom,pr.bottom)-Math.max(r.top,pr.top)):0;"
-                    + "window.AndroidApp.syncNativeMapViewport(token,r.left,r.top,r.width,r.height,bottomOcclusion,window.innerWidth,window.innerHeight,visible);"
+                    + "var pr=panel&&panel.getBoundingClientRect();var effectiveMapBottom=pr&&pr.top>r.bottom?Math.min(window.innerHeight,pr.top):r.bottom;var effectiveMapHeight=Math.max(r.height,effectiveMapBottom-r.top);"
+                    + "var bottomOcclusion=pr?Math.max(0,Math.min(r.top+effectiveMapHeight,pr.bottom)-Math.max(r.top,pr.top)):0;"
+                    + "window.AndroidApp.syncNativeMapViewport(token,r.left,r.top,r.width,effectiveMapHeight,bottomOcclusion,window.innerWidth,window.innerHeight,visible);"
                     + "var blocked=[];document.querySelectorAll('button,a,input,select,textarea,[role=button]').forEach(function(el){"
                         + "var marker=el.closest('.mapboxgl-marker,.maplibregl-marker');"
                         + "if(el.disabled||el.hidden||el.closest('.mapboxgl-control-container,.maplibregl-control-container')||marker)return;"
@@ -1335,17 +1336,17 @@ public class MainActivity extends Activity {
                 // initialization shield can safely replace the native cover.
                 + "var liveStatus=((document.querySelector('.mobile-header-instruction')||{}).textContent||'').trim();"
                 + "var app=document.querySelector('.app');"
-                + "var archiveTextReady=/\\d+\\s+listings[\\s\\S]*loaded\\./i.test(liveStatus);"
+                + "var archiveTextReady=/\\d+\\s+listings[\\s\\S]*loaded\\b/i.test(liveStatus);"
                 + "if(!offline&&shell&&archiveTextReady&&!window.__nliNativeStartupGeometryRequested){"
                     + "window.__nliNativeStartupGeometryRequested=true;window.__nliNativeStartupGeometryReady=false;"
                     + "var hydrate=typeof hydrateMobileSiteGeometry==='function'?hydrateMobileSiteGeometry:null;"
                     + "if(!hydrate){window.__nliNativeStartupGeometryReady=true;}else{Promise.resolve(hydrate()).catch(function(){return false;}).then(function(){window.__nliNativeStartupGeometryReady=true;});}}"
-                + "if(!offline&&shell&&archiveTextReady&&!window.__nliNativeStartupDeferredRequested&&typeof loadDeferredData==='function'){"
-                    + "window.__nliNativeStartupDeferredRequested=true;window.__nliNativeStartupDeferredReady=false;"
-                    + "Promise.resolve(loadDeferredData({includeCommunity:true})).catch(function(){return false;}).then(function(){window.__nliNativeStartupDeferredReady=true;});}"
                 + "var geometryStatus=app&&app.getAttribute('data-site-geometry');"
                 + "var geometryReady=offline||window.__nliNativeStartupGeometryReady===true||geometryStatus==='loaded'||geometryStatus==='deferred';"
-                + "var deferredReady=offline||window.__nliNativeStartupDeferredReady===true;"
+                // Community activity, points, and notification counts already
+                // have one idle data pass in the page runtime. Do not pull that
+                // heavier request in front of the first usable map paint.
+                + "var deferredReady=true;"
                 + "var mapBusy=!!(app&&(app.classList.contains('mobile-map-initializing')||app.classList.contains('mobile-site-reveal-pending')||app.classList.contains('mobile-site-reveal-settling')));"
                 + "var mapBox=document.getElementById('map');var mapRect=mapBox&&mapBox.getBoundingClientRect();"
                 + "var mapUiReady=!!(mapRect&&mapRect.width>2&&mapRect.height>2&&!mapBusy&&window.__nliNativeMapLayoutInstalled);"
