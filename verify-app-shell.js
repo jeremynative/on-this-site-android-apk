@@ -150,6 +150,10 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes('"nli-community-contributions"')
     || !nativeMapController.includes('"nli-temporary-markers"')
     || !nativeMapController.includes('"nli-moving-features"')
+    || !nativeMapController.includes('new SymbolLayer("nli-moving-biography-canoes", MOVING_FEATURE_SOURCE_ID)')
+    || !nativeMapController.includes('iconImage("nli-icon-biography-canoe")')
+    || !nativeMapController.includes('Expression.eq(Expression.get("on_water"), Expression.literal(true))')
+    || !nativeMapController.includes('style.addImage("nli-icon-biography-canoe", canoe)')
     || !nativeMapController.includes('"nli-moving-biography-icons"')
     || !nativeMapController.includes('"nli-moving-dog-icons"')
     || !nativeMapController.includes('"nli-moving-whale-icons"')
@@ -198,6 +202,11 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes('COMPACT_MAP_CREDIT = "ⓘ OSM"')
     || !nativeMapController.includes("© OpenStreetMap contributors")) {
   throw new Error("Native MapLibre must use self-hosted/bundled PMTiles, hide engine branding, retain legal credit, and render the required project overlays.");
+}
+if (!nativeMapController.includes('new SymbolLayer("nli-moving-feature-labels", MOVING_FEATURE_SOURCE_ID)')
+    || !nativeMapController.includes('textFont(new String[] { "Noto Sans Regular" }), textSize(10f)')
+    || nativeMapController.includes('textFont(new String[] { "Noto Sans Bold" }), textSize(10f)')) {
+  throw new Error("Native biography titles must use the bundled regular font so close-zoom labels render on Android.");
 }
 if (!fs.existsSync(amethystShipIconPath) || fs.statSync(amethystShipIconPath).size < 10000) {
   throw new Error("Android must bundle the reviewed generic Amethyst-era bark icon.");

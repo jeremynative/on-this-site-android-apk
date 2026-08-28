@@ -991,6 +991,22 @@ final class NativeMapController {
                 textHaloColor("rgba(42,47,44,0.7)"), textHaloWidth(0.6f),
                 textAllowOverlap(true), textIgnorePlacement(true)
             ));
+            style.addLayer(new SymbolLayer("nli-moving-biography-canoes", MOVING_FEATURE_SOURCE_ID)
+                .withFilter(Expression.all(
+                    Expression.eq(Expression.get("moving_kind"), Expression.literal("biography")),
+                    Expression.eq(Expression.get("on_water"), Expression.literal(true))
+                ))
+                .withProperties(
+                    iconImage("nli-icon-biography-canoe"),
+                    iconSize(Expression.interpolate(
+                        Expression.linear(), Expression.zoom(),
+                        Expression.stop(6, 0.62f),
+                        Expression.stop(10, 0.72f),
+                        Expression.stop(14, 0.86f)
+                    )),
+                    iconOpacity(Expression.coalesce(Expression.get("motion_opacity"), Expression.literal(1f))),
+                    iconAllowOverlap(true), iconIgnorePlacement(true)
+                ));
             style.addLayer(new SymbolLayer("nli-moving-biography-icons", MOVING_FEATURE_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("moving_kind"), Expression.literal("biography")))
                 .withProperties(
@@ -1026,7 +1042,7 @@ final class NativeMapController {
             style.addLayer(new SymbolLayer("nli-moving-feature-labels", MOVING_FEATURE_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("show_label"), Expression.literal(true)))
                 .withProperties(
-                    textField(Expression.get("label")), textFont(new String[] { "Noto Sans Bold" }), textSize(10f),
+                    textField(Expression.get("label")), textFont(new String[] { "Noto Sans Regular" }), textSize(10f),
                     textColor("#1f2d25"), textHaloColor("rgba(255,255,255,0.96)"), textHaloWidth(1.25f),
                     textOffset(new Float[] { 0f, -2.3f }), textAllowOverlap(true), textIgnorePlacement(true),
                     textOpacity(Expression.coalesce(Expression.get("motion_opacity"), Expression.literal(1f)))
@@ -1064,6 +1080,19 @@ final class NativeMapController {
 
     private void addBundledMapIcons(Style style) {
         try {
+            Bitmap canoe = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888);
+            Canvas canoeCanvas = new Canvas(canoe);
+            Paint canoeFill = new Paint(Paint.ANTI_ALIAS_FLAG);
+            canoeFill.setColor(Color.rgb(116, 73, 31));
+            canoeFill.setStyle(Paint.Style.FILL);
+            RectF canoeHull = new RectF(7f, 42f, 57f, 55f);
+            canoeCanvas.drawRoundRect(canoeHull, 7f, 7f, canoeFill);
+            Paint canoeStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+            canoeStroke.setColor(Color.rgb(63, 41, 22));
+            canoeStroke.setStyle(Paint.Style.STROKE);
+            canoeStroke.setStrokeWidth(2.5f);
+            canoeCanvas.drawRoundRect(canoeHull, 7f, 7f, canoeStroke);
+            style.addImage("nli-icon-biography-canoe", canoe);
             String[] assets = activity.getAssets().list("assets/map-icons");
             if (assets == null) return;
             int loaded = 0;
@@ -1384,6 +1413,7 @@ final class NativeMapController {
         setLayerVisibility(style, "nli-profile-path-line", profileMode);
         setLayerVisibility(style, "nli-profile-point-circles", profileMode);
         setLayerVisibility(style, "nli-profile-point-numbers", profileMode);
+        setLayerVisibility(style, "nli-moving-biography-canoes", !profileMode);
         setLayerVisibility(style, "nli-moving-biography-icons", !profileMode);
         setLayerVisibility(style, "nli-moving-dog-icons", !profileMode);
         setLayerVisibility(style, "nli-moving-whale-icons", !profileMode);
@@ -1513,7 +1543,7 @@ final class NativeMapController {
                 "nli-suggestion-draft-label", "nli-suggestion-draft-marker", "nli-search-result-marker",
                 "nli-approved-suggestion-labels", "nli-approved-suggestion-markers",
                 "nli-plant-markers", "nli-story-markers", "nli-selected-site-label",
-                "nli-moving-feature-labels", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons", "nli-moving-ship-icons",
+                "nli-moving-feature-labels", "nli-moving-biography-canoes", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons", "nli-moving-ship-icons",
                 "nli-calendar-event-labels", "nli-calendar-event-circles", "nli-exhibit-circles",
                 "nli-biography-path-numbers", "nli-biography-path-points", "nli-biography-path-labels",
                 "nli-site-point-labels", "nli-site-point-icons", "nli-site-point-circles");
@@ -1539,7 +1569,7 @@ final class NativeMapController {
             "nli-suggestion-draft-label", "nli-suggestion-draft-marker", "nli-search-result-marker",
             "nli-approved-suggestion-labels", "nli-approved-suggestion-markers",
             "nli-plant-markers", "nli-story-markers", "nli-selected-site-label",
-            "nli-moving-feature-labels", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons", "nli-moving-ship-icons",
+            "nli-moving-feature-labels", "nli-moving-biography-canoes", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons", "nli-moving-ship-icons",
             "nli-calendar-event-labels", "nli-calendar-event-circles", "nli-exhibit-circles",
             "nli-biography-path-numbers", "nli-biography-path-points", "nli-biography-path-labels",
             "nli-site-point-labels", "nli-site-point-icons", "nli-site-point-circles",
