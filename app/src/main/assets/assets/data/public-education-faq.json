@@ -1,0 +1,745 @@
+[
+  {
+    "id": "FAQ001",
+    "theme": "Communities and continuity",
+    "question": "What Indigenous Nations and communities are connected to Long Island?",
+    "short_answer": "Long Island is the home of several Algonquian nations, including the sovereign Shinnecock Indian Nation and the Unkechaug Nation, which maintain reservations. The Montaukett, Matinecock, and Setaukett nations also continue as distinct, active communities preserving their ancestral heritage today.",
+    "target_type": "wiki",
+    "target_slug": "native-long-island-overview",
+    "url": "/?wiki=native-long-island-overview",
+    "source_ids": [
+      140,
+      26,
+      5
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ005",
+    "theme": "Communities and continuity",
+    "question": "What does ancestral land mean on the map?",
+    "short_answer": "Ancestral land represents dynamic, overlapping spheres of cultural stewardship, resource harvesting, and kinship networks rather than rigid, surveyed modern borders. It reflects an ongoing spiritual and ecological relationship with the landscape that predates and outlasts colonial land deeds.",
+    "target_type": "wiki",
+    "target_slug": "native-long-island-overview",
+    "url": "/?wiki=native-long-island-overview",
+    "source_ids": [
+      26,
+      142,
+      727
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ002",
+    "theme": "Communities and continuity",
+    "question": "Are Native people still living on Long Island today?",
+    "short_answer": "Yes, Native people continue to live on Long Island today. The Shinnecock and Unkechaug Nations maintain active, sovereign reservation communities, while the Montaukett and Matinecock peoples thrive in local enclaves, preserving their ancestral culture and organizing tribal affairs.",
+    "target_type": "wiki",
+    "target_slug": "continued-indigenous-presence-today",
+    "url": "/?wiki=continued-indigenous-presence-today",
+    "source_ids": [
+      140,
+      26,
+      119
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ003",
+    "theme": "Communities and continuity",
+    "question": "What is the difference between a Nation, tribe, community, and historic group name in this project?",
+    "short_answer": "A 'Nation' is a politically autonomous, sovereign government. A 'tribe' is often a colonial category historically imposed to simplify land deeds. 'Community' describes the kinship-linked, local village networks that have sustained Native families and identity throughout centuries of dispossession.",
+    "target_type": "wiki",
+    "target_slug": "the-tribes-of-long-island",
+    "url": "/?wiki=the-tribes-of-long-island",
+    "source_ids": [
+      140,
+      5,
+      151
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ008",
+    "theme": "Communities and continuity",
+    "question": "Why do community relationships and kinship not fit neatly inside modern town boundaries?",
+    "short_answer": "Algonquian kinship networks and ecological harvesting pathways never conformed to artificial colonial town borders. For centuries, intermarriage and seasonal migrations linked families across Long Island and southern New England, establishing a fluid landscape of shared cultural stewardship.",
+    "target_type": "wiki",
+    "target_slug": "the-tribes-of-long-island",
+    "url": "/?wiki=the-tribes-of-long-island",
+    "source_ids": [
+      5,
+      140,
+      26
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ004",
+    "theme": "Communities and continuity",
+    "question": "Why is the idea that Long Island had exactly thirteen tribes misleading?",
+    "short_answer": "The familiar list of thirteen tribes is a later historical model, not a complete map of fixed pre-contact governments or borders. Many names in colonial records identify places, local communities, or negotiating groups connected through kinship and shared land use.",
+    "target_type": "wiki",
+    "target_slug": "myth-of-the-thirteen-tribes",
+    "url": "/?wiki=myth-of-the-thirteen-tribes",
+    "source_ids": [
+      140,
+      26,
+      151
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ006",
+    "theme": "Communities and continuity",
+    "question": "What do sovereignty, recognition, and detribalization mean in the Long Island context?",
+    "short_answer": "Sovereignty is a Native Nation's inherent authority to govern itself. Recognition is an outside government's formal acknowledgment of a political relationship, while detribalization describes legal and political efforts to deny a community's continuing identity, government, or land rights.",
+    "target_type": "wiki",
+    "target_slug": "sovereignty-recognition-and-detribalization",
+    "url": "/?wiki=sovereignty-recognition-and-detribalization",
+    "source_ids": [
+      5,
+      142,
+      119
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ007",
+    "theme": "Communities and continuity",
+    "question": "How have Native forms of leadership and tribal government changed over time?",
+    "short_answer": "Long Island records preserve councils, sachems, sunksquaws, elders, and kin-based leadership. Colonial and state systems later pressed communities into trustee structures, while Native people continued to adapt those institutions and contest exclusions from political participation.",
+    "target_type": "wiki",
+    "target_slug": "tribal-trustees",
+    "url": "/?wiki=tribal-trustees",
+    "source_ids": [
+      26,
+      140,
+      119
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ009",
+    "theme": "Language, place names, and maps",
+    "question": "Why do Indigenous place names matter?",
+    "short_answer": "Indigenous place names are vital monuments of Algonquian history, preserving ecological, geographical, and cultural knowledge of the landscape. They remind the public of an unbroken Native presence, though colonial spellings often obscure their original pronunciations and meanings.",
+    "target_type": "wiki",
+    "target_slug": "algonquian-language-and-place-names",
+    "url": "/?wiki=algonquian-language-and-place-names",
+    "source_ids": [
+      145,
+      7,
+      140,
+      119
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ010",
+    "theme": "Language, place names, and maps",
+    "question": "Why can one Long Island place name have several spellings?",
+    "short_answer": "Varied spellings arose because seventeenth-century European scribes (Dutch and English) recorded oral Algonquian place names phonetically. Lacking standardized spelling systems, different clerks transcribed the same spoken sounds differently in local deeds, town minutes, and land patents over time.",
+    "target_type": "wiki",
+    "target_slug": "algonquian-language-and-place-names",
+    "url": "/?wiki=algonquian-language-and-place-names",
+    "source_ids": [
+      145,
+      140
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ011",
+    "theme": "Language, place names, and maps",
+    "question": "Why are some translations of Indigenous place names uncertain or disputed?",
+    "short_answer": "Translations are uncertain due to phonetic corruption by colonial scribes and the loss of fluent local speakers. Nineteenth-century writers also invented romanticized, false translations that modern linguists must carefully deconstruct using comparative Algonquian dictionaries.",
+    "target_type": "wiki",
+    "target_slug": "algonquian-language-and-place-names",
+    "url": "/?wiki=algonquian-language-and-place-names",
+    "source_ids": [
+      1,
+      140,
+      7
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ012",
+    "theme": "Language, place names, and maps",
+    "question": "How should a visitor pronounce an Indigenous place name when the historic pronunciation is uncertain?",
+    "short_answer": "Visitors should approach these names with humility, adopting the pronunciations used by living local Indigenous communities today. When historical pronunciations are uncertain, acknowledging this gap is more respectful than inventing a definitive pronunciation.",
+    "target_type": "wiki",
+    "target_slug": "learning-indigenous-words-respectfully",
+    "url": "/?wiki=learning-indigenous-words-respectfully",
+    "source_ids": [
+      177,
+      119,
+      140
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ014",
+    "theme": "Language, place names, and maps",
+    "question": "How can non-Native learners study local Indigenous words respectfully?",
+    "short_answer": "Non-Native learners should approach historic vocabularies with humility, recognizing that early word lists are phonetically transcribed colonial fragments rather than complete languages. Respectful study requires honoring the cultural contexts of these words and centering contemporary, tribal-led language revitalization programs.",
+    "target_type": "wiki",
+    "target_slug": "learning-indigenous-words-respectfully",
+    "url": "/?wiki=learning-indigenous-words-respectfully",
+    "source_ids": [
+      5,
+      1,
+      26
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ013",
+    "theme": "Language, place names, and maps",
+    "question": "What happened to the Indigenous languages spoken on Long Island?",
+    "short_answer": "Colonialism, schooling, land loss, and pressure to use English interrupted everyday fluency in Long Island's Algonquian languages. Surviving word lists and family memories remain important records, and language reclamation work treats dormancy as a condition that can change—not as disappearance.",
+    "target_type": "wiki",
+    "target_slug": "language",
+    "url": "/?wiki=language",
+    "source_ids": [
+      152,
+      140,
+      26
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ015",
+    "theme": "Language, place names, and maps",
+    "question": "Why are the ancestral land layers broad and sometimes overlapping?",
+    "short_answer": "Ancestral land layers are broad and overlapping because pre-contact Long Island communities lived in fluid, kinship-linked village bands rather than rigid states with surveyed borders. These map layers represent dynamic, shared spheres of seasonal harvesting, trade, and cultural stewardship.",
+    "target_type": "wiki",
+    "target_slug": "mapping-indigenous-history-responsibly",
+    "url": "/?wiki=mapping-indigenous-history-responsibly",
+    "source_ids": [
+      140,
+      26,
+      727
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ016",
+    "theme": "Language, place names, and maps",
+    "question": "What evidence does the map use to connect a history with a place?",
+    "short_answer": "Maps connect history to place by integrating multiple layers of evidence: physical archaeological remains, documentary land deeds, census records, and oral testimonies. This approach distinguishes between confirmed, professionally excavated sites and broad, culturally fluid landscapes.",
+    "target_type": "wiki",
+    "target_slug": "mapping-indigenous-history-responsibly",
+    "url": "/?wiki=mapping-indigenous-history-responsibly",
+    "source_ids": [
+      142,
+      26
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ017",
+    "theme": "Language, place names, and maps",
+    "question": "How can maps make Indigenous history visible without pretending to be complete?",
+    "short_answer": "Maps visualize Indigenous history by representing fluid, approximate zones rather than definitive borders. By explicitly acknowledging archival gaps, colonial cartographic distortions, and ongoing tribal authority, maps show that unmapped areas reflect a lack of surviving documentation, not an absence of history.",
+    "target_type": "wiki",
+    "target_slug": "mapping-indigenous-history-responsibly",
+    "url": "/?wiki=mapping-indigenous-history-responsibly",
+    "source_ids": [
+      26,
+      140,
+      142
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ018",
+    "theme": "History, sources, and public memory",
+    "question": "Why should colonial land deeds not be read as simple, equal real-estate sales?",
+    "short_answer": "Colonial deeds are evidence of negotiation and dispossession, but they were written within European legal systems and should not automatically be treated as proof of equal, fully understood sales. Translation, authority, debt, shared-use rights, and continued Native presence all require context.",
+    "target_type": "wiki",
+    "target_slug": "land-deeds-and-dispossession",
+    "url": "/?wiki=land-deeds-and-dispossession",
+    "source_ids": [
+      26,
+      140,
+      5
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ022",
+    "theme": "History, sources, and public memory",
+    "question": "How did land dispossession continue after the first colonial deeds?",
+    "short_answer": "Land dispossession continued through legislative actions, forced allotments, lease violations, and judicial rulings. Key examples include the fraudulent 1859 abrogation of the Shinnecock 1703 thousand-year lease and the 1910 court ruling that declared the Montauketts legally 'extinct' to validate private land grabs.",
+    "target_type": "wiki",
+    "target_slug": "land-deeds-and-dispossession",
+    "url": "/?wiki=land-deeds-and-dispossession",
+    "source_ids": [
+      727,
+      142
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ019",
+    "theme": "History, sources, and public memory",
+    "question": "How should readers use colonial records that describe Native people through European assumptions?",
+    "short_answer": "Readers must analyze colonial records critically as evidence of European administrative strategies and biases, not objective truths. These documents reflect a clash of legal, property, and cultural frameworks designed to justify land dispossession rather than accurately depict Native life.",
+    "target_type": "wiki",
+    "target_slug": "colonial-descriptions-of-indians",
+    "url": "/?wiki=colonial-descriptions-of-indians",
+    "source_ids": [
+      140,
+      142
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ020",
+    "theme": "History, sources, and public memory",
+    "question": "What can archaeology contribute to Indigenous Long Island history, and what are its limits?",
+    "short_answer": "Archaeology provides physical evidence of Indigenous daily life, trade, and continuous land use, disrupting colonial narratives of early Native disappearance. However, its limits include site destruction from urban development and the inability of physical objects to replace living oral traditions.",
+    "target_type": "wiki",
+    "target_slug": "historic-preservation",
+    "url": "/?wiki=historic-preservation",
+    "source_ids": [
+      726,
+      142,
+      26
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ045",
+    "theme": "Sacred sites, burials, and protection",
+    "question": "What can preservation laws and public agencies do, and where do they fall short?",
+    "short_answer": "Preservation laws and agencies can review projects, protect some public sites, document discoveries, and support repatriation, but coverage varies by land ownership, jurisdiction, and the type of resource. Legal compliance is a minimum; early consultation and Native-led decision-making provide stronger protection.",
+    "target_type": "wiki",
+    "target_slug": "historic-preservation",
+    "url": "/?wiki=historic-preservation",
+    "source_ids": [
+      187,
+      4,
+      26,
+      248
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ021",
+    "theme": "History, sources, and public memory",
+    "question": "Why are shell middens and other archaeological deposits not trash piles or souvenir sites?",
+    "short_answer": "Shell middens are archaeological records of foodways, seasonal life, technology, and long relationships with coastal places—not casual trash piles or sources of souvenirs. Do not dig, collect, or publicize a vulnerable deposit; disturbing it destroys context and may also harm nearby burials.",
+    "target_type": "wiki",
+    "target_slug": "shell-midden",
+    "url": "/?wiki=shell-midden",
+    "source_ids": [
+      11,
+      26,
+      142
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ023",
+    "theme": "History, sources, and public memory",
+    "question": "How did missions and colonial schooling affect Native communities on Long Island?",
+    "short_answer": "Missions and colonial schooling pressured Native communities to assimilate, suppressing Algonquian languages. However, communities adapted Christianity and English literacy as powerful tools of resilience, using written English to petition for land rights and establishing independent Native-led churches that still serve as cultural anchors today.",
+    "target_type": "wiki",
+    "target_slug": "indian-missions-on-long-island",
+    "url": "/?wiki=indian-missions-on-long-island",
+    "source_ids": [
+      205,
+      732
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ024",
+    "theme": "History, sources, and public memory",
+    "question": "How are slavery, indenture, and unfree labor connected to Native Long Island history?",
+    "short_answer": "Native Long Island history is deeply intertwined with unfree labor. Colonists subjected Indigenous people to chattel slavery and coercive indenture systems, often binding out children to pay off contrived debts. Despite these oppressive systems, Native laborers preserved their cultural identities and kinship networks.",
+    "target_type": "wiki",
+    "target_slug": "slavery",
+    "url": "/?wiki=slavery",
+    "source_ids": [
+      14,
+      25
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ025",
+    "theme": "History, sources, and public memory",
+    "question": "What do the records show about Indigenous women's leadership on Long Island?",
+    "short_answer": "Historical records demonstrate that Algonquian women held prominent political leadership as 'sunksquaws' (female sachems) who negotiated land transactions, led councils, and managed diplomatic relations. Key seventeenth-century leaders included Weany of Shinnecock, Sumono of Unkechaug, and Quashawam and Wuchikittawbut of Montauk.",
+    "target_type": "wiki",
+    "target_slug": "sunksquaws-and-indigenous-womens-leadership",
+    "url": "/?wiki=sunksquaws-and-indigenous-womens-leadership",
+    "source_ids": [
+      140,
+      152,
+      5,
+      29
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ026",
+    "theme": "History, sources, and public memory",
+    "question": "What roles did Native Long Islanders have in whaling and maritime work?",
+    "short_answer": "Native men were the core of Long Island’s historic whaling industry, transitioning from aboriginal drift whaling to colonial shore stations and global deep-sea voyages. Renowned as elite harpooners and officers, families like the Lees of Shinnecock achieved high maritime ranks despite exploitative debt peonage.",
+    "target_type": "wiki",
+    "target_slug": "indigenous-whaling-and-maritime-labor",
+    "url": "/?wiki=indigenous-whaling-and-maritime-labor",
+    "source_ids": [
+      25,
+      29,
+      687,
+      26
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ027",
+    "theme": "History, sources, and public memory",
+    "question": "How did seasonal movement, farming, fishing, and gathering shape life across Long Island?",
+    "short_answer": "Seasonal cycles of fishing, gathering, hunting, and small-scale gardening shaped Algonquian life on Long Island. Far from aimless wandering, this 'flexible sedentism' was a highly organized ecological strategy of moving between coastal summer estuarine camps and protected, wooded winter inland settlements.",
+    "target_type": "wiki",
+    "target_slug": "ecology-and-flexible-sedentism",
+    "url": "/?wiki=ecology-and-flexible-sedentism",
+    "source_ids": [
+      140,
+      142,
+      125,
+      11
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ028",
+    "theme": "Visiting, relationships, and support",
+    "question": "How should visitors approach living Native communities and Indigenous-led spaces on Long Island?",
+    "short_answer": "Shinnecock and Unkechaug reservation communities are sovereign homelands and residential places, not public parks. Visit only for clearly public events, businesses, museums, or programs, and follow the host's current directions, photography rules, and boundaries.",
+    "target_type": "wiki",
+    "target_slug": "visiting-indigenous-led-spaces-respectfully",
+    "url": "/?wiki=visiting-indigenous-led-spaces-respectfully",
+    "source_ids": [
+      119,
+      26,
+      5
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ030",
+    "theme": "Visiting, relationships, and support",
+    "question": "What should visitors know before going to a Native-led museum or cultural center?",
+    "short_answer": "A Native-led museum or cultural center presents history through the community's own priorities and authority. Check current visitor information, follow photography and handling rules, listen to staff, and treat cultural materials as more than objects on display.",
+    "target_type": "wiki",
+    "target_slug": "visiting-indigenous-led-spaces-respectfully",
+    "url": "/?wiki=visiting-indigenous-led-spaces-respectfully",
+    "source_ids": [
+      26,
+      153,
+      142
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ038",
+    "theme": "Visiting, relationships, and support",
+    "question": "When is photography or social-media sharing appropriate at Native cultural spaces and events?",
+    "short_answer": "Photography is only appropriate when explicitly permitted by event hosts or posted policies. Visitors must listen to master of ceremonies announcements at powwows, respect sacred moments, and always secure direct, verbal consent before photographing individuals or their sacred regalia.",
+    "target_type": "wiki",
+    "target_slug": "visiting-indigenous-led-spaces-respectfully",
+    "url": "/?wiki=visiting-indigenous-led-spaces-respectfully",
+    "source_ids": [
+      26,
+      153,
+      119
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ029",
+    "theme": "Visiting, relationships, and support",
+    "question": "How can someone visit or support Ma's House respectfully?",
+    "short_answer": "Ma's House is a Shinnecock-led artist residency, gallery, and community space founded by Jeremy Dennis. Check its official schedule before visiting, attend public programs, support participating artists, and follow all parking and access directions for the surrounding residential community.",
+    "target_type": "site",
+    "target_slug": "mas-house",
+    "url": "/?site=mas-house",
+    "source_ids": [
+      153,
+      119
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ031",
+    "theme": "Visiting, relationships, and support",
+    "question": "What is a respectful way to visit the Shinnecock Monument and learn from the history it marks?",
+    "short_answer": "The Shinnecock Monument consists of two electronic signs along Sunrise Highway in Hampton Bays. Viewed from the public highway, they represent a Shinnecock-led economic development project and a visible assertion of sovereignty.",
+    "target_type": "site",
+    "target_slug": "shinnecock-monument",
+    "url": "/?site=shinnecock-monument",
+    "source_ids": [
+      143
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ032",
+    "theme": "Visiting, relationships, and support",
+    "question": "What should a first-time visitor know before attending a powwow?",
+    "short_answer": "A powwow is a living Native gathering with its own hosts and protocols, not a costume show. Listen to the master of ceremonies, stand or pause when asked, never touch regalia, ask before photographing individuals, and stop recording whenever an announcement says photography is not permitted.",
+    "target_type": "wiki",
+    "target_slug": "powwow",
+    "url": "/?wiki=powwow",
+    "source_ids": [
+      26,
+      119
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ033",
+    "theme": "Visiting, relationships, and support",
+    "question": "How should someone behave at a public gravesite, memorial, or sensitive historic landscape?",
+    "short_answer": "Visitors to historic cemeteries, wayside resting spots, and memorials must behave with quiet reverence and strict non-interference. Avoid touching, leaving unauthorized offerings, or straying off designated paths, ensuring these sacred landscapes remain entirely undisturbed and respected.",
+    "target_type": "wiki",
+    "target_slug": "burial-protection-and-sacred-landscapes",
+    "url": "/?wiki=burial-protection-and-sacred-landscapes",
+    "source_ids": [
+      193,
+      35,
+      14,
+      187
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ039",
+    "theme": "Sacred sites, burials, and protection",
+    "question": "Why do sacred sites and burial places require special care and protection?",
+    "short_answer": "Sacred sites and burial grounds are resting places of Native ancestors that hold profound spiritual and genealogical significance. Protecting them from development, looting, and public exposure respects the dignity of deceased ancestors and preserves the sovereign cultural heritage of descendant communities.",
+    "target_type": "wiki",
+    "target_slug": "burial-protection-and-sacred-landscapes",
+    "url": "/?wiki=burial-protection-and-sacred-landscapes",
+    "source_ids": [
+      248,
+      26
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ040",
+    "theme": "Sacred sites, burials, and protection",
+    "question": "What should someone do if construction or erosion appears to disturb human remains or a possible burial site?",
+    "short_answer": "Stop work, keep people away from the area, and do not touch or photograph possible human remains. Contact local law enforcement immediately and give the location privately; officials can determine the next steps and coordinate with appropriate descendant communities and specialists.",
+    "target_type": "wiki",
+    "target_slug": "burial-protection-and-sacred-landscapes",
+    "url": "/?wiki=burial-protection-and-sacred-landscapes",
+    "source_ids": [
+      248,
+      187
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ041",
+    "theme": "Sacred sites, burials, and protection",
+    "question": "What should someone do if they find an artifact or possible human remains?",
+    "short_answer": "Leave an artifact or possible human remains exactly where found. For possible remains, contact local law enforcement immediately; for an artifact, notify the landowner or responsible public agency and a qualified archaeologist without posting the precise location online.",
+    "target_type": "wiki",
+    "target_slug": "burial-protection-and-sacred-landscapes",
+    "url": "/?wiki=burial-protection-and-sacred-landscapes",
+    "source_ids": [
+      102,
+      26
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ042",
+    "theme": "Sacred sites, burials, and protection",
+    "question": "How can a suspected disturbance be reported without publicizing a vulnerable location?",
+    "short_answer": "Report suspected grave or site disturbances privately to local town historians, tribal historic preservation officers, or police, rather than posting photos or coordinates online. Private reporting prevents destructive looting and respects the spiritual privacy of ancestral resting places.",
+    "target_type": "wiki",
+    "target_slug": "burial-protection-and-sacred-landscapes",
+    "url": "/?wiki=burial-protection-and-sacred-landscapes",
+    "source_ids": [
+      9,
+      187
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ043",
+    "theme": "Sacred sites, burials, and protection",
+    "question": "Why does this project sometimes omit exact locations?",
+    "short_answer": "The project omits exact locations when detail could expose burials, archaeological deposits, sacred places, or private property to trespass, looting, or damage. A broad map can teach the history without turning a vulnerable place into a destination.",
+    "target_type": "wiki",
+    "target_slug": "burial-protection-and-sacred-landscapes",
+    "url": "/?wiki=burial-protection-and-sacred-landscapes",
+    "source_ids": [
+      102,
+      26,
+      43,
+      168
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ044",
+    "theme": "Sacred sites, burials, and protection",
+    "question": "Can a person visit a sensitive site just because its general area is publicly known?",
+    "short_answer": "No. Knowing a site's general area is not permission to enter it. Respect private property, sovereign Native land, posted closures, and protected landscapes; learn from the public article or an authorized program unless the owner or host clearly invites visitation.",
+    "target_type": "wiki",
+    "target_slug": "burial-protection-and-sacred-landscapes",
+    "url": "/?wiki=burial-protection-and-sacred-landscapes",
+    "source_ids": [
+      5,
+      248,
+      26
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ034",
+    "theme": "Visiting, relationships, and support",
+    "question": "What are practical ways to support Indigenous-led work on Long Island today?",
+    "short_answer": "Support Indigenous-led work through the public channels each organization chooses: attend programs, buy directly from Native artists and businesses, donate to official campaigns, and share accurate information. Avoid inventing a project on a community's behalf or assuming that every organization can accept volunteers.",
+    "target_type": "wiki",
+    "target_slug": "supporting-indigenous-led-work",
+    "url": "/?wiki=supporting-indigenous-led-work",
+    "source_ids": [
+      119,
+      26
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ037",
+    "theme": "Visiting, relationships, and support",
+    "question": "How can someone donate, volunteer, or offer professional help without creating extra work for Native organizations?",
+    "short_answer": "Support organizations by prioritizing their publicly stated requests rather than offering unsolicited, self-directed help. Donate directly to established funds, respect organizational boundaries, pay Native professionals for their labor, and understand that some groups may lack the capacity to coordinate volunteers.",
+    "target_type": "wiki",
+    "target_slug": "supporting-indigenous-led-work",
+    "url": "/?wiki=supporting-indigenous-led-work",
+    "source_ids": [
+      119,
+      153
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ050",
+    "theme": "Education, acknowledgement, and further learning",
+    "question": "How can non-Native people ask questions without expecting Native people to do unpaid educational labor?",
+    "short_answer": "Non-Native people can avoid exploiting Native communities by consulting existing public records, books, and museum materials first. When direct inquiry is necessary, seek formal consent, treat consultations as professional services, pay Native experts fairly, and respect communal boundaries.",
+    "target_type": "wiki",
+    "target_slug": "supporting-indigenous-led-work",
+    "url": "/?wiki=supporting-indigenous-led-work",
+    "source_ids": [
+      205,
+      152,
+      119,
+      25
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ035",
+    "theme": "Visiting, relationships, and support",
+    "question": "How can schools, museums, towns, and preservation groups build better relationships with local Native Nations?",
+    "short_answer": "Institutions must move past generic consultation toward active, reciprocal partnerships that respect tribal sovereignty. This means co-developing programs with tribal historic preservation officers, repatriating sacred objects under NAGPRA, using Native-authored curricula, and paying Native experts proper compensation.",
+    "target_type": "wiki",
+    "target_slug": "building-respectful-institutional-relationships",
+    "url": "/?wiki=building-respectful-institutional-relationships",
+    "source_ids": [
+      152,
+      119,
+      142,
+      153
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ036",
+    "theme": "Visiting, relationships, and support",
+    "question": "What does Indigenous-led economic development look like beyond tourism?",
+    "short_answer": "Indigenous-led economic development can include aquaculture, renewable infrastructure, retail, arts, media, land stewardship, and other enterprises chosen by Native Nations. The Shinnecock oyster project and Monument signs are Long Island examples of development tied to community revenue and self-determination.",
+    "target_type": "wiki",
+    "target_slug": "indigenous-led-economic-development",
+    "url": "/?wiki=indigenous-led-economic-development",
+    "source_ids": [
+      26,
+      5
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ046",
+    "theme": "Education, acknowledgement, and further learning",
+    "question": "How can educators teach Indigenous Long Island history without presenting Native people only in the past?",
+    "short_answer": "Educators must integrate contemporary Native presence alongside history by utilizing community-authored resources, inviting Native guest speakers with fair compensation, and highlighting continuous sovereignty and cultural survivance rather than treating Indigenous peoples as extinct historical relics.",
+    "target_type": "wiki",
+    "target_slug": "teaching-indigenous-long-island-history",
+    "url": "/?wiki=teaching-indigenous-long-island-history",
+    "source_ids": [
+      119,
+      140,
+      29
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ047",
+    "theme": "Education, acknowledgement, and further learning",
+    "question": "What makes a land acknowledgement useful rather than performative?",
+    "short_answer": "A land acknowledgement becomes useful when it leads to an ongoing relationship and action chosen with the Native Nation being acknowledged. That can include correcting public history, paying Native educators, supporting current community priorities, and protecting land or cultural resources.",
+    "target_type": "wiki",
+    "target_slug": "teaching-indigenous-long-island-history",
+    "url": "/?wiki=teaching-indigenous-long-island-history",
+    "source_ids": [
+      119,
+      5
+    ],
+    "safety": "public_ok"
+  },
+  {
+    "id": "FAQ048",
+    "theme": "Education, acknowledgement, and further learning",
+    "question": "How can someone research the Indigenous history connected to their town, school, or property responsibly?",
+    "short_answer": "Responsible local research requires studying colonial deeds, town records, and academic ethnohistories critically without trespassing on private property, hunting for artifacts, or looting graves. Researchers should consult with professional archaeological associations and respect the intellectual authority of living tribal nations.",
+    "target_type": "wiki",
+    "target_slug": "researching-indigenous-long-island-history-responsibly",
+    "url": "/?wiki=researching-indigenous-long-island-history-responsibly",
+    "source_ids": [
+      140,
+      26,
+      142
+    ],
+    "safety": "public_with_broad_location_only"
+  },
+  {
+    "id": "FAQ049",
+    "theme": "Education, acknowledgement, and further learning",
+    "question": "What should someone read, visit, or listen to next to learn more about Indigenous Long Island?",
+    "short_answer": "To learn more, read John A. Strong’s We Are Still Here! and Gaynell Stone’s Readings in Long Island Archaeology and Ethnohistory series. Visit the Shinnecock Nation Cultural Center and Museum and support contemporary Native-led arts at Ma’s House.",
+    "target_type": "wiki",
+    "target_slug": "further-learning-indigenous-long-island",
+    "url": "/?wiki=further-learning-indigenous-long-island",
+    "source_ids": [
+      119,
+      140,
+      152,
+      26,
+      35
+    ],
+    "safety": "public_ok"
+  }
+]

@@ -5973,6 +5973,64 @@
       line-height: 1.48;
     }
 
+    .public-faq-section {
+      display: grid;
+      gap: 9px;
+      margin-top: 22px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(49, 92, 72, 0.22);
+    }
+
+    .public-faq-section > h2,
+    .public-faq-section > .public-faq-intro {
+      margin: 0;
+    }
+
+    .public-faq-intro {
+      color: #5d6b63;
+      font-size: 13px;
+    }
+
+    .public-faq-item {
+      overflow: hidden;
+      border: 1px solid rgba(49, 92, 72, 0.22);
+      border-radius: 10px;
+      background: #f8fbf7;
+    }
+
+    .public-faq-item > summary {
+      min-height: 48px;
+      cursor: pointer;
+      padding: 13px 38px 13px 13px;
+      color: #244f3d;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
+    .public-faq-item[open] > summary {
+      border-bottom: 1px solid rgba(49, 92, 72, 0.16);
+      background: #eaf3e9;
+    }
+
+    .public-faq-short,
+    .public-faq-long {
+      margin: 0;
+      padding: 12px 13px 0;
+    }
+
+    .public-faq-long {
+      padding-top: 0;
+      padding-bottom: 13px;
+      color: #394740;
+    }
+
+    .public-faq-sources {
+      margin-bottom: 0;
+      padding-left: 19px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
     .detail-loading-status {
       margin: 12px 0 0;
       color: var(--muted);
@@ -16144,9 +16202,9 @@ return maplibregl$1;
   <script data-inline-source="assets/js/shared-html-utils.js">
 (function () {
   const DESKTOP_ALLOWED_TAGS = new Set([
-    "A", "ABBR", "B", "BLOCKQUOTE", "BR", "CAPTION", "CITE", "DIV", "EM",
+    "A", "ABBR", "B", "BLOCKQUOTE", "BR", "CAPTION", "CITE", "DETAILS", "DIV", "EM",
     "FIGCAPTION", "FIGURE", "H1", "H2", "H3", "H4", "HR", "I", "IFRAME", "IMG", "LI",
-    "OL", "P", "SPAN", "STRONG", "SUP", "TABLE", "TBODY", "TD", "TH", "THEAD", "TR", "U", "UL"
+    "OL", "P", "SPAN", "STRONG", "SUMMARY", "SUP", "TABLE", "TBODY", "TD", "TH", "THEAD", "TR", "U", "UL"
   ]);
   const DESKTOP_ALLOWED_ATTRS = new Set(["allow", "allowfullscreen", "class", "data-src", "frameborder", "height", "href", "referrerpolicy", "src", "title", "width", "alt"]);
   const TIMELINE_SECTION_TITLE_PATTERN = /history|colonial|land loss|excavation|preservation|disruption|vandalism/i;
@@ -18996,9 +19054,7 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
 })();
   </script>
   <script data-inline-source="assets/js/mobile-app.js">
-
-
-    const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
+const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const SHARED_FIELDS = SHARED_CONFIG.fields || {};
     const SHARED_MAP_STORY = SHARED_CONFIG.mapStory || {};
     const SHARED_UTILS = window.NLI_SHARED_UTILS || {};
@@ -19907,6 +19963,7 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
       mobilePromoKind: "",
       mobilePromoPayload: null,
       mobilePromoPayloadCache: null,
+      publicEducationFaq: [],
       researchQuestionInstance: null,
       nearbyRenderLimit: 0,
       visitableSiteList: [],
@@ -23181,6 +23238,30 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
         && publicCleanText(event.description || event.summary || event.title)
       ));
       return moments[mobilePromoDailyIndex(moments.length, "did-you-know")] || null;
+    }
+
+    let publicEducationFaqPromise = null;
+    function loadPublicEducationFaq() {
+      if (state.publicEducationFaq.length) return Promise.resolve(state.publicEducationFaq);
+      if (publicEducationFaqPromise) return publicEducationFaqPromise;
+      publicEducationFaqPromise = fetch("assets/data/public-education-faq.json?v=20260828", { cache: "no-cache" })
+        .then(response => response.ok ? response.json() : Promise.reject(new Error(`FAQ data returned ${response.status}`)))
+        .then(rows => {
+          state.publicEducationFaq = Array.isArray(rows) ? rows.filter(item => item?.id && item?.question && item?.short_answer) : [];
+          state.mobilePromoPayloadCache = null;
+          return state.publicEducationFaq;
+        })
+        .catch(error => {
+          console.warn("Public education questions will retry later.", error);
+          return [];
+        })
+        .finally(() => { publicEducationFaqPromise = null; });
+      return publicEducationFaqPromise;
+    }
+
+    function mobileDidYouKnowFaq() {
+      const rows = state.publicEducationFaq;
+      return rows[mobilePromoDailyIndex(rows.length, "public-education-faq")] || null;
     }
 
     function mobileDailyLearningSite() {
@@ -32954,6 +33035,17 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
         };
       }
       if (kind === "did-you-know") {
+        const faq = mobileDidYouKnowFaq();
+        if (faq) {
+          return {
+            kind,
+            label: "Did You Know?",
+            title: faq.question,
+            summary: faq.short_answer,
+            actionLabel: "Read answer",
+            faq
+          };
+        }
         const event = mobileDidYouKnowMoment();
         if (!event) return null;
         const hasContent = Boolean(mobileTimelineContentTarget(event));
@@ -32999,15 +33091,17 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
       const sites = state.visitableSiteList;
       const exhibits = state.exhibits;
       const questionOpen = Boolean(state.researchQuestionInstance?.open);
+      const publicFaq = state.publicEducationFaq;
       let cache = state.mobilePromoPayloadCache;
       if (
         cache?.dateKey !== dateKey
         || cache.timelineEvents !== timelineEvents
         || cache.sites !== sites
         || cache.exhibits !== exhibits
+        || cache.publicFaq !== publicFaq
         || cache.questionOpen !== questionOpen
       ) {
-        cache = { dateKey, timelineEvents, sites, exhibits, questionOpen, payloads: new Map() };
+        cache = { dateKey, timelineEvents, sites, exhibits, publicFaq, questionOpen, payloads: new Map() };
         state.mobilePromoPayloadCache = cache;
       }
       if (!cache.payloads.has(kind)) cache.payloads.set(kind, buildMobilePromoPayload(kind));
@@ -33067,6 +33161,14 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
       }
       if (["on-this-date", "did-you-know"].includes(payload.kind) && payload.event) {
         openMobileTimelineEvent(payload.event);
+        return;
+      }
+      if (payload.kind === "did-you-know" && payload.faq?.target_slug) {
+        if (payload.faq.target_type === "site") {
+          openSite(payload.faq.target_slug, { focus: false, drawerState: "half" });
+        } else {
+          openWikiArticle(payload.faq.target_slug, { drawerState: "half" });
+        }
         return;
       }
       if (payload.kind === "learning" && payload.site?.slug) {
@@ -39032,6 +39134,7 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
     window.__nliCaptureAndroidLifecycleSnapshot = captureAndroidLifecycleSnapshot;
 
     async function start() {
+      const publicFaqReady = loadPublicEducationFaq();
       try {
         checkAndroidAppCompatibility();
         installTabletProjectTitleRotation();
@@ -39127,6 +39230,7 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
             )
           }) || null;
         }
+        await publicFaqReady;
         syncMobilePromoDock();
         if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {
           window.setTimeout(() => idleTask(refreshMobileSiteIconFieldsFromDirectus), 30000);
@@ -39190,7 +39294,6 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
     }
 
     start();
-
   </script>
 </body>
 </html>

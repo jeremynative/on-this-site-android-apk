@@ -907,6 +907,7 @@
       mobilePromoKind: "",
       mobilePromoPayload: null,
       mobilePromoPayloadCache: null,
+      publicEducationFaq: [],
       researchQuestionInstance: null,
       nearbyRenderLimit: 0,
       visitableSiteList: [],
@@ -4181,6 +4182,30 @@
         && publicCleanText(event.description || event.summary || event.title)
       ));
       return moments[mobilePromoDailyIndex(moments.length, "did-you-know")] || null;
+    }
+
+    let publicEducationFaqPromise = null;
+    function loadPublicEducationFaq() {
+      if (state.publicEducationFaq.length) return Promise.resolve(state.publicEducationFaq);
+      if (publicEducationFaqPromise) return publicEducationFaqPromise;
+      publicEducationFaqPromise = fetch("assets/data/public-education-faq.json?v=20260828", { cache: "no-cache" })
+        .then(response => response.ok ? response.json() : Promise.reject(new Error(`FAQ data returned ${response.status}`)))
+        .then(rows => {
+          state.publicEducationFaq = Array.isArray(rows) ? rows.filter(item => item?.id && item?.question && item?.short_answer) : [];
+          state.mobilePromoPayloadCache = null;
+          return state.publicEducationFaq;
+        })
+        .catch(error => {
+          console.warn("Public education questions will retry later.", error);
+          return [];
+        })
+        .finally(() => { publicEducationFaqPromise = null; });
+      return publicEducationFaqPromise;
+    }
+
+    function mobileDidYouKnowFaq() {
+      const rows = state.publicEducationFaq;
+      return rows[mobilePromoDailyIndex(rows.length, "public-education-faq")] || null;
     }
 
     function mobileDailyLearningSite() {
@@ -13954,6 +13979,17 @@
         };
       }
       if (kind === "did-you-know") {
+        const faq = mobileDidYouKnowFaq();
+        if (faq) {
+          return {
+            kind,
+            label: "Did You Know?",
+            title: faq.question,
+            summary: faq.short_answer,
+            actionLabel: "Read answer",
+            faq
+          };
+        }
         const event = mobileDidYouKnowMoment();
         if (!event) return null;
         const hasContent = Boolean(mobileTimelineContentTarget(event));
@@ -13999,15 +14035,17 @@
       const sites = state.visitableSiteList;
       const exhibits = state.exhibits;
       const questionOpen = Boolean(state.researchQuestionInstance?.open);
+      const publicFaq = state.publicEducationFaq;
       let cache = state.mobilePromoPayloadCache;
       if (
         cache?.dateKey !== dateKey
         || cache.timelineEvents !== timelineEvents
         || cache.sites !== sites
         || cache.exhibits !== exhibits
+        || cache.publicFaq !== publicFaq
         || cache.questionOpen !== questionOpen
       ) {
-        cache = { dateKey, timelineEvents, sites, exhibits, questionOpen, payloads: new Map() };
+        cache = { dateKey, timelineEvents, sites, exhibits, publicFaq, questionOpen, payloads: new Map() };
         state.mobilePromoPayloadCache = cache;
       }
       if (!cache.payloads.has(kind)) cache.payloads.set(kind, buildMobilePromoPayload(kind));
@@ -14067,6 +14105,14 @@
       }
       if (["on-this-date", "did-you-know"].includes(payload.kind) && payload.event) {
         openMobileTimelineEvent(payload.event);
+        return;
+      }
+      if (payload.kind === "did-you-know" && payload.faq?.target_slug) {
+        if (payload.faq.target_type === "site") {
+          openSite(payload.faq.target_slug, { focus: false, drawerState: "half" });
+        } else {
+          openWikiArticle(payload.faq.target_slug, { drawerState: "half" });
+        }
         return;
       }
       if (payload.kind === "learning" && payload.site?.slug) {
@@ -20032,6 +20078,7 @@
     window.__nliCaptureAndroidLifecycleSnapshot = captureAndroidLifecycleSnapshot;
 
     async function start() {
+      const publicFaqReady = loadPublicEducationFaq();
       try {
         checkAndroidAppCompatibility();
         installTabletProjectTitleRotation();
@@ -20127,6 +20174,7 @@
             )
           }) || null;
         }
+        await publicFaqReady;
         syncMobilePromoDock();
         if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {
           window.setTimeout(() => idleTask(refreshMobileSiteIconFieldsFromDirectus), 30000);
