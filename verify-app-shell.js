@@ -2090,7 +2090,7 @@ requireBundledPattern(/document\.addEventListener\("visibilitychange"[\s\S]*?doc
 requireBundledText('refreshMobileSearchSuggestions();', "Bundled Android app must persistently refresh native Android autocomplete.");
 requireBundledText('window.__nliHydrateMobileSiteGeometryAfterStartup = () => {', "Bundled Android app must expose post-startup detailed geometry hydration.");
 requireBundledText('if (!isOfflineTextMode() && !nativeAndroid) idleTask(hydrateMobileSiteGeometry);', "Bundled Android app must not parse detailed polygons before the native first map is usable.");
-requireBundledText('scheduleNativeMapStateSync("events", nativeMapBridgeAvailable() && state.mobileStartupRendering ? 3200 : 0);', "Bundled Android startup events must coalesce with the deferred detailed-geometry native state handoff.");
+requireBundledText('scheduleNativeMapStateSync("events", nativeMapBridgeAvailable() && state.mobileStartupRendering ? 8000 : 0);', "Bundled Android startup events must coalesce with the deferred detailed-geometry native state handoff.");
 requireBundledPattern(/const\s+SHORELINE_REFINED_GEOMETRY_NOTE[\s\S]*?const\s+SHINNECOCK_HILLS_REFINED_GEOMETRY_NOTE[\s\S]*?function\s+shorelineRefinementNoteForSite[\s\S]*?geometry_refinement:\s*shorelineRefinementNoteForSite\(site\)/, "Bundled Android polygon styling must define and attach its shoreline-refinement values before MapLibre evaluates them.");
 requireBundledText('Profile activity sync will retry later.', "Bundled Android app must keep profile activity sync retry logging.");
 requireBundledText('state.profileActivitySynced = false;\n          return false;', "Bundled Android app must leave failed profile sync retryable.");
