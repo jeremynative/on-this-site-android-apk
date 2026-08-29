@@ -1251,17 +1251,27 @@ final class NativeMapController {
             }
             boolean pointsUpdated = payload.has("sitePoints");
             boolean labelsUpdated = payload.has("labels");
+            boolean unreadUpdated = payload.has("unreadBadges");
             if (pointsUpdated) {
                 setSource(style, SITE_POINT_SOURCE_ID, applyBundledSiteIconKeys(payload.optJSONObject("sitePoints")));
             }
             if (labelsUpdated) {
                 setSource(style, LABEL_SOURCE_ID, withBundledTerritoryLabels(payload.optJSONObject("labels")));
             }
-            if ((pointsUpdated || labelsUpdated || eventsUpdated) && currentStateJson != null && !currentStateJson.isEmpty()) {
+            if ((pointsUpdated || labelsUpdated || eventsUpdated || unreadUpdated) && currentStateJson != null && !currentStateJson.isEmpty()) {
                 JSONObject cachedState = new JSONObject(currentStateJson);
                 if (pointsUpdated) cachedState.put("sitePoints", payload.optJSONObject("sitePoints"));
                 if (labelsUpdated) cachedState.put("labels", payload.optJSONObject("labels"));
                 if (eventsUpdated) cachedState.put("events", payload.optJSONObject("events"));
+                if (unreadUpdated) {
+                    JSONObject unreadBadges = payload.optJSONObject("unreadBadges");
+                    JSONObject sitePoints = applyUnreadBadges(cachedState.optJSONObject("sitePoints"), unreadBadges);
+                    JSONObject labels = applyUnreadBadges(cachedState.optJSONObject("labels"), unreadBadges);
+                    cachedState.put("sitePoints", sitePoints);
+                    cachedState.put("labels", labels);
+                    setSource(style, SITE_POINT_SOURCE_ID, applyBundledSiteIconKeys(sitePoints));
+                    setSource(style, LABEL_SOURCE_ID, withBundledTerritoryLabels(labels));
+                }
                 currentStateJson = cachedState.toString();
             }
             lastStateSignature = signature;
@@ -1275,8 +1285,10 @@ final class NativeMapController {
                 + ", temporary=" + featureCount(payload.optJSONObject("temporaryMarkers"))
                 + ", events=" + featureCount(payload.optJSONObject("events"))
                 + ", eventsUpdated=" + eventsUpdated
+                + ", unreadUpdated=" + unreadUpdated
                 + ", sitePointsUpdated=" + pointsUpdated
-                + ", labelsUpdated=" + labelsUpdated);
+                + ", labelsUpdated=" + labelsUpdated
+                + ", reason=" + payload.optString("reason", "state"));
         } catch (Exception error) {
             Log.e(LOG_TAG, "Ignored invalid transient native map state.", error);
         }
@@ -1343,6 +1355,27 @@ final class NativeMapController {
             features.put(feature);
         }
         return merged;
+    }
+
+    private JSONObject applyUnreadBadges(JSONObject collection, JSONObject unreadBadges) throws Exception {
+        if (collection == null) return new JSONObject("{\"type\":\"FeatureCollection\",\"features\":[]}");
+        JSONArray features = collection.optJSONArray("features");
+        if (features == null) return collection;
+        JSONObject counts = unreadBadges == null ? new JSONObject() : unreadBadges;
+        for (int index = 0; index < features.length(); index++) {
+            JSONObject feature = features.optJSONObject(index);
+            JSONObject properties = feature == null ? null : feature.optJSONObject("properties");
+            if (properties == null) continue;
+            String slug = properties.optString("slug", "");
+            if (slug.isEmpty()) continue;
+            int unreadCount = Math.max(0, counts.optInt(slug, 0));
+            properties.put("unread_count", unreadCount);
+            properties.put("unread_label", unreadCount > 99 ? "99+" : String.valueOf(unreadCount));
+            properties.put("unread_icon", unreadCount > 0
+                ? "mobile-unread-count-" + (unreadCount > 99 ? "99-plus" : unreadCount)
+                : "");
+        }
+        return collection;
     }
 
     private void setSource(Style style, String id, JSONObject collection) {
