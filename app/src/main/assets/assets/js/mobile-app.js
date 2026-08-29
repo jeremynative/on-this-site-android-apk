@@ -6757,6 +6757,17 @@
       return { type: "FeatureCollection", features: (features || []).filter(Boolean) };
     }
 
+    function nativeMapUnreadBadges(sites = state.mapSites) {
+      const unreadBadges = {};
+      (sites || []).forEach(site => {
+        const slug = String(site?.slug || "");
+        if (!slug) return;
+        const unreadCount = mobileContentUnreadCount("site", slug);
+        if (unreadCount > 0) unreadBadges[slug] = unreadCount;
+      });
+      return unreadBadges;
+    }
+
     function nativeMapBridgeAvailable() {
       return Boolean(
         isNativeAndroidApp()
@@ -6980,8 +6991,10 @@
       };
       if (state.nativeMapBaseSignature === baseSignature && typeof window.AndroidApp.syncNativeMapTransientState === "function") {
         if (state.nativeMapPointSignature !== pointSignature) {
-          transientPayload.sitePoints = nativeMapFeatureCollection(allFeatures.filter(feature => feature?.geometry?.type === "Point"));
-          transientPayload.labels = nativeMapFeatureCollection([...(sourceData.territoryLabels?.features || []), ...(sourceData.detailLabels?.features || [])]);
+          // Point-only revisions are unread-badge changes. Send the compact
+          // slug/count map and let the native renderer update its cached
+          // sources instead of retransmitting every site and label feature.
+          transientPayload.unreadBadges = nativeMapUnreadBadges();
         }
         window.__nliSyncNativeMapViewport?.();
         window.AndroidApp.syncNativeMapTransientState(androidBridgeToken(), JSON.stringify(transientPayload));

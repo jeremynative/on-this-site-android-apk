@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260829-android-performance-r190";
+const expectedBuild = "20260829-android-performance-r191";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -2092,6 +2092,14 @@ requireBundledText('window.__nliHydrateMobileSiteGeometryAfterStartup = () => {'
 requireBundledText('if (!isOfflineTextMode() && !nativeAndroid) idleTask(hydrateMobileSiteGeometry);', "Bundled Android app must not parse detailed polygons before the native first map is usable.");
 requireBundledPattern(/const\s+eventSignature\s*=\s*exhibitFeatures\.map[\s\S]*?const\s+baseSignature\s*=\s*`[^`]+bio-paths:[^`]+`[\s\S]*?const\s+transientSignature\s*=\s*`[^`]+events:\$\{eventSignature\}`/, "Bundled Android calendar changes must remain outside the static native-map signature.");
 requireBundledPattern(/const\s+transientPayload\s*=\s*\{[\s\S]*?events:\s*nativeMapFeatureCollection\(exhibitFeatures\)[\s\S]*?syncNativeMapTransientState/, "Bundled Android calendar markers must use compact native-map updates after initial state.");
+requireBundledPattern(/function\s+nativeMapUnreadBadges\([\s\S]*?mobileContentUnreadCount\("site",\s*slug\)[\s\S]*?transientPayload\.unreadBadges\s*=\s*nativeMapUnreadBadges\(\)/, "Bundled Android unread changes must use compact slug/count updates.");
+if (/nativeMapPointSignature\s*!==\s*pointSignature[\s\S]{0,400}?transientPayload\.(?:sitePoints|labels)\s*=/.test(bundledMobileJs)) {
+  throw new Error("Bundled Android unread changes must not retransmit every native site point or label.");
+}
+if (!nativeMapController.includes('payload.has("unreadBadges")')
+    || !nativeMapController.includes("applyUnreadBadges(cachedState.optJSONObject(\"sitePoints\"), unreadBadges)")) {
+  throw new Error("Native MapLibre must apply compact unread updates to its cached point and label sources.");
+}
 if (/const\s+baseSignature\s*=\s*`[^`]*events:/.test(bundledMobileJs)) {
   throw new Error("Bundled Android calendar markers must not force a full static native-map rebuild.");
 }
