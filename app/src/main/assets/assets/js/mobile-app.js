@@ -6954,9 +6954,10 @@
       const communitySignature = communityFeatures.map(feature => `${feature.properties.native_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}`).join("|");
       const temporarySignature = temporaryFeatures.map(feature => `${feature.properties.temporary_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}`).join("|");
       const nativeBasemap = Object.prototype.hasOwnProperty.call(MOBILE_BASEMAPS, state.settings.basemap) ? state.settings.basemap : "outdoors";
-      const baseSignature = `${state.nativeMapBaseRevision}|${profileKey}|${profileSignature}|basemap:${nativeBasemap}|bio-paths:${mobileBiographyPathsEnabled() ? 1 : 0}|events:${exhibitFeatures.map(feature => feature.properties.event_key).join(",")}`;
+      const eventSignature = exhibitFeatures.map(feature => feature.properties.event_key).join(",");
+      const baseSignature = `${state.nativeMapBaseRevision}|${profileKey}|${profileSignature}|basemap:${nativeBasemap}|bio-paths:${mobileBiographyPathsEnabled() ? 1 : 0}`;
       const pointSignature = `${state.nativeMapPointRevision}|${allFeatures.filter(feature => feature?.geometry?.type === "Point").length}`;
-      const transientSignature = `user:${userLocationSignature}|community:${communitySignature}|temporary:${temporarySignature}`;
+      const transientSignature = `user:${userLocationSignature}|community:${communitySignature}|temporary:${temporarySignature}|events:${eventSignature}`;
       const signature = `${baseSignature}|points:${pointSignature}|${transientSignature}`;
       const center = state.map.getCenter?.();
       const transientPayload = {
@@ -6974,7 +6975,8 @@
         } : null,
         userLocation: nativeMapFeatureCollection(userLocationFeatures),
         communityContributions: nativeMapFeatureCollection(communityFeatures),
-        temporaryMarkers: nativeMapFeatureCollection(temporaryFeatures)
+        temporaryMarkers: nativeMapFeatureCollection(temporaryFeatures),
+        events: nativeMapFeatureCollection(exhibitFeatures)
       };
       if (state.nativeMapBaseSignature === baseSignature && typeof window.AndroidApp.syncNativeMapTransientState === "function") {
         if (state.nativeMapPointSignature !== pointSignature) {
@@ -6997,7 +6999,6 @@
           : nativeMapFeatureCollection([...(sourceData.territoryLabels?.features || []), ...(sourceData.detailLabels?.features || [])]),
         profilePath: profileJourney?.lines || nativeMapFeatureCollection(),
         profilePoints: nativeMapFeatureCollection(profileModel ? nativeProfilePointFeatures(profileModel) : []),
-        events: nativeMapFeatureCollection(exhibitFeatures),
         biographyPaths: profileModel
           ? nativeMapFeatureCollection()
           : allMobileBiographyPathFeatureCollection({ enabled: mobileBiographyPathsEnabled() })
@@ -8371,7 +8372,7 @@
       // startup is still settling, let event markers coalesce with the deferred
       // detailed-geometry sync instead of serializing the full site payload a
       // second time just to add a few calendar markers.
-      scheduleNativeMapStateSync("events", nativeMapBridgeAvailable() && state.mobileStartupRendering ? 8000 : 0);
+      scheduleNativeMapStateSync("events", 0);
     }
 
     function approvedSiteSuggestions() {
@@ -15517,10 +15518,7 @@
       MAP_UTILS.setGeoJsonSourceDataMany(state.map, sources);
       state.mapSourceAppliedKey = sourceKey;
       syncMobileBiographyPathLayers();
-      scheduleNativeMapStateSync(
-        "source-refresh",
-        nativeMapBridgeAvailable() && state.mobileStartupRendering ? 8000 : 40
-      );
+      scheduleNativeMapStateSync("source-refresh");
     }
 
     function isAndroidMapGestureActive() {

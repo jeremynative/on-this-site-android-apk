@@ -1194,6 +1194,7 @@ final class NativeMapController {
                 setSource(style, PROFILE_PATH_SOURCE_ID, payload.optJSONObject("profilePath"));
                 setSource(style, PROFILE_POINT_SOURCE_ID, payload.optJSONObject("profilePoints"));
                 Log.i(LOG_TAG, "Applied native map base state " + payload.optString("mode", "public")
+                    + " reason=" + payload.optString("reason", "state")
                     + ": territories=" + featureCount(payload.optJSONObject("territories"))
                     + ", polygons=" + featureCount(payload.optJSONObject("sitePolygons"))
                     + ", points=" + featureCount(sitePoints)
@@ -1244,6 +1245,10 @@ final class NativeMapController {
             setSource(style, USER_LOCATION_SOURCE_ID, payload.optJSONObject("userLocation"));
             setSource(style, COMMUNITY_SOURCE_ID, payload.optJSONObject("communityContributions"));
             setSource(style, TEMPORARY_SOURCE_ID, payload.optJSONObject("temporaryMarkers"));
+            boolean eventsUpdated = payload.has("events");
+            if (eventsUpdated) {
+                setSource(style, EVENT_SOURCE_ID, payload.optJSONObject("events"));
+            }
             boolean pointsUpdated = payload.has("sitePoints");
             boolean labelsUpdated = payload.has("labels");
             if (pointsUpdated) {
@@ -1252,10 +1257,11 @@ final class NativeMapController {
             if (labelsUpdated) {
                 setSource(style, LABEL_SOURCE_ID, withBundledTerritoryLabels(payload.optJSONObject("labels")));
             }
-            if ((pointsUpdated || labelsUpdated) && currentStateJson != null && !currentStateJson.isEmpty()) {
+            if ((pointsUpdated || labelsUpdated || eventsUpdated) && currentStateJson != null && !currentStateJson.isEmpty()) {
                 JSONObject cachedState = new JSONObject(currentStateJson);
                 if (pointsUpdated) cachedState.put("sitePoints", payload.optJSONObject("sitePoints"));
                 if (labelsUpdated) cachedState.put("labels", payload.optJSONObject("labels"));
+                if (eventsUpdated) cachedState.put("events", payload.optJSONObject("events"));
                 currentStateJson = cachedState.toString();
             }
             lastStateSignature = signature;
@@ -1267,6 +1273,8 @@ final class NativeMapController {
                 + ", userLocation=" + featureCount(payload.optJSONObject("userLocation"))
                 + ", community=" + featureCount(payload.optJSONObject("communityContributions"))
                 + ", temporary=" + featureCount(payload.optJSONObject("temporaryMarkers"))
+                + ", events=" + featureCount(payload.optJSONObject("events"))
+                + ", eventsUpdated=" + eventsUpdated
                 + ", sitePointsUpdated=" + pointsUpdated
                 + ", labelsUpdated=" + labelsUpdated);
         } catch (Exception error) {
