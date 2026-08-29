@@ -1,5 +1,15 @@
 # Android APK — Codex Handoff
 
+## August 29 Android performance and startup optimization
+
+- Branch `codex/android-performance-20260829` removes the largest measured Android startup redundancies without changing public map behavior. The native map now becomes usable from compact geometry, then hydrates detailed site geometry once after the first stable frame instead of blocking the loading handoff and repeatedly rebuilding the same full state.
+- Native viewport updates now skip unchanged bounds, occlusion, visibility, and blocked-touch payloads. Map padding/layout work only runs when its inputs change, and native tile prefetch is disabled to reduce offscreen graphics allocation.
+- The Samsung search reconciliation loop now runs only while the search field is focused and the page is visible. Moving biography updates use the native bridge's 480 ms cadence instead of serializing frames faster than Java can apply them.
+- Fixed a bundled-fallback race that could replace a successfully rendered native map with the browser-compatibility fallback after its deadline. Also restored missing shoreline-refinement constants that caused a bundled `ReferenceError`.
+- Shared web runtime optimizations were merged as web PRs `#131` and `#132`; the first deployment succeeded and the final coalesced calendar-state deployment is being monitored before release.
+- `node verify-app-shell.js`, `node verify-google-play-readiness.js`, the targeted web startup/motion/search/request verifiers, repeated debug builds, and S25 QA passed. On the S25, the bundled app reached a usable native map in roughly 2.1–2.7 seconds, Ma's House remained the first prediction/search result, and the compatibility fallback no longer replaced the rendered map. No fatal exception or ANR was observed.
+- Commit `4c9ce44` contains the Android product changes. Safest next action: confirm the final web deployment, run one final live S25 startup trace, merge this branch, and verify the signed Obtainium/Google Play artifacts before calling the work live.
+
 ## August 23 Amethyst global-whaling route
 
 - Added a small generic nineteenth-century bark that leaves Sag Harbor on a slow one-way eastbound route, fades at the route end, and resets invisibly. It is explicitly an illustrative global-whaling route rather than a reconstruction of the lost <em>Amethyst</em>.
