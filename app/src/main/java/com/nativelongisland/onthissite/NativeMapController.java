@@ -238,6 +238,9 @@ final class NativeMapController {
     private String currentStateJson;
     private String movingFeaturesJson = EMPTY_FEATURE_COLLECTION;
     private long lastMovingFeatureApplyAt;
+    private String lastBlockedTouchRegionsJson = "";
+    private float lastBlockedTouchScaleX = Float.NaN;
+    private float lastBlockedTouchScaleY = Float.NaN;
     private final Runnable applyLatestMovingFeaturesTask = this::applyMovingFeaturesToStyle;
     private final JSONObject bundledSiteIconKeysBySlug = new JSONObject();
     private String lastStateSignature = "";
@@ -264,6 +267,9 @@ final class NativeMapController {
             .rotateGesturesEnabled(true)
             .tiltGesturesEnabled(true)
             .textureMode(true)
+            // Avoid fetching and decoding lower-zoom tiles outside the visible
+            // viewport; the app already performs bounded camera transitions.
+            .setPrefetchesTiles(false)
             .foregroundLoadColor(Color.rgb(232, 241, 237))
             .camera(new CameraPosition.Builder()
                 .target(new LatLng(40.86, -72.82))
@@ -405,6 +411,7 @@ final class NativeMapController {
     }
 
     void setVisible(boolean visible) {
+        if ((container.getVisibility() == View.VISIBLE) == visible) return;
         container.setVisibility(visible ? View.VISIBLE : View.GONE);
         if (visible) mapView.invalidate();
     }
@@ -423,13 +430,18 @@ final class NativeMapController {
         int safeHeight = Math.max(1, Math.round(height));
         int safeLeft = Math.max(0, Math.round(left));
         int safeTop = Math.max(0, Math.round(top));
+        int safeBottomOcclusion = Math.min(safeHeight - 1, Math.max(0, Math.round(bottomOcclusion)));
+        int nextVisibility = visible && safeWidth > 1 && safeHeight > 1 ? View.VISIBLE : View.GONE;
+        boolean occlusionChanged = viewportBottomOcclusion != safeBottomOcclusion;
+        boolean rootChanged = touchRootScreenLeft != rootScreenLeft || touchRootScreenTop != rootScreenTop;
+        boolean visibilityChanged = container.getVisibility() != nextVisibility;
         viewportLeft = safeLeft;
         viewportTop = safeTop;
         viewportRight = safeLeft + safeWidth;
         viewportBottom = safeTop + safeHeight;
-        viewportBottomOcclusion = Math.min(safeHeight - 1, Math.max(0, Math.round(bottomOcclusion)));
+        viewportBottomOcclusion = safeBottomOcclusion;
         viewportInteractiveBottom = viewportBottom - viewportBottomOcclusion;
-        if (map != null) map.setPadding(0, 0, 0, viewportBottomOcclusion);
+        if (map != null && occlusionChanged) map.setPadding(0, 0, 0, viewportBottomOcclusion);
         touchRootScreenLeft = rootScreenLeft;
         touchRootScreenTop = rootScreenTop;
         FrameLayout.LayoutParams currentParams = (FrameLayout.LayoutParams) container.getLayoutParams();
@@ -444,6 +456,7 @@ final class NativeMapController {
             markStartupVisualChange();
         }
         startupViewportReady = nextStartupViewportReady;
+        if (!boundsChanged && !occlusionChanged && !rootChanged && !visibilityChanged) return;
         // Resizing a transparent WebView overlay while a native drag or its
         // inertia is still settling must not restore the ACTION_DOWN camera.
         // MapLibre already preserves its center through a viewport resize.
@@ -454,12 +467,14 @@ final class NativeMapController {
                 : (map == null ? null : map.getCameraPosition()));
         long expectedCameraRevision = cameraIntentRevision;
         long restoreRevision = ++viewportRestoreRevision;
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(safeWidth, safeHeight);
-        params.leftMargin = safeLeft;
-        params.topMargin = safeTop;
-        container.setLayoutParams(params);
-        setMapCreditExpanded(mapCreditExpanded);
-        setVisible(visible && safeWidth > 1 && safeHeight > 1);
+        if (boundsChanged) {
+            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(safeWidth, safeHeight);
+            params.leftMargin = safeLeft;
+            params.topMargin = safeTop;
+            container.setLayoutParams(params);
+            setMapCreditExpanded(mapCreditExpanded);
+        }
+        setVisible(nextVisibility == View.VISIBLE);
         if (boundsChanged && cameraToPreserve != null) {
             Log.d(LOG_TAG, "Preserving camera through viewport change: "
                 + cameraToPreserve.target.getLongitude() + ","
@@ -481,8 +496,14 @@ final class NativeMapController {
     }
 
     void updateBlockedTouchRegions(String regionsJson, float scaleX, float scaleY) {
-        blockedTouchRegions.clear();
         if (regionsJson == null || regionsJson.length() > 128 * 1024) return;
+        if (regionsJson.equals(lastBlockedTouchRegionsJson)
+            && Float.compare(scaleX, lastBlockedTouchScaleX) == 0
+            && Float.compare(scaleY, lastBlockedTouchScaleY) == 0) return;
+        lastBlockedTouchRegionsJson = regionsJson;
+        lastBlockedTouchScaleX = scaleX;
+        lastBlockedTouchScaleY = scaleY;
+        blockedTouchRegions.clear();
         try {
             JSONArray rows = new JSONArray(regionsJson);
             int limit = Math.min(rows.length(), 80);

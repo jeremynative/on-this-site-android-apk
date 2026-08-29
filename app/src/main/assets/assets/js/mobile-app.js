@@ -924,6 +924,8 @@
       placeAutocompleteQuery: "",
       placeAutocompleteResults: [],
       androidImeSearchDraft: "",
+      searchValueWatchTimer: null,
+      nativeAndroidSearchWatchInstalled: false,
       layers: [],
       markers: new Map(),
       mapSourceCache: null,
@@ -3325,6 +3327,12 @@
       return window.setTimeout(callback, 250);
     }
 
+    window.__nliHydrateMobileSiteGeometryAfterStartup = () => {
+      if (isOfflineTextMode() || state.siteGeometryLoaded || state.siteGeometryPromise) return false;
+      idleTask(hydrateMobileSiteGeometry);
+      return true;
+    };
+
     function mobileMapRuntime() {
       if (!window.mapboxgl?.Map && window.maplibregl?.Map) window.mapboxgl = window.maplibregl;
       return window.mapboxgl;
@@ -4602,31 +4610,37 @@
     }
 
     function startSearchValueWatch() {
-      if (!searchEl || state.searchValueWatchTimer) return;
+      if (!searchEl || document.hidden || document.activeElement !== searchEl) return;
       state.lastSearchValue = searchEl.value || "";
-      state.searchValueWatchTimer = window.setInterval(scheduleSearchSync, 180);
-      window.setTimeout(stopSearchValueWatch, 5000);
+      if (state.searchValueWatchTimer) return;
+      state.searchValueWatchTimer = window.setInterval(() => {
+        if (document.hidden || document.activeElement !== searchEl) {
+          stopSearchValueWatch();
+          return;
+        }
+        refreshMobileSearchSuggestions();
+        scheduleSearchSync();
+      }, 180);
     }
 
-    function stopSearchValueWatch() {
+    function stopSearchValueWatch(options = {}) {
       if (!state.searchValueWatchTimer) return;
       window.clearInterval(state.searchValueWatchTimer);
       state.searchValueWatchTimer = null;
+      if (options.silent === true) return;
       scheduleSearchSync();
       if (searchEl?.value.trim()) window.setTimeout(showAndroidSearchPreviewPanel, 80);
     }
 
     function installNativeAndroidSearchWatch() {
-      if (!/Android/i.test(navigator.userAgent) || state.nativeAndroidSearchWatchTimer || !searchEl) return;
+      if (!/Android/i.test(navigator.userAgent) || state.nativeAndroidSearchWatchInstalled || !searchEl) return;
+      state.nativeAndroidSearchWatchInstalled = true;
       state.lastSearchValue = "";
       scheduleSearchSync();
       // Some Samsung WebView/IME combinations mutate input.value without
-      // dispatching a later input event. Keep autocomplete independent from
-      // the heavier map/list filter so each actual field value is rendered.
-      state.nativeAndroidSearchWatchTimer = window.setInterval(() => {
-        refreshMobileSearchSuggestions();
-        scheduleSearchSync();
-      }, 180);
+      // dispatching a later input event. Poll only while the field is focused;
+      // the previous lifetime interval kept running even when search was idle.
+      if (document.activeElement === searchEl) startSearchValueWatch();
     }
 
     function isPlaceSearchCandidate(query, matches = []) {
@@ -6585,8 +6599,18 @@
       });
     }
 
+    const SHORELINE_REFINED_GEOMETRY_NOTE = "Exact intersection with NYS Counties_Shoreline land geometry";
+    const SHINNECOCK_HILLS_REFINED_GEOMETRY_NOTE = "Simplified mainland intersection with refined NYS land/water geometry";
+
+    function shorelineRefinementNoteForSite(site) {
+      if (site?.slug === "shinnecock-hills") return SHINNECOCK_HILLS_REFINED_GEOMETRY_NOTE;
+      if (site?.slug === "keskaechqueren") return SHORELINE_REFINED_GEOMETRY_NOTE;
+      return "";
+    }
+
     function mobilePolygonOpacity(site) {
       if (site?.slug === "shinnecock-ancestral-land") return 0.38;
+      if (site?.slug === "shinnecock-hills") return 0.42;
       const fallback = isBroadTerritory(site) ? 0.18 : 0.2;
       const sourceOpacity = numeric(site.map_opacity, fallback);
       return Math.max(0.08, Math.min(isBroadTerritory(site) ? 0.22 : 0.26, sourceOpacity * 0.55));
@@ -6620,6 +6644,7 @@
             unread_label: mobileUnreadCountLabel(unreadCount),
             unread_icon: mobileUnreadCountIcon(unreadCount),
             geometry_surface: normalizeComparisonText(site.geometry_surface || ""),
+            geometry_refinement: shorelineRefinementNoteForSite(site),
             broad: isBroadTerritory(site),
             territory_label_point: site.territory_label_point || null,
             bounds_area: geometryBoundsArea(siteDisplayGeometry(site))
@@ -8342,7 +8367,11 @@
           element.addEventListener("click", () => openExhibit(exhibit));
           state.exhibitMarkers.set(key, new mapboxgl.Marker({ element, anchor: isCalendarBadge || attachedSite ? "bottom" : "center", offset: attachedSite ? [23, -6] : [0, 0] }).setLngLat(exhibit.center).addTo(state.map));
         });
-      scheduleNativeMapStateSync("events", 0);
+      // The first compact native map sync already makes the app usable. While
+      // startup is still settling, let event markers coalesce with the deferred
+      // detailed-geometry sync instead of serializing the full site payload a
+      // second time just to add a few calendar markers.
+      scheduleNativeMapStateSync("events", nativeMapBridgeAvailable() && state.mobileStartupRendering ? 3200 : 0);
     }
 
     function approvedSiteSuggestions() {
@@ -12568,10 +12597,12 @@
         const now = performance.now();
         updateMobileMovingFeatureMarkers(now);
         state.mobileMovingMarkerLastAt = now;
-        state.mobileMovingMarkerTimer = window.setTimeout(tick, MOBILE_MOVING_MARKER_INTERVAL_MS);
+        const interval = nativeMapBridgeAvailable() ? 480 : MOBILE_MOVING_MARKER_INTERVAL_MS;
+        state.mobileMovingMarkerTimer = window.setTimeout(tick, interval);
       };
       const elapsed = performance.now() - (state.mobileMovingMarkerLastAt || 0);
-      state.mobileMovingMarkerTimer = window.setTimeout(tick, Math.max(0, MOBILE_MOVING_MARKER_INTERVAL_MS - elapsed));
+      const interval = nativeMapBridgeAvailable() ? 480 : MOBILE_MOVING_MARKER_INTERVAL_MS;
+      state.mobileMovingMarkerTimer = window.setTimeout(tick, Math.max(0, interval - elapsed));
     }
 
     async function ensureMobileMovingFeatureMarkers() {
@@ -20252,10 +20283,12 @@
       syncMobileMovingFeatureVisibility(performance.now());
       syncSiteHeroCarouselLifecycle();
       if (document.hidden) {
+        stopSearchValueWatch({ silent: true });
         captureAndroidLifecycleSnapshot();
         cancelAndroidLifecycleDetailScrollRestore();
         scheduleMemberProfileActivityTracking({ force: true, throttleMs: 0 });
       } else {
+        if (document.activeElement === searchEl) startSearchValueWatch();
         scheduleMemberProfileActivityTracking();
         if (state.profile) {
           state.profileActivitySynced = false;
@@ -20283,6 +20316,7 @@
     });
     window.addEventListener("pagehide", () => {
       stopSiteHeroCarousel();
+      stopSearchValueWatch({ silent: true });
       captureAndroidLifecycleSnapshot();
       cancelAndroidLifecycleDetailScrollRestore();
       scheduleMemberProfileActivityTracking({ force: true, throttleMs: 0 });
@@ -20371,7 +20405,7 @@
         }).finally(() => appEl?.classList.remove("mobile-map-initializing"));
         if (mobileMapReady && state.mobileStartupSiteRevealPending) await startMobileStartupSiteReveal();
         else if (state.mobileStartupSiteRevealPending) finishMobileStartupSiteReveal();
-        if (!isOfflineTextMode()) idleTask(hydrateMobileSiteGeometry);
+        if (!isOfflineTextMode() && !nativeAndroid) idleTask(hydrateMobileSiteGeometry);
         if (!isOfflineTextMode()) {
           state.researchQuestionInstance = window.NLI_RESEARCH_QUESTION_UTILS?.init?.({
             platform: "mobile",

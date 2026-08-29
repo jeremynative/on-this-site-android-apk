@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260828-plant-camera-seasons-r189";
+    static final String APP_VERSION = "20260829-android-performance-r190";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -223,6 +223,7 @@ public class MainActivity extends Activity {
     private boolean webTouchStartedOnLocationControl;
     private boolean loadingBundledFallback;
     private boolean appShellLoaded;
+    private boolean postStartupGeometryHydrationScheduled;
     private boolean runtimePermissionPromptActive;
     private boolean locationPermissionDeniedForSession;
     private boolean notificationPermissionPromptedForSession;
@@ -292,9 +293,16 @@ public class MainActivity extends Activity {
         Log.w(LOG_TAG, "Bundled fallback renderer never became available; showing browser compatibility fallback.");
         showWebViewCompatibilityFallback();
     };
+    private final Runnable postStartupGeometryHydration = () -> {
+        if (webView == null || !appShellLoaded || loadingBundledFallback) return;
+        webView.evaluateJavascript(
+            "(function(){try{return !!(window.__nliHydrateMobileSiteGeometryAfterStartup&&window.__nliHydrateMobileSiteGeometryAfterStartup());}catch(error){return false;}})()",
+            null
+        );
+    };
 
     private void probeBundledFallbackPaint() {
-        if (webView == null || !loadingBundledFallback) return;
+        if (webView == null || !loadingBundledFallback || appShellLoaded) return;
         webView.evaluateJavascript(
             "(function(){try{"
                 + "var app=document.querySelector('.app');"
@@ -305,7 +313,7 @@ public class MainActivity extends Activity {
                 + "return app&&archiveReady?'painted':'waiting';"
                 + "}catch(error){return 'waiting';}})();",
             value -> {
-                if (webView == null || !loadingBundledFallback) return;
+                if (webView == null || !loadingBundledFallback || appShellLoaded) return;
                 if (value != null && value.contains("painted")) {
                     requestNativeMapViewportSync(0L);
                     if (nativeMapEnabled
@@ -1196,7 +1204,11 @@ public class MainActivity extends Activity {
                 + "if(window.MutationObserver){var mt=0,mtSettled=0;var mo=new MutationObserver(function(){clearTimeout(mt);clearTimeout(mtSettled);mt=setTimeout(sync,80);mtSettled=setTimeout(sync,420);});mo.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','class','open','data-native-tablet-landscape']});window.__nliNativeMapMutationObserver=mo;}"
                 + "requestAnimationFrame(function(){sync();requestAnimationFrame(sync);});"
                 + "setTimeout(sync,250);setTimeout(sync,900);setTimeout(sync,2200);setTimeout(sync,5000);"
-                + "var startupSyncCount=0;var startupSyncTimer=setInterval(function(){sync();startupSyncCount+=1;if(startupSyncCount>=40)clearInterval(startupSyncTimer);},500);window.__nliNativeMapStartupSyncTimer=startupSyncTimer;return true;"
+                // ResizeObserver and MutationObserver own steady-state layout.
+                // Keep only a short bounded poll for WebView builds that delay
+                // their first observer callback; the previous 20-second DOM
+                // scan repeatedly crossed the JavaScript/native bridge.
+                + "var startupSyncCount=0;var startupSyncTimer=setInterval(function(){sync();startupSyncCount+=1;if(startupSyncCount>=8)clearInterval(startupSyncTimer);},500);window.__nliNativeMapStartupSyncTimer=startupSyncTimer;return true;"
             + "}catch(error){return false;}})()",
             value -> Log.d(LOG_TAG, "Native map layout installed: " + value)
         );
@@ -1337,12 +1349,11 @@ public class MainActivity extends Activity {
                 + "var liveStatus=((document.querySelector('.mobile-header-instruction')||{}).textContent||'').trim();"
                 + "var app=document.querySelector('.app');"
                 + "var archiveTextReady=/\\d+\\s+listings[\\s\\S]*loaded\\b/i.test(liveStatus);"
-                + "if(!offline&&shell&&archiveTextReady&&!window.__nliNativeStartupGeometryRequested){"
-                    + "window.__nliNativeStartupGeometryRequested=true;window.__nliNativeStartupGeometryReady=false;"
-                    + "var hydrate=typeof hydrateMobileSiteGeometry==='function'?hydrateMobileSiteGeometry:null;"
-                    + "if(!hydrate){window.__nliNativeStartupGeometryReady=true;}else{Promise.resolve(hydrate()).catch(function(){return false;}).then(function(){window.__nliNativeStartupGeometryReady=true;});}}"
                 + "var geometryStatus=app&&app.getAttribute('data-site-geometry');"
-                + "var geometryReady=offline||window.__nliNativeStartupGeometryReady===true||geometryStatus==='loaded'||geometryStatus==='deferred';"
+                // The compact center snapshot and bundled 13 territories are
+                // sufficient for a usable first map. Detailed polygons hydrate
+                // after reveal and must never hold the native loading cover.
+                + "var compactGeometryReady=offline||geometryStatus!=='hydrating';"
                 // Community activity, points, and notification counts already
                 // have one idle data pass in the page runtime. Do not pull that
                 // heavier request in front of the first usable map paint.
@@ -1356,7 +1367,7 @@ public class MainActivity extends Activity {
                 + "var startupDomSignature=(promoDock&&promoDock.hidden?'0':'1')+'|'+promoKinds+'|'+unreadBadges;var startupDomNow=Date.now();"
                 + "if(window.__nliNativeStartupDomSignature!==startupDomSignature){window.__nliNativeStartupDomSignature=startupDomSignature;window.__nliNativeStartupDomChangedAt=startupDomNow;}"
                 + "var startupDomStable=startupDomNow-Number(window.__nliNativeStartupDomChangedAt||startupDomNow)>=" + STARTUP_DOM_STABLE_MS + ";"
-                + "var onlineReady=!offline&&shell&&loaderHidden&&archiveTextReady&&geometryReady&&deferredReady&&mapUiReady&&startupDomStable;"
+                + "var onlineReady=!offline&&shell&&loaderHidden&&archiveTextReady&&compactGeometryReady&&deferredReady&&mapUiReady&&startupDomStable;"
                 + "return offlineReady||onlineReady?'ready':shell?'starting':'empty';"
                 + "}catch(error){return 'empty:'+String(error&&error.message||error);}})();",
             value -> {
@@ -1380,6 +1391,8 @@ public class MainActivity extends Activity {
                     }
                     appShellLoaded = true;
                     appReadinessProbeActive = false;
+                    startupHandler.removeCallbacks(revealBundledFallback);
+                    startupHandler.removeCallbacks(offlineRenderDeadline);
                     dispatchPendingPlantPhoto();
                     // Early document measurements can still reflect the
                     // temporary full-screen startup map. Re-measure at the
@@ -1387,6 +1400,7 @@ public class MainActivity extends Activity {
                     // pixels, then once more after the final layout settles.
                     settleNativeMapViewport();
                     hideLoadingCover();
+                    schedulePostStartupGeometryHydration();
                     if (loadingBundledFallback
                         && hasUsableNetwork()
                         && !liveRecoveryAttemptedForCurrentNetwork) {
@@ -1440,6 +1454,19 @@ public class MainActivity extends Activity {
         }
         return "nativelongisland.com".equalsIgnoreCase(host)
             && (path.equals("/mobile-app.html") || path.equals("/mobile-app-live.html"));
+    }
+
+    private void schedulePostStartupGeometryHydration() {
+        if (webView == null || postStartupGeometryHydrationScheduled) return;
+        postStartupGeometryHydrationScheduled = true;
+        // Let the loading outline complete and the first native map frame
+        // become interactive before parsing/replacing detailed polygons.
+        webView.postDelayed(postStartupGeometryHydration, 900L);
+    }
+
+    private void resetPostStartupGeometryHydration() {
+        postStartupGeometryHydrationScheduled = false;
+        if (webView != null) webView.removeCallbacks(postStartupGeometryHydration);
     }
 
     private boolean hasUsableNetwork() {
@@ -1902,6 +1929,7 @@ public class MainActivity extends Activity {
 
     void refreshApp() {
         if (webView == null) return;
+        resetPostStartupGeometryHydration();
         showLoadingCover("Loading On This Site");
         lastRefreshAt = System.currentTimeMillis();
         appShellLoaded = false;
@@ -1936,6 +1964,7 @@ public class MainActivity extends Activity {
 
     private void loadBundledFallback(String reason) {
         if (webView == null || loadingBundledFallback) return;
+        resetPostStartupGeometryHydration();
         boolean retryValidatedNetwork = liveRecoveryAttemptedForCurrentNetwork && hasUsableNetwork();
         startupHandler.removeCallbacks(startupFallback);
         startupHandler.removeCallbacks(validatedNetworkRecovery);
