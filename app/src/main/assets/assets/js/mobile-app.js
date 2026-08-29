@@ -8371,7 +8371,7 @@
       // startup is still settling, let event markers coalesce with the deferred
       // detailed-geometry sync instead of serializing the full site payload a
       // second time just to add a few calendar markers.
-      scheduleNativeMapStateSync("events", nativeMapBridgeAvailable() && state.mobileStartupRendering ? 3200 : 0);
+      scheduleNativeMapStateSync("events", nativeMapBridgeAvailable() && state.mobileStartupRendering ? 8000 : 0);
     }
 
     function approvedSiteSuggestions() {
