@@ -15517,7 +15517,10 @@
       MAP_UTILS.setGeoJsonSourceDataMany(state.map, sources);
       state.mapSourceAppliedKey = sourceKey;
       syncMobileBiographyPathLayers();
-      scheduleNativeMapStateSync("source-refresh");
+      scheduleNativeMapStateSync(
+        "source-refresh",
+        nativeMapBridgeAvailable() && state.mobileStartupRendering ? 8000 : 40
+      );
     }
 
     function isAndroidMapGestureActive() {
