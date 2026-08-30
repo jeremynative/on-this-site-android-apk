@@ -5669,13 +5669,13 @@
       body.android-device.tablet-landscape .app.panel-collapsed > .mobile-timeline,
       body.android-device.tablet-landscape .app.panel-collapsed > .list-panel { grid-row: 4; }
 
-    body.mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header {
+    body:not(.native-android-app).mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header {
       gap: 0;
       padding-top: max(7px, var(--app-top-safe));
       padding-bottom: 7px;
     }
 
-    body.mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header > :not(.title-row) {
+    body:not(.native-android-app).mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header > :not(.title-row) {
       display: none !important;
     }
 

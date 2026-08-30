@@ -94,9 +94,13 @@
     const MOVING_DOG_WIKI_SLUG = "dog-ceremonialism";
     const MOBILE_MOVING_MARKER_INTERVAL_MS = 180;
     // The native renderer receives only this compact moving-feature collection.
-    // Keep its position cadence short enough to avoid visible steps at close zoom.
-    const MOBILE_NATIVE_MOVING_MARKER_INTERVAL_MS = 64;
-    const MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS = 280;
+    // Use a zoom-aware cadence: overview motion is deliberately slow and does
+    // not need to wake the renderer as often, while close views need enough
+    // samples to keep the artwork gliding instead of stepping between points.
+    const MOBILE_NATIVE_MOVING_MARKER_OVERVIEW_INTERVAL_MS = 56;
+    const MOBILE_NATIVE_MOVING_MARKER_CLOSE_INTERVAL_MS = 24;
+    // Never let a delayed timer "catch up" with one conspicuous jump.
+    const MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS = 80;
     const MOBILE_MOVING_LAND_CACHE_MAX = 4000;
     const mobileMovingRouteModelCache = new WeakMap();
     const MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS = 720000;
@@ -4012,6 +4016,85 @@
       } catch {
         return false;
       }
+    }
+
+    const discussionSourceRefreshCache = new Map();
+    const DISCUSSION_SOURCE_REFRESH_TTL_MS = 45000;
+
+    function discussionSourceFilter(sourceType, item) {
+      const type = encodeURIComponent(String(sourceType || ""));
+      const slug = encodeURIComponent(String(item?.slug || ""));
+      if (!type || !slug) return "";
+      if (sourceType === "site") {
+        return `&filter[source_type][_eq]=${type}&filter[_or][0][source_slug][_eq]=${slug}&filter[_or][1][site_slug][_eq]=${slug}`;
+      }
+      return `&filter[source_type][_eq]=${type}&filter[source_slug][_eq]=${slug}`;
+    }
+
+    function mergeDiscussionSourceComments(sourceType, item, rows = []) {
+      const retained = (state.publicComments || []).filter(comment => (
+        comment?._local_pending === true ||
+        !COMMENT_UTILS.matchesSource(comment, sourceType, item, {
+          normalizeSourceType: normalizeCommentSourceType,
+          useLegacySiteSlug: true,
+          allowLegacySiteFallback: true
+        })
+      ));
+      state.publicComments = mergeSeededComments([...retained, ...(rows || [])]);
+      state.profileActivityCache = null;
+    }
+
+    async function refreshDiscussionSourceData(sourceType, item, options = {}) {
+      const key = `${String(sourceType || "")}:${String(item?.slug || item?.id || "")}`;
+      const filter = discussionSourceFilter(sourceType, item);
+      if (!filter || key.endsWith(":")) return false;
+      const cached = discussionSourceRefreshCache.get(key);
+      if (options.fresh !== true && cached && Date.now() - cached.at < DISCUSSION_SOURCE_REFRESH_TTL_MS) {
+        return cached.promise;
+      }
+      const promise = (async () => {
+        const commentsRequest = fetchJson(`/items/mobile_comments?limit=100&filter[status][_eq]=approved&filter[public_activity][_eq]=true${filter}&sort=created_at&fields=${PUBLIC_COMMENT_FIELDS}`, {
+          cacheKey: `mobile-discussion-${key}`,
+          ttl: DISCUSSION_SOURCE_REFRESH_TTL_MS,
+          fresh: options.fresh === true
+        });
+        const plantsRequest = sourceType === "site"
+          ? fetchJson(`/items/mobile_plant_observations?limit=100&filter[status][_eq]=approved&filter[site_slug][_eq]=${encodeURIComponent(String(item.slug || ""))}&fields=${PLANT_OBSERVATION_FIELDS}`, {
+              cacheKey: `mobile-plants-${key}`,
+              ttl: DISCUSSION_SOURCE_REFRESH_TTL_MS,
+              fresh: options.fresh === true
+            }).catch(() => ({ data: [] }))
+          : Promise.resolve({ data: [] });
+        const [commentsResponse, plantsResponse] = await Promise.all([commentsRequest, plantsRequest]);
+        mergeDiscussionSourceComments(sourceType, item, commentsResponse.data || []);
+        if (sourceType === "site") mergePlantObservationRecords(plantsResponse.data || []);
+        return true;
+      })().catch(error => {
+        console.warn("Discussion data will refresh when this article is reopened.", error);
+        return false;
+      });
+      discussionSourceRefreshCache.set(key, { at: Date.now(), promise });
+      return promise;
+    }
+
+    function updateOpenDiscussionSection(sourceType, item) {
+      const stillOpen = sourceType === "site"
+        ? state.selectedSlug === item?.slug
+        : state.selectedWikiSlug === item?.slug;
+      if (!stillOpen || !detailEl?.classList.contains("open")) return false;
+      const current = detailBodyEl.querySelector(`.discussion-section[data-discussion-type="${CSS.escape(sourceType)}"][data-discussion-slug="${CSS.escape(String(item.slug || ""))}"]`);
+      if (!current) return false;
+      const template = document.createElement("template");
+      template.innerHTML = discussionHtml(sourceType, item).trim();
+      const replacement = template.content.firstElementChild;
+      if (!replacement) return false;
+      current.replaceWith(replacement);
+      decorateCurrentDetailForQuoteComments(sourceType, item);
+      if (sourceType === "site") {
+        detailEl.classList.toggle("plant-browse-mode", plantObservationsForSource("site", item).length > 0);
+        syncSitePlantMarkers(item);
+      }
+      return true;
     }
 
     async function refreshMobileAppDataFromDirectus() {
@@ -12151,10 +12234,21 @@
 
     function mobileBiographyZoomMotionScale() {
       const zoom = Number(state.map?.getZoom?.());
-      if (!Number.isFinite(zoom)) return 1;
-      if (zoom <= 8) return 0.4;
-      if (zoom >= 11.5) return 1;
-      return 0.4 + ((zoom - 8) / 3.5) * 0.6;
+      if (!Number.isFinite(zoom)) return 0.15;
+      if (zoom <= 8) return 0.15;
+      if (zoom >= 11.5) return 0.65;
+      return 0.15 + ((zoom - 8) / 3.5) * 0.5;
+    }
+
+    function mobileNativeMovingMarkerIntervalMs() {
+      const zoom = Number(state.map?.getZoom?.());
+      if (!Number.isFinite(zoom) || zoom <= 8) return MOBILE_NATIVE_MOVING_MARKER_OVERVIEW_INTERVAL_MS;
+      if (zoom >= 11.5) return MOBILE_NATIVE_MOVING_MARKER_CLOSE_INTERVAL_MS;
+      const progress = (zoom - 8) / 3.5;
+      return Math.round(
+        MOBILE_NATIVE_MOVING_MARKER_OVERVIEW_INTERVAL_MS
+        - progress * (MOBILE_NATIVE_MOVING_MARKER_OVERVIEW_INTERVAL_MS - MOBILE_NATIVE_MOVING_MARKER_CLOSE_INTERVAL_MS)
+      );
     }
 
     function mobileBiographyMotionFor(item, now = performance.now()) {
@@ -12662,11 +12756,11 @@
         const now = performance.now();
         updateMobileMovingFeatureMarkers(now);
         state.mobileMovingMarkerLastAt = now;
-        const interval = nativeMapBridgeAvailable() ? MOBILE_NATIVE_MOVING_MARKER_INTERVAL_MS : MOBILE_MOVING_MARKER_INTERVAL_MS;
+        const interval = nativeMapBridgeAvailable() ? mobileNativeMovingMarkerIntervalMs() : MOBILE_MOVING_MARKER_INTERVAL_MS;
         state.mobileMovingMarkerTimer = window.setTimeout(tick, interval);
       };
       const elapsed = performance.now() - (state.mobileMovingMarkerLastAt || 0);
-      const interval = nativeMapBridgeAvailable() ? MOBILE_NATIVE_MOVING_MARKER_INTERVAL_MS : MOBILE_MOVING_MARKER_INTERVAL_MS;
+      const interval = nativeMapBridgeAvailable() ? mobileNativeMovingMarkerIntervalMs() : MOBILE_MOVING_MARKER_INTERVAL_MS;
       state.mobileMovingMarkerTimer = window.setTimeout(tick, Math.max(0, interval - elapsed));
     }
 
@@ -12728,7 +12822,12 @@
         detailBodyEl.innerHTML = `<p class="summary">This knowledgebase article is not available in this view yet.</p>`;
         return;
       }
-      await ensureTimelineDetailsForSource("wiki", article.id, article.slug);
+      // The article body is the primary response to a biography/map tap. Do
+      // not hold it behind the supplemental timeline request: on a slower
+      // mobile connection that made otherwise text-only biographies appear
+      // frozen for several seconds. Existing timeline rows render now and the
+      // targeted request hydrates the journey below as soon as it is ready.
+      const timelinePromise = ensureTimelineDetailsForSource("wiki", article.id, article.slug);
       if (state.selectedWikiSlug !== slug) return;
       const event = options.timelineEventId
         ? (state.timelineById.get(String(options.timelineEventId)) || options.timelineEvent || state.timelineEvents.find(item => String(item.id) === String(options.timelineEventId)))
@@ -12756,7 +12855,7 @@
         ${showArticleSummary ? `<p class="summary">${escapeHtml(publicCleanText(article.summary))}</p>` : ""}
         ${articleContentHtml ? `<section class="section"><h3>Sections</h3><div class="section-content">${articleContentHtml}</div></section>` : ""}
         ${whyThisMattersHtml(article)}
-        ${mobileBiographyPathHtml(article, wikiMoments)}
+        <div data-mobile-wiki-biography-path>${mobileBiographyPathHtml(article, wikiMoments)}</div>
         ${sourcesEvidenceSection(article)}
         ${plantWikiObservationSitesHtml(article)}
         ${discussionHtml("wiki", article)}
@@ -12787,22 +12886,24 @@
           events: wikiMoments
         });
       }
+      void timelinePromise.then(() => {
+        if (state.selectedWikiSlug !== slug || !detailEl?.classList.contains("open")) return;
+        const updatedMoments = timelineEventsForSource("wiki", article.id, article.slug);
+        const pathSlot = detailBodyEl.querySelector("[data-mobile-wiki-biography-path]");
+        if (pathSlot) pathSlot.innerHTML = mobileBiographyPathHtml(article, updatedMoments);
+        const updatedTimeline = mobileBiographyTimelineData(article, updatedMoments);
+        if (updatedTimeline?.places?.length >= 2) {
+          showMobileBiographyPathOverlay(article, {
+            focus: false,
+            events: updatedMoments
+          });
+        }
+      }).catch(() => {});
       if (event?.id) {
         window.setTimeout(() => focusMobileHistoricMoment(event.id), 120);
       }
-      if (!options.skipCommentRefresh) refreshCommentsNow({ rerender: false }).then(updated => {
-        if (updated && state.selectedWikiSlug === slug) {
-          const refreshLifecycleSnapshot = androidLifecycleDetailScrollRestore?.active ? lifecycleSnapshot : null;
-          openWikiArticle(article.slug, {
-            ...options,
-            skipCommentRefresh: true,
-            skipRoute: true,
-            drawerState: refreshLifecycleSnapshot ? drawerState : currentDetailDrawerState(),
-            preserveDetailScrollTop: detailBodyEl.scrollTop,
-            lifecycleSnapshot: refreshLifecycleSnapshot,
-            restoreMapState: options.restoreMapState === true
-          });
-        }
+      if (!options.skipCommentRefresh) refreshDiscussionSourceData("wiki", article).then(updated => {
+        if (updated) updateOpenDiscussionSection("wiki", article);
       });
     }
 
@@ -13860,16 +13961,16 @@
           if (state.selectedSlug === slug) refreshMobileVisitActions(state.selectedSite || site);
         }).catch(() => []);
       }
-      const [fullSite, , sourceList] = await Promise.all([detailPromise, timelinePromise, sourceListPromise]);
-      site = fullSite;
+      // Render the primary listing as soon as its detail record arrives.
+      // Timeline moments and normalized source relations are supplemental and
+      // hydrate their own regions below instead of blocking every site tap.
+      site = await detailPromise;
       if (state.selectedSlug !== slug) return;
       state.selectedSite = site;
       syncActiveSiteMapLabel(site);
       const image = mobileSnapshotImageUrl(listingImage(site));
       const imageFallback = mobileSnapshotImageUrl(listingImageFallback(site));
       const moments = timelineEventsForSource("site", site.id, site.slug);
-      if ((!Array.isArray(site.source_list) || !site.source_list.length) && sourceList.length) site = { ...site, source_list: sourceList };
-      let renderedMoments = false;
       const sectionEntries = contentSections(site);
       const linked = new Set();
       const excludeHref = `#listing/${site.slug}`;
@@ -13878,10 +13979,6 @@
         summary: site.summary
       });
       const sections = sectionEntries.map(([title, content, field]) => {
-        if (field?.content === "history_content" && moments.length) {
-          renderedMoments = true;
-          return `${sourceAwareSectionHtml(title, content, { linked, excludeHref, field: field?.content })}${historicMomentsHtml(moments, { showLocations: false })}`;
-        }
         return sourceAwareSectionHtml(title, content, {
           linked,
           excludeHref,
@@ -13889,7 +13986,7 @@
           field: field?.content
         });
       }).join("");
-      const historyHtml = moments.length && !renderedMoments ? historicMomentsHtml(moments, { showLocations: false }) : "";
+      const historyHtml = moments.length ? historicMomentsHtml(moments, { showLocations: false }) : "";
       detailTitleEl.innerHTML = mobileSiteTitleHtml(site);
       restoreDetailHeroToBody();
       detailBodyEl.innerHTML = `
@@ -13897,10 +13994,10 @@
         ${introductionPresentation.leadSummary ? `<p class="summary" data-site-introduction="summary">${escapeHtml(introductionPresentation.leadSummary)}</p>` : ""}
         ${siteTagsHtml(site)}
         ${sections}
-        ${historyHtml}
+        <div data-mobile-site-timeline-slot>${historyHtml}</div>
         ${whyThisMattersHtml(site)}
         ${relatedSitesSection(site)}
-        ${sourcesEvidenceSection(site)}
+        <div data-mobile-site-sources-slot>${sourcesEvidenceSection(site)}</div>
         ${mobileAdoptPlaceCtaHtml(site)}
         ${discussionHtml("site", site)}
         <div class="actions">
@@ -13937,21 +14034,28 @@
       if (contentUpdateItems.length && options.focusNewContent !== false) {
         window.setTimeout(() => revealMobileContentUpdate(site, contentUpdateItems), 180);
       }
-      if (!options.skipCommentRefresh) refreshCommentsNow({ rerender: false }).then(updated => {
-        if (updated && state.selectedSlug === slug) {
-          const refreshLifecycleSnapshot = androidLifecycleDetailScrollRestore?.active ? lifecycleSnapshot : null;
-          openSite(slug, {
-            focus: false,
-            skipCommentRefresh: true,
-            skipRoute: true,
-            drawerState: refreshLifecycleSnapshot ? drawerState : currentDetailDrawerState(),
-            preserveDetailScrollTop: detailBodyEl.scrollTop,
-            contentUpdateItems,
-            timelineEventId: options.timelineEventId,
-            timelineEvent: options.timelineEvent,
-            lifecycleSnapshot: refreshLifecycleSnapshot,
-            restoreMapState: options.restoreMapState === true
-          });
+      void timelinePromise.then(() => {
+        if (state.selectedSlug !== slug || !detailEl?.classList.contains("open")) return;
+        const updatedMoments = timelineEventsForSource("site", site.id, site.slug);
+        const timelineSlot = detailBodyEl.querySelector("[data-mobile-site-timeline-slot]");
+        if (timelineSlot) timelineSlot.innerHTML = historicMomentsHtml(updatedMoments, { showLocations: false });
+      }).catch(() => {});
+      void sourceListPromise.then(sourceList => {
+        if (!Array.isArray(sourceList) || !sourceList.length || state.selectedSlug !== slug || !detailEl?.classList.contains("open")) return;
+        const sourcedSite = { ...site, source_list: sourceList };
+        state.selectedSite = sourcedSite;
+        const sourceSlot = detailBodyEl.querySelector("[data-mobile-site-sources-slot]");
+        if (sourceSlot) sourceSlot.innerHTML = sourcesEvidenceSection(sourcedSite);
+      }).catch(() => {});
+      if (!options.skipCommentRefresh) refreshDiscussionSourceData("site", site).then(updated => {
+        if (!updated) return;
+        updateOpenDiscussionSection("site", site);
+        // A newly fetched comment may not have existed during the initial
+        // reveal pass. Re-run the focused reveal after replacing only the
+        // discussion section so unread activity still lands on the exact card
+        // without rebuilding the entire detail panel.
+        if (contentUpdateItems.length && options.focusNewContent !== false) {
+          window.setTimeout(() => revealMobileContentUpdate(site, contentUpdateItems), 40);
         }
       });
     }

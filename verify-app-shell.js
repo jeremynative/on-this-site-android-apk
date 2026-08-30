@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260829-android-performance-r191";
+const expectedBuild = "20260830-content-performance-r198";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -291,7 +291,7 @@ if (!nativeMapController.includes("CameraPosition cameraToPreserve = nativeGestu
     || !nativeMapController.includes("if (camera == null || map == null || nativeGestureInProgress()) return;")
     || !nativeMapController.includes("movingFeaturesJson = featuresJson;")
     || !nativeMapController.includes("if (nativeGestureInProgress()) return;")
-    || !nativeMapController.includes("MOVING_FEATURE_MIN_UPDATE_MS = 64L")
+    || !nativeMapController.includes("MOVING_FEATURE_MIN_UPDATE_MS = 20L")
     || !nativeMapController.includes("mapView.postDelayed(applyLatestMovingFeaturesTask")
     || !nativeMapController.includes("boolean gestureSettled = cameraGestureAwaitingIdle;")
     || !nativeMapController.includes("applyMovingFeaturesToStyle();")
@@ -300,13 +300,15 @@ if (!nativeMapController.includes("CameraPosition cameraToPreserve = nativeGestu
   throw new Error("Native map gestures must own the camera and pause moving-source updates until camera idle.");
 }
 if (!bundledMobileJs.includes("function mobileMovingBiographyLoop")
-    || !bundledMobileJs.includes("const MOBILE_NATIVE_MOVING_MARKER_INTERVAL_MS = 64")
-    || !bundledMobileJs.includes("const MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS = 280")
+    || !bundledMobileJs.includes("const MOBILE_NATIVE_MOVING_MARKER_OVERVIEW_INTERVAL_MS = 56")
+    || !bundledMobileJs.includes("const MOBILE_NATIVE_MOVING_MARKER_CLOSE_INTERVAL_MS = 24")
+    || !bundledMobileJs.includes("const MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS = 80")
     || !bundledMobileJs.includes("function mobileBiographyZoomMotionScale()")
+    || !bundledMobileJs.includes("function mobileNativeMovingMarkerIntervalMs()")
     || !bundledMobileJs.includes("function mobileBiographyMotionFor(item, now = performance.now())")
     || !bundledMobileJs.includes("const motion = mobileBiographyMotionFor(item, now)")
-    || !bundledMobileJs.includes("if (zoom <= 8) return 0.4")
-    || !bundledMobileJs.includes("if (zoom >= 11.5) return 1")
+    || !bundledMobileJs.includes("if (zoom <= 8) return 0.15")
+    || !bundledMobileJs.includes("if (zoom >= 11.5) return 0.65")
     || !bundledMobileJs.includes("Math.min(rawDelta, MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS) * motionScale")
     || !bundledMobileJs.includes('phase: "fade-out"')
     || !bundledMobileJs.includes('phase: "reset"')
@@ -412,7 +414,7 @@ if (!bundledSharedLifecycleUtils.includes("function snapshotSignature(snapshot)"
     || !bundledMobileJs.includes("ANDROID_LIFECYCLE_WRITE_DEDUP_MS")
     || !bundledMobileJs.includes("function cancelAndroidLifecycleDetailScrollRestore()")
     || !bundledMobileJs.includes("androidLifecycleDetailScrollRestore.targetScrollTop")
-    || !bundledMobileJs.includes("preserveDetailScrollTop: detailBodyEl.scrollTop")) {
+    || !bundledMobileJs.includes("detailScrollTop: Number(options.preserveDetailScrollTop)")) {
   throw new Error("APK lifecycle recovery must package stable snapshots, one cancelable scroll session, and reading-position preservation.");
 }
 
@@ -469,7 +471,7 @@ if (!bundledMobileJs.includes('loginSheetEl?.classList.contains("open") && state
 }
 if (!bundledMobileCss.includes("#profiles-sheet.profile-progress-active")
     || !bundledMobileCss.includes("#login-sheet.profile-progress-active")
-    || !bundledMobileCss.includes("body.mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header")
+    || !bundledMobileCss.includes("body:not(.native-android-app).mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header")
     || !bundledMobileJs.includes('document.body.classList.toggle("mobile-contributor-sheet-open", contributorSheetOpen)')
     || !bundledMobileCss.includes("body.mobile-profile-map-mode .mobile-calendar-event-marker")
     || !bundledMobileCss.includes(".comment.contributor-card {")) {
@@ -503,7 +505,7 @@ if (!bundledMobileJs.includes("function mobileActivitySpecificContentTarget(acti
     || !bundledMobileJs.includes("#timeline-moment-${CSS.escape(activityId)}")
     || !bundledMobileJs.includes('detailBodyEl.querySelector("[data-site-hero-carousel], .article-sticky-hero")')
     || !bundledMobileJs.includes('detailBodyEl.querySelector("[data-mobile-visit-actions]")')
-    || !bundledMobileJs.includes("preserveDetailScrollTop: detailBodyEl.scrollTop,\n            contentUpdateItems")) {
+    || (bundledMobileJs.match(/revealMobileContentUpdate\(site, contentUpdateItems\)/g) || []).length < 2) {
   throw new Error("APK unread site updates must prioritize and preserve the exact new comment, moment, story, or visit area.");
 }
 
@@ -922,7 +924,7 @@ for (const lifecycleRuntime of [bundledApp, bundledLiveRuntime]) {
       || !lifecycleRuntime.includes("function restoreAndroidLifecycleDetailScroll(snapshot)")
       || !lifecycleRuntime.includes("LIFECYCLE_UTILS.createScrollRestorer({")
       || !lifecycleRuntime.includes("function cancelAndroidLifecycleDetailScrollRestore()")
-      || !lifecycleRuntime.includes("preserveDetailScrollTop: detailBodyEl.scrollTop")
+      || !lifecycleRuntime.includes("const detailScrollSnapshot = lifecycleSnapshot || (Number(options.preserveDetailScrollTop) > 0")
       || !lifecycleRuntime.includes("filterSites({ revealPanel: false })")
       || !lifecycleRuntime.includes("const lifecycleSnapshot = options.lifecycleSnapshot || null")
       || !lifecycleRuntime.includes("restoreAndroidLifecycleDetailScroll(detailScrollSnapshot)")
@@ -1135,7 +1137,7 @@ if (!bundledMobileJs.includes("mobileMovingMarkerPausedAt: 0")
     || !bundledMobileJs.includes("mobileMovingMarkerPausedDurationMs: 0")
     || !bundledMobileJs.includes("function stopMobileMovingFeatureAnimation(now = performance.now())")
     || !bundledMobileJs.includes("window.clearTimeout(state.mobileMovingMarkerTimer)")
-    || !bundledMobileJs.includes("const interval = nativeMapBridgeAvailable() ? MOBILE_NATIVE_MOVING_MARKER_INTERVAL_MS : MOBILE_MOVING_MARKER_INTERVAL_MS")
+    || !bundledMobileJs.includes("const interval = nativeMapBridgeAvailable() ? mobileNativeMovingMarkerIntervalMs() : MOBILE_MOVING_MARKER_INTERVAL_MS")
     || !bundledMobileJs.includes("state.mobileMovingMarkerTimer = window.setTimeout(tick, interval)")
     || bundledMobileJs.includes("window.requestAnimationFrame(tick)")
     || !bundledMobileJs.includes("state.mobileMovingMarkerPausedDurationMs += Math.max(0, now - pausedAt)")
@@ -1196,9 +1198,22 @@ const openSiteImplementation = openSiteStart >= 0 && openSiteEnd > openSiteStart
 if (!openSiteImplementation
     || openSiteImplementation.includes("renderList();")
     || !openSiteImplementation.includes("syncNearbySelectedCard(slug);")
-    || !openSiteImplementation.includes("await Promise.all([detailPromise, timelinePromise, sourceListPromise])")
+    || !openSiteImplementation.includes("site = await detailPromise;")
+    || !openSiteImplementation.includes("void timelinePromise.then(() =>")
+    || !openSiteImplementation.includes("void sourceListPromise.then(sourceList =>")
     || !openSiteImplementation.includes("void Promise.all([\n          refreshRemoteSiteVisitsForProfileSite")) {
   throw new Error("Bundled Android site opening must avoid feed rebuilds and run detail work concurrently without blocking on contributor refreshes.");
+}
+if (!bundledMobileJs.includes("async function refreshDiscussionSourceData(sourceType, item, options = {})")
+    || !bundledMobileJs.includes("const DISCUSSION_SOURCE_REFRESH_TTL_MS = 45000;")
+    || !openSiteImplementation.includes('refreshDiscussionSourceData("site", site)')
+    || openSiteImplementation.includes("refreshCommentsNow({ rerender: false })")) {
+  throw new Error("Android listing taps must refresh only the open discussion instead of refetching all public comments and plant observations.");
+}
+if (!source.includes("body.mobile-detail-open .mobile-view-tabs,body.mobile-detail-open .mobile-timeline,body.mobile-detail-open .list-panel{visibility:hidden!important;pointer-events:none!important;}")
+    || !source.includes("body.native-android-app.mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header>.search-autocomplete{display:block!important;}")
+    || source.includes("body.mobile-detail-open .app{grid-template-rows:auto minmax(0,1fr) 0 0!important;}")) {
+  throw new Error("Android detail panels must preserve the map grid rectangle instead of resizing it during a site tap.");
 }
 for (const [label, document] of [
   ["bundled fallback", bundledApp]

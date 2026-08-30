@@ -108,7 +108,10 @@ final class NativeMapController {
 
     private static final String LOG_TAG = "OnThisSiteNativeMap";
     private static final int MAX_STATE_BYTES = 12 * 1024 * 1024;
-    private static final long MOVING_FEATURE_MIN_UPDATE_MS = 64L;
+    // The hosted runtime sends a compact moving-feature source. Close zooms
+    // use a 24 ms cadence so biography artwork glides rather than stepping;
+    // retain a small guard here to coalesce accidental duplicate bridge calls.
+    private static final long MOVING_FEATURE_MIN_UPDATE_MS = 20L;
     private static final long MAP_TAP_DISPATCH_DELAY_MS = 300L;
     private static final String EMPTY_FEATURE_COLLECTION = "{\"type\":\"FeatureCollection\",\"features\":[]}";
     private static final String ISLAND_SOURCE_ID = "nli-island";
@@ -238,6 +241,10 @@ final class NativeMapController {
     private String currentStateJson;
     private String movingFeaturesJson = EMPTY_FEATURE_COLLECTION;
     private long lastMovingFeatureApplyAt;
+    private long movingFeatureDebugWindowStartedAt;
+    private long movingFeatureDebugLastApplyAt;
+    private long movingFeatureDebugMaxGapMs;
+    private int movingFeatureDebugApplyCount;
     private String lastBlockedTouchRegionsJson = "";
     private float lastBlockedTouchScaleX = Float.NaN;
     private float lastBlockedTouchScaleY = Float.NaN;
@@ -599,6 +606,111 @@ final class NativeMapController {
             }
         }
         return true;
+    }
+
+    boolean runGestureDiagnostic(String gestureName) {
+        if (!BuildConfig.DEBUG || map == null || container.getVisibility() != View.VISIBLE || !styleReady) return false;
+        String gesture = String.valueOf(gestureName).toLowerCase(Locale.ROOT);
+        if (!"tilt".equals(gesture) && !"rotate".equals(gesture)) return false;
+        float usableWidth = Math.max(dp(240), viewportRight - viewportLeft);
+        float usableHeight = Math.max(dp(280), viewportInteractiveBottom - viewportTop);
+        float centerX = viewportLeft + usableWidth * 0.5f;
+        float centerY = viewportTop + usableHeight * 0.56f;
+        float radius = Math.min(usableWidth * 0.22f, dp(120));
+        float travel = Math.min(usableHeight * 0.28f, dp(190));
+        long downTime = SystemClock.uptimeMillis();
+        CameraPosition before = map.getCameraPosition();
+
+        float firstX = centerX - radius;
+        float firstY = centerY;
+        dispatchSyntheticGestureEvent(downTime, downTime, MotionEvent.ACTION_DOWN, new float[][] {{ firstX, firstY }});
+        dispatchSyntheticGestureEvent(
+            downTime,
+            downTime + 16L,
+            MotionEvent.ACTION_POINTER_DOWN | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+            new float[][] {{ firstX, firstY }, { centerX + radius, centerY }}
+        );
+        float[][] finalPoints = null;
+        for (int step = 1; step <= 14; step++) {
+            float progress = step / 14f;
+            if ("tilt".equals(gesture)) {
+                float y = centerY - travel * progress;
+                finalPoints = new float[][] {{ centerX - radius, y }, { centerX + radius, y }};
+            } else {
+                double angle = Math.toRadians(38.0 * progress);
+                float dx = (float) (Math.cos(angle) * radius);
+                float dy = (float) (Math.sin(angle) * radius);
+                finalPoints = new float[][] {{ centerX - dx, centerY - dy }, { centerX + dx, centerY + dy }};
+            }
+            dispatchSyntheticGestureEvent(
+                downTime,
+                downTime + 16L + step * 18L,
+                MotionEvent.ACTION_MOVE,
+                finalPoints
+            );
+        }
+        if (finalPoints == null) return false;
+        long endTime = downTime + 300L;
+        dispatchSyntheticGestureEvent(
+            downTime,
+            endTime,
+            MotionEvent.ACTION_POINTER_UP | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+            finalPoints
+        );
+        dispatchSyntheticGestureEvent(
+            downTime,
+            endTime + 16L,
+            MotionEvent.ACTION_UP,
+            new float[][] {{ finalPoints[0][0], finalPoints[0][1] }}
+        );
+        mapView.postDelayed(() -> {
+            CameraPosition after = map == null ? null : map.getCameraPosition();
+            Log.d(LOG_TAG, "Synthetic " + gesture + " gesture: before=" + cameraPoseSummary(before)
+                + " after=" + cameraPoseSummary(after));
+        }, 500L);
+        return true;
+    }
+
+    private void dispatchSyntheticGestureEvent(long downTime, long eventTime, int action, float[][] points) {
+        int count = points == null ? 0 : points.length;
+        if (count < 1) return;
+        MotionEvent.PointerProperties[] properties = new MotionEvent.PointerProperties[count];
+        MotionEvent.PointerCoords[] coordinates = new MotionEvent.PointerCoords[count];
+        for (int index = 0; index < count; index++) {
+            MotionEvent.PointerProperties pointer = new MotionEvent.PointerProperties();
+            pointer.id = index;
+            pointer.toolType = MotionEvent.TOOL_TYPE_FINGER;
+            properties[index] = pointer;
+            MotionEvent.PointerCoords coordinate = new MotionEvent.PointerCoords();
+            coordinate.x = points[index][0];
+            coordinate.y = points[index][1];
+            coordinate.pressure = 1f;
+            coordinate.size = 1f;
+            coordinates[index] = coordinate;
+        }
+        MotionEvent event = MotionEvent.obtain(
+            downTime,
+            eventTime,
+            action,
+            count,
+            properties,
+            coordinates,
+            0,
+            0,
+            1f,
+            1f,
+            0,
+            0,
+            android.view.InputDevice.SOURCE_TOUCHSCREEN,
+            0
+        );
+        routeTouchEvent(event);
+        event.recycle();
+    }
+
+    private String cameraPoseSummary(CameraPosition position) {
+        if (position == null) return "none";
+        return String.format(Locale.US, "z%.2f/b%.2f/t%.2f", position.zoom, position.bearing, position.tilt);
     }
 
     private void capturePendingMovingFeature(PointF screenPoint) {
@@ -1330,7 +1442,49 @@ final class NativeMapController {
         if (source != null) {
             source.setGeoJson(collection);
             lastMovingFeatureApplyAt = SystemClock.uptimeMillis();
+            recordMovingFeatureDebugSample(collection, lastMovingFeatureApplyAt);
         }
+    }
+
+    private void recordMovingFeatureDebugSample(FeatureCollection collection, long now) {
+        if (!BuildConfig.DEBUG) return;
+        if (movingFeatureDebugWindowStartedAt <= 0L) movingFeatureDebugWindowStartedAt = now;
+        if (movingFeatureDebugLastApplyAt > 0L) {
+            movingFeatureDebugMaxGapMs = Math.max(movingFeatureDebugMaxGapMs, now - movingFeatureDebugLastApplyAt);
+        }
+        movingFeatureDebugLastApplyAt = now;
+        movingFeatureDebugApplyCount += 1;
+        long windowMs = now - movingFeatureDebugWindowStartedAt;
+        if (windowMs < 1000L) return;
+
+        String sample = "none";
+        try {
+            List<Feature> features = collection.features();
+            if (features != null) {
+                for (Feature feature : features) {
+                    if (!"biography".equals(feature.getStringProperty("moving_kind")) || !(feature.geometry() instanceof Point)) continue;
+                    Point point = (Point) feature.geometry();
+                    sample = String.format(Locale.US, "%.7f,%.7f", point.longitude(), point.latitude());
+                    break;
+                }
+            }
+        } catch (Exception ignored) {}
+        double zoom = map == null || map.getCameraPosition() == null ? Double.NaN : map.getCameraPosition().zoom;
+        double averageGapMs = movingFeatureDebugApplyCount <= 1
+            ? windowMs
+            : (double) windowMs / (double) (movingFeatureDebugApplyCount - 1);
+        Log.d(LOG_TAG, String.format(
+            Locale.US,
+            "Moving feature cadence: zoom=%.2f updates=%d avgGapMs=%.1f maxGapMs=%d sample=%s",
+            zoom,
+            movingFeatureDebugApplyCount,
+            averageGapMs,
+            movingFeatureDebugMaxGapMs,
+            sample
+        ));
+        movingFeatureDebugWindowStartedAt = now;
+        movingFeatureDebugApplyCount = 0;
+        movingFeatureDebugMaxGapMs = 0L;
     }
 
     private void setTerritorySource(Style style, JSONObject collection) throws Exception {

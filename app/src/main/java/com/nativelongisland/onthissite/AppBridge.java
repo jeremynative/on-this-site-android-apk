@@ -110,6 +110,24 @@ class AppBridge {
     }
 
     @JavascriptInterface
+    public boolean runNativeMapGestureDiagnostic(String token, String gestureName) {
+        if (!BuildConfig.DEBUG || !activity.validBridgeToken(token)) return false;
+        if (Looper.myLooper() == Looper.getMainLooper()) return activity.runNativeMapGestureDiagnostic(gestureName);
+        AtomicBoolean completed = new AtomicBoolean(false);
+        CountDownLatch latch = new CountDownLatch(1);
+        activity.runOnUiThread(() -> {
+            completed.set(activity.runNativeMapGestureDiagnostic(gestureName));
+            latch.countDown();
+        });
+        try {
+            latch.await(2, TimeUnit.SECONDS);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+        }
+        return completed.get();
+    }
+
+    @JavascriptInterface
     public float getSafeInsetTop() {
         return activity.safeInsetTopCss();
     }
