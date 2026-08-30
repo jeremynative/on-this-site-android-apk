@@ -226,6 +226,147 @@
     ];
     const BIOGRAPHY_WIKI_SLUGS = new Set((KNOWLEDGEBASE_CATEGORIES.find(category => category.label === "Biography")?.slugs || []));
     const BIOGRAPHY_PLACE_PATHS = {
+      "mary-emma-cuffee-bunn": {
+        title: "Mary Emma Cuffee Bunn life journey",
+        mapLabel: "Mary Emma Cuffee Bunn",
+        note: "Dated, source-supported places from the biography; the line is a chronology, not a precise travel route.",
+        places: [
+          { label: "July 6, 1847 — Born at Shinnecock", place: "Shinnecock Indian Reservation", coordinates: [-72.4301332, 40.8719521], reason: "Her birth and family life are documented at Shinnecock." },
+          { label: "December 30, 1876 — Circassian loss", place: "Mecox Bay / Bridgehampton shore", coordinates: [-72.31108768226193, 40.89655598343291], reason: "Her husband David Waukus Bunn died in the Circassian disaster." },
+          { label: "1915 — Shinnecock powwow photograph", place: "Shinnecock Powwow Grounds", coordinates: [-72.4323487, 40.8742772], reason: "She appeared in a documented 1915 powwow photograph." },
+          { label: "December 7, 1937 — Dies at age ninety", place: "Shinnecock Indian Reservation", coordinates: [-72.4301332, 40.8719521], reason: "Her later life remained rooted in the Shinnecock community." }
+        ]
+      },
+      "wickham-cuffee": {
+        title: "Wickham Cuffee life journey",
+        mapLabel: "Wickham Cuffee",
+        note: "Dated, source-supported places from the biography; the line is a chronology, not a precise travel route.",
+        places: [
+          { label: "1826 — Born at Shinnecock", place: "Shinnecock Indian Reservation", coordinates: [-72.4301332, 40.8719521], reason: "His birth and community life are documented at Shinnecock." },
+          { label: "April 21, 1859 — Trustee acknowledgment", place: "Southampton Town Hall", coordinates: [-72.3852129, 40.8873658], reason: "As a trustee he acknowledged a deed associated with the loss of Shinnecock Hills lease rights." },
+          { label: "1902 — Shares architectural knowledge", place: "Shinnecock Indian Reservation", coordinates: [-72.4301332, 40.8719521], reason: "He explained older Shinnecock dwelling construction and made a model." },
+          { label: "1909 — State health report photograph", place: "Shinnecock Indian Reservation", coordinates: [-72.4301332, 40.8719521], reason: "A state health officer’s report included his photograph." }
+        ]
+      },
+      "princess-sun-tama-ann-harding-murdock": {
+        title: "Princess Sun Tama life journey",
+        mapLabel: "Princess Sun Tama",
+        note: "Dated, source-supported public places from the biography; the line is a chronology, not a precise travel route.",
+        places: [
+          { label: "May 31, 1958 — Elected Matinecock spokesperson", place: "Zion Episcopal Church, Douglaston", coordinates: [-73.74361, 40.76639], reason: "She helped organize a community gathering and was elected spokesperson." },
+          { label: "January 25, 1969 — Land-rights letter", place: "Huntington Town Hall", coordinates: [-73.426, 40.868], reason: "She and the Matinecock council sent Huntington officials a letter asserting continuing land rights." },
+          { label: "March 1969 — Town Hall delegation", place: "Huntington Town Hall", coordinates: [-73.426, 40.868], reason: "She led a delegation demanding recognition, an accounting, and land for community use." }
+        ]
+      },
+      "chief-robert-pharaoh": {
+        title: "Robert Pharaoh life journey",
+        mapLabel: "Robert Pharaoh",
+        note: "Dated, source-supported public or broad-location places from the biography; the line is a chronology, not a precise travel route.",
+        places: [
+          { label: "1989 — North Neck burial-ground rally", place: "North Neck, Montauk (broad location)", coordinates: [-71.948, 41.061], reason: "He joined a public coalition defending a threatened Montaukett burial ground." },
+          { label: "May 3, 1993 — Community leadership meeting", place: "Riverhead (broad public location)", coordinates: [-72.662, 40.917], reason: "He advanced a hereditary leadership claim during a documented community governance debate." },
+          { label: "May 1993 — Cultural gathering", place: "Montauk County Park / Indian Fields", coordinates: [-71.9, 41.073], reason: "He hosted a public gathering centered on cultural education, history, and traditional foods." }
+        ]
+      },
+      "donald-treadwell-lone-otter": {
+        title: "Donald Treadwell community history",
+        mapLabel: "Donald Treadwell (Lone Otter)",
+        note: "The biography’s source-supported activity is shown at one broad public community location, not as a private residence or precise route.",
+        places: [
+          { label: "1981–1994 — Writing, leadership, and public-health work", place: "Poospatuck / Unkechaug Reservation (broad location)", coordinates: [-72.83454, 40.78913], reason: "His documented writing, leadership, and clean-water work were centered in the Unkechaug community; the location is intentionally broad." }
+        ]
+      },
+      "anthony-beaman-chief-running-bull": {
+        title: "Anthony Beaman life chronology",
+        mapLabel: "Anthony Beaman (Chief Running Bull)",
+        note: "Dated, source-supported public or broad-location places from the biography; the line is a chronology, not a precise travel route.",
+        places: [
+          { label: "1914 — Shinnecock reservation pageant", place: "Shinnecock Indian Reservation (broad public location)", coordinates: [-72.4301332, 40.8719521], reason: "A ceremony chronology names Running Bull, Anthony Beaman, the Medicine Man, among the people present." },
+          { label: "circa 1934 — Conscience Point photograph", place: "Conscience Point, North Sea", coordinates: [-72.41532, 40.94083], reason: "A group photograph caption identifies him as Chief Running Bull and a tribal medicine man." },
+          { label: "into the 1940s — Medicine practice remembered", place: "Shinnecock Indian Reservation (broad public location)", coordinates: [-72.4301332, 40.8719521], reason: "Community informants remembered Anthony “Did” Beaman as one of two medicine men who practiced into the 1940s." }
+        ]
+      },
+      "david-fowler-montaukett": {
+        title: "David Fowler life chronology",
+        mapLabel: "David Fowler (Montaukett)",
+        note: "Dated, source-supported broad locations from Fowler’s life; the line connects a chronology and is not a precise travel route.",
+        places: [
+          { label: "1735–1759 — Montaukett origins", place: "Montaukett homeland, Montauk (broad location)", coordinates: [-71.944, 41.036], reason: "Sources identify Fowler as Montaukett and place his birth and early life at Montauk." },
+          { label: "1759–1761 — Moor’s Indian Charity School", place: "Lebanon, Connecticut", coordinates: [-72.212, 41.636], reason: "He entered Eleazar Wheelock’s school on April 12, 1759." },
+          { label: "1761–1762 — Work in Oneida country", place: "Oneida country, central New York (broad regional location)", coordinates: [-75.65, 43.10], reason: "He accompanied Samson Occom and later recruited Native students in the region." },
+          { label: "1765–1767 — Canajoharie school and relief journey", place: "Canajoharie, New York (broad public location)", coordinates: [-74.571, 42.905], reason: "He taught at Canajoharie and undertook a documented 400-mile relief journey during the 1767 famine." },
+          { label: "1767–1773 — Return to Montauk", place: "Montaukett homeland, Montauk (broad location)", coordinates: [-71.944, 41.036], reason: "Fowler returned with his family, taught at Montauk, and later helped organize the Brothertown plan." },
+          { label: "1775–1807 — Brothertown community leadership", place: "Brothertown, central New York (broad historical location)", coordinates: [-75.62, 42.98], reason: "He led an early Montaukett group to Brothertown and later served in community political leadership." }
+        ]
+      },
+      "george-lewis-fowler": {
+        title: "George Lewis Fowler life chronology",
+        mapLabel: "George Lewis Fowler",
+        note: "Dated, source-supported public or broad locations from Fowler’s life; the connecting line is a chronology, not a reconstruction of his exact route.",
+        places: [
+          { label: "circa 1858–1885 — Indian Fields", place: "Indian Fields / Montaukett homeland, Montauk (broad location)", coordinates: [-71.9, 41.073], reason: "Fowler was born and raised within the Montaukett community at Indian Fields." },
+          { label: "1885–1931 — Fowler House in Freetown", place: "Fowler House, East Hampton", coordinates: [-72.17687, 40.97798], reason: "After the 1885 Benson agreement, George and Sarah Melissa Horton Fowler made their home in Freetown; his 1931 will sought to keep the property in the family." }
+        ]
+      },
+      "sasarataicko-sassakataka": {
+        title: "Sasarataicko record chronology",
+        mapLabel: "Sasarataicko (Sassakataka)",
+        note: "Two source-supported public or broad locations from the surviving record; the line is a chronology, not a reconstructed route, and the later identity follows Gaynell Stone’s published interpretation.",
+        places: [
+          { label: "1659 — Cataconacke boundaries", place: "Cataconacke / Old Field, Setauket area", coordinates: [-73.11862, 40.97691], reason: "Strong calls Sasarataicko one of Wyandanch’s advisors, and a 1667 deposition records Sakkatakka and Chekanno marking the tract." },
+          { label: "1702–1703 — Montaukett land agreements", place: "Montaukett homeland, Montauk (broad location)", coordinates: [-71.944, 41.036], reason: "Stone connects the earlier advisor with Sassakatakow or Sassakatoko, named in later records as a Montaukett sachem; the location is intentionally broad." }
+        ]
+      },
+      "charles-sumner-bunn": {
+        title: "Charles Sumner Bunn public chronology",
+        mapLabel: "Charles Sumner Bunn",
+        note: "Source-supported public or broad locations from Bunn’s work and public service; the connecting line orders records by date and does not reconstruct his exact travel route.",
+        places: [
+          { label: "1900 — Trustee service at Shinnecock", place: "Shinnecock Indian Reservation / Art Village vicinity", coordinates: [-72.43013, 40.87195], reason: "Bunn and fellow trustees renewed an agreement governing art students’ access to paint on the reservation and use the Sailboat Dock." },
+          { label: "circa 1920 — Decoy display in New York", place: "National Sportsman’s Show in New York City", coordinates: [-73.9879655, 40.742203], reason: "A photograph shows Bunn with his decoy display, and family accounts describe him selling his locally carved birds at the annual show." },
+          { label: "April 2, 1935 — Voting-rights motion", place: "Southampton Town Hall", coordinates: [-72.3852129, 40.8873658], reason: "Attending as a tribal member, Bunn moved that state legislation be requested to allow Shinnecock women to vote at the annual meeting." },
+          { label: "1952 — Reservation-boundary testimony", place: "Suffolk County Supreme Court, Riverhead", coordinates: [-72.666166, 40.9186928], reason: "At age eighty-six, Bunn shared community traditions in the King reservation-boundary litigation." }
+        ]
+      },
+      "alice-bunn-martinez": {
+        title: "Alice Bunn Martinez public chronology",
+        mapLabel: "Alice Bunn Martinez",
+        note: "Source-supported broad public places from Alice's record; the line orders records by date and does not reconstruct her private or exact travel route.",
+        places: [
+          { label: "January 30, 1901 — Born at Shinnecock", place: "Shinnecock Indian Reservation (broad public context)", coordinates: [-72.43013, 40.87195], reason: "The ancestor registry gives Alice's birth date, and Stone identifies her as born on the reservation." },
+          { label: "circa 1934 — Conscience Point record", place: "Conscience Point, North Sea", coordinates: [-72.41532, 40.94083], reason: "Stone's caption names Alice and Charles Martinez in a community photograph; it does not identify a pageant or performance." },
+          { label: "1939 — Roadside trading post", place: "Shinnecock / Southampton area (broad public context)", coordinates: [-72.43013, 40.87195], reason: "Alice opened what Stone describes as Long Island's first Indian trading post, beginning with a roadside teepee." },
+          { label: "1953 — Permanent trading post", place: "Shinnecock / Southampton area (broad public context)", coordinates: [-72.43013, 40.87195], reason: "After returning from Oklahoma, Alice established the permanent post for Martinez family craftwork." }
+        ]
+      },
+      "charles-martinez": {
+        title: "Charles Martinez documented places",
+        mapLabel: "Charles Martinez",
+        note: "Source-supported broad public places from Charles's record; the line is a source guide, not a private or exact route, and the employment years remain unknown.",
+        places: [
+          { label: "Early twentieth century — National Golf Club work", place: "National Golf Links of America, Southampton", coordinates: [-72.4536366, 40.9136233], reason: "Stone records twenty-three years as a foreman, early-tractor operation, and mechanical expertise but does not provide exact employment years." },
+          { label: "circa 1934 — Conscience Point record", place: "Conscience Point, North Sea", coordinates: [-72.41532, 40.94083], reason: "Stone's caption names Charles and Alice Bunn Martinez at Conscience Point; it does not identify a pageant or performance." }
+        ]
+      },
+      "eliza-fowler-beaman": {
+        title: "Eliza Fowler Beaman public chronology",
+        mapLabel: "Eliza Fowler Beaman",
+        note: "Source-supported public or broad locations from Eliza Fowler Beaman’s documented public life; the connecting line orders records by date and does not reconstruct her exact travel route.",
+        places: [
+          { label: "1914 — Shinnecock pageant and teaching record", place: "Shinnecock Indian Reservation (broad public context)", coordinates: [-72.43013, 40.87195], reason: "The pageant record names Elizabeth Fowler Beaman among the participants and identifies her as a teacher in the Southampton School." },
+          { label: "September 24, 1944 — Springy Banks gathering", place: "Springy Banks Pow Wow Grounds / Three Mile Harbor", coordinates: [-72.1885914836176, 41.004623009316305], reason: "Stone’s Montauk history places Eliza and other Native participants at the documented intertribal gathering." }
+        ]
+      },
+      "elliott-alphonso-kellis": {
+        title: "Elliott Alphonso Kellis public chronology",
+        mapLabel: "Elliott Alphonso Kellis",
+        note: "Source-supported public or broad places in Kellis's record; the connecting line orders records by date and does not reconstruct his exact travel route or private residence.",
+        places: [
+          { label: "April 7, 1908 — First trustee election", place: "Shinnecock Indian Reservation (broad public context)", coordinates: [-72.43013, 40.87195], reason: "Election records identify this as Elliott Kellis's first election as a Shinnecock trustee." },
+          { label: "circa 1934 — Conscience Point photograph", place: "Conscience Point, North Sea (public marker)", coordinates: [-72.41532, 40.94083], reason: "Stone's photograph caption names Elliot Kellis among the Shinnecock participants at Conscience Point." },
+          { label: "1938 — Reservation powwow", place: "Shinnecock Powwow Grounds", coordinates: [-72.42467, 40.86874], reason: "Stone and Martine associate Elliot Kellis and Zella de Milhau with organizing the documented gathering." }
+        ]
+      },
       "wyandanch": {
         title: "Wyandanch associated places",
         note: "Broad associated places from the story; not a precise travel route.",
@@ -7141,8 +7282,13 @@
           }
           if (kind === "wiki") {
             const slug = String(key || "");
-            if (!slug || !state.wikiBySlug.has(slug)) return false;
-            openWikiArticle(slug, { focus: false, mapCenter: selectedMapCenter });
+            if (!slug) return false;
+            const movingArticle = (state.nativeMovingBiographyItems || [])
+              .find(item => item?.slug === slug)?.article;
+            openWikiArticle(state.wikiBySlug.get(slug) || movingArticle || slug, {
+              focus: false,
+              mapCenter: selectedMapCenter
+            });
             return true;
           }
           if (kind === "event") {
@@ -7564,8 +7710,10 @@
 
     function openMapFeature(feature) {
       const wikiSlug = feature?.properties?.wiki_slug;
-      if (wikiSlug && state.wikiBySlug.has(wikiSlug)) {
-        openWikiArticle(state.wikiBySlug.get(wikiSlug), {
+      if (wikiSlug) {
+        const movingArticle = (state.nativeMovingBiographyItems || [])
+          .find(item => item?.slug === wikiSlug)?.article;
+        openWikiArticle(state.wikiBySlug.get(wikiSlug) || movingArticle || wikiSlug, {
           focus: false,
           timelineEventId: feature?.properties?.event_id || feature?.properties?.eventId || ""
         });
@@ -12232,12 +12380,12 @@
       return { coordinates: first, direction: "right", progress: 0, opacity: Math.min(1, elapsed / MOBILE_BIOGRAPHY_MARKER_FADE_MS), phase: "fade-in" };
     }
 
-    function mobileBiographyZoomMotionScale() {
-      const zoom = Number(state.map?.getZoom?.());
-      if (!Number.isFinite(zoom)) return 0.15;
-      if (zoom <= 8) return 0.15;
-      if (zoom >= 11.5) return 0.65;
-      return 0.15 + ((zoom - 8) / 3.5) * 0.5;
+    function mobileBiographyZoomMotionScale(zoomValue = Number(state.map?.getZoom?.())) {
+      const zoom = Number(zoomValue);
+      if (!Number.isFinite(zoom)) return 0.12;
+      if (zoom <= 8) return 0.12;
+      if (zoom <= 11.5) return 0.12 + ((zoom - 8) / 3.5) * 0.1;
+      return Math.max(0.08, 0.22 / Math.pow(2, (zoom - 11.5) * 0.5));
     }
 
     function mobileNativeMovingMarkerIntervalMs() {

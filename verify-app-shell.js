@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260830-content-performance-r198";
+const expectedBuild = "20260830-biography-pacing-taps-r199";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -304,12 +304,12 @@ if (!bundledMobileJs.includes("function mobileMovingBiographyLoop")
     || !bundledMobileJs.includes("const MOBILE_NATIVE_MOVING_MARKER_OVERVIEW_INTERVAL_MS = 56")
     || !bundledMobileJs.includes("const MOBILE_NATIVE_MOVING_MARKER_CLOSE_INTERVAL_MS = 24")
     || !bundledMobileJs.includes("const MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS = 80")
-    || !bundledMobileJs.includes("function mobileBiographyZoomMotionScale()")
+    || !bundledMobileJs.includes("function mobileBiographyZoomMotionScale(zoomValue = Number(state.map?.getZoom?.()))")
     || !bundledMobileJs.includes("function mobileNativeMovingMarkerIntervalMs()")
     || !bundledMobileJs.includes("function mobileBiographyMotionFor(item, now = performance.now())")
     || !bundledMobileJs.includes("const motion = mobileBiographyMotionFor(item, now)")
-    || !bundledMobileJs.includes("if (zoom <= 8) return 0.15")
-    || !bundledMobileJs.includes("if (zoom >= 11.5) return 0.65")
+    || !bundledMobileJs.includes("if (zoom <= 8) return 0.12")
+    || !bundledMobileJs.includes("return Math.max(0.08, 0.22 / Math.pow(2, (zoom - 11.5) * 0.5))")
     || !bundledMobileJs.includes("Math.min(rawDelta, MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS) * motionScale")
     || !bundledMobileJs.includes('phase: "fade-out"')
     || !bundledMobileJs.includes('phase: "reset"')
@@ -1164,7 +1164,8 @@ if (!bundledMobileJs.includes("const baseSignature =")
   throw new Error("APK map state must separate stable map layers from selected-site, user-location, and community updates.");
 }
 if (!bundledMobileJs.includes("openFeature(kind, key, mapCenter = null)")
-    || !bundledMobileJs.includes("openWikiArticle(slug, { focus: false, mapCenter: selectedMapCenter })")
+    || !bundledMobileJs.includes("openWikiArticle(state.wikiBySlug.get(slug) || movingArticle || slug, {")
+    || !bundledMobileJs.includes("mapCenter: selectedMapCenter")
     || !bundledMobileJs.includes("? { focus: false, mapCenter: selectedMapCenter }")) {
   throw new Error("Native APK map taps must preserve moving-feature coordinates and center selected content within the visible panel-aware map area.");
 }
@@ -2254,6 +2255,19 @@ if (!bundledMobileJs.includes('ttl: 60000, fresh: false, anonymous: true')) {
 }
 if (!bundledMobileJs.includes('toFixed(3)},${Number(coordinates[1]).toFixed(3)')) {
   throw new Error("Bundled Android biography motion must reuse shoreline state at a practical map-cell scale.");
+}
+for (const [label, runtime] of [["modular", bundledMobileJs], ["full offline", bundledApp]]) {
+  if (!/function\s+mobileBiographyZoomMotionScale\(zoomValue[\s\S]*?return\s+0\.12[\s\S]*?Math\.max\(0\.08,\s*0\.22\s*\/\s*Math\.pow/.test(runtime)) {
+    throw new Error(`Android ${label} biography routes must decelerate at close zoom without lowering native frame cadence.`);
+  }
+  if (!runtime.includes("const movingArticle = (state.nativeMovingBiographyItems || [])")
+      || !runtime.includes("openWikiArticle(state.wikiBySlug.get(wikiSlug) || movingArticle || wikiSlug, {")
+      || !runtime.includes("openWikiArticle(state.wikiBySlug.get(slug) || movingArticle || slug, {")) {
+    throw new Error(`Android ${label} moving biographies must open before the deferred knowledge-base index is ready.`);
+  }
+  if (!runtime.includes('"elliott-alphonso-kellis": {')) {
+    throw new Error(`Android ${label} runtime must retain the Elliott Alphonso Kellis moving biography route.`);
+  }
 }
 const bundledDirectusClient = fs.readFileSync(bundledSharedDirectusClientPath, "utf8");
 if (!bundledDirectusClient.includes('requestOptions.anonymous === true ? "" : tokenProvider()')) {
