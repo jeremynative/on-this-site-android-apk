@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260830-biography-pacing-taps-r199";
+const expectedBuild = "20260830-indigenous-biography-homelands-r200";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -87,6 +87,18 @@ const mapLibreJs = fs.readFileSync(mapLibreJsPath, "utf8");
 const mapLibreCss = fs.readFileSync(mapLibreCssPath, "utf8");
 const mapLibreLicense = fs.readFileSync(mapLibreLicensePath, "utf8");
 const bundledLiveRuntime = `${bundledLiveApp}\n${bundledMobileJs}\n${bundledMobileCss}`;
+
+if (!bundledMobileJs.includes('{ label: "Unkechaug homeland", place: "Poospatuck Reservation", coordinates: [-72.83454, 40.78913]')
+    || !bundledMobileJs.includes('"chief-harry-wallace-of-the-unkechaug"')
+    || !bundledMobileJs.includes('"ninigret-eastern-niantic-sachem"')
+    || !bundledMobileJs.includes('"samson-occom"')
+    || !bundledMobileJs.includes('"cockenoe"')
+    || !bundledMobileJs.includes("function mobileBiographyUniqueRoute(route = [])")
+    || !bundledMobileJs.includes("function mobileBiographyDisplayOffsets(items = [])")
+    || !bundledMobileJs.includes("function mobileBiographyDisplayCoordinates(coordinates, offset = [0, 0])")
+    || !bundledMobileJs.includes("mobileBiographyDisplayCoordinates(motion.coordinates, item.displayOffset)")) {
+  throw new Error("Bundled Android runtime must map Indigenous biographies to their homelands and space shared-location icons.");
+}
 
 if (!bundledMobileJs.includes("function bindPlantCameraZoom(overlay, video, track)")
     || !bundledMobileJs.includes("applyConstraints({ advanced: [{ zoom: value }] })")

@@ -107,6 +107,12 @@
     const MOBILE_BIOGRAPHY_MARKER_STAGGER_MS = 85;
     const MOBILE_BIOGRAPHY_MARKER_FADE_MS = 1600;
     const MOBILE_BIOGRAPHY_MARKER_RESET_MS = 650;
+    const MOBILE_BIOGRAPHY_LOCAL_WANDER_RADIUS_DEG = 0.00115;
+    const MOBILE_BIOGRAPHY_LOCAL_WANDER_POINT_COUNT = 4;
+    const MOBILE_BIOGRAPHY_CONTINUOUS_SLUGS = new Set([
+      "chief-harry-wallace-of-the-unkechaug",
+      "jeremy-dennis"
+    ]);
     const MOBILE_WHALE_ONE_WAY_MS = 900000;
     const MOBILE_WHALE_START_OFFSET_MS = MOBILE_WHALE_ONE_WAY_MS * 0.78;
     const MOBILE_WHALE_ROUTE = Object.freeze([
@@ -226,6 +232,50 @@
     ];
     const BIOGRAPHY_WIKI_SLUGS = new Set((KNOWLEDGEBASE_CATEGORIES.find(category => category.label === "Biography")?.slugs || []));
     const BIOGRAPHY_PLACE_PATHS = {
+      "jeremy-dennis": {
+        title: "Jeremy Dennis at Ma's House",
+        places: [{ coordinates: [-72.42747682588364, 40.867202882578056] }]
+      },
+      "chief-harry-wallace-of-the-unkechaug": {
+        title: "Chief Harry Wallace associated places",
+        places: [{ place: "Poospatuck Reservation", coordinates: [-72.83454, 40.78913] }]
+      },
+      "wuchikittawbut": {
+        title: "Wuchikittawbut associated places",
+        places: [{ place: "Montaukett homeland", coordinates: [-71.944, 41.036] }]
+      },
+      "betty-lewis-cromwell-shinnecock": {
+        title: "Betty Lewis Cromwell associated places",
+        places: [{ coordinates: [-72.432, 40.884] }]
+      },
+      "sylvester-pharoah": {
+        title: "Sylvester Pharoah associated places",
+        places: [{ place: "Montaukett homeland", coordinates: [-71.95, 41.036] }]
+      },
+      "mary-rebecca-bunn-aunt-becky": {
+        title: "Mary Rebecca Bunn associated places",
+        places: [{ place: "Shinnecock Reservation", coordinates: [-72.43013, 40.87195] }]
+      },
+      "peter-john-cuffee": {
+        title: "Peter John Cuffee associated places",
+        places: [{ coordinates: [-72.315, 40.937] }]
+      },
+      "ninigret-eastern-niantic-sachem": {
+        title: "Ninigret associated places",
+        places: [{ place: "Eastern Niantic homeland", coordinates: [-71.66, 41.38] }]
+      },
+      "paucamp": {
+        title: "Paucamp associated places",
+        places: [{ coordinates: [-72.6, 40.94] }]
+      },
+      "samson-occom": {
+        title: "Samson Occom associated places",
+        places: [{ place: "Mohegan homeland", coordinates: [-72.099, 41.478] }]
+      },
+      "cockenoe": {
+        title: "Cockenoe associated places",
+        places: [{ coordinates: [-72.185, 40.963] }]
+      },
       "mary-emma-cuffee-bunn": {
         title: "Mary Emma Cuffee Bunn life journey",
         mapLabel: "Mary Emma Cuffee Bunn",
@@ -689,6 +739,7 @@
         title: "Worison associated places",
         note: "Broad places connected with Worison in Unkechaug land and shore-whaling records.",
         places: [
+          { label: "Unkechaug homeland", place: "Poospatuck Reservation", coordinates: [-72.83454, 40.78913], reason: "Worison was Unkechaug; his mapped journey begins in the Unkechaug homeland at Poospatuck before following the surviving whaling and land records." },
           { label: "Winter 1676-1677 - shore-whaling contracts", place: "Southampton shore-whaling records", coordinates: [-72.389, 40.884], reason: "Worison signed early shore-whaling contracts with John Cooper for a share of the profits." },
           { label: "1680 - Watchogue Neck residence", place: "Watchogue Neck / East Moriches area", coordinates: [-72.789, 40.762], reason: "A land description places Warishone at a neck of land west of Watchogue and identifies him as Mahue's kinsman." }
         ]
@@ -12352,8 +12403,24 @@
       };
     }
 
-    function mobileMovingBiographyLoop(route = [], travelMs = MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS, offsetMs = 0, now = performance.now()) {
+    function mobileMovingBiographyLoop(route = [], travelMs = MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS, offsetMs = 0, now = performance.now(), options = {}) {
       const routeDuration = Math.max(1000, travelMs);
+      if (options.continuous === true) {
+        const cycle = Math.max(1000, routeDuration * 2);
+        const elapsed = (((now + offsetMs) % cycle) + cycle) % cycle;
+        const returning = elapsed > routeDuration;
+        const progress = returning ? 1 - ((elapsed - routeDuration) / routeDuration) : elapsed / routeDuration;
+        const coordinates = mobileMovingCoordinateAt(route, Math.max(0, Math.min(1, progress))) || route[0] || [FALLBACK_CENTER[0], FALLBACK_CENTER[1]];
+        const sampleProgress = Math.max(0, Math.min(1, progress + (returning ? -0.01 : 0.01)));
+        const sample = mobileMovingCoordinateAt(route, sampleProgress) || coordinates;
+        return {
+          coordinates,
+          direction: sample[0] >= coordinates[0] ? "right" : "left",
+          progress,
+          opacity: 1,
+          phase: "moving"
+        };
+      }
       const cycle = routeDuration + (MOBILE_BIOGRAPHY_MARKER_FADE_MS * 2) + MOBILE_BIOGRAPHY_MARKER_RESET_MS;
       let elapsed = (((now + offsetMs) % cycle) + cycle) % cycle;
       if (elapsed <= routeDuration) {
@@ -12402,8 +12469,11 @@
     function mobileBiographyMotionFor(item, now = performance.now()) {
       const route = item?.route || [];
       const routeDuration = Math.max(1000, Number(item?.duration) || MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS);
-      const cycleDuration = routeDuration + (MOBILE_BIOGRAPHY_MARKER_FADE_MS * 2) + MOBILE_BIOGRAPHY_MARKER_RESET_MS;
-      const signature = `${routeDuration}|${route.length}|${route[0]?.join(",") || ""}|${route[route.length - 1]?.join(",") || ""}`;
+      const continuous = item?.continuous === true;
+      const cycleDuration = continuous
+        ? routeDuration * 2
+        : routeDuration + (MOBILE_BIOGRAPHY_MARKER_FADE_MS * 2) + MOBILE_BIOGRAPHY_MARKER_RESET_MS;
+      const signature = `${continuous ? "continuous" : "reset"}|${routeDuration}|${route.length}|${route[0]?.join(",") || ""}|${route[route.length - 1]?.join(",") || ""}`;
       const slug = String(item?.slug || "");
       let controller = state.mobileBiographyMotionControllers.get(slug);
       if (!controller) {
@@ -12434,7 +12504,7 @@
         }
         controller.progress = controller.elapsedMs / cycleDuration;
       }
-      return mobileMovingBiographyLoop(route, routeDuration, 0, controller.elapsedMs);
+      return mobileMovingBiographyLoop(route, routeDuration, 0, controller.elapsedMs, { continuous });
     }
 
     function mobileMovingRouteDuration(route = []) {
@@ -12486,17 +12556,109 @@
       }
     }
 
+    function mobileBiographyStableHash(text = "") {
+      let hash = 0;
+      for (const character of String(text)) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0;
+      return Math.abs(hash);
+    }
+
+    function mobileBiographySegmentStaysOnSurface(start, end, startsOnLand, samples = 12) {
+      if (!Array.isArray(start) || !Array.isArray(end) || !state.landMaskData?.geometry) return false;
+      for (let index = 0; index <= samples; index += 1) {
+        const t = index / samples;
+        const point = [
+          start[0] + ((end[0] - start[0]) * t),
+          start[1] + ((end[1] - start[1]) * t)
+        ];
+        if (mobileMovingPointIsOnLand(point) !== startsOnLand) return false;
+      }
+      return true;
+    }
+
+    function mobileBiographyLocalWanderRoute(slug, route = [], path = {}) {
+      const validRoute = route.filter(coordinates => Array.isArray(coordinates) && coordinates.every(Number.isFinite));
+      if (path?.animate === false || validRoute.length !== 1 || !state.landMaskData?.geometry) return validRoute;
+      const origin = validRoute[0].slice(0, 2);
+      const startsOnLand = mobileMovingPointIsOnLand(origin);
+      const angleOffset = (mobileBiographyStableHash(`${slug}:local-wander`) % 360) * Math.PI / 180;
+      const localRoute = [origin];
+      for (let index = 0; index < 12 && localRoute.length < MOBILE_BIOGRAPHY_LOCAL_WANDER_POINT_COUNT; index += 1) {
+        const radius = MOBILE_BIOGRAPHY_LOCAL_WANDER_RADIUS_DEG * (1 - (Math.floor(index / 4) * 0.28));
+        const angle = angleOffset + ((Math.PI * 2 * (index % 4)) / 4);
+        const candidate = [origin[0] + (Math.cos(angle) * radius), origin[1] + (Math.sin(angle) * radius)];
+        const previous = localRoute[localRoute.length - 1];
+        if (mobileMovingPointIsOnLand(candidate) !== startsOnLand) continue;
+        if (!mobileBiographySegmentStaysOnSurface(previous, candidate, startsOnLand)) continue;
+        localRoute.push(candidate);
+      }
+      return localRoute.length >= 2 ? localRoute : validRoute;
+    }
+
+    function mobileBiographyUniqueRoute(route = []) {
+      const seen = new Set();
+      return route.filter(coordinates => {
+        if (!Array.isArray(coordinates) || !coordinates.every(Number.isFinite)) return false;
+        const key = `${Number(coordinates[0]).toFixed(5)},${Number(coordinates[1]).toFixed(5)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+
+    function mobileBiographyDisplayOffsets(items = []) {
+      const groups = new Map();
+      const offsets = new Map();
+      for (const item of items) {
+        const coordinates = item?.route?.[0] || [];
+        if (!coordinates.every(Number.isFinite)) continue;
+        const key = `${Number(coordinates[0]).toFixed(5)},${Number(coordinates[1]).toFixed(5)}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(item);
+      }
+      for (const group of groups.values()) {
+        if (group.length < 2) continue;
+        group.sort((a, b) => String(a.slug).localeCompare(String(b.slug)));
+        group.forEach((item, index) => {
+          const angle = group.length === 2 ? index * Math.PI : (-Math.PI / 2) + ((Math.PI * 2 * index) / group.length);
+          const radius = group.length === 2 ? 18 : 22;
+          offsets.set(item.slug, [Math.round(Math.cos(angle) * radius), Math.round(Math.sin(angle) * radius)]);
+        });
+      }
+      return offsets;
+    }
+
+    function mobileBiographyDisplayCoordinates(coordinates, offset = [0, 0]) {
+      const x = Number(offset?.[0]) || 0;
+      const y = Number(offset?.[1]) || 0;
+      if (!Array.isArray(coordinates) || (!x && !y) || !state.map?.project || !state.map?.unproject) return coordinates;
+      try {
+        const point = state.map.project(coordinates);
+        const projected = state.map.unproject([Number(point.x) + x, Number(point.y) + y]);
+        const lng = Number(projected?.lng);
+        const lat = Number(projected?.lat);
+        return Number.isFinite(lng) && Number.isFinite(lat) ? [lng, lat] : coordinates;
+      } catch {
+        return coordinates;
+      }
+    }
+
     function mobileMovingBiographyItems() {
-      return Object.keys(BIOGRAPHY_PLACE_PATHS)
+      const items = Object.keys(BIOGRAPHY_PLACE_PATHS)
         .map((slug, index) => {
           const article = state.wikiBySlug.get(slug) || { slug, title: BIOGRAPHY_PLACE_PATHS[slug]?.title || slug };
-          const path = mobileBiographyTimelineData(article, timelineEventsForSource("wiki", article.id, slug)) || mobileBiographyPathData(article);
+          const configuredPath = BIOGRAPHY_PLACE_PATHS[slug] || null;
+          const configuredPlaces = (configuredPath?.places || [])
+            .filter(place => Array.isArray(place?.coordinates) && place.coordinates.every(Number.isFinite));
+          const path = mobileBiographyTimelineData(article, timelineEventsForSource("wiki", article.id, slug))
+            || mobileBiographyPathData(article)
+            || (configuredPlaces.length ? { ...configuredPath, places: configuredPlaces } : null);
           // Source review can opt a visual guide out.
           if (path?.animate === false) return null;
-          if (!path?.places?.length || path.places.length < 2) return null;
-          const route = (path.routePlaces?.length ? path.routePlaces : path.places)
+          if (!path?.places?.length) return null;
+          const configuredRoute = mobileBiographyUniqueRoute((path.routePlaces?.length ? path.routePlaces : path.places)
             .map(place => Array.isArray(place) ? place : place?.coordinates)
-            .filter(coords => Array.isArray(coords) && coords.every(Number.isFinite));
+            .filter(coords => Array.isArray(coords) && coords.every(Number.isFinite)));
+          const route = mobileBiographyLocalWanderRoute(slug, configuredRoute, path);
           if (route.length < 2) return null;
           return {
             slug,
@@ -12505,10 +12667,16 @@
             route,
             person: mobileBiographyPathPersonName(article, slug),
             duration: mobileMovingRouteDuration(route),
-            offset: index * 31000
+            offset: index * 31000,
+            localWander: configuredRoute.length === 1,
+            fixedSurfaceIsLand: configuredRoute.length === 1 ? mobileMovingPointIsOnLand(route[0]) : null,
+            continuous: configuredRoute.length === 1 || MOBILE_BIOGRAPHY_CONTINUOUS_SLUGS.has(slug)
           };
         })
         .filter(Boolean);
+      const displayOffsets = mobileBiographyDisplayOffsets(items);
+      items.forEach(item => { item.displayOffset = displayOffsets.get(item.slug) || [0, 0]; });
+      return items;
     }
 
     function mobileMovingBiographyStatus(item, motion) {
@@ -12541,7 +12709,7 @@
         const status = mobileMovingBiographyStatus(item, motion);
         features.push({
           type: "Feature",
-          geometry: { type: "Point", coordinates: motion.coordinates },
+          geometry: { type: "Point", coordinates: mobileBiographyDisplayCoordinates(motion.coordinates, item.displayOffset) },
           properties: {
             native_kind: "wiki",
             native_key: item.slug,
@@ -12664,7 +12832,7 @@
 
     function updateMobileMovingBiographyMarker(item, marker, now = performance.now()) {
       const motion = mobileBiographyMotionFor(item, now);
-      marker.setLngLat(motion.coordinates);
+      marker.setLngLat(mobileBiographyDisplayCoordinates(motion.coordinates, item.displayOffset));
       const element = marker.getElement?.();
       const button = element?.querySelector?.(".mobile-moving-biography-marker");
       if (!button) return;
