@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260829-android-performance-r191";
+    static final String APP_VERSION = "20260830-content-performance-r198";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -867,7 +867,14 @@ public class MainActivity extends Activity {
                 + "if(document.getElementById('ots-native-panel-exclusivity'))return;"
                 + "var s=document.createElement('style');"
                 + "s.id='ots-native-panel-exclusivity';"
-                + "s.textContent='body.mobile-detail-open .app{grid-template-rows:auto minmax(0,1fr) 0 0!important;}body.mobile-detail-open .mobile-view-tabs,body.mobile-detail-open .mobile-timeline,body.mobile-detail-open .list-panel{display:none!important;}';"
+                // Keep the underlying map rectangle fixed while the detail
+                // drawer overlays it. Removing the tab/list grid rows made the
+                // map grow by one control-row for a frame and visibly skewed
+                // the native surface on every site tap.
+                + "s.textContent='body.native-android-app.mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header{gap:8px!important;padding-top:max(12px,var(--app-top-safe))!important;padding-bottom:10px!important;}"
+                    + "body.native-android-app.mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header>.search-autocomplete{display:block!important;}"
+                    + "body.native-android-app.mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header>.quick-actions{display:grid!important;}"
+                    + "body.mobile-detail-open .mobile-view-tabs,body.mobile-detail-open .mobile-timeline,body.mobile-detail-open .list-panel{visibility:hidden!important;pointer-events:none!important;}';"
                 + "var root=document.head||document.documentElement;if(!root)return;root.appendChild(s);"
                 + "})();",
             null
@@ -1281,6 +1288,13 @@ public class MainActivity extends Activity {
     void syncNativeMapMovingFeatures(String featuresJson) {
         if (!nativeMapEnabled || nativeMapController == null) return;
         nativeMapController.updateMovingFeatures(featuresJson);
+    }
+
+    boolean runNativeMapGestureDiagnostic(String gestureName) {
+        return BuildConfig.DEBUG
+            && nativeMapEnabled
+            && nativeMapController != null
+            && nativeMapController.runGestureDiagnostic(gestureName);
     }
 
     void syncNativeMapCamera(double longitude, double latitude, double zoom) {
