@@ -3117,7 +3117,7 @@
       if (!site?.slug) return site;
       if ("introduction_content" in site || "history_content" in site) return SITE_UTILS.sanitizePublicSiteContent(site);
       if (state.siteDetailCache.has(site.slug)) return state.siteDetailCache.get(site.slug);
-      const promise = fetchJson(`/items/sites?limit=1&filter[publication_status][_eq]=published&filter[slug][_eq]=${encodeURIComponent(site.slug)}&fields=${SITE_DETAIL_FIELDS}`)
+      const promise = fetchJson(`/items/sites?limit=1&filter[publication_status][_eq]=published&filter[slug][_eq]=${encodeURIComponent(site.slug)}&fields=${SITE_DETAIL_FIELDS}`, { anonymous: true })
         .then(response => {
           const remote = response.data?.[0] || null;
           const full = SITE_UTILS.sanitizePublicSiteContent(remote ? { ...site, ...remote } : site);
@@ -3277,7 +3277,7 @@
       const existing = typeof articleOrSlug === "string" ? state.wikiBySlug.get(slug) : articleOrSlug;
       if (existing && "content" in existing) return existing;
       if (state.wikiDetailCache.has(slug)) return state.wikiDetailCache.get(slug);
-      const promise = fetchJson(`/items/wiki_articles?limit=1&filter[slug][_eq]=${encodeURIComponent(slug)}&fields=${WIKI_DETAIL_FIELDS}`, { cacheKey: `wiki-detail-${slug}`, ttl: 60000, fresh: false })
+      const promise = fetchJson(`/items/wiki_articles?limit=1&filter[slug][_eq]=${encodeURIComponent(slug)}&fields=${WIKI_DETAIL_FIELDS}`, { cacheKey: `wiki-detail-${slug}`, ttl: 60000, fresh: false, anonymous: true })
         .then(response => {
           const full = response.data?.[0];
           if (!full) return existing || null;
@@ -12322,7 +12322,9 @@
         state.mobileMovingLandCacheGeometry = geometry;
         state.mobileMovingLandStateCache.clear();
       }
-      const cacheKey = `${Number(coordinates[0]).toFixed(4)},${Number(coordinates[1]).toFixed(4)}`;
+      // Reuse shoreline classification within a small map cell instead of
+      // rescanning the full land mask on every animation frame.
+      const cacheKey = `${Number(coordinates[0]).toFixed(3)},${Number(coordinates[1]).toFixed(3)}`;
       if (state.mobileMovingLandStateCache.has(cacheKey)) return state.mobileMovingLandStateCache.get(cacheKey);
       try {
         const result = mobileMovingLandSamples(coordinates).some(sample => pointInGeometry(sample, geometry));

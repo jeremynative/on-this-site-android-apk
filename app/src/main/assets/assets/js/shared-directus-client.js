@@ -154,7 +154,10 @@
       const fresh = requestOptions.fresh !== false;
       const url = fresh ? `${baseUrl}${path}${separator}_=${Date.now()}` : `${baseUrl}${path}`;
       const headers = {};
-      const token = tokenProvider();
+      // Public archive reads must not wait for contributor-token refresh. A
+      // stale signed-in session previously made an otherwise public article
+      // take several seconds to open before the anonymous retry completed.
+      const token = requestOptions.anonymous === true ? "" : tokenProvider();
       if (token) headers.authorization = `Bearer ${token}`;
       let response = await fetch(url, { headers, cache: fresh ? "no-store" : "default" });
       if (response.status === 403 && path.includes("why_this_matters")) {
@@ -200,7 +203,7 @@
         } catch {}
       }
 
-      const token = tokenProvider();
+      const token = requestOptions.anonymous === true ? "" : tokenProvider();
       const dedupeKey = requestOptions.dedupe === false
         ? ""
         : [path, requestOptions.fresh !== false ? "fresh" : "cacheable", token || "", requestOptions.errorPrefix || fetchErrorPrefix, requestOptions.errorSeparator ?? fetchErrorSeparator].join("|");
@@ -292,10 +295,10 @@
       return encodeURIComponent(String(value || ""));
     }
 
-    async function fetchFirstItem(collection, filterField, value, fields = "") {
+    async function fetchFirstItem(collection, filterField, value, fields = "", requestOptions = {}) {
       if (!value) return null;
       const fieldsParam = fields ? `&fields=${fields}` : "";
-      const response = await fetchJson(`/items/${collection}?limit=1&filter[${filterField}][_eq]=${filterValue(value)}${fieldsParam}`);
+      const response = await fetchJson(`/items/${collection}?limit=1&filter[${filterField}][_eq]=${filterValue(value)}${fieldsParam}`, requestOptions);
       return response.data?.[0] || null;
     }
 
