@@ -10,6 +10,7 @@ const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
 const lightweightOfflineAppPath = "app/src/main/assets/offline-app.html";
 const offlineArchiveUtilsPath = "app/src/main/assets/assets/js/offline-archive-utils.js";
 const bundledMobileJsPath = "app/src/main/assets/assets/js/mobile-app.js";
+const bundledSharedDirectusClientPath = "app/src/main/assets/assets/js/shared-directus-client.js";
 const bundledSharedProfileUtilsPath = "app/src/main/assets/assets/js/shared-profile-utils.js";
 const bundledSharedSearchUtilsPath = "app/src/main/assets/assets/js/shared-search-utils.js";
 const bundledSharedLifecycleUtilsPath = "app/src/main/assets/assets/js/shared-lifecycle-utils.js";
@@ -2245,6 +2246,19 @@ requireBundledPattern(/function\s+siteHeroCarouselCanAdvance\([\s\S]*?detailEl\.
 requireBundledPattern(/function\s+syncDetailHeroScrollState\([\s\S]*?syncSiteHeroCarouselLifecycle\(hero\)[\s\S]*?document\.addEventListener\("visibilitychange"[\s\S]*?syncSiteHeroCarouselLifecycle\(\)/, "Bundled Android site photo carousel lifecycle must follow compact and app visibility state.");
 requireBundledPattern(/\.site-hero-carousel\.hero\s*\{[\s\S]*?touch-action:\s*pan-y;[\s\S]*?overscroll-behavior-x:\s*contain;/, "Bundled Android carousels must reserve horizontal swipes while preserving vertical article scrolling.");
 requireBundledText('jumpToQuoteComment(heroCommentSlide.dataset.siteHeroComment);', "Bundled Android comment-photo slides must jump to the exact approved comment.");
+if (!bundledMobileJs.includes('fields=${SITE_DETAIL_FIELDS}`, { anonymous: true }')) {
+  throw new Error("Bundled Android public site detail must bypass contributor-token refresh.");
+}
+if (!bundledMobileJs.includes('ttl: 60000, fresh: false, anonymous: true')) {
+  throw new Error("Bundled Android public knowledgebase detail must bypass contributor-token refresh.");
+}
+if (!bundledMobileJs.includes('toFixed(3)},${Number(coordinates[1]).toFixed(3)')) {
+  throw new Error("Bundled Android biography motion must reuse shoreline state at a practical map-cell scale.");
+}
+const bundledDirectusClient = fs.readFileSync(bundledSharedDirectusClientPath, "utf8");
+if (!bundledDirectusClient.includes('requestOptions.anonymous === true ? "" : tokenProvider()')) {
+  throw new Error("Bundled Directus client must support credential-free public archive reads.");
+}
 
 console.log(`Android shell verifier passed: ${expectedBuild}`);
 
