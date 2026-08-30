@@ -108,7 +108,7 @@ final class NativeMapController {
 
     private static final String LOG_TAG = "OnThisSiteNativeMap";
     private static final int MAX_STATE_BYTES = 12 * 1024 * 1024;
-    private static final long MOVING_FEATURE_MIN_UPDATE_MS = 480L;
+    private static final long MOVING_FEATURE_MIN_UPDATE_MS = 64L;
     private static final long MAP_TAP_DISPATCH_DELAY_MS = 300L;
     private static final String EMPTY_FEATURE_COLLECTION = "{\"type\":\"FeatureCollection\",\"features\":[]}";
     private static final String ISLAND_SOURCE_ID = "nli-island";

@@ -19149,6 +19149,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const MOVING_DOG_ICON_URL = "assets/map-icons/dog-moving-icon.png";
     const MOVING_DOG_WIKI_SLUG = "dog-ceremonialism";
     const MOBILE_MOVING_MARKER_INTERVAL_MS = 180;
+    // The native renderer receives only this compact moving-feature collection.
+    // Keep its position cadence short enough to avoid visible steps at close zoom.
+    const MOBILE_NATIVE_MOVING_MARKER_INTERVAL_MS = 64;
+    const MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS = 280;
     const MOBILE_MOVING_LAND_CACHE_MAX = 4000;
     const mobileMovingRouteModelCache = new WeakMap();
     const MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS = 720000;
@@ -20012,6 +20016,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       activeSiteLabelMarker: null,
       mobileBiographyPathMarkers: [],
       mobileMovingBiographyMarkers: new Map(),
+      mobileBiographyMotionControllers: new Map(),
       nativeMovingBiographyItems: [],
       mobileMovingBiographyMarkerQueueTimer: null,
       mobileMovingDogMarker: null,
@@ -31200,6 +31205,52 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return { coordinates: first, direction: "right", progress: 0, opacity: Math.min(1, elapsed / MOBILE_BIOGRAPHY_MARKER_FADE_MS), phase: "fade-in" };
     }
 
+    function mobileBiographyZoomMotionScale() {
+      const zoom = Number(state.map?.getZoom?.());
+      if (!Number.isFinite(zoom)) return 1;
+      if (zoom <= 8) return 0.4;
+      if (zoom >= 11.5) return 1;
+      return 0.4 + ((zoom - 8) / 3.5) * 0.6;
+    }
+
+    function mobileBiographyMotionFor(item, now = performance.now()) {
+      const route = item?.route || [];
+      const routeDuration = Math.max(1000, Number(item?.duration) || MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS);
+      const cycleDuration = routeDuration + (MOBILE_BIOGRAPHY_MARKER_FADE_MS * 2) + MOBILE_BIOGRAPHY_MARKER_RESET_MS;
+      const signature = `${routeDuration}|${route.length}|${route[0]?.join(",") || ""}|${route[route.length - 1]?.join(",") || ""}`;
+      const slug = String(item?.slug || "");
+      let controller = state.mobileBiographyMotionControllers.get(slug);
+      if (!controller) {
+        const initialElapsed = (((Number(item?.offset) || 0) % cycleDuration) + cycleDuration) % cycleDuration;
+        controller = {
+          elapsedMs: initialElapsed,
+          lastFrameAt: now,
+          cycleDuration,
+          signature,
+          progress: initialElapsed / cycleDuration
+        };
+        state.mobileBiographyMotionControllers.set(slug, controller);
+      } else {
+        if (controller.signature !== signature || controller.cycleDuration !== cycleDuration) {
+          const normalized = Math.max(0, Math.min(1, Number(controller.progress) || 0));
+          controller.elapsedMs = normalized * cycleDuration;
+          controller.cycleDuration = cycleDuration;
+          controller.signature = signature;
+        }
+        const paused = document.hidden || state.profileMapMode || isAndroidMapGestureActive() || mobileMapCameraIsInteracting();
+        const rawDelta = Math.max(0, now - Number(controller.lastFrameAt || now));
+        controller.lastFrameAt = now;
+        if (!paused) {
+          const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+          const motionScale = mobileBiographyZoomMotionScale() * (reducedMotion ? 0.5 : 1);
+          const delta = Math.min(rawDelta, MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS) * motionScale;
+          controller.elapsedMs = (Math.max(0, Number(controller.elapsedMs) || 0) + delta) % cycleDuration;
+        }
+        controller.progress = controller.elapsedMs / cycleDuration;
+      }
+      return mobileMovingBiographyLoop(route, routeDuration, 0, controller.elapsedMs);
+    }
+
     function mobileMovingRouteDuration(route = []) {
       const totalMiles = mobileMovingRouteModel(route).total;
       return Math.max(360000, Math.min(1440000, totalMiles * 42000));
@@ -31298,7 +31349,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const showLabel = Number(state.map?.getZoom?.() || 0) >= SITE_POINT_LABEL_MIN_ZOOM;
       const features = [];
       (state.nativeMovingBiographyItems || []).forEach(item => {
-        const motion = mobileMovingBiographyLoop(item.route, item.duration, item.offset, motionNow);
+        const motion = mobileBiographyMotionFor(item, now);
         const status = mobileMovingBiographyStatus(item, motion);
         features.push({
           type: "Feature",
@@ -31424,7 +31475,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function updateMobileMovingBiographyMarker(item, marker, now = performance.now()) {
-      const motion = mobileMovingBiographyLoop(item.route, item.duration, item.offset, now);
+      const motion = mobileBiographyMotionFor(item, now);
       marker.setLngLat(motion.coordinates);
       const element = marker.getElement?.();
       const button = element?.querySelector?.(".mobile-moving-biography-marker");
@@ -31667,11 +31718,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const now = performance.now();
         updateMobileMovingFeatureMarkers(now);
         state.mobileMovingMarkerLastAt = now;
-        const interval = nativeMapBridgeAvailable() ? 480 : MOBILE_MOVING_MARKER_INTERVAL_MS;
+        const interval = nativeMapBridgeAvailable() ? MOBILE_NATIVE_MOVING_MARKER_INTERVAL_MS : MOBILE_MOVING_MARKER_INTERVAL_MS;
         state.mobileMovingMarkerTimer = window.setTimeout(tick, interval);
       };
       const elapsed = performance.now() - (state.mobileMovingMarkerLastAt || 0);
-      const interval = nativeMapBridgeAvailable() ? 480 : MOBILE_MOVING_MARKER_INTERVAL_MS;
+      const interval = nativeMapBridgeAvailable() ? MOBILE_NATIVE_MOVING_MARKER_INTERVAL_MS : MOBILE_MOVING_MARKER_INTERVAL_MS;
       state.mobileMovingMarkerTimer = window.setTimeout(tick, Math.max(0, interval - elapsed));
     }
 
