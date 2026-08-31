@@ -16,6 +16,7 @@ import android.graphics.RectF;
 import android.graphics.drawable.GradientDrawable;
 import android.location.Location;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -102,6 +103,7 @@ public class OnThisSiteNavigationActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_on_this_site_navigation);
+        applySystemBarSafeArea(findViewById(R.id.navigation_root));
         windowKeepScreenOn();
         mapContainer = findViewById(R.id.navigation_map_container);
         edgeOverlay = findViewById(R.id.navigation_edge_overlay);
@@ -585,6 +587,34 @@ public class OnThisSiteNavigationActivity extends Activity {
 
     private void windowKeepScreenOn() {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    private void applySystemBarSafeArea(View root) {
+        root.setOnApplyWindowInsetsListener((view, windowInsets) -> {
+            int left;
+            int top;
+            int right;
+            int bottom;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                android.graphics.Insets safeInsets = windowInsets.getInsets(
+                    android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.displayCutout()
+                );
+                left = safeInsets.left;
+                top = safeInsets.top;
+                right = safeInsets.right;
+                bottom = safeInsets.bottom;
+            } else {
+                left = windowInsets.getSystemWindowInsetLeft();
+                top = windowInsets.getSystemWindowInsetTop();
+                right = windowInsets.getSystemWindowInsetRight();
+                bottom = windowInsets.getSystemWindowInsetBottom();
+            }
+            view.setPadding(left, top, right, bottom);
+            return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                ? android.view.WindowInsets.CONSUMED
+                : windowInsets.consumeSystemWindowInsets();
+        });
+        root.requestApplyInsets();
     }
 
     private String safeTitle(String value) {
