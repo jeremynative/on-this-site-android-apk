@@ -1633,13 +1633,16 @@ for (const needle of [
   "googleMap.setTrafficEnabled(true)",
   "VOICE_ALERTS_AND_GUIDANCE",
   "BLUETOOTH_AUDIO",
+  "setTripProgressBarEnabled(false)",
   "navigator.setDestination",
   "navigator.setDestinations",
   "off-screen sites show distance and direction at the edge",
   'setPositiveButton("Add stop"',
   "MAX_VISIBLE_SITE_LABELS = 4",
   "MAX_NEARBY_EDGE_INDICATORS = 3",
-  "NEARBY_SITE_RANGE_METERS = 1609.344f",
+  "ROUTE_AREA_SITE_RANGE_METERS = 4828.032f",
+  "LOCKED_GUIDANCE_EDGE_RANGE_METERS = 1609.344f",
+  "startGuidance();",
   "applySystemBarSafeArea(findViewById(R.id.navigation_root))",
   "android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.displayCutout()",
   "view.setPadding(left, top, right, bottom)",
@@ -1656,6 +1659,10 @@ for (const needle of [
   "GoogleNavigationLegalActivity.class"
 ]) {
   if (!googleNavigationActivity.includes(needle)) throw new Error(`In-app Google navigation is missing: ${needle}`);
+}
+if (!/refreshVisibleSiteMarkers\(\)[\s\S]*?result\[0\]\s*<=\s*ROUTE_AREA_SITE_RANGE_METERS/.test(googleNavigationActivity)
+    || !/refreshNearbyEdgeIndicators\(\)[\s\S]*?result\[0\]\s*<=\s*LOCKED_GUIDANCE_EDGE_RANGE_METERS/.test(googleNavigationActivity)) {
+  throw new Error("Navigation must keep zoomed route-area pins within three miles while limiting edge indicators to one mile.");
 }
 if (!navigationSiteRepository.includes('"Point".equals(centerItem.optString("geometry_type"))')
     || !navigationSiteRepository.includes("isSafePublicCandidate")
