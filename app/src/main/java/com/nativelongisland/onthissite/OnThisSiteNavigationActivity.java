@@ -55,7 +55,8 @@ public class OnThisSiteNavigationActivity extends Activity {
     private static final int LOCATION_PERMISSION_REQUEST = 71;
     private static final int MAX_VISIBLE_SITE_LABELS = 4;
     private static final int MAX_NEARBY_EDGE_INDICATORS = 3;
-    private static final float NEARBY_SITE_RANGE_METERS = 1609.344f;
+    private static final float ROUTE_AREA_SITE_RANGE_METERS = 4828.032f;
+    private static final float LOCKED_GUIDANCE_EDGE_RANGE_METERS = 1609.344f;
     private static final float MIN_LABEL_HORIZONTAL_SPACING_DP = 190f;
     private static final float MIN_LABEL_VERTICAL_SPACING_DP = 58f;
     private static final String EXTRA_TITLE = "destination_title";
@@ -162,7 +163,7 @@ public class OnThisSiteNavigationActivity extends Activity {
         navigationView.setRecenterButtonEnabled(true);
         navigationView.setSpeedLimitIconEnabled(true);
         navigationView.setSpeedometerEnabled(true);
-        navigationView.setTripProgressBarEnabled(true);
+        navigationView.setTripProgressBarEnabled(false);
         navigationView.setTrafficPromptsEnabled(true);
         if (hasLocationPermission()) statusView.setText("Loading route…");
         navigationView.getMapAsync(map -> {
@@ -194,7 +195,7 @@ public class OnThisSiteNavigationActivity extends Activity {
                     .setTitle(destinationTitle)
                     .setVehicleStopover(true)
                     .build();
-                if (hasLocationPermission()) calculateRoute(Arrays.asList(primaryDestination), false);
+                if (hasLocationPermission()) calculateRoute(Arrays.asList(primaryDestination));
             }
 
             @Override
@@ -213,7 +214,7 @@ public class OnThisSiteNavigationActivity extends Activity {
         navigationHandler.postDelayed(navigationStartupTimeout, 15_000L);
     }
 
-    private void calculateRoute(List<Waypoint> destinations, boolean resumeGuidance) {
+    private void calculateRoute(List<Waypoint> destinations) {
         if (navigator == null || destinations == null || destinations.isEmpty()) return;
         routeReady = false;
         startButton.setEnabled(false);
@@ -229,8 +230,10 @@ public class OnThisSiteNavigationActivity extends Activity {
                 statusView.setText(destinations.size() > 1
                     ? "Historical stop added before " + destinationTitle + "."
                     : "Route ready. Nearby public sites are labeled; off-screen sites show distance and direction at the edge.");
-                if (navigationView != null) navigationView.showRouteOverview();
-                if (resumeGuidance) startGuidance();
+                // Enter guidance as soon as Google has a valid route. The map
+                // overview is still available through the header while a route
+                // is loading, but it is no longer an extra required step.
+                startGuidance();
             } else if (code == Navigator.RouteStatus.NETWORK_ERROR) {
                 statusView.setText("Google could not calculate the route because the network is unavailable.");
             } else if (code == Navigator.RouteStatus.NO_ROUTE_FOUND) {
@@ -291,7 +294,9 @@ public class OnThisSiteNavigationActivity extends Activity {
             if (!bounds.contains(point)) continue;
             float[] result = new float[1];
             Location.distanceBetween(currentLocation.getLatitude(), currentLocation.getLongitude(), site.latitude, site.longitude, result);
-            if (result[0] <= NEARBY_SITE_RANGE_METERS) visible.add(site);
+            // Keep a wider route-area layer available when the driver zooms or
+            // pans out. The separate edge overlay remains intentionally local.
+            if (result[0] <= ROUTE_AREA_SITE_RANGE_METERS) visible.add(site);
         }
         visible.sort(Comparator.comparingDouble(site -> distanceSquared(center, site)));
         float density = getResources().getDisplayMetrics().density;
@@ -380,7 +385,9 @@ public class OnThisSiteNavigationActivity extends Activity {
             if (visibleBounds.contains(point)) continue;
             float[] result = new float[2];
             Location.distanceBetween(currentLocation.getLatitude(), currentLocation.getLongitude(), site.latitude, site.longitude, result);
-            if (result[0] <= NEARBY_SITE_RANGE_METERS) nearby.add(new NearbySiteDistance(site, result[0], result[1]));
+            if (result[0] <= LOCKED_GUIDANCE_EDGE_RANGE_METERS) {
+                nearby.add(new NearbySiteDistance(site, result[0], result[1]));
+            }
         }
         nearby.sort(Comparator.comparingDouble(item -> item.distanceMeters));
         float density = getResources().getDisplayMetrics().density;
@@ -500,7 +507,7 @@ public class OnThisSiteNavigationActivity extends Activity {
             .setTitle(site.title)
             .setVehicleStopover(true)
             .build();
-        calculateRoute(Arrays.asList(stop, primaryDestination), guidanceStarted);
+        calculateRoute(Arrays.asList(stop, primaryDestination));
     }
 
     private BitmapDescriptor siteLabelIcon(String rawTitle) {
@@ -579,7 +586,7 @@ public class OnThisSiteNavigationActivity extends Activity {
             try {
                 if (googleMap != null) googleMap.setMyLocationEnabled(true);
             } catch (SecurityException ignored) {}
-            if (navigator != null && primaryDestination != null) calculateRoute(Arrays.asList(primaryDestination), false);
+            if (navigator != null && primaryDestination != null) calculateRoute(Arrays.asList(primaryDestination));
             else statusView.setText("Loading route…");
         } else {
             statusView.setText("Location is off. The map is available, but routing needs location access.");
