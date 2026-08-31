@@ -6022,6 +6022,12 @@
       transition: width 180ms ease, height 180ms ease, max-height 180ms ease, margin 180ms ease, border-radius 180ms ease, box-shadow 180ms ease;
     }
 
+    .article-sticky-hero-placeholder {
+      flex: 0 0 auto;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
     .detail-hero-dock .hero.article-sticky-hero.is-compact {
       display: block;
       width: 100%;
