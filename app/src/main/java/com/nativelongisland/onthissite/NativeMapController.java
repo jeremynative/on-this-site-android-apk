@@ -113,6 +113,7 @@ final class NativeMapController {
     // retain a small guard here to coalesce accidental duplicate bridge calls.
     private static final long MOVING_FEATURE_MIN_UPDATE_MS = 20L;
     private static final long MAP_TAP_DISPATCH_DELAY_MS = 300L;
+    private static final int BUNDLED_ICON_BATCH_SIZE = 4;
     private static final String EMPTY_FEATURE_COLLECTION = "{\"type\":\"FeatureCollection\",\"features\":[]}";
     private static final String ISLAND_SOURCE_ID = "nli-island";
     private static final String TERRITORY_SOURCE_ID = "nli-territories";
@@ -250,6 +251,7 @@ final class NativeMapController {
     private float lastBlockedTouchScaleY = Float.NaN;
     private final Runnable applyLatestMovingFeaturesTask = this::applyMovingFeaturesToStyle;
     private final JSONObject bundledSiteIconKeysBySlug = new JSONObject();
+    private JSONObject bundledTerritoryFallback;
     private String lastStateSignature = "";
     private String lastBaseStateSignature = "";
     private String currentBasemap = "outdoors";
@@ -838,10 +840,24 @@ final class NativeMapController {
                 lineColor("#315a49"), lineWidth(1.25f), lineOpacity(0.72f)
             ));
 
-            addSource(style, TERRITORY_SOURCE_ID, buildBundledTerritoryGeoJson(false));
+            // The hosted WebView supplies the authoritative filtered map in
+            // one base handoff. Loading the same 400+ centers and detailed
+            // territories here first made online cold starts parse and render
+            // those sources twice. Keep the bundled snapshot only for the
+            // genuine offline renderer, where it is the only immediate map.
+            String initialTerritories = usingOnlineArchive
+                ? EMPTY_FEATURE_COLLECTION
+                : bundledTerritoryGeoJson(false);
+            String initialSitePoints = usingOnlineArchive
+                ? EMPTY_FEATURE_COLLECTION
+                : buildBundledSiteGeoJson();
+            String initialLabels = usingOnlineArchive
+                ? EMPTY_FEATURE_COLLECTION
+                : bundledTerritoryGeoJson(true);
+            addSource(style, TERRITORY_SOURCE_ID, initialTerritories);
             addSource(style, SITE_POLYGON_SOURCE_ID, EMPTY_FEATURE_COLLECTION);
-            addSource(style, SITE_POINT_SOURCE_ID, buildBundledSiteGeoJson());
-            addSource(style, LABEL_SOURCE_ID, buildBundledTerritoryGeoJson(true));
+            addSource(style, SITE_POINT_SOURCE_ID, initialSitePoints);
+            addSource(style, LABEL_SOURCE_ID, initialLabels);
             addSource(style, BIOGRAPHY_PATH_SOURCE_ID, EMPTY_FEATURE_COLLECTION);
             addSource(style, EVENT_SOURCE_ID, EMPTY_FEATURE_COLLECTION);
             addSource(style, USER_LOCATION_SOURCE_ID, EMPTY_FEATURE_COLLECTION);
@@ -1228,42 +1244,63 @@ final class NativeMapController {
             style.addImage("nli-icon-biography-canoe", canoe);
             String[] assets = activity.getAssets().list("assets/map-icons");
             if (assets == null) return;
-            int loaded = 0;
-            for (String filename : assets) {
-                if (filename == null || !filename.toLowerCase(Locale.ROOT).endsWith(".png")) continue;
-                String base = filename.substring(0, filename.length() - 4)
-                    .toLowerCase(Locale.ROOT)
-                    .replaceAll("[^a-z0-9]+", "-")
-                    .replaceAll("(^-+|-+$)", "");
-                if (base.isEmpty()) continue;
-                try (InputStream input = activity.getAssets().open("assets/map-icons/" + filename)) {
-                    Bitmap source = BitmapFactory.decodeStream(input);
-                    if (source == null || source.getWidth() < 1 || source.getHeight() < 1) continue;
-                    Bitmap normalized = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888);
-                    Canvas canvas = new Canvas(normalized);
-                    Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-                    float scale = Math.min(56f / source.getWidth(), 56f / source.getHeight());
-                    float width = source.getWidth() * scale;
-                    float height = source.getHeight() * scale;
-                    float left = (64f - width) / 2f;
-                    float top = (64f - height) / 2f;
-                    canvas.drawBitmap(source, null, new RectF(left, top, left + width, top + height), paint);
-                    style.addImage("nli-icon-" + base, normalized);
-                    if ("dog-moving-icon".equals(base) || "whaling-moving-whale".equals(base)) {
-                        Matrix mirror = new Matrix();
-                        mirror.preScale(-1f, 1f);
-                        Bitmap mirrored = Bitmap.createBitmap(normalized, 0, 0, normalized.getWidth(), normalized.getHeight(), mirror, true);
-                        style.addImage("nli-icon-" + base + "-left", mirrored);
-                    }
-                    source.recycle();
-                    loaded += 1;
-                } catch (Exception iconError) {
-                    Log.w(LOG_TAG, "Could not load bundled map icon " + filename + ".", iconError);
-                }
-            }
-            Log.i(LOG_TAG, "Loaded " + loaded + " bundled project map icons.");
+            // Decode a few icons per frame. Dots remain visible underneath,
+            // so artwork can arrive progressively without a long main-thread
+            // pause before the first usable native map frame.
+            mapView.post(() -> addBundledMapIconBatch(style, assets, 0, 0));
         } catch (Exception error) {
             Log.w(LOG_TAG, "Could not enumerate bundled project map icons.", error);
+        }
+    }
+
+    private void addBundledMapIconBatch(Style style, String[] assets, int startIndex, int loadedCount) {
+        if (!styleReady || map == null || map.getStyle() == null || assets == null) return;
+        int index = Math.max(0, startIndex);
+        int processed = 0;
+        int loaded = loadedCount;
+        while (index < assets.length && processed < BUNDLED_ICON_BATCH_SIZE) {
+            String filename = assets[index++];
+            processed += 1;
+            if (filename == null || !filename.toLowerCase(Locale.ROOT).endsWith(".png")) continue;
+            String base = filename.substring(0, filename.length() - 4)
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("(^-+|-+$)", "");
+            if (base.isEmpty()) continue;
+            try (InputStream input = activity.getAssets().open("assets/map-icons/" + filename)) {
+                Bitmap source = BitmapFactory.decodeStream(input);
+                if (source == null || source.getWidth() < 1 || source.getHeight() < 1) continue;
+                Bitmap normalized = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888);
+                Canvas canvas = new Canvas(normalized);
+                Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+                float scale = Math.min(56f / source.getWidth(), 56f / source.getHeight());
+                float width = source.getWidth() * scale;
+                float height = source.getHeight() * scale;
+                float left = (64f - width) / 2f;
+                float top = (64f - height) / 2f;
+                canvas.drawBitmap(source, null, new RectF(left, top, left + width, top + height), paint);
+                style.addImage("nli-icon-" + base, normalized);
+                if ("dog-moving-icon".equals(base) || "whaling-moving-whale".equals(base)) {
+                    Matrix mirror = new Matrix();
+                    mirror.preScale(-1f, 1f);
+                    Bitmap mirrored = Bitmap.createBitmap(normalized, 0, 0, normalized.getWidth(), normalized.getHeight(), mirror, true);
+                    style.addImage("nli-icon-" + base + "-left", mirrored);
+                }
+                source.recycle();
+                loaded += 1;
+            } catch (Exception iconError) {
+                Log.w(LOG_TAG, "Could not load bundled map icon " + filename + ".", iconError);
+            }
+        }
+        if (index < assets.length) {
+            int nextIndex = index;
+            int nextLoaded = loaded;
+            mapView.postDelayed(
+                () -> addBundledMapIconBatch(style, assets, nextIndex, nextLoaded),
+                16L
+            );
+        } else {
+            Log.i(LOG_TAG, "Loaded " + loaded + " bundled project map icons in paced batches.");
         }
     }
 
@@ -1493,12 +1530,12 @@ final class NativeMapController {
         if (featureCount(collection) >= BUNDLED_TERRITORY_SLUGS.length) {
             source.setGeoJson(FeatureCollection.fromJson(collection.toString()));
         } else {
-            source.setGeoJson(FeatureCollection.fromJson(buildBundledTerritoryGeoJson(false)));
+            source.setGeoJson(FeatureCollection.fromJson(bundledTerritoryGeoJson(false)));
         }
     }
 
     private JSONObject withBundledTerritoryLabels(JSONObject collection) throws Exception {
-        JSONObject merged = new JSONObject(buildBundledTerritoryGeoJson(true));
+        JSONObject merged = new JSONObject(bundledTerritoryGeoJson(true));
         JSONArray features = merged.getJSONArray("features");
         JSONArray incoming = collection == null ? null : collection.optJSONArray("features");
         if (incoming == null) return merged;
@@ -1905,24 +1942,8 @@ final class NativeMapController {
     private String buildBundledSiteGeoJson() throws Exception {
         JSONObject source = new JSONObject(readAsset("assets/data/mobile-site-centers.json"));
         JSONArray rows = source.optJSONArray("rows");
-        JSONObject siteIndexSource = new JSONObject(readAsset("assets/data/mobile-site-index.json"));
-        JSONArray siteIndexRows = siteIndexSource.optJSONArray("rows");
-        JSONObject siteById = new JSONObject();
-        JSONObject siteBySlug = new JSONObject();
-        if (siteIndexRows != null) {
-            for (int index = 0; index < siteIndexRows.length(); index++) {
-                JSONObject site = siteIndexRows.optJSONObject(index);
-                if (site == null) continue;
-                int id = site.optInt("id", -1);
-                String slug = site.optString("slug", "").trim();
-                if (id >= 0) siteById.put(String.valueOf(id), site);
-                if (!slug.isEmpty()) siteBySlug.put(slug, site);
-            }
-        }
         JSONObject iconManifest = new JSONObject(readAsset("map/site-icon-keys.json"));
-        JSONObject iconAssetById = iconManifest.optJSONObject("icon_asset_by_map_icon_id");
-        JSONArray forceBlueDotSlugs = iconManifest.optJSONArray("force_blue_dot_slugs");
-        String exhibitIcon = iconManifest.optString("exhibit_icon", "");
+        JSONObject nativeIconKeyBySlug = iconManifest.optJSONObject("native_icon_key_by_site_slug");
         JSONArray features = new JSONArray();
         int customIconCount = 0;
         if (rows != null) {
@@ -1932,18 +1953,12 @@ final class NativeMapController {
                 if (center == null || center.length() < 2) continue;
                 int id = row.optInt("id", -1);
                 String slug = row.optString("slug", "").trim();
-                JSONObject site = siteById.optJSONObject(String.valueOf(id));
-                if (site == null && !slug.isEmpty()) site = siteBySlug.optJSONObject(slug);
                 JSONObject properties = new JSONObject();
                 properties.put("id", id);
                 properties.put("slug", slug);
-                String nativeIconKey = bundledNativeSiteIconKey(
-                    site,
-                    slug,
-                    iconAssetById,
-                    forceBlueDotSlugs,
-                    exhibitIcon
-                );
+                String nativeIconKey = nativeIconKeyBySlug == null
+                    ? ""
+                    : nativeIconKeyBySlug.optString(slug, "").trim();
                 if (!nativeIconKey.isEmpty()) {
                     properties.put("native_icon_key", nativeIconKey);
                     if (!slug.isEmpty()) bundledSiteIconKeysBySlug.put(slug, nativeIconKey);
@@ -2004,49 +2019,12 @@ final class NativeMapController {
         return text.matches(".*\\b(museum|gallery|exhibit|exhibition|public art|art center|cultural center|heritage center|house museum|ma s house|mas house|preservation long island)\\b.*");
     }
 
-    private String buildBundledTerritoryGeoJson(boolean labelsOnly) throws Exception {
-        JSONObject source = new JSONObject(readAsset("assets/data/mobile-site-geometry.json"));
-        JSONArray rows = source.optJSONArray("rows");
-        JSONArray features = new JSONArray();
-        if (rows != null) {
-            for (int rowIndex = 0; rowIndex < rows.length(); rowIndex++) {
-                JSONObject row = rows.optJSONObject(rowIndex);
-                String slug = row == null ? "" : row.optString("slug", "");
-                int territoryIndex = bundledTerritoryIndex(slug);
-                if (territoryIndex < 0) continue;
-                JSONObject geometry;
-                if (labelsOnly) {
-                    JSONArray point = row.optJSONArray("territory_label_point");
-                    if (point == null || point.length() < 2) point = row.optJSONArray("center");
-                    if (point == null || point.length() < 2) continue;
-                    geometry = new JSONObject()
-                        .put("type", "Point")
-                        .put("coordinates", new JSONArray().put(point.optDouble(0)).put(point.optDouble(1)));
-                } else {
-                    geometry = row.optJSONObject("display_geojson");
-                    if (geometry == null) continue;
-                }
-                JSONObject properties = new JSONObject()
-                    .put("id", row.optInt("id"))
-                    .put("slug", slug)
-                    .put("title", BUNDLED_TERRITORY_TITLES[territoryIndex])
-                    .put("label_kind", "territory")
-                    .put("broad", true)
-                    .put("fillcolor", BUNDLED_TERRITORY_COLORS[territoryIndex]);
-                features.put(new JSONObject()
-                    .put("type", "Feature")
-                    .put("properties", properties)
-                    .put("geometry", geometry));
-            }
+    private String bundledTerritoryGeoJson(boolean labelsOnly) throws Exception {
+        if (bundledTerritoryFallback == null) {
+            bundledTerritoryFallback = new JSONObject(readAsset("map/ancestral-territory-fallback.json"));
         }
-        return new JSONObject().put("type", "FeatureCollection").put("features", features).toString();
-    }
-
-    private int bundledTerritoryIndex(String slug) {
-        for (int index = 0; index < BUNDLED_TERRITORY_SLUGS.length; index++) {
-            if (BUNDLED_TERRITORY_SLUGS[index].equals(slug)) return index;
-        }
-        return -1;
+        JSONObject collection = bundledTerritoryFallback.optJSONObject(labelsOnly ? "labels" : "territories");
+        return collection == null ? EMPTY_FEATURE_COLLECTION : collection.toString();
     }
 
     private String readAsset(String path) throws Exception {

@@ -7309,12 +7309,27 @@
     }
 
     function scheduleNativeMapStateSync(reason = "state", delay = 40) {
-      if (!nativeMapBridgeAvailable()) return;
+      if (!nativeMapBridgeAvailable()) return false;
+      if (!state.nativeMapBaseSignature
+          && reason !== "native-bridge-shell-ready"
+          && reason !== "map-load") {
+        // Passive requests may resolve before the shell's first authoritative
+        // handoff on slower devices. The first base already reads their latest
+        // state, so sending one early would only duplicate the large payload.
+        return false;
+      }
       window.clearTimeout(state.nativeMapStateTimer);
       state.nativeMapStateTimer = window.setTimeout(() => {
         state.nativeMapStateTimer = null;
         syncNativeMapState(reason);
       }, Math.max(0, Number(delay) || 0));
+      return true;
+    }
+
+    function scheduleNativeMapTransientStateSync(reason = "state", delay = 0) {
+      if (!nativeMapBridgeAvailable() || !state.nativeMapBaseSignature) return false;
+      scheduleNativeMapStateSync(reason, delay);
+      return true;
     }
 
     function installNativeMapBridge() {
@@ -14558,7 +14573,10 @@
     };
 
     function syncUserLocationMarker({ centerMap = false, zoom = NEAR_ME_ZOOM, duration = 850 } = {}) {
-      scheduleNativeMapStateSync("user-location", 0);
+      // Location is already included in the first authoritative base handoff.
+      // Avoid turning an early saved-location callback into a second complete
+      // 400+ site payload while Android is still preparing the native map.
+      scheduleNativeMapTransientStateSync("user-location", 0);
       if (!state.map || !state.userLocation || typeof mapboxgl === "undefined") return;
       if (state.userMarker?.setLngLat) {
         state.userMarker.setLngLat(state.userLocation);
@@ -14967,7 +14985,7 @@
         saveSettings();
         setLocationControlsBusy(false);
         state.userLocation = null;
-        scheduleNativeMapStateSync("user-location-cleared", 0);
+        scheduleNativeMapTransientStateSync("user-location-cleared", 0);
         renderCurrentTerritoryStatus();
           renderList();
           if (!silent) showBanner("Location permission was not available. Showing sites near central Long Island without personal distances.");
@@ -18894,7 +18912,11 @@
           nativeBridgeTimer = window.setTimeout(() => {
             nativeBridgeTimer = null;
             installNativeMapBridge();
-            scheduleNativeMapStateSync("native-bridge-shell-ready", 0);
+            // Establish the authoritative base immediately. Async content
+            // refreshes can finish in this same turn; queuing this handoff
+            // allowed one of them to replace it and forced an unnecessary
+            // full native-map payload on slower Android devices.
+            syncNativeMapState("native-bridge-shell-ready");
             resolveMapReady();
           }, 360);
         }
@@ -18902,7 +18924,7 @@
           collapseMobileMapAttribution();
           addPolygonLayers();
           installNativeMapBridge();
-          scheduleNativeMapStateSync("map-load", 0);
+          syncNativeMapState("map-load");
           syncMarkers();
           syncUserLocationMarker({ centerMap: false });
           bindAndroidMapGestureGuards();

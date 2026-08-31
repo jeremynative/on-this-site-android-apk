@@ -1684,22 +1684,26 @@
       -webkit-overflow-scrolling: touch;
     }
 
+    .mobile-timeline .mobile-learning-feed {
+      padding-right: 38px;
+    }
+
     .mobile-timeline-scrubber {
       position: absolute;
       top: 48px;
-      right: -8px;
+      right: 0;
       bottom: 8px;
       z-index: 22;
-      width: 76px;
+      width: 40px;
       border: 0;
       border-radius: 18px 0 0 18px;
-      background: linear-gradient(90deg, rgba(248, 251, 247, 0), rgba(248, 251, 247, 0.58));
-      opacity: 0.58;
+      background: linear-gradient(90deg, rgba(248, 251, 247, 0), rgba(248, 251, 247, 0.28));
+      opacity: 0.88;
       cursor: ns-resize;
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
-      transition: right 140ms ease, opacity 140ms ease, background 140ms ease;
+      transition: width 140ms ease, opacity 140ms ease, background 140ms ease;
     }
 
     .mobile-timeline-scrubber[hidden] {
@@ -1707,6 +1711,7 @@
     }
 
     .mobile-timeline-scrubber.is-active {
+      width: 76px;
       right: 0;
       background: linear-gradient(90deg, rgba(248, 251, 247, 0.08), rgba(248, 251, 247, 0.9));
       opacity: 1;
@@ -1724,14 +1729,15 @@
 
     .mobile-timeline-scrubber-scale {
       position: absolute;
-      inset: 5px 0 5px 4px;
+      inset: 5px 0;
       overflow: hidden;
       pointer-events: none;
+      transform-origin: right center;
       transition: transform 140ms ease;
     }
 
     .mobile-timeline-scrubber:not(.is-active) .mobile-timeline-scrubber-scale {
-      transform: translateX(32px);
+      transform: scaleX(0.58);
     }
 
     .mobile-timeline-scrubber.is-active .mobile-timeline-scrubber-scale {
@@ -4122,6 +4128,38 @@
       gap: 8px;
     }
 
+    .site-plant-seasons,
+    .site-plant-season {
+      display: grid;
+      gap: 10px;
+    }
+
+    .site-plant-season + .site-plant-season {
+      padding-top: 10px;
+      border-top: 1px solid rgba(73, 111, 93, 0.14);
+    }
+
+    .site-plant-season h5 {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+      margin: 0;
+      color: var(--accent-strong);
+      font-size: 14px;
+    }
+
+    .site-plant-season h5 span {
+      display: inline-grid;
+      place-items: center;
+      min-width: 24px;
+      min-height: 24px;
+      padding: 0 7px;
+      border-radius: 999px;
+      background: #e9f2ea;
+      color: var(--accent-strong);
+      font-size: 12px;
+    }
+
     .site-plant-card {
       overflow: hidden;
       border: 1px solid rgba(73, 111, 93, 0.16);
@@ -4624,6 +4662,18 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
+      object-position: center center;
+      aspect-ratio: auto;
+      background: #000;
+      transform-origin: center;
+      transition: transform 100ms linear;
+      touch-action: none;
+    }
+
+    .plant-camera-preview {
+      position: relative;
+      overflow: hidden;
+      min-height: 0;
       background: #000;
     }
 
@@ -4640,7 +4690,7 @@
     }
 
     body.native-android-app .plant-camera-controls {
-      padding-bottom: max(56px, calc(var(--app-bottom-safe) + 16px));
+      padding-bottom: max(80px, calc(var(--app-bottom-safe) + 28px));
     }
 
     .plant-camera-help {
@@ -4649,6 +4699,31 @@
       color: rgba(255, 255, 255, 0.86);
       font-size: 13px;
       line-height: 1.35;
+    }
+
+    .plant-camera-zoom-indicator {
+      position: absolute;
+      left: 50%;
+      bottom: 16px;
+      z-index: 2;
+      min-width: 52px;
+      padding: 6px 10px;
+      transform: translate(-50%, 5px);
+      border: 1px solid rgba(255, 255, 255, 0.42);
+      border-radius: 999px;
+      background: rgba(8, 13, 9, 0.7);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 140ms ease, transform 140ms ease;
+      pointer-events: none;
+    }
+
+    .plant-camera-zoom-indicator.visible {
+      transform: translate(-50%, 0);
+      opacity: 1;
     }
 
     .discussion-section {
@@ -5621,13 +5696,13 @@
       body.android-device.tablet-landscape .app.panel-collapsed > .mobile-timeline,
       body.android-device.tablet-landscape .app.panel-collapsed > .list-panel { grid-row: 4; }
 
-    body.mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header {
+    body:not(.native-android-app).mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header {
       gap: 0;
       padding-top: max(7px, var(--app-top-safe));
       padding-bottom: 7px;
     }
 
-    body.mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header > :not(.title-row) {
+    body:not(.native-android-app).mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header > :not(.title-row) {
       display: none !important;
     }
 
@@ -19150,15 +19225,25 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const MOVING_DOG_WIKI_SLUG = "dog-ceremonialism";
     const MOBILE_MOVING_MARKER_INTERVAL_MS = 180;
     // The native renderer receives only this compact moving-feature collection.
-    // Keep its position cadence short enough to avoid visible steps at close zoom.
-    const MOBILE_NATIVE_MOVING_MARKER_INTERVAL_MS = 64;
-    const MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS = 280;
+    // Use a zoom-aware cadence: overview motion is deliberately slow and does
+    // not need to wake the renderer as often, while close views need enough
+    // samples to keep the artwork gliding instead of stepping between points.
+    const MOBILE_NATIVE_MOVING_MARKER_OVERVIEW_INTERVAL_MS = 56;
+    const MOBILE_NATIVE_MOVING_MARKER_CLOSE_INTERVAL_MS = 24;
+    // Never let a delayed timer "catch up" with one conspicuous jump.
+    const MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS = 80;
     const MOBILE_MOVING_LAND_CACHE_MAX = 4000;
     const mobileMovingRouteModelCache = new WeakMap();
     const MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS = 720000;
     const MOBILE_BIOGRAPHY_MARKER_STAGGER_MS = 85;
     const MOBILE_BIOGRAPHY_MARKER_FADE_MS = 1600;
     const MOBILE_BIOGRAPHY_MARKER_RESET_MS = 650;
+    const MOBILE_BIOGRAPHY_LOCAL_WANDER_RADIUS_DEG = 0.00115;
+    const MOBILE_BIOGRAPHY_LOCAL_WANDER_POINT_COUNT = 4;
+    const MOBILE_BIOGRAPHY_CONTINUOUS_SLUGS = new Set([
+      "chief-harry-wallace-of-the-unkechaug",
+      "jeremy-dennis"
+    ]);
     const MOBILE_WHALE_ONE_WAY_MS = 900000;
     const MOBILE_WHALE_START_OFFSET_MS = MOBILE_WHALE_ONE_WAY_MS * 0.78;
     const MOBILE_WHALE_ROUTE = Object.freeze([
@@ -19278,6 +19363,50 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     ];
     const BIOGRAPHY_WIKI_SLUGS = new Set((KNOWLEDGEBASE_CATEGORIES.find(category => category.label === "Biography")?.slugs || []));
     const BIOGRAPHY_PLACE_PATHS = {
+      "jeremy-dennis": {
+        title: "Jeremy Dennis at Ma's House",
+        places: [{ coordinates: [-72.42747682588364, 40.867202882578056] }]
+      },
+      "chief-harry-wallace-of-the-unkechaug": {
+        title: "Chief Harry Wallace associated places",
+        places: [{ place: "Poospatuck Reservation", coordinates: [-72.83454, 40.78913] }]
+      },
+      "wuchikittawbut": {
+        title: "Wuchikittawbut associated places",
+        places: [{ place: "Montaukett homeland", coordinates: [-71.944, 41.036] }]
+      },
+      "betty-lewis-cromwell-shinnecock": {
+        title: "Betty Lewis Cromwell associated places",
+        places: [{ coordinates: [-72.432, 40.884] }]
+      },
+      "sylvester-pharoah": {
+        title: "Sylvester Pharoah associated places",
+        places: [{ place: "Montaukett homeland", coordinates: [-71.95, 41.036] }]
+      },
+      "mary-rebecca-bunn-aunt-becky": {
+        title: "Mary Rebecca Bunn associated places",
+        places: [{ place: "Shinnecock Reservation", coordinates: [-72.43013, 40.87195] }]
+      },
+      "peter-john-cuffee": {
+        title: "Peter John Cuffee associated places",
+        places: [{ coordinates: [-72.315, 40.937] }]
+      },
+      "ninigret-eastern-niantic-sachem": {
+        title: "Ninigret associated places",
+        places: [{ place: "Eastern Niantic homeland", coordinates: [-71.66, 41.38] }]
+      },
+      "paucamp": {
+        title: "Paucamp associated places",
+        places: [{ coordinates: [-72.6, 40.94] }]
+      },
+      "samson-occom": {
+        title: "Samson Occom associated places",
+        places: [{ place: "Mohegan homeland", coordinates: [-72.099, 41.478] }]
+      },
+      "cockenoe": {
+        title: "Cockenoe associated places",
+        places: [{ coordinates: [-72.185, 40.963] }]
+      },
       "mary-emma-cuffee-bunn": {
         title: "Mary Emma Cuffee Bunn life journey",
         mapLabel: "Mary Emma Cuffee Bunn",
@@ -19741,6 +19870,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         title: "Worison associated places",
         note: "Broad places connected with Worison in Unkechaug land and shore-whaling records.",
         places: [
+          { label: "Unkechaug homeland", place: "Poospatuck Reservation", coordinates: [-72.83454, 40.78913], reason: "Worison was Unkechaug; his mapped journey begins in the Unkechaug homeland at Poospatuck before following the surviving whaling and land records." },
           { label: "Winter 1676-1677 - shore-whaling contracts", place: "Southampton shore-whaling records", coordinates: [-72.389, 40.884], reason: "Worison signed early shore-whaling contracts with John Cooper for a share of the profits." },
           { label: "1680 - Watchogue Neck residence", place: "Watchogue Neck / East Moriches area", coordinates: [-72.789, 40.762], reason: "A land description places Warishone at a neck of land west of Watchogue and identifies him as Mahue's kinsman." }
         ]
@@ -22310,7 +22440,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!site?.slug) return site;
       if ("introduction_content" in site || "history_content" in site) return SITE_UTILS.sanitizePublicSiteContent(site);
       if (state.siteDetailCache.has(site.slug)) return state.siteDetailCache.get(site.slug);
-      const promise = fetchJson(`/items/sites?limit=1&filter[publication_status][_eq]=published&filter[slug][_eq]=${encodeURIComponent(site.slug)}&fields=${SITE_DETAIL_FIELDS}`)
+      const promise = fetchJson(`/items/sites?limit=1&filter[publication_status][_eq]=published&filter[slug][_eq]=${encodeURIComponent(site.slug)}&fields=${SITE_DETAIL_FIELDS}`, { anonymous: true })
         .then(response => {
           const remote = response.data?.[0] || null;
           const full = SITE_UTILS.sanitizePublicSiteContent(remote ? { ...site, ...remote } : site);
@@ -22470,7 +22600,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const existing = typeof articleOrSlug === "string" ? state.wikiBySlug.get(slug) : articleOrSlug;
       if (existing && "content" in existing) return existing;
       if (state.wikiDetailCache.has(slug)) return state.wikiDetailCache.get(slug);
-      const promise = fetchJson(`/items/wiki_articles?limit=1&filter[slug][_eq]=${encodeURIComponent(slug)}&fields=${WIKI_DETAIL_FIELDS}`, { cacheKey: `wiki-detail-${slug}`, ttl: 60000, fresh: false })
+      const promise = fetchJson(`/items/wiki_articles?limit=1&filter[slug][_eq]=${encodeURIComponent(slug)}&fields=${WIKI_DETAIL_FIELDS}`, { cacheKey: `wiki-detail-${slug}`, ttl: 60000, fresh: false, anonymous: true })
         .then(response => {
           const full = response.data?.[0];
           if (!full) return existing || null;
@@ -23209,6 +23339,85 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       } catch {
         return false;
       }
+    }
+
+    const discussionSourceRefreshCache = new Map();
+    const DISCUSSION_SOURCE_REFRESH_TTL_MS = 45000;
+
+    function discussionSourceFilter(sourceType, item) {
+      const type = encodeURIComponent(String(sourceType || ""));
+      const slug = encodeURIComponent(String(item?.slug || ""));
+      if (!type || !slug) return "";
+      if (sourceType === "site") {
+        return `&filter[source_type][_eq]=${type}&filter[_or][0][source_slug][_eq]=${slug}&filter[_or][1][site_slug][_eq]=${slug}`;
+      }
+      return `&filter[source_type][_eq]=${type}&filter[source_slug][_eq]=${slug}`;
+    }
+
+    function mergeDiscussionSourceComments(sourceType, item, rows = []) {
+      const retained = (state.publicComments || []).filter(comment => (
+        comment?._local_pending === true ||
+        !COMMENT_UTILS.matchesSource(comment, sourceType, item, {
+          normalizeSourceType: normalizeCommentSourceType,
+          useLegacySiteSlug: true,
+          allowLegacySiteFallback: true
+        })
+      ));
+      state.publicComments = mergeSeededComments([...retained, ...(rows || [])]);
+      state.profileActivityCache = null;
+    }
+
+    async function refreshDiscussionSourceData(sourceType, item, options = {}) {
+      const key = `${String(sourceType || "")}:${String(item?.slug || item?.id || "")}`;
+      const filter = discussionSourceFilter(sourceType, item);
+      if (!filter || key.endsWith(":")) return false;
+      const cached = discussionSourceRefreshCache.get(key);
+      if (options.fresh !== true && cached && Date.now() - cached.at < DISCUSSION_SOURCE_REFRESH_TTL_MS) {
+        return cached.promise;
+      }
+      const promise = (async () => {
+        const commentsRequest = fetchJson(`/items/mobile_comments?limit=100&filter[status][_eq]=approved&filter[public_activity][_eq]=true${filter}&sort=created_at&fields=${PUBLIC_COMMENT_FIELDS}`, {
+          cacheKey: `mobile-discussion-${key}`,
+          ttl: DISCUSSION_SOURCE_REFRESH_TTL_MS,
+          fresh: options.fresh === true
+        });
+        const plantsRequest = sourceType === "site"
+          ? fetchJson(`/items/mobile_plant_observations?limit=100&filter[status][_eq]=approved&filter[site_slug][_eq]=${encodeURIComponent(String(item.slug || ""))}&fields=${PLANT_OBSERVATION_FIELDS}`, {
+              cacheKey: `mobile-plants-${key}`,
+              ttl: DISCUSSION_SOURCE_REFRESH_TTL_MS,
+              fresh: options.fresh === true
+            }).catch(() => ({ data: [] }))
+          : Promise.resolve({ data: [] });
+        const [commentsResponse, plantsResponse] = await Promise.all([commentsRequest, plantsRequest]);
+        mergeDiscussionSourceComments(sourceType, item, commentsResponse.data || []);
+        if (sourceType === "site") mergePlantObservationRecords(plantsResponse.data || []);
+        return true;
+      })().catch(error => {
+        console.warn("Discussion data will refresh when this article is reopened.", error);
+        return false;
+      });
+      discussionSourceRefreshCache.set(key, { at: Date.now(), promise });
+      return promise;
+    }
+
+    function updateOpenDiscussionSection(sourceType, item) {
+      const stillOpen = sourceType === "site"
+        ? state.selectedSlug === item?.slug
+        : state.selectedWikiSlug === item?.slug;
+      if (!stillOpen || !detailEl?.classList.contains("open")) return false;
+      const current = detailBodyEl.querySelector(`.discussion-section[data-discussion-type="${CSS.escape(sourceType)}"][data-discussion-slug="${CSS.escape(String(item.slug || ""))}"]`);
+      if (!current) return false;
+      const template = document.createElement("template");
+      template.innerHTML = discussionHtml(sourceType, item).trim();
+      const replacement = template.content.firstElementChild;
+      if (!replacement) return false;
+      current.replaceWith(replacement);
+      decorateCurrentDetailForQuoteComments(sourceType, item);
+      if (sourceType === "site") {
+        detailEl.classList.toggle("plant-browse-mode", plantObservationsForSource("site", item).length > 0);
+        syncSitePlantMarkers(item);
+      }
+      return true;
     }
 
     async function refreshMobileAppDataFromDirectus() {
@@ -26231,12 +26440,27 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function scheduleNativeMapStateSync(reason = "state", delay = 40) {
-      if (!nativeMapBridgeAvailable()) return;
+      if (!nativeMapBridgeAvailable()) return false;
+      if (!state.nativeMapBaseSignature
+          && reason !== "native-bridge-shell-ready"
+          && reason !== "map-load") {
+        // Passive requests may resolve before the shell's first authoritative
+        // handoff on slower devices. The first base already reads their latest
+        // state, so sending one early would only duplicate the large payload.
+        return false;
+      }
       window.clearTimeout(state.nativeMapStateTimer);
       state.nativeMapStateTimer = window.setTimeout(() => {
         state.nativeMapStateTimer = null;
         syncNativeMapState(reason);
       }, Math.max(0, Number(delay) || 0));
+      return true;
+    }
+
+    function scheduleNativeMapTransientStateSync(reason = "state", delay = 0) {
+      if (!nativeMapBridgeAvailable() || !state.nativeMapBaseSignature) return false;
+      scheduleNativeMapStateSync(reason, delay);
+      return true;
     }
 
     function installNativeMapBridge() {
@@ -31325,8 +31549,24 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       };
     }
 
-    function mobileMovingBiographyLoop(route = [], travelMs = MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS, offsetMs = 0, now = performance.now()) {
+    function mobileMovingBiographyLoop(route = [], travelMs = MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS, offsetMs = 0, now = performance.now(), options = {}) {
       const routeDuration = Math.max(1000, travelMs);
+      if (options.continuous === true) {
+        const cycle = Math.max(1000, routeDuration * 2);
+        const elapsed = (((now + offsetMs) % cycle) + cycle) % cycle;
+        const returning = elapsed > routeDuration;
+        const progress = returning ? 1 - ((elapsed - routeDuration) / routeDuration) : elapsed / routeDuration;
+        const coordinates = mobileMovingCoordinateAt(route, Math.max(0, Math.min(1, progress))) || route[0] || [FALLBACK_CENTER[0], FALLBACK_CENTER[1]];
+        const sampleProgress = Math.max(0, Math.min(1, progress + (returning ? -0.01 : 0.01)));
+        const sample = mobileMovingCoordinateAt(route, sampleProgress) || coordinates;
+        return {
+          coordinates,
+          direction: sample[0] >= coordinates[0] ? "right" : "left",
+          progress,
+          opacity: 1,
+          phase: "moving"
+        };
+      }
       const cycle = routeDuration + (MOBILE_BIOGRAPHY_MARKER_FADE_MS * 2) + MOBILE_BIOGRAPHY_MARKER_RESET_MS;
       let elapsed = (((now + offsetMs) % cycle) + cycle) % cycle;
       if (elapsed <= routeDuration) {
@@ -31361,11 +31601,25 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       return Math.max(0.08, 0.22 / Math.pow(2, (zoom - 11.5) * 0.5));
     }
 
+    function mobileNativeMovingMarkerIntervalMs() {
+      const zoom = Number(state.map?.getZoom?.());
+      if (!Number.isFinite(zoom) || zoom <= 8) return MOBILE_NATIVE_MOVING_MARKER_OVERVIEW_INTERVAL_MS;
+      if (zoom >= 11.5) return MOBILE_NATIVE_MOVING_MARKER_CLOSE_INTERVAL_MS;
+      const progress = (zoom - 8) / 3.5;
+      return Math.round(
+        MOBILE_NATIVE_MOVING_MARKER_OVERVIEW_INTERVAL_MS
+        - progress * (MOBILE_NATIVE_MOVING_MARKER_OVERVIEW_INTERVAL_MS - MOBILE_NATIVE_MOVING_MARKER_CLOSE_INTERVAL_MS)
+      );
+    }
+
     function mobileBiographyMotionFor(item, now = performance.now()) {
       const route = item?.route || [];
       const routeDuration = Math.max(1000, Number(item?.duration) || MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS);
-      const cycleDuration = routeDuration + (MOBILE_BIOGRAPHY_MARKER_FADE_MS * 2) + MOBILE_BIOGRAPHY_MARKER_RESET_MS;
-      const signature = `${routeDuration}|${route.length}|${route[0]?.join(",") || ""}|${route[route.length - 1]?.join(",") || ""}`;
+      const continuous = item?.continuous === true;
+      const cycleDuration = continuous
+        ? routeDuration * 2
+        : routeDuration + (MOBILE_BIOGRAPHY_MARKER_FADE_MS * 2) + MOBILE_BIOGRAPHY_MARKER_RESET_MS;
+      const signature = `${continuous ? "continuous" : "reset"}|${routeDuration}|${route.length}|${route[0]?.join(",") || ""}|${route[route.length - 1]?.join(",") || ""}`;
       const slug = String(item?.slug || "");
       let controller = state.mobileBiographyMotionControllers.get(slug);
       if (!controller) {
@@ -31396,7 +31650,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         }
         controller.progress = controller.elapsedMs / cycleDuration;
       }
-      return mobileMovingBiographyLoop(route, routeDuration, 0, controller.elapsedMs);
+      return mobileMovingBiographyLoop(route, routeDuration, 0, controller.elapsedMs, { continuous });
     }
 
     function mobileMovingRouteDuration(route = []) {
@@ -31432,7 +31686,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         state.mobileMovingLandCacheGeometry = geometry;
         state.mobileMovingLandStateCache.clear();
       }
-      const cacheKey = `${Number(coordinates[0]).toFixed(4)},${Number(coordinates[1]).toFixed(4)}`;
+      // Reuse shoreline classification within a small map cell instead of
+      // rescanning the full land mask on every animation frame.
+      const cacheKey = `${Number(coordinates[0]).toFixed(3)},${Number(coordinates[1]).toFixed(3)}`;
       if (state.mobileMovingLandStateCache.has(cacheKey)) return state.mobileMovingLandStateCache.get(cacheKey);
       try {
         const result = mobileMovingLandSamples(coordinates).some(sample => pointInGeometry(sample, geometry));
@@ -31446,17 +31702,109 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }
     }
 
+    function mobileBiographyStableHash(text = "") {
+      let hash = 0;
+      for (const character of String(text)) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0;
+      return Math.abs(hash);
+    }
+
+    function mobileBiographySegmentStaysOnSurface(start, end, startsOnLand, samples = 12) {
+      if (!Array.isArray(start) || !Array.isArray(end) || !state.landMaskData?.geometry) return false;
+      for (let index = 0; index <= samples; index += 1) {
+        const t = index / samples;
+        const point = [
+          start[0] + ((end[0] - start[0]) * t),
+          start[1] + ((end[1] - start[1]) * t)
+        ];
+        if (mobileMovingPointIsOnLand(point) !== startsOnLand) return false;
+      }
+      return true;
+    }
+
+    function mobileBiographyLocalWanderRoute(slug, route = [], path = {}) {
+      const validRoute = route.filter(coordinates => Array.isArray(coordinates) && coordinates.every(Number.isFinite));
+      if (path?.animate === false || validRoute.length !== 1 || !state.landMaskData?.geometry) return validRoute;
+      const origin = validRoute[0].slice(0, 2);
+      const startsOnLand = mobileMovingPointIsOnLand(origin);
+      const angleOffset = (mobileBiographyStableHash(`${slug}:local-wander`) % 360) * Math.PI / 180;
+      const localRoute = [origin];
+      for (let index = 0; index < 12 && localRoute.length < MOBILE_BIOGRAPHY_LOCAL_WANDER_POINT_COUNT; index += 1) {
+        const radius = MOBILE_BIOGRAPHY_LOCAL_WANDER_RADIUS_DEG * (1 - (Math.floor(index / 4) * 0.28));
+        const angle = angleOffset + ((Math.PI * 2 * (index % 4)) / 4);
+        const candidate = [origin[0] + (Math.cos(angle) * radius), origin[1] + (Math.sin(angle) * radius)];
+        const previous = localRoute[localRoute.length - 1];
+        if (mobileMovingPointIsOnLand(candidate) !== startsOnLand) continue;
+        if (!mobileBiographySegmentStaysOnSurface(previous, candidate, startsOnLand)) continue;
+        localRoute.push(candidate);
+      }
+      return localRoute.length >= 2 ? localRoute : validRoute;
+    }
+
+    function mobileBiographyUniqueRoute(route = []) {
+      const seen = new Set();
+      return route.filter(coordinates => {
+        if (!Array.isArray(coordinates) || !coordinates.every(Number.isFinite)) return false;
+        const key = `${Number(coordinates[0]).toFixed(5)},${Number(coordinates[1]).toFixed(5)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+
+    function mobileBiographyDisplayOffsets(items = []) {
+      const groups = new Map();
+      const offsets = new Map();
+      for (const item of items) {
+        const coordinates = item?.route?.[0] || [];
+        if (!coordinates.every(Number.isFinite)) continue;
+        const key = `${Number(coordinates[0]).toFixed(5)},${Number(coordinates[1]).toFixed(5)}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(item);
+      }
+      for (const group of groups.values()) {
+        if (group.length < 2) continue;
+        group.sort((a, b) => String(a.slug).localeCompare(String(b.slug)));
+        group.forEach((item, index) => {
+          const angle = group.length === 2 ? index * Math.PI : (-Math.PI / 2) + ((Math.PI * 2 * index) / group.length);
+          const radius = group.length === 2 ? 18 : 22;
+          offsets.set(item.slug, [Math.round(Math.cos(angle) * radius), Math.round(Math.sin(angle) * radius)]);
+        });
+      }
+      return offsets;
+    }
+
+    function mobileBiographyDisplayCoordinates(coordinates, offset = [0, 0]) {
+      const x = Number(offset?.[0]) || 0;
+      const y = Number(offset?.[1]) || 0;
+      if (!Array.isArray(coordinates) || (!x && !y) || !state.map?.project || !state.map?.unproject) return coordinates;
+      try {
+        const point = state.map.project(coordinates);
+        const projected = state.map.unproject([Number(point.x) + x, Number(point.y) + y]);
+        const lng = Number(projected?.lng);
+        const lat = Number(projected?.lat);
+        return Number.isFinite(lng) && Number.isFinite(lat) ? [lng, lat] : coordinates;
+      } catch {
+        return coordinates;
+      }
+    }
+
     function mobileMovingBiographyItems() {
-      return Object.keys(BIOGRAPHY_PLACE_PATHS)
+      const items = Object.keys(BIOGRAPHY_PLACE_PATHS)
         .map((slug, index) => {
           const article = state.wikiBySlug.get(slug) || { slug, title: BIOGRAPHY_PLACE_PATHS[slug]?.title || slug };
-          const path = mobileBiographyTimelineData(article, timelineEventsForSource("wiki", article.id, slug)) || mobileBiographyPathData(article);
+          const configuredPath = BIOGRAPHY_PLACE_PATHS[slug] || null;
+          const configuredPlaces = (configuredPath?.places || [])
+            .filter(place => Array.isArray(place?.coordinates) && place.coordinates.every(Number.isFinite));
+          const path = mobileBiographyTimelineData(article, timelineEventsForSource("wiki", article.id, slug))
+            || mobileBiographyPathData(article)
+            || (configuredPlaces.length ? { ...configuredPath, places: configuredPlaces } : null);
           // Source review can opt a visual guide out.
           if (path?.animate === false) return null;
-          if (!path?.places?.length || path.places.length < 2) return null;
-          const route = (path.routePlaces?.length ? path.routePlaces : path.places)
+          if (!path?.places?.length) return null;
+          const configuredRoute = mobileBiographyUniqueRoute((path.routePlaces?.length ? path.routePlaces : path.places)
             .map(place => Array.isArray(place) ? place : place?.coordinates)
-            .filter(coords => Array.isArray(coords) && coords.every(Number.isFinite));
+            .filter(coords => Array.isArray(coords) && coords.every(Number.isFinite)));
+          const route = mobileBiographyLocalWanderRoute(slug, configuredRoute, path);
           if (route.length < 2) return null;
           return {
             slug,
@@ -31465,10 +31813,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             route,
             person: mobileBiographyPathPersonName(article, slug),
             duration: mobileMovingRouteDuration(route),
-            offset: index * 31000
+            offset: index * 31000,
+            localWander: configuredRoute.length === 1,
+            fixedSurfaceIsLand: configuredRoute.length === 1 ? mobileMovingPointIsOnLand(route[0]) : null,
+            continuous: configuredRoute.length === 1 || MOBILE_BIOGRAPHY_CONTINUOUS_SLUGS.has(slug)
           };
         })
         .filter(Boolean);
+      const displayOffsets = mobileBiographyDisplayOffsets(items);
+      items.forEach(item => { item.displayOffset = displayOffsets.get(item.slug) || [0, 0]; });
+      return items;
     }
 
     function mobileMovingBiographyStatus(item, motion) {
@@ -31501,7 +31855,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const status = mobileMovingBiographyStatus(item, motion);
         features.push({
           type: "Feature",
-          geometry: { type: "Point", coordinates: motion.coordinates },
+          geometry: { type: "Point", coordinates: mobileBiographyDisplayCoordinates(motion.coordinates, item.displayOffset) },
           properties: {
             native_kind: "wiki",
             native_key: item.slug,
@@ -31624,7 +31978,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function updateMobileMovingBiographyMarker(item, marker, now = performance.now()) {
       const motion = mobileBiographyMotionFor(item, now);
-      marker.setLngLat(motion.coordinates);
+      marker.setLngLat(mobileBiographyDisplayCoordinates(motion.coordinates, item.displayOffset));
       const element = marker.getElement?.();
       const button = element?.querySelector?.(".mobile-moving-biography-marker");
       if (!button) return;
@@ -31866,11 +32220,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const now = performance.now();
         updateMobileMovingFeatureMarkers(now);
         state.mobileMovingMarkerLastAt = now;
-        const interval = nativeMapBridgeAvailable() ? MOBILE_NATIVE_MOVING_MARKER_INTERVAL_MS : MOBILE_MOVING_MARKER_INTERVAL_MS;
+        const interval = nativeMapBridgeAvailable() ? mobileNativeMovingMarkerIntervalMs() : MOBILE_MOVING_MARKER_INTERVAL_MS;
         state.mobileMovingMarkerTimer = window.setTimeout(tick, interval);
       };
       const elapsed = performance.now() - (state.mobileMovingMarkerLastAt || 0);
-      const interval = nativeMapBridgeAvailable() ? MOBILE_NATIVE_MOVING_MARKER_INTERVAL_MS : MOBILE_MOVING_MARKER_INTERVAL_MS;
+      const interval = nativeMapBridgeAvailable() ? mobileNativeMovingMarkerIntervalMs() : MOBILE_MOVING_MARKER_INTERVAL_MS;
       state.mobileMovingMarkerTimer = window.setTimeout(tick, Math.max(0, interval - elapsed));
     }
 
@@ -31932,7 +32286,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         detailBodyEl.innerHTML = `<p class="summary">This knowledgebase article is not available in this view yet.</p>`;
         return;
       }
-      await ensureTimelineDetailsForSource("wiki", article.id, article.slug);
+      // The article body is the primary response to a biography/map tap. Do
+      // not hold it behind the supplemental timeline request: on a slower
+      // mobile connection that made otherwise text-only biographies appear
+      // frozen for several seconds. Existing timeline rows render now and the
+      // targeted request hydrates the journey below as soon as it is ready.
+      const timelinePromise = ensureTimelineDetailsForSource("wiki", article.id, article.slug);
       if (state.selectedWikiSlug !== slug) return;
       const event = options.timelineEventId
         ? (state.timelineById.get(String(options.timelineEventId)) || options.timelineEvent || state.timelineEvents.find(item => String(item.id) === String(options.timelineEventId)))
@@ -31960,7 +32319,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         ${showArticleSummary ? `<p class="summary">${escapeHtml(publicCleanText(article.summary))}</p>` : ""}
         ${articleContentHtml ? `<section class="section"><h3>Sections</h3><div class="section-content">${articleContentHtml}</div></section>` : ""}
         ${whyThisMattersHtml(article)}
-        ${mobileBiographyPathHtml(article, wikiMoments)}
+        <div data-mobile-wiki-biography-path>${mobileBiographyPathHtml(article, wikiMoments)}</div>
         ${sourcesEvidenceSection(article)}
         ${plantWikiObservationSitesHtml(article)}
         ${discussionHtml("wiki", article)}
@@ -31991,22 +32350,24 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           events: wikiMoments
         });
       }
+      void timelinePromise.then(() => {
+        if (state.selectedWikiSlug !== slug || !detailEl?.classList.contains("open")) return;
+        const updatedMoments = timelineEventsForSource("wiki", article.id, article.slug);
+        const pathSlot = detailBodyEl.querySelector("[data-mobile-wiki-biography-path]");
+        if (pathSlot) pathSlot.innerHTML = mobileBiographyPathHtml(article, updatedMoments);
+        const updatedTimeline = mobileBiographyTimelineData(article, updatedMoments);
+        if (updatedTimeline?.places?.length >= 2) {
+          showMobileBiographyPathOverlay(article, {
+            focus: false,
+            events: updatedMoments
+          });
+        }
+      }).catch(() => {});
       if (event?.id) {
         window.setTimeout(() => focusMobileHistoricMoment(event.id), 120);
       }
-      if (!options.skipCommentRefresh) refreshCommentsNow({ rerender: false }).then(updated => {
-        if (updated && state.selectedWikiSlug === slug) {
-          const refreshLifecycleSnapshot = androidLifecycleDetailScrollRestore?.active ? lifecycleSnapshot : null;
-          openWikiArticle(article.slug, {
-            ...options,
-            skipCommentRefresh: true,
-            skipRoute: true,
-            drawerState: refreshLifecycleSnapshot ? drawerState : currentDetailDrawerState(),
-            preserveDetailScrollTop: detailBodyEl.scrollTop,
-            lifecycleSnapshot: refreshLifecycleSnapshot,
-            restoreMapState: options.restoreMapState === true
-          });
-        }
+      if (!options.skipCommentRefresh) refreshDiscussionSourceData("wiki", article).then(updated => {
+        if (updated) updateOpenDiscussionSection("wiki", article);
       });
     }
 
@@ -33064,16 +33425,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           if (state.selectedSlug === slug) refreshMobileVisitActions(state.selectedSite || site);
         }).catch(() => []);
       }
-      const [fullSite, , sourceList] = await Promise.all([detailPromise, timelinePromise, sourceListPromise]);
-      site = fullSite;
+      // Render the primary listing as soon as its detail record arrives.
+      // Timeline moments and normalized source relations are supplemental and
+      // hydrate their own regions below instead of blocking every site tap.
+      site = await detailPromise;
       if (state.selectedSlug !== slug) return;
       state.selectedSite = site;
       syncActiveSiteMapLabel(site);
       const image = mobileSnapshotImageUrl(listingImage(site));
       const imageFallback = mobileSnapshotImageUrl(listingImageFallback(site));
       const moments = timelineEventsForSource("site", site.id, site.slug);
-      if ((!Array.isArray(site.source_list) || !site.source_list.length) && sourceList.length) site = { ...site, source_list: sourceList };
-      let renderedMoments = false;
       const sectionEntries = contentSections(site);
       const linked = new Set();
       const excludeHref = `#listing/${site.slug}`;
@@ -33082,10 +33443,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         summary: site.summary
       });
       const sections = sectionEntries.map(([title, content, field]) => {
-        if (field?.content === "history_content" && moments.length) {
-          renderedMoments = true;
-          return `${sourceAwareSectionHtml(title, content, { linked, excludeHref, field: field?.content })}${historicMomentsHtml(moments, { showLocations: false })}`;
-        }
         return sourceAwareSectionHtml(title, content, {
           linked,
           excludeHref,
@@ -33093,7 +33450,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           field: field?.content
         });
       }).join("");
-      const historyHtml = moments.length && !renderedMoments ? historicMomentsHtml(moments, { showLocations: false }) : "";
+      const historyHtml = moments.length ? historicMomentsHtml(moments, { showLocations: false }) : "";
       detailTitleEl.innerHTML = mobileSiteTitleHtml(site);
       restoreDetailHeroToBody();
       detailBodyEl.innerHTML = `
@@ -33101,10 +33458,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         ${introductionPresentation.leadSummary ? `<p class="summary" data-site-introduction="summary">${escapeHtml(introductionPresentation.leadSummary)}</p>` : ""}
         ${siteTagsHtml(site)}
         ${sections}
-        ${historyHtml}
+        <div data-mobile-site-timeline-slot>${historyHtml}</div>
         ${whyThisMattersHtml(site)}
         ${relatedSitesSection(site)}
-        ${sourcesEvidenceSection(site)}
+        <div data-mobile-site-sources-slot>${sourcesEvidenceSection(site)}</div>
         ${mobileAdoptPlaceCtaHtml(site)}
         ${discussionHtml("site", site)}
         <div class="actions">
@@ -33141,21 +33498,28 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (contentUpdateItems.length && options.focusNewContent !== false) {
         window.setTimeout(() => revealMobileContentUpdate(site, contentUpdateItems), 180);
       }
-      if (!options.skipCommentRefresh) refreshCommentsNow({ rerender: false }).then(updated => {
-        if (updated && state.selectedSlug === slug) {
-          const refreshLifecycleSnapshot = androidLifecycleDetailScrollRestore?.active ? lifecycleSnapshot : null;
-          openSite(slug, {
-            focus: false,
-            skipCommentRefresh: true,
-            skipRoute: true,
-            drawerState: refreshLifecycleSnapshot ? drawerState : currentDetailDrawerState(),
-            preserveDetailScrollTop: detailBodyEl.scrollTop,
-            contentUpdateItems,
-            timelineEventId: options.timelineEventId,
-            timelineEvent: options.timelineEvent,
-            lifecycleSnapshot: refreshLifecycleSnapshot,
-            restoreMapState: options.restoreMapState === true
-          });
+      void timelinePromise.then(() => {
+        if (state.selectedSlug !== slug || !detailEl?.classList.contains("open")) return;
+        const updatedMoments = timelineEventsForSource("site", site.id, site.slug);
+        const timelineSlot = detailBodyEl.querySelector("[data-mobile-site-timeline-slot]");
+        if (timelineSlot) timelineSlot.innerHTML = historicMomentsHtml(updatedMoments, { showLocations: false });
+      }).catch(() => {});
+      void sourceListPromise.then(sourceList => {
+        if (!Array.isArray(sourceList) || !sourceList.length || state.selectedSlug !== slug || !detailEl?.classList.contains("open")) return;
+        const sourcedSite = { ...site, source_list: sourceList };
+        state.selectedSite = sourcedSite;
+        const sourceSlot = detailBodyEl.querySelector("[data-mobile-site-sources-slot]");
+        if (sourceSlot) sourceSlot.innerHTML = sourcesEvidenceSection(sourcedSite);
+      }).catch(() => {});
+      if (!options.skipCommentRefresh) refreshDiscussionSourceData("site", site).then(updated => {
+        if (!updated) return;
+        updateOpenDiscussionSection("site", site);
+        // A newly fetched comment may not have existed during the initial
+        // reveal pass. Re-run the focused reveal after replacing only the
+        // discussion section so unread activity still lands on the exact card
+        // without rebuilding the entire detail panel.
+        if (contentUpdateItems.length && options.focusNewContent !== false) {
+          window.setTimeout(() => revealMobileContentUpdate(site, contentUpdateItems), 40);
         }
       });
     }
@@ -33340,7 +33704,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     };
 
     function syncUserLocationMarker({ centerMap = false, zoom = NEAR_ME_ZOOM, duration = 850 } = {}) {
-      scheduleNativeMapStateSync("user-location", 0);
+      // Location is already included in the first authoritative base handoff.
+      // Avoid turning an early saved-location callback into a second complete
+      // 400+ site payload while Android is still preparing the native map.
+      scheduleNativeMapTransientStateSync("user-location", 0);
       if (!state.map || !state.userLocation || typeof mapboxgl === "undefined") return;
       if (state.userMarker?.setLngLat) {
         state.userMarker.setLngLat(state.userLocation);
@@ -33749,7 +34116,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         saveSettings();
         setLocationControlsBusy(false);
         state.userLocation = null;
-        scheduleNativeMapStateSync("user-location-cleared", 0);
+        scheduleNativeMapTransientStateSync("user-location-cleared", 0);
         renderCurrentTerritoryStatus();
           renderList();
           if (!silent) showBanner("Location permission was not available. Showing sites near central Long Island without personal distances.");
@@ -37676,7 +38043,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           nativeBridgeTimer = window.setTimeout(() => {
             nativeBridgeTimer = null;
             installNativeMapBridge();
-            scheduleNativeMapStateSync("native-bridge-shell-ready", 0);
+            // Establish the authoritative base immediately. Async content
+            // refreshes can finish in this same turn; queuing this handoff
+            // allowed one of them to replace it and forced an unnecessary
+            // full native-map payload on slower Android devices.
+            syncNativeMapState("native-bridge-shell-ready");
             resolveMapReady();
           }, 360);
         }
@@ -37684,7 +38055,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           collapseMobileMapAttribution();
           addPolygonLayers();
           installNativeMapBridge();
-          scheduleNativeMapStateSync("map-load", 0);
+          syncNativeMapState("map-load");
           syncMarkers();
           syncUserLocationMarker({ centerMap: false });
           bindAndroidMapGestureGuards();
