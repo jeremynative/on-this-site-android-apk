@@ -1,5 +1,14 @@
 # Android APK — Codex Handoff
 
+## August 31 biography introductions
+
+- Synchronized the 34 reviewed biography article bodies from Directus/web into the maintained Android offline source archive, including Sunksqua Weany and the conservative Jeremiah Pharoah correction. No unrelated site, timeline, geometry, or Android-specific runtime data was replaced.
+- Added a release guard requiring every reviewed biography to begin with its identifying `biography-introduction` paragraph. Exact parity with the web bundle was checked for all 34 articles.
+- Bumped the native cache marker to `20260831-biography-introductions-r205` so installed apps request the newly deployed hosted runtime.
+- `node verify-app-shell.js`, exact offline biography parity, `node verify-google-play-readiness.js`, `git diff --check`, and `build-debug-apk.ps1` pass.
+
+Current branch is `content/biography-introductions-20260831`, based on `origin/main` at `bab9a71`. Safest next action is to merge the focused Android PR, wait for the signed Obtainium workflow, verify the published APK hash/version, and install it over a connected production app only if a device is available without clearing data.
+
 ## August 31 polygon shoreline edge audit
 
 - Synced the audited deferred polygon geometry from web PR `#153` without replacing Android-specific UI/runtime files or enlarging the compact first-frame land mask. The bundled archive retains 439 site geometry rows and now includes 16 high-detail display polygons; cache version `20260831-shoreline-edge-audit-v4` prevents an older geometry snapshot from persisting after upgrade.

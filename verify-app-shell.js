@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260831-polygon-edge-audit-r204";
+const expectedBuild = "20260831-biography-introductions-r205";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -815,6 +815,26 @@ if (bundledSourceRecords.length !== 288) {
 
 const bundledMobileDataMatch = bundledApp.match(/window\.NLI_MOBILE_DATA\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
 const bundledMobileData = JSON.parse(bundledMobileDataMatch[1]);
+const reviewedBiographySlugs = [
+  "chief-harry-wallace-of-the-unkechaug", "peter-john-cuffee", "sunksqua-weany-pametsechs", "wuchikittawbut",
+  "paucamp", "nathan-jeffrey-cuffee", "sylvester-pharoah", "sachem-aquash-of-the-montaukett",
+  "mandush-17th-century-sachem-of-shinnecock", "chief-mahue-mayhew-of-unkechaug", "stephen-talkhouse-pharoah",
+  "wobetom", "rev-paul-cuffee", "jeremiah-pharoah-montaukett-whaler", "ninigret-eastern-niantic-sachem",
+  "mary-rebecca-bunn-aunt-becky", "mangwobe-sachem-of-rockaway", "mocomanto-shinnecock-sachem-1640",
+  "nasseconset-sachem-of-the-nissequogue", "keeossechok-sachem-of-the-secatogue",
+  "sachem-warawakmy-of-the-setauket", "john-a-strong", "betty-lewis-cromwell-shinnecock", "momoweta",
+  "sachem-tackapousha", "elizabeth-thunder-bird-haile-shinnecock", "samson-occom",
+  "penhawitz-sachem-of-the-canarsie", "adam-achitteronose",
+  "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "quashawam", "wyandanch", "cockenoe",
+  "poggatacut-sachem-of-the-manhassets-of-shelter-island"
+];
+const bundledBiographyBySlug = new Map((bundledMobileData.wikiArticles || []).map(article => [article.slug, article]));
+for (const slug of reviewedBiographySlugs) {
+  const article = bundledBiographyBySlug.get(slug);
+  if (!article || !/^<p class="biography-introduction">[\s\S]+?<\/p>/.test(String(article.content || ""))) {
+    throw new Error(`Bundled Android biography ${slug} must begin with its reviewed identifying introduction.`);
+  }
+}
 if (!Array.isArray(bundledMobileData.learningPaths) || bundledMobileData.learningPaths.length !== 3) {
   throw new Error(`Bundled Android fallback must contain 3 public learning paths; found ${bundledMobileData.learningPaths?.length || 0}.`);
 }
