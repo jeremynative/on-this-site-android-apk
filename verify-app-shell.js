@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260831-content-panel-compact-r203";
+const expectedBuild = "20260831-polygon-edge-audit-r204";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -638,6 +638,21 @@ const bundledSiteCenters = JSON.parse(fs.readFileSync(
   "app/src/main/assets/assets/data/mobile-site-centers.json",
   "utf8"
 ));
+
+const bundledGeometryRows = Array.isArray(bundledSiteGeometry?.rows) ? bundledSiteGeometry.rows : [];
+const detailedPolygonRows = bundledGeometryRows.filter((row) => row?.display_geojson);
+const bundledGeometryBytes = fs.statSync(
+  "app/src/main/assets/assets/data/mobile-site-geometry.json"
+).size;
+if (bundledGeometryRows.length !== 439 || detailedPolygonRows.length < 16) {
+  throw new Error("Bundled Android geometry must retain all 439 sites and the audited detailed polygon set.");
+}
+if (bundledGeometryBytes > 2_850_000) {
+  throw new Error(`Bundled Android geometry exceeds its deferred-load budget: ${bundledGeometryBytes} bytes.`);
+}
+if (!bundledMobileJs.includes('SITE_GEOMETRY_VERSION = "20260831-shoreline-edge-audit-v4"')) {
+  throw new Error("Android must invalidate the older cached polygon geometry after the shoreline audit.");
+}
 
 const manifestIconAssets = nativeSiteIconManifest?.icon_asset_by_map_icon_id || {};
 const manifestForceBlueSlugs = new Set(nativeSiteIconManifest?.force_blue_dot_slugs || []);
