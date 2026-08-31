@@ -34105,7 +34105,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             : mapZoom;
           applyUserLocation(position, { centerMap, mapZoom: resolvedMapZoom, centerBounds });
           resolve(true);
-      }, () => {
+      }, error => {
+        if (window.NLI_STARTUP_LOCATION_AUDIT) {
+          window.NLI_STARTUP_LOCATION_AUDIT.lastError = {
+            code: Number(error?.code || 0),
+            message: String(error?.message || "")
+          };
+        }
         state.settings.locationEnabled = false;
         state.settings.locationPrompted = true;
         saveSettings();
@@ -34241,26 +34247,33 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       });
     }
 
-    function nativeLocationPermissionGranted() {
-      if (!isNativeAndroidApp()) return false;
-      try {
-        return window.AndroidApp?.hasLocationPermission?.() === true;
-      } catch (_) {
-        return false;
-      }
-    }
-
     async function requestStartupLocation() {
-      if (isNativeAndroidApp()) {
-        if (!nativeLocationPermissionGranted()) return false;
-        return requestUserLocation({ centerMap: false, silent: true, mapZoom: NEAR_ME_ZOOM });
-      }
-      if (state.settings.proximityAlerts) {
-        setMobilePanelMode("nearby");
-        setNearbyPanelState("default");
-        return requestUserLocation({ centerMap: true, silent: false, mapZoom: STARTUP_LOCATION_ZOOM, centerBounds: STARTUP_LOCATION_CENTER_BOUNDS });
-      }
-      return false;
+      const debugAudit = window.AndroidApp?.isDebugBuild?.() === true
+        ? (window.NLI_STARTUP_LOCATION_AUDIT ||= { attempts: 0, lastResult: null })
+        : null;
+      if (debugAudit) debugAudit.attempts += 1;
+      const request = isNativeAndroidApp()
+        ? requestUserLocation({
+          centerMap: true,
+          silent: true,
+          mapZoom: NEAR_ME_ZOOM,
+          centerBounds: STARTUP_LOCATION_CENTER_BOUNDS,
+          positionOptions: { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 }
+        })
+        : requestUserLocation({
+          centerMap: true,
+          silent: true,
+          mapZoom: STARTUP_LOCATION_ZOOM,
+          centerBounds: STARTUP_LOCATION_CENTER_BOUNDS,
+          positionOptions: { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+        });
+      return request.then(found => {
+        if (debugAudit) {
+          debugAudit.lastResult = Boolean(found);
+          if (found) debugAudit.lastError = null;
+        }
+        return found;
+      });
     }
 
     function startLocationWatch() {
@@ -39997,12 +40010,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         // was already open (for example after taking a photo in a draft).
         if (androidLifecycleSnapshot?.content) {
           restoreAndroidLifecyclePanels(androidLifecycleSnapshot);
-        } else if (nativeAndroid) {
-          setMobilePanelMode("timeline");
-          setMobileBottomPanelState("collapsed", { persist: false });
         } else {
+          setMobileBottomPanelState("collapsed", { persist: false });
           setMobilePanelMode("nearby");
-          setMobileBottomPanelState("normal", { persist: false });
         }
         installMobileBottomPanelDrag();
         installLandscapePanelResize();
@@ -40034,7 +40044,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         // then reveal the live map or text fallback only when it is ready.
         appEl?.classList.add("mobile-map-initializing");
         hideLoadingScreen();
-        if (nativeAndroid) requestStartupLocation();
         const mobileMapReady = await initMap().catch(error => {
           console.warn("Map did not initialize yet.", error);
           statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
@@ -40084,7 +40093,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         if (state.selectedSite && !androidLifecycleMapRestored) focusSite(state.selectedSite);
         checkDailyHistoryMoment();
         checkNewContentAlerts();
-        if (!nativeAndroid) requestStartupLocation();
+        requestStartupLocation();
+        if (/Android/i.test(navigator.userAgent)) window.setTimeout(() => {
+          if (!state.userLocation) requestStartupLocation();
+        }, 15000);
         if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {
           idleTask(() => (state.profile ? ensureProfileStatsSynced() : Promise.resolve(false))
             .then(() => awardDailyLoginReward({ silent: true }))

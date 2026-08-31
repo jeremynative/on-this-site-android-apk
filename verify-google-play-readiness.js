@@ -67,16 +67,18 @@ for (const permission of [
 ]) forbid(manifest, permission, `Forbidden broad permission is present: ${permission}`);
 requireMatch(activity, /setMixedContentMode\(WebSettings\.MIXED_CONTENT_NEVER_ALLOW\)/,
   "WebView mixed content must remain blocked.");
-requireMatch(activity, /window\.__nliAllowGeoUntil=0/,
-  "Bundled fallback must not grant a startup location-request window.");
+requireMatch(activity, /window\.__nliAllowGeoUntil=Date\.now\(\)\+30000/,
+  "Bundled fallback must grant only the short requested startup location window.");
 requireMatch(activity, /validateLoadedAppShell\(String url\) \{\s*if \(!isAppShellUrl\(url\)\) return;/,
   "Privacy and account-deletion pages must not be rejected by the app-shell watchdog.");
-requireMatch(mobile, /function nativeLocationPermissionGranted\(\)[\s\S]*?if \(!nativeLocationPermissionGranted\(\)\) return false;[\s\S]*?requestUserLocation\(\{ centerMap: false, silent: true/,
-  "APK must reuse granted location permission without opening a new startup prompt.");
+requireMatch(mobile, /function requestStartupLocation\(\)[\s\S]*?const request = isNativeAndroidApp\(\)[\s\S]*?requestUserLocation\(\{[\s\S]*?centerMap: true,[\s\S]*?silent: true,[\s\S]*?mapZoom: NEAR_ME_ZOOM/,
+  "APK must request startup location and center the map when permission is available.");
 requireMatch(mobile, /data-find-nearby-sites/,
   "APK Nearby must offer a dedicated location action instead of showing an alphabetical archive list.");
-forbid(mobile, "if (nativeAndroid && !isOfflineTextMode()) await requestStartupLocation();",
-  "APK must not request location during startup.");
+requireMatch(mobile, /const mobileMapReady = await initMap\(\)[\s\S]*?requestStartupLocation\(\);/,
+  "APK must begin startup location centering after the map is ready.");
+requireMatch(mobile, /if \(\/Android\/i\.test\(navigator\.userAgent\)\) window\.setTimeout\(\(\) => \{\s*if \(!state\.userLocation\) requestStartupLocation\(\);\s*\}, 15000\);/,
+  "APK must retry startup location after the WebView settles.");
 for (const productId of ["support_10", "support_25", "support_50", "support_100", "support_monthly_10", "support_monthly_25", "support_monthly_50", "support_monthly_100"]) {
   requireMatch(billingManager, new RegExp(`"${productId}"`), `Billing product is missing from the native allowlist: ${productId}`);
 }

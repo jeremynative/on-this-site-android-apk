@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260831-biography-introductions-r205";
+const expectedBuild = "20260831-mobile-map-first-r206";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -256,9 +256,9 @@ const expandedMapHitQuery = nativeMapController.match(/List<Feature> features = 
 if (!expandedMapHitQuery || expandedMapHitQuery.includes('"nli-territory-fill"')) {
   throw new Error("Expanded pin hit testing must not steal exact offline territory polygon taps.");
 }
-if (!bundledMobileJs.includes('else if (nativeAndroid) {\n          setMobilePanelMode("timeline");\n          setMobileBottomPanelState("collapsed", { persist: false });')
+if (!bundledMobileJs.includes('else {\n          setMobileBottomPanelState("collapsed", { persist: false });\n          setMobilePanelMode("nearby");')
     || !bundledMobileJs.includes("Finding your location with device GPS. In airplane mode this can take a little longer.")) {
-  throw new Error("Android startup must use a collapsed Timeline and explain airplane-mode GPS requests.");
+  throw new Error("Android startup must use a collapsed Nearby panel and explain airplane-mode GPS requests.");
 }
 if (!bundledMobileJs.includes('"Sewanhacky (The Isle of Shells)"')
     || !bundledMobileJs.includes('"Paumanack (The Land of Tribute)"')
@@ -1515,7 +1515,7 @@ requireText("window.NLI_APK_SNAPSHOT_MODE=true;", "Android shell must mark the b
 requireText("window.NLI_APK_OFFLINE_TEXT_MODE=true;", "Android shell must mark the bundled fallback as a text-first offline archive.");
 requireText("window.NLI_DISABLE_DIRECTUS_RUNTIME=true;", "Android shell must disable Directus runtime calls in the snapshot APK.");
 requireText("directus.nativelongisland.com", "Android shell must block Directus requests while the APK snapshot is offline.");
-requireText("window.__nliAllowGeoUntil=0;", "Android shell must block a new permission prompt until a dedicated user action allows it.");
+requireText("window.__nliAllowGeoUntil=Date.now()+30000;", "Android shell must allow the requested startup location prompt while retaining the short geolocation gate.");
 requireText("window.AndroidApp.hasLocationPermission", "Android shell must reuse an already granted location permission during startup.");
 requireText("#locate,#mobile-map-locate,#suggest-use-location", "Android shell must allow the dedicated map location control through the geolocation gate.");
 if (!bundledMobileJs.includes("function isApkSnapshotMode()") || !bundledApp.includes("function isApkSnapshotMode()")) {
@@ -2233,12 +2233,11 @@ if (/profileActivitySynced\s*=\s*includeCommunity\s*&&\s*Boolean\(state\.profile
 }
 requireBundledText('sorted by proximity', "Bundled Android app must label nearby results as proximity sorted.");
 requireBundledText('const STARTUP_LOCATION_ZOOM = NEAR_ME_ZOOM;', "Bundled Android app must open with the Near me zoom level.");
-requireBundledText('function nativeLocationPermissionGranted()', "Bundled Android app must check the native permission before startup location use.");
-requireBundledText('if (!nativeLocationPermissionGranted()) return false;', "Bundled Android app must not open a new location prompt during startup.");
+requireBundledPattern(/function requestStartupLocation\(\)[\s\S]*?const request = isNativeAndroidApp\(\)[\s\S]*?requestUserLocation\(\{[\s\S]*?centerMap: true,[\s\S]*?silent: true,[\s\S]*?mapZoom: NEAR_ME_ZOOM,[\s\S]*?centerBounds: STARTUP_LOCATION_CENTER_BOUNDS/, "Bundled Android app must request and center on startup location.");
 requireBundledText('data-find-nearby-sites', "Bundled Android app must provide an explicit location action when permission is unavailable.");
-if (bundledMobileJs.includes('if (nativeAndroid && !isOfflineTextMode()) await requestStartupLocation();')) {
-  throw new Error("Bundled Android app must not request location during startup.");
-}
+requireBundledPattern(/const mobileMapReady = await initMap\(\)[\s\S]*?requestStartupLocation\(\);/, "Bundled Android app must begin startup location centering after the map is ready.");
+requireBundledPattern(/if \(\/Android\/i\.test\(navigator\.userAgent\)\) window\.setTimeout\(\(\) => \{\s*if \(!state\.userLocation\) requestStartupLocation\(\);\s*\}, 15000\);/, "Bundled Android app must retry location after the WebView settles.");
+requireBundledPattern(/else \{\s*setMobileBottomPanelState\("collapsed", \{ persist: false \}\);\s*setMobilePanelMode\("nearby"\);/, "Bundled Android app must start on the map with its Nearby panel collapsed.");
 requireBundledText('mobile-startup-spotlight', "Bundled Android app must include the shared daily feature card.");
 if (bundledMobileJs.includes('scheduleMobilePromoStartup();')) {
   throw new Error("Bundled Android app must not open a random daily feature over Nearby during startup.");

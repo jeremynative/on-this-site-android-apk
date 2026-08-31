@@ -1,5 +1,15 @@
 # Android APK — Codex Handoff
 
+## August 31 mobile map-first startup
+
+- Unrouted mobile launches now begin with the map unobstructed: the bottom panel is collapsed, Nearby is the hidden selected feed, and no detail or sheet is opened. Routed links and restored active Android content still reopen their requested content, and desktop behavior is unchanged.
+- Startup location is requested after map initialization, then retried after the Android WebView settles if its first provider request times out. The native geolocation gate now permits the automatic startup request while retaining the short permission window.
+- Added regression coverage for the collapsed map-first state, startup location sequencing/retry, and an APK WebView audit. Build marker is `20260831-mobile-map-first-r206`.
+- Physical iPlay 50 mini Pro QA passed with the packaged corrected runtime: both content feeds were hidden, no content surface was open, location became ready, and the map centered at zoom `10.5`. Wi-Fi was restored; production app data was not cleared. Web counterpart merged as PR `#158`.
+- `node verify-app-shell.js`, `node verify-google-play-readiness.js`, `git diff --check`, debug APK build, and the real-device audit pass.
+
+Current branch is `fix/mobile-map-first-user-center-20260831`, based on `origin/main` at `0173376`. Safest next action is to merge the focused Android PR, wait for the signed Obtainium workflow, verify the published version/hash, and install it over the connected production app without clearing data.
+
 ## August 31 biography introductions
 
 - Synchronized the 34 reviewed biography article bodies from Directus/web into the maintained Android offline source archive, including Sunksqua Weany and the conservative Jeremiah Pharoah correction. No unrelated site, timeline, geometry, or Android-specific runtime data was replaced.
