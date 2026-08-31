@@ -62,22 +62,34 @@
     const detailHead = document.querySelector(".detail-head");
     const closeButton = document.querySelector("#close-detail");
     const source = document.querySelector("#detail-body > .actions a.action[href*='google.com/maps/dir/']");
-    if (!detailHead || !closeButton || !source || detailHead.querySelector("[data-nli-navigation-placement='top']")) return;
+    if (!detailHead || !closeButton) return;
+    let topAction = detailHead.querySelector("[data-nli-navigation-placement='top']");
+    if (!source) {
+      if (topAction) topAction.hidden = true;
+      return;
+    }
     const destination = destinationFromHref(source.href);
-    if (!destination) return;
-    const topAction = document.createElement("a");
-    topAction.className = "nli-listing-top-navigation";
+    if (!destination) {
+      if (topAction) topAction.hidden = true;
+      return;
+    }
+    if (!topAction) {
+      topAction = document.createElement("a");
+      topAction.className = "nli-listing-top-navigation";
+      topAction.rel = "noreferrer";
+      topAction.dataset.nliNavigationPlacement = "top";
+      topAction.setAttribute("title", "Navigate");
+      topAction.textContent = "➤";
+      topAction.dataset.nliGoogleNavigation = "1";
+      topAction.addEventListener("click", event => {
+        const liveDestination = destinationFromHref(topAction.href);
+        if (startNavigation(currentTitle(topAction), currentSlug(), liveDestination)) event.preventDefault();
+      });
+      closeButton.insertAdjacentElement("beforebegin", topAction);
+    }
     topAction.href = source.href;
-    topAction.rel = "noreferrer";
-    topAction.dataset.nliNavigationPlacement = "top";
+    topAction.hidden = false;
     topAction.setAttribute("aria-label", `Navigate to ${currentTitle(source)}`);
-    topAction.setAttribute("title", "Navigate");
-    topAction.textContent = "➤";
-    topAction.dataset.nliGoogleNavigation = "1";
-    topAction.addEventListener("click", event => {
-      if (startNavigation(currentTitle(source), currentSlug(), destination)) event.preventDefault();
-    });
-    closeButton.insertAdjacentElement("beforebegin", topAction);
   };
   const decorateCustomDestinations = root => {
     if (!available()) return;

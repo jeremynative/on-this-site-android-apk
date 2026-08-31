@@ -127,6 +127,7 @@ public class OnThisSiteNavigationActivity extends Activity {
         destinationLatitude = intent == null ? Double.NaN : intent.getDoubleExtra(EXTRA_LATITUDE, Double.NaN);
         destinationLongitude = intent == null ? Double.NaN : intent.getDoubleExtra(EXTRA_LONGITUDE, Double.NaN);
         ((TextView) findViewById(R.id.navigation_destination)).setText(destinationTitle);
+        Log.i(LOG_TAG, "Destination prepared: " + destinationTitle + " (" + destinationLatitude + ", " + destinationLongitude + ")");
 
         if (!Double.isFinite(destinationLatitude) || !Double.isFinite(destinationLongitude)) {
             statusView.setText("This place does not have a supported public navigation point.");
