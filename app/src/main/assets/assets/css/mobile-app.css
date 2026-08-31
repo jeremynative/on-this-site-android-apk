@@ -1663,22 +1663,26 @@
       -webkit-overflow-scrolling: touch;
     }
 
+    .mobile-timeline .mobile-learning-feed {
+      padding-right: 38px;
+    }
+
     .mobile-timeline-scrubber {
       position: absolute;
       top: 48px;
-      right: -8px;
+      right: 0;
       bottom: 8px;
       z-index: 22;
-      width: 76px;
+      width: 40px;
       border: 0;
       border-radius: 18px 0 0 18px;
-      background: linear-gradient(90deg, rgba(248, 251, 247, 0), rgba(248, 251, 247, 0.58));
-      opacity: 0.58;
+      background: linear-gradient(90deg, rgba(248, 251, 247, 0), rgba(248, 251, 247, 0.28));
+      opacity: 0.88;
       cursor: ns-resize;
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
-      transition: right 140ms ease, opacity 140ms ease, background 140ms ease;
+      transition: width 140ms ease, opacity 140ms ease, background 140ms ease;
     }
 
     .mobile-timeline-scrubber[hidden] {
@@ -1686,6 +1690,7 @@
     }
 
     .mobile-timeline-scrubber.is-active {
+      width: 76px;
       right: 0;
       background: linear-gradient(90deg, rgba(248, 251, 247, 0.08), rgba(248, 251, 247, 0.9));
       opacity: 1;
@@ -1703,14 +1708,15 @@
 
     .mobile-timeline-scrubber-scale {
       position: absolute;
-      inset: 5px 0 5px 4px;
+      inset: 5px 0;
       overflow: hidden;
       pointer-events: none;
+      transform-origin: right center;
       transition: transform 140ms ease;
     }
 
     .mobile-timeline-scrubber:not(.is-active) .mobile-timeline-scrubber-scale {
-      transform: translateX(32px);
+      transform: scaleX(0.58);
     }
 
     .mobile-timeline-scrubber.is-active .mobile-timeline-scrubber-scale {

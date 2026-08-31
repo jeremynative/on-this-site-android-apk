@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260830-indigenous-biography-homelands-r200";
+const expectedBuild = "20260830-timeline-edge-startup-r201";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -37,6 +37,7 @@ const manifestPath = "app/src/main/AndroidManifest.xml";
 const appBridgePath = "app/src/main/java/com/nativelongisland/onthissite/AppBridge.java";
 const nativeMapControllerPath = "app/src/main/java/com/nativelongisland/onthissite/NativeMapController.java";
 const nativeSiteIconManifestPath = "app/src/main/assets/map/site-icon-keys.json";
+const nativeTerritoryFallbackPath = "app/src/main/assets/map/ancestral-territory-fallback.json";
 const amethystShipIconPath = "app/src/main/assets/assets/map-icons/amethyst-moving-bark.png";
 const storyBridgePath = "app/src/main/java/com/nativelongisland/onthissite/StoryBridge.java";
 const captureFileProviderPath = "app/src/main/java/com/nativelongisland/onthissite/CaptureFileProvider.java";
@@ -62,6 +63,7 @@ const manifest = fs.readFileSync(manifestPath, "utf8");
 const appBridge = fs.readFileSync(appBridgePath, "utf8");
 const nativeMapController = fs.readFileSync(nativeMapControllerPath, "utf8").replace(/\r\n/g, "\n");
 const nativeSiteIconManifest = JSON.parse(fs.readFileSync(nativeSiteIconManifestPath, "utf8"));
+const nativeTerritoryFallback = JSON.parse(fs.readFileSync(nativeTerritoryFallbackPath, "utf8"));
 const storyBridge = fs.readFileSync(storyBridgePath, "utf8");
 const captureFileProvider = fs.readFileSync(captureFileProviderPath, "utf8");
 const nativeCommentPhotoCompat = fs.readFileSync(nativeCommentPhotoCompatPath, "utf8");
@@ -209,8 +211,9 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes('"nli-site-unread-counts"')
     || !nativeMapController.includes('"nli-site-point-icons"')
     || !nativeMapController.includes("addBundledMapIcons(style)")
-    || !nativeMapController.includes('readAsset("assets/data/mobile-site-index.json")')
+    || nativeMapController.includes('readAsset("assets/data/mobile-site-index.json")')
     || !nativeMapController.includes('readAsset("map/site-icon-keys.json")')
+    || !nativeMapController.includes('iconManifest.optJSONObject("native_icon_key_by_site_slug")')
     || !nativeMapController.includes('properties.put("native_icon_key", nativeIconKey)')
     || !nativeMapController.includes("applyBundledSiteIconKeys(payload.optJSONObject(\"sitePoints\"))")
     || !nativeMapController.includes("bundledSiteIconKeysBySlug.put(slug, nativeIconKey)")
@@ -220,7 +223,6 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes('circleRadius(4f), circleColor("#2f80ed"), circleOpacity(1f)')
     || !nativeMapController.includes("circleStrokeWidth(0f)")
     || !nativeMapController.includes('new SymbolLayer("nli-territory-labels", LABEL_SOURCE_ID)')
-    || !nativeMapController.includes('.put("label_kind", "territory")')
     || !nativeMapController.includes("territoryLabelLayer.setMinZoom(6.2f)")
     || !nativeMapController.includes('map.queryRenderedFeatures(screenPoint, "nli-territory-labels")')
     || !nativeMapController.includes("Feature exactPoint = nearestActionablePointFeature(exactPoints, screenPoint, false)")
@@ -296,7 +298,7 @@ if (!bundledMobileJs.includes("function nativeUserLocationFeatures()")
     || !bundledMobileJs.includes("userLocation: nativeMapFeatureCollection(userLocationFeatures)")
     || !bundledMobileJs.includes("communityContributions: nativeMapFeatureCollection(communityFeatures)")
     || !bundledMobileJs.includes("temporaryMarkers: nativeMapFeatureCollection(temporaryFeatures)")
-    || !bundledMobileJs.includes('scheduleNativeMapStateSync("user-location", 0)')
+    || !bundledMobileJs.includes('scheduleNativeMapTransientStateSync("user-location", 0)')
     || !bundledMobileJs.includes("unread_count")) {
   throw new Error("The WebView/native bridge must preserve user location and unread-content state in the visible native map.");
 }
@@ -638,11 +640,23 @@ const bundledSiteCenters = JSON.parse(fs.readFileSync(
 
 const manifestIconAssets = nativeSiteIconManifest?.icon_asset_by_map_icon_id || {};
 const manifestForceBlueSlugs = new Set(nativeSiteIconManifest?.force_blue_dot_slugs || []);
-if (nativeSiteIconManifest?.version !== 1
+const manifestSiteIconKeys = nativeSiteIconManifest?.native_icon_key_by_site_slug || {};
+if (nativeSiteIconManifest?.version !== 2
     || Object.keys(manifestIconAssets).length < 35
+    || Object.keys(manifestSiteIconKeys).length < 60
     || manifestForceBlueSlugs.size !== 2
     || nativeSiteIconManifest?.exhibit_icon !== "exhibit-framed-landscape-marker.png") {
   throw new Error("Native first-frame site icon manifest is incomplete or has an unexpected schema.");
+}
+if (nativeTerritoryFallback?.version !== 1
+    || nativeTerritoryFallback?.territories?.features?.length !== 13
+    || nativeTerritoryFallback?.labels?.features?.length !== 13) {
+  throw new Error("Native ancestral-land fallback must contain exactly 13 precomputed polygons and labels.");
+}
+for (const [slug, iconKey] of Object.entries(manifestSiteIconKeys)) {
+  if (!slug || !/^nli-icon-[a-z0-9-]+$/.test(iconKey)) {
+    throw new Error(`Native first-frame site icon lookup is invalid for ${slug || "an empty slug"}.`);
+  }
 }
 for (const filename of [...Object.values(manifestIconAssets), nativeSiteIconManifest.exhibit_icon, "blue-dot-placeholder.png"]) {
   const assetPath = `app/src/main/assets/assets/map-icons/${filename}`;
@@ -1165,15 +1179,34 @@ if (!nativeMapController.includes("if (!boundsChanged && !occlusionChanged && !r
 if (!nativeMapController.includes(".setPrefetchesTiles(false)")) {
   throw new Error("Native Android map rendering must skip off-screen tile prefetch.");
 }
+if (!nativeMapController.includes("String initialTerritories = usingOnlineArchive")
+    || !nativeMapController.includes("String initialSitePoints = usingOnlineArchive")
+    || !nativeMapController.includes("String initialLabels = usingOnlineArchive")
+    || !nativeMapController.includes("? EMPTY_FEATURE_COLLECTION")
+    || !nativeMapController.includes("addBundledMapIconBatch(style, assets, 0, 0)")
+    || !nativeMapController.includes("BUNDLED_ICON_BATCH_SIZE = 4")
+    || !nativeMapController.includes("mapView.postDelayed(")
+    || nativeMapController.includes('readAsset("assets/data/mobile-site-geometry.json")')
+    || !nativeMapController.includes('readAsset("map/ancestral-territory-fallback.json")')) {
+  throw new Error("Online native startup must avoid duplicate bundled map sources and pace icon decoding across frames.");
+}
 if (!bundledMobileJs.includes("const baseSignature =")
     || !bundledMobileJs.includes("const transientSignature =")
     || !bundledMobileJs.includes("nativeMapBaseRevision")
     || !bundledMobileJs.includes("nativeMapPointRevision")
+    || !bundledMobileJs.includes("function scheduleNativeMapTransientStateSync")
+    || !bundledMobileJs.includes("!state.nativeMapBaseSignature")
     || !bundledMobileJs.includes("invalidateMapSourceCache({ nativeBase: false })")
     || !bundledMobileJs.includes("baseSignature,\n        transientSignature,")
     || !bundledMobileJs.includes('typeof window.AndroidApp.syncNativeMapTransientState === "function"')
     || !bundledMobileJs.includes("JSON.stringify(transientPayload)")) {
   throw new Error("APK map state must separate stable map layers from selected-site, user-location, and community updates.");
+}
+if (!bundledMobileCss.includes(".mobile-timeline .mobile-learning-feed")
+    || !bundledMobileCss.includes("padding-right: 38px")
+    || !bundledMobileCss.includes("width: 40px")
+    || !bundledMobileCss.includes("transform: scaleX(0.58)")) {
+  throw new Error("The inactive APK Timeline must reserve a right gutter and keep its tapered position trace visible.");
 }
 if (!bundledMobileJs.includes("openFeature(kind, key, mapCenter = null)")
     || !bundledMobileJs.includes("openWikiArticle(state.wikiBySlug.get(slug) || movingArticle || slug, {")

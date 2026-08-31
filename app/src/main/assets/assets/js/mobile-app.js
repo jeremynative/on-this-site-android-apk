@@ -7317,6 +7317,12 @@
       }, Math.max(0, Number(delay) || 0));
     }
 
+    function scheduleNativeMapTransientStateSync(reason = "state", delay = 0) {
+      if (!nativeMapBridgeAvailable() || !state.nativeMapBaseSignature) return false;
+      scheduleNativeMapStateSync(reason, delay);
+      return true;
+    }
+
     function installNativeMapBridge() {
       if (!nativeMapBridgeAvailable() || state.nativeMapBridgeInstalled) return false;
       state.nativeMapBridgeInstalled = true;
@@ -14558,7 +14564,10 @@
     };
 
     function syncUserLocationMarker({ centerMap = false, zoom = NEAR_ME_ZOOM, duration = 850 } = {}) {
-      scheduleNativeMapStateSync("user-location", 0);
+      // Location is already included in the first authoritative base handoff.
+      // Avoid turning an early saved-location callback into a second complete
+      // 400+ site payload while Android is still preparing the native map.
+      scheduleNativeMapTransientStateSync("user-location", 0);
       if (!state.map || !state.userLocation || typeof mapboxgl === "undefined") return;
       if (state.userMarker?.setLngLat) {
         state.userMarker.setLngLat(state.userLocation);
@@ -14967,7 +14976,7 @@
         saveSettings();
         setLocationControlsBusy(false);
         state.userLocation = null;
-        scheduleNativeMapStateSync("user-location-cleared", 0);
+        scheduleNativeMapTransientStateSync("user-location-cleared", 0);
         renderCurrentTerritoryStatus();
           renderList();
           if (!silent) showBanner("Location permission was not available. Showing sites near central Long Island without personal distances.");
