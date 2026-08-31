@@ -2526,6 +2526,10 @@
       --detail-drawer-height: min(58dvh, calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe) - 12px));
     }
 
+    body.native-android-app:not(.tablet-landscape) .detail.drawer-half {
+      --detail-drawer-height: min(48dvh, calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe) - 12px));
+    }
+
     .detail.drawer-expanded {
       --detail-drawer-height: min(86dvh, calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe) - 12px));
     }
@@ -5682,6 +5686,16 @@
     }
 
     body:not(.native-android-app).mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header > :not(.title-row) {
+      display: none !important;
+    }
+
+    body.native-android-app.mobile-detail-open:not(.mobile-profile-map-mode) .app header {
+      gap: 0;
+      padding-top: max(7px, var(--app-top-safe));
+      padding-bottom: 7px;
+    }
+
+    body.native-android-app.mobile-detail-open:not(.mobile-profile-map-mode) .app header > :not(.title-row) {
       display: none !important;
     }
 
