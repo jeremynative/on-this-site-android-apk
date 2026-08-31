@@ -77,7 +77,7 @@
     topAction.addEventListener("click", event => {
       if (startNavigation(currentTitle(source), currentSlug(), destination)) event.preventDefault();
     });
-    closeButton.insertAdjacentElement("afterend", topAction);
+    closeButton.insertAdjacentElement("beforebegin", topAction);
   };
   const decorateCustomDestinations = root => {
     if (!available()) return;
@@ -113,11 +113,11 @@
         grid-template-columns: minmax(0, 1fr) 54px 42px 42px;
       }
       .detail-head:has(.nli-listing-top-navigation) #close-detail {
-        grid-column: -3 / -2;
+        grid-column: -2 / -1;
       }
       .detail-head .nli-listing-top-navigation {
         display: inline-grid;
-        grid-column: -2 / -1;
+        grid-column: -3 / -2;
         grid-row: 2;
         place-items: center;
         align-self: center;
