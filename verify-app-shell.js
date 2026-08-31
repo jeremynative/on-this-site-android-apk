@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260831-navigation-edge-indicators-r211";
+const expectedBuild = "20260831-navigation-panel-custom-search-r212";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1647,8 +1647,23 @@ if (!navigationSiteRepository.includes('"Point".equals(centerItem.optString("geo
     || !navigationSiteRepository.includes("approximate|general|broad|near|area|landscape|mixed|pending|needs review")) {
   throw new Error("Navigation map must restrict pins to specific, public, non-sensitive point records.");
 }
-for (const needle of ["isInAppGoogleNavigationAvailable", "startInAppGoogleNavigation", "Navigate", "google.com/maps/dir/"]) {
+for (const needle of [
+  "isInAppGoogleNavigationAvailable",
+  "startInAppGoogleNavigation",
+  "Navigate",
+  "google.com/maps/dir/",
+  "addTopListingNavigation",
+  "nli-listing-top-navigation",
+  "decorateCustomDestinations",
+  "[data-result-slug='address-result'][data-nav]",
+  "nli-custom-navigation"
+]) {
   if (!nativeGoogleNavigation.includes(needle)) throw new Error(`Native Google navigation link integration is missing: ${needle}`);
+}
+for (const needle of ["data-nav", "navigationCoordinates"]) {
+  if (!bundledMobileJs.includes(needle) || !bundledApp.includes(needle)) {
+    throw new Error(`Custom place search results must expose safe navigation coordinates in live and bundled Android shells: ${needle}`);
+  }
 }
 for (const needle of ["google-navigation-notice.txt", "google-navigation-licenses.txt", "Open-source licenses"]) {
   if (!googleNavigationLegalActivity.includes(needle)) throw new Error(`Google navigation legal-notice access is missing: ${needle}`);
