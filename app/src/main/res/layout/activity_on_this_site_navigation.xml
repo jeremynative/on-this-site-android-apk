@@ -9,7 +9,14 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <FrameLayout
+        android:id="@+id/navigation_edge_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="false" />
+
     <LinearLayout
+        android:id="@+id/navigation_top_card"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"

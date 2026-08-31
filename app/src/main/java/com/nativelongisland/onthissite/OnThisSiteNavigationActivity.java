@@ -13,15 +13,20 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.RectF;
+import android.graphics.drawable.GradientDrawable;
+import android.location.Location;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import com.google.android.gms.maps.GoogleMap;
@@ -48,6 +53,8 @@ public class OnThisSiteNavigationActivity extends Activity {
     private static final String LOG_TAG = "OnThisSiteGoogleNav";
     private static final int LOCATION_PERMISSION_REQUEST = 71;
     private static final int MAX_VISIBLE_SITE_LABELS = 8;
+    private static final int MAX_NEARBY_EDGE_INDICATORS = 3;
+    private static final float NEARBY_EDGE_RANGE_METERS = 5f * 1609.344f;
     private static final float MIN_LABEL_HORIZONTAL_SPACING_DP = 190f;
     private static final float MIN_LABEL_VERTICAL_SPACING_DP = 58f;
     private static final String EXTRA_TITLE = "destination_title";
@@ -59,6 +66,8 @@ public class OnThisSiteNavigationActivity extends Activity {
     private Navigator navigator;
     private GoogleMap googleMap;
     private FrameLayout mapContainer;
+    private FrameLayout edgeOverlay;
+    private View topCard;
     private TextView statusView;
     private Button startButton;
     private Button overviewButton;
@@ -69,6 +78,7 @@ public class OnThisSiteNavigationActivity extends Activity {
     private Waypoint primaryDestination;
     private boolean routeReady;
     private boolean guidanceStarted;
+    private Location currentLocation;
     private List<NavigationSiteRepository.Site> publicSites = new ArrayList<>();
     private final List<Marker> siteMarkers = new ArrayList<>();
     private final Map<Marker, NavigationSiteRepository.Site> siteByMarker = new HashMap<>();
@@ -94,6 +104,8 @@ public class OnThisSiteNavigationActivity extends Activity {
         setContentView(R.layout.activity_on_this_site_navigation);
         windowKeepScreenOn();
         mapContainer = findViewById(R.id.navigation_map_container);
+        edgeOverlay = findViewById(R.id.navigation_edge_overlay);
+        topCard = findViewById(R.id.navigation_top_card);
         statusView = findViewById(R.id.navigation_status);
         startButton = findViewById(R.id.navigation_start);
         overviewButton = findViewById(R.id.navigation_overview);
@@ -158,7 +170,14 @@ public class OnThisSiteNavigationActivity extends Activity {
             try {
                 googleMap.setMyLocationEnabled(hasLocationPermission());
             } catch (SecurityException ignored) {}
-            googleMap.setOnCameraIdleListener(this::refreshVisibleSiteMarkers);
+            googleMap.setOnCameraIdleListener(() -> {
+                refreshVisibleSiteMarkers();
+                refreshNearbyEdgeIndicators();
+            });
+            googleMap.setOnMyLocationChangeListener(location -> runOnUiThread(() -> {
+                currentLocation = location;
+                refreshNearbyEdgeIndicators();
+            }));
             googleMap.setOnMarkerClickListener(this::onMarkerClicked);
             loadPublicSites();
         });
@@ -207,7 +226,7 @@ public class OnThisSiteNavigationActivity extends Activity {
                 overviewButton.setEnabled(true);
                 statusView.setText(destinations.size() > 1
                     ? "Historical stop added before " + destinationTitle + "."
-                    : "Route ready. Nearby public On This Site places are labeled on the map.");
+                    : "Route ready. Nearby public sites are labeled; off-screen sites show distance and direction at the edge.");
                 if (navigationView != null) navigationView.showRouteOverview();
                 if (resumeGuidance) startGuidance();
             } else if (code == Navigator.RouteStatus.NETWORK_ERROR) {
@@ -239,6 +258,7 @@ public class OnThisSiteNavigationActivity extends Activity {
                 runOnUiThread(() -> {
                     publicSites = loaded;
                     refreshVisibleSiteMarkers();
+                    refreshNearbyEdgeIndicators();
                     Log.i(LOG_TAG, "Loaded " + loaded.size() + " public navigation-map sites.");
                 });
             } catch (Exception error) {
@@ -307,6 +327,11 @@ public class OnThisSiteNavigationActivity extends Activity {
     private boolean onMarkerClicked(Marker marker) {
         NavigationSiteRepository.Site site = siteByMarker.get(marker);
         if (site == null) return false;
+        showAddStopDialog(site);
+        return true;
+    }
+
+    private void showAddStopDialog(NavigationSiteRepository.Site site) {
         String message = guidanceStarted
             ? "Add " + site.title + " as the next stop before continuing to " + destinationTitle + "?"
             : "Route through " + site.title + " before continuing to " + destinationTitle + "?";
@@ -316,7 +341,140 @@ public class OnThisSiteNavigationActivity extends Activity {
             .setPositiveButton("Add stop", (dialog, which) -> addSiteStop(site))
             .setNegativeButton("Keep route", null)
             .show();
-        return true;
+    }
+
+    private void refreshNearbyEdgeIndicators() {
+        if (edgeOverlay == null) return;
+        edgeOverlay.removeAllViews();
+        if (googleMap == null || currentLocation == null || publicSites.isEmpty()) return;
+        int width = edgeOverlay.getWidth();
+        int height = edgeOverlay.getHeight();
+        if (width <= 0 || height <= 0) {
+            edgeOverlay.post(this::refreshNearbyEdgeIndicators);
+            return;
+        }
+        Projection projection;
+        LatLngBounds visibleBounds;
+        try {
+            projection = googleMap.getProjection();
+            visibleBounds = projection.getVisibleRegion().latLngBounds;
+        } catch (Exception ignored) {
+            return;
+        }
+        List<NearbySiteDistance> nearby = new ArrayList<>();
+        for (NavigationSiteRepository.Site site : publicSites) {
+            if (sameDestination(site)) continue;
+            LatLng point = new LatLng(site.latitude, site.longitude);
+            if (visibleBounds.contains(point)) continue;
+            float[] result = new float[2];
+            Location.distanceBetween(currentLocation.getLatitude(), currentLocation.getLongitude(), site.latitude, site.longitude, result);
+            if (result[0] <= NEARBY_EDGE_RANGE_METERS) nearby.add(new NearbySiteDistance(site, result[0], result[1]));
+        }
+        nearby.sort(Comparator.comparingDouble(item -> item.distanceMeters));
+        float density = getResources().getDisplayMetrics().density;
+        float horizontalInset = 12f * density;
+        float top = Math.max(topCard == null ? 0 : topCard.getBottom(), Math.round(84f * density)) + 10f * density;
+        float bottom = height - 90f * density;
+        float centerX = width / 2f;
+        float centerY = (top + bottom) / 2f;
+        List<RectF> occupied = new ArrayList<>();
+        int added = 0;
+        for (NearbySiteDistance item : nearby) {
+            if (added >= MAX_NEARBY_EDGE_INDICATORS) break;
+            Point projected = projection.toScreenLocation(new LatLng(item.site.latitude, item.site.longitude));
+            float dx = projected.x - centerX;
+            float dy = projected.y - centerY;
+            if (Math.abs(dx) < 1f && Math.abs(dy) < 1f) continue;
+            float edgeScale = Math.min(
+                (centerX - horizontalInset) / Math.max(1f, Math.abs(dx)),
+                ((bottom - top) / 2f) / Math.max(1f, Math.abs(dy))
+            );
+            float edgeX = centerX + dx * edgeScale;
+            float edgeY = centerY + dy * edgeScale;
+            LinearLayout indicator = nearbyEdgeIndicator(item, dx, dy, density);
+            edgeOverlay.addView(indicator, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ));
+            indicator.measure(
+                View.MeasureSpec.makeMeasureSpec(Math.round(230f * density), View.MeasureSpec.AT_MOST),
+                View.MeasureSpec.makeMeasureSpec(Math.round(64f * density), View.MeasureSpec.AT_MOST)
+            );
+            int indicatorWidth = indicator.getMeasuredWidth();
+            int indicatorHeight = indicator.getMeasuredHeight();
+            float x = clamp(edgeX - indicatorWidth / 2f, horizontalInset, width - horizontalInset - indicatorWidth);
+            float y = clamp(edgeY - indicatorHeight / 2f, top, bottom - indicatorHeight);
+            RectF proposed = new RectF(x, y, x + indicatorWidth, y + indicatorHeight);
+            boolean overlaps = false;
+            for (RectF existing : occupied) {
+                if (RectF.intersects(existing, proposed)) {
+                    overlaps = true;
+                    break;
+                }
+            }
+            if (overlaps) {
+                edgeOverlay.removeView(indicator);
+                continue;
+            }
+            indicator.setX(x);
+            indicator.setY(y);
+            occupied.add(proposed);
+            added += 1;
+        }
+    }
+
+    private LinearLayout nearbyEdgeIndicator(NearbySiteDistance item, float dx, float dy, float density) {
+        LinearLayout indicator = new LinearLayout(this);
+        indicator.setOrientation(LinearLayout.HORIZONTAL);
+        indicator.setGravity(Gravity.CENTER_VERTICAL);
+        int horizontalPadding = Math.round(9f * density);
+        int verticalPadding = Math.round(6f * density);
+        indicator.setPadding(horizontalPadding, verticalPadding, horizontalPadding, verticalPadding);
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(Color.argb(238, 23, 79, 57));
+        background.setCornerRadius(10f * density);
+        indicator.setBackground(background);
+        indicator.setElevation(7f * density);
+        TextView arrow = new TextView(this);
+        arrow.setText("➤");
+        arrow.setTextColor(Color.rgb(245, 194, 66));
+        arrow.setTextSize(21);
+        arrow.setGravity(Gravity.CENTER);
+        arrow.setRotation((float) Math.toDegrees(Math.atan2(dy, dx)));
+        indicator.addView(arrow, new LinearLayout.LayoutParams(Math.round(34f * density), Math.round(34f * density)));
+        TextView label = new TextView(this);
+        label.setText(shortEdgeTitle(item.site.title) + "\n" + formatDistance(item.distanceMeters) + " " + cardinalDirection(item.bearingDegrees));
+        label.setTextColor(Color.WHITE);
+        label.setTextSize(12);
+        label.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        label.setMaxLines(2);
+        label.setMaxWidth(Math.round(180f * density));
+        indicator.addView(label);
+        indicator.setContentDescription(item.site.title + ", " + formatDistance(item.distanceMeters) + " " + cardinalDirection(item.bearingDegrees) + ". Tap to add stop.");
+        indicator.setClickable(true);
+        indicator.setFocusable(true);
+        indicator.setOnClickListener(view -> showAddStopDialog(item.site));
+        return indicator;
+    }
+
+    private String shortEdgeTitle(String value) {
+        String clean = safeTitle(value);
+        return clean.length() <= 24 ? clean : clean.substring(0, 23) + "…";
+    }
+
+    private String formatDistance(float meters) {
+        float miles = meters / 1609.344f;
+        return miles < 0.2f ? Math.max(100, Math.round(meters / 30.48f) * 100) + " ft" : String.format(java.util.Locale.US, miles < 10f ? "%.1f mi" : "%.0f mi", miles);
+    }
+
+    private String cardinalDirection(float bearing) {
+        String[] directions = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" };
+        int index = Math.round(((bearing % 360f) + 360f) % 360f / 45f) % directions.length;
+        return directions[index];
+    }
+
+    private float clamp(float value, float minimum, float maximum) {
+        return Math.max(minimum, Math.min(maximum, value));
     }
 
     private void addSiteStop(NavigationSiteRepository.Site site) {
@@ -469,10 +627,23 @@ public class OnThisSiteNavigationActivity extends Activity {
             navigator.cleanup();
             navigator = null;
         }
+        if (googleMap != null) googleMap.setOnMyLocationChangeListener(null);
         if (navigationView != null) {
             navigationView.onDestroy();
             navigationView = null;
         }
         super.onDestroy();
+    }
+
+    private static final class NearbySiteDistance {
+        final NavigationSiteRepository.Site site;
+        final float distanceMeters;
+        final float bearingDegrees;
+
+        NearbySiteDistance(NavigationSiteRepository.Site site, float distanceMeters, float bearingDegrees) {
+            this.site = site;
+            this.distanceMeters = distanceMeters;
+            this.bearingDegrees = bearingDegrees;
+        }
     }
 }

@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260831-in-app-google-navigation-r210";
+const expectedBuild = "20260831-navigation-edge-indicators-r211";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1628,9 +1628,14 @@ for (const needle of [
   "BLUETOOTH_AUDIO",
   "navigator.setDestination",
   "navigator.setDestinations",
-  "Nearby public On This Site places are labeled on the map",
+  "off-screen sites show distance and direction at the edge",
   'setPositiveButton("Add stop"',
   "MAX_VISIBLE_SITE_LABELS = 8",
+  "MAX_NEARBY_EDGE_INDICATORS = 3",
+  "NEARBY_EDGE_RANGE_METERS = 5f * 1609.344f",
+  "setOnMyLocationChangeListener",
+  "cardinalDirection",
+  "Tap to add stop.",
   "setTaskRemovedBehavior(Navigator.TaskRemovedBehavior.QUIT_SERVICE)",
   "GoogleNavigationLegalActivity.class"
 ]) {
