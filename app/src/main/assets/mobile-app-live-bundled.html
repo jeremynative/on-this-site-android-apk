@@ -22157,6 +22157,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     const ANDROID_LIFECYCLE_STATE_KEY = "nli-android-lifecycle-state";
+    const ANDROID_LIFECYCLE_SESSION_KEY = "nli-android-lifecycle-session";
+    const ANDROID_LIFECYCLE_SESSION_ID = (() => {
+      try {
+        return sessionStorage[ANDROID_LIFECYCLE_SESSION_KEY] ||= `${Date.now()}-${Math.random()}`;
+      } catch {
+        return "";
+      }
+    })();
     const ANDROID_LIFECYCLE_STATE_MAX_AGE = 12 * 60 * 60 * 1000;
     const ANDROID_LIFECYCLE_WRITE_DEDUP_MS = 750;
     let androidLifecycleDetailScrollRestore = null;
@@ -24722,6 +24730,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function nearbyFeedCardHtml(card) {
       const isWiki = card.sourceType === "wiki";
       const isExternalMapResult = card.item.slug === "address-result";
+      const navigationCoordinates = isExternalMapResult && Array.isArray(card.item.center)
+        ? card.item.center.map(Number)
+        : [];
+      const navigationAttrs = navigationCoordinates.length >= 2 && navigationCoordinates.every(Number.isFinite)
+        ? ` data-nav="${navigationCoordinates[1]},${navigationCoordinates[0]}"`
+        : "";
       const buttonAttrs = isWiki
         ? `data-wiki-slug="${escapeHtml(card.item.slug)}"`
         : `data-slug="${escapeHtml(card.item.slug)}"`;
@@ -24731,7 +24745,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         : "";
       const commentCount = Number(card.counts?.comments || 0);
       return `
-        <article class="site-card learning-card nearby-feed-card${card.imageUrl ? " has-thumbnail" : ""}${!isWiki && card.item.slug === state.selectedSlug ? " active" : ""}" ${buttonAttrs} ${resultAttrs} data-learning-card-key="${escapeHtml(card.key)}">
+        <article class="site-card learning-card nearby-feed-card${card.imageUrl ? " has-thumbnail" : ""}${!isWiki && card.item.slug === state.selectedSlug ? " active" : ""}" ${buttonAttrs} ${resultAttrs}${navigationAttrs} data-learning-card-key="${escapeHtml(card.key)}">
           ${learningCardImageHtml(card, isWiki ? `data-nearby-open-wiki="${escapeHtml(card.item.slug)}"` : `data-nearby-open="${escapeHtml(card.item.slug)}"`, card.item.listing_image_alt || "", { hideWhenMissing: true })}
           <div class="learning-card-body">
             <div class="learning-card-meta">
@@ -33184,6 +33198,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function captureAndroidLifecycleSnapshot() {
       if (!isNativeAndroidApp()) return null;
+      const sessionId = ANDROID_LIFECYCLE_SESSION_ID;
       const center = state.map?.getCenter?.();
       const activeContent = activeAndroidLifecycleContent();
       const now = Date.now();
@@ -33205,6 +33220,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         }
       }
       const snapshot = {
+        sessionId,
         savedAt: now,
         content: activeContent,
         panelMode: appEl?.classList.contains("panel-timeline") ? "timeline" : "nearby",
@@ -33245,7 +33261,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!isNativeAndroidApp()) return null;
       try {
         const snapshot = JSON.parse(localStorage.getItem(ANDROID_LIFECYCLE_STATE_KEY) || "null");
-        if (!androidLifecycleSnapshotIsValid(snapshot)) {
+        if (!snapshot?.sessionId
+            || snapshot.sessionId !== ANDROID_LIFECYCLE_SESSION_ID
+            || !androidLifecycleSnapshotIsValid(snapshot)) {
           clearAndroidLifecycleSnapshot();
           return null;
         }
