@@ -5591,6 +5591,12 @@
     function nearbyFeedCardHtml(card) {
       const isWiki = card.sourceType === "wiki";
       const isExternalMapResult = card.item.slug === "address-result";
+      const navigationCoordinates = isExternalMapResult && Array.isArray(card.item.center)
+        ? card.item.center.map(Number)
+        : [];
+      const navigationAttrs = navigationCoordinates.length >= 2 && navigationCoordinates.every(Number.isFinite)
+        ? ` data-nav="${navigationCoordinates[1]},${navigationCoordinates[0]}"`
+        : "";
       const buttonAttrs = isWiki
         ? `data-wiki-slug="${escapeHtml(card.item.slug)}"`
         : `data-slug="${escapeHtml(card.item.slug)}"`;
@@ -5600,7 +5606,7 @@
         : "";
       const commentCount = Number(card.counts?.comments || 0);
       return `
-        <article class="site-card learning-card nearby-feed-card${card.imageUrl ? " has-thumbnail" : ""}${!isWiki && card.item.slug === state.selectedSlug ? " active" : ""}" ${buttonAttrs} ${resultAttrs} data-learning-card-key="${escapeHtml(card.key)}">
+        <article class="site-card learning-card nearby-feed-card${card.imageUrl ? " has-thumbnail" : ""}${!isWiki && card.item.slug === state.selectedSlug ? " active" : ""}" ${buttonAttrs} ${resultAttrs}${navigationAttrs} data-learning-card-key="${escapeHtml(card.key)}">
           ${learningCardImageHtml(card, isWiki ? `data-nearby-open-wiki="${escapeHtml(card.item.slug)}"` : `data-nearby-open="${escapeHtml(card.item.slug)}"`, card.item.listing_image_alt || "", { hideWhenMissing: true })}
           <div class="learning-card-body">
             <div class="learning-card-meta">
