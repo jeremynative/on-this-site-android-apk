@@ -1655,6 +1655,8 @@ for (const needle of [
   "android.view.WindowInsets.CONSUMED",
   "setOnMyLocationChangeListener",
   "topCard.setVisibility(View.GONE)",
+  'guidanceDestinationView.setText("Destination: " + destinationTitle)',
+  "guidanceDestinationView.setVisibility(View.VISIBLE)",
   "The map is available, but routing needs location access.",
   "item.site.hasHeaderImage",
   "Color.argb(224, 60, 137, 230)",
@@ -1707,6 +1709,11 @@ const navigationLegalIndex = googleNavigationLayout.indexOf('android:id="@+id/na
 const navigationCloseIndex = googleNavigationLayout.indexOf('android:id="@+id/navigation_close"');
 if (navigationLegalIndex < 0 || navigationCloseIndex < 0 || navigationCloseIndex < navigationLegalIndex) {
   throw new Error("The native navigation close button must be the far-right header action.");
+}
+if (!googleNavigationLayout.includes('android:id="@+id/navigation_guidance_destination"')
+    || !googleNavigationLayout.includes('android:contentDescription="Current navigation destination"')
+    || !googleNavigationLayout.includes('android:layout_marginTop="220dp"')) {
+  throw new Error("Active guidance must identify the selected destination without restoring the old header clutter.");
 }
 for (const needle of ["data-nav", "navigationCoordinates"]) {
   if (!bundledMobileJs.includes(needle) || !bundledApp.includes(needle)) {

@@ -70,6 +70,7 @@ public class OnThisSiteNavigationActivity extends Activity {
     private FrameLayout mapContainer;
     private FrameLayout edgeOverlay;
     private View topCard;
+    private TextView guidanceDestinationView;
     private TextView statusView;
     private Button startButton;
     private Button overviewButton;
@@ -109,6 +110,7 @@ public class OnThisSiteNavigationActivity extends Activity {
         mapContainer = findViewById(R.id.navigation_map_container);
         edgeOverlay = findViewById(R.id.navigation_edge_overlay);
         topCard = findViewById(R.id.navigation_top_card);
+        guidanceDestinationView = findViewById(R.id.navigation_guidance_destination);
         statusView = findViewById(R.id.navigation_status);
         startButton = findViewById(R.id.navigation_start);
         overviewButton = findViewById(R.id.navigation_overview);
@@ -128,6 +130,8 @@ public class OnThisSiteNavigationActivity extends Activity {
         destinationLatitude = intent == null ? Double.NaN : intent.getDoubleExtra(EXTRA_LATITUDE, Double.NaN);
         destinationLongitude = intent == null ? Double.NaN : intent.getDoubleExtra(EXTRA_LONGITUDE, Double.NaN);
         ((TextView) findViewById(R.id.navigation_destination)).setText(destinationTitle);
+        guidanceDestinationView.setText("Destination: " + destinationTitle);
+        styleGuidanceDestination();
         Log.i(LOG_TAG, "Destination prepared: " + destinationTitle + " (" + destinationLatitude + ", " + destinationLongitude + ")");
 
         if (!Double.isFinite(destinationLatitude) || !Double.isFinite(destinationLongitude)) {
@@ -253,7 +257,17 @@ public class OnThisSiteNavigationActivity extends Activity {
         guidanceStarted = true;
         startButton.setEnabled(false);
         topCard.setVisibility(View.GONE);
+        guidanceDestinationView.setVisibility(View.VISIBLE);
         refreshNearbyEdgeIndicators();
+    }
+
+    private void styleGuidanceDestination() {
+        float density = getResources().getDisplayMetrics().density;
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(Color.argb(220, 255, 255, 255));
+        background.setCornerRadius(18f * density);
+        background.setStroke(Math.max(1, Math.round(density)), Color.rgb(30, 82, 60));
+        guidanceDestinationView.setBackground(background);
     }
 
     private void loadPublicSites() {

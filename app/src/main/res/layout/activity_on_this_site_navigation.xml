@@ -16,6 +16,26 @@
         android:layout_height="match_parent"
         android:clickable="false" />
 
+    <TextView
+        android:id="@+id/navigation_guidance_destination"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="220dp"
+        android:contentDescription="Current navigation destination"
+        android:elevation="7dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:maxWidth="320dp"
+        android:paddingStart="14dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="8dp"
+        android:textColor="#173B2B"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <LinearLayout
         android:id="@+id/navigation_top_card"
         android:layout_width="match_parent"
