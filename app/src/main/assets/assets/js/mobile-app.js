@@ -3026,6 +3026,14 @@
     }
 
     const ANDROID_LIFECYCLE_STATE_KEY = "nli-android-lifecycle-state";
+    const ANDROID_LIFECYCLE_SESSION_KEY = "nli-android-lifecycle-session";
+    const ANDROID_LIFECYCLE_SESSION_ID = (() => {
+      try {
+        return sessionStorage[ANDROID_LIFECYCLE_SESSION_KEY] ||= `${Date.now()}-${Math.random()}`;
+      } catch {
+        return "";
+      }
+    })();
     const ANDROID_LIFECYCLE_STATE_MAX_AGE = 12 * 60 * 60 * 1000;
     const ANDROID_LIFECYCLE_WRITE_DEDUP_MS = 750;
     let androidLifecycleDetailScrollRestore = null;
@@ -14059,6 +14067,7 @@
 
     function captureAndroidLifecycleSnapshot() {
       if (!isNativeAndroidApp()) return null;
+      const sessionId = ANDROID_LIFECYCLE_SESSION_ID;
       const center = state.map?.getCenter?.();
       const activeContent = activeAndroidLifecycleContent();
       const now = Date.now();
@@ -14080,6 +14089,7 @@
         }
       }
       const snapshot = {
+        sessionId,
         savedAt: now,
         content: activeContent,
         panelMode: appEl?.classList.contains("panel-timeline") ? "timeline" : "nearby",
@@ -14120,7 +14130,9 @@
       if (!isNativeAndroidApp()) return null;
       try {
         const snapshot = JSON.parse(localStorage.getItem(ANDROID_LIFECYCLE_STATE_KEY) || "null");
-        if (!androidLifecycleSnapshotIsValid(snapshot)) {
+        if (!snapshot?.sessionId
+            || snapshot.sessionId !== ANDROID_LIFECYCLE_SESSION_ID
+            || !androidLifecycleSnapshotIsValid(snapshot)) {
           clearAndroidLifecycleSnapshot();
           return null;
         }
