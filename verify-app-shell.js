@@ -852,6 +852,9 @@ if (!bundledMobileJs.includes('style: isNativeAndroidApp() ? mobileBasemapStyle(
   throw new Error("Android must not download and paint a duplicate hidden raster basemap under the native map.");
 }
 if (!bundledMobileJs.includes('syncNativeMapState("native-bridge-shell-ready")')
+    || !bundledMobileJs.includes('syncNativeMapState("map-load")')
+    || !bundledMobileJs.includes('reason !== "native-bridge-shell-ready"')
+    || !bundledMobileJs.includes('reason !== "map-load"')
     || !bundledMobileJs.includes("nativeBridgeTimer = window.setTimeout")) {
   throw new Error("Android must establish the authoritative native-map base immediately when the lightweight bridge is ready, before asynchronous content can replace the first handoff.");
 }
