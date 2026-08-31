@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260830-timeline-edge-startup-r201";
+const expectedBuild = "20260831-timeline-edge-startup-r202";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -851,9 +851,9 @@ requireText("listings[\\\\s\\\\S]*loaded\\\\b", "Android readiness must accept b
 if (!bundledMobileJs.includes('style: isNativeAndroidApp() ? mobileBasemapStyle("blank") : mobileBasemapStyle(savedBasemap)')) {
   throw new Error("Android must not download and paint a duplicate hidden raster basemap under the native map.");
 }
-if (!bundledMobileJs.includes('scheduleNativeMapStateSync("native-bridge-shell-ready", 0)')
+if (!bundledMobileJs.includes('syncNativeMapState("native-bridge-shell-ready")')
     || !bundledMobileJs.includes("nativeBridgeTimer = window.setTimeout")) {
-  throw new Error("Android must release startup once the lightweight native bridge is ready instead of waiting on hidden browser tiles.");
+  throw new Error("Android must establish the authoritative native-map base immediately when the lightweight bridge is ready, before asynchronous content can replace the first handoff.");
 }
 requireText("app.classList.contains('mobile-map-initializing')", "Android startup readiness must wait for the in-map initialization shield to finish.");
 requireText("app.classList.contains('mobile-site-reveal-pending')", "Android startup readiness must wait for the intentional site reveal to finish behind the native cover.");

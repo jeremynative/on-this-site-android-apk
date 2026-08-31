@@ -18903,7 +18903,11 @@
           nativeBridgeTimer = window.setTimeout(() => {
             nativeBridgeTimer = null;
             installNativeMapBridge();
-            scheduleNativeMapStateSync("native-bridge-shell-ready", 0);
+            // Establish the authoritative base immediately. Async content
+            // refreshes can finish in this same turn; queuing this handoff
+            // allowed one of them to replace it and forced an unnecessary
+            // full native-map payload on slower Android devices.
+            syncNativeMapState("native-bridge-shell-ready");
             resolveMapReady();
           }, 360);
         }
