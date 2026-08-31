@@ -88,11 +88,9 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_CAMERA_REQUEST = 48;
     static final int COMMENT_BRIDGE_CAMERA_PERMISSION_REQUEST = 49;
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
-    private static final int NAVIGATION_COMPANION_LOCATION_REQUEST = 51;
-    private static final int NAVIGATION_COMPANION_NOTIFICATION_REQUEST = 52;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260831-navigation-companion-r209";
+    static final String APP_VERSION = "20260831-in-app-google-navigation-r210";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -230,7 +228,6 @@ public class MainActivity extends Activity {
     private boolean locationPermissionDeniedForSession;
     private boolean notificationPermissionPromptedForSession;
     private boolean notificationPermissionRequestInFlight;
-    private boolean navigationCompanionEnablePending;
     private int appReadinessProbeAttempts;
     private boolean appReadinessProbeActive;
     private String appReadinessProbeUrl;
@@ -1173,7 +1170,7 @@ public class MainActivity extends Activity {
         view.postDelayed(() -> syncTabletLandscapeClass(view), 750);
         enforceExclusiveMobilePanels(view);
         installNativeCommentPhotoCompatibility(view);
-        installNativeNavigationCompanion(view);
+        installNativeGoogleNavigation(view);
         validateLoadedAppShell(url);
     }
 
@@ -2116,8 +2113,6 @@ public class MainActivity extends Activity {
             syncTabletLandscapeClass(webView);
             settleNativeMapViewport();
             scheduleNetworkStateEvaluation("resume");
-            dispatchNavigationCompanionState(isNavigationCompanionEnabled());
-            openNavigationCompanionSettingsIfRequested(getIntent());
         }
         if (billingManager != null) billingManager.restorePurchases();
     }
@@ -2196,7 +2191,6 @@ public class MainActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        openNavigationCompanionSettingsIfRequested(intent);
     }
 
     void launchPlantBridgeCamera() {
@@ -2353,14 +2347,14 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void installNativeNavigationCompanion(WebView view) {
+    private void installNativeGoogleNavigation(WebView view) {
         if (view == null) return;
         try {
-            view.evaluateJavascript(readBundledTextAsset("native-navigation-companion.js"), value ->
-                Log.d(LOG_TAG, "Native navigation companion controls installed: " + value)
+            view.evaluateJavascript(readBundledTextAsset("native-google-navigation.js"), value ->
+                Log.d(LOG_TAG, "Native in-app Google navigation controls installed: " + value)
             );
         } catch (IOException error) {
-            Log.e(LOG_TAG, "Could not install native navigation companion controls.", error);
+            Log.e(LOG_TAG, "Could not install native in-app Google navigation controls.", error);
         }
     }
 
@@ -2579,79 +2573,19 @@ public class MainActivity extends Activity {
         return true;
     }
 
-    boolean isNavigationCompanionEnabled() {
-        return NavigationCompanionService.isEnabled(this);
+    boolean isInAppGoogleNavigationAvailable() {
+        return OnThisSiteApplication.isNavigationApiConfigured();
     }
 
-    int setNavigationCompanionEnabled(boolean enabled) {
-        if (!enabled) {
-            navigationCompanionEnablePending = false;
-            NavigationCompanionService.stop(this);
-            dispatchNavigationCompanionState(false);
-            return 0;
+    boolean startInAppGoogleNavigation(String title, String slug, double latitude, double longitude) {
+        if (!isInAppGoogleNavigationAvailable() || !Double.isFinite(latitude) || !Double.isFinite(longitude)) return false;
+        try {
+            startActivity(OnThisSiteNavigationActivity.createIntent(this, title, slug, latitude, longitude));
+            return true;
+        } catch (Exception error) {
+            Log.e(LOG_TAG, "Could not open in-app Google navigation.", error);
+            return false;
         }
-        navigationCompanionEnablePending = true;
-        if (!hasLocationPermission()) {
-            beginRuntimePermissionPrompt();
-            requestPermissions(
-                new String[] { Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION },
-                NAVIGATION_COMPANION_LOCATION_REQUEST
-            );
-            return 2;
-        }
-        if (!hasNotificationPermission()) {
-            beginRuntimePermissionPrompt();
-            requestPermissions(
-                new String[] { Manifest.permission.POST_NOTIFICATIONS },
-                NAVIGATION_COMPANION_NOTIFICATION_REQUEST
-            );
-            return 2;
-        }
-        startNavigationCompanion();
-        return 1;
-    }
-
-    private void continueNavigationCompanionEnable() {
-        if (!navigationCompanionEnablePending) return;
-        if (!hasLocationPermission()) {
-            navigationCompanionEnablePending = false;
-            NavigationCompanionService.setEnabled(this, false);
-            dispatchNavigationCompanionState(false);
-            return;
-        }
-        if (!hasNotificationPermission()) {
-            beginRuntimePermissionPrompt();
-            requestPermissions(
-                new String[] { Manifest.permission.POST_NOTIFICATIONS },
-                NAVIGATION_COMPANION_NOTIFICATION_REQUEST
-            );
-            return;
-        }
-        startNavigationCompanion();
-    }
-
-    private void startNavigationCompanion() {
-        navigationCompanionEnablePending = false;
-        NavigationCompanionService.start(this);
-        dispatchNavigationCompanionState(true);
-    }
-
-    private void dispatchNavigationCompanionState(boolean enabled) {
-        if (webView == null) return;
-        webView.post(() -> webView.evaluateJavascript(
-            "window.dispatchEvent(new CustomEvent('nli-navigation-companion-change',{detail:{enabled:"
-                + enabled + "}}))",
-            null
-        ));
-    }
-
-    private void openNavigationCompanionSettingsIfRequested(Intent intent) {
-        if (intent == null || !intent.getBooleanExtra("open_navigation_companion_settings", false) || webView == null) return;
-        intent.removeExtra("open_navigation_companion_settings");
-        webView.postDelayed(() -> webView.evaluateJavascript(
-            "(function(){var button=document.getElementById('settings-open');if(button){button.click();return true;}return false;})()",
-            null
-        ), 500);
     }
 
     @Override
@@ -2709,29 +2643,6 @@ public class MainActivity extends Activity {
                 suppressResumeRefreshAfterPermissionPrompt();
                 if (granted) launchCommentBridgeCamera();
                 else queueCommentPhoto(false, "Camera permission is needed to take a comment photo.", "", "", "");
-                return;
-            }
-
-            if (requestCode == NAVIGATION_COMPANION_LOCATION_REQUEST) {
-                suppressResumeRefreshAfterPermissionPrompt();
-                if (!granted) {
-                    navigationCompanionEnablePending = false;
-                    NavigationCompanionService.setEnabled(this, false);
-                    dispatchNavigationCompanionState(false);
-                } else {
-                    startupHandler.postDelayed(this::continueNavigationCompanionEnable, 200);
-                }
-                return;
-            }
-
-            if (requestCode == NAVIGATION_COMPANION_NOTIFICATION_REQUEST) {
-                suppressResumeRefreshAfterPermissionPrompt();
-                if (granted) startNavigationCompanion();
-                else {
-                    navigationCompanionEnablePending = false;
-                    NavigationCompanionService.setEnabled(this, false);
-                    dispatchNavigationCompanionState(false);
-                }
                 return;
             }
 

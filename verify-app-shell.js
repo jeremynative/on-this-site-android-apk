@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260831-navigation-companion-r209";
+const expectedBuild = "20260831-in-app-google-navigation-r210";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -42,9 +42,12 @@ const amethystShipIconPath = "app/src/main/assets/assets/map-icons/amethyst-movi
 const storyBridgePath = "app/src/main/java/com/nativelongisland/onthissite/StoryBridge.java";
 const captureFileProviderPath = "app/src/main/java/com/nativelongisland/onthissite/CaptureFileProvider.java";
 const nativeCommentPhotoCompatPath = "app/src/main/assets/native-comment-photo-compat.js";
-const navigationCompanionServicePath = "app/src/main/java/com/nativelongisland/onthissite/NavigationCompanionService.java";
-const navigationCompanionActionPath = "app/src/main/java/com/nativelongisland/onthissite/NavigationCompanionActionActivity.java";
-const nativeNavigationCompanionPath = "app/src/main/assets/native-navigation-companion.js";
+const onThisSiteApplicationPath = "app/src/main/java/com/nativelongisland/onthissite/OnThisSiteApplication.java";
+const googleNavigationActivityPath = "app/src/main/java/com/nativelongisland/onthissite/OnThisSiteNavigationActivity.java";
+const googleNavigationLegalActivityPath = "app/src/main/java/com/nativelongisland/onthissite/GoogleNavigationLegalActivity.java";
+const navigationSiteRepositoryPath = "app/src/main/java/com/nativelongisland/onthissite/NavigationSiteRepository.java";
+const nativeGoogleNavigationPath = "app/src/main/assets/native-google-navigation.js";
+const googleNavigationNoticePath = "app/src/main/assets/google-navigation-notice.txt";
 const offlineInsetAuditPath = "audit-apk-offline-insets.mjs";
 const offlineParityAuditPath = "audit-apk-offline-parity.mjs";
 const bundledMobileIndexPaths = [
@@ -70,9 +73,12 @@ const nativeTerritoryFallback = JSON.parse(fs.readFileSync(nativeTerritoryFallba
 const storyBridge = fs.readFileSync(storyBridgePath, "utf8");
 const captureFileProvider = fs.readFileSync(captureFileProviderPath, "utf8");
 const nativeCommentPhotoCompat = fs.readFileSync(nativeCommentPhotoCompatPath, "utf8");
-const navigationCompanionService = fs.readFileSync(navigationCompanionServicePath, "utf8");
-const navigationCompanionAction = fs.readFileSync(navigationCompanionActionPath, "utf8");
-const nativeNavigationCompanion = fs.readFileSync(nativeNavigationCompanionPath, "utf8");
+const onThisSiteApplication = fs.readFileSync(onThisSiteApplicationPath, "utf8");
+const googleNavigationActivity = fs.readFileSync(googleNavigationActivityPath, "utf8");
+const googleNavigationLegalActivity = fs.readFileSync(googleNavigationLegalActivityPath, "utf8");
+const navigationSiteRepository = fs.readFileSync(navigationSiteRepositoryPath, "utf8");
+const nativeGoogleNavigation = fs.readFileSync(nativeGoogleNavigationPath, "utf8");
+const googleNavigationNotice = fs.readFileSync(googleNavigationNoticePath, "utf8");
 const offlineInsetAudit = fs.readFileSync(offlineInsetAuditPath, "utf8");
 const offlineParityAudit = fs.readFileSync(offlineParityAuditPath, "utf8");
 const bundledApp = bundledAppBytes.toString("utf8");
@@ -1584,49 +1590,70 @@ requireText("showNearbyNotification", "Android shell must expose native nearby n
 if (!appBridge.includes("showNotification") || !appBridge.includes("showNearbyNotification")) {
   throw new Error("Android app bridge must expose native notifications to the mobile web app.");
 }
-for (const permission of ["android.permission.FOREGROUND_SERVICE", "android.permission.FOREGROUND_SERVICE_LOCATION"]) {
-  if (!manifest.includes(permission)) throw new Error(`Navigation companion requires ${permission}.`);
-}
 if (manifest.includes("android.permission.ACCESS_BACKGROUND_LOCATION")) {
-  throw new Error("Navigation companion must use an explicitly started foreground location service, not unrestricted background location.");
+  throw new Error("In-app Google navigation must not request unrestricted background location.");
 }
-if (!manifest.includes('android:name=".NavigationCompanionService"')
-    || !manifest.includes('android:foregroundServiceType="location"')
-    || !manifest.includes('android:name=".NavigationCompanionActionActivity"')
+if (!manifest.includes('android:name=".OnThisSiteApplication"')
+    || !manifest.includes('android:name=".OnThisSiteNavigationActivity"')
+    || !manifest.includes('android:name=".GoogleNavigationLegalActivity"')
     || !manifest.includes('<package android:name="com.google.android.apps.maps"')) {
-  throw new Error("Navigation companion service, review activity, and Google Maps handoff must be declared explicitly.");
+  throw new Error("In-app Google navigation, legal notices, and Google Maps fallback must be declared explicitly.");
 }
-if (!appBridge.includes("isNavigationCompanionEnabled")
-    || !appBridge.includes("setNavigationCompanionEnabled")
+if (manifest.includes('android:name=".NavigationCompanionService"')
+    || manifest.includes('android:name=".NavigationCompanionActionActivity"')) {
+  throw new Error("The rejected notification companion must not remain registered in the APK.");
+}
+if (!gradleBuild.includes('implementation "com.google.android.libraries.navigation:navigation:7.6.0"')
+    || !gradleBuild.includes('coreLibraryDesugaring "com.android.tools:desugar_jdk_libs_nio:2.0.3"')
+    || !gradleBuild.includes("minSdk = 24")
+    || !gradleBuild.includes('buildConfigField "String", "GOOGLE_NAVIGATION_API_KEY"')) {
+  throw new Error("Android build must use the compatible Google Navigation SDK, desugaring, API 24 minimum, and secret-backed key.");
+}
+if (!releaseWorkflow.includes("GOOGLE_NAVIGATION_API_KEY: ${{ secrets.GOOGLE_NAVIGATION_API_KEY }}")) {
+  throw new Error("Release workflow must inject the Google Navigation key from a GitHub secret.");
+}
+if (!onThisSiteApplication.includes("NavigationApi.setApiKey(apiKey)")
+    || !onThisSiteApplication.includes("if (!apiKey.isEmpty())")) {
+  throw new Error("Application must configure Google Navigation before creating SDK components and tolerate keyless builds.");
+}
+if (!appBridge.includes("isInAppGoogleNavigationAvailable")
+    || !appBridge.includes("startInAppGoogleNavigation")
     || !appBridge.includes("validBridgeToken(token)")) {
-  throw new Error("Navigation companion bridge controls must require the per-launch capability token.");
+  throw new Error("In-app Google navigation bridge controls must require the per-launch capability token.");
 }
 for (const needle of [
-  "FOREGROUND_SERVICE_TYPE_LOCATION",
-  "On This Site companion is on",
-  '"Turn off"',
-  "GLOBAL_ALERT_INTERVAL_MS",
-  "SITE_ALERT_INTERVAL_MS",
-  "ALERT_RADIUS_MILES = 0.75",
-  '"Point".equals(centerItem.optString("geometry_type"))',
-  "isSafePublicCandidate",
-  "navigation_companion_site_",
-  "Review stop"
+  "NavigationView",
+  "googleMap.setTrafficEnabled(true)",
+  "VOICE_ALERTS_AND_GUIDANCE",
+  "BLUETOOTH_AUDIO",
+  "navigator.setDestination",
+  "navigator.setDestinations",
+  "Nearby public On This Site places are labeled on the map",
+  'setPositiveButton("Add stop"',
+  "MAX_VISIBLE_SITE_LABELS = 18",
+  "setTaskRemovedBehavior(Navigator.TaskRemovedBehavior.QUIT_SERVICE)",
+  "GoogleNavigationLegalActivity.class"
 ]) {
-  if (!navigationCompanionService.includes(needle)) throw new Error(`Navigation companion service is missing: ${needle}`);
+  if (!googleNavigationActivity.includes(needle)) throw new Error(`In-app Google navigation is missing: ${needle}`);
 }
-if (!navigationCompanionService.includes("ancestral land|traditional land|territory|burial|cemetery|sacred|archaeolog|private residence")
-    || !navigationCompanionService.includes("approximate|general|broad|near|area|landscape|mixed|pending|needs review")) {
-  throw new Error("Navigation companion must exclude sensitive, broad, and approximate map records from routing suggestions.");
+if (!navigationSiteRepository.includes('"Point".equals(centerItem.optString("geometry_type"))')
+    || !navigationSiteRepository.includes("isSafePublicCandidate")
+    || !navigationSiteRepository.includes("ancestral land|traditional land|territory|burial|cemetery|sacred|archaeolog|private residence")
+    || !navigationSiteRepository.includes("approximate|general|broad|near|area|landscape|mixed|pending|needs review")) {
+  throw new Error("Navigation map must restrict pins to specific, public, non-sensitive point records.");
 }
-for (const needle of ["Open Google Maps", "Google Maps controls whether it can be added to your current route", "Turn off companion", "com.google.android.apps.maps", "https://www.google.com/maps/search/"]) {
-  if (!navigationCompanionAction.includes(needle)) throw new Error(`Navigation companion review flow is missing: ${needle}`);
+for (const needle of ["isInAppGoogleNavigationAvailable", "startInAppGoogleNavigation", "Navigate", "google.com/maps/dir/"]) {
+  if (!nativeGoogleNavigation.includes(needle)) throw new Error(`Native Google navigation link integration is missing: ${needle}`);
 }
-for (const needle of ["Google Maps companion", "Undo and turn off", "nli-navigation-companion-change", "Google Maps controls any route change"]) {
-  if (!nativeNavigationCompanion.includes(needle)) throw new Error(`Navigation companion controls are missing: ${needle}`);
+for (const needle of ["google-navigation-notice.txt", "google-navigation-licenses.txt", "Open-source licenses"]) {
+  if (!googleNavigationLegalActivity.includes(needle)) throw new Error(`Google navigation legal-notice access is missing: ${needle}`);
 }
-requireText("installNativeNavigationCompanion(view);", "Android shell must inject navigation companion controls into hosted and bundled app pages.");
-requireText('readBundledTextAsset("native-navigation-companion.js")', "Android shell must load the maintained navigation companion control asset.");
+if (!googleNavigationNotice.includes("Google Maps/Google Earth Additional Terms of Service")
+    || !googleNavigationNotice.includes("Legal Notices for Google Maps and Google Maps APIs")) {
+  throw new Error("Google navigation notice must link the required Google Maps terms and legal notices.");
+}
+requireText("installNativeGoogleNavigation(view);", "Android shell must inject in-app Google navigation controls into hosted and bundled app pages.");
+requireText('readBundledTextAsset("native-google-navigation.js")', "Android shell must load the maintained Google navigation control asset.");
 if (!appBridge.includes("public boolean isDebugBuild()") || !appBridge.includes("return BuildConfig.DEBUG;")) {
   throw new Error("Android app bridge must expose the debug-only location-control audit guard.");
 }

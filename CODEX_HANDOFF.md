@@ -1,5 +1,16 @@
 # Android APK — Codex Handoff
 
+## August 31 in-app Google navigation implementation awaiting API key
+
+- Branch `feature/in-app-google-navigation-20260831` replaces the rejected notification companion with an optional in-app Google Navigation SDK 7.6 experience. Existing article Directions links become Navigate only when a build contains a configured key; keyless builds retain the official Google Maps link and expose no dead navigation control.
+- The native navigation screen calculates Google traffic-aware driving routes, provides voice/Bluetooth guidance and standard navigation UI, shows up to 18 nearby labeled On This Site pins, and lets a user confirm adding a selected public site as the next stop. It loads 259 current public Point records while excluding approximate, broad, sensitive, burial, sacred, archaeological, private-residence, and other unsafe records. Google Maps remains available as a one-tap fallback.
+- Removed the prior companion service, action activity, foreground-notification toggle, and companion JavaScript. No background-location permission was added. The Google API key is injected only from an ignored local file or the `GOOGLE_NAVIGATION_API_KEY` GitHub secret. Required Google terms and the SDK license are available from the navigation screen.
+- Physical iPlay tablet QA passed with a dummy key: the Navigate link opened the native activity, 259 safe sites loaded, the screen layout and legal notice rendered, and the invalid-key timeout produced a clear authorization message after 15 seconds without crashing. A separate keyless build preserved Directions. The QA package was uninstalled; production 0.1.616 remains installed and unchanged.
+- `verify-app-shell.js`, Google Play readiness, JavaScript syntax, whitespace, debug build, optimized/R8 QA build, and ARM native-library/16 KB compatibility checks passed. The optimized universal ARM APK is 53,632,102 bytes. Google SDK resource-format and configuration-resolution warnings are non-fatal.
+- Live route, traffic, road-snapping, voice, and marker interaction cannot be approved or published until a billing-enabled Google Cloud project has Navigation SDK enabled and supplies Android-restricted keys for the QA and production package/signing certificates. No Google Cloud billing state, GitHub secret, merge, release, or Obtainium publication has been changed.
+
+Safest next action: obtain explicit authorization for the Google Cloud billing setup, create/restrict the QA and production Navigation SDK keys without printing them, add the production value as GitHub secret `GOOGLE_NAVIGATION_API_KEY`, perform a live route test on the physical tablet, then commit/push/merge and publish the signed Obtainium APK only if that test passes.
+
 ## August 31 mobile map-first startup
 
 - Unrouted mobile launches now begin with the map unobstructed: the bottom panel is collapsed, Nearby is the hidden selected feed, and no detail or sheet is opened. Routed links and restored active Android content still reopen their requested content, and desktop behavior is unchanged.

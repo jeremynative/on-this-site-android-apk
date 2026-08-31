@@ -5,6 +5,7 @@ build/
 # Local configuration file (sdk path, etc)
 local.properties
 mapbox-token.local.txt
+google-navigation-api-key.local.txt
 
 # Log/OS Files
 *.log

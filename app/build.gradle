@@ -2,8 +2,17 @@ plugins {
     id "com.android.application"
 }
 
+configurations {
+    googleNavigationLegal
+}
+
 dependencies {
     implementation "com.android.billingclient:billing:8.2.1"
+    // Google Navigation SDK 7.6 is the newest line compatible with the
+    // project's Gradle 8.11 / Android Gradle Plugin 8.10 toolchain.
+    implementation "com.google.android.libraries.navigation:navigation:7.6.0"
+    googleNavigationLegal "com.google.android.libraries.navigation:navigation:7.6.0@aar"
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs_nio:2.0.3"
     // Keep the native map available on devices without Vulkan. MapLibre 13's
     // default artifact requires Vulkan, while the OpenGL artifact uses the
     // same Android API with the widest supported-device coverage.
@@ -40,11 +49,12 @@ android {
 
     defaultConfig {
         applicationId = "com.nativelongisland.onthissite"
-        minSdk = 23
+        minSdk = 24
         targetSdk = 36
         versionCode = Integer.parseInt((System.getenv("VERSION_CODE") ?: "17").toString())
         versionName = (System.getenv("VERSION_NAME") ?: "0.1.16").toString()
         buildConfigField "String", "MAPBOX_TOKEN", "\"${(System.getenv("MAPBOX_TOKEN") ?: "").replace("\\", "\\\\").replace("\"", "\\\"")}\""
+        buildConfigField "String", "GOOGLE_NAVIGATION_API_KEY", "\"${(System.getenv("GOOGLE_NAVIGATION_API_KEY") ?: "").replace("\\", "\\\\").replace("\"", "\\\"")}\""
     }
 
     signingConfigs {
@@ -90,6 +100,25 @@ android {
             debuggable = false
         }
     }
+
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    sourceSets.main.assets.srcDir(layout.buildDirectory.dir("generated/google-navigation-legal"))
+}
+
+tasks.register("prepareGoogleNavigationLegal", Copy) {
+    from { configurations.googleNavigationLegal.collect { zipTree(it) } }
+    include "LICENSE"
+    rename { "google-navigation-licenses.txt" }
+    into layout.buildDirectory.dir("generated/google-navigation-legal")
+}
+
+tasks.named("preBuild").configure {
+    dependsOn tasks.named("prepareGoogleNavigationLegal")
 }
 
 gradle.taskGraph.whenReady { graph ->
