@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260831-biography-introductions-r205";
+    static final String APP_VERSION = "20260831-mobile-map-first-r206";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -1675,7 +1675,7 @@ public class MainActivity extends Activity {
                     + "return originalFetch(input,init);"
                 + "};"
             + "}"
-            + "window.__nliAllowGeoUntil=0;"
+            + "window.__nliAllowGeoUntil=Date.now()+30000;"
             + "function allowGeo(){window.__nliAllowGeoUntil=Date.now()+30000;}"
             + "document.addEventListener('click',function(event){"
                 + "var target=event.target&&event.target.closest&&event.target.closest('#locate,#mobile-map-locate,#suggest-use-location,[data-allow-geolocation]');"
