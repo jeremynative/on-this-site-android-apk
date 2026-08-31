@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260831-mobile-map-first-r206";
+const expectedBuild = "20260831-article-intro-scroll-r207";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -2178,6 +2178,10 @@ requireBundledText('grid-template-columns: minmax(0, 1fr) 54px auto;', "Bundled 
 requireBundledPattern(/\.detail \.close\s*\{[\s\S]*?grid-column:\s*-2 \/ -1;[\s\S]*?text-transform:\s*lowercase;/, "Bundled Android site close x must stay lowercase at the far right.");
 requireBundledPattern(/\.detail-hero-dock \.hero\.article-sticky-hero\.is-compact\s*\{[\s\S]*?height:\s*44px;/, "Bundled Android scrolled site thumbnail must remain small.");
 requireBundledPattern(/function showFullDetailHero\(\)\s*\{[\s\S]*?detailBodyEl\.scrollTo\(\{ top: 0, behavior: "smooth" \}\);[\s\S]*?detailHeroDockEl\.addEventListener\("click", showFullDetailHero\);/, "Bundled Android compact thumbnail must restore the full image when tapped.");
+requireBundledPattern(/const DETAIL_HERO_DOCK_PROGRESS = 0\.72;[\s\S]*?const DETAIL_HERO_DOCK_MIN_SCROLL_PX = 96;[\s\S]*?Math\.round\(heroHeight \* DETAIL_HERO_DOCK_PROGRESS\)/, "Bundled Android article image must wait until most of the hero naturally scrolls before docking.");
+requireBundledPattern(/function detailHeroPlaceholder\(hero\)[\s\S]*?placeholder\.style\.height = `\$\{rect\.height\}px`;[\s\S]*?detailHeroHomeNode = detailHeroPlaceholder\(hero\);/, "Bundled Android article image docking must preserve the introduction's scroll position.");
+requireBundledPattern(/scrollTop >= detailHeroDockThreshold[\s\S]*?scrollTop <= Math\.max\(0, detailHeroDockThreshold - DETAIL_HERO_DOCK_HYSTERESIS_PX\)/, "Bundled Android article image must use a stable docking threshold while scrolling in either direction.");
+requireBundledPattern(/\.article-sticky-hero-placeholder\s*\{[\s\S]*?visibility:\s*hidden;[\s\S]*?pointer-events:\s*none;/, "Bundled Android article hero placeholder must preserve layout without becoming interactive.");
 requireBundledText('`${leadingTitleTerms[0]}${leadingTitleTerms[1]}` === compactQuery) score += 2600;', "Bundled Android autocomplete must prioritize punctuation-free possessive title matches such as Ma's House.");
 forbidBundledText('formatLabel(item.site_type)', "Bundled Android autocomplete must not crash when a site enters the suggestions.");
 requireBundledText('if (searchEl.value !== query) searchEl.value = query;', "Bundled Android search must commit the full native composition into the DOM before submitting.");
