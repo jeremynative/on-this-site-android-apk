@@ -52,9 +52,9 @@ import java.util.Map;
 public class OnThisSiteNavigationActivity extends Activity {
     private static final String LOG_TAG = "OnThisSiteGoogleNav";
     private static final int LOCATION_PERMISSION_REQUEST = 71;
-    private static final int MAX_VISIBLE_SITE_LABELS = 8;
+    private static final int MAX_VISIBLE_SITE_LABELS = 4;
     private static final int MAX_NEARBY_EDGE_INDICATORS = 3;
-    private static final float NEARBY_EDGE_RANGE_METERS = 5f * 1609.344f;
+    private static final float NEARBY_SITE_RANGE_METERS = 1609.344f;
     private static final float MIN_LABEL_HORIZONTAL_SPACING_DP = 190f;
     private static final float MIN_LABEL_VERTICAL_SPACING_DP = 58f;
     private static final String EXTRA_TITLE = "destination_title";
@@ -137,15 +137,14 @@ public class OnThisSiteNavigationActivity extends Activity {
             overviewButton.setEnabled(false);
             return;
         }
+        initializeNavigation(savedInstanceState);
         if (!hasLocationPermission()) {
             statusView.setText("Location access is needed to calculate a route from your position.");
             requestPermissions(
                 new String[] { Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION },
                 LOCATION_PERMISSION_REQUEST
             );
-            return;
         }
-        initializeNavigation(savedInstanceState);
     }
 
     private void initializeNavigation(Bundle savedInstanceState) {
@@ -162,7 +161,7 @@ public class OnThisSiteNavigationActivity extends Activity {
         navigationView.setSpeedometerEnabled(true);
         navigationView.setTripProgressBarEnabled(true);
         navigationView.setTrafficPromptsEnabled(true);
-        statusView.setText("Loading Google navigation and On This Site pins…");
+        if (hasLocationPermission()) statusView.setText("Loading route…");
         navigationView.getMapAsync(map -> {
             googleMap = map;
             googleMap.setTrafficEnabled(true);
@@ -192,7 +191,7 @@ public class OnThisSiteNavigationActivity extends Activity {
                     .setTitle(destinationTitle)
                     .setVehicleStopover(true)
                     .build();
-                calculateRoute(Arrays.asList(primaryDestination), false);
+                if (hasLocationPermission()) calculateRoute(Arrays.asList(primaryDestination), false);
             }
 
             @Override
@@ -246,9 +245,9 @@ public class OnThisSiteNavigationActivity extends Activity {
         navigator.setAudioGuidance(Navigator.AudioGuidance.VOICE_ALERTS_AND_GUIDANCE | Navigator.AudioGuidance.BLUETOOTH_AUDIO);
         navigator.startGuidance();
         guidanceStarted = true;
-        startButton.setText("Guidance on");
         startButton.setEnabled(false);
-        statusView.setText("Turn-by-turn guidance is active. Tap a labeled On This Site pin to review adding it as a stop.");
+        topCard.setVisibility(View.GONE);
+        refreshNearbyEdgeIndicators();
     }
 
     private void loadPublicSites() {
@@ -268,7 +267,10 @@ public class OnThisSiteNavigationActivity extends Activity {
     }
 
     private void refreshVisibleSiteMarkers() {
-        if (googleMap == null || publicSites.isEmpty()) return;
+        if (googleMap == null || currentLocation == null || publicSites.isEmpty()) {
+            clearSiteMarkers();
+            return;
+        }
         LatLngBounds bounds;
         LatLng center;
         Projection projection;
@@ -283,7 +285,10 @@ public class OnThisSiteNavigationActivity extends Activity {
         for (NavigationSiteRepository.Site site : publicSites) {
             if (sameDestination(site)) continue;
             LatLng point = new LatLng(site.latitude, site.longitude);
-            if (bounds.contains(point)) visible.add(site);
+            if (!bounds.contains(point)) continue;
+            float[] result = new float[1];
+            Location.distanceBetween(currentLocation.getLatitude(), currentLocation.getLongitude(), site.latitude, site.longitude, result);
+            if (result[0] <= NEARBY_SITE_RANGE_METERS) visible.add(site);
         }
         visible.sort(Comparator.comparingDouble(site -> distanceSquared(center, site)));
         float density = getResources().getDisplayMetrics().density;
@@ -306,9 +311,7 @@ public class OnThisSiteNavigationActivity extends Activity {
             labelAnchors.add(anchor);
             if (spacedVisible.size() >= MAX_VISIBLE_SITE_LABELS) break;
         }
-        for (Marker marker : siteMarkers) marker.remove();
-        siteMarkers.clear();
-        siteByMarker.clear();
+        clearSiteMarkers();
         for (NavigationSiteRepository.Site site : spacedVisible) {
             Marker marker = googleMap.addMarker(new MarkerOptions()
                 .position(new LatLng(site.latitude, site.longitude))
@@ -322,6 +325,12 @@ public class OnThisSiteNavigationActivity extends Activity {
                 siteByMarker.put(marker, site);
             }
         }
+    }
+
+    private void clearSiteMarkers() {
+        for (Marker marker : siteMarkers) marker.remove();
+        siteMarkers.clear();
+        siteByMarker.clear();
     }
 
     private boolean onMarkerClicked(Marker marker) {
@@ -368,12 +377,14 @@ public class OnThisSiteNavigationActivity extends Activity {
             if (visibleBounds.contains(point)) continue;
             float[] result = new float[2];
             Location.distanceBetween(currentLocation.getLatitude(), currentLocation.getLongitude(), site.latitude, site.longitude, result);
-            if (result[0] <= NEARBY_EDGE_RANGE_METERS) nearby.add(new NearbySiteDistance(site, result[0], result[1]));
+            if (result[0] <= NEARBY_SITE_RANGE_METERS) nearby.add(new NearbySiteDistance(site, result[0], result[1]));
         }
         nearby.sort(Comparator.comparingDouble(item -> item.distanceMeters));
         float density = getResources().getDisplayMetrics().density;
         float horizontalInset = 12f * density;
-        float top = Math.max(topCard == null ? 0 : topCard.getBottom(), Math.round(84f * density)) + 10f * density;
+        float top = topCard != null && topCard.getVisibility() == View.VISIBLE
+            ? Math.max(topCard.getBottom(), Math.round(72f * density)) + 8f * density
+            : 116f * density;
         float bottom = height - 90f * density;
         float centerX = width / 2f;
         float centerY = (top + bottom) / 2f;
@@ -431,13 +442,15 @@ public class OnThisSiteNavigationActivity extends Activity {
         int verticalPadding = Math.round(6f * density);
         indicator.setPadding(horizontalPadding, verticalPadding, horizontalPadding, verticalPadding);
         GradientDrawable background = new GradientDrawable();
-        background.setColor(Color.argb(238, 23, 79, 57));
+        background.setColor(Color.argb(152, 23, 79, 57));
         background.setCornerRadius(10f * density);
         indicator.setBackground(background);
         indicator.setElevation(7f * density);
         TextView arrow = new TextView(this);
         arrow.setText("➤");
-        arrow.setTextColor(Color.rgb(245, 194, 66));
+        arrow.setTextColor(item.site.hasHeaderImage
+            ? Color.argb(224, 60, 137, 230)
+            : Color.argb(224, 74, 171, 101));
         arrow.setTextSize(21);
         arrow.setGravity(Gravity.CENTER);
         arrow.setRotation((float) Math.toDegrees(Math.atan2(dy, dx)));
@@ -503,11 +516,11 @@ public class OnThisSiteNavigationActivity extends Activity {
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         Paint background = new Paint(Paint.ANTI_ALIAS_FLAG);
-        background.setColor(Color.rgb(30, 82, 60));
+        background.setColor(Color.argb(170, 30, 82, 60));
         float radius = 8f * density;
         canvas.drawRoundRect(new RectF(pinWidth / 2f, 0, width, height - 4f * density), radius, radius, background);
         Paint pin = new Paint(Paint.ANTI_ALIAS_FLAG);
-        pin.setColor(Color.rgb(196, 57, 46));
+        pin.setColor(Color.argb(190, 196, 57, 46));
         canvas.drawCircle(pinWidth / 2f, height / 2.5f, 7f * density, pin);
         canvas.drawText(title, pinWidth + horizontalPadding, (height - 4f * density) / 2f - (textPaint.ascent() + textPaint.descent()) / 2f, textPaint);
         return BitmapDescriptorFactory.fromBitmap(bitmap);
@@ -559,8 +572,15 @@ public class OnThisSiteNavigationActivity extends Activity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode != LOCATION_PERMISSION_REQUEST) return;
-        if (hasLocationPermission()) initializeNavigation(null);
-        else statusView.setText("Location was not allowed. Use Google Maps instead, or grant location and try again.");
+        if (hasLocationPermission()) {
+            try {
+                if (googleMap != null) googleMap.setMyLocationEnabled(true);
+            } catch (SecurityException ignored) {}
+            if (navigator != null && primaryDestination != null) calculateRoute(Arrays.asList(primaryDestination), false);
+            else statusView.setText("Loading route…");
+        } else {
+            statusView.setText("Location is off. The map is available, but routing needs location access.");
+        }
     }
 
     private void windowKeepScreenOn() {

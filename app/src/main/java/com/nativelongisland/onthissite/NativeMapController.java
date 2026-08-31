@@ -223,8 +223,10 @@ final class NativeMapController {
         pendingMapTapFeatureLongitude = Double.NaN;
         pendingMapTapFeatureLatitude = Double.NaN;
         if (point == null) return;
-        if (dispatchPendingMovingFeature(featureKind, featureKey, featureLongitude, featureLatitude)) return;
-        handleMapClick(point);
+        // Resolve the exact frame position first. A nearby moving biography
+        // must not preempt the site pin or specific polygon actually pressed.
+        if (handleMapClick(point)) return;
+        dispatchPendingMovingFeature(featureKind, featureKey, featureLongitude, featureLatitude);
     };
     private boolean usingOnlineArchive;
     private boolean offlineFallbackAttempted;
@@ -721,7 +723,7 @@ final class NativeMapController {
         pendingMapTapFeatureLongitude = Double.NaN;
         pendingMapTapFeatureLatitude = Double.NaN;
         if (map == null || screenPoint == null || profileMode) return;
-        float hitRadius = Math.max(32f, activity.getResources().getDisplayMetrics().density * 32f);
+        float hitRadius = mapTapHitRadiusPx();
         RectF hitBox = new RectF(
             screenPoint.x - hitRadius,
             screenPoint.y - hitRadius,
@@ -730,7 +732,6 @@ final class NativeMapController {
         );
         List<Feature> features = map.queryRenderedFeatures(
             hitBox,
-            "nli-moving-feature-labels",
             "nli-moving-biography-icons",
             "nli-moving-dog-icons",
             "nli-moving-whale-icons",
@@ -766,6 +767,14 @@ final class NativeMapController {
     private boolean pointInBlockedRegion(float x, float y) {
         for (RectF region : blockedTouchRegions) if (region.contains(x, y)) return true;
         return false;
+    }
+
+    private float mapTapHitRadiusPx() {
+        double zoom = map == null || map.getCameraPosition() == null
+            ? 10.0
+            : map.getCameraPosition().zoom;
+        float radiusDp = zoom < 8.5 ? 18f : zoom < 10.0 ? 24f : 32f;
+        return Math.max(18f, activity.getResources().getDisplayMetrics().density * radiusDp);
     }
 
     private boolean nativeGestureInProgress() {
@@ -1804,13 +1813,31 @@ final class NativeMapController {
             Feature exactPoint = nearestActionablePointFeature(exactPoints, screenPoint, false);
             if (dispatchActionablePointFeature(exactPoint, false)) return true;
 
+            // A precise press on a reviewed site polygon beats unrelated
+            // point artwork that only intersects the expanded accessibility
+            // box. Pins still win when their rendered pixels are pressed.
+            List<Feature> exactSiteSurfaces = map.queryRenderedFeatures(
+                screenPoint,
+                SITE_LAND_FILL_LAYER_ID,
+                SITE_LAND_SATELLITE_FILL_LAYER_ID,
+                SITE_NON_LAND_FILL_LAYER_ID
+            );
+            if (exactSiteSurfaces != null) {
+                for (Feature surface : exactSiteSurfaces) {
+                    if (surface != null && surface.hasProperty("slug")) {
+                        listener.onFeatureSelected("site", surface.getStringProperty("slug"));
+                        return true;
+                    }
+                }
+            }
+
         }
         // Project artwork is intentionally compact, and several legacy PNGs
         // place their visible drawing low inside a transparent square. A tap
         // on the visible house/building can therefore sit more than 20 dp from
         // the geographic anchor. Use a 64 dp square so the artwork wins over
         // the territory/polygon underneath without visually enlarging it.
-        float hitRadius = Math.max(32f, activity.getResources().getDisplayMetrics().density * 32f);
+        float hitRadius = mapTapHitRadiusPx();
         RectF hitBox = new RectF(
             screenPoint.x - hitRadius,
             screenPoint.y - hitRadius,

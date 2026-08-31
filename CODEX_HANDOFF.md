@@ -1,5 +1,16 @@
 # Android APK — Codex Handoff
 
+## August 31 S25 navigation UI and low-zoom selection follow-up
+
+- Branch `fix/s25-navigation-ui-20260831` keeps article and custom-place navigation inside the On This Site native activity. The compact square article arrow now sits immediately to the right of the close control and directly intercepts its Google Maps URL; the separate `↗` control in the native navigation screen remains the explicit external Google Maps fallback.
+- The native route screen initializes its map before requesting location, so denying or delaying permission no longer produces a blank destination screen. Its setup controls are compact, and the setup card is removed when guidance starts so Google's turn banner stays visible.
+- Nearby historical-site markers and edge indicators are limited to one mile, capped and made translucent. Edge arrows are blue when the packaged site metadata has a listing/header image and green otherwise.
+- Low-zoom taps now resolve the exact rendered site pin or specific polygon before a nearby moving biography fallback. Biography labels no longer create a broad preemptive hit area, and the accessibility radius scales down with lower zoom.
+- Tablet QA passed the custom-address native entry path, denied-location map availability, compact controls, the corrected in-app article arrow, and a dense zoom-7.5 site-pin tap that opened `Nobbs (Goose Creek)` rather than a nearby biography. The article body pull-down regression audit also passes after waiting for the real drawer transition before dispatching its gesture.
+- `verify-app-shell.js`, Google Play readiness, navigation bridge audit, JavaScript syntax, `lintDebug`, `assembleDebug`, and focused real-device checks pass. The Galaxy S25 was not available over wireless ADB during this pass; do not claim Samsung hardware verification until it reconnects.
+
+Safest next action: merge this focused Android change, verify the exact signed Obtainium release and production key/certificate, install without clearing app data, then test live guidance and remove the QA package.
+
 ## August 31 in-app Google navigation and nearby edge indicators
 
 - Branch `feature/in-app-google-navigation-20260831` replaces the rejected notification companion with an optional in-app Google Navigation SDK 7.6 experience. Existing article Directions links become Navigate only when a build contains a configured key; keyless builds retain the official Google Maps link and expose no dead navigation control.

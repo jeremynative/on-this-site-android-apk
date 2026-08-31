@@ -43,7 +43,13 @@ final class NavigationSiteRepository {
             double longitude = center.optDouble(0, Double.NaN);
             double latitude = center.optDouble(1, Double.NaN);
             if (!Double.isFinite(latitude) || !Double.isFinite(longitude) || !isOnLongIsland(latitude, longitude)) continue;
-            loaded.add(new Site(metadata.optString("title"), slug, latitude, longitude));
+            loaded.add(new Site(
+                metadata.optString("title"),
+                slug,
+                latitude,
+                longitude,
+                hasHeaderImage(metadata)
+            ));
         }
         return loaded;
     }
@@ -69,6 +75,15 @@ final class NavigationSiteRepository {
             && longitude >= LONG_ISLAND_MIN_LNG && longitude <= LONG_ISLAND_MAX_LNG;
     }
 
+    private static boolean hasHeaderImage(JSONObject item) {
+        return item != null && (
+            !item.optString("listing_image_file", "").trim().isEmpty()
+            || !item.optString("listing_image_thumb_url", "").trim().isEmpty()
+            || !item.optString("listing_image_url", "").trim().isEmpty()
+            || !item.optString("content_image_url", "").trim().isEmpty()
+        );
+    }
+
     private static String readAsset(Context context, String path) throws Exception {
         try (InputStream input = context.getAssets().open(path); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             byte[] buffer = new byte[8192];
@@ -83,12 +98,14 @@ final class NavigationSiteRepository {
         final String slug;
         final double latitude;
         final double longitude;
+        final boolean hasHeaderImage;
 
-        Site(String title, String slug, double latitude, double longitude) {
+        Site(String title, String slug, double latitude, double longitude, boolean hasHeaderImage) {
             this.title = title;
             this.slug = slug;
             this.latitude = latitude;
             this.longitude = longitude;
+            this.hasHeaderImage = hasHeaderImage;
         }
     }
 }

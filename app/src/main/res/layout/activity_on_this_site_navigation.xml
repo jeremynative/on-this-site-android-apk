@@ -23,10 +23,10 @@
         android:background="#F2FFFFFF"
         android:elevation="8dp"
         android:orientation="vertical"
-        android:paddingStart="12dp"
-        android:paddingTop="8dp"
-        android:paddingEnd="12dp"
-        android:paddingBottom="8dp">
+        android:paddingStart="10dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="6dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -36,9 +36,13 @@
 
             <Button
                 android:id="@+id/navigation_close"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:text="Close" />
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:text="×"
+                android:textSize="24sp"
+                android:contentDescription="Close navigation" />
 
             <TextView
                 android:id="@+id/navigation_destination"
@@ -47,22 +51,30 @@
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
                 android:ellipsize="end"
-                android:maxLines="2"
+                android:maxLines="1"
                 android:textColor="#173B2B"
-                android:textSize="18sp"
+                android:textSize="17sp"
                 android:textStyle="bold" />
 
             <Button
                 android:id="@+id/navigation_external"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:text="Maps" />
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:text="↗"
+                android:textSize="21sp"
+                android:contentDescription="Open in Google Maps" />
 
             <Button
                 android:id="@+id/navigation_legal"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:text="Legal" />
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:text="ⓘ"
+                android:textSize="18sp"
+                android:contentDescription="Navigation legal information" />
         </LinearLayout>
 
         <TextView
@@ -73,11 +85,13 @@
             android:paddingTop="4dp"
             android:paddingEnd="4dp"
             android:paddingBottom="4dp"
+            android:maxLines="2"
             android:text="Preparing navigation…"
             android:textColor="#26382F"
-            android:textSize="14sp" />
+            android:textSize="13sp" />
 
         <LinearLayout
+            android:id="@+id/navigation_top_actions"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="end"
@@ -86,14 +100,14 @@
             <Button
                 android:id="@+id/navigation_overview"
                 android:layout_width="wrap_content"
-                android:layout_height="48dp"
+                android:layout_height="44dp"
                 android:enabled="false"
                 android:text="Overview" />
 
             <Button
                 android:id="@+id/navigation_start"
                 android:layout_width="wrap_content"
-                android:layout_height="48dp"
+                android:layout_height="44dp"
                 android:layout_marginStart="8dp"
                 android:enabled="false"
                 android:text="Start" />
