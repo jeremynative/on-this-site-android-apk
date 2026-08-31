@@ -174,6 +174,31 @@ class AppBridge {
     }
 
     @JavascriptInterface
+    public boolean isNavigationCompanionEnabled(String token) {
+        return activity.validBridgeToken(token) && activity.isNavigationCompanionEnabled();
+    }
+
+    @JavascriptInterface
+    public int setNavigationCompanionEnabled(String token, boolean enabled) {
+        if (!activity.validBridgeToken(token)) return 0;
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return activity.setNavigationCompanionEnabled(enabled);
+        }
+        java.util.concurrent.atomic.AtomicInteger result = new java.util.concurrent.atomic.AtomicInteger(0);
+        CountDownLatch latch = new CountDownLatch(1);
+        activity.runOnUiThread(() -> {
+            result.set(activity.setNavigationCompanionEnabled(enabled));
+            latch.countDown();
+        });
+        try {
+            latch.await(1500, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+        }
+        return result.get();
+    }
+
+    @JavascriptInterface
     public void takePlantPhoto(String token) {
         if (!activity.validBridgeToken(token)) return;
         activity.runOnUiThread(() -> {

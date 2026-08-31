@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260831-article-pull-down-r208";
+const expectedBuild = "20260831-navigation-companion-r209";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -42,6 +42,9 @@ const amethystShipIconPath = "app/src/main/assets/assets/map-icons/amethyst-movi
 const storyBridgePath = "app/src/main/java/com/nativelongisland/onthissite/StoryBridge.java";
 const captureFileProviderPath = "app/src/main/java/com/nativelongisland/onthissite/CaptureFileProvider.java";
 const nativeCommentPhotoCompatPath = "app/src/main/assets/native-comment-photo-compat.js";
+const navigationCompanionServicePath = "app/src/main/java/com/nativelongisland/onthissite/NavigationCompanionService.java";
+const navigationCompanionActionPath = "app/src/main/java/com/nativelongisland/onthissite/NavigationCompanionActionActivity.java";
+const nativeNavigationCompanionPath = "app/src/main/assets/native-navigation-companion.js";
 const offlineInsetAuditPath = "audit-apk-offline-insets.mjs";
 const offlineParityAuditPath = "audit-apk-offline-parity.mjs";
 const bundledMobileIndexPaths = [
@@ -67,6 +70,9 @@ const nativeTerritoryFallback = JSON.parse(fs.readFileSync(nativeTerritoryFallba
 const storyBridge = fs.readFileSync(storyBridgePath, "utf8");
 const captureFileProvider = fs.readFileSync(captureFileProviderPath, "utf8");
 const nativeCommentPhotoCompat = fs.readFileSync(nativeCommentPhotoCompatPath, "utf8");
+const navigationCompanionService = fs.readFileSync(navigationCompanionServicePath, "utf8");
+const navigationCompanionAction = fs.readFileSync(navigationCompanionActionPath, "utf8");
+const nativeNavigationCompanion = fs.readFileSync(nativeNavigationCompanionPath, "utf8");
 const offlineInsetAudit = fs.readFileSync(offlineInsetAuditPath, "utf8");
 const offlineParityAudit = fs.readFileSync(offlineParityAuditPath, "utf8");
 const bundledApp = bundledAppBytes.toString("utf8");
@@ -1578,6 +1584,49 @@ requireText("showNearbyNotification", "Android shell must expose native nearby n
 if (!appBridge.includes("showNotification") || !appBridge.includes("showNearbyNotification")) {
   throw new Error("Android app bridge must expose native notifications to the mobile web app.");
 }
+for (const permission of ["android.permission.FOREGROUND_SERVICE", "android.permission.FOREGROUND_SERVICE_LOCATION"]) {
+  if (!manifest.includes(permission)) throw new Error(`Navigation companion requires ${permission}.`);
+}
+if (manifest.includes("android.permission.ACCESS_BACKGROUND_LOCATION")) {
+  throw new Error("Navigation companion must use an explicitly started foreground location service, not unrestricted background location.");
+}
+if (!manifest.includes('android:name=".NavigationCompanionService"')
+    || !manifest.includes('android:foregroundServiceType="location"')
+    || !manifest.includes('android:name=".NavigationCompanionActionActivity"')
+    || !manifest.includes('<package android:name="com.google.android.apps.maps"')) {
+  throw new Error("Navigation companion service, review activity, and Google Maps handoff must be declared explicitly.");
+}
+if (!appBridge.includes("isNavigationCompanionEnabled")
+    || !appBridge.includes("setNavigationCompanionEnabled")
+    || !appBridge.includes("validBridgeToken(token)")) {
+  throw new Error("Navigation companion bridge controls must require the per-launch capability token.");
+}
+for (const needle of [
+  "FOREGROUND_SERVICE_TYPE_LOCATION",
+  "On This Site companion is on",
+  '"Turn off"',
+  "GLOBAL_ALERT_INTERVAL_MS",
+  "SITE_ALERT_INTERVAL_MS",
+  "ALERT_RADIUS_MILES = 0.75",
+  '"Point".equals(centerItem.optString("geometry_type"))',
+  "isSafePublicCandidate",
+  "navigation_companion_site_",
+  "Review stop"
+]) {
+  if (!navigationCompanionService.includes(needle)) throw new Error(`Navigation companion service is missing: ${needle}`);
+}
+if (!navigationCompanionService.includes("ancestral land|traditional land|territory|burial|cemetery|sacred|archaeolog|private residence")
+    || !navigationCompanionService.includes("approximate|general|broad|near|area|landscape|mixed|pending|needs review")) {
+  throw new Error("Navigation companion must exclude sensitive, broad, and approximate map records from routing suggestions.");
+}
+for (const needle of ["Open Google Maps", "Google Maps controls whether it can be added to your current route", "Turn off companion", "com.google.android.apps.maps", "https://www.google.com/maps/search/"]) {
+  if (!navigationCompanionAction.includes(needle)) throw new Error(`Navigation companion review flow is missing: ${needle}`);
+}
+for (const needle of ["Google Maps companion", "Undo and turn off", "nli-navigation-companion-change", "Google Maps controls any route change"]) {
+  if (!nativeNavigationCompanion.includes(needle)) throw new Error(`Navigation companion controls are missing: ${needle}`);
+}
+requireText("installNativeNavigationCompanion(view);", "Android shell must inject navigation companion controls into hosted and bundled app pages.");
+requireText('readBundledTextAsset("native-navigation-companion.js")', "Android shell must load the maintained navigation companion control asset.");
 if (!appBridge.includes("public boolean isDebugBuild()") || !appBridge.includes("return BuildConfig.DEBUG;")) {
   throw new Error("Android app bridge must expose the debug-only location-control audit guard.");
 }
