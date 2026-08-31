@@ -80,11 +80,17 @@ const prepareArticle = () => evaluate(`(async () => {
     && !body?.querySelector(".detail-loading-status")
     && body?.querySelector("p")?.textContent.trim().length > 20, 20000);
   if (!ready) return { error: "The article did not reach its half-drawer state." };
+  // Let the opening transition finish before measuring a visible article
+  // point; otherwise the drawer can still be below the visual viewport.
+  await waitFor(() => {
+    const rect = body.getBoundingClientRect();
+    return rect.top < window.innerHeight - 80 && rect.bottom > 120;
+  }, 4000);
   body.scrollTop = 0;
   await wait(80);
   const bodyRect = body.getBoundingClientRect();
   const paragraphRect = body.querySelector("p").getBoundingClientRect();
-  const y = Math.min(bodyRect.bottom - 80, Math.max(bodyRect.top + 80, paragraphRect.top + Math.min(40, paragraphRect.height / 2)));
+  const y = Math.min(window.innerHeight - 80, bodyRect.bottom - 80, Math.max(bodyRect.top + 80, paragraphRect.top + Math.min(40, paragraphRect.height / 2)));
   return { x: bodyRect.left + (bodyRect.width * 0.5), y, bodyTop: bodyRect.top, bodyBottom: bodyRect.bottom, innerWidth: window.innerWidth, innerHeight: window.innerHeight, pixelRatio: window.devicePixelRatio };
 })()`);
 

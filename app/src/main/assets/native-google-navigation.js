@@ -59,18 +59,25 @@
   };
   const addTopListingNavigation = () => {
     if (!available()) return;
-    const detailTitle = document.querySelector("#detail-title");
+    const detailHead = document.querySelector(".detail-head");
+    const closeButton = document.querySelector("#close-detail");
     const source = document.querySelector("#detail-body > .actions a.action[href*='google.com/maps/dir/']");
-    if (!detailTitle || !source || detailTitle.querySelector("[data-nli-navigation-placement='top']")) return;
+    if (!detailHead || !closeButton || !source || detailHead.querySelector("[data-nli-navigation-placement='top']")) return;
+    const destination = destinationFromHref(source.href);
+    if (!destination) return;
     const topAction = document.createElement("a");
-    topAction.className = "action nli-listing-top-navigation";
+    topAction.className = "nli-listing-top-navigation";
     topAction.href = source.href;
     topAction.rel = "noreferrer";
     topAction.dataset.nliNavigationPlacement = "top";
     topAction.setAttribute("aria-label", `Navigate to ${currentTitle(source)}`);
-    topAction.textContent = "Navigate";
-    detailTitle.appendChild(topAction);
-    decorateDirections(detailTitle);
+    topAction.setAttribute("title", "Navigate");
+    topAction.textContent = "➤";
+    topAction.dataset.nliGoogleNavigation = "1";
+    topAction.addEventListener("click", event => {
+      if (startNavigation(currentTitle(source), currentSlug(), destination)) event.preventDefault();
+    });
+    closeButton.insertAdjacentElement("afterend", topAction);
   };
   const decorateCustomDestinations = root => {
     if (!available()) return;
@@ -99,11 +106,34 @@
     const style = document.createElement("style");
     style.id = "nli-google-navigation-styles";
     style.textContent = `
-      #detail-title .nli-listing-top-navigation {
-        width: fit-content;
-        min-height: 38px;
-        margin-top: 8px;
-        padding: 0 14px;
+      .detail-head:has(.nli-listing-top-navigation) {
+        grid-template-columns: minmax(0, 1fr) 42px 42px;
+      }
+      .detail.hero-docked .detail-head:has(.nli-listing-top-navigation) {
+        grid-template-columns: minmax(0, 1fr) 54px 42px 42px;
+      }
+      .detail-head:has(.nli-listing-top-navigation) #close-detail {
+        grid-column: -3 / -2;
+      }
+      .detail-head .nli-listing-top-navigation {
+        display: inline-grid;
+        grid-column: -2 / -1;
+        grid-row: 2;
+        place-items: center;
+        align-self: center;
+        justify-self: end;
+        box-sizing: border-box;
+        width: 42px;
+        height: 42px;
+        min-height: 42px;
+        margin: 0;
+        padding: 0;
+        border: 1px solid var(--line, #cad8ce);
+        border-radius: 10px;
+        background: transparent;
+        color: inherit;
+        font: 400 18px/1 Arial, sans-serif;
+        text-decoration: none;
         touch-action: manipulation;
         pointer-events: auto;
       }

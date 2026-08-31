@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260831-navigation-panel-custom-search-r212";
+const expectedBuild = "20260831-s25-navigation-ui-r213";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -241,7 +241,8 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes("dispatchActionablePointFeature(exactPoint, false)")
     || !nativeMapController.includes("List<Feature> territorySurfaces = map.queryRenderedFeatures(")
     || !nativeMapController.includes("TERRITORY_FILL_LAYER_ID,\n                TERRITORY_LINE_LAYER_ID")
-    || !nativeMapController.includes("density * 32f")
+    || !nativeMapController.includes("float radiusDp = zoom < 8.5 ? 18f : zoom < 10.0 ? 24f : 32f")
+    || !nativeMapController.includes("List<Feature> exactSiteSurfaces = map.queryRenderedFeatures(")
     || !nativeMapController.includes("Expression.stop(6, 0.72f)")
     || !nativeMapController.includes("Expression.stop(14, 1.08f)")
     || !nativeMapController.includes("nearestActionablePointFeature(features, screenPoint, profileMode)")
@@ -346,8 +347,9 @@ if (!bundledMobileJs.includes("function mobileMovingBiographyLoop")
     || !nativeMapController.includes('textOpacity(Expression.coalesce(Expression.get("motion_opacity")')) {
   throw new Error("Biography icons and titles must fade at the route end, reset invisibly, and fade back in at the start on Android.");
 }
-if (!nativeMapController.includes("getDisplayMetrics().density * 32f")) {
-  throw new Error("Native site artwork must keep a touch target large enough for transparent-padded icons.");
+if (!nativeMapController.includes("mapTapHitRadiusPx()")
+    || !nativeMapController.includes("zoom < 8.5 ? 18f : zoom < 10.0 ? 24f : 32f")) {
+  throw new Error("Native map hit targets must remain accessible up close while tightening precision at overview zoom.");
 }
 if (!nativeMapController.includes('new SymbolLayer("nli-site-point-labels", SITE_POINT_SOURCE_ID)')
     || !nativeMapController.includes("sitePointLabelLayer.setMinZoom(11.4f)")
@@ -376,6 +378,9 @@ if (!nativeMapController.includes("MAP_TAP_DISPATCH_DELAY_MS")
     || !nativeMapController.includes("pendingMapTapFeatureKind")
     || !nativeMapController.includes("pendingMapTapFeatureLongitude")
     || !nativeMapController.includes("dispatchPendingMovingFeature(featureKind, featureKey, featureLongitude, featureLatitude)")
+    || !/if \(handleMapClick\(point\)\) return;[\s\S]{0,160}dispatchPendingMovingFeature\(featureKind, featureKey, featureLongitude, featureLatitude\)/.test(nativeMapController)
+    || !nativeMapController.includes("float hitRadius = mapTapHitRadiusPx()")
+    || !nativeMapController.includes("A nearby moving biography")
     || !nativeMapController.includes("listener.onFeatureSelected(featureKind, featureKey, featureLongitude, featureLatitude)")
     || !nativeMapController.includes("map.setPadding(0, 0, 0, viewportBottomOcclusion)")
     || !source.includes("mtSettled=setTimeout(sync,420)")
@@ -1630,10 +1635,15 @@ for (const needle of [
   "navigator.setDestinations",
   "off-screen sites show distance and direction at the edge",
   'setPositiveButton("Add stop"',
-  "MAX_VISIBLE_SITE_LABELS = 8",
+  "MAX_VISIBLE_SITE_LABELS = 4",
   "MAX_NEARBY_EDGE_INDICATORS = 3",
-  "NEARBY_EDGE_RANGE_METERS = 5f * 1609.344f",
+  "NEARBY_SITE_RANGE_METERS = 1609.344f",
   "setOnMyLocationChangeListener",
+  "topCard.setVisibility(View.GONE)",
+  "The map is available, but routing needs location access.",
+  "item.site.hasHeaderImage",
+  "Color.argb(224, 60, 137, 230)",
+  "Color.argb(224, 74, 171, 101)",
   "cardinalDirection",
   "Tap to add stop.",
   "setTaskRemovedBehavior(Navigator.TaskRemovedBehavior.QUIT_SERVICE)",
@@ -1643,6 +1653,8 @@ for (const needle of [
 }
 if (!navigationSiteRepository.includes('"Point".equals(centerItem.optString("geometry_type"))')
     || !navigationSiteRepository.includes("isSafePublicCandidate")
+    || !navigationSiteRepository.includes("hasHeaderImage(metadata)")
+    || !navigationSiteRepository.includes('listing_image_thumb_url')
     || !navigationSiteRepository.includes("ancestral land|traditional land|territory|reservation|burial|cemetery|sacred|ceremonial|pow ?wow|sweat lodge|archaeolog|private residence")
     || !navigationSiteRepository.includes("approximate|general|broad|near|area|landscape|mixed|pending|needs review")) {
   throw new Error("Navigation map must restrict pins to specific, public, non-sensitive point records.");
@@ -1654,6 +1666,12 @@ for (const needle of [
   "google.com/maps/dir/",
   "addTopListingNavigation",
   "nli-listing-top-navigation",
+  'closeButton.insertAdjacentElement("afterend", topAction)',
+  'topAction.textContent = "➤"',
+  'topAction.addEventListener("click", event => {',
+  'if (startNavigation(currentTitle(source), currentSlug(), destination)) event.preventDefault();',
+  "background: transparent",
+  "width: 42px",
   "decorateCustomDestinations",
   "[data-result-slug='address-result'][data-nav]",
   "nli-custom-navigation"
