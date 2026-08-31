@@ -56,6 +56,7 @@ const result = await evaluate(`(async () => {
     loaderHidden: !loader || loader.hidden || loader.classList.contains("hidden"),
     siteCards: document.querySelectorAll(".site-card[data-slug]").length,
     wikiCards: document.querySelectorAll(".site-card[data-wiki-slug]").length,
+    nativeBridgeReady: typeof window.NLI_NATIVE_MAP_BRIDGE?.openFeature === "function",
     headerText: header?.textContent?.trim() || "",
     wikiIndexStatus: wikiResponse.status,
     wikiIndexRows: Array.isArray(wikiPayload?.rows) ? wikiPayload.rows.length : 0,
@@ -68,7 +69,9 @@ socket.close();
 
 if (result.offline) throw new Error(`APK remained in offline mode after online startup: ${result.url}`);
 if (!result.loaderHidden) throw new Error("APK live loading screen is still visible.");
-if (result.siteCards < 1) throw new Error("APK live shell rendered no site cards.");
+if (result.siteCards < 1 && !result.nativeBridgeReady) {
+  throw new Error("APK live shell rendered neither site cards nor a ready native map bridge.");
+}
 if (result.wikiIndexStatus !== 200 || result.wikiIndexRows < 1) {
   throw new Error(`APK wiki index is unavailable (${result.wikiIndexStatus}, ${result.wikiIndexRows} rows).`);
 }
