@@ -44,6 +44,7 @@ const captureFileProviderPath = "app/src/main/java/com/nativelongisland/onthissi
 const nativeCommentPhotoCompatPath = "app/src/main/assets/native-comment-photo-compat.js";
 const onThisSiteApplicationPath = "app/src/main/java/com/nativelongisland/onthissite/OnThisSiteApplication.java";
 const googleNavigationActivityPath = "app/src/main/java/com/nativelongisland/onthissite/OnThisSiteNavigationActivity.java";
+const googleNavigationLayoutPath = "app/src/main/res/layout/activity_on_this_site_navigation.xml";
 const googleNavigationLegalActivityPath = "app/src/main/java/com/nativelongisland/onthissite/GoogleNavigationLegalActivity.java";
 const navigationSiteRepositoryPath = "app/src/main/java/com/nativelongisland/onthissite/NavigationSiteRepository.java";
 const nativeGoogleNavigationPath = "app/src/main/assets/native-google-navigation.js";
@@ -75,6 +76,7 @@ const captureFileProvider = fs.readFileSync(captureFileProviderPath, "utf8");
 const nativeCommentPhotoCompat = fs.readFileSync(nativeCommentPhotoCompatPath, "utf8");
 const onThisSiteApplication = fs.readFileSync(onThisSiteApplicationPath, "utf8");
 const googleNavigationActivity = fs.readFileSync(googleNavigationActivityPath, "utf8");
+const googleNavigationLayout = fs.readFileSync(googleNavigationLayoutPath, "utf8");
 const googleNavigationLegalActivity = fs.readFileSync(googleNavigationLegalActivityPath, "utf8");
 const navigationSiteRepository = fs.readFileSync(navigationSiteRepositoryPath, "utf8");
 const nativeGoogleNavigation = fs.readFileSync(nativeGoogleNavigationPath, "utf8");
@@ -1670,12 +1672,16 @@ for (const needle of [
   "google.com/maps/dir/",
   "addTopListingNavigation",
   "nli-listing-top-navigation",
+  "let topAction = detailHead.querySelector",
+  "topAction.hidden = true",
   'closeButton.insertAdjacentElement("beforebegin", topAction)',
   "grid-column: -2 / -1",
   "grid-column: -3 / -2",
   'topAction.textContent = "➤"',
   'topAction.addEventListener("click", event => {',
-  'if (startNavigation(currentTitle(source), currentSlug(), destination)) event.preventDefault();',
+  "const liveDestination = destinationFromHref(topAction.href)",
+  "if (startNavigation(currentTitle(topAction), currentSlug(), liveDestination)) event.preventDefault();",
+  "topAction.href = source.href",
   "background: transparent",
   "width: 42px",
   "decorateCustomDestinations",
@@ -1683,6 +1689,11 @@ for (const needle of [
   "nli-custom-navigation"
 ]) {
   if (!nativeGoogleNavigation.includes(needle)) throw new Error(`Native Google navigation link integration is missing: ${needle}`);
+}
+const navigationLegalIndex = googleNavigationLayout.indexOf('android:id="@+id/navigation_legal"');
+const navigationCloseIndex = googleNavigationLayout.indexOf('android:id="@+id/navigation_close"');
+if (navigationLegalIndex < 0 || navigationCloseIndex < 0 || navigationCloseIndex < navigationLegalIndex) {
+  throw new Error("The native navigation close button must be the far-right header action.");
 }
 for (const needle of ["data-nav", "navigationCoordinates"]) {
   if (!bundledMobileJs.includes(needle) || !bundledApp.includes(needle)) {
