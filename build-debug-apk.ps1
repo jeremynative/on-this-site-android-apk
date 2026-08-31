@@ -7,6 +7,7 @@ $localGradle = Join-Path $workspaceRoot ".tools\gradle-8.11.1\bin\gradle.bat"
 $localSdk = Join-Path $workspaceRoot "android-sdk-local"
 $apk = Join-Path $projectRoot "app\build\outputs\apk\debug\app-debug.apk"
 $localMapboxToken = Join-Path $projectRoot "mapbox-token.local.txt"
+$localGoogleNavigationKey = Join-Path $projectRoot "google-navigation-api-key.local.txt"
 
 if (Test-Path (Join-Path $localJava "bin\java.exe")) {
     $env:JAVA_HOME = $localJava
@@ -21,6 +22,10 @@ if (Test-Path $localSdk) {
 
 if (-not $env:MAPBOX_TOKEN -and (Test-Path $localMapboxToken)) {
     $env:MAPBOX_TOKEN = (Get-Content -LiteralPath $localMapboxToken -Raw).Trim()
+}
+
+if (-not $env:GOOGLE_NAVIGATION_API_KEY -and (Test-Path $localGoogleNavigationKey)) {
+    $env:GOOGLE_NAVIGATION_API_KEY = (Get-Content -LiteralPath $localGoogleNavigationKey -Raw).Trim()
 }
 
 $gradleCommand = if (Test-Path $localGradle) { $localGradle } else { "gradle" }

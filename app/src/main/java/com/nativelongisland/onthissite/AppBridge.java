@@ -174,20 +174,26 @@ class AppBridge {
     }
 
     @JavascriptInterface
-    public boolean isNavigationCompanionEnabled(String token) {
-        return activity.validBridgeToken(token) && activity.isNavigationCompanionEnabled();
+    public boolean isInAppGoogleNavigationAvailable(String token) {
+        return activity.validBridgeToken(token) && activity.isInAppGoogleNavigationAvailable();
     }
 
     @JavascriptInterface
-    public int setNavigationCompanionEnabled(String token, boolean enabled) {
-        if (!activity.validBridgeToken(token)) return 0;
+    public boolean startInAppGoogleNavigation(
+        String token,
+        String title,
+        String slug,
+        double latitude,
+        double longitude
+    ) {
+        if (!activity.validBridgeToken(token)) return false;
         if (Looper.myLooper() == Looper.getMainLooper()) {
-            return activity.setNavigationCompanionEnabled(enabled);
+            return activity.startInAppGoogleNavigation(title, slug, latitude, longitude);
         }
-        java.util.concurrent.atomic.AtomicInteger result = new java.util.concurrent.atomic.AtomicInteger(0);
+        AtomicBoolean opened = new AtomicBoolean(false);
         CountDownLatch latch = new CountDownLatch(1);
         activity.runOnUiThread(() -> {
-            result.set(activity.setNavigationCompanionEnabled(enabled));
+            opened.set(activity.startInAppGoogleNavigation(title, slug, latitude, longitude));
             latch.countDown();
         });
         try {
@@ -195,7 +201,7 @@ class AppBridge {
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
         }
-        return result.get();
+        return opened.get();
     }
 
     @JavascriptInterface
