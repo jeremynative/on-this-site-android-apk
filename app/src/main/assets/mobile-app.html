@@ -2547,6 +2547,10 @@
       --detail-drawer-height: min(58dvh, calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe) - 12px));
     }
 
+    body.native-android-app:not(.tablet-landscape) .detail.drawer-half {
+      --detail-drawer-height: min(48dvh, calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe) - 12px));
+    }
+
     .detail.drawer-expanded {
       --detail-drawer-height: min(86dvh, calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe) - 12px));
     }
@@ -5703,6 +5707,16 @@
     }
 
     body:not(.native-android-app).mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header > :not(.title-row) {
+      display: none !important;
+    }
+
+    body.native-android-app.mobile-detail-open:not(.mobile-profile-map-mode) .app header {
+      gap: 0;
+      padding-top: max(7px, var(--app-top-safe));
+      padding-bottom: 7px;
+    }
+
+    body.native-android-app.mobile-detail-open:not(.mobile-profile-map-mode) .app header > :not(.title-row) {
       display: none !important;
     }
 
@@ -25881,9 +25895,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const viewport = Math.max(window.innerHeight || 0, 420);
       const reserved = cssPixelValue("--app-top-safe", 0) + cssPixelValue("--app-bottom-safe", 0);
       const max = Math.max(240, viewport - reserved - 12);
+      const halfRatio = isNativeAndroidApp() && !document.body.classList.contains("tablet-landscape") ? 0.48 : 0.58;
       return {
         collapsed: Math.min(max, Math.max(190, Math.round(viewport * 0.34))),
-        half: Math.min(max, Math.max(270, Math.round(viewport * 0.58))),
+        half: Math.min(max, Math.max(270, Math.round(viewport * halfRatio))),
         expanded: Math.min(max, Math.max(340, Math.round(viewport * 0.86)))
       };
     }
@@ -37640,6 +37655,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       window.requestAnimationFrame(() => {
         positionMobileMapActionButtons();
         state.map?.resize?.();
+        scheduleNativeMapStateSync("panel-layout", 0);
       });
     }
 

@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260831-timeline-edge-startup-r202";
+const expectedBuild = "20260831-content-panel-compact-r203";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -487,6 +487,7 @@ if (!bundledMobileJs.includes('loginSheetEl?.classList.contains("open") && state
 if (!bundledMobileCss.includes("#profiles-sheet.profile-progress-active")
     || !bundledMobileCss.includes("#login-sheet.profile-progress-active")
     || !bundledMobileCss.includes("body:not(.native-android-app).mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header")
+    || !bundledMobileCss.includes("body.native-android-app.mobile-detail-open:not(.mobile-profile-map-mode) .app header")
     || !bundledMobileJs.includes('document.body.classList.toggle("mobile-contributor-sheet-open", contributorSheetOpen)')
     || !bundledMobileCss.includes("body.mobile-profile-map-mode .mobile-calendar-event-marker")
     || !bundledMobileCss.includes(".comment.contributor-card {")) {
@@ -1261,9 +1262,17 @@ if (!bundledMobileJs.includes("async function refreshDiscussionSourceData(source
   throw new Error("Android listing taps must refresh only the open discussion instead of refetching all public comments and plant observations.");
 }
 if (!source.includes("body.mobile-detail-open .mobile-view-tabs,body.mobile-detail-open .mobile-timeline,body.mobile-detail-open .list-panel{visibility:hidden!important;pointer-events:none!important;}")
-    || !source.includes("body.native-android-app.mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header>.search-autocomplete{display:block!important;}")
+    || source.includes("header>.search-autocomplete{display:block!important;}")
+    || !source.includes("body.native-android-app.mobile-detail-open:not(.mobile-profile-map-mode) .app header>:not(.title-row){display:none!important;}")
+    || !source.includes("body.native-android-app:not(.tablet-landscape) .detail.drawer-half{--detail-drawer-height:min(48dvh")
     || source.includes("body.mobile-detail-open .app{grid-template-rows:auto minmax(0,1fr) 0 0!important;}")) {
   throw new Error("Android detail panels must preserve the map grid rectangle instead of resizing it during a site tap.");
+}
+if (!bundledMobileCss.includes("body.native-android-app:not(.tablet-landscape) .detail.drawer-half")
+    || !bundledMobileCss.includes("--detail-drawer-height: min(48dvh")
+    || !bundledMobileJs.includes('const halfRatio = isNativeAndroidApp() && !document.body.classList.contains("tablet-landscape") ? 0.48 : 0.58;')
+    || !bundledMobileJs.includes('scheduleNativeMapStateSync("panel-layout", 0);')) {
+  throw new Error("Android portrait detail mode must use the smaller drawer and resync the native map after header compaction.");
 }
 for (const [label, document] of [
   ["bundled fallback", bundledApp]

@@ -6750,9 +6750,10 @@
       const viewport = Math.max(window.innerHeight || 0, 420);
       const reserved = cssPixelValue("--app-top-safe", 0) + cssPixelValue("--app-bottom-safe", 0);
       const max = Math.max(240, viewport - reserved - 12);
+      const halfRatio = isNativeAndroidApp() && !document.body.classList.contains("tablet-landscape") ? 0.48 : 0.58;
       return {
         collapsed: Math.min(max, Math.max(190, Math.round(viewport * 0.34))),
-        half: Math.min(max, Math.max(270, Math.round(viewport * 0.58))),
+        half: Math.min(max, Math.max(270, Math.round(viewport * halfRatio))),
         expanded: Math.min(max, Math.max(340, Math.round(viewport * 0.86)))
       };
     }
@@ -18509,6 +18510,7 @@
       window.requestAnimationFrame(() => {
         positionMobileMapActionButtons();
         state.map?.resize?.();
+        scheduleNativeMapStateSync("panel-layout", 0);
       });
     }
 
