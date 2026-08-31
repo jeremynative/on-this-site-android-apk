@@ -1,5 +1,15 @@
 # Android APK — Codex Handoff
 
+## August 31 polygon shoreline edge audit
+
+- Synced the audited deferred polygon geometry from web PR `#153` without replacing Android-specific UI/runtime files or enlarging the compact first-frame land mask. The bundled archive retains 439 site geometry rows and now includes 16 high-detail display polygons; cache version `20260831-shoreline-edge-audit-v4` prevents an older geometry snapshot from persisting after upgrade.
+- Added a hard 2.85 MB deferred-geometry budget and exact row/detail checks to `verify-app-shell.js`. The detailed geometry remains post-startup work, so the lightweight initial map handoff is unchanged.
+- Added `audit-apk-polygon-edge.mjs` for repeatable real-device verification of a routed polygon and its packaged geometry.
+- On the USB iPlay 50 mini Pro, separate QA package testing passed both Wi-Fi and cleared-data airplane-mode cold starts. Corchaug opened as a `MultiPolygon` with all 439 geometry rows and 16 detailed rows; the packaged Corchaug geometry measured about 232 KB. No fatal exception or ANR appeared during the clean online/offline runs. The tablet's production `0.1.610` app and data remained untouched.
+- `node verify-app-shell.js`, `node verify-google-play-readiness.js`, `git diff --check`, and `assembleDebug` pass. Shell marker is `20260831-polygon-edge-audit-r204`.
+
+Current branch is `fix/polygon-edge-audit-20260831`, based on `origin/main` at `e712884`. Safest next action is to merge, wait for the signed Obtainium workflow, verify the exact published APK, and install it over the tablet production package without clearing data.
+
 ## August 29 Android performance and startup optimization
 
 - Branch `codex/android-performance-20260829` removes the largest measured Android startup redundancies without changing public map behavior. The native map now becomes usable from compact geometry, then hydrates detailed site geometry once after the first stable frame instead of blocking the loading handoff and repeatedly rebuilding the same full state.
