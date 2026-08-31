@@ -11,6 +11,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Point;
 import android.graphics.RectF;
 import android.net.Uri;
 import android.os.Bundle;
@@ -24,6 +25,7 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.Projection;
 import com.google.android.gms.maps.model.BitmapDescriptor;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
@@ -45,7 +47,9 @@ import java.util.Map;
 public class OnThisSiteNavigationActivity extends Activity {
     private static final String LOG_TAG = "OnThisSiteGoogleNav";
     private static final int LOCATION_PERMISSION_REQUEST = 71;
-    private static final int MAX_VISIBLE_SITE_LABELS = 18;
+    private static final int MAX_VISIBLE_SITE_LABELS = 8;
+    private static final float MIN_LABEL_HORIZONTAL_SPACING_DP = 190f;
+    private static final float MIN_LABEL_VERTICAL_SPACING_DP = 58f;
     private static final String EXTRA_TITLE = "destination_title";
     private static final String EXTRA_SLUG = "destination_slug";
     private static final String EXTRA_LATITUDE = "destination_latitude";
@@ -247,8 +251,10 @@ public class OnThisSiteNavigationActivity extends Activity {
         if (googleMap == null || publicSites.isEmpty()) return;
         LatLngBounds bounds;
         LatLng center;
+        Projection projection;
         try {
-            bounds = googleMap.getProjection().getVisibleRegion().latLngBounds;
+            projection = googleMap.getProjection();
+            bounds = projection.getVisibleRegion().latLngBounds;
             center = googleMap.getCameraPosition().target;
         } catch (Exception ignored) {
             return;
@@ -260,11 +266,30 @@ public class OnThisSiteNavigationActivity extends Activity {
             if (bounds.contains(point)) visible.add(site);
         }
         visible.sort(Comparator.comparingDouble(site -> distanceSquared(center, site)));
-        if (visible.size() > MAX_VISIBLE_SITE_LABELS) visible = visible.subList(0, MAX_VISIBLE_SITE_LABELS);
+        float density = getResources().getDisplayMetrics().density;
+        float minimumHorizontalSpacing = MIN_LABEL_HORIZONTAL_SPACING_DP * density;
+        float minimumVerticalSpacing = MIN_LABEL_VERTICAL_SPACING_DP * density;
+        List<NavigationSiteRepository.Site> spacedVisible = new ArrayList<>();
+        List<Point> labelAnchors = new ArrayList<>();
+        for (NavigationSiteRepository.Site site : visible) {
+            Point anchor = projection.toScreenLocation(new LatLng(site.latitude, site.longitude));
+            boolean overlaps = false;
+            for (Point accepted : labelAnchors) {
+                if (Math.abs(anchor.x - accepted.x) < minimumHorizontalSpacing
+                    && Math.abs(anchor.y - accepted.y) < minimumVerticalSpacing) {
+                    overlaps = true;
+                    break;
+                }
+            }
+            if (overlaps) continue;
+            spacedVisible.add(site);
+            labelAnchors.add(anchor);
+            if (spacedVisible.size() >= MAX_VISIBLE_SITE_LABELS) break;
+        }
         for (Marker marker : siteMarkers) marker.remove();
         siteMarkers.clear();
         siteByMarker.clear();
-        for (NavigationSiteRepository.Site site : visible) {
+        for (NavigationSiteRepository.Site site : spacedVisible) {
             Marker marker = googleMap.addMarker(new MarkerOptions()
                 .position(new LatLng(site.latitude, site.longitude))
                 .title(site.title)

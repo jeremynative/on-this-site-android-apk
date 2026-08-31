@@ -1630,7 +1630,7 @@ for (const needle of [
   "navigator.setDestinations",
   "Nearby public On This Site places are labeled on the map",
   'setPositiveButton("Add stop"',
-  "MAX_VISIBLE_SITE_LABELS = 18",
+  "MAX_VISIBLE_SITE_LABELS = 8",
   "setTaskRemovedBehavior(Navigator.TaskRemovedBehavior.QUIT_SERVICE)",
   "GoogleNavigationLegalActivity.class"
 ]) {
@@ -1638,7 +1638,7 @@ for (const needle of [
 }
 if (!navigationSiteRepository.includes('"Point".equals(centerItem.optString("geometry_type"))')
     || !navigationSiteRepository.includes("isSafePublicCandidate")
-    || !navigationSiteRepository.includes("ancestral land|traditional land|territory|burial|cemetery|sacred|archaeolog|private residence")
+    || !navigationSiteRepository.includes("ancestral land|traditional land|territory|reservation|burial|cemetery|sacred|ceremonial|pow ?wow|sweat lodge|archaeolog|private residence")
     || !navigationSiteRepository.includes("approximate|general|broad|near|area|landscape|mixed|pending|needs review")) {
   throw new Error("Navigation map must restrict pins to specific, public, non-sensitive point records.");
 }

@@ -59,7 +59,7 @@ final class NavigationSiteRepository {
         String cleanup = item.optString("geometry_cleanup_status", "");
         if (title.isEmpty() || slug.isEmpty() || address.trim().isEmpty()) return false;
         String sensitiveText = (title + " " + type + " " + summary).toLowerCase(Locale.ROOT);
-        if (sensitiveText.matches(".*\\b(ancestral land|traditional land|territory|burial|cemetery|sacred|archaeolog|private residence)\\b.*")) return false;
+        if (sensitiveText.matches(".*\\b(ancestral land|traditional land|territory|reservation|burial|cemetery|sacred|ceremonial|pow ?wow|sweat lodge|archaeolog|private residence)\\b.*")) return false;
         String accuracyText = (address + " " + surface + " " + cleanup).toLowerCase(Locale.ROOT);
         return !accuracyText.matches(".*\\b(approximate|general|broad|near|area|landscape|mixed|pending|needs review)\\b.*");
     }
