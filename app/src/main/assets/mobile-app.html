@@ -25947,21 +25947,22 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       let latestHeight = 0;
       let dragging = false;
       let armed = false;
-      let touchIdentifier = null;
+      let touchStartX = null;
 
       const reset = () => {
         dragging = false;
         armed = false;
-        touchIdentifier = null;
+        touchStartX = null;
         detailEl.classList.remove("dragging");
         detailEl.style.transform = "";
       };
 
-      const canStartDrag = target => {
+      const canStartDrag = (target, touch = false) => {
         if (!detailEl.classList.contains("open")) return false;
         if (target.closest(".detail-drawer-handle")) return true;
-        if (target.closest("button, a, input, select, textarea, summary, img, iframe")) return false;
-        return Boolean(target.closest(".detail-head"));
+        if (target.closest(".detail-head")) return !target.closest("button,a,input,select,textarea,summary");
+        return touch && detailBodyEl.scrollTop < 2
+          && !target.closest("input,select,textarea,iframe,[contenteditable]");
       };
 
       const movePanel = clientY => {
@@ -26008,9 +26009,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
       detailEl.addEventListener("touchstart", event => {
         if (event.touches.length !== 1) return;
-        if (!canStartDrag(event.target)) return;
+        if (!canStartDrag(event.target, true)) return;
         const touch = event.touches[0];
-        touchIdentifier = touch.identifier;
+        touchStartX = event.target.closest("#detail-body") ? touch.clientX : null;
         armed = true;
         dragging = false;
         startY = touch.clientY;
@@ -26019,9 +26020,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       }, { passive: true });
 
       detailEl.addEventListener("touchmove", event => {
-        if (!armed || touchIdentifier === null) return;
-        const touch = [...event.changedTouches].find(item => item.identifier === touchIdentifier) || event.touches[0];
-        if (!touch) return;
+        if (!armed || event.touches.length !== 1) return reset();
+        const touch = event.touches[0];
+        if (touchStartX !== null && !dragging) {
+          const deltaX = Math.abs(touch.clientX - touchStartX);
+          const deltaY = touch.clientY - startY;
+          if (deltaX <= 6 && Math.abs(deltaY) <= 6) return;
+          if (deltaY <= deltaX) return reset();
+        }
         movePanel(touch.clientY);
         if (dragging) event.preventDefault();
       }, { passive: false });

@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260831-article-intro-scroll-r207";
+const expectedBuild = "20260831-article-pull-down-r208";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -2178,6 +2178,8 @@ requireBundledText('grid-template-columns: minmax(0, 1fr) 54px auto;', "Bundled 
 requireBundledPattern(/\.detail \.close\s*\{[\s\S]*?grid-column:\s*-2 \/ -1;[\s\S]*?text-transform:\s*lowercase;/, "Bundled Android site close x must stay lowercase at the far right.");
 requireBundledPattern(/\.detail-hero-dock \.hero\.article-sticky-hero\.is-compact\s*\{[\s\S]*?height:\s*44px;/, "Bundled Android scrolled site thumbnail must remain small.");
 requireBundledPattern(/function showFullDetailHero\(\)\s*\{[\s\S]*?detailBodyEl\.scrollTo\(\{ top: 0, behavior: "smooth" \}\);[\s\S]*?detailHeroDockEl\.addEventListener\("click", showFullDetailHero\);/, "Bundled Android compact thumbnail must restore the full image when tapped.");
+requireBundledPattern(/const canStartDrag = \(target, touch = false\)[\s\S]*?touch && detailBodyEl\.scrollTop < 2[\s\S]*?touchStartX = event\.target\.closest\("#detail-body"\) \? touch\.clientX : null/, "Bundled Android article body must arm pull-down drawer gestures only when reading is already at the top.");
+requireBundledPattern(/if \(touchStartX !== null && !dragging\)[\s\S]*?deltaY <= deltaX[\s\S]*?return reset\(\);[\s\S]*?movePanel\(touch\.clientY\)/, "Bundled Android article pull-down must preserve upward reading scrolls and horizontal media swipes.");
 requireBundledPattern(/const DETAIL_HERO_DOCK_PROGRESS = 0\.72;[\s\S]*?const DETAIL_HERO_DOCK_MIN_SCROLL_PX = 96;[\s\S]*?Math\.round\(heroHeight \* DETAIL_HERO_DOCK_PROGRESS\)/, "Bundled Android article image must wait until most of the hero naturally scrolls before docking.");
 requireBundledPattern(/function detailHeroPlaceholder\(hero\)[\s\S]*?placeholder\.style\.height = `\$\{rect\.height\}px`;[\s\S]*?detailHeroHomeNode = detailHeroPlaceholder\(hero\);/, "Bundled Android article image docking must preserve the introduction's scroll position.");
 requireBundledPattern(/scrollTop >= detailHeroDockThreshold[\s\S]*?scrollTop <= Math\.max\(0, detailHeroDockThreshold - DETAIL_HERO_DOCK_HYSTERESIS_PX\)/, "Bundled Android article image must use a stable docking threshold while scrolling in either direction.");
