@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260901-map-search-quota-fallback-r221";
+    static final String APP_VERSION = "20260901-apk-map-polygon-stability-r222";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -223,7 +223,6 @@ public class MainActivity extends Activity {
     private boolean webTouchStartedOnLocationControl;
     private boolean loadingBundledFallback;
     private boolean appShellLoaded;
-    private boolean postStartupGeometryHydrationScheduled;
     private boolean runtimePermissionPromptActive;
     private boolean locationPermissionDeniedForSession;
     private boolean notificationPermissionPromptedForSession;
@@ -293,14 +292,6 @@ public class MainActivity extends Activity {
         Log.w(LOG_TAG, "Bundled fallback renderer never became available; showing browser compatibility fallback.");
         showWebViewCompatibilityFallback();
     };
-    private final Runnable postStartupGeometryHydration = () -> {
-        if (webView == null || !appShellLoaded || loadingBundledFallback) return;
-        webView.evaluateJavascript(
-            "(function(){try{return !!(window.__nliHydrateMobileSiteGeometryAfterStartup&&window.__nliHydrateMobileSiteGeometryAfterStartup());}catch(error){return false;}})()",
-            null
-        );
-    };
-
     private void probeBundledFallbackPaint() {
         if (webView == null || !loadingBundledFallback || appShellLoaded) return;
         webView.evaluateJavascript(
@@ -1370,10 +1361,10 @@ public class MainActivity extends Activity {
                 + "var app=document.querySelector('.app');"
                 + "var archiveTextReady=/\\d+\\s+listings[\\s\\S]*loaded\\b/i.test(liveStatus);"
                 + "var geometryStatus=app&&app.getAttribute('data-site-geometry');"
-                // The compact center snapshot and bundled 13 territories are
-                // sufficient for a usable first map. Detailed polygons hydrate
-                // after reveal and must never hold the native loading cover.
-                + "var compactGeometryReady=offline||geometryStatus!=='hydrating';"
+                // The native map is visually complete only after the reviewed
+                // detailed geometry payload has replaced the compact startup
+                // centers. Keep the cover up so land polygons never pop in.
+                + "var authoritativeGeometryReady=offline||geometryStatus==='loaded';"
                 // Community activity, points, and notification counts already
                 // have one idle data pass in the page runtime. Do not pull that
                 // heavier request in front of the first usable map paint.
@@ -1387,7 +1378,7 @@ public class MainActivity extends Activity {
                 + "var startupDomSignature=(promoDock&&promoDock.hidden?'0':'1')+'|'+promoKinds+'|'+unreadBadges;var startupDomNow=Date.now();"
                 + "if(window.__nliNativeStartupDomSignature!==startupDomSignature){window.__nliNativeStartupDomSignature=startupDomSignature;window.__nliNativeStartupDomChangedAt=startupDomNow;}"
                 + "var startupDomStable=startupDomNow-Number(window.__nliNativeStartupDomChangedAt||startupDomNow)>=" + STARTUP_DOM_STABLE_MS + ";"
-                + "var onlineReady=!offline&&shell&&loaderHidden&&archiveTextReady&&compactGeometryReady&&deferredReady&&mapUiReady&&startupDomStable;"
+                + "var onlineReady=!offline&&shell&&loaderHidden&&archiveTextReady&&authoritativeGeometryReady&&deferredReady&&mapUiReady&&startupDomStable;"
                 + "return offlineReady||onlineReady?'ready':shell?'starting':'empty';"
                 + "}catch(error){return 'empty:'+String(error&&error.message||error);}})();",
             value -> {
@@ -1420,7 +1411,6 @@ public class MainActivity extends Activity {
                     // pixels, then once more after the final layout settles.
                     settleNativeMapViewport();
                     hideLoadingCover();
-                    schedulePostStartupGeometryHydration();
                     if (loadingBundledFallback
                         && hasUsableNetwork()
                         && !liveRecoveryAttemptedForCurrentNetwork) {
@@ -1474,19 +1464,6 @@ public class MainActivity extends Activity {
         }
         return "nativelongisland.com".equalsIgnoreCase(host)
             && (path.equals("/mobile-app.html") || path.equals("/mobile-app-live.html"));
-    }
-
-    private void schedulePostStartupGeometryHydration() {
-        if (webView == null || postStartupGeometryHydrationScheduled) return;
-        postStartupGeometryHydrationScheduled = true;
-        // Let the loading outline complete and the first native map frame
-        // become interactive before parsing/replacing detailed polygons.
-        webView.postDelayed(postStartupGeometryHydration, 900L);
-    }
-
-    private void resetPostStartupGeometryHydration() {
-        postStartupGeometryHydrationScheduled = false;
-        if (webView != null) webView.removeCallbacks(postStartupGeometryHydration);
     }
 
     private boolean hasUsableNetwork() {
@@ -1949,7 +1926,6 @@ public class MainActivity extends Activity {
 
     void refreshApp() {
         if (webView == null) return;
-        resetPostStartupGeometryHydration();
         showLoadingCover("Loading On This Site");
         lastRefreshAt = System.currentTimeMillis();
         appShellLoaded = false;
@@ -1984,7 +1960,6 @@ public class MainActivity extends Activity {
 
     private void loadBundledFallback(String reason) {
         if (webView == null || loadingBundledFallback) return;
-        resetPostStartupGeometryHydration();
         boolean retryValidatedNetwork = liveRecoveryAttemptedForCurrentNetwork && hasUsableNetwork();
         startupHandler.removeCallbacks(startupFallback);
         startupHandler.removeCallbacks(validatedNetworkRecovery);

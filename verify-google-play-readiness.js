@@ -75,8 +75,8 @@ requireMatch(mobile, /function requestStartupLocation\(\)[\s\S]*?const request =
   "APK must request startup location and center the map when permission is available.");
 requireMatch(mobile, /data-find-nearby-sites/,
   "APK Nearby must offer a dedicated location action instead of showing an alphabetical archive list.");
-requireMatch(mobile, /const mobileMapReady = await initMap\(\)[\s\S]*?requestStartupLocation\(\);/,
-  "APK must begin startup location centering after the map is ready.");
+requireMatch(mobile, /let mobileMapReady;[\s\S]*?await Promise\.all\(\[[\s\S]*?initMap\(\)[\s\S]*?startupGeometryReady[\s\S]*?requestStartupLocation\(\);/,
+  "APK must begin startup location centering after both map construction and authoritative geometry are ready.");
 requireMatch(mobile, /if \(\/Android\/i\.test\(navigator\.userAgent\)\) window\.setTimeout\(\(\) => \{\s*if \(!state\.userLocation\) requestStartupLocation\(\);\s*\}, 15000\);/,
   "APK must retry startup location after the WebView settles.");
 for (const productId of ["support_10", "support_25", "support_50", "support_100", "support_monthly_10", "support_monthly_25", "support_monthly_50", "support_monthly_100"]) {

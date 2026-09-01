@@ -1352,7 +1352,9 @@ final class NativeMapController {
             boolean baseStateChanged = baseSignature.isEmpty() || !baseSignature.equals(lastBaseStateSignature);
             if (baseStateChanged) {
                 JSONObject sitePoints = applyBundledSiteIconKeys(payload.optJSONObject("sitePoints"));
-                boolean nextStartupStateReady = featureCount(sitePoints) > 0;
+                boolean authoritativeGeometryReady = payload.optBoolean("geometryReady", false);
+                boolean nextStartupStateReady = authoritativeGeometryReady
+                    && (profileMode || featureCount(sitePoints) > 0);
                 boolean startupStateChanged = !startupStateReady || baseSignature.isEmpty() || !baseSignature.equals(lastBaseStateSignature);
                 startupStateReady = startupStateReady || nextStartupStateReady;
                 if (startupVisualTracking && nextStartupStateReady && startupStateChanged) markStartupVisualChange();
@@ -1366,7 +1368,8 @@ final class NativeMapController {
                 setSource(style, PROFILE_POINT_SOURCE_ID, payload.optJSONObject("profilePoints"));
                 Log.i(LOG_TAG, "Applied native map base state " + payload.optString("mode", "public")
                     + " reason=" + payload.optString("reason", "state")
-                    + ": territories=" + featureCount(payload.optJSONObject("territories"))
+                    + ": geometryReady=" + authoritativeGeometryReady
+                    + ", territories=" + featureCount(payload.optJSONObject("territories"))
                     + ", polygons=" + featureCount(payload.optJSONObject("sitePolygons"))
                     + ", points=" + featureCount(sitePoints)
                     + ", customIcons=" + featureCountWithStringProperty(sitePoints, "native_icon_key")
@@ -1410,7 +1413,6 @@ final class NativeMapController {
             String signature = payload.optString("signature", "");
             Style style = map.getStyle();
             if (!signature.isEmpty() && signature.equals(lastStateSignature)) {
-                applyCamera(payload.optJSONObject("camera"));
                 return;
             }
             setSource(style, USER_LOCATION_SOURCE_ID, payload.optJSONObject("userLocation"));
@@ -1447,7 +1449,6 @@ final class NativeMapController {
             }
             lastStateSignature = signature;
             applyModeVisibility(style);
-            applyCamera(payload.optJSONObject("camera"));
             mapView.invalidate();
             Log.d(LOG_TAG, "Applied compact transient native map state"
                 + ": bytes=" + stateJson.length()
