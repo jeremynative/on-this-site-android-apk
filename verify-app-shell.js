@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260901-safe-area-coalescing-r220";
+const expectedBuild = "20260901-map-search-quota-fallback-r221";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -2439,10 +2439,7 @@ requireBundledText('searchEl.addEventListener("keydown", handleMobileSearchKeydo
 requireBundledText('searchEl.addEventListener("search", handleMobileSearchCommand);', "Bundled Android app must open search results from the Android search keyboard action.");
 requireBundledText('window.__nliSubmitMobileSearch = handleMobileSearchCommand;', "Bundled Android app must expose a native keyboard Search submit bridge.");
 requireBundledText('function mobileSearchResultTypeLabel(value)', "Bundled Android autocomplete must format map-entry types without an undefined global helper.");
-requireBundledPattern(/function\s+schedulePlaceAutocomplete\(rawQuery\)[\s\S]*?query\.length\s*<\s*3[\s\S]*?loadPlaceAutocomplete\(query,\s*requestId\)/, "Bundled Android search must debounce external Long Island predictions.");
-requireBundledPattern(/function\s+loadPlaceAutocomplete\(rawQuery,\s*requestId\)[\s\S]*?search\/searchbox\/v1\/suggest[\s\S]*?bbox=\$\{bbox\}[\s\S]*?state\.placeAutocompleteResults/, "Bundled Android search must fetch bounded business, address, and place predictions.");
-requireBundledPattern(/const\s+localLimit\s*=\s*placeSuggestions\.length\s*\?\s*Math\.min\(3,\s*localSuggestions\.length\)\s*:\s*5[\s\S]*?data-place-suggestion/, "Bundled Android search must keep project results ahead of external map results.");
-requireBundledPattern(/function\s+openPlaceAutocompleteSuggestion\(index\)[\s\S]*?retrieveSearchboxSuggestion\(suggestion,\s*tokenValue\)[\s\S]*?applyAddressSearchFeature\(feature\)[\s\S]*?setMobileBottomPanelState\("maximized"\)/, "Bundled Android search must map an exact external prediction with nearby project context.");
+requireBundledPattern(/function\s+renderSearchSuggestions\([^)]*\)[\s\S]*?mobileAutocompleteCandidates\(query\)[\s\S]*?data-map-search-query/, "Bundled Android search must keep typing local and offer an explicit map lookup.");
 requireBundledPattern(/function\s+nearbyFeedCardModel\(item,\s*index,[^)]*\)[\s\S]*?isExternalMapResult\s*=\s*item\.slug\s*===\s*"address-result"[\s\S]*?comment:\s*!isExternalMapResult[\s\S]*?isExternalMapResult\s*\?\s*"Show"\s*:\s*"Open"/, "Bundled Android external results must show map context without project discussion controls.");
 requireBundledText('grid-template-columns: minmax(0, 1fr) 54px auto;', "Bundled Android scrolled site header must keep a compact thumbnail beside the title.");
 requireBundledPattern(/\.detail \.close\s*\{[\s\S]*?grid-column:\s*-2 \/ -1;[\s\S]*?text-transform:\s*lowercase;/, "Bundled Android site close x must stay lowercase at the far right.");
@@ -2624,6 +2621,15 @@ if (!bundledMobileJs.includes('toFixed(3)},${Number(coordinates[1]).toFixed(3)')
   throw new Error("Bundled Android biography motion must reuse shoreline state at a practical map-cell scale.");
 }
 for (const [label, runtime] of [["modular", bundledMobileJs], ["full offline", bundledApp]]) {
+  if (/search\/searchbox\/v1\/(?:suggest|retrieve)|session_token|autocomplete=true/.test(runtime)) {
+    throw new Error(`Android ${label} search must not spend Mapbox Search Box sessions while typing.`);
+  }
+  if (!runtime.includes('data-map-search-query="${escapeHtml(query)}"')
+      || !runtime.includes("autocomplete=false")
+      || !runtime.includes("free allowance has been reached")
+      || !runtime.includes("Open directions in Maps")) {
+    throw new Error(`Android ${label} search must use explicit one-request geocoding with a provider fallback.`);
+  }
   if (!/function\s+mobileBiographyZoomMotionScale\(zoomValue[\s\S]*?return\s+0\.12[\s\S]*?Math\.max\(0\.08,\s*0\.22\s*\/\s*Math\.pow/.test(runtime)) {
     throw new Error(`Android ${label} biography routes must decelerate at close zoom without lowering native frame cadence.`);
   }
