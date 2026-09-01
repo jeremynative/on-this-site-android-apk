@@ -1,5 +1,14 @@
 # Android APK — Codex Handoff
 
+## September 1 navigation cluster pins
+
+- Branch `fix/navigation-cluster-pins-20260901` fixes the Google navigation map's dense-area suppression. The previous renderer discarded any site within a 190 x 58 dp label-collision box and stopped after four labels, making clusters appear to contain only one site.
+- Every eligible site inside the visible three-mile route area now receives a compact clickable pin. Up to ten nearest labels are retained, with their text, marker, and spacing scaling from 72% to full size as the user zooms in; additional sites remain visible as smaller blue/green pins instead of disappearing.
+- Tapping a marker with other site coordinates inside a 36 dp screen radius opens a chooser listing every nearby On This Site place, so exact or nearly overlapping points are still selectable before the normal Add stop confirmation.
+- Build marker is `20260901-navigation-cluster-pins-r214`. `verify-app-shell.js`, `git diff --check`, the complete debug APK build, `lintDebug`, and the release-equivalent `assembleOptimizedQa` build pass. The connected iPlay tablet is available, but no local Google Navigation credential exists; live clustered-map QA therefore remains gated on the signed workflow artifact that receives the restricted production key.
+
+Safest next action: commit and open a focused PR, run Google Play readiness and CI, merge after checks pass, then install the exact signed Obtainium APK over the tablet without clearing data and visually verify a dense cluster plus the chooser. Do not submit a new Google Play build unless explicitly requested.
+
 ## August 31 S25 navigation UI and low-zoom selection follow-up
 
 - Branch `fix/s25-navigation-ui-20260831` keeps article and custom-place navigation inside the On This Site native activity. The compact square article arrow now sits immediately to the right of the close control and directly intercepts its Google Maps URL; the separate `↗` control in the native navigation screen remains the explicit external Google Maps fallback.
