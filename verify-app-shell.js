@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260901-tablet-bio-detail-cache-r223";
+const expectedBuild = "20260901-wiki-index-refresh-r224";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1527,6 +1527,10 @@ if (!gradleBuild.includes("minifyEnabled = true")
 if (!bundledMobileJs.includes("const apkSnapshotMode = isApkSnapshotMode();")
     || !bundledMobileJs.includes("apkSnapshotMode\n            ? Promise.resolve({ data: [] })")) {
   throw new Error("The modular APK snapshot must not block cold offline startup on Directus-only configuration requests.");
+}
+if (!bundledMobileJs.includes('const WIKI_INDEX_VERSION = "20260901-biography-introductions-v1";')
+    || !bundledMobileJs.includes('fetch(`${WIKI_INDEX_URL}?v=${WIKI_INDEX_VERSION}`, { cache: "no-cache" })')) {
+  throw new Error("The APK runtime must refresh the versioned biography index instead of retaining a stale cached list.");
 }
 requireText("mobile-app-live.html", "Android shell must include the lightweight Directus-backed mobile app fallback asset.");
 if (!lightweightOfflineApp.includes("offline-text-mode")

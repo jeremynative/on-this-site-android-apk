@@ -1222,3 +1222,10 @@ Safest next action: refresh Obtainium on the S25 and install 0.1.463 when conven
 - `verify-app-shell.js`, `verify-google-play-readiness.js`, `git diff --check`, the debug build, the physical tablet audit, and `assembleOptimizedQa` pass. The production package/data were not cleared or replaced during QA.
 - The matching web work is merged through PRs #177-#181 at `e62de27903f89d40b2dbad21b51a7420808d300c`; deployment workflow `33566796996` passed its complete content/runtime verification and reached final publication.
 - Safest next action: commit the final shared-runtime sync, merge this branch, wait for the signed Obtainium release, install that exact signed APK over production without clearing data, and repeat the focused tablet audit. Google Play remains out of scope unless separately requested.
+
+## 2026-09-01 returning-device biography index refresh
+
+- Signed 0.1.636 correctly contained all 118 local biography details, but its first production launch exposed an older 93-item static index retained by Android WebView under the unchanged July cache key. Directus and the deployed static index both already contained 118 published articles.
+- The shared runtime now bumps the biography-index version and revalidates `mobile-wiki-index.json` on launch. Android build marker is `20260901-wiki-index-refresh-r224`; `verify-app-shell.js` guards the refresh contract.
+- Web PR #182 merged as `2c4d6f1b903846058a4770f2629ead8c23fe934b`. Android shell/Play verifiers, whitespace checks, and the debug APK build pass.
+- Safest next action: deploy web PR #182, merge this Android follow-up, publish the next signed Obtainium APK, and confirm a returning production tablet reports 118 wiki articles without clearing app data.

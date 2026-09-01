@@ -21782,7 +21782,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const SITE_DETAIL_FIELDS = SHARED_FIELDS.mobileSiteDetail;
     const WIKI_INDEX_FIELDS = SHARED_FIELDS.mobileWikiIndex;
     const WIKI_INDEX_URL = "assets/data/mobile-wiki-index.json";
-    const WIKI_INDEX_VERSION = "20260714-public-content-audit-v1";
+    const WIKI_INDEX_VERSION = "20260901-biography-introductions-v1";
     const WIKI_DETAIL_FIELDS = SHARED_FIELDS.mobileWikiDetail;
     const TIMELINE_FIELDS = SHARED_FIELDS.timeline;
     const BASIC_TIMELINE_FIELDS = SHARED_FIELDS.basicTimeline;
@@ -25001,7 +25001,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     async function fetchMobileWikiIndexRows() {
       try {
-        const response = await fetch(`${WIKI_INDEX_URL}?v=${WIKI_INDEX_VERSION}`, { cache: "force-cache" });
+        const response = await fetch(`${WIKI_INDEX_URL}?v=${WIKI_INDEX_VERSION}`, { cache: "no-cache" });
         if (!response.ok) throw new Error(`Mobile wiki index unavailable: ${response.status}`);
         const json = await response.json();
         if (Array.isArray(json?.rows) && json.rows.length) return json.rows;
