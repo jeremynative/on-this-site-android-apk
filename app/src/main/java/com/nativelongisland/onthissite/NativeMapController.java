@@ -125,6 +125,7 @@ final class NativeMapController {
     private static final String USER_LOCATION_SOURCE_ID = "nli-user-location";
     private static final String COMMUNITY_SOURCE_ID = "nli-community-contributions";
     private static final String TEMPORARY_SOURCE_ID = "nli-temporary-markers";
+    private static final String SEARCH_FOCUS_SOURCE_ID = "nli-search-focus";
     private static final String PROFILE_PATH_SOURCE_ID = "nli-profile-path";
     private static final String PROFILE_POINT_SOURCE_ID = "nli-profile-points";
     private static final String MOVING_FEATURE_SOURCE_ID = "nli-moving-features";
@@ -202,6 +203,7 @@ final class NativeMapController {
     private final float routedGestureTouchSlop;
     private boolean suppressNextCameraCallback;
     private boolean cameraGestureAwaitingIdle;
+    private int searchFocusGeneration;
     private boolean suppressNextMapTap;
     private LatLng pendingMapTapPoint;
     private float pendingMapTapX;
@@ -872,6 +874,7 @@ final class NativeMapController {
             addSource(style, USER_LOCATION_SOURCE_ID, EMPTY_FEATURE_COLLECTION);
             addSource(style, COMMUNITY_SOURCE_ID, EMPTY_FEATURE_COLLECTION);
             addSource(style, TEMPORARY_SOURCE_ID, EMPTY_FEATURE_COLLECTION);
+            addSource(style, SEARCH_FOCUS_SOURCE_ID, EMPTY_FEATURE_COLLECTION);
             addSource(style, PROFILE_PATH_SOURCE_ID, EMPTY_FEATURE_COLLECTION);
             addSource(style, PROFILE_POINT_SOURCE_ID, EMPTY_FEATURE_COLLECTION);
             addSource(style, MOVING_FEATURE_SOURCE_ID, movingFeaturesJson);
@@ -1124,6 +1127,16 @@ final class NativeMapController {
                     textField("+"), textFont(new String[] { "Noto Sans Regular" }),
                     textSize(14f), textColor("#ffffff"),
                     textAllowOverlap(true), textIgnorePlacement(true)
+                ));
+            style.addLayer(new CircleLayer("nli-search-selected-site-glow-outer", SEARCH_FOCUS_SOURCE_ID)
+                .withProperties(
+                    circleRadius(25f), circleColor("#ffd23e"), circleOpacity(0.18f),
+                    circleStrokeColor("#ffe982"), circleStrokeWidth(3f)
+                ));
+            style.addLayer(new CircleLayer("nli-search-selected-site-glow-inner", SEARCH_FOCUS_SOURCE_ID)
+                .withProperties(
+                    circleRadius(13f), circleColor("#ffd23e"), circleOpacity(0.56f),
+                    circleStrokeColor("#fff5a8"), circleStrokeWidth(3f)
                 ));
             SymbolLayer selectedSiteLabelLayer = new SymbolLayer("nli-selected-site-label", TEMPORARY_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("temporary_kind"), Expression.literal("selected-site")))
@@ -1671,6 +1684,8 @@ final class NativeMapController {
         setLayerVisibility(style, "nli-search-result-marker", !profileMode);
         setLayerVisibility(style, "nli-suggestion-draft-marker", !profileMode);
         setLayerVisibility(style, "nli-suggestion-draft-label", !profileMode);
+        setLayerVisibility(style, "nli-search-selected-site-glow-outer", !profileMode);
+        setLayerVisibility(style, "nli-search-selected-site-glow-inner", !profileMode);
         setLayerVisibility(style, "nli-selected-site-label", !profileMode);
         setLayerVisibility(style, "nli-profile-path-line", profileMode);
         setLayerVisibility(style, "nli-profile-point-circles", profileMode);
@@ -1738,6 +1753,26 @@ final class NativeMapController {
         cameraGestureAwaitingIdle = false;
         suppressNextCameraCallback = true;
         map.moveCamera(CameraUpdateFactory.newCameraPosition(desired));
+    }
+
+    void focusSearchResult(double longitude, double latitude, double zoom, int durationMs) {
+        updateCamera(longitude, latitude, zoom);
+        if (map == null || !Double.isFinite(longitude) || !Double.isFinite(latitude)) return;
+        int generation = ++searchFocusGeneration;
+        map.getStyle(style -> {
+            GeoJsonSource source = style.getSourceAs(SEARCH_FOCUS_SOURCE_ID);
+            if (source == null) return;
+            source.setGeoJson(FeatureCollection.fromFeature(
+                Feature.fromGeometry(Point.fromLngLat(longitude, latitude))
+            ));
+            mapView.postDelayed(() -> {
+                if (generation != searchFocusGeneration || map == null) return;
+                map.getStyle(currentStyle -> {
+                    GeoJsonSource currentSource = currentStyle.getSourceAs(SEARCH_FOCUS_SOURCE_ID);
+                    if (currentSource != null) currentSource.setGeoJson(FeatureCollection.fromFeatures(new Feature[] {}));
+                });
+            }, Math.max(900, Math.min(6000, durationMs)));
+        });
     }
 
     private boolean sameCamera(CameraPosition first, CameraPosition second) {

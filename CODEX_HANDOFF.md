@@ -1,5 +1,15 @@
 # Android APK — Codex Handoff
 
+## September 1 search-result close focus and glow
+
+- Branch `fix/search-result-map-focus-20260901` distinguishes search-result selections from ordinary Nearby-card opens. Search results now request zoom 14.5, keep the selected article open, and show a temporary gold focus halo; ordinary Nearby content still preserves the visitor's existing camera.
+- The native MapLibre renderer has a dedicated temporary search-focus source plus inner and outer glow layers. A token-validated bridge directly focuses and highlights the native map even when the offline WebView compatibility map is unavailable.
+- Added `audit-apk-search-map-focus.mjs` and release guards for the search-aware card route, unchanged Nearby camera behavior, native bridge, native glow layers, and diagnostic camera snapshot. Shell marker is `20260901-search-result-map-focus-r215`.
+- Physical iPlay 50 mini Pro QA passed on the separately installed offline QA package: selecting Whale's Fin from submitted search results opened its article, centered the native map at requested zoom 14.5, and visibly drew both gold glow rings around its whale marker. Wi-Fi was restored, the QA package was removed, and the production app/data were not changed.
+- `verify-app-shell.js`, Google Play readiness, JavaScript syntax, whitespace, debug build, lint, and the release-equivalent optimized QA build pass. Current branch is the branch tip; no Directus content or Google Play release was changed.
+
+Safest next action: merge the focused Android PR after web deployment, verify the signed Obtainium workflow artifact, install it over the connected production app without clearing data, and repeat the Whale's Fin search check online.
+
 ## September 1 navigation cluster pins
 
 - Branch `fix/navigation-cluster-pins-20260901` fixes the Google navigation map's dense-area suppression. The previous renderer discarded any site within a 190 x 58 dp label-collision box and stopped after four labels, making clusters appear to contain only one site.

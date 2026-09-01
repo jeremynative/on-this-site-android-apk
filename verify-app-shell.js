@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260901-navigation-cluster-pins-r214";
+const expectedBuild = "20260901-search-result-map-focus-r215";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -905,6 +905,28 @@ function requireBundledPattern(pattern, message) {
 }
 
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
+for (const [needle, message] of [
+  ['const fromSearchResults = Boolean(activeMobileSearchValue().trim())', "Android search-result taps must be distinguished from ordinary Nearby taps."],
+  ['openSite(slug, { focus: true, focusZoom: 14.5 })', "Android search results must move the selected site into close focus."],
+  ['openSite(slug, { focus: false })', "Ordinary Android Nearby cards must continue preserving the current camera."],
+  ['showMobileSearchResultMapHighlight(site)', "Android search results must visibly highlight the selected site."],
+  ['search_result_highlight: state.mobileSearchResultHighlightSlug === state.selectedSite.slug', "Android search result glow must be passed to the native map."],
+  ['scheduleNativeMapStateSync("search-result-highlight", 0)', "Android search result glow must refresh the native map immediately."],
+  ['window.AndroidApp.focusNativeSearchResult(', "Android search results must directly focus the native map when the compatibility map is unavailable."],
+  ['window.__nliMobileMapCameraSnapshot = () =>', "Android physical QA must be able to read the selected search camera without changing it."],
+  ['openNearbySiteWithMapPreview(cardTarget.slug, { fromSearch: fromSearchResults })', "Android search result cards must use the search-aware map opening path."]
+]) {
+  if (!bundledMobileJs.includes(needle)) throw new Error(message);
+}
+if (!bundledMobileCss.includes(".search-result-map-pulse") || !bundledMobileCss.includes("@keyframes search-result-map-glow")) {
+  throw new Error("Android search-result map focus must include the temporary selected-site glow.");
+}
+for (const layer of ["nli-search-selected-site-glow-outer", "nli-search-selected-site-glow-inner"]) {
+  if (!nativeMapController.includes(layer)) throw new Error(`Android native map is missing selected-site glow layer ${layer}.`);
+}
+for (const bridgeText of ["focusNativeSearchResult", "focusSearchResult(longitude, latitude, zoom, durationMs)"]) {
+  if (!appBridge.includes(bridgeText) && !source.includes(bridgeText)) throw new Error(`Android native search focus bridge is missing ${bridgeText}.`);
+}
 requireText("LOADING_COVER_MINIMUM_MS = 1500", "Android loading cover must remain visible long enough to show its Long Island progress animation.");
 requireText('showLoadingCover("Loading On This Site");', "Android cold startup must initialize the native loading animation timer before the WebView can finish.");
 requireText("STARTUP_VISUAL_STABLE_MS = 600", "Android must keep a bounded stability window without delaying the first usable map.");
