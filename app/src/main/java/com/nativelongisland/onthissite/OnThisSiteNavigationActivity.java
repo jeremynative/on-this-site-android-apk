@@ -715,19 +715,22 @@ public class OnThisSiteNavigationActivity extends Activity {
             return;
         }
         Application application = (Application) context.getApplicationContext();
-        if (application instanceof OnThisSiteApplication) {
-            ((OnThisSiteApplication) application).clearActiveNavigationDestination();
-        }
         NavigationApi.getNavigator(application, new NavigationApi.NavigatorListener() {
             @Override
             public void onNavigatorReady(Navigator readyNavigator) {
                 readyNavigator.stopGuidance();
                 readyNavigator.clearDestinations();
+                if (application instanceof OnThisSiteApplication) {
+                    ((OnThisSiteApplication) application).clearActiveNavigationDestination();
+                }
             }
 
             @Override
             public void onError(@NavigationApi.ErrorCode int errorCode) {
                 Log.w(LOG_TAG, "Could not stop navigation from the notification (error " + errorCode + ").");
+                if (application instanceof OnThisSiteApplication) {
+                    ((OnThisSiteApplication) application).clearActiveNavigationDestination();
+                }
             }
         });
     }

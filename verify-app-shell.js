@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260901-navigation-notification-return-r217";
+const expectedBuild = "20260901-navigation-notification-dismiss-r218";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1673,7 +1673,8 @@ for (const needle of [
   "PendingIntent.getBroadcast",
   "setContentIntent(resumePendingIntent)",
   "setActiveDestination",
-  "updateNotification()"
+  "updateNotification()",
+  "manager.cancel(NOTIFICATION_ID)"
 ]) {
   if (!navigationNotificationProvider.includes(needle)) {
     throw new Error(`Navigation notification return/exit support is missing: ${needle}`);
