@@ -7223,6 +7223,12 @@
       const transientSignature = `user:${userLocationSignature}|community:${communitySignature}|temporary:${temporarySignature}|events:${eventSignature}`;
       const signature = `${baseSignature}|points:${pointSignature}|${transientSignature}`;
       const center = state.map.getCenter?.();
+      const camera = center ? {
+        center: [Number(center.lng), Number(center.lat)],
+        zoom: Number(state.map.getZoom?.()),
+        bearing: Number(state.map.getBearing?.()) || 0,
+        pitch: Number(state.map.getPitch?.()) || 0
+      } : null;
       const transientPayload = {
         signature,
         baseSignature,
@@ -7230,12 +7236,6 @@
         reason,
         mode: profileModel ? "profile" : "public",
         basemap: nativeBasemap,
-        camera: center ? {
-          center: [Number(center.lng), Number(center.lat)],
-          zoom: Number(state.map.getZoom?.()),
-          bearing: Number(state.map.getBearing?.()) || 0,
-          pitch: Number(state.map.getPitch?.()) || 0
-        } : null,
         userLocation: nativeMapFeatureCollection(userLocationFeatures),
         communityContributions: nativeMapFeatureCollection(communityFeatures),
         temporaryMarkers: nativeMapFeatureCollection(temporaryFeatures),
@@ -7256,6 +7256,8 @@
       }
       const payload = {
         ...transientPayload,
+        camera,
+        geometryReady: Boolean(state.siteGeometryLoaded || isOfflineTextMode()),
         territories: nativeMapFeatureCollection(allFeatures.filter(feature => /Polygon/.test(feature?.geometry?.type || "") && feature?.properties?.broad === true)),
         sitePolygons: nativeMapFeatureCollection(allFeatures.filter(feature => /Polygon/.test(feature?.geometry?.type || "") && feature?.properties?.broad !== true && !profileModel)),
         sitePoints: nativeMapFeatureCollection(allFeatures.filter(feature => feature?.geometry?.type === "Point" && !profileModel)),
@@ -20960,10 +20962,25 @@
         // then reveal the live map or text fallback only when it is ready.
         appEl?.classList.add("mobile-map-initializing");
         hideLoadingScreen();
-        const mobileMapReady = await initMap().catch(error => {
-          console.warn("Map did not initialize yet.", error);
-          statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
-        }).finally(() => appEl?.classList.remove("mobile-map-initializing"));
+        // Build the native map and hydrate the authoritative polygon payload
+        // in parallel, but keep both startup shields in place until each is
+        // ready. This prevents the compact center snapshot from painting as a
+        // seemingly finished map before the reviewed land polygons arrive.
+        const startupGeometryReady = nativeAndroid && !isOfflineTextMode()
+          ? hydrateMobileSiteGeometry()
+          : Promise.resolve(true);
+        let mobileMapReady;
+        try {
+          [mobileMapReady] = await Promise.all([
+            initMap().catch(error => {
+              console.warn("Map did not initialize yet.", error);
+              statusEl.textContent = `${state.filtered.length || state.sites.length} sites`;
+            }),
+            startupGeometryReady
+          ]);
+        } finally {
+          appEl?.classList.remove("mobile-map-initializing");
+        }
         if (mobileMapReady && state.mobileStartupSiteRevealPending) await startMobileStartupSiteReveal();
         else if (state.mobileStartupSiteRevealPending) finishMobileStartupSiteReveal();
         if (!isOfflineTextMode() && !nativeAndroid) idleTask(hydrateMobileSiteGeometry);

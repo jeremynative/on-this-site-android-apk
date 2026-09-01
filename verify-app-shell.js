@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260901-map-search-quota-fallback-r221";
+const expectedBuild = "20260901-apk-map-polygon-stability-r222";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -949,17 +949,17 @@ if (!bundledMobileJs.includes('syncNativeMapState("native-bridge-shell-ready")')
 requireText("app.classList.contains('mobile-map-initializing')", "Android startup readiness must wait for the in-map initialization shield to finish.");
 requireText("app.classList.contains('mobile-site-reveal-pending')", "Android startup readiness must wait for the intentional site reveal to finish behind the native cover.");
 requireText("app.classList.contains('mobile-site-reveal-settling')", "Android startup readiness must not expose the marker settling animation.");
-requireText("var compactGeometryReady=offline||geometryStatus!=='hydrating'", "Android startup must hand off from the compact map without waiting for detailed polygons.");
-requireText("schedulePostStartupGeometryHydration();", "Android must request detailed polygons only after the first usable map handoff.");
-requireText("window.__nliHydrateMobileSiteGeometryAfterStartup", "Android must trigger the page's deferred geometry hydration after its loading cover closes.");
-requireText("resetPostStartupGeometryHydration();", "Android must cancel a stale deferred geometry task before live or fallback navigation.");
+requireText("var authoritativeGeometryReady=offline||geometryStatus==='loaded'", "Android startup must keep its native cover over the compact map until authoritative polygons are loaded.");
+if (source.includes("schedulePostStartupGeometryHydration();") || source.includes("postStartupGeometryHydration")) {
+  throw new Error("Android must not defer authoritative polygon hydration until after the loading cover closes.");
+}
 requireText("if (webView == null || !loadingBundledFallback || appShellLoaded) return;", "A successful bundled native-map readiness probe must not be overwritten by the legacy offline paint deadline.");
 requireText("var deferredReady=true", "Android startup must leave the page's existing idle community-data pass out of the first-paint gate.");
 if (source.includes("window.__nliNativeStartupDeferredRequested")) {
   throw new Error("Android startup must not duplicate or pull the deferred community request in front of the first usable map.");
 }
 requireText("window.__nliNativeStartupDomSignature", "Android startup must track the visible promo controls and unread badges until their DOM state settles.");
-requireText("archiveTextReady&&compactGeometryReady&&deferredReady&&mapUiReady&&startupDomStable", "Android must require loaded archive text, a compact map, a settled viewport, and stable controls before handing off from the native cover.");
+requireText("archiveTextReady&&authoritativeGeometryReady&&deferredReady&&mapUiReady&&startupDomStable", "Android must require loaded archive text, authoritative geometry, a settled viewport, and stable controls before handing off from the native cover.");
 requireText("nativeMapController.isStartupVisualStable(STARTUP_VISUAL_STABLE_MS)", "Android readiness probes must include native style, viewport, state, and camera stability.");
 requireText("var archiveReady=offline&&!!document.querySelector('.offline-map-index')", "Offline startup must keep the Long Island cover until the saved map index and region controls are fully rendered.");
 if (!nativeMapController.includes("void beginStartupVisualTracking()")
@@ -1066,8 +1066,10 @@ for (const lifecycleRuntime of [bundledApp, bundledLiveRuntime]) {
 for (const startupRuntime of [bundledApp, bundledLiveRuntime]) {
   if (!startupRuntime.includes('appEl?.classList.add("mobile-map-initializing")')
       || !startupRuntime.includes('hideLoadingScreen();')
-      || !startupRuntime.includes('await initMap().catch(error =>')
-      || !startupRuntime.includes('.finally(() => appEl?.classList.remove("mobile-map-initializing"))')
+      || !startupRuntime.includes('const startupGeometryReady = nativeAndroid && !isOfflineTextMode()')
+      || !startupRuntime.includes('await Promise.all([')
+      || !startupRuntime.includes('startupGeometryReady')
+      || !startupRuntime.includes('appEl?.classList.remove("mobile-map-initializing")')
       || !startupRuntime.includes('.app.mobile-map-initializing .mobile-map-shell::after')
       || !startupRuntime.includes('content: "Loading map\\2026"')
       || !startupRuntime.includes('pointer-events: auto')) {
@@ -1303,6 +1305,27 @@ if (!bundledMobileJs.includes("const baseSignature =")
     || !bundledMobileJs.includes('typeof window.AndroidApp.syncNativeMapTransientState === "function"')
     || !bundledMobileJs.includes("JSON.stringify(transientPayload)")) {
   throw new Error("APK map state must separate stable map layers from selected-site, user-location, and community updates.");
+}
+const transientPayloadStart = bundledMobileJs.indexOf("      const transientPayload = {");
+const transientPayloadEnd = bundledMobileJs.indexOf("\n      };", transientPayloadStart);
+const transientPayloadBlock = transientPayloadStart >= 0 && transientPayloadEnd > transientPayloadStart
+  ? bundledMobileJs.slice(transientPayloadStart, transientPayloadEnd)
+  : "";
+const nativeTransientStart = nativeMapController.indexOf("    void applyTransientState(String stateJson) {");
+const nativeTransientEnd = nativeMapController.indexOf("\n    private ", nativeTransientStart);
+const nativeTransientImplementation = nativeTransientStart >= 0 && nativeTransientEnd > nativeTransientStart
+  ? nativeMapController.slice(nativeTransientStart, nativeTransientEnd)
+  : "";
+if (!transientPayloadBlock
+    || transientPayloadBlock.includes("camera:")
+    || !bundledMobileJs.includes("camera,\n        geometryReady: Boolean(state.siteGeometryLoaded || isOfflineTextMode())")
+    || !nativeTransientImplementation
+    || nativeTransientImplementation.includes("applyCamera(")) {
+  throw new Error("APK content-only map updates must not resend or apply a stale hidden-WebView camera.");
+}
+if (!nativeMapController.includes('payload.optBoolean("geometryReady", false)')
+    || !nativeMapController.includes("authoritativeGeometryReady")) {
+  throw new Error("Native map startup stability must require an explicitly authoritative polygon payload.");
 }
 if (!bundledMobileCss.includes(".mobile-timeline .mobile-learning-feed")
     || !bundledMobileCss.includes("padding-right: 38px")
@@ -2478,8 +2501,8 @@ requireBundledText('function installNativeAndroidSearchWatch()', "Bundled Androi
 requireBundledText("state.nativeAndroidSearchWatchInstalled = true;", "Bundled Android app must install the focus-owned search watcher once.");
 requireBundledPattern(/document\.addEventListener\("visibilitychange"[\s\S]*?document\.hidden[\s\S]*?stopSearchValueWatch\(\{\s*silent:\s*true\s*\}\)[\s\S]*?document\.activeElement\s*===\s*searchEl[\s\S]*?startSearchValueWatch\(\)/, "Bundled Android app must suspend search polling while backgrounded and resume it only for a focused search field.");
 requireBundledText('refreshMobileSearchSuggestions();', "Bundled Android app must persistently refresh native Android autocomplete.");
-requireBundledText('window.__nliHydrateMobileSiteGeometryAfterStartup = () => {', "Bundled Android app must expose post-startup detailed geometry hydration.");
-requireBundledText('if (!isOfflineTextMode() && !nativeAndroid) idleTask(hydrateMobileSiteGeometry);', "Bundled Android app must not parse detailed polygons before the native first map is usable.");
+requireBundledPattern(/const\s+startupGeometryReady\s*=\s*nativeAndroid\s*&&\s*!isOfflineTextMode\(\)[\s\S]*?hydrateMobileSiteGeometry\(\)[\s\S]*?Promise\.all\(\[[\s\S]*?initMap\(\)[\s\S]*?startupGeometryReady/, "Bundled Android startup must hydrate authoritative polygons in parallel with map construction and wait for both before reveal.");
+requireBundledText('if (!isOfflineTextMode() && !nativeAndroid) idleTask(hydrateMobileSiteGeometry);', "Non-native mobile browsers may keep detailed polygon hydration deferred after their first map.");
 requireBundledPattern(/const\s+eventSignature\s*=\s*exhibitFeatures\.map[\s\S]*?const\s+baseSignature\s*=\s*`[^`]+bio-paths:[^`]+`[\s\S]*?const\s+transientSignature\s*=\s*`[^`]+events:\$\{eventSignature\}`/, "Bundled Android calendar changes must remain outside the static native-map signature.");
 requireBundledPattern(/const\s+transientPayload\s*=\s*\{[\s\S]*?events:\s*nativeMapFeatureCollection\(exhibitFeatures\)[\s\S]*?syncNativeMapTransientState/, "Bundled Android calendar markers must use compact native-map updates after initial state.");
 requireBundledPattern(/function\s+nativeMapUnreadBadges\([\s\S]*?mobileContentUnreadCount\("site",\s*slug\)[\s\S]*?transientPayload\.unreadBadges\s*=\s*nativeMapUnreadBadges\(\)/, "Bundled Android unread changes must use compact slug/count updates.");
@@ -2508,7 +2531,7 @@ requireBundledText('sorted by proximity', "Bundled Android app must label nearby
 requireBundledText('const STARTUP_LOCATION_ZOOM = NEAR_ME_ZOOM;', "Bundled Android app must open with the Near me zoom level.");
 requireBundledPattern(/function requestStartupLocation\(\)[\s\S]*?const request = isNativeAndroidApp\(\)[\s\S]*?requestUserLocation\(\{[\s\S]*?centerMap: true,[\s\S]*?silent: true,[\s\S]*?mapZoom: NEAR_ME_ZOOM,[\s\S]*?centerBounds: STARTUP_LOCATION_CENTER_BOUNDS/, "Bundled Android app must request and center on startup location.");
 requireBundledText('data-find-nearby-sites', "Bundled Android app must provide an explicit location action when permission is unavailable.");
-requireBundledPattern(/const mobileMapReady = await initMap\(\)[\s\S]*?requestStartupLocation\(\);/, "Bundled Android app must begin startup location centering after the map is ready.");
+requireBundledPattern(/let mobileMapReady;[\s\S]*?await Promise\.all\(\[[\s\S]*?initMap\(\)[\s\S]*?startupGeometryReady[\s\S]*?requestStartupLocation\(\);/, "Bundled Android app must begin startup location centering after both map construction and authoritative geometry are ready.");
 requireBundledPattern(/if \(\/Android\/i\.test\(navigator\.userAgent\)\) window\.setTimeout\(\(\) => \{\s*if \(!state\.userLocation\) requestStartupLocation\(\);\s*\}, 15000\);/, "Bundled Android app must retry location after the WebView settles.");
 requireBundledPattern(/else \{\s*setMobileBottomPanelState\("collapsed", \{ persist: false \}\);\s*setMobilePanelMode\("nearby"\);/, "Bundled Android app must start on the map with its Nearby panel collapsed.");
 requireBundledText('mobile-startup-spotlight', "Bundled Android app must include the shared daily feature card.");
