@@ -37,7 +37,7 @@ final class NavigationSiteRepository {
             if (centerItem == null || !"Point".equals(centerItem.optString("geometry_type"))) continue;
             String slug = centerItem.optString("slug", "");
             JSONObject metadata = metadataBySlug.get(slug);
-            if (!isSafePublicCandidate(metadata)) continue;
+            if (!isPublicNavigationCandidate(metadata)) continue;
             JSONArray center = centerItem.optJSONArray("center");
             if (center == null || center.length() < 2) continue;
             double longitude = center.optDouble(0, Double.NaN);
@@ -54,20 +54,31 @@ final class NavigationSiteRepository {
         return loaded;
     }
 
-    private static boolean isSafePublicCandidate(JSONObject item) {
+    private static boolean isPublicNavigationCandidate(JSONObject item) {
         if (item == null || !"published".equalsIgnoreCase(item.optString("publication_status", "published"))) return false;
         String title = item.optString("title", "").trim();
         String slug = item.optString("slug", "").trim();
-        String type = item.optString("site_type", "");
-        String summary = item.optString("summary", "");
-        String address = item.optString("address_label", "");
-        String surface = item.optString("geometry_surface", "");
-        String cleanup = item.optString("geometry_cleanup_status", "");
-        if (title.isEmpty() || slug.isEmpty() || address.trim().isEmpty()) return false;
-        String sensitiveText = (title + " " + type + " " + summary).toLowerCase(Locale.ROOT);
-        if (sensitiveText.matches(".*\\b(ancestral land|traditional land|territory|reservation|burial|cemetery|sacred|ceremonial|pow ?wow|sweat lodge|archaeolog|private residence)\\b.*")) return false;
-        String accuracyText = (address + " " + surface + " " + cleanup).toLowerCase(Locale.ROOT);
-        return !accuracyText.matches(".*\\b(approximate|general|broad|near|area|landscape|mixed|pending|needs review)\\b.*");
+        if (title.isEmpty() || slug.isEmpty()) return false;
+
+        // The public map contains many reviewed historical points without a
+        // modern street-address label. Requiring that label hid most of the
+        // project's ordinary sites from the driving overlay even though their
+        // published point coordinates were already visible on the main map.
+        // Restrict only records whose own classification/location state marks
+        // them as inappropriate for a driving destination; do not reject an
+        // otherwise public site merely because its article discusses sensitive
+        // history or uses words such as "near" in normal prose.
+        String type = item.optString("site_type", "").toLowerCase(Locale.ROOT);
+        String geometrySurface = item.optString("geometry_surface", "").toLowerCase(Locale.ROOT);
+        String cleanupStatus = item.optString("geometry_cleanup_status", "").toLowerCase(Locale.ROOT);
+        if (type.contains("sensitive")
+            || type.contains("burial")
+            || type.contains("reservation")
+            || type.contains("territory")
+            || type.contains("archaeolog")
+            || type.contains("private")) return false;
+        return !"suppressed".equals(geometrySurface)
+            && !"needs_public_location_verification".equals(cleanupStatus);
     }
 
     private static boolean isOnLongIsland(double latitude, double longitude) {

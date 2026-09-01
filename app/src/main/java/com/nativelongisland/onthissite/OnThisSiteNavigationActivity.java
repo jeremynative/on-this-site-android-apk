@@ -63,6 +63,8 @@ public class OnThisSiteNavigationActivity extends Activity {
     private static final String EXTRA_SLUG = "destination_slug";
     private static final String EXTRA_LATITUDE = "destination_latitude";
     private static final String EXTRA_LONGITUDE = "destination_longitude";
+    private static final String NAVIGATION_PREFERENCES = "on_this_site_navigation";
+    private static final String PREF_VOICE_MUTED = "voice_guidance_muted";
 
     private NavigationView navigationView;
     private Navigator navigator;
@@ -70,10 +72,12 @@ public class OnThisSiteNavigationActivity extends Activity {
     private FrameLayout mapContainer;
     private FrameLayout edgeOverlay;
     private View topCard;
+    private View guidanceControls;
     private TextView guidanceDestinationView;
     private TextView statusView;
     private Button startButton;
     private Button overviewButton;
+    private Button audioToggleButton;
     private String destinationTitle;
     private String destinationSlug;
     private double destinationLatitude;
@@ -81,6 +85,7 @@ public class OnThisSiteNavigationActivity extends Activity {
     private Waypoint primaryDestination;
     private boolean routeReady;
     private boolean guidanceStarted;
+    private boolean voiceGuidanceMuted;
     private Location currentLocation;
     private List<NavigationSiteRepository.Site> publicSites = new ArrayList<>();
     private final List<Marker> siteMarkers = new ArrayList<>();
@@ -110,10 +115,16 @@ public class OnThisSiteNavigationActivity extends Activity {
         mapContainer = findViewById(R.id.navigation_map_container);
         edgeOverlay = findViewById(R.id.navigation_edge_overlay);
         topCard = findViewById(R.id.navigation_top_card);
+        guidanceControls = findViewById(R.id.navigation_guidance_controls);
         guidanceDestinationView = findViewById(R.id.navigation_guidance_destination);
         statusView = findViewById(R.id.navigation_status);
         startButton = findViewById(R.id.navigation_start);
         overviewButton = findViewById(R.id.navigation_overview);
+        audioToggleButton = findViewById(R.id.navigation_audio_toggle);
+        voiceGuidanceMuted = getSharedPreferences(NAVIGATION_PREFERENCES, MODE_PRIVATE)
+            .getBoolean(PREF_VOICE_MUTED, false);
+        audioToggleButton.setOnClickListener(view -> toggleVoiceGuidance());
+        updateAudioToggleButton();
         findViewById(R.id.navigation_close).setOnClickListener(view -> closeNavigation());
         findViewById(R.id.navigation_external).setOnClickListener(view -> openOfficialGoogleMaps());
         findViewById(R.id.navigation_legal).setOnClickListener(view ->
@@ -252,13 +263,44 @@ public class OnThisSiteNavigationActivity extends Activity {
 
     private void startGuidance() {
         if (!routeReady || navigator == null) return;
-        navigator.setAudioGuidance(Navigator.AudioGuidance.VOICE_ALERTS_AND_GUIDANCE | Navigator.AudioGuidance.BLUETOOTH_AUDIO);
+        applyAudioGuidance();
         navigator.startGuidance();
         guidanceStarted = true;
         startButton.setEnabled(false);
         topCard.setVisibility(View.GONE);
-        guidanceDestinationView.setVisibility(View.VISIBLE);
+        guidanceControls.setVisibility(View.VISIBLE);
         refreshNearbyEdgeIndicators();
+    }
+
+    private void toggleVoiceGuidance() {
+        voiceGuidanceMuted = !voiceGuidanceMuted;
+        getSharedPreferences(NAVIGATION_PREFERENCES, MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_VOICE_MUTED, voiceGuidanceMuted)
+            .apply();
+        applyAudioGuidance();
+        Toast.makeText(
+            this,
+            voiceGuidanceMuted ? "Voice guidance muted" : "Voice guidance on",
+            Toast.LENGTH_SHORT
+        ).show();
+    }
+
+    private void applyAudioGuidance() {
+        if (navigator != null) {
+            navigator.setAudioGuidance(voiceGuidanceMuted
+                ? Navigator.AudioGuidance.SILENT
+                : Navigator.AudioGuidance.VOICE_ALERTS_AND_GUIDANCE | Navigator.AudioGuidance.BLUETOOTH_AUDIO);
+        }
+        updateAudioToggleButton();
+    }
+
+    private void updateAudioToggleButton() {
+        if (audioToggleButton == null) return;
+        audioToggleButton.setText(voiceGuidanceMuted ? "🔇" : "🔊");
+        audioToggleButton.setContentDescription(voiceGuidanceMuted
+            ? "Turn on voice guidance"
+            : "Mute voice guidance");
     }
 
     private void styleGuidanceDestination() {

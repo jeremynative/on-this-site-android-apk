@@ -47,6 +47,8 @@ const googleNavigationActivityPath = "app/src/main/java/com/nativelongisland/ont
 const googleNavigationLayoutPath = "app/src/main/res/layout/activity_on_this_site_navigation.xml";
 const googleNavigationLegalActivityPath = "app/src/main/java/com/nativelongisland/onthissite/GoogleNavigationLegalActivity.java";
 const navigationSiteRepositoryPath = "app/src/main/java/com/nativelongisland/onthissite/NavigationSiteRepository.java";
+const mobileSiteCentersPath = "app/src/main/assets/assets/data/mobile-site-centers.json";
+const mobileSiteIndexPath = "app/src/main/assets/assets/data/mobile-site-index.json";
 const nativeGoogleNavigationPath = "app/src/main/assets/native-google-navigation.js";
 const googleNavigationNoticePath = "app/src/main/assets/google-navigation-notice.txt";
 const offlineInsetAuditPath = "audit-apk-offline-insets.mjs";
@@ -79,6 +81,8 @@ const googleNavigationActivity = fs.readFileSync(googleNavigationActivityPath, "
 const googleNavigationLayout = fs.readFileSync(googleNavigationLayoutPath, "utf8");
 const googleNavigationLegalActivity = fs.readFileSync(googleNavigationLegalActivityPath, "utf8");
 const navigationSiteRepository = fs.readFileSync(navigationSiteRepositoryPath, "utf8");
+const mobileSiteCenters = JSON.parse(fs.readFileSync(mobileSiteCentersPath, "utf8"));
+const mobileSiteIndex = JSON.parse(fs.readFileSync(mobileSiteIndexPath, "utf8"));
 const nativeGoogleNavigation = fs.readFileSync(nativeGoogleNavigationPath, "utf8");
 const googleNavigationNotice = fs.readFileSync(googleNavigationNoticePath, "utf8");
 const offlineInsetAudit = fs.readFileSync(offlineInsetAuditPath, "utf8");
@@ -1639,6 +1643,9 @@ for (const needle of [
   "googleMap.setTrafficEnabled(true)",
   "VOICE_ALERTS_AND_GUIDANCE",
   "BLUETOOTH_AUDIO",
+  "Navigator.AudioGuidance.SILENT",
+  "toggleVoiceGuidance",
+  "voice_guidance_muted",
   "setTripProgressBarEnabled(false)",
   "navigator.setDestination",
   "navigator.setDestinations",
@@ -1656,7 +1663,7 @@ for (const needle of [
   "setOnMyLocationChangeListener",
   "topCard.setVisibility(View.GONE)",
   'guidanceDestinationView.setText("Destination: " + destinationTitle)',
-  "guidanceDestinationView.setVisibility(View.VISIBLE)",
+  "guidanceControls.setVisibility(View.VISIBLE)",
   "The map is available, but routing needs location access.",
   "item.site.hasHeaderImage",
   "Color.argb(224, 60, 137, 230)",
@@ -1673,12 +1680,30 @@ if (!/refreshVisibleSiteMarkers\(\)[\s\S]*?result\[0\]\s*<=\s*ROUTE_AREA_SITE_RA
   throw new Error("Navigation must keep zoomed route-area pins within three miles while limiting edge indicators to one mile.");
 }
 if (!navigationSiteRepository.includes('"Point".equals(centerItem.optString("geometry_type"))')
-    || !navigationSiteRepository.includes("isSafePublicCandidate")
+    || !navigationSiteRepository.includes("isPublicNavigationCandidate")
     || !navigationSiteRepository.includes("hasHeaderImage(metadata)")
     || !navigationSiteRepository.includes('listing_image_thumb_url')
-    || !navigationSiteRepository.includes("ancestral land|traditional land|territory|reservation|burial|cemetery|sacred|ceremonial|pow ?wow|sweat lodge|archaeolog|private residence")
-    || !navigationSiteRepository.includes("approximate|general|broad|near|area|landscape|mixed|pending|needs review")) {
-  throw new Error("Navigation map must restrict pins to specific, public, non-sensitive point records.");
+    || !navigationSiteRepository.includes('type.contains("sensitive")')
+    || !navigationSiteRepository.includes('type.contains("burial")')
+    || !navigationSiteRepository.includes('"suppressed".equals(geometrySurface)')
+    || !navigationSiteRepository.includes('"needs_public_location_verification".equals(cleanupStatus)')
+    || navigationSiteRepository.includes("address.trim().isEmpty()")
+    || navigationSiteRepository.includes('item.optString("summary"')) {
+  throw new Error("Navigation map must include ordinary public point records without exposing explicitly sensitive or suppressed locations.");
+}
+const navigationMetadataBySlug = new Map((mobileSiteIndex.rows || []).map(item => [item.slug, item]));
+const bundledNavigationCandidateCount = (mobileSiteCenters.rows || []).filter(center => {
+  if (center.geometry_type !== "Point") return false;
+  const item = navigationMetadataBySlug.get(center.slug);
+  if (!item || (item.publication_status && String(item.publication_status).toLowerCase() !== "published")) return false;
+  if (!String(item.title || "").trim() || !String(item.slug || "").trim()) return false;
+  const type = String(item.site_type || "").toLowerCase();
+  if (["sensitive", "burial", "reservation", "territory", "archaeolog", "private"].some(value => type.includes(value))) return false;
+  return String(item.geometry_surface || "").toLowerCase() !== "suppressed"
+    && String(item.geometry_cleanup_status || "").toLowerCase() !== "needs_public_location_verification";
+}).length;
+if (bundledNavigationCandidateCount < 300) {
+  throw new Error(`Navigation-map coverage regressed to ${bundledNavigationCandidateCount} ordinary public point records.`);
 }
 for (const needle of [
   "isInAppGoogleNavigationAvailable",
@@ -1710,10 +1735,12 @@ const navigationCloseIndex = googleNavigationLayout.indexOf('android:id="@+id/na
 if (navigationLegalIndex < 0 || navigationCloseIndex < 0 || navigationCloseIndex < navigationLegalIndex) {
   throw new Error("The native navigation close button must be the far-right header action.");
 }
-if (!googleNavigationLayout.includes('android:id="@+id/navigation_guidance_destination"')
+if (!googleNavigationLayout.includes('android:id="@+id/navigation_guidance_controls"')
+    || !googleNavigationLayout.includes('android:id="@+id/navigation_guidance_destination"')
+    || !googleNavigationLayout.includes('android:id="@+id/navigation_audio_toggle"')
     || !googleNavigationLayout.includes('android:contentDescription="Current navigation destination"')
     || !googleNavigationLayout.includes('android:layout_marginTop="220dp"')) {
-  throw new Error("Active guidance must identify the selected destination without restoring the old header clutter.");
+  throw new Error("Active guidance must identify the selected destination and expose a compact voice-guidance toggle.");
 }
 for (const needle of ["data-nav", "navigationCoordinates"]) {
   if (!bundledMobileJs.includes(needle) || !bundledApp.includes(needle)) {
