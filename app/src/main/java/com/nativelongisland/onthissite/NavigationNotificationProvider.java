@@ -44,7 +44,8 @@ final class NavigationNotificationProvider extends NotificationContentProviderBa
 
     void clearActiveDestination() {
         application.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE).edit().clear().apply();
-        updateNotification();
+        NotificationManager manager = application.getSystemService(NotificationManager.class);
+        if (manager != null) manager.cancel(NOTIFICATION_ID);
     }
 
     static Intent createResumeIntent(Context context) {
