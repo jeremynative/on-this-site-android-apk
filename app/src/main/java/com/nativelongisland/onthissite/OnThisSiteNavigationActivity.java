@@ -3,7 +3,9 @@ package com.nativelongisland.onthissite;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Application;
 import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
@@ -50,6 +52,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.lang.ref.WeakReference;
 
 public class OnThisSiteNavigationActivity extends Activity {
     private static final String LOG_TAG = "OnThisSiteGoogleNav";
@@ -61,12 +64,13 @@ public class OnThisSiteNavigationActivity extends Activity {
     private static final float MIN_LABEL_HORIZONTAL_SPACING_DP = 132f;
     private static final float MIN_LABEL_VERTICAL_SPACING_DP = 44f;
     private static final float CLUSTER_TAP_RADIUS_DP = 36f;
-    private static final String EXTRA_TITLE = "destination_title";
-    private static final String EXTRA_SLUG = "destination_slug";
-    private static final String EXTRA_LATITUDE = "destination_latitude";
-    private static final String EXTRA_LONGITUDE = "destination_longitude";
+    static final String EXTRA_TITLE = "destination_title";
+    static final String EXTRA_SLUG = "destination_slug";
+    static final String EXTRA_LATITUDE = "destination_latitude";
+    static final String EXTRA_LONGITUDE = "destination_longitude";
     private static final String NAVIGATION_PREFERENCES = "on_this_site_navigation";
     private static final String PREF_VOICE_MUTED = "voice_guidance_muted";
+    private static WeakReference<OnThisSiteNavigationActivity> activeActivity = new WeakReference<>(null);
 
     private NavigationView navigationView;
     private Navigator navigator;
@@ -106,7 +110,7 @@ public class OnThisSiteNavigationActivity extends Activity {
         overviewButton.setEnabled(false);
     };
 
-    static Intent createIntent(Activity source, String title, String slug, double latitude, double longitude) {
+    static Intent createIntent(Context source, String title, String slug, double latitude, double longitude) {
         return new Intent(source, OnThisSiteNavigationActivity.class)
             .putExtra(EXTRA_TITLE, title)
             .putExtra(EXTRA_SLUG, slug)
@@ -117,6 +121,7 @@ public class OnThisSiteNavigationActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        activeActivity = new WeakReference<>(this);
         setContentView(R.layout.activity_on_this_site_navigation);
         applySystemBarSafeArea(findViewById(R.id.navigation_root));
         windowKeepScreenOn();
@@ -274,6 +279,12 @@ public class OnThisSiteNavigationActivity extends Activity {
         applyAudioGuidance();
         navigator.startGuidance();
         guidanceStarted = true;
+        ((OnThisSiteApplication) getApplication()).setActiveNavigationDestination(
+            destinationTitle,
+            destinationSlug,
+            destinationLatitude,
+            destinationLongitude
+        );
         startButton.setEnabled(false);
         topCard.setVisibility(View.GONE);
         guidanceControls.setVisibility(View.VISIBLE);
@@ -679,11 +690,54 @@ public class OnThisSiteNavigationActivity extends Activity {
             new AlertDialog.Builder(this)
                 .setTitle("Stop navigation?")
                 .setMessage("Turn-by-turn guidance will end and On This Site will return to its map.")
-                .setPositiveButton("Stop and close", (dialog, which) -> finish())
+                .setPositiveButton("Stop and close", (dialog, which) -> stopNavigationAndFinish())
                 .setNegativeButton("Keep navigating", null)
                 .show();
         } else {
-            finish();
+            stopNavigationAndFinish();
+        }
+    }
+
+    private void stopNavigationAndFinish() {
+        if (navigator != null) {
+            navigator.stopGuidance();
+            navigator.clearDestinations();
+        }
+        guidanceStarted = false;
+        ((OnThisSiteApplication) getApplication()).clearActiveNavigationDestination();
+        finish();
+    }
+
+    static void stopActiveNavigationFromNotification(Context context) {
+        OnThisSiteNavigationActivity active = activeActivity.get();
+        if (active != null && !active.isFinishing()) {
+            active.runOnUiThread(active::stopNavigationAndFinish);
+            return;
+        }
+        Application application = (Application) context.getApplicationContext();
+        if (application instanceof OnThisSiteApplication) {
+            ((OnThisSiteApplication) application).clearActiveNavigationDestination();
+        }
+        NavigationApi.getNavigator(application, new NavigationApi.NavigatorListener() {
+            @Override
+            public void onNavigatorReady(Navigator readyNavigator) {
+                readyNavigator.stopGuidance();
+                readyNavigator.clearDestinations();
+            }
+
+            @Override
+            public void onError(@NavigationApi.ErrorCode int errorCode) {
+                Log.w(LOG_TAG, "Could not stop navigation from the notification (error " + errorCode + ").");
+            }
+        });
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (NavigationNotificationProvider.ACTION_STOP.equals(intent == null ? null : intent.getAction())) {
+            stopNavigationAndFinish();
         }
     }
 
@@ -811,6 +865,9 @@ public class OnThisSiteNavigationActivity extends Activity {
             navigator.cleanup();
             navigator = null;
         }
+        OnThisSiteNavigationActivity active = activeActivity.get();
+        if (active == this) activeActivity.clear();
+        ((OnThisSiteApplication) getApplication()).clearActiveNavigationDestination();
         if (googleMap != null) googleMap.setOnMyLocationChangeListener(null);
         if (navigationView != null) {
             navigationView.onDestroy();

@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260901-search-autocomplete-focus-r216";
+const expectedBuild = "20260901-navigation-notification-return-r217";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -44,6 +44,8 @@ const captureFileProviderPath = "app/src/main/java/com/nativelongisland/onthissi
 const nativeCommentPhotoCompatPath = "app/src/main/assets/native-comment-photo-compat.js";
 const onThisSiteApplicationPath = "app/src/main/java/com/nativelongisland/onthissite/OnThisSiteApplication.java";
 const googleNavigationActivityPath = "app/src/main/java/com/nativelongisland/onthissite/OnThisSiteNavigationActivity.java";
+const navigationNotificationProviderPath = "app/src/main/java/com/nativelongisland/onthissite/NavigationNotificationProvider.java";
+const navigationActionReceiverPath = "app/src/main/java/com/nativelongisland/onthissite/NavigationActionReceiver.java";
 const googleNavigationLayoutPath = "app/src/main/res/layout/activity_on_this_site_navigation.xml";
 const googleNavigationLegalActivityPath = "app/src/main/java/com/nativelongisland/onthissite/GoogleNavigationLegalActivity.java";
 const navigationSiteRepositoryPath = "app/src/main/java/com/nativelongisland/onthissite/NavigationSiteRepository.java";
@@ -78,6 +80,8 @@ const captureFileProvider = fs.readFileSync(captureFileProviderPath, "utf8");
 const nativeCommentPhotoCompat = fs.readFileSync(nativeCommentPhotoCompatPath, "utf8");
 const onThisSiteApplication = fs.readFileSync(onThisSiteApplicationPath, "utf8");
 const googleNavigationActivity = fs.readFileSync(googleNavigationActivityPath, "utf8");
+const navigationNotificationProvider = fs.readFileSync(navigationNotificationProviderPath, "utf8");
+const navigationActionReceiver = fs.readFileSync(navigationActionReceiverPath, "utf8");
 const googleNavigationLayout = fs.readFileSync(googleNavigationLayoutPath, "utf8");
 const googleNavigationLegalActivity = fs.readFileSync(googleNavigationLegalActivityPath, "utf8");
 const navigationSiteRepository = fs.readFileSync(navigationSiteRepositoryPath, "utf8");
@@ -1652,8 +1656,38 @@ if (!releaseWorkflow.includes("GOOGLE_NAVIGATION_API_KEY: ${{ secrets.GOOGLE_NAV
   throw new Error("Release workflow must inject the Google Navigation key from a GitHub secret.");
 }
 if (!onThisSiteApplication.includes("NavigationApi.setApiKey(apiKey)")
-    || !onThisSiteApplication.includes("if (!apiKey.isEmpty())")) {
+    || !onThisSiteApplication.includes("if (!apiKey.isEmpty())")
+    || !onThisSiteApplication.includes("NavigationApi.initForegroundServiceManagerProvider")) {
   throw new Error("Application must configure Google Navigation before creating SDK components and tolerate keyless builds.");
+}
+if (!manifest.includes('android:name=".NavigationActionReceiver"')
+    || !manifest.includes('android:name=".OnThisSiteNavigationActivity"')
+    || !manifest.includes('android:launchMode="singleTop"')) {
+  throw new Error("Active navigation must have a single-top resume target and a private notification action receiver.");
+}
+for (const needle of [
+  "NotificationContentProviderBase",
+  "PendingIntent.getActivity",
+  "Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP",
+  '"Exit navigation"',
+  "PendingIntent.getBroadcast",
+  "setContentIntent(resumePendingIntent)",
+  "setActiveDestination",
+  "updateNotification()"
+]) {
+  if (!navigationNotificationProvider.includes(needle)) {
+    throw new Error(`Navigation notification return/exit support is missing: ${needle}`);
+  }
+}
+if (!navigationActionReceiver.includes("ACTION_STOP")
+    || !navigationActionReceiver.includes("stopActiveNavigationFromNotification")) {
+  throw new Error("Navigation notification exit must stop the active route without reopening the UI.");
+}
+if (!googleNavigationActivity.includes("active.runOnUiThread(active::stopNavigationAndFinish)")
+    || !googleNavigationActivity.includes("readyNavigator.stopGuidance()")
+    || !googleNavigationActivity.includes("clearActiveNavigationDestination()")
+    || !googleNavigationActivity.includes("protected void onNewIntent(Intent intent)")) {
+  throw new Error("Navigation notification actions must resume or stop the existing guidance session safely.");
 }
 if (!appBridge.includes("isInAppGoogleNavigationAvailable")
     || !appBridge.includes("startInAppGoogleNavigation")

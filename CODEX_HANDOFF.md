@@ -1,5 +1,14 @@
 # Android APK — Codex Handoff
 
+## September 1 active-navigation notification return and exit
+
+- Branch `fix/navigation-return-swipe-exit-20260901` configures the Google Navigation SDK foreground notification with a real resume target. Tapping the ongoing notification now brings the existing single-top `OnThisSiteNavigationActivity` route back to the foreground; persisted destination extras provide a safe recreation fallback if Android has removed the activity.
+- The same single ongoing notification now has an `Exit navigation` action in the pulled-down Android notification shade. A private receiver stops guidance, clears destinations, closes the background route activity without opening it, and removes the saved active destination.
+- The notification uses a low-importance navigation channel, displays the current destination, and updates when guidance begins. No extra companion notification, background-location request, or unrelated web/content change was added.
+- Build marker is `20260901-navigation-notification-return-r217`. `verify-app-shell.js`, Google Play readiness, Java compilation, the complete debug APK build, `lintDebug`, `assembleOptimizedQa`, and whitespace checks pass. The connected device is the iPlay 50 mini Pro; the Galaxy S25 is not currently attached. Production-key notification interaction still requires the signed workflow artifact.
+
+Safest next action: open and merge the focused Android PR, wait for the signed Obtainium release, install that exact APK over production without clearing data, start a real route, switch apps, confirm the notification returns to the route, and confirm `Exit navigation` stops guidance from the shade.
+
 ## September 1 one-tap autocomplete follow-up
 
 - Branch `fix/mobile-autocomplete-map-focus-20260901` makes a site autocomplete row perform the requested action directly: one tap closes search, opens the article, focuses the native map at zoom 14.5, and starts the existing gold selected-site halo. Wiki and spelling-correction suggestions retain their previous fill/search behavior.
