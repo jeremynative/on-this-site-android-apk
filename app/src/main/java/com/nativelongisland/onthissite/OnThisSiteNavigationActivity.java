@@ -141,7 +141,7 @@ public class OnThisSiteNavigationActivity extends Activity {
         destinationLatitude = intent == null ? Double.NaN : intent.getDoubleExtra(EXTRA_LATITUDE, Double.NaN);
         destinationLongitude = intent == null ? Double.NaN : intent.getDoubleExtra(EXTRA_LONGITUDE, Double.NaN);
         ((TextView) findViewById(R.id.navigation_destination)).setText(destinationTitle);
-        guidanceDestinationView.setText("Destination: " + destinationTitle);
+        guidanceDestinationView.setText("To: " + destinationTitle);
         styleGuidanceDestination();
         Log.i(LOG_TAG, "Destination prepared: " + destinationTitle + " (" + destinationLatitude + ", " + destinationLongitude + ")");
 

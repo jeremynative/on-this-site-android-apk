@@ -1662,7 +1662,7 @@ for (const needle of [
   "android.view.WindowInsets.CONSUMED",
   "setOnMyLocationChangeListener",
   "topCard.setVisibility(View.GONE)",
-  'guidanceDestinationView.setText("Destination: " + destinationTitle)',
+  'guidanceDestinationView.setText("To: " + destinationTitle)',
   "guidanceControls.setVisibility(View.VISIBLE)",
   "The map is available, but routing needs location access.",
   "item.site.hasHeaderImage",
@@ -1739,7 +1739,9 @@ if (!googleNavigationLayout.includes('android:id="@+id/navigation_guidance_contr
     || !googleNavigationLayout.includes('android:id="@+id/navigation_guidance_destination"')
     || !googleNavigationLayout.includes('android:id="@+id/navigation_audio_toggle"')
     || !googleNavigationLayout.includes('android:contentDescription="Current navigation destination"')
-    || !googleNavigationLayout.includes('android:layout_marginTop="220dp"')) {
+    || !googleNavigationLayout.includes('android:layout_gravity="top|start"')
+    || !googleNavigationLayout.includes('android:layout_marginTop="154dp"')
+    || !googleNavigationLayout.includes('android:maxWidth="240dp"')) {
   throw new Error("Active guidance must identify the selected destination and expose a compact voice-guidance toggle.");
 }
 for (const needle of ["data-nav", "navigationCoordinates"]) {
