@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260901-navigation-notification-dismiss-r218";
+const expectedBuild = "20260901-navigation-pin-header-colors-r219";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1750,7 +1750,9 @@ if (!visibleSiteMarkerMethod
 if (!navigationSiteRepository.includes('"Point".equals(centerItem.optString("geometry_type"))')
     || !navigationSiteRepository.includes("isPublicNavigationCandidate")
     || !navigationSiteRepository.includes("hasHeaderImage(metadata)")
-    || !navigationSiteRepository.includes('listing_image_thumb_url')
+    || !navigationSiteRepository.includes('hasImageValue(item, "listing_image_thumb_url")')
+    || !navigationSiteRepository.includes("item.isNull(key)")
+    || navigationSiteRepository.includes('hasImageValue(item, "content_image_url")')
     || !navigationSiteRepository.includes('type.contains("sensitive")')
     || !navigationSiteRepository.includes('type.contains("burial")')
     || !navigationSiteRepository.includes('"suppressed".equals(geometrySurface)')
@@ -1772,6 +1774,18 @@ const bundledNavigationCandidateCount = (mobileSiteCenters.rows || []).filter(ce
 }).length;
 if (bundledNavigationCandidateCount < 300) {
   throw new Error(`Navigation-map coverage regressed to ${bundledNavigationCandidateCount} ordinary public point records.`);
+}
+const navigationCandidates = (mobileSiteCenters.rows || [])
+  .filter(center => center.geometry_type === "Point")
+  .map(center => navigationMetadataBySlug.get(center.slug))
+  .filter(Boolean);
+const navigationHeaderImageCount = navigationCandidates.filter(item =>
+  [item.listing_image_file, item.listing_image_thumb_url, item.listing_image_url]
+    .some(value => value !== null && String(value || "").trim() && String(value).trim().toLowerCase() !== "null")
+).length;
+const navigationNoHeaderImageCount = navigationCandidates.length - navigationHeaderImageCount;
+if (navigationHeaderImageCount < 25 || navigationNoHeaderImageCount < 100) {
+  throw new Error(`Navigation pin colors need a real mix of header-image (${navigationHeaderImageCount}) and no-header (${navigationNoHeaderImageCount}) sites.`);
 }
 for (const needle of [
   "isInAppGoogleNavigationAvailable",

@@ -88,11 +88,16 @@ final class NavigationSiteRepository {
 
     private static boolean hasHeaderImage(JSONObject item) {
         return item != null && (
-            !item.optString("listing_image_file", "").trim().isEmpty()
-            || !item.optString("listing_image_thumb_url", "").trim().isEmpty()
-            || !item.optString("listing_image_url", "").trim().isEmpty()
-            || !item.optString("content_image_url", "").trim().isEmpty()
+            hasImageValue(item, "listing_image_file")
+            || hasImageValue(item, "listing_image_thumb_url")
+            || hasImageValue(item, "listing_image_url")
         );
+    }
+
+    private static boolean hasImageValue(JSONObject item, String key) {
+        if (item == null || item.isNull(key)) return false;
+        String value = item.optString(key, "").trim();
+        return !value.isEmpty() && !"null".equalsIgnoreCase(value);
     }
 
     private static String readAsset(Context context, String path) throws Exception {
