@@ -1164,8 +1164,8 @@ for (const [label, document] of [
     throw new Error(`${label} must animate reviewed multi-stop biographies unless they explicitly opt out.`);
   }
   if (!document.includes("const geometry = state.landMaskData?.geometry || null;")
-      || !document.includes("!geometry) return false;")) {
-    throw new Error(`${label} must show the safe canoe state until land data is available.`);
+      || !document.includes("!geometry) return true;")) {
+    throw new Error(`${label} must show the safe walking state until land data is available.`);
   }
   if (document.includes("if (path?.animate !== true) return null;")) {
     throw new Error(`${label} still contains the obsolete explicit-travel-only biography animation rule.`);
@@ -1621,7 +1621,7 @@ for (const [needle, message] of [
   ["function resizeMobileProfileProgressMap()", "APK contributor mode must resize its overlay without refitting the geographic camera."],
   ["limit: options.limit || 3", "APK related sites must be capped at three."],
   ["const MOBILE_CANOE_LAND_SAMPLE_RADIUS_DEG = 0.00022", "APK canoe state must sample the moving icon footprint near narrow land."],
-  ["mobileMovingLandSamples(coordinates).some", "APK canoe state must hide when any sampled point touches land."],
+  ["surroundingLandSamples >= Math.ceil(samples.length / 2)", "APK canoe state must require a stable majority-footprint shoreline classification."],
   ["MEDIA_UTILS.optimizedMapIconUrl", "APK map markers must preserve optimized transparent artwork."],
   ["id=\"mobile-map-locate\"", "APK map must include a dedicated current-location control."],
   ["id=\"mobile-map-locate\" type=\"button\" data-allow-geolocation", "APK current-location control must pass the Android geolocation gate."],

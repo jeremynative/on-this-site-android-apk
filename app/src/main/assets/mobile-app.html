@@ -33855,9 +33855,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function mobileMovingPointIsOnLand(coordinates = []) {
-      // Before land data arrives, use the safe canoe state.
+      // Before land data arrives, use the safe walking state. Painting a boat
+      // over unknown terrain is more visibly wrong than waiting for shoreline
+      // classification before showing a canoe.
       const geometry = state.landMaskData?.geometry || null;
-      if (!coordinates.every(Number.isFinite) || !geometry) return false;
+      if (!coordinates.every(Number.isFinite) || !geometry) return true;
       if (state.mobileMovingLandCacheGeometry !== geometry) {
         state.mobileMovingLandCacheGeometry = geometry;
         state.mobileMovingLandStateCache.clear();
@@ -33868,7 +33870,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const cacheKey = `${Number(coordinates[0]).toFixed(3)},${Number(coordinates[1]).toFixed(3)}`;
       if (state.mobileMovingLandStateCache.has(cacheKey)) return state.mobileMovingLandStateCache.get(cacheKey);
       try {
-        const result = mobileMovingLandSamples(coordinates).some(sample => pointInGeometry(sample, geometry));
+        const samples = mobileMovingLandSamples(coordinates);
+        const centerIsLand = Boolean(samples[0] && pointInGeometry(samples[0], geometry));
+        const surroundingLandSamples = samples.slice(1).filter(sample => pointInGeometry(sample, geometry)).length;
+        const result = centerIsLand || surroundingLandSamples >= Math.ceil(samples.length / 2);
         if (state.mobileMovingLandStateCache.size >= MOBILE_MOVING_LAND_CACHE_MAX) {
           state.mobileMovingLandStateCache.delete(state.mobileMovingLandStateCache.keys().next().value);
         }
