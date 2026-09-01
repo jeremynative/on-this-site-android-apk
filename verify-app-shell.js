@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260901-search-result-map-focus-r215";
+const expectedBuild = "20260901-search-autocomplete-focus-r216";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
