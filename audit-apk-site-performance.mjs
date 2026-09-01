@@ -147,6 +147,13 @@ const report = await evaluate(`(async () => {
     document.querySelector("#close-detail")?.click();
     await wait(260);
     performance.clearResourceTimings();
+    const map = document.querySelector("#map");
+    const beforeRect = map?.getBoundingClientRect();
+    const rectSamples = [];
+    const rectTimer = window.setInterval(() => {
+      const rect = map?.getBoundingClientRect();
+      if (rect) rectSamples.push({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
+    }, 16);
     const startedAt = performance.now();
     const opened = window.NLI_NATIVE_MAP_BRIDGE?.openFeature?.("wiki", slug);
     if (!opened) return { title, error: "Native map bridge did not accept the knowledgebase article." };
@@ -157,6 +164,15 @@ const report = await evaluate(`(async () => {
     const shellMs = performance.now() - startedAt;
     const complete = await waitFor(() => !detailBody.querySelector(".detail-loading-status") && detailBody.textContent.trim().length > 180, 15000);
     const completeMs = performance.now() - startedAt;
+    await wait(320);
+    window.clearInterval(rectTimer);
+    const mapRect = map?.getBoundingClientRect();
+    const mapRectMaxDelta = beforeRect ? Math.max(0, ...rectSamples.flatMap(rect => [
+      Math.abs(rect.top - beforeRect.top),
+      Math.abs(rect.left - beforeRect.left),
+      Math.abs(rect.width - beforeRect.width),
+      Math.abs(rect.height - beforeRect.height)
+    ])) : null;
     return {
       title,
       shell,
@@ -164,6 +180,8 @@ const report = await evaluate(`(async () => {
       complete: Boolean(complete),
       completeMs: Math.round(completeMs),
       textLength: detailBody.textContent.trim().length,
+      mapVisible: Boolean(mapRect && mapRect.width > 100 && mapRect.height > 100),
+      mapRectMaxDelta: mapRectMaxDelta == null ? null : Math.round(mapRectMaxDelta * 10) / 10,
       resources: performance.getEntriesByType("resource")
         .filter(entry => entry.startTime >= startedAt - 5)
         .map(entry => ({
@@ -183,23 +201,47 @@ const report = await evaluate(`(async () => {
     rows.push(await openSite(site));
   }
   rows.push(await openSite({ title: "Ma's House", slug: "mas-house" }));
-  const wikiRows = [await openWiki({
-    title: "Elizabeth Thunder Bird Haile",
-    slug: "elizabeth-thunder-bird-haile-shinnecock"
-  })];
+  const wikiRows = [];
+  for (const wiki of [
+    { title: "Sunksqua Weany", slug: "sunksqua-weany-pametsechs" },
+    { title: "Elizabeth Thunder Bird Haile", slug: "elizabeth-thunder-bird-haile-shinnecock" },
+    { title: "Sachem Tackapousha", slug: "sachem-tackapousha" },
+    { title: "Wyandanch", slug: "wyandanch" }
+  ]) {
+    wikiRows.push(await openWiki(wiki));
+  }
   return { href: location.href, rows, wikiRows };
 })()`);
 
 socket.close();
 if (report?.error) throw new Error(report.error);
-console.log(JSON.stringify(report, null, 2));
+console.log(JSON.stringify({
+  href: report.href,
+  sites: (report.rows || []).map(row => ({
+    title: row.title,
+    shellMs: row.shellMs,
+    completeMs: row.completeMs,
+    mapRectMaxDelta: row.mapRectMaxDelta
+  })),
+  biographies: (report.wikiRows || []).map(row => ({
+    title: row.title,
+    shellMs: row.shellMs,
+    completeMs: row.completeMs,
+    mapRectMaxDelta: row.mapRectMaxDelta,
+    detailResources: (row.resources || []).map(resource => resource.name).filter(name => /wiki-details|wiki_articles/.test(name))
+  }))
+}, null, 2));
 for (const row of report.rows || []) {
   if (row.error || !row.shell || !row.complete || !row.mapVisible || Number(row.mapRectMaxDelta || 0) > 1) {
     throw new Error(`Site-open audit failed: ${JSON.stringify(row)}`);
   }
 }
 for (const row of report.wikiRows || []) {
-  if (row.error || !row.shell || !row.complete) {
+  const resources = row.resources || [];
+  const usedBundledDetail = resources.some(resource => /\/assets\/data\/wiki-details\/wiki-/.test(resource.name));
+  const usedDirectusDetail = resources.some(resource => /\/items\/wiki_articles/.test(resource.name));
+  if (row.error || !row.shell || !row.complete || !row.mapVisible || Number(row.mapRectMaxDelta || 0) > 1
+      || row.completeMs > 1200 || !usedBundledDetail || usedDirectusDetail) {
     throw new Error(`Knowledgebase-open audit failed: ${JSON.stringify(row)}`);
   }
 }

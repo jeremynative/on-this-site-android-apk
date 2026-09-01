@@ -244,6 +244,17 @@
 
   async function startPlayCheckout(form, options = {}) {
     const intent = intentFromForm(form, options.pageUrl || window.location.href);
+    if (window.NLI_MODERATION_UTILS?.checkPublicText) {
+      if (intent.publicThankYou) {
+        const publicName = intent.publicDisplayName || intent.name;
+        const nameCheck = window.NLI_MODERATION_UTILS.checkPublicText(publicName, "Public display name");
+        if (!nameCheck.ok) throw new Error(nameCheck.message);
+      }
+      if (intent.publicCaption) {
+        const captionCheck = window.NLI_MODERATION_UTILS.checkPublicText(intent.publicCaption, "Public message");
+        if (!captionCheck.ok) throw new Error(captionCheck.message);
+      }
+    }
     const productId = playProductId(intent.frequency, intent.amount);
     const productType = playProductType(intent.frequency);
     if (!productId || !playProductDetails.has(productId)) {
@@ -504,24 +515,24 @@
           <input id="${esc(options.platform || "web")}-support-custom-amount" data-support-custom-amount type="number" min="1" step="1" inputmode="decimal" placeholder="Optional">
         </div>
         <div class="field">
-          <label for="${esc(options.platform || "web")}-support-name">Name</label>
+          <label for="${esc(options.platform || "web")}-support-name">Name (private unless you choose to show it)</label>
           <input id="${esc(options.platform || "web")}-support-name" data-support-name autocomplete="name" required>
         </div>
         <div class="field">
-          <label for="${esc(options.platform || "web")}-support-email">Email</label>
+          <label for="${esc(options.platform || "web")}-support-email">Email (private)</label>
           <input id="${esc(options.platform || "web")}-support-email" data-support-email autocomplete="email" inputmode="email" type="email" required>
         </div>
         <div class="field">
-          <label for="${esc(options.platform || "web")}-support-public-name">Public display name</label>
-          <input id="${esc(options.platform || "web")}-support-public-name" data-support-public-name placeholder="Optional">
+          <label for="${esc(options.platform || "web")}-support-public-name">Public name (optional)</label>
+          <input id="${esc(options.platform || "web")}-support-public-name" data-support-public-name placeholder="Use a different public name">
         </div>
         <label class="support-check">
           <input type="checkbox" data-support-public-thanks>
-          <span>Thank me publicly on the project site.</span>
+          <span>Show my name in Community Activity. Leave unchecked to appear as Anonymous supporter.</span>
         </label>
         <div class="field">
-          <label for="${esc(options.platform || "web")}-support-public-caption">Public donation caption</label>
-          <textarea id="${esc(options.platform || "web")}-support-public-caption" data-support-public-caption rows="2" maxlength="180" placeholder="Optional short note for the activity feed"></textarea>
+          <label for="${esc(options.platform || "web")}-support-public-caption">Public message (optional)</label>
+          <textarea id="${esc(options.platform || "web")}-support-public-caption" data-support-public-caption rows="2" maxlength="180" placeholder="Optional message to appear with your donation"></textarea>
         </div>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-connection">Artwork or project connection</label>
@@ -532,8 +543,8 @@
           <input id="${esc(options.platform || "web")}-support-artwork-title" data-support-artwork-title placeholder="Optional artwork or edition title">
         </div>
         <div class="field">
-          <label for="${esc(options.platform || "web")}-support-note">Optional note</label>
-          <textarea id="${esc(options.platform || "web")}-support-note" data-support-note rows="4"></textarea>
+          <label for="${esc(options.platform || "web")}-support-note">Private note to the project (optional)</label>
+          <textarea id="${esc(options.platform || "web")}-support-note" data-support-note rows="4" placeholder="Not shown publicly"></textarea>
         </div>
         <div class="actions">
           <button class="button action" type="button" data-support-submit ${hasStripe || hasPlay ? "" : "disabled"}>${hasPlay ? "Continue with Google Play" : "Continue to secure payment"}</button>
@@ -619,12 +630,16 @@
       return await startPlayCheckout(form, options);
     }
     const intent = intentFromForm(form, options.pageUrl || window.location.href);
-    if (intent.publicThankYou && window.NLI_MODERATION_UTILS?.checkPublicText) {
-      const publicName = intent.publicDisplayName || intent.name;
-      const nameCheck = window.NLI_MODERATION_UTILS.checkPublicText(publicName, "Public display name");
-      if (!nameCheck.ok) throw new Error(nameCheck.message);
-      const captionCheck = window.NLI_MODERATION_UTILS.checkPublicText(intent.publicCaption, "Public donation caption");
-      if (!captionCheck.ok) throw new Error(captionCheck.message);
+    if (window.NLI_MODERATION_UTILS?.checkPublicText) {
+      if (intent.publicThankYou) {
+        const publicName = intent.publicDisplayName || intent.name;
+        const nameCheck = window.NLI_MODERATION_UTILS.checkPublicText(publicName, "Public display name");
+        if (!nameCheck.ok) throw new Error(nameCheck.message);
+      }
+      if (intent.publicCaption) {
+        const captionCheck = window.NLI_MODERATION_UTILS.checkPublicText(intent.publicCaption, "Public message");
+        if (!captionCheck.ok) throw new Error(captionCheck.message);
+      }
     }
     const supportConfig = config();
     if (supportConfig.checkoutEndpoint) {

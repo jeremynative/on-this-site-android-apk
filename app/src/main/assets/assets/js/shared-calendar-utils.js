@@ -1,4 +1,19 @@
 (function () {
+  const DATE_LABEL_MONTHS = {
+    january: "01",
+    february: "02",
+    march: "03",
+    april: "04",
+    may: "05",
+    june: "06",
+    july: "07",
+    august: "08",
+    september: "09",
+    october: "10",
+    november: "11",
+    december: "12"
+  };
+
   function eventTypeLabel(value) {
     return String(value || "event")
       .replace(/_/g, " ")
@@ -99,6 +114,21 @@
     return calendarBadgeMarkup(date);
   }
 
+  function dateLabelMonthDay(dateLabel) {
+    const text = String(dateLabel || "").trim();
+    const match = text.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:st|nd|rd|th)?\b/i);
+    if (!match) return "";
+    const month = DATE_LABEL_MONTHS[match[1].toLowerCase()];
+    const dayNumber = Number(match[2]);
+    const day = Number.isFinite(dayNumber) ? String(dayNumber).padStart(2, "0") : "";
+    return month && day ? `${month}-${day}` : "";
+  }
+
+  function timelineEventMatchesToday(event, today = new Date().toISOString().slice(0, 10)) {
+    const todayMonthDay = String(today || "").slice(5, 10);
+    return Boolean(todayMonthDay && dateLabelMonthDay(event?.date_label) === todayMonthDay);
+  }
+
   function roundedRectPath(context, x, y, width, height, radius) {
     const safeRadius = Math.max(0, Math.min(radius, width / 2, height / 2));
     context.beginPath();
@@ -172,6 +202,7 @@
     calendarBadgeMarkup,
     calendarDayNumber,
     calendarMonthDay,
+    dateLabelMonthDay,
     eventTypeLabel,
     eventDateRange,
     exhibitDateLabel: eventDateRange,
@@ -181,6 +212,7 @@
     isExhibitCurrentOrUpcoming: isCalendarEventCurrentOrUpcoming,
     normalizeCalendarEvents,
     onThisDayCalendarMarkup,
-    onThisDayNumber
+    onThisDayNumber,
+    timelineEventMatchesToday
   };
 }());

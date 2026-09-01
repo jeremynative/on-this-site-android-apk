@@ -18,8 +18,8 @@
   <link rel="preconnect" href="https://directus.nativelongisland.com">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link href="assets/vendor/maplibre-gl/maplibre-gl.css?v=ab1e70d59ec4" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/mobile-app.css?v=c1fecfb3d60c">
-  <link rel="stylesheet" href="assets/css/shared-research-question.css?v=0580df563387">
+  <link rel="stylesheet" href="assets/css/mobile-app.css?v=cc3d27822f2b">
+  <link rel="stylesheet" href="assets/css/shared-research-question.css?v=58d7f9115b8a">
 </head>
 <body>
   <div class="loading-screen" id="loading-screen" role="status" aria-live="polite">
@@ -305,10 +305,18 @@
         <div class="field">
           <label for="register-password">Password</label>
           <input id="register-password" type="password" autocomplete="new-password">
+          <p class="field-help">Use at least 10 characters.</p>
         </div>
         <div class="field">
           <label for="register-invite-code">Invite code (optional)</label>
           <input id="register-invite-code" autocomplete="off" inputmode="text">
+        </div>
+        <div class="toggle-row account-agreement">
+          <span>
+            <label for="register-agreement">Required agreement</label>
+            <p>I have read and agree to the <a href="https://nativelongisland.com/privacy-policy.html">Privacy policy</a>, including how contributor content and account data are handled.</p>
+          </span>
+          <input id="register-agreement" type="checkbox" required aria-required="true">
         </div>
         <button class="action" id="register-submit" type="button">Create account</button>
         <p class="form-status" id="register-status" hidden></p>
@@ -326,6 +334,7 @@
         </div>
         <button class="action" id="password-reset-submit" type="button">Email reset link</button>
         <p class="form-status" id="password-reset-status" hidden></p>
+        <a class="action secondary" id="password-reset-return-app" href="onthissite://account/verified" hidden>Return to the iPhone app</a>
       </section>
       <button class="action secondary" id="logout-submit" type="button" hidden>Logout</button>
       <button class="action secondary account-continue" data-close-sheet type="button">Continue without login</button>
@@ -596,10 +605,13 @@
 
   <div class="banner" id="banner"></div>
 
-  <script src="assets/data/mobile-media-map.js?v=9727ad9d1903" defer></script>
+  <script>window.NLI_SITE_DETAIL_MANIFEST_URL = "assets/data/native-long-island-site-detail-manifest.e72dcec06b46.js";</script>
+<script>window.NLI_WIKI_DETAIL_MANIFEST_URL = "assets/data/native-long-island-wiki-detail-manifest.1844b0f71b63.js";</script>
+<script src="assets/data/mobile-media-map.js?v=df457a8718f1" defer></script>
 <script src="assets/data/place-name-area-overlays.js?v=adb2735000cd" defer></script>
 <script id="maplibre-gl-script" src="assets/vendor/maplibre-gl/maplibre-gl.js?v=45a9b07a9189" async></script>
   <script src="assets/js/shared-directus-config.js?v=fef05b53e355" defer></script>
+  <script src="assets/js/water-labels.js?v=897e649388c9" defer></script>
   <script src="assets/js/shared-utils.js?v=17d9a13be172" defer></script>
   <script src="assets/js/shared-site-utils.js?v=b7776568ee89" defer></script>
   <script src="assets/js/shared-site-title-utils.js?v=b764a9581872" defer></script>
@@ -608,25 +620,25 @@
   <script src="assets/js/shared-profile-utils.js?v=1c90855a34b2" defer></script>
   <script src="assets/js/shared-map-story-utils.js?v=69dc8f1bce92" defer></script>
   <script src="assets/js/shared-learning-card-utils.js?v=61b351e0cc97" defer></script>
-  <script src="assets/js/shared-activity-utils.js?v=5d5af4744c61" defer></script>
-  <script src="assets/js/shared-comment-utils.js?v=6a493b4f6d99" defer></script>
+  <script src="assets/js/shared-activity-utils.js?v=d5edd0482c84" defer></script>
+  <script src="assets/js/shared-comment-utils.js?v=36fd425be871" defer></script>
   <script src="assets/js/shared-quote-comment-utils.js?v=a023f2a30d3c" defer></script>
-  <script src="assets/js/shared-timeline-utils.js?v=f0e9bec6fd38" defer></script>
+  <script src="assets/js/shared-timeline-utils.js?v=e005e33efb3c" defer></script>
   <script src="assets/js/shared-moderation-utils.js?v=1ad838b0ba73" defer></script>
-  <script src="assets/js/shared-plant-utils.js?v=370e31436ee9" defer></script>
-  <script src="assets/js/shared-calendar-utils.js?v=db0bfbe8513f" defer></script>
+  <script src="assets/js/shared-plant-utils.js?v=e4850ec4165d" defer></script>
+  <script src="assets/js/shared-calendar-utils.js?v=4643d26b4828" defer></script>
   <script src="assets/js/shared-geometry-utils.js?v=acf0224db6df" defer></script>
   <script src="assets/js/shared-route-utils.js?v=016707562f5e" defer></script>
-  <script src="assets/js/shared-html-utils.js?v=9e23801f11e4" defer></script>
-  <script src="assets/js/shared-directus-client.js?v=64fb0a773197" defer></script>
-  <script src="assets/js/shared-media-utils.js?v=a1fd852f75c1" defer></script>
-  <script src="assets/js/shared-map-utils.js?v=89299443ce13" defer></script>
+  <script src="assets/js/shared-html-utils.js?v=6ebde5a746e1" defer></script>
+  <script src="assets/js/shared-directus-client.js?v=1012864517da" defer></script>
+  <script src="assets/js/shared-media-utils.js?v=589868155ec4" defer></script>
+  <script src="assets/js/shared-map-utils.js?v=dd706b0d6326" defer></script>
   <script src="assets/js/shared-feedback-utils.js?v=880c8eadb9cd" defer></script>
   <script src="assets/js/support-public-config.js?v=53b5261a2538" defer></script>
-  <script src="assets/js/shared-support-utils.js?v=11e4efbd9506" defer></script>
-  <script src="assets/js/shared-research-question-utils.js?v=4c7d4e78bf56" defer></script>
+  <script src="assets/js/shared-support-utils.js?v=87c59f4d11ab" defer></script>
+  <script src="assets/js/shared-research-question-utils.js?v=bc939b15024b" defer></script>
   <script src="assets/js/language-quiz-words.js?v=9395720dbb1d" defer></script>
-  <script src="assets/js/userviews-tracker.js?v=52e031bc8cd5" defer></script>
-  <script src="assets/js/mobile-app.js?v=b10d1704d18e" defer></script>
+  <script src="assets/js/userviews-tracker.js?v=c3326553d1b0" defer></script>
+  <script src="assets/js/mobile-app.js?v=8bb6665e4114" defer></script>
 </body>
 </html>

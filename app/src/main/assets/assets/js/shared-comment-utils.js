@@ -388,6 +388,14 @@
       dot.classList.toggle("is-active", active);
       dot.setAttribute("aria-pressed", String(active));
     });
+    const credit = String(activeSlide.dataset.siteHeroCredit || "").trim();
+    const creditNode = root.nextElementSibling?.matches?.("[data-site-hero-carousel-credit]")
+      ? root.nextElementSibling
+      : null;
+    if (creditNode) {
+      creditNode.textContent = credit;
+      creditNode.hidden = !credit;
+    }
     return true;
   }
 

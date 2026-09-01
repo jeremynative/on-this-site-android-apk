@@ -84,6 +84,10 @@
       }
     });
     const NEW_CONTENT_ALERT_INTERVAL_MS = 5 * 60 * 60 * 1000;
+    // Returning to the app should make profile data current without turning
+    // every focus/visibility event into ten fresh Directus collection reads.
+    const PROFILE_ACTIVITY_REFRESH_TTL_MS = 60 * 1000;
+    const PROFILE_ACTIVITY_RETRY_TTL_MS = 20 * 1000;
     const PUBLIC_ARCHIVE_BASE = SHARED_CONFIG.publicArchiveBase || "https://nativelongisland.com/";
     const EXHIBIT_MARKER_ICON = "assets/map-icons/exhibit-framed-landscape-marker.png";
     const BIOGRAPHY_PERSON_ICON_URL = "assets/map-icons/person-biography-marker.png";
@@ -92,21 +96,26 @@
     const WHALING_FEATURE_SLUG = "whaling";
     const MOVING_DOG_ICON_URL = "assets/map-icons/dog-moving-icon.png";
     const MOVING_DOG_WIKI_SLUG = "dog-ceremonialism";
-    const MOBILE_MOVING_MARKER_INTERVAL_MS = 180;
-    // The native renderer receives only this compact moving-feature collection.
+    // Three updates per second keep slow route travel visually continuous while
+    // avoiding hundreds of JNI/GeoJSON updates per minute on older Android devices.
+    const MOBILE_MOVING_MARKER_INTERVAL_MS = 360;
+    // The native renderer receives only the compact moving-feature collection.
     // Use a zoom-aware cadence: overview motion is deliberately slow and does
     // not need to wake the renderer as often, while close views need enough
     // samples to keep the artwork gliding instead of stepping between points.
     const MOBILE_NATIVE_MOVING_MARKER_OVERVIEW_INTERVAL_MS = 56;
     const MOBILE_NATIVE_MOVING_MARKER_CLOSE_INTERVAL_MS = 24;
-    // Never let a delayed timer "catch up" with one conspicuous jump.
+    // Never let a delayed timer "catch up" with one conspicuous jump. Gesture
+    // and visibility resumes reset each route clock; this cap also covers a
+    // short main-thread stall between otherwise normal updates.
     const MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS = 80;
+    const MOBILE_MOVING_MARKER_MAP_RECOVERY_MAX_MS = 5000;
     const MOBILE_MOVING_LAND_CACHE_MAX = 4000;
     const mobileMovingRouteModelCache = new WeakMap();
     const MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS = 720000;
     const MOBILE_BIOGRAPHY_MARKER_STAGGER_MS = 85;
     const MOBILE_BIOGRAPHY_MARKER_FADE_MS = 1600;
-    const MOBILE_BIOGRAPHY_MARKER_RESET_MS = 650;
+    const MOBILE_BIOGRAPHY_MARKER_RESET_MS = 2400;
     const MOBILE_BIOGRAPHY_LOCAL_WANDER_RADIUS_DEG = 0.00115;
     const MOBILE_BIOGRAPHY_LOCAL_WANDER_POINT_COUNT = 4;
     const MOBILE_BIOGRAPHY_CONTINUOUS_SLUGS = new Set([
@@ -127,11 +136,11 @@
     ]);
     const MOBILE_AMETHYST_SHIP_ONE_WAY_MS = 480000;
     const MOBILE_AMETHYST_SHIP_ROUTE = Object.freeze([
-      [-72.293, 40.998],
-      [-72.17, 40.985],
-      [-72.03, 40.975],
-      [-71.88, 40.985],
-      [-71.70, 41.01]
+      [-72.26, 41.05],
+      [-72.24, 41.06],
+      [-72.22, 41.07],
+      [-72.20, 41.08],
+      [-72.16, 41.12]
     ]);
     const MOBILE_DOG_ONE_WAY_MS = 1020000;
     const MOBILE_DOG_START_OFFSET_MS = MOBILE_DOG_ONE_WAY_MS * 0.35;
@@ -220,9 +229,9 @@
     const MOBILE_BIOGRAPHY_ICON_PREFERENCE_VERSION = 2;
     const MOBILE_BIOGRAPHY_PATH_PREFERENCE_VERSION = 1;
     const KNOWLEDGEBASE_CATEGORIES = [
-      { label: "Biography", slugs: ["mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "quashawam", "elizabeth-thunder-bird-haile-shinnecock", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "sachem-warawakmy-of-the-setauket", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "john-a-strong", "nathan-jeffrey-cuffee", "samson-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "penhawitz-sachem-of-the-canarsie", "stephen-talkhouse-pharoah", "nasseconset-sachem-of-the-nissequogue", "keeossechok-sachem-of-the-secatogue", "sunksquaws-and-indigenous-womens-leadership"] },
+      { label: "Biography", slugs: ["mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "quashawam", "elizabeth-thunder-bird-haile-shinnecock", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "mary-emma-cuffee-bunn", "wickham-cuffee", "princess-sun-tama-ann-harding-murdock", "chief-robert-pharaoh", "donald-treadwell-lone-otter", "anthony-beaman-chief-running-bull", "david-fowler-montaukett", "george-lewis-fowler", "sasarataicko-sassakataka", "charles-sumner-bunn", "alice-bunn-martinez", "charles-martinez", "eliza-fowler-beaman", "elliott-alphonso-kellis", "sachem-warawakmy-of-the-setauket", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "john-a-strong", "nathan-jeffrey-cuffee", "samson-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "penhawitz-sachem-of-the-canarsie", "stephen-talkhouse-pharoah", "nasseconset-sachem-of-the-nissequogue", "keeossechok-sachem-of-the-secatogue", "sunksquaws-and-indigenous-womens-leadership", "jeremy-dennis"] },
       { label: "Tribal Nations and Communities", entries: [["wiki", "native-long-island-overview"], ["wiki", "continued-indigenous-presence-today"], ["wiki", "the-tribes-of-long-island"], ["wiki", "western-long-island-native-communities"], ["wiki", "central-long-island-native-communities"], ["wiki", "eastern-long-island-native-communities"], ["wiki", "myth-of-the-thirteen-tribes"], ["site", "montaukett-ancestral-land"], ["site", "shinnecock-indian-reservation"], ["site", "unkechaug-indian-reservation"], ["site", "corchaug-tribe"], ["site", "manhansack-aqua-quash-awamock"], ["site", "setauket-ancestral-land"], ["site", "nissaquogue"], ["site", "matinecock"], ["site", "secatogues"], ["site", "massapequas"], ["site", "merricks"], ["site", "rockaways"], ["site", "canarsie"]] },
-      { label: "History", slugs: ["native-long-island-overview", "slavery", "indian-missions-on-long-island", "colonial-descriptions-of-indians", "indian-forts", "13-tribes-of-long-island-david-martine", "early-contact-period-1600-ad-1700-ad", "post-contact", "creation-of-long-island", "land-deeds-and-dispossession", "myth-of-extinction-and-survivance", "myth-of-the-thirteen-tribes", "historic-preservation", "history-and-place-names", "merrick-people-in-early-land-records"] },
+      { label: "History", slugs: ["native-long-island-overview", "slavery", "indian-missions-on-long-island", "education-at-shinnecock", "shinnecock-veterans-and-wartime-service", "colonial-descriptions-of-indians", "indian-forts", "13-tribes-of-long-island-david-martine", "early-contact-period-1600-ad-1700-ad", "post-contact", "creation-of-long-island", "land-deeds-and-dispossession", "myth-of-extinction-and-survivance", "myth-of-the-thirteen-tribes", "historic-preservation", "history-and-place-names", "merrick-people-in-early-land-records"] },
       { label: "Sovereignty and Governance", slugs: ["tribal-trustees", "sovereignty-recognition-and-detribalization", "land-deeds-and-dispossession", "continued-indigenous-presence-today"] },
       { label: "Culture, Ceremony, and Lifeways", slugs: ["sweat-lodge", "nunnowa", "wampum", "burial", "powwow", "spirituality-ceremony-cosmology", "language", "algonquian-language-and-place-names", "dog-ceremonialism", "spring", "summer", "fall", "winter", "food", "fishing", "whaling", "indigenous-whaling-and-maritime-labor", "ecology-and-flexible-sedentism"] },
       { label: "Time Periods and Archaeology", slugs: ["paleo-indian-period", "archaic-period", "orient-transitional-period", "woodland-period", "late-woodland", "early-contact-period-1600-ad-1700-ad", "post-contact", "shell-midden", "killed-pottery", "arrow-heads", "phase-archaeology-investigation", "phase-ii-archaeology-investigation", "phase-iii-archaeological-investigation", "burial-protection-and-sacred-landscapes"] },
@@ -230,6 +239,17 @@
       { label: "Natural Resources", slugs: ["native-plants", "beach-plum", "spring", "summer", "fall", "winter", "food", "fishing", "whaling", "indigenous-whaling-and-maritime-labor", "shell-midden", "ecology-and-flexible-sedentism"] },
       { label: "Maps and Reference", slugs: ["13-tribes-of-long-island-david-martine", "history-and-place-names", "algonquian-language-and-place-names", "western-long-island-native-communities", "central-long-island-native-communities", "eastern-long-island-native-communities"] }
     ];
+    const KNOWLEDGEBASE_CATEGORY_DESCRIPTIONS = {
+      "Biography": "Meet the people whose leadership, work, memory, and scholarship shape Native Long Island history.",
+      "Tribal Nations and Communities": "Begin with living Nations and community histories, then explore ancestral lands across Long Island.",
+      "History": "Follow major periods, records, encounters, and continuing histories from deep time to the present.",
+      "Sovereignty and Governance": "Learn about leadership, land rights, recognition, treaties, and the continuing exercise of sovereignty.",
+      "Culture, Ceremony, and Lifeways": "Explore language, foodways, seasonal knowledge, ceremony, maritime work, and community traditions.",
+      "Time Periods and Archaeology": "Understand archaeological periods, material histories, research practices, and sensitive-site protection.",
+      "Preservation and Site Protection": "Read about preservation, burial protection, documentation, and responsibilities toward cultural places.",
+      "Natural Resources": "Connect plants, waters, seasons, food, fishing, and whaling to the living Long Island landscape.",
+      "Maps and Reference": "Use regional overviews, place-name studies, and reference maps to orient further research."
+    };
     const BIOGRAPHY_WIKI_SLUGS = new Set((KNOWLEDGEBASE_CATEGORIES.find(category => category.label === "Biography")?.slugs || []));
     const BIOGRAPHY_PLACE_PATHS = {
       "jeremy-dennis": {
@@ -808,6 +828,55 @@
         layers: [{ id: "mobile-raster-basemap", type: "raster", source: "mobile-raster-basemap", paint: { "raster-saturation": value === "satellite" ? 0.08 : -0.24, "raster-brightness-max": value === "satellite" ? 0.9 : 1 } }]
       };
     }
+
+    function mobileWaterLabelsVisible() {
+      return window.NLI_WATER_LABEL_UTILS?.visibleBasemap?.(state.basemap) === true;
+    }
+
+    function mobileWaterLabelFeatures() {
+      return window.NLI_WATER_LABEL_UTILS?.featureCollection?.() || { type: "FeatureCollection", features: [] };
+    }
+
+    function addMobileWaterLabelLayers() {
+      if (!state.map || !mobileWaterLabelsVisible() || state.map.getSource("mobile-water-name-labels")) return;
+      state.map.addSource("mobile-water-name-labels", { type: "geojson", data: mobileWaterLabelFeatures() });
+      const layerDefinitions = [
+        { id: "mobile-water-name-major", tier: 0, minzoom: 12.2, sizes: [12.2, 11, 15, 14, 18, 17] },
+        { id: "mobile-water-name-bay", tier: 1, minzoom: 12.2, sizes: [12.2, 10.5, 15, 13, 18, 15] },
+        { id: "mobile-water-name-inland", tier: 2, minzoom: 12.2, sizes: [12.2, 10.5, 15, 12.5, 18, 14] },
+        { id: "mobile-water-name-canal", tier: 3, waterClass: "Canal", minzoom: 13.2, sizes: [13.2, 9.75, 16, 11.5, 18, 13] },
+        { id: "mobile-water-name-stream", tier: 3, waterClass: "Stream", minzoom: 13.7, sizes: [13.7, 9.5, 17, 11, 18, 12.5] }
+      ];
+      for (const definition of layerDefinitions) {
+        state.map.addLayer({
+          id: definition.id,
+          type: "symbol",
+          source: "mobile-water-name-labels",
+          filter: definition.waterClass
+            ? ["in", ["get", "water_class"], ["literal", definition.waterClass === "Stream" ? ["Stream", "Spring"] : [definition.waterClass]]]
+            : ["==", ["get", "water_tier"], definition.tier],
+          minzoom: definition.minzoom,
+          layout: {
+            "text-field": ["get", "title"],
+            "text-size": ["interpolate", ["linear"], ["zoom"], ...definition.sizes],
+            "text-font": ["Open Sans Semibold", "Arial Unicode MS Regular"],
+            "text-anchor": "center",
+            "text-justify": "center",
+            "text-max-width": 13,
+            "text-allow-overlap": false,
+            "text-ignore-placement": false,
+            "text-optional": true,
+            "symbol-sort-key": ["get", "water_tier"]
+          },
+          paint: {
+            "text-color": "#2f6471",
+            "text-halo-color": "rgba(255,255,255,0.96)",
+            "text-halo-width": 1.35,
+            "text-halo-blur": 0.2
+          }
+        });
+      }
+    }
     const MAPBOX_PUBLIC_TOKEN = "__NLI_MAPBOX_TOKEN__";
     const SITE_INDEX_FIELDS = SHARED_FIELDS.mobileSiteIndex;
     const SITE_INDEX_RUNTIME_FIELDS = String(SITE_INDEX_FIELDS || "").split(",").filter(field => !["geojson", "display_geojson"].includes(field)).join(",");
@@ -826,7 +895,7 @@
     const BASIC_TIMELINE_FIELDS = SHARED_FIELDS.basicTimeline;
     const TIMELINE_INDEX_FIELDS = String(BASIC_TIMELINE_FIELDS || "").split(",").filter(field => field !== "description").join(",");
     const TIMELINE_INDEX_URL = "assets/data/mobile-timeline-index.json";
-    const TIMELINE_INDEX_VERSION = "20260714-public-content-audit-v1";
+    const TIMELINE_INDEX_VERSION = "20260823-source-replacement-v2";
     const EXHIBIT_FIELDS = SHARED_FIELDS.exhibit;
     const PROFILE_FIELDS = SHARED_FIELDS.profile;
     const PUBLIC_COMMENT_FIELDS = SHARED_FIELDS.publicComment;
@@ -877,20 +946,6 @@
         reason: "Site of attention and urgency"
       }
     ];
-    const DATE_LABEL_MONTHS = {
-      january: "01",
-      february: "02",
-      march: "03",
-      april: "04",
-      may: "05",
-      june: "06",
-      july: "07",
-      august: "08",
-      september: "09",
-      october: "10",
-      november: "11",
-      december: "12"
-    };
     const NEARBY_LIST_DESKTOP_LIMIT = 18;
     const NEARBY_LIST_ANDROID_INITIAL_LIMIT = 8;
     const NEARBY_LIST_ANDROID_DEFAULT_LIMIT = 12;
@@ -1034,6 +1089,9 @@
       eventById: new Map(),
       eventBySlug: new Map(),
       contributorProfiles: [],
+      bannedContributorProfileIds: new Set(),
+      bannedContributorProfiles: [],
+      bannedContributionPlaceholders: {},
       publicComments: [],
       siteHeroCarouselTimer: null,
       siteHeroCarouselKey: "",
@@ -1091,9 +1149,13 @@
       learningPaths: [],
       learningPathBySlug: new Map(),
       learningPathsLoaded: false,
+      knowledgebaseSortMode: "quantity",
       siteDetailCache: new Map(),
+      siteDetailManifestPromise: null,
       wikiDetailCache: new Map(),
+      wikiDetailManifestPromise: null,
       timelineDetailCache: new Map(),
+      timelineDetailRowsBySource: new Map(),
       relatedSitesCache: new Map(),
       relatedSiteIndexCache: null,
       siteGeometryLoaded: false,
@@ -1102,12 +1164,19 @@
       deferredDataLoading: false,
       deferredCommunityDataLoaded: false,
       mobileActivityRenderedSignature: "",
-      mobileActivitySeenSessionKeys: new Set(),
+      mobileActivitySeenObserver: null,
+      mobileActivitySeenTimers: new Map(),
+      mobileActivitySeenSessionKeysByProfile: new Map(),
+      mobileActivityIdentitySyncTimer: null,
       mobileActivityRenderLimit: MOBILE_ACTIVITY_INITIAL_LIMIT,
       mobileActivityDiscussionKeys: new Set(),
+      mobileActivityExpandedPinnedKeys: new Set(),
       mobileActivityDrafts: new Map(),
       profileActivitySynced: false,
       profileActivitySyncPromise: null,
+      profileActivityLastAttemptAt: 0,
+      profileActivityLastSyncedAt: 0,
+      profileStorageSyncTimer: null,
       publicProfileActivityLoaded: new Set(),
       publicProfileActivityPromises: new Map(),
       mobileStartupRendering: false,
@@ -1122,6 +1191,7 @@
       timelineScrubberDragging: false,
       timelineFeedSignature: "",
       timelineFeedObserver: null,
+      timelineProgressiveRender: null,
       nearbyFeedObserver: null,
       expandedLearningCardKeys: new Set(),
       mobilePanelState: "normal",
@@ -1147,10 +1217,10 @@
       lastSearchDataVersion: -1,
       lastAutocompleteQuery: null,
       lastAutocompleteDataVersion: -1,
-      addressSearchFallbackQuery: "",
-      androidImeSearchDraft: "",
       searchValueWatchTimer: null,
       nativeAndroidSearchWatchInstalled: false,
+      addressSearchFallbackQuery: "",
+      androidImeSearchDraft: "",
       layers: [],
       markers: new Map(),
       mapSourceCache: null,
@@ -1180,6 +1250,7 @@
       nativeSuggestionPin: null,
       activeSiteLabelMarker: null,
       mobileBiographyPathMarkers: [],
+      mobileBiographyPathStyleLoadHandler: null,
       mobileMovingBiographyMarkers: new Map(),
       mobileBiographyMotionControllers: new Map(),
       nativeMovingBiographyItems: [],
@@ -1191,6 +1262,12 @@
       mobileMovingMarkerLastAt: 0,
       mobileMovingMarkerPausedAt: 0,
       mobileMovingMarkerPausedDurationMs: 0,
+      mobileMovingMarkerPauseReasons: new Set(),
+      mobileMovingMarkerMapRecoveryTimer: null,
+      mobileMovingMarkerMapPauseStartedAt: 0,
+      mobileMovingMarkerMapLifecycleBound: false,
+      mobileMovingMarkerMapResumeTimer: null,
+      mobileMovingMarkerBasemapResumeTimer: null,
       mobileMovingMarkerInteractionUntil: 0,
       mobileMovingLandCacheGeometry: null,
       mobileMovingLandStateCache: new Map(),
@@ -1219,8 +1296,13 @@
       nativeMapBaseRevision: 0,
       nativeMapPointSignature: "",
       nativeMapPointRevision: 0,
+      nativeMapStaticPayloadCache: null,
       nativeMapBridgeInstalled: false,
       nativeMapCameraEcho: null,
+      mobileFollowedBiographySlug: "",
+      mobileBiographyFollowUserStoppedSlug: "",
+      mobileBiographyFollowCameraMoving: false,
+      mobileBiographyFollowLastCenteredAt: 0,
       proximityAlertInFlight: false,
       selectedWikiSlug: "",
       androidLifecycleRestored: false,
@@ -1378,6 +1460,7 @@
     const registerEmailEl = document.getElementById("register-email");
     const registerPasswordEl = document.getElementById("register-password");
     const registerInviteCodeEl = document.getElementById("register-invite-code");
+    const registerAgreementEl = document.getElementById("register-agreement");
     const registerSubmitBtn = document.getElementById("register-submit");
     const registerStatusEl = document.getElementById("register-status");
     const passwordResetToggleBtn = document.getElementById("password-reset-toggle");
@@ -1388,6 +1471,7 @@
     const passwordResetNewPasswordFieldEl = document.getElementById("password-reset-new-password-field");
     const passwordResetSubmitBtn = document.getElementById("password-reset-submit");
     const passwordResetStatusEl = document.getElementById("password-reset-status");
+    const passwordResetReturnAppEl = document.getElementById("password-reset-return-app");
     const logoutSubmitBtn = document.getElementById("logout-submit");
     const demoLoginBtn = document.getElementById("demo-login");
     const profileCardEl = document.getElementById("profile-card");
@@ -1506,15 +1590,25 @@
         if (nextKey !== previousKey) {
           state.profileActivitySynced = false;
           state.profileActivityCache = null;
+          state.profileActivityLastAttemptAt = 0;
+          state.profileActivityLastSyncedAt = 0;
         }
       } else {
         SHARED_UTILS.removeStorageKeys(["nli-contributor-profile", "nli-contributor-session", "nli-mobile-profile"]);
         if (previousKey) {
           state.profileActivitySynced = false;
           state.profileActivityCache = null;
+          state.profileActivityLastAttemptAt = 0;
+          state.profileActivityLastSyncedAt = 0;
         }
       }
       renderProfile();
+      scheduleMobileActivityUnreadIdentitySync();
+    }
+
+    function scheduleMobileActivityUnreadIdentitySync() {
+      window.clearTimeout(state.mobileActivityIdentitySyncTimer);
+      state.mobileActivityIdentitySyncTimer = window.setTimeout(() => syncMobileActivityUnreadIdentity(), 0);
     }
 
     function expireProfileSession(message = "Your login expired. Please log back in.") {
@@ -1934,7 +2028,7 @@
         acceptNode(node) {
           const parent = node.parentElement;
           if (!parent || !node.nodeValue?.trim()) return NodeFilter.FILTER_REJECT;
-          if (parent.closest("a, button, input, textarea, select, script, style, .kid-friendly-section, .language-vocab-card, .language-quiz-marker")) return NodeFilter.FILTER_REJECT;
+          if (parent.closest("a, button, input, textarea, select, script, style, .kid-friendly-section, .language-vocab-card, .language-quiz-marker, .site-hero-image-credit")) return NodeFilter.FILTER_REJECT;
           if (parent.closest("[hidden]") || parent.offsetParent === null) return NodeFilter.FILTER_REJECT;
           return languageWordForText(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
         }
@@ -2130,6 +2224,10 @@
       return HTML_UTILS.cleanHtml(value, { mode: "mobile", convertFootnotes: false, rewriteMediaUrl, internalHref, cleanImageUrl });
     }
 
+    function removeRepeatedContent(value, options = {}) {
+      return HTML_UTILS.removeRepeatedContent?.(value, options) || String(value || "");
+    }
+
     function firstContentImage(html) {
       const template = document.createElement("template");
       template.innerHTML = html || "";
@@ -2138,76 +2236,67 @@
       return src ? rewriteMediaUrl(src) : "";
     }
 
+    function removeFirstContentImageFromHtml(html, heroImage) {
+      if (!html || !heroImage) return html || "";
+      const template = document.createElement("template");
+      template.innerHTML = String(html || "");
+      const firstImage = template.content.querySelector("img");
+      if (!firstImage) return html;
+      const container = firstImage.closest("figure, p");
+      firstImage.remove();
+      if (container && !container.textContent.trim() && !container.querySelector("img, video, iframe, audio")) container.remove();
+      return template.innerHTML.trim();
+    }
+
     function formatSectionContent(title, content, options = {}) {
-      const html = cleanHtml(content);
+      const html = removeRepeatedContent(cleanHtml(content));
       const shouldRenderTimeline = HTML_UTILS.shouldRenderSectionTimeline(title);
       const rendered = shouldRenderTimeline ? (sectionTimelineHtml(html) || html) : html;
       return autoLinkHtml(rendered, options);
     }
 
     function buildInternalLinkTerms() {
-      const terms = new Map();
-      const add = (title, href, priority) => {
-        const label = String(title || "").replace(/^Private:\s*/i, "").replace(/\s+/g, " ").trim();
-        if (label.length < 4 || /^[0-9\s.,-]+$/.test(label)) return;
-        const key = label.toLowerCase();
-        if (!terms.has(key) || priority < terms.get(key).priority) terms.set(key, { label, href, priority });
-      };
-      state.sites.forEach(site => add(site.title, `#listing/${site.slug}`, 1));
-      state.wikiArticles.forEach(article => add(article.title, `#wiki/${article.slug}`, 2));
-      return [...terms.values()]
-        .filter(item => !["home", "about", "blog", "map", "maps", "page"].includes(item.label.toLowerCase()))
-        .sort((a, b) => b.label.length - a.label.length || a.priority - b.priority);
+      return HTML_UTILS.buildInternalLinkTerms?.({
+        sites: state.sites,
+        wikiArticles: state.wikiArticles,
+        biographySlugs: BIOGRAPHY_WIKI_SLUGS
+      }) || [];
     }
 
     function autoLinkHtml(html, options = {}) {
-      const template = document.createElement("template");
-      template.innerHTML = html || "";
-      const used = options.used || new Set();
-      const excludeHref = options.excludeHref || "";
-      const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_TEXT, {
-        acceptNode(node) {
-          const parent = node.parentElement;
-          if (!parent || !node.nodeValue.trim() || parent.closest("a, button, h1, h2, h3, h4, .timeline-year")) return NodeFilter.FILTER_REJECT;
-          return NodeFilter.FILTER_ACCEPT;
-        }
-      });
-      const textNodes = [];
-      while (walker.nextNode()) textNodes.push(walker.currentNode);
-      for (const node of textNodes) linkFirstAvailableTerm(node, used, excludeHref);
-      return template.innerHTML;
+      return HTML_UTILS.autoLinkHtml?.(html, {
+        ...options,
+        terms: state.linkTerms
+      }) || String(html || "");
     }
 
-    function linkFirstAvailableTerm(node, used, excludeHref) {
-      const value = node.nodeValue;
-      for (const term of state.linkTerms) {
-        if (used.has(term.href) || term.href === excludeHref) continue;
-        const index = indexOfInternalLinkTerm(value, term.label);
-        if (index < 0) continue;
-        const fragment = document.createDocumentFragment();
-        if (index) fragment.appendChild(document.createTextNode(value.slice(0, index)));
-        const link = document.createElement("a");
-        link.href = term.href;
-        link.textContent = value.slice(index, index + term.label.length);
-        fragment.appendChild(link);
-        if (index + term.label.length < value.length) fragment.appendChild(document.createTextNode(value.slice(index + term.label.length)));
-        node.replaceWith(fragment);
-        used.add(term.href);
-        return;
-      }
+    function refreshOpenDetailInternalLinks() {
+      const type = state.selectedSite?.slug ? "site" : state.selectedWikiSlug ? "wiki" : "";
+      const slug = type === "site" ? state.selectedSite.slug : state.selectedWikiSlug;
+      if (!detailEl?.classList.contains("open") || !type || !slug) return 0;
+      const excludeHref = type === "site" ? `#listing/${slug}` : `#wiki/${slug}`;
+      return HTML_UTILS.linkInternalReferences?.(detailBodyEl, {
+        terms: state.linkTerms,
+        excludeHref,
+        skipSelector: ".discussion-section, .sources-section, .related-sites-section, .actions"
+      }) || 0;
     }
 
-    function indexOfInternalLinkTerm(value, term) {
-      const text = String(value || "").toLowerCase();
-      const needle = String(term || "").toLowerCase();
-      let index = text.indexOf(needle);
-      while (index >= 0) {
-        const before = index ? text[index - 1] : "";
-        const after = text[index + needle.length] || "";
-        if (!/[a-z0-9]/i.test(before) && !/[a-z0-9]/i.test(after)) return index;
-        index = text.indexOf(needle, index + 1);
-      }
-      return -1;
+    function refreshMobileInternalLinkCatalog() {
+      state.linkTerms = buildInternalLinkTerms();
+      refreshOpenDetailInternalLinks();
+    }
+
+    function applyMobileWikiIndexRows(rows = []) {
+      if (!Array.isArray(rows) || !rows.length) return false;
+      state.wikiArticles = rows.map(sanitizePublicWikiArticle);
+      state.wikiById = new Map(state.wikiArticles.map(article => [Number(article.id), article]));
+      state.wikiBySlug = new Map(state.wikiArticles.map(article => [article.slug, article]));
+      refreshMobileInternalLinkCatalog();
+      rebuildMobileSearchIndex();
+      clearRelatedSiteCaches();
+      updateMobileHeaderInstruction();
+      return true;
     }
 
     function sectionTimelineHtml(html) {
@@ -2240,35 +2329,19 @@
     }
 
     function firstCompleteSentences(text, maxSentences = 2, maxLength = 260) {
-      const cleaned = publicCleanText(text || "")
-        .replace(/\s+/g, " ")
-        .replace(/\b[A-Z]{1,2}\d{2,}\b/g, "")
-        .trim();
-      if (!cleaned) return "";
-      const sentences = cleaned.match(/[^.!?]+[.!?]+(?=\s|$)/g) || [];
-      const chosen = sentences.slice(0, maxSentences).join(" ").trim();
-      if (chosen && chosen.length <= maxLength) return chosen;
-      if (chosen) return chosen.slice(0, maxLength).replace(/\s+\S*$/, "").trim() + ".";
-      return cleaned.slice(0, maxLength).replace(/\s+\S*$/, "").trim() + ".";
-    }
-
-    function isInternalKnowledgebaseProcessNote(value = "") {
-      return /source-supported biography|on this site knowledgebase|inline footnotes|public-safe context/i.test(stripHtml(value || ""));
-    }
-
-    function publicWikiSummary(article = {}) {
-      const summary = article.summary || "";
-      if (!isInternalKnowledgebaseProcessNote(summary)) return summary;
-      const fallback = firstCompleteSentences(article.content || article.why_this_matters || "", 2, 300);
-      return fallback && !isInternalKnowledgebaseProcessNote(fallback) ? fallback : "";
+      return HTML_UTILS.firstCompleteSentences(text, maxSentences, maxLength, publicCleanText);
     }
 
     function sanitizePublicWikiArticle(article = {}) {
-      const summary = publicWikiSummary(article);
-      const content = SITE_UTILS.stripInternalPublicSiteSections(article.content);
+      const summary = HTML_UTILS.publicWikiSummary(article, { stripText: stripHtml, cleanText: publicCleanText });
+      const hasContent = Object.prototype.hasOwnProperty.call(article, "content");
+      const content = hasContent ? SITE_UTILS.stripInternalPublicSiteSections(article.content) : undefined;
       const whyThisMatters = SITE_UTILS.stripInternalPublicSiteSections(article.why_this_matters);
       if (summary === article.summary && content === article.content && whyThisMatters === article.why_this_matters) return article;
-      return { ...article, summary, content, why_this_matters: whyThisMatters };
+      const sanitized = { ...article, summary, why_this_matters: whyThisMatters };
+      if (hasContent) sanitized.content = content;
+      else delete sanitized.content;
+      return sanitized;
     }
 
     function sourceAwareSectionHtml(title, content, options = {}) {
@@ -2335,11 +2408,7 @@
     }
 
     function siteHasHeaderImage(site) {
-      return Boolean(
-        directusAssetUrl(site?.listing_image_file) ||
-        MEDIA_UTILS.cleanImageUrl(site?.listing_image_url) ||
-        MEDIA_UTILS.cleanImageUrl(site?.listing_image_thumb_url)
-      );
+      return MEDIA_UTILS.siteHasHeaderImage(site, { directusAssetUrl });
     }
 
     function imageErrorAction(fallback) {
@@ -2540,29 +2609,7 @@
     }
 
     function polygonUnreadBadgeOffset(title, fontSize, maxWidthEm = 8, textOffsetEm = 0) {
-      const words = String(title || "").trim().split(/\s+/).filter(Boolean);
-      const characterWidthEm = 0.56;
-      const lines = [];
-      let lineWidth = 0;
-      words.forEach(word => {
-        const wordWidth = Math.max(0.8, word.length * characterWidthEm);
-        const nextWidth = lineWidth ? lineWidth + characterWidthEm + wordWidth : wordWidth;
-        if (lineWidth && nextWidth > maxWidthEm) {
-          lines.push(lineWidth);
-          lineWidth = wordWidth;
-        } else {
-          lineWidth = nextWidth;
-        }
-      });
-      if (lineWidth || !lines.length) lines.push(lineWidth || 1);
-      const safeFontSize = Math.max(8, Number(fontSize) || 10);
-      const labelWidth = Math.min(maxWidthEm, Math.max(...lines)) * safeFontSize;
-      const labelHeight = lines.length * safeFontSize * 1.16;
-      const badgeRadius = 6;
-      return [
-        Math.round(labelWidth / 2 + badgeRadius),
-        Math.round(textOffsetEm * safeFontSize - labelHeight / 2 - badgeRadius)
-      ];
+      return MAP_UTILS.polygonUnreadBadgeOffset(title, fontSize, maxWidthEm, textOffsetEm);
     }
 
     function activeMapSites() {
@@ -2572,6 +2619,7 @@
     function invalidateMapSourceCache(options = {}) {
       state.mapSourceCache = null;
       state.mapSourceCacheKey = "";
+      state.nativeMapStaticPayloadCache = null;
       state.mapSourceRevision += 1;
       if (options.nativeBase === false) {
         state.nativeMapPointRevision += 1;
@@ -2618,19 +2666,8 @@
       };
     }
 
-    function dateLabelMonthDay(dateLabel) {
-      const text = String(dateLabel || "").trim();
-      const match = text.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:st|nd|rd|th)?\b/i);
-      if (!match) return "";
-      const month = DATE_LABEL_MONTHS[match[1].toLowerCase()];
-      const dayNumber = Number(match[2]);
-      const day = Number.isFinite(dayNumber) ? String(dayNumber).padStart(2, "0") : "";
-      return month && day ? `${month}-${day}` : "";
-    }
-
     function timelineEventMatchesToday(event, today = localDateKey()) {
-      const todayMonthDay = String(today || "").slice(5, 10);
-      return Boolean(todayMonthDay && dateLabelMonthDay(event?.date_label) === todayMonthDay);
+      return CALENDAR_UTILS.timelineEventMatchesToday(event, today);
     }
 
     function activeSiteAttentionEntries(today = localDateKey()) {
@@ -2813,7 +2850,7 @@
     const MOBILE_SITE_CONTENT_SECTION_FIELDS = [
       { title: "introduction_title", content: "introduction_content", defaultTitle: "Introduction" },
       { title: "oral_history_title", content: "oral_history_content", defaultTitle: "Oral History" },
-      { title: "history_title", content: "history_content", defaultTitle: "History" },
+      { title: "history_title", content: "history_content", defaultTitle: "Historic Moments" },
       { title: "legends_and_lore_title", content: "legends_and_lore_content", defaultTitle: "Legends and Lore" },
       { title: "translation_title", content: "translation_content", defaultTitle: "Translation" },
       { title: "preservation_title", content: "preservation_content", defaultTitle: "Preservation" },
@@ -2830,7 +2867,9 @@
       return SHARED_UTILS.contentSectionsFromFields(publicSite, MOBILE_SITE_CONTENT_SECTION_FIELDS, {
         hasContent: value => SHARED_UTILS.richTextHasDisplayContent(value, { cleanText: stripHtml }),
         excludeTitle: title => SHARED_UTILS.isWhyThisMattersTitle(title)
-      });
+      }).map(entry => entry?.[2]?.content === "history_content" && /^history$/i.test(String(entry[0] || "").trim())
+        ? ["Historic Moments", entry[1], entry[2]]
+        : entry);
     }
 
     const SITE_FRONTEND_EDITOR_FIELDS = [
@@ -2839,7 +2878,7 @@
       ["listing_image_file", "Header image", "image"],
       ["why_this_matters", "Why This Matters", "textarea"],
       ["introduction_content", "Site text", "textarea"],
-      ["history_content", "History", "textarea"],
+      ["history_content", "Historic Moments overview", "textarea"],
       ["preservation_content", "Preservation", "textarea"],
       ["oral_history_content", "Oral History", "textarea"]
     ];
@@ -2910,7 +2949,7 @@
       return firstCompleteSentences(text, 2, 320) || fallback;
     }
 
-    function whyThisMattersHtml(item) {
+    function whyThisMattersHtml(item, options = {}) {
       const paragraphs = SHARED_UTILS.uniqueTextBlocks(
         (() => {
           const realTexts = [item?.why_this_matters || "", ...legacyWhyThisMattersTexts(item)].filter(Boolean);
@@ -2918,7 +2957,7 @@
         })(),
         { cleanText: publicCleanText, normalizeText }
       );
-      return paragraphs.length ? `<section class="section" data-content-section-field="why_this_matters"><h3>Why This Matters</h3>${paragraphs.map(text => `<p>${escapeHtml(text)}</p>`).join("")}</section>` : "";
+      return paragraphs.length ? `<section class="section" data-content-section-field="why_this_matters"><h3>Why This Matters</h3>${paragraphs.map(text => `<p>${autoLinkHtml(escapeHtml(text), options)}</p>`).join("")}</section>` : "";
     }
 
     function normalizeSourceRelation(relation) {
@@ -2974,9 +3013,28 @@
       if (!events.length) return "";
       const showLocations = options.showLocations !== false;
       const title = options.title || "Historic Moments";
+      const requestedOverviewContent = String(options.overviewContent || "").trim();
+      const deDuplicatedOverviewContent = TIMELINE_UTILS.stripDuplicateOverviewMedia(requestedOverviewContent, events);
+      const overviewContent = TIMELINE_UTILS.overviewIsRedundant(deDuplicatedOverviewContent, events, { cleanText: stripHtml })
+        ? ""
+        : deDuplicatedOverviewContent;
+      const overviewSource = importedFootnoteSources(overviewContent).join("; ");
+      const overviewHtml = overviewContent
+        ? removeFootnoteReferenceMarkers(formatSectionContent(title, overviewContent, {
+          used: options.linked,
+          excludeHref: options.excludeHref
+        }))
+        : "";
       return `
-        <section class="section">
+        <section class="section section-history-moments"${options.overviewField ? ` data-content-section-field="${escapeHtml(options.overviewField)}"` : ""}>
           <h3>${escapeHtml(title)}</h3>
+          ${overviewHtml ? `
+            <div class="historic-moments-overview section-content">${overviewHtml}</div>
+            ${overviewSource ? `
+              <button class="timeline-source-info historic-moments-overview-source" type="button" data-timeline-source-info data-source-reference="${escapeHtml(overviewSource)}" aria-label="Show source for historic overview" aria-expanded="false" title="${escapeHtml(overviewSource)}">i</button>
+              <div class="timeline-source-popover" role="note"><div>${HTML_UTILS.sourceReferenceTextHtml(overviewSource, { escapeHtml })}</div><div class="timeline-source-copy-hint">Source reference.</div></div>
+            ` : ""}
+          ` : ""}
           <div class="timeline">
             ${events.map(event => {
               const sourceNote = timelineSourceText(event);
@@ -2986,8 +3044,14 @@
                   <div class="timeline-year">${escapeHtml(timelineLabel(event))}</div>
                   ${location ? `<p class="timeline-location"><strong>Location:</strong> ${escapeHtml(location)}</p>` : ""}
                   <div class="timeline-body">
-                    <p><strong>${escapeHtml(timelineTitle(event))}</strong></p>
-                    ${event.description ? cleanHtml(timelineDisplayDescription(event)) : ""}
+                    <p><strong>${autoLinkHtml(escapeHtml(timelineTitle(event)), {
+                      used: options.linked,
+                      excludeHref: options.excludeHref
+                    })}</strong></p>
+                    ${event.description ? autoLinkHtml(cleanHtml(timelineDisplayDescription(event)), {
+                      used: options.linked,
+                      excludeHref: options.excludeHref
+                    }) : ""}
                   </div>
                   ${isAdminContributor() ? `<div class="actions"><button class="action secondary" type="button" data-open-frontend-editor="timeline" data-editor-slug="${escapeHtml(event.id)}">Edit moment</button></div>` : ""}
                   ${sourceNote ? `
@@ -3190,6 +3254,103 @@
       return directusClient.fetchJson(path, options);
     }
 
+    function contributionIsModerated(record, profileField = "member_profile") {
+      const profileId = Number(relationId(record?.[profileField]));
+      if (!profileId) return false;
+      if (state.bannedContributorProfileIds.has(profileId)) return true;
+      const profile = state.contributorProfiles.find(item => Number(relationId(item?.id)) === profileId);
+      return Boolean(profile && PROFILE_UTILS.isProfileBanned(profile));
+    }
+
+    function mergeBannedContributorProfiles(rows = state.bannedContributorProfiles) {
+      (rows || []).forEach(profile => {
+        const index = state.contributorProfiles.findIndex(item => Number(item.id) === Number(profile.id));
+        const merged = { ...(index >= 0 ? state.contributorProfiles[index] : {}), ...profile, account_banned: true, account_enabled: false };
+        if (index >= 0) state.contributorProfiles[index] = merged;
+        else state.contributorProfiles.push(merged);
+      });
+    }
+
+    function mergeBannedContributionPlaceholders(groups = state.bannedContributionPlaceholders || {}) {
+      state.bannedContributionPlaceholders = groups || {};
+      const clearPlaceholders = rows => (rows || []).filter(row => !row?._bannedPlaceholder);
+      state.publicComments = clearPlaceholders(state.publicComments);
+      state.mapStories = clearPlaceholders(state.mapStories);
+      state.plantObservations = clearPlaceholders(state.plantObservations);
+      state.siteSuggestions = clearPlaceholders(state.siteSuggestions);
+      if (isCurrentAdminReviewer()) return;
+      const prepare = (rows, profileField = "member_profile") => clearPlaceholders(rows)
+        .filter(row => !contributionIsModerated(row, profileField));
+      const append = (current, rows) => [
+        ...current,
+        ...(rows || []).map(row => ({ ...row, _bannedPlaceholder: true }))
+      ];
+      state.publicComments = append(prepare(state.publicComments), groups.comments);
+      state.mapStories = append(prepare(state.mapStories), groups.stories);
+      state.plantObservations = append(prepare(state.plantObservations), groups.plants);
+      state.siteSuggestions = append(prepare(state.siteSuggestions, "author_profile"), groups.suggestions);
+    }
+
+    async function refreshBannedContributorRegistry() {
+      const headers = {};
+      if (isCurrentAdminReviewer() && state.profile?.token) headers.Authorization = `Bearer ${state.profile.token}`;
+      const response = await fetch(new URL("account-moderation.php", PUBLIC_ARCHIVE_BASE).href, {
+        method: "GET",
+        headers,
+        cache: "no-store"
+      });
+      if (!response.ok) throw new Error("Moderation status is unavailable.");
+      const payload = await response.json();
+      state.bannedContributorProfileIds = new Set((payload.banned_profile_ids || []).map(Number).filter(Number.isFinite));
+      state.bannedContributorProfiles = payload.banned_profiles || [];
+      mergeBannedContributorProfiles();
+      mergeBannedContributionPlaceholders(payload.banned_contributions || {});
+      return true;
+    }
+
+    async function setContributorBanState(profile, banned) {
+      if (!isCurrentAdminReviewer() || !state.profile?.token) {
+        showBanner("Only the administrator can manage contributor accounts.");
+        return false;
+      }
+      const profileId = Number(relationId(profile?.id));
+      const name = profile?.display_name || profile?.username || "this contributor";
+      const role = String(profile?.role_label || "").toLowerCase();
+      if (!profileId || ["admin", "administrator", "founder"].includes(role)) {
+        showBanner("Administrator and founder accounts cannot be banned here.");
+        return false;
+      }
+      const confirmed = window.confirm(banned
+        ? `Ban ${name}? Their login will be suspended and public contributions will show as [deleted]. Nothing will be permanently deleted.`
+        : `Unban ${name}? Their login and unchanged contributions will be restored.`);
+      if (!confirmed) return false;
+      const reason = banned ? (window.prompt("Optional private reason for this ban:", "") || "") : "";
+      const response = await fetch(new URL("account-moderation.php", PUBLIC_ARCHIVE_BASE).href, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${state.profile.token}`
+        },
+        body: JSON.stringify({ action: banned ? "ban" : "unban", profile_id: profileId, reason })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "The account could not be updated.");
+      profile.account_banned = banned;
+      profile.account_enabled = !banned;
+      if (banned) state.bannedContributorProfileIds.add(profileId);
+      else state.bannedContributorProfileIds.delete(profileId);
+      state.profileActivityCache = null;
+      renderProfiles();
+      renderMobileActivitySheet();
+      updateMobileActivityUnreadBadge();
+      syncMapStoryMarkers();
+      if (state.selectedSite?.slug) {
+        await openSite(state.selectedSite.slug, { focus: false, skipCommentRefresh: true, skipRoute: true });
+      }
+      showBanner(banned ? `${name} is banned. Contributions are preserved and shown as [deleted].` : `${name} is unbanned. Their contributions are restored.`);
+      return true;
+    }
+
     async function contributorProfileForToken(token, email = "") {
       if (token) {
         try {
@@ -3342,13 +3503,44 @@
       return window.NLI_MODERATION_UTILS.checkPublicText(value, label);
     }
 
+    async function ensureMobileSiteDetailManifest() {
+      if (window.NLI_SITE_DETAIL_MANIFEST) return window.NLI_SITE_DETAIL_MANIFEST;
+      if (!window.NLI_SITE_DETAIL_MANIFEST_URL) return null;
+      if (state.siteDetailManifestPromise) return state.siteDetailManifestPromise;
+      state.siteDetailManifestPromise = new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = window.NLI_SITE_DETAIL_MANIFEST_URL;
+        script.async = true;
+        script.onload = () => resolve(window.NLI_SITE_DETAIL_MANIFEST || null);
+        script.onerror = () => reject(new Error("Static site detail manifest could not be loaded."));
+        document.head.append(script);
+      }).finally(() => {
+        state.siteDetailManifestPromise = null;
+      });
+      return state.siteDetailManifestPromise;
+    }
+
+    async function fetchStaticMobileSiteDetail(site) {
+      const manifest = await ensureMobileSiteDetailManifest();
+      const detailUrl = manifest?.bySlug?.[site?.slug] || manifest?.byId?.[String(site?.id)];
+      if (!detailUrl) return null;
+      const response = await fetch(detailUrl, {
+        cache: "force-cache",
+        credentials: "same-origin"
+      });
+      if (!response.ok) throw new Error(`Static mobile site detail request failed (${response.status}).`);
+      return response.json();
+    }
+
     async function fetchSiteDetail(site) {
       if (!site?.slug) return site;
       if ("introduction_content" in site || "history_content" in site) return SITE_UTILS.sanitizePublicSiteContent(site);
       if (state.siteDetailCache.has(site.slug)) return state.siteDetailCache.get(site.slug);
-      const promise = fetchJson(`/items/sites?limit=1&filter[publication_status][_eq]=published&filter[slug][_eq]=${encodeURIComponent(site.slug)}&fields=${SITE_DETAIL_FIELDS}`, { anonymous: true })
-        .then(response => {
-          const remote = response.data?.[0] || null;
+      const promise = fetchStaticMobileSiteDetail(site)
+        .catch(() => null)
+        .then(staticDetail => staticDetail || fetchJson(`/items/sites?limit=1&filter[publication_status][_eq]=published&filter[slug][_eq]=${encodeURIComponent(site.slug)}&fields=${SITE_DETAIL_FIELDS}`, { anonymous: true })
+          .then(response => response.data?.[0] || null))
+        .then(remote => {
           const full = SITE_UTILS.sanitizePublicSiteContent(remote ? { ...site, ...remote } : site);
           if (site.territory_assignment_version && site.display_geojson) {
             full.display_geojson = site.display_geojson;
@@ -3422,7 +3614,7 @@
         throw new Error("Mobile site geometry snapshot was empty.");
       } catch (error) {
         console.warn("Static mobile geometry unavailable; falling back to Directus geometry.", error);
-        const fallback = await fetchJson("/items/sites?limit=-1&filter[publication_status][_eq]=published&sort=title&fields=id,slug,geojson", {
+        const fallback = await fetchJson("/items/sites?limit=-1&filter[publication_status][_eq]=published&sort=title&fields=id,slug,geojson,display_geojson", {
           cacheKey: "mobile-site-geometry-fallback",
           ttl: 60000,
           fresh: false
@@ -3500,15 +3692,46 @@
       return state.siteGeometryPromise;
     }
 
+    async function ensureMobileWikiDetailManifest() {
+      if (window.NLI_WIKI_DETAIL_MANIFEST) return window.NLI_WIKI_DETAIL_MANIFEST;
+      if (!window.NLI_WIKI_DETAIL_MANIFEST_URL) return null;
+      if (state.wikiDetailManifestPromise) return state.wikiDetailManifestPromise;
+      state.wikiDetailManifestPromise = new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = window.NLI_WIKI_DETAIL_MANIFEST_URL;
+        script.async = true;
+        script.onload = () => resolve(window.NLI_WIKI_DETAIL_MANIFEST || null);
+        script.onerror = () => reject(new Error("Static wiki detail manifest could not be loaded."));
+        document.head.append(script);
+      }).finally(() => {
+        state.wikiDetailManifestPromise = null;
+      });
+      return state.wikiDetailManifestPromise;
+    }
+
+    async function fetchStaticMobileWikiDetail(article) {
+      const manifest = await ensureMobileWikiDetailManifest();
+      const detailUrl = manifest?.bySlug?.[article?.slug] || manifest?.byId?.[String(article?.id)];
+      if (!detailUrl) return null;
+      const response = await fetch(detailUrl, {
+        cache: "force-cache",
+        credentials: "same-origin"
+      });
+      if (!response.ok) throw new Error(`Static mobile wiki detail request failed (${response.status}).`);
+      return response.json();
+    }
+
     async function fetchWikiDetail(articleOrSlug) {
       const slug = typeof articleOrSlug === "string" ? articleOrSlug : articleOrSlug?.slug;
       if (!slug) return null;
       const existing = typeof articleOrSlug === "string" ? state.wikiBySlug.get(slug) : articleOrSlug;
       if (existing && "content" in existing) return existing;
       if (state.wikiDetailCache.has(slug)) return state.wikiDetailCache.get(slug);
-      const promise = fetchJson(`/items/wiki_articles?limit=1&filter[slug][_eq]=${encodeURIComponent(slug)}&fields=${WIKI_DETAIL_FIELDS}`, { cacheKey: `wiki-detail-${slug}`, ttl: 60000, fresh: false, anonymous: true })
-        .then(response => {
-          const full = response.data?.[0];
+      const promise = fetchStaticMobileWikiDetail(existing || { slug })
+        .catch(() => null)
+        .then(staticDetail => staticDetail || fetchJson(`/items/wiki_articles?limit=1&filter[slug][_eq]=${encodeURIComponent(slug)}&fields=${WIKI_DETAIL_FIELDS}`, { cacheKey: `wiki-detail-${slug}`, ttl: 60000, fresh: false, anonymous: true })
+          .then(response => response.data?.[0] || null))
+        .then(full => {
           if (!full) return existing || null;
           const merged = sanitizePublicWikiArticle({ ...(existing || {}), ...full });
           state.wikiBySlug.set(slug, merged);
@@ -3539,22 +3762,62 @@
       return rows;
     }
 
+    function timelineDetailSourceKey(sourceType, sourceId, sourceSlug) {
+      const type = String(sourceType || "").trim();
+      const slug = String(sourceSlug || "").trim();
+      const numericId = Number(sourceId);
+      return `${type}:${slug || (Number.isFinite(numericId) ? numericId : "")}`;
+    }
+
+    function timelineEventMatchesDetailSource(event, sourceType, sourceId, sourceSlug) {
+      if (TIMELINE_UTILS.eventMatchesSource(event, sourceType, sourceId, sourceSlug)) return true;
+      const numericId = Number(sourceId);
+      if (!Number.isFinite(numericId)) return false;
+      if (sourceType === "site") return Number(relationId(event?.site)) === numericId;
+      if (sourceType === "wiki") return Number(relationId(event?.wiki_article)) === numericId;
+      if (sourceType === "calendar_event") return Number(relationId(event?.calendar_event)) === numericId;
+      return false;
+    }
+
+    function replaceTimelineEventsForSource(rows = [], sourceType, sourceId, sourceSlug, options = {}) {
+      const currentRows = Array.isArray(rows) ? rows : [];
+      state.timelineEvents = state.timelineEvents.filter(event =>
+        !timelineEventMatchesDetailSource(event, sourceType, sourceId, sourceSlug)
+      );
+      state.timelineById = new Map(state.timelineEvents.map(event => [String(event.id), event]));
+      if (options.remember !== false) {
+        state.timelineDetailRowsBySource.set(timelineDetailSourceKey(sourceType, sourceId, sourceSlug), {
+          rows: currentRows,
+          sourceType,
+          sourceId,
+          sourceSlug
+        });
+      }
+      if (currentRows.length) mergeTimelineEvents(currentRows);
+      else rebuildSortedTimelineEvents();
+      return currentRows;
+    }
+
     async function ensureTimelineDetailsForSource(sourceType, sourceId, sourceSlug) {
       const type = String(sourceType || "").trim();
       const slug = String(sourceSlug || "").trim();
       const numericId = Number(sourceId);
       if (!type || (!slug && !Number.isFinite(numericId))) return [];
-      const key = `${type}:${slug || numericId}`;
+      const key = timelineDetailSourceKey(type, numericId, slug);
       if (state.timelineDetailCache.has(key)) return state.timelineDetailCache.get(key);
-      const sourceFilter = slug
-        ? `&filter[source_slug][_eq]=${encodeURIComponent(slug)}`
-        : `&filter[source_id][_eq]=${encodeURIComponent(String(numericId))}`;
-      const promise = fetchJson(`/items/timeline_events?limit=-1&filter[source_type][_eq]=${encodeURIComponent(type)}${sourceFilter}&fields=${TIMELINE_FIELDS}`, {
+      const relationField = { site: "site", wiki: "wiki_article", calendar_event: "calendar_event" }[type] || "";
+      const sourceIdentityFilter = slug
+        ? `filter[_or][0][_and][1][source_slug][_eq]=${encodeURIComponent(slug)}`
+        : `filter[_or][0][_and][1][source_id][_eq]=${encodeURIComponent(String(numericId))}`;
+      const sourceFilter = relationField && Number.isFinite(numericId)
+        ? `&filter[_or][0][_and][0][source_type][_eq]=${encodeURIComponent(type)}&${sourceIdentityFilter}&filter[_or][1][${relationField}][_eq]=${encodeURIComponent(String(numericId))}`
+        : `&filter[source_type][_eq]=${encodeURIComponent(type)}&${slug ? `filter[source_slug][_eq]=${encodeURIComponent(slug)}` : `filter[source_id][_eq]=${encodeURIComponent(String(numericId))}`}`;
+      const promise = fetchJson(`/items/timeline_events?limit=-1${sourceFilter}&fields=${TIMELINE_FIELDS}`, {
         cacheKey: `timeline-detail-${key}`,
         ttl: 60000,
         fresh: false
       })
-        .then(response => mergeTimelineEvents(response.data || []))
+        .then(response => replaceTimelineEventsForSource(response.data || [], type, numericId, slug))
         .catch(() => []);
       state.timelineDetailCache.set(key, promise);
       return promise;
@@ -3863,7 +4126,7 @@
 
     async function fetchMobileTimelineIndexRows() {
       try {
-        const response = await fetch(`${TIMELINE_INDEX_URL}?v=${TIMELINE_INDEX_VERSION}`, { cache: "force-cache" });
+        const response = await fetch(`${TIMELINE_INDEX_URL}?v=${TIMELINE_INDEX_VERSION}`, { cache: "no-cache" });
         if (!response.ok) throw new Error(`Mobile timeline index unavailable: ${response.status}`);
         const json = await response.json();
         if (Array.isArray(json?.rows) && json.rows.length) return json.rows;
@@ -3892,7 +4155,7 @@
       state.deferredDataLoading = true;
       state.deferredDataPromise = (async () => {
       try {
-      runDeferredUpdate("Mobile timeline", renderMobileTimeline);
+      runDeferredUpdate("Mobile timeline", renderMobileTimelineIfOpen);
       const loadCoreData = !state.deferredDataLoaded;
       const signedInCommunity = Boolean(state.profile?.token);
       const loadTimelineEvents = () =>
@@ -3907,6 +4170,10 @@
       const siteSuggestionsRequest = includeCommunity && state.profile?.token
         ? fetchJson(`/items/site_suggestions?limit=-1&fields=${SITE_SUGGESTION_FIELDS}`, { fresh: true }).catch(() => ({ ...currentRowsFallback(state.siteSuggestions), _fallback: true }))
         : Promise.resolve({ ...currentRowsFallback(state.siteSuggestions), _skipped: true });
+      const moderationRegistryRequest = refreshBannedContributorRegistry().catch(error => {
+        console.warn("Contributor moderation status will refresh later.", error);
+        return false;
+      });
       const communityRequest = async (request, fallbackRows = []) => {
         if (!includeCommunity) return { ...currentRowsFallback(fallbackRows), _skipped: true };
         try {
@@ -3920,15 +4187,10 @@
       // is rendered immediately when its own request resolves instead of waiting for every request.
       const wikiRequest = loadCoreData ? fetchMobileWikiIndexRows()
         .then(data => ({ data }))
-        .then(response => {
-          state.wikiArticles = (response.data || []).map(sanitizePublicWikiArticle);
-          state.wikiById = new Map(state.wikiArticles.map(article => [Number(article.id), article]));
-          state.wikiBySlug = new Map(state.wikiArticles.map(article => [article.slug, article]));
-          rebuildMobileSearchIndex();
-          clearRelatedSiteCaches();
-          updateMobileHeaderInstruction();
-          return response;
-        })
+        .then(response => ({
+          ...response,
+          _wikiIndexApplied: applyMobileWikiIndexRows(response.data || [])
+        }))
         .catch(() => ({ data: [] }))
         : Promise.resolve({ data: state.wikiArticles });
       const eventRequest = loadCoreData ? fetchJson(`/items/calendar_events?limit=-1&sort=start_datetime,title&fields=${EXHIBIT_FIELDS}`, { cacheKey: "mobile-events", ttl: 60000, fresh: false })
@@ -3970,18 +4232,26 @@
           : Promise.resolve({ data: state.mapStoryVotes }),
         signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_language_quiz_progress?limit=-1&fields=${LANGUAGE_PROGRESS_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.languageQuizAttempts)), state.languageQuizAttempts) : Promise.resolve({ ...currentRowsFallback(state.languageQuizAttempts), _skipped: true }),
         signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_profile_follows?limit=-1&fields=${FOLLOW_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileFollows)), state.profileFollows) : Promise.resolve({ ...currentRowsFallback(state.profileFollows), _skipped: true }),
-        signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_profile_logins?limit=-1&fields=${LOGIN_REWARD_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileLoginRewards)), state.profileLoginRewards) : Promise.resolve({ ...currentRowsFallback(state.profileLoginRewards), _skipped: true })
+        signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_profile_logins?limit=-1&fields=${LOGIN_REWARD_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileLoginRewards)), state.profileLoginRewards) : Promise.resolve({ ...currentRowsFallback(state.profileLoginRewards), _skipped: true }),
+        moderationRegistryRequest
       ]);
       const existingTimelineById = new Map(state.timelineEvents.map(item => [String(item.id), item]));
       state.timelineEvents = (timelineResponse.data || []).map(item => ({ ...item, ...(existingTimelineById.get(String(item.id)) || {}) }));
       state.timelineById = new Map(state.timelineEvents.map(item => [String(item.id), item]));
       rebuildSortedTimelineEvents();
-      state.wikiArticles = (wikiResponse.data || []).map(sanitizePublicWikiArticle);
-      state.wikiById = new Map(state.wikiArticles.map(article => [Number(article.id), article]));
-      state.wikiBySlug = new Map(state.wikiArticles.map(article => [article.slug, article]));
-      clearRelatedSiteCaches();
+      state.timelineDetailRowsBySource.forEach(snapshot => {
+        replaceTimelineEventsForSource(
+          snapshot.rows,
+          snapshot.sourceType,
+          snapshot.sourceId,
+          snapshot.sourceSlug,
+          { remember: false }
+        );
+      });
+      if (!wikiResponse._wikiIndexApplied) applyMobileWikiIndexRows(wikiResponse.data || []);
       state.exhibits = mergeCalendarEvents(eventResponse.data || [], legacyExhibitResponse.data || []);
       state.contributorProfiles = mergeSeededProfiles(profilesResponse.data || []);
+      mergeBannedContributorProfiles();
       state.publicComments = mergeSeededComments(preserveActiveProfileRows(commentsResponse.data, state.publicComments));
       state.commentVotes = preserveActiveProfileRows(commentVotesResponse.data, state.commentVotes);
       state.profilePointEvents = preserveActiveProfileRows(pointEventsResponse.data, state.profilePointEvents);
@@ -4001,6 +4271,7 @@
       state.languageQuizAttempts = preserveActiveProfileRows(languageResponse.data, state.languageQuizAttempts);
       state.profileFollows = preserveActiveProfileRows(followsResponse.data, state.profileFollows, ["follower_profile", "following_profile"]);
       state.profileLoginRewards = preserveActiveProfileRows(loginRewardsResponse.data, state.profileLoginRewards);
+      mergeBannedContributionPlaceholders();
       // Public community activity is complete for anonymous visitors too. Do
       // not schedule a second fetch/render merely because there is no profile.
       state.profileActivitySynced = includeCommunity && allResponsesFresh([
@@ -4015,13 +4286,17 @@
         followsResponse,
         loginRewardsResponse
       ]);
+      if (includeCommunity) {
+        state.profileActivityLastAttemptAt = Date.now();
+        if (state.profileActivitySynced) state.profileActivityLastSyncedAt = state.profileActivityLastAttemptAt;
+      }
       state.profileActivityCache = null;
       state.deferredDataLoaded = true;
       if (includeCommunity) state.deferredCommunityDataLoaded = true;
       runDeferredUpdate("Exhibits", prepareExhibits);
       runDeferredUpdate("Profile", renderProfile);
       runDeferredUpdate("Achievements", renderRewards);
-      runDeferredUpdate("Mobile timeline", renderMobileTimeline);
+      runDeferredUpdate("Mobile timeline", renderMobileTimelineIfOpen);
       if (profilesSheetEl?.classList.contains("open")) runDeferredUpdate("Profiles", renderProfiles);
       if (followingSheetEl?.classList.contains("open")) runDeferredUpdate("Following", renderFollowing);
       if (eventsSheetEl?.classList.contains("open")) runDeferredUpdate("Events", renderEventsList);
@@ -4092,6 +4367,7 @@
     }
 
     async function refreshProfileActivityData() {
+      state.profileActivityLastAttemptAt = Date.now();
       const [profilesResponse, commentsResponse, commentVotesResponse, pointEventsResponse, visitsResponse, suggestionsResponse, registrationsResponse, languageResponse, followsResponse, loginRewardsResponse] = await Promise.all([
         withProfileSyncTimeout(fetchJson(`/items/mobile_member_profiles?limit=-1&sort=display_name&fields=${PROFILE_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.contributorProfiles)), currentRowsFallback(state.contributorProfiles)),
         withProfileSyncTimeout(fetchJson(`/items/mobile_comments?limit=-1&filter[status][_eq]=approved&filter[public_activity][_eq]=true&fields=${PUBLIC_COMMENT_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.publicComments)), currentRowsFallback(state.publicComments)),
@@ -4110,6 +4386,7 @@
         withProfileSyncTimeout(activeProfileRowsRequest("mobile_profile_logins", LOGIN_REWARD_FIELDS, state.profileLoginRewards), currentRowsFallback(state.profileLoginRewards))
       ]);
       state.contributorProfiles = mergeSeededProfiles(profilesResponse.data || []);
+      mergeBannedContributorProfiles();
       state.publicComments = mergeSeededComments(preserveActiveProfileRows(commentsResponse.data, state.publicComments));
       state.commentVotes = preserveActiveProfileRows(commentVotesResponse.data, state.commentVotes);
       state.profilePointEvents = preserveActiveProfileRows(pointEventsResponse.data, state.profilePointEvents);
@@ -4119,6 +4396,7 @@
       state.languageQuizAttempts = preserveActiveProfileRows(languageResponse.data, state.languageQuizAttempts);
       state.profileFollows = preserveActiveProfileRows(followsResponse.data, state.profileFollows, ["follower_profile", "following_profile"]);
       state.profileLoginRewards = preserveActiveProfileRows(loginRewardsResponse.data, state.profileLoginRewards);
+      mergeBannedContributionPlaceholders();
       state.profileActivityCache = null;
       // Admin-only review data is useful in the account sheet, but it must not
       // leave an otherwise healthy contributor profile in a permanent loading state.
@@ -4132,6 +4410,7 @@
         followsResponse,
         loginRewardsResponse
       ]);
+      if (state.profileActivitySynced) state.profileActivityLastSyncedAt = Date.now();
       if (profilesSheetEl?.classList.contains("open")) renderProfiles();
       if (followingSheetEl?.classList.contains("open")) renderFollowing();
       if (activitySheetEl?.classList.contains("open")) renderMobileActivitySheet();
@@ -4141,11 +4420,23 @@
       return state.profileActivitySynced;
     }
 
+    function profileActivitySyncIsFresh(now = Date.now()) {
+      const lastSync = Number(state.profileActivityLastSyncedAt || 0);
+      return Boolean(state.profileActivitySynced && lastSync && now - lastSync < PROFILE_ACTIVITY_REFRESH_TTL_MS);
+    }
+
+    function profileActivityRetryIsCoolingDown(now = Date.now()) {
+      const lastAttempt = Number(state.profileActivityLastAttemptAt || 0);
+      return Boolean(!state.profileActivitySynced && lastAttempt && now - lastAttempt < PROFILE_ACTIVITY_RETRY_TTL_MS);
+    }
+
     async function ensureProfileActivitySynced() {
-      if (state.profileActivitySynced) return true;
+      if (profileActivitySyncIsFresh()) return true;
       if (state.profileActivitySyncPromise) return state.profileActivitySyncPromise;
+      if (profileActivityRetryIsCoolingDown()) return false;
+      state.profileActivityLastAttemptAt = Date.now();
       const syncPromise = state.deferredDataLoading && state.deferredDataPromise
-        ? state.deferredDataPromise.then(() => state.profileActivitySynced || refreshProfileActivityData())
+        ? state.deferredDataPromise.then(() => profileActivitySyncIsFresh() || refreshProfileActivityData())
         : refreshProfileActivityData();
       state.profileActivitySyncPromise = syncPromise
         .catch(error => {
@@ -4405,7 +4696,7 @@
       state.siteById = new Map(state.sites.map(site => [Number(site.id), site]));
       state.visitableSiteList = state.sites.filter(site => !isBroadTerritory(site));
       rebuildMobileSearchIndex({ incrementVersion: false });
-      state.linkTerms = buildInternalLinkTerms();
+      refreshMobileInternalLinkCatalog();
       state.mapSites = state.sites.filter(site => (
         site.center &&
         site.slug !== WHALING_FEATURE_SLUG &&
@@ -4889,6 +5180,7 @@
       state.lastSearchDataVersion = state.searchDataVersion;
       refreshMobileSearchSuggestions();
       window.clearTimeout(state.searchTimer);
+      if (isNativeAndroidApp() && document.activeElement === searchEl) startSearchValueWatch();
     }
 
     // Native WebView input can update the visible field without delivering a
@@ -6114,8 +6406,26 @@
       renderMobileTimeline({ preserveScroll: true });
     }
 
+    function renderMobileTimelineIfOpen() {
+      if (!appEl?.classList.contains("panel-timeline")) {
+        state.mobileTimelineRendered = false;
+        state.timelineProgressiveRender?.cancel?.();
+        state.timelineProgressiveRender = null;
+        return null;
+      }
+      return renderMobileTimeline();
+    }
+
+    function mobileTimelineCardElementFromHtml(html) {
+      const template = document.createElement("template");
+      template.innerHTML = String(html || "").trim();
+      return template.content.firstElementChild || null;
+    }
+
     function renderMobileTimeline(options = {}) {
       if (!mobileTimelineCurrentBtn) return;
+      state.timelineProgressiveRender?.cancel?.();
+      state.timelineProgressiveRender = null;
       state.mobileTimelineRendered = true;
       const previousScrollTop = options.preserveScroll ? mobileTimelineCurrentBtn.scrollTop : state.timelineScrollTop;
       state.timelineFeedObserver?.disconnect?.();
@@ -6153,7 +6463,6 @@
             <span>${windowStart} before this point</span>
           </div>
         ` : ""}
-        ${cards.map(mobileTimelineFeedCardHtml).join("")}
         ${hasMore ? `
           <div class="learning-feed-more" data-learning-feed-sentinel="timeline">
             <button type="button" data-timeline-show-more>Load more moments</button>
@@ -6161,19 +6470,51 @@
           </div>
         ` : `<p class="learning-feed-end">End of historic timeline</p>`}
       `;
-      if (mobileTimelineStatusEl) mobileTimelineStatusEl.textContent = `Showing ${windowStart + 1}-${windowEnd} of ${events.length}`;
-      if (Number.isFinite(options.jumpIndex)) {
-        const targetCard = mobileTimelineCurrentBtn.querySelector(`[data-timeline-index="${options.jumpIndex}"]`);
-        mobileTimelineCurrentBtn.scrollTop = targetCard ? Math.max(0, targetCard.offsetTop - mobileTimelineCurrentBtn.offsetTop - 8) : 0;
-      } else if (Number.isFinite(options.preserveEventIndex)) {
-        const preservedCard = mobileTimelineCurrentBtn.querySelector(`[data-timeline-index="${options.preserveEventIndex}"]`);
-        mobileTimelineCurrentBtn.scrollTop = preservedCard ? Math.max(0, preservedCard.offsetTop - mobileTimelineCurrentBtn.offsetTop - 8) : Math.max(0, previousScrollTop || 0);
-      } else {
-        mobileTimelineCurrentBtn.scrollTop = Math.max(0, previousScrollTop || 0);
-      }
-      state.timelineScrollTop = mobileTimelineCurrentBtn.scrollTop;
       syncMobileTimelineScrubber(Number.isFinite(options.jumpIndex) ? options.jumpIndex : state.timelineScrubberIndex, events);
-      installLearningFeedObserver("timeline", mobileTimelineCurrentBtn, loadMoreMobileTimeline);
+      const footer = mobileTimelineCurrentBtn.querySelector('[data-learning-feed-sentinel="timeline"], .learning-feed-end');
+      const scrollToRequestedCard = (card, item) => {
+        const requestedIndex = Number.isFinite(options.jumpIndex)
+          ? Number(options.jumpIndex)
+          : Number.isFinite(options.preserveEventIndex)
+            ? Number(options.preserveEventIndex)
+            : NaN;
+        if (Number.isFinite(requestedIndex) && Number(item.index) === requestedIndex) {
+          mobileTimelineCurrentBtn.scrollTop = Math.max(0, card.offsetTop - mobileTimelineCurrentBtn.offsetTop - 8);
+        } else if (!Number.isFinite(requestedIndex) && options.preserveScroll) {
+          mobileTimelineCurrentBtn.scrollTop = Math.max(0, Math.min(previousScrollTop || 0, mobileTimelineCurrentBtn.scrollHeight));
+        }
+        state.timelineScrollTop = mobileTimelineCurrentBtn.scrollTop;
+      };
+      const finishTimelineRender = () => {
+        if (mobileTimelineStatusEl) mobileTimelineStatusEl.textContent = `Showing ${windowStart + 1}-${windowEnd} of ${events.length}`;
+        if (!Number.isFinite(options.jumpIndex) && !Number.isFinite(options.preserveEventIndex)) {
+          mobileTimelineCurrentBtn.scrollTop = Math.max(0, previousScrollTop || 0);
+        }
+        state.timelineScrollTop = mobileTimelineCurrentBtn.scrollTop;
+        installLearningFeedObserver("timeline", mobileTimelineCurrentBtn, loadMoreMobileTimeline);
+      };
+      if (typeof TIMELINE_UTILS.progressivelyAppendMediaItems !== "function") {
+        footer?.insertAdjacentHTML("beforebegin", cards.map(mobileTimelineFeedCardHtml).join(""));
+        finishTimelineRender();
+        return;
+      }
+      if (mobileTimelineStatusEl) mobileTimelineStatusEl.textContent = `Loading ${windowStart + 1} of ${events.length}`;
+      const controller = TIMELINE_UTILS.progressivelyAppendMediaItems({
+        container: mobileTimelineCurrentBtn,
+        items: cards,
+        beforeNode: footer,
+        createItem: card => mobileTimelineCardElementFromHtml(mobileTimelineFeedCardHtml(card)),
+        timeoutMs: 3500,
+        onItemReady: (element, card) => {
+          if (mobileTimelineStatusEl) mobileTimelineStatusEl.textContent = `Loading ${windowStart + 1}-${card.index + 1} of ${events.length}`;
+          scrollToRequestedCard(element, card);
+        },
+        onComplete: finishTimelineRender
+      });
+      state.timelineProgressiveRender = controller;
+      controller.finished.finally(() => {
+        if (state.timelineProgressiveRender === controller) state.timelineProgressiveRender = null;
+      });
     }
 
     function mobileTimelineExhibitSite(exhibit = {}) {
@@ -6239,8 +6580,11 @@
       showBanner(event.source_title || event.title || "This moment does not have a mapped place yet.");
     }
 
-    function animateMobileSiteMarker(site) {
+    function animateMobileSiteMarker(site, searchResult = false) {
       if (!site?.slug) return;
+      if (searchResult && site.center && nativeMapBridgeAvailable() && typeof window.AndroidApp?.focusNativeSearchResult === "function") {
+        window.AndroidApp.focusNativeSearchResult(androidBridgeToken(), Number(site.center[0]), Number(site.center[1]), 14.5, 2800);
+      }
       const marker = state.markers.get(site.slug);
       const element = marker?.getElement?.();
       if (!element) return;
@@ -6326,7 +6670,7 @@
       appEl?.classList.toggle("panel-nearby", next === "nearby");
       mobileTabTimelineBtn?.setAttribute("aria-pressed", String(next === "timeline"));
       mobileTabNearbyBtn?.setAttribute("aria-pressed", String(next === "nearby"));
-      if (next === "timeline" && !state.mobileTimelineRendered) renderMobileTimeline();
+      if (next === "timeline" && state.mobilePanelState !== "collapsed" && !state.mobileTimelineRendered) renderMobileTimeline();
       mobileTimelineEl?.setAttribute("aria-hidden", String(next !== "timeline" || state.mobilePanelState === "collapsed"));
       listPanelEl?.setAttribute("aria-hidden", String(next !== "nearby" || state.mobilePanelState === "collapsed"));
       window.requestAnimationFrame(() => {
@@ -6403,6 +6747,7 @@
       const mode = appEl?.classList.contains("panel-timeline") ? "timeline" : "nearby";
       mobileTimelineEl?.setAttribute("aria-hidden", String(mode !== "timeline" || panelState === "collapsed"));
       listPanelEl?.setAttribute("aria-hidden", String(mode !== "nearby" || panelState === "collapsed"));
+      if (mode === "timeline" && panelState !== "collapsed" && !state.mobileTimelineRendered) renderMobileTimeline();
       if (collapseListBtn) {
         const collapsed = panelState === "collapsed";
         collapseListBtn.hidden = panelState === "maximized";
@@ -6429,9 +6774,9 @@
     }
 
     function restoreNearbyPanelHeight() {
-      // Viewport and orientation changes must preserve the panel the visitor
-      // is actually using. Re-reading storage here used to turn a deliberately
-      // collapsed cold-start into an open panel whenever Android rotated.
+      // Preserve the panel that is actually visible through rotation and
+      // viewport changes. Re-reading empty storage here reopened a collapsed
+      // Android map whenever the device changed orientation.
       setMobileBottomPanelState(state.mobilePanelState || "normal", { persist: false });
     }
 
@@ -6885,6 +7230,7 @@
             layer_categories: SITE_UTILS.siteLayerCategoryKeys(site).join(" "),
             fillcolor: siteTerritoryFillColor(site, isBroadTerritory(site) ? "#496f5d" : "#7b9b68"),
             opacity: mobilePolygonOpacity(site),
+            geometry_refinement: shorelineRefinementNoteForSite(site),
             label_size: polygonLabelSize(site),
             has_header_image: siteHasHeaderImage(site),
             has_icon: !!siteMapIconUrl(site),
@@ -6895,7 +7241,6 @@
             unread_label: mobileUnreadCountLabel(unreadCount),
             unread_icon: mobileUnreadCountIcon(unreadCount),
             geometry_surface: normalizeComparisonText(site.geometry_surface || ""),
-            geometry_refinement: shorelineRefinementNoteForSite(site),
             broad: isBroadTerritory(site),
             territory_label_point: site.territory_label_point || null,
             bounds_area: geometryBoundsArea(siteDisplayGeometry(site))
@@ -6978,17 +7323,17 @@
     }
 
     function cachedMobileMapSourceData() {
-      const sites = activeMapSites();
-      const shapeSites = sites.filter(site => {
-        const type = siteDisplayGeometry(site)?.type;
-        return type === "Polygon" || type === "MultiPolygon";
-      });
-      const pointHitSites = sites.filter(site => siteDisplayGeometry(site)?.type === "Point");
       const categoryKey = JSON.stringify(state.settings.layerCategories || {});
       const eraKey = JSON.stringify(state.settings.eraCategories || {});
       const dateKey = localDateKey();
-      const cacheKey = `${state.mapSourceRevision}|${dateKey}|${state.settings.showPins !== false ? "pins" : "no-pins"}|${state.settings.showShapes !== false ? "shapes" : "no-shapes"}|${state.settings.exhibits !== false ? "exhibits" : "no-exhibits"}|${categoryKey}|${eraKey}|${sites.length}|${state.placeNameAreas?.features?.length || 0}`;
+      const cacheKey = `${state.mapSourceRevision}|${dateKey}|${state.settings.showPins !== false ? "pins" : "no-pins"}|${state.settings.showShapes !== false ? "shapes" : "no-shapes"}|${state.settings.exhibits !== false ? "exhibits" : "no-exhibits"}|${categoryKey}|${eraKey}|${state.mapSites.length}|${state.placeNameAreas?.features?.length || 0}`;
       if (!state.mapSourceCache || state.mapSourceCacheKey !== cacheKey) {
+        const sites = activeMapSites();
+        const shapeSites = sites.filter(site => {
+          const type = siteDisplayGeometry(site)?.type;
+          return type === "Polygon" || type === "MultiPolygon";
+        });
+        const pointHitSites = sites.filter(site => siteDisplayGeometry(site)?.type === "Point");
         const siteFeatures = siteFeatureCollection([...shapeSites, ...pointHitSites]);
         const placeNameAreas = mobilePlaceNameAreaFeatures(sites);
         siteFeatures.features.push(...placeNameAreas);
@@ -7002,6 +7347,29 @@
         state.mapSourceCacheKey = cacheKey;
       }
       return state.mapSourceCache;
+    }
+
+    function nativeMapStaticPayloadParts(sourceData, profileModel, cacheKey) {
+      if (state.nativeMapStaticPayloadCache?.key === cacheKey) return state.nativeMapStaticPayloadCache;
+      const allFeatures = sourceData.sites?.features || [];
+      const pointFeatures = allFeatures.filter(feature => feature?.geometry?.type === "Point");
+      const polygonFeatures = allFeatures.filter(feature => /Polygon/.test(feature?.geometry?.type || ""));
+      const territoryFeatures = polygonFeatures.filter(feature => feature?.properties?.broad === true);
+      const sitePolygonFeatures = profileModel
+        ? []
+        : polygonFeatures.filter(feature => feature?.properties?.broad !== true);
+      const labelFeatures = profileModel
+        ? (sourceData.territoryLabels?.features || [])
+        : [...(sourceData.territoryLabels?.features || []), ...(sourceData.detailLabels?.features || [])];
+      state.nativeMapStaticPayloadCache = {
+        key: cacheKey,
+        pointSignature: `${state.nativeMapPointRevision}|${pointFeatures.length}`,
+        pointCollection: nativeMapFeatureCollection(profileModel ? [] : pointFeatures),
+        territoryCollection: nativeMapFeatureCollection(territoryFeatures),
+        sitePolygonCollection: nativeMapFeatureCollection(sitePolygonFeatures),
+        labelCollection: nativeMapFeatureCollection(labelFeatures)
+      };
+      return state.nativeMapStaticPayloadCache;
     }
 
     function nativeMapFeatureCollection(features = []) {
@@ -7172,10 +7540,8 @@
       if (!nativeMapBridgeAvailable() || !state.map) return false;
       const center = state.map.getCenter?.();
       const zoom = Number(state.map.getZoom?.());
-      const rawBearing = Number(state.map.getBearing?.());
-      const rawPitch = Number(state.map.getPitch?.());
-      const bearing = Number.isFinite(rawBearing) ? rawBearing : 0;
-      const pitch = Number.isFinite(rawPitch) ? rawPitch : 0;
+      const bearing = Number(state.map.getBearing?.());
+      const pitch = Number(state.map.getPitch?.());
       if (!center || !Number.isFinite(Number(center.lng)) || !Number.isFinite(Number(center.lat)) || !Number.isFinite(zoom)) return false;
       const echo = state.nativeMapCameraEcho;
       if (echo) {
@@ -7183,8 +7549,8 @@
         const matchesNativeCamera = Math.abs(Number(center.lng) - Number(echo.longitude)) < 0.00002
           && Math.abs(Number(center.lat) - Number(echo.latitude)) < 0.00002
           && Math.abs(zoom - Number(echo.zoom)) < 0.02
-          && Math.abs(bearing - Number(echo.bearing)) < 0.1
-          && Math.abs(pitch - Number(echo.pitch)) < 0.1;
+          && Math.abs((Number.isFinite(bearing) ? bearing : 0) - Number(echo.bearing || 0)) < 0.1
+          && Math.abs((Number.isFinite(pitch) ? pitch : 0) - Number(echo.pitch || 0)) < 0.1;
         if (isFresh && matchesNativeCamera) {
           state.nativeMapCameraEcho = null;
           return false;
@@ -7192,7 +7558,14 @@
         if (!isFresh) state.nativeMapCameraEcho = null;
       }
       if (typeof window.AndroidApp.syncNativeMapCameraPose === "function") {
-        window.AndroidApp.syncNativeMapCameraPose(androidBridgeToken(), Number(center.lng), Number(center.lat), zoom, bearing, pitch);
+        window.AndroidApp.syncNativeMapCameraPose(
+          androidBridgeToken(),
+          Number(center.lng),
+          Number(center.lat),
+          zoom,
+          Number.isFinite(bearing) ? bearing : 0,
+          Number.isFinite(pitch) ? pitch : 0
+        );
       } else {
         window.AndroidApp.syncNativeMapCamera(androidBridgeToken(), Number(center.lng), Number(center.lat), zoom);
       }
@@ -7202,7 +7575,6 @@
     function syncNativeMapState(reason = "state") {
       if (!nativeMapBridgeAvailable() || !state.map) return false;
       const sourceData = cachedMobileMapSourceData();
-      const allFeatures = sourceData.sites?.features || [];
       const profileModel = state.profileMapMode?.model || null;
       const profileJourney = profileModel ? mobileProfileJourneyMapData(profileModel) : null;
       const profileKey = state.profileMapMode?.profileKey || "";
@@ -7215,20 +7587,16 @@
       const temporaryFeatures = profileModel ? [] : nativeTemporaryMapFeatures();
       const userLocationSignature = userLocationFeatures[0]?.geometry?.coordinates?.join(",") || "none";
       const communitySignature = communityFeatures.map(feature => `${feature.properties.native_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}`).join("|");
-      const temporarySignature = temporaryFeatures.map(feature => `${feature.properties.temporary_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}:${feature.properties.search_result_highlight ? 1 : 0}`).join("|");
+      const temporarySignature = temporaryFeatures.map(feature => `${feature.properties.temporary_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}`).join("|");
       const nativeBasemap = Object.prototype.hasOwnProperty.call(MOBILE_BASEMAPS, state.settings.basemap) ? state.settings.basemap : "outdoors";
       const eventSignature = exhibitFeatures.map(feature => feature.properties.event_key).join(",");
       const baseSignature = `${state.nativeMapBaseRevision}|${profileKey}|${profileSignature}|basemap:${nativeBasemap}|bio-paths:${mobileBiographyPathsEnabled() ? 1 : 0}`;
-      const pointSignature = `${state.nativeMapPointRevision}|${allFeatures.filter(feature => feature?.geometry?.type === "Point").length}`;
+      const staticParts = nativeMapStaticPayloadParts(sourceData, profileModel, `${state.mapSourceCacheKey}|${baseSignature}|${state.nativeMapPointRevision}`);
+      const pointSignature = staticParts.pointSignature;
       const transientSignature = `user:${userLocationSignature}|community:${communitySignature}|temporary:${temporarySignature}|events:${eventSignature}`;
       const signature = `${baseSignature}|points:${pointSignature}|${transientSignature}`;
       const center = state.map.getCenter?.();
-      const camera = center ? {
-        center: [Number(center.lng), Number(center.lat)],
-        zoom: Number(state.map.getZoom?.()),
-        bearing: Number(state.map.getBearing?.()) || 0,
-        pitch: Number(state.map.getPitch?.()) || 0
-      } : null;
+      const camera = center ? { center: [Number(center.lng), Number(center.lat)], zoom: Number(state.map.getZoom?.()) } : null;
       const transientPayload = {
         signature,
         baseSignature,
@@ -7258,12 +7626,10 @@
         ...transientPayload,
         camera,
         geometryReady: Boolean(state.siteGeometryLoaded || isOfflineTextMode()),
-        territories: nativeMapFeatureCollection(allFeatures.filter(feature => /Polygon/.test(feature?.geometry?.type || "") && feature?.properties?.broad === true)),
-        sitePolygons: nativeMapFeatureCollection(allFeatures.filter(feature => /Polygon/.test(feature?.geometry?.type || "") && feature?.properties?.broad !== true && !profileModel)),
-        sitePoints: nativeMapFeatureCollection(allFeatures.filter(feature => feature?.geometry?.type === "Point" && !profileModel)),
-        labels: profileModel
-          ? nativeMapFeatureCollection(sourceData.territoryLabels?.features || [])
-          : nativeMapFeatureCollection([...(sourceData.territoryLabels?.features || []), ...(sourceData.detailLabels?.features || [])]),
+        territories: staticParts.territoryCollection,
+        sitePolygons: staticParts.sitePolygonCollection,
+        sitePoints: staticParts.pointCollection,
+        labels: staticParts.labelCollection,
         profilePath: profileJourney?.lines || nativeMapFeatureCollection(),
         profilePoints: nativeMapFeatureCollection(profileModel ? nativeProfilePointFeatures(profileModel) : []),
         biographyPaths: profileModel
@@ -7421,7 +7787,7 @@
       const placeNameArea = [...features]
         .filter(feature => feature?.properties?.place_name_area_overlay === true || feature?.properties?.place_name_area_overlay === "true")
         .sort((a, b) => Number(a.properties?.bounds_area || 0) - Number(b.properties?.bounds_area || 0))[0];
-      return placeNameArea || preferredAncestralLandFeature(features) || [...features]
+      return placeNameArea || preferredReservationFeature(features) || preferredAncestralLandFeature(features) || [...features]
         .filter(feature => feature?.properties?.slug || feature?.properties?.wiki_slug)
         .sort((a, b) => {
           const aBroad = a.properties?.broad === true || a.properties?.broad === "true";
@@ -7448,6 +7814,12 @@
       const slug = feature?.properties?.slug || "";
       if (slug === "shinnecock-indian-reservation" || slug === "unkechaug-indian-reservation") return true;
       return /reservation/i.test(`${feature?.properties?.title || ""} ${feature?.properties?.site_type || ""}`);
+    }
+
+    function preferredReservationFeature(features = []) {
+      return features
+        .filter(isMobileReservationFeature)
+        .sort((a, b) => Number(a.properties?.bounds_area || 0) - Number(b.properties?.bounds_area || 0))[0] || null;
     }
 
     function preferredAncestralLandFeature(features = []) {
@@ -8591,13 +8963,21 @@
         }
         const current = iconEntries.get(key);
         const priority = mobileSiteIconPriority(site);
-        if (!current || priority < current.priority) iconEntries.set(key, { key, url, priority });
+        if (!current || priority < current.priority) iconEntries.set(key, { key, url, priority, site });
       });
       const pending = new Map(state.mobileSiteIconImageQueue.map(entry => [entry.key, entry]));
       iconEntries.forEach((entry, key) => pending.set(key, entry));
       state.mobileSiteIconImageQueue = [...pending.values()].sort((a, b) => a.priority - b.priority || a.key.localeCompare(b.key));
       state.mobileSiteIconImagesQueued = new Set(state.mobileSiteIconImageQueue.map(entry => entry.key));
       processMobileSiteIconQueue();
+    }
+
+    function reprioritizeQueuedMobileSiteIcons() {
+      if (!state.map || state.mobileSiteIconImageQueue.length < 2) return;
+      state.mobileSiteIconImageQueue.forEach(entry => {
+        if (entry.site) entry.priority = mobileSiteIconPriority(entry.site);
+      });
+      state.mobileSiteIconImageQueue.sort((a, b) => a.priority - b.priority || a.key.localeCompare(b.key));
     }
 
     function shouldShowCustomMapIcons() {
@@ -8825,23 +9205,24 @@
     function openMapStory(story) {
       if (!mapStoryViewEl) return;
       const counts = MAP_STORY_UTILS.storyVoteCounts(story, state.mapStoryVotes);
-      const photo = directusAssetUrl(story.photo);
+      const deleted = contributionIsModerated(story);
+      const photo = deleted ? "" : directusAssetUrl(story.photo);
       const attached = story.attached_site_slug
         ? `<button class="action secondary" type="button" data-story-site="${escapeHtml(story.attached_site_slug)}">Open ${escapeHtml(story.attached_site_title || "attached site")}</button>`
         : "";
       mapStoryViewEl.innerHTML = `
         ${photo ? `<img class="map-story-photo" src="${escapeHtml(photo)}" alt="" loading="lazy" decoding="async">` : ""}
         <p class="map-story-kicker">Visitor Story</p>
-        <h3>${escapeHtml(MAP_STORY_UTILS.authorName(story))} says:</h3>
-        <p class="map-story-text">${escapeHtml(MAP_STORY_UTILS.quotedText(story))}</p>
+        <h3>${deleted ? "[deleted]" : `${escapeHtml(MAP_STORY_UTILS.authorName(story))} says:`}</h3>
+        <p class="map-story-text">${deleted ? "[deleted]" : escapeHtml(MAP_STORY_UTILS.quotedText(story))}</p>
         <p class="detail-meta">${escapeHtml(MAP_STORY_UTILS.timeLabel(story, state.mapStoryVotes, MAP_STORY_RULES))}</p>
         ${attached}
         <div class="map-story-vote-row">
-          <button class="action secondary" type="button" data-story-vote="1" data-story-id="${escapeHtml(story.id)}">Helpful ${counts.up}</button>
+          ${deleted ? "" : `<button class="action secondary" type="button" data-story-vote="1" data-story-id="${escapeHtml(story.id)}">Helpful ${counts.up}</button>`}
           ${isAdminContributor() ? `<button class="action secondary" type="button" data-delete-map-story="${escapeHtml(story.id)}">Delete contribution</button>` : ""}
           <span class="detail-meta">${counts.up} helpful vote${counts.up === 1 ? "" : "s"}; 10 keeps it.</span>
         </div>
-        ${MAP_STORY_UTILS.hasMemberVote(story, state.mapStoryVotes, currentContributorProfile()?.id) ? `<p class="detail-meta">You already voted on this story.</p>` : ""}
+        ${!deleted && MAP_STORY_UTILS.hasMemberVote(story, state.mapStoryVotes, currentContributorProfile()?.id) ? `<p class="detail-meta">You already voted on this story.</p>` : ""}
       `;
       openSheet(mapStoryViewSheetEl);
     }
@@ -10726,22 +11107,29 @@
 
     function siteHeroCarouselHtml(site, image, imageFallback = "") {
       const commentSlides = approvedSiteCommentPhotoSlides(site, image);
+      const headerCredit = MEDIA_UTILS.listingImageCredit?.(site) || "";
+      const creditHtml = credit => credit
+        ? `<p class="site-hero-image-credit" data-site-hero-carousel-credit>${escapeHtml(credit)}</p>`
+        : "";
       if (!commentSlides.length) {
-        return image ? `<img class="hero article-sticky-hero" src="${escapeHtml(image)}" alt="${escapeHtml(site.listing_image_alt || site.title)}" loading="lazy" decoding="async" onerror="${imageErrorAction(imageFallback)}">` : "";
+        return image ? `<img class="hero article-sticky-hero" src="${escapeHtml(image)}" alt="${escapeHtml(site.listing_image_alt || site.title)}" loading="lazy" decoding="async" onerror="${imageErrorAction(imageFallback)}">${creditHtml(headerCredit)}` : "";
       }
       const slides = [
-        ...(image ? [{ image, author: "", id: "", primary: true }] : []),
-        ...commentSlides
+        ...(image ? [{ image, author: "", id: "", primary: true, credit: headerCredit }] : []),
+        ...commentSlides.map(slide => ({
+          ...slide,
+          credit: slide.author && !MEDIA_UTILS.isProjectAdminImageCreditName?.(slide.author) ? `Image by ${slide.author}.` : ""
+        }))
       ];
       return `
         <div class="site-hero-carousel hero article-sticky-hero" data-site-hero-carousel data-site-hero-site="${escapeHtml(site.slug || site.id || "")}" data-site-hero-index="0" aria-label="${escapeHtml(site.title)} photo carousel">
           <div class="site-hero-carousel-stage">
             ${slides.map((slide, index) => slide.primary ? `
-              <div class="site-hero-slide${index === 0 ? " is-active" : ""}" data-site-hero-slide-index="${index}" aria-hidden="${index === 0 ? "false" : "true"}">
+              <div class="site-hero-slide${index === 0 ? " is-active" : ""}" data-site-hero-slide-index="${index}" data-site-hero-credit="${escapeHtml(slide.credit || "")}" aria-hidden="${index === 0 ? "false" : "true"}">
                 <img src="${escapeHtml(slide.image)}" alt="${escapeHtml(site.listing_image_alt || site.title)}" loading="eager" decoding="async" onerror="${imageErrorAction(imageFallback)}">
               </div>
             ` : `
-              <button class="site-hero-slide site-hero-comment-slide${index === 0 ? " is-active" : ""}" type="button" data-site-hero-slide-index="${index}" data-site-hero-comment="${escapeHtml(slide.id)}" aria-hidden="${index === 0 ? "false" : "true"}" tabindex="${index === 0 ? "0" : "-1"}" aria-label="View ${escapeHtml(slide.author)}'s approved comment">
+              <button class="site-hero-slide site-hero-comment-slide${index === 0 ? " is-active" : ""}" type="button" data-site-hero-slide-index="${index}" data-site-hero-credit="${escapeHtml(slide.credit || "")}" data-site-hero-comment="${escapeHtml(slide.id)}" aria-hidden="${index === 0 ? "false" : "true"}" tabindex="${index === 0 ? "0" : "-1"}" aria-label="View ${escapeHtml(slide.author)}'s approved comment">
                 <img src="${escapeHtml(slide.image)}" alt="Photo from ${escapeHtml(slide.author)}'s approved comment" loading="lazy" decoding="async" data-site-hero-comment-image>
                 <span class="site-hero-comment-caption">${escapeHtml(slide.author)} · View comment</span>
               </button>
@@ -10751,6 +11139,7 @@
             ${slides.map((slide, index) => `<button type="button" data-site-hero-dot="${index}" class="${index === 0 ? "is-active" : ""}" aria-label="Show photo ${index + 1} of ${slides.length}" aria-pressed="${index === 0 ? "true" : "false"}"></button>`).join("")}
           </div>
         </div>
+        ${creditHtml(slides[0]?.credit || "")}
       `;
     }
 
@@ -11114,6 +11503,9 @@
             ${group.observations.map(comment => {
               const fields = enrichedPlantObservationFields(comment.fields || comment);
               const sourceRecord = comment.comment || comment;
+              if (contributionIsModerated(sourceRecord)) {
+                return `<article class="site-plant-card deleted"><div class="site-plant-card-body"><span class="site-plant-card-title">[deleted]</span></div></article>`;
+              }
               const author = state.contributorProfiles.find(profile => Number(profile.id) === Number(relationId(sourceRecord.member_profile)));
               const contributor = author?.display_name || fields.contributor || sourceRecord.author_name || "Contributor";
               const contributorKey = author?.id || author?.slug || contributor;
@@ -11390,11 +11782,11 @@
       const rootComments = commentThread.roots;
       const repliesFor = parentId => commentThread.repliesFor(parentId);
       const renderComment = (comment, depth = 0) => {
-        const deleted = COMMENT_UTILS.isModeratedDeleted(comment);
+        const deleted = COMMENT_UTILS.isModeratedDeleted(comment) || contributionIsModerated(comment);
         const author = state.contributorProfiles.find(profile => Number(profile.id) === Number(comment.member_profile));
         const parent = depth ? commentThread.parentFor(comment) : null;
         const parentAuthor = parent ? state.contributorProfiles.find(profile => Number(profile.id) === Number(parent.member_profile)) : null;
-        const parentName = COMMENT_UTILS.isModeratedDeleted(parent) ? "[deleted]" : (parentAuthor?.display_name || parent?.author_name || "");
+        const parentName = (COMMENT_UTILS.isModeratedDeleted(parent) || contributionIsModerated(parent)) ? "[deleted]" : (parentAuthor?.display_name || parent?.author_name || "");
         const attachment = directusAssetUrl(comment.comment_image);
         const name = deleted ? "[deleted]" : (author?.display_name || comment.author_name || "Contributor");
         const avatar = directusAssetUrl(author?.avatar);
@@ -12117,7 +12509,7 @@
     function mobileTimelineEventCoordinates(event = {}) {
       const lng = Number(event.longitude);
       const lat = Number(event.latitude);
-      return Number.isFinite(lng) && Number.isFinite(lat) && lng >= -76 && lng <= -70.5 && lat >= 39.5 && lat <= 42.5 ? [lng, lat] : null;
+      return Number.isFinite(lng) && Number.isFinite(lat) && lng >= -76 && lng <= -70.5 && lat >= 39.5 && lat <= 43.25 ? [lng, lat] : null;
     }
 
     function normalizedMobileBiographyPlaceText(value) {
@@ -12126,6 +12518,15 @@
 
     function mobileBiographyPlaceMatchesEvent(place, event) {
       if (!place || !event) return false;
+      const placeYearMatch = [place.dateLabel, place.date_label, place.label].filter(Boolean).join(" ").match(/\b(1[5-9]\d{2}|20\d{2})\b/);
+      const eventYearMatch = [event.start_year, event.date_label, event.title].filter(value => value !== null && value !== undefined).join(" ").match(/\b(1[5-9]\d{2}|20\d{2})\b/);
+      if (placeYearMatch && eventYearMatch) {
+        const placeYear = Number(placeYearMatch[1]);
+        const eventStart = Number(event.start_year || eventYearMatch[1]);
+        const eventEnd = Number(event.end_year || eventStart);
+        if (Number.isFinite(placeYear) && Number.isFinite(eventStart) && Number.isFinite(eventEnd)
+          && (placeYear < Math.min(eventStart, eventEnd) || placeYear > Math.max(eventStart, eventEnd))) return false;
+      }
       const placeText = normalizedMobileBiographyPlaceText([place.label, place.place].filter(Boolean).join(" "));
       const eventText = normalizedMobileBiographyPlaceText([
         timelineLocationLabel(event),
@@ -12144,29 +12545,10 @@
     }
 
     function cleanupBiographyArticleHtml(article, html) {
-      if (!isBiographyWikiArticle(article) || !html) return html;
-      const template = document.createElement("template");
-      template.innerHTML = String(html || "");
-      [...template.content.querySelectorAll("h2, h3")].forEach(heading => {
-        const label = publicCleanText(heading.textContent || "");
-        const isIntroHeading = /^introduction$/i.test(label);
-        const isDuplicateSection = /^(places connected|connected places|places|why this matters)$/i.test(label);
-        if (!isIntroHeading && !isDuplicateSection) return;
-        const level = Number(heading.tagName.replace(/^H/i, "")) || 2;
-        let node = heading.nextSibling;
-        heading.remove();
-        if (isIntroHeading) return;
-        while (node) {
-          const next = node.nextSibling;
-          const isBoundary = node.nodeType === Node.ELEMENT_NODE
-            && /^H[1-6]$/i.test(node.tagName || "")
-            && (Number(node.tagName.replace(/^H/i, "")) || 2) <= level;
-          if (isBoundary) break;
-          node.remove();
-          node = next;
-        }
+      return HTML_UTILS.cleanupBiographyArticleHtml(html, {
+        enabled: isBiographyWikiArticle(article),
+        cleanText: publicCleanText
       });
-      return template.innerHTML.trim();
     }
 
     function mobileBiographyTimelineData(article, events = []) {
@@ -12287,10 +12669,16 @@
 
     function clearMobileBiographyPathOverlay() {
       if (state.map) {
-        for (const id of ["mobile-biography-place-labels", "mobile-biography-place-points", "mobile-biography-place-path"]) {
-          if (state.map.getLayer(id)) state.map.removeLayer(id);
+        if (state.mobileBiographyPathStyleLoadHandler) {
+          state.map.off("style.load", state.mobileBiographyPathStyleLoadHandler);
+          state.mobileBiographyPathStyleLoadHandler = null;
         }
-        if (state.map.getSource("mobile-biography-place-path")) state.map.removeSource("mobile-biography-place-path");
+        if (state.map.isStyleLoaded?.()) {
+          for (const id of ["mobile-biography-place-labels", "mobile-biography-place-points", "mobile-biography-place-path"]) {
+            if (state.map.getLayer(id)) state.map.removeLayer(id);
+          }
+          if (state.map.getSource("mobile-biography-place-path")) state.map.removeSource("mobile-biography-place-path");
+        }
       }
       if (Array.isArray(state.mobileBiographyPathMarkers)) {
         state.mobileBiographyPathMarkers.forEach(marker => marker?.remove?.());
@@ -12325,6 +12713,20 @@
       clearMobileBiographyPathOverlay();
       if (!path || !state.map) return;
       state.activeMobileBiographyPath = path;
+      if (!state.map.isStyleLoaded?.()) {
+        const map = state.map;
+        const expectedSlug = String(article?.slug || "");
+        const handleStyleLoad = () => {
+          if (state.mobileBiographyPathStyleLoadHandler === handleStyleLoad) {
+            state.mobileBiographyPathStyleLoadHandler = null;
+          }
+          if (state.map !== map || state.activeMobileBiographyPath !== path || String(state.selectedWikiSlug || "") !== expectedSlug) return;
+          showMobileBiographyPathOverlay(article, options);
+        };
+        state.mobileBiographyPathStyleLoadHandler = handleStyleLoad;
+        map.once("style.load", handleStyleLoad);
+        return;
+      }
       state.map.addSource("mobile-biography-place-path", { type: "geojson", data: mobileBiographyPathFeatureCollection(path, article) });
       const beforeLayer = state.map.getLayer("mobile-site-icons") ? "mobile-site-icons" : undefined;
       state.map.addLayer({
@@ -12436,20 +12838,8 @@
     function mobileMovingBiographyLoop(route = [], travelMs = MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS, offsetMs = 0, now = performance.now(), options = {}) {
       const routeDuration = Math.max(1000, travelMs);
       if (options.continuous === true) {
-        const cycle = Math.max(1000, routeDuration * 2);
-        const elapsed = (((now + offsetMs) % cycle) + cycle) % cycle;
-        const returning = elapsed > routeDuration;
-        const progress = returning ? 1 - ((elapsed - routeDuration) / routeDuration) : elapsed / routeDuration;
-        const coordinates = mobileMovingCoordinateAt(route, Math.max(0, Math.min(1, progress))) || route[0] || [FALLBACK_CENTER[0], FALLBACK_CENTER[1]];
-        const sampleProgress = Math.max(0, Math.min(1, progress + (returning ? -0.01 : 0.01)));
-        const sample = mobileMovingCoordinateAt(route, sampleProgress) || coordinates;
-        return {
-          coordinates,
-          direction: sample[0] >= coordinates[0] ? "right" : "left",
-          progress,
-          opacity: 1,
-          phase: "moving"
-        };
+        const motion = mobileMovingPingPong(route, routeDuration, offsetMs, now);
+        return { ...motion, opacity: 1, phase: "moving" };
       }
       const cycle = routeDuration + (MOBILE_BIOGRAPHY_MARKER_FADE_MS * 2) + MOBILE_BIOGRAPHY_MARKER_RESET_MS;
       let elapsed = (((now + offsetMs) % cycle) + cycle) % cycle;
@@ -12479,9 +12869,15 @@
 
     function mobileBiographyZoomMotionScale(zoomValue = Number(state.map?.getZoom?.())) {
       const zoom = Number(zoomValue);
+      // Treat an unavailable startup zoom as an overview. This avoids a brief
+      // full-speed burst while the hidden compatibility map synchronizes with
+      // the visible native camera.
       if (!Number.isFinite(zoom)) return 0.12;
       if (zoom <= 8) return 0.12;
       if (zoom <= 11.5) return 0.12 + ((zoom - 8) / 3.5) * 0.1;
+      // More map pixels represent the same ground distance as the visitor
+      // zooms closer. Keep frequent native frames for smoothness, but reduce
+      // route advancement so the person never appears to sprint.
       return Math.max(0.08, 0.22 / Math.pow(2, (zoom - 11.5) * 0.5));
     }
 
@@ -12523,7 +12919,10 @@
           controller.cycleDuration = cycleDuration;
           controller.signature = signature;
         }
-        const paused = document.hidden || state.profileMapMode || isAndroidMapGestureActive() || mobileMapCameraIsInteracting();
+        // Gesture events own the pause lifecycle. MapLibre's isMoving/isZooming
+        // flags can remain true after a native Android pinch and must not become
+        // a permanent per-frame gate for biography motion.
+        const paused = document.hidden || state.profileMapMode || state.mobileMovingMarkerPauseReasons.size > 0;
         const rawDelta = Math.max(0, now - Number(controller.lastFrameAt || now));
         controller.lastFrameAt = now;
         if (!paused) {
@@ -12563,26 +12962,34 @@
     }
 
     function mobileMovingPointIsOnLand(coordinates = []) {
-      // Before land data arrives, use the safe canoe state.
+      // Before land data arrives, use the safe walking state. Painting a boat
+      // over unknown terrain is more visibly wrong than waiting for shoreline
+      // classification before showing a canoe.
       const geometry = state.landMaskData?.geometry || null;
-      if (!coordinates.every(Number.isFinite) || !geometry) return false;
+      if (!coordinates.every(Number.isFinite) || !geometry) return true;
       if (state.mobileMovingLandCacheGeometry !== geometry) {
         state.mobileMovingLandCacheGeometry = geometry;
         state.mobileMovingLandStateCache.clear();
       }
-      // Reuse shoreline classification within a small map cell instead of
-      // rescanning the full land mask on every animation frame.
+      // Surface state changes at shoreline scale, not every few feet. Reusing
+      // a roughly 0.001-degree cell prevents every animation frame from
+      // rescanning the complete Long Island land mask.
       const cacheKey = `${Number(coordinates[0]).toFixed(3)},${Number(coordinates[1]).toFixed(3)}`;
       if (state.mobileMovingLandStateCache.has(cacheKey)) return state.mobileMovingLandStateCache.get(cacheKey);
       try {
-        const result = mobileMovingLandSamples(coordinates).some(sample => pointInGeometry(sample, geometry));
+        const samples = mobileMovingLandSamples(coordinates);
+        const centerIsLand = Boolean(samples[0] && pointInGeometry(samples[0], geometry));
+        const surroundingLandSamples = samples.slice(1).filter(sample => pointInGeometry(sample, geometry)).length;
+        const result = centerIsLand || surroundingLandSamples >= Math.ceil(samples.length / 2);
         if (state.mobileMovingLandStateCache.size >= MOBILE_MOVING_LAND_CACHE_MAX) {
           state.mobileMovingLandStateCache.delete(state.mobileMovingLandStateCache.keys().next().value);
         }
         state.mobileMovingLandStateCache.set(cacheKey, result);
         return result;
       } catch {
-        return false;
+        // Classification failures must keep the person walking. Returning
+        // water here paints a canoe over unknown terrain.
+        return true;
       }
     }
 
@@ -12649,9 +13056,14 @@
         if (group.length < 2) continue;
         group.sort((a, b) => String(a.slug).localeCompare(String(b.slug)));
         group.forEach((item, index) => {
-          const angle = group.length === 2 ? index * Math.PI : (-Math.PI / 2) + ((Math.PI * 2 * index) / group.length);
+          const angle = group.length === 2
+            ? index * Math.PI
+            : (-Math.PI / 2) + ((Math.PI * 2 * index) / group.length);
           const radius = group.length === 2 ? 18 : 22;
-          offsets.set(item.slug, [Math.round(Math.cos(angle) * radius), Math.round(Math.sin(angle) * radius)]);
+          offsets.set(item.slug, [
+            Math.round(Math.cos(angle) * radius),
+            Math.round(Math.sin(angle) * radius)
+          ]);
         });
       }
       return offsets;
@@ -12700,6 +13112,8 @@
             offset: index * 31000,
             localWander: configuredRoute.length === 1,
             fixedSurfaceIsLand: configuredRoute.length === 1 ? mobileMovingPointIsOnLand(route[0]) : null,
+            // A local wander should turn around naturally instead of vanishing
+            // beside one place. Living contributors remain present as well.
             continuous: configuredRoute.length === 1 || MOBILE_BIOGRAPHY_CONTINUOUS_SLUGS.has(slug)
           };
         })
@@ -12709,7 +13123,54 @@
       return items;
     }
 
+    function stopMobileBiographyFollow(options = {}) {
+      const slug = state.mobileFollowedBiographySlug;
+      if (options.user === true && slug) state.mobileBiographyFollowUserStoppedSlug = slug;
+      state.mobileFollowedBiographySlug = "";
+      state.mobileBiographyFollowLastCenteredAt = 0;
+      for (const entry of state.mobileMovingBiographyMarkers.values()) {
+        const button = entry.marker?.getElement?.()?.querySelector?.(".mobile-moving-biography-marker");
+        if (button) button.dataset.followed = "false";
+      }
+      if (nativeMapBridgeAvailable()) syncNativeMovingFeaturesToAndroid(performance.now());
+    }
+
+    function syncMobileFollowedBiographyCamera(item, motion, now = performance.now(), options = {}) {
+      if (!state.map || !item || item.slug !== state.mobileFollowedBiographySlug || !motion?.coordinates?.every(Number.isFinite)) return;
+      if (!options.force && now - Number(state.mobileBiographyFollowLastCenteredAt || 0) < MOBILE_MOVING_MARKER_INTERVAL_MS) return;
+      state.mobileBiographyFollowCameraMoving = true;
+      try {
+        state.map.easeTo?.({
+          center: motion.coordinates,
+          ...(nativeMapBridgeAvailable() ? {} : { offset: mobilePanelMapOffset() }),
+          duration: 0,
+          essential: true
+        });
+        state.mobileBiographyFollowLastCenteredAt = now;
+      } finally {
+        state.mobileBiographyFollowCameraMoving = false;
+      }
+    }
+
+    function startMobileBiographyFollow(slug) {
+      if (!slug || !mobileBiographyIconsEnabled() || state.mobileBiographyFollowUserStoppedSlug === slug) return false;
+      const item = mobileMovingBiographyItems().find(candidate => candidate.slug === slug);
+      if (!item) return false;
+      state.mobileFollowedBiographySlug = slug;
+      state.mobileBiographyFollowLastCenteredAt = 0;
+      ensureMobileMovingBiographyMarkers();
+      const now = performance.now();
+      const motion = mobileBiographyMotionFor(item, now);
+      const marker = state.mobileMovingBiographyMarkers.get(slug)?.marker;
+      if (marker) updateMobileMovingBiographyMarker(item, marker, now);
+      if (nativeMapBridgeAvailable()) syncNativeMovingFeaturesToAndroid(now);
+      syncMobileFollowedBiographyCamera(item, motion, now, { force: true });
+      startMobileMovingFeatureAnimation();
+      return true;
+    }
+
     function mobileMovingBiographyStatus(item, motion) {
+      if (item?.localWander) return "";
       const places = item?.path?.places || [];
       if (!places.length) return "";
       const targetIndex = Math.min(places.length - 1, Math.max(0, Math.ceil((motion?.progress || 0) * (places.length - 1))));
@@ -12737,6 +13198,7 @@
       (state.nativeMovingBiographyItems || []).forEach(item => {
         const motion = mobileBiographyMotionFor(item, now);
         const status = mobileMovingBiographyStatus(item, motion);
+        const followed = item.slug === state.mobileFollowedBiographySlug;
         features.push({
           type: "Feature",
           geometry: { type: "Point", coordinates: mobileBiographyDisplayCoordinates(motion.coordinates, item.displayOffset) },
@@ -12747,11 +13209,14 @@
             icon_key: "nli-icon-person-biography-marker",
             title: item.person || "Biography",
             label: status ? `${item.person || "Biography"}\n${status}` : (item.person || "Biography"),
-            show_label: showLabel,
+            show_label: showLabel || followed,
             motion_opacity: Number(motion.opacity.toFixed(3)),
             motion_phase: motion.phase,
             direction: motion.direction,
-            on_water: !mobileMovingPointIsOnLand(motion.coordinates)
+            on_water: item.fixedSurfaceIsLand == null
+              ? !mobileMovingPointIsOnLand(motion.coordinates)
+              : !item.fixedSurfaceIsLand,
+            followed
           }
         });
       });
@@ -12795,8 +13260,8 @@
           native_key: WHALING_FEATURE_SLUG,
           moving_kind: "ship",
           icon_key: "nli-icon-amethyst-moving-bark",
-          title: "Amethyst: global Shinnecock whaling",
-          label: "Amethyst: global Shinnecock whaling",
+          title: "Whaling",
+          label: "Whaling",
           show_label: false,
           motion_opacity: Number(shipMotion.opacity.toFixed(3)),
           motion_phase: shipMotion.phase,
@@ -12818,7 +13283,7 @@
     function mobileMovingBiographyHtml(item) {
       const name = item?.person || "Biography";
       return `
-        <button class="mobile-moving-biography-marker" type="button" aria-label="Open ${escapeHtml(name)}">
+        <button class="mobile-moving-biography-marker" type="button" data-on-water="false" aria-label="Open ${escapeHtml(name)}">
           <span class="mobile-moving-biography-shell" aria-hidden="true">
             <span class="mobile-moving-biography-canoe"></span>
             <img src="${escapeHtml(BIOGRAPHY_PERSON_ICON_URL)}" alt="">
@@ -12868,11 +13333,16 @@
       if (!button) return;
       button.dataset.direction = motion.direction;
       button.dataset.motionPhase = motion.phase;
+      button.dataset.followed = item.slug === state.mobileFollowedBiographySlug ? "true" : "false";
       button.style.opacity = String(Math.max(0, Math.min(1, motion.opacity)));
-      button.dataset.showLabel = state.map?.getZoom?.() >= SITE_POINT_LABEL_MIN_ZOOM ? "true" : "false";
-      button.dataset.onWater = mobileMovingPointIsOnLand(motion.coordinates) ? "false" : "true";
+      button.dataset.showLabel = state.map?.getZoom?.() >= SITE_POINT_LABEL_MIN_ZOOM || item.slug === state.mobileFollowedBiographySlug ? "true" : "false";
+      const isOnLand = item.fixedSurfaceIsLand == null
+        ? mobileMovingPointIsOnLand(motion.coordinates)
+        : item.fixedSurfaceIsLand;
+      button.dataset.onWater = isOnLand ? "false" : "true";
       const status = button.querySelector(".mobile-moving-biography-status");
       if (status) status.textContent = mobileMovingBiographyStatus(item, motion);
+      if (item.slug === state.mobileFollowedBiographySlug) syncMobileFollowedBiographyCamera(item, motion, now);
     }
 
     function ensureMobileMovingBiographyMarkers() {
@@ -12911,8 +13381,9 @@
         const element = document.createElement("div");
         element.className = "mobile-moving-biography-mapbox-icon";
         element.innerHTML = mobileMovingBiographyHtml(item);
+        const initialMotion = mobileBiographyMotionFor(item, performance.now());
         const marker = new mapboxgl.Marker({ element, anchor: "center" })
-          .setLngLat(item.route[0])
+          .setLngLat(initialMotion.coordinates)
           .addTo(state.map);
         state.mobileMovingBiographyMarkers.set(item.slug, { item, marker });
         bindMobileMovingBiographyElement(marker, item);
@@ -13017,7 +13488,7 @@
 
     function mobileMovingAmethystShipHtml() {
       return `
-        <button class="mobile-moving-amethyst-ship-marker" type="button" aria-label="Open Amethyst and global Shinnecock whaling history">
+        <button class="mobile-moving-amethyst-ship-marker" type="button" aria-label="Open Whaling">
           <span class="mobile-moving-amethyst-ship-shell" aria-hidden="true"><img src="${escapeHtml(AMETHYST_SHIP_ICON_URL)}" alt=""></span>
         </button>
       `;
@@ -13053,15 +13524,17 @@
     }
 
     function updateMobileMovingFeatureMarkers(now = performance.now()) {
-      if (!state.map || document.hidden || isAndroidMapGestureActive() || mobileMapCameraIsInteracting() || now < (state.mobileMovingMarkerInteractionUntil || 0)) return;
+      if (!state.map || document.hidden || state.profileMapMode || state.mobileMovingMarkerPauseReasons.size || isAndroidMapGestureActive() || now < (state.mobileMovingMarkerInteractionUntil || 0)) return;
       if (nativeMapBridgeAvailable()) {
         removeMobileMovingDomMarkers();
         syncNativeMovingFeaturesToAndroid(now);
+        const followedItem = (state.nativeMovingBiographyItems || []).find(item => item.slug === state.mobileFollowedBiographySlug);
+        if (followedItem) syncMobileFollowedBiographyCamera(followedItem, mobileBiographyMotionFor(followedItem, now), now);
         return;
       }
       const motionNow = Math.max(0, now - (state.mobileMovingMarkerPausedDurationMs || 0));
       for (const entry of state.mobileMovingBiographyMarkers.values()) {
-        updateMobileMovingBiographyMarker(entry.item, entry.marker, motionNow);
+        updateMobileMovingBiographyMarker(entry.item, entry.marker, now);
       }
       updateMobileMovingDogMarker(motionNow);
       updateMobileMovingWhaleMarker(motionNow);
@@ -13074,16 +13547,107 @@
       if (!state.mobileMovingMarkerPausedAt) state.mobileMovingMarkerPausedAt = now;
     }
 
+    function pauseMobileMovingFeatureAnimation(reason = "map", now = performance.now()) {
+      const pauseReason = String(reason || "map");
+      if ((pauseReason === "map" || pauseReason === "native-map") && !state.mobileMovingMarkerMapPauseStartedAt) {
+        state.mobileMovingMarkerMapPauseStartedAt = now;
+      }
+      state.mobileMovingMarkerPauseReasons.add(pauseReason);
+      state.mobileBiographyMotionControllers.forEach(controller => { controller.lastFrameAt = now; });
+      stopMobileMovingFeatureAnimation(now);
+      if (pauseReason === "map" || pauseReason === "native-map") scheduleMobileMovingFeatureMapRecovery();
+    }
+
+    function resumeMobileMovingFeatureAnimation(reason = "map", now = performance.now()) {
+      state.mobileMovingMarkerPauseReasons.delete(String(reason || "map"));
+      if (!state.mobileMovingMarkerPauseReasons.has("map") && !state.mobileMovingMarkerPauseReasons.has("native-map")) {
+        window.clearTimeout(state.mobileMovingMarkerMapRecoveryTimer);
+        state.mobileMovingMarkerMapRecoveryTimer = null;
+        state.mobileMovingMarkerMapPauseStartedAt = 0;
+      }
+      if (state.mobileMovingMarkerPauseReasons.size || document.hidden || state.profileMapMode) return;
+      state.mobileBiographyMotionControllers.forEach(controller => { controller.lastFrameAt = now; });
+      syncMobileMovingFeatureVisibility(now);
+    }
+
+    function scheduleMobileMovingFeatureMapRecovery(delay = 1200) {
+      window.clearTimeout(state.mobileMovingMarkerMapRecoveryTimer);
+      state.mobileMovingMarkerMapRecoveryTimer = window.setTimeout(() => {
+        state.mobileMovingMarkerMapRecoveryTimer = null;
+        if (document.hidden || state.profileMapMode) return;
+        const now = performance.now();
+        const pauseStartedAt = Number(state.mobileMovingMarkerMapPauseStartedAt || now);
+        const pausedFor = Math.max(0, now - pauseStartedAt);
+        if (mobileMapCameraIsInteracting() && pausedFor < MOBILE_MOVING_MARKER_MAP_RECOVERY_MAX_MS) {
+          scheduleMobileMovingFeatureMapRecovery(400);
+          return;
+        }
+        state.mobileMovingMarkerPauseReasons.delete("map");
+        state.mobileMovingMarkerPauseReasons.delete("native-map");
+        state.mobileMovingMarkerMapPauseStartedAt = 0;
+        state.androidMapGestureActive = false;
+        window.clearTimeout(state.mobileMovingMarkerMapResumeTimer);
+        state.mobileMovingMarkerMapResumeTimer = null;
+        window.clearTimeout(state.androidMapGestureSettleTimer);
+        state.androidMapGestureSettleTimer = null;
+        syncMobileMovingFeatureVisibility(now);
+      }, Math.max(300, Number(delay) || 1200));
+    }
+
+    function bindMobileMovingFeatureMapLifecycle() {
+      if (!state.map || state.mobileMovingMarkerMapLifecycleBound) return;
+      state.mobileMovingMarkerMapLifecycleBound = true;
+      state.map.on("movestart", () => {
+        if (state.mobileBiographyFollowCameraMoving) return;
+        // In the native APK this is the hidden compatibility map mirroring
+        // the visible MapLibre camera. NativeMapController already supplies
+        // the real gesture lifecycle, so this event must not pause motion.
+        if (nativeMapBridgeAvailable()) return;
+        stopMobileBiographyFollow({ user: true });
+        window.clearTimeout(state.mobileMovingMarkerMapResumeTimer);
+        state.mobileMovingMarkerMapResumeTimer = null;
+        pauseMobileMovingFeatureAnimation("map", performance.now());
+      });
+      state.map.on("moveend", () => {
+        if (nativeMapBridgeAvailable()) return;
+        window.clearTimeout(state.mobileMovingMarkerMapResumeTimer);
+        state.mobileMovingMarkerMapResumeTimer = window.setTimeout(() => {
+          state.mobileMovingMarkerMapResumeTimer = null;
+          resumeMobileMovingFeatureAnimation("map", performance.now());
+        }, 160);
+      });
+    }
+
     function syncMobileMovingFeatureVisibility(now = performance.now()) {
       if (document.hidden) {
-        stopMobileMovingFeatureAnimation(now);
+        pauseMobileMovingFeatureAnimation("visibility", now);
         return;
       }
+      const resumedFromVisibility = state.mobileMovingMarkerPauseReasons.has("visibility");
+      state.mobileMovingMarkerPauseReasons.delete("visibility");
+      if (resumedFromVisibility) {
+        // A native pinch can be interrupted by Android locking or backgrounding
+        // the activity before ACTION_UP is delivered. Its recovery timer may
+        // also expire while hidden. Treat a visible Activity as a fresh gesture
+        // boundary so that stale native-map reasons cannot freeze every guide.
+        state.mobileMovingMarkerPauseReasons.delete("map");
+        state.mobileMovingMarkerPauseReasons.delete("native-map");
+        state.mobileMovingMarkerMapPauseStartedAt = 0;
+        state.androidMapGestureActive = false;
+        window.clearTimeout(state.mobileMovingMarkerMapRecoveryTimer);
+        state.mobileMovingMarkerMapRecoveryTimer = null;
+        window.clearTimeout(state.mobileMovingMarkerMapResumeTimer);
+        state.mobileMovingMarkerMapResumeTimer = null;
+        window.clearTimeout(state.androidMapGestureSettleTimer);
+        state.androidMapGestureSettleTimer = null;
+      }
+      if (state.mobileMovingMarkerPauseReasons.size || state.profileMapMode) return;
       const pausedAt = Number(state.mobileMovingMarkerPausedAt || 0);
       if (pausedAt) {
         state.mobileMovingMarkerPausedDurationMs += Math.max(0, now - pausedAt);
         state.mobileMovingMarkerPausedAt = 0;
       }
+      state.mobileBiographyMotionControllers.forEach(controller => { controller.lastFrameAt = now; });
       state.mobileMovingMarkerLastAt = now;
       updateMobileMovingFeatureMarkers(now);
       startMobileMovingFeatureAnimation();
@@ -13102,8 +13666,12 @@
           return;
         }
         const now = performance.now();
-        updateMobileMovingFeatureMarkers(now);
-        state.mobileMovingMarkerLastAt = now;
+        try {
+          updateMobileMovingFeatureMarkers(now);
+          state.mobileMovingMarkerLastAt = now;
+        } catch (error) {
+          console.warn("Mobile map motion update will retry.", error);
+        }
         const interval = nativeMapBridgeAvailable() ? mobileNativeMovingMarkerIntervalMs() : MOBILE_MOVING_MARKER_INTERVAL_MS;
         state.mobileMovingMarkerTimer = window.setTimeout(tick, interval);
       };
@@ -13114,11 +13682,17 @@
 
     async function ensureMobileMovingFeatureMarkers() {
       if (!state.map) return;
+      bindMobileMovingFeatureMapLifecycle();
       ensureMobileMovingDogMarker();
       ensureMobileMovingWhaleMarker();
       ensureMobileMovingAmethystShipMarker();
       ensureMobileMovingBiographyMarkers();
-      ensureLandMask().then(() => updateMobileMovingFeatureMarkers()).catch(() => {});
+      ensureLandMask().then(() => {
+        // Single-place biographies become eligible for their local wandering
+        // loop only after the shoreline is known, so add those markers now.
+        ensureMobileMovingBiographyMarkers();
+        updateMobileMovingFeatureMarkers();
+      }).catch(() => {});
       updateMobileMovingFeatureMarkers();
       startMobileMovingFeatureAnimation();
     }
@@ -13140,6 +13714,12 @@
         showBanner("This knowledgebase article is not available yet.");
         return;
       }
+      if (state.selectedWikiSlug !== slug || options.mapCenter?.every?.(Number.isFinite)) {
+        state.mobileBiographyFollowUserStoppedSlug = "";
+      }
+      const contentUpdateItems = Array.isArray(options.contentUpdateItems)
+        ? options.contentUpdateItems
+        : mobileUnreadContentActivityItems("wiki", slug);
       markMobileContentActivitySeen("wiki", slug);
       const lifecycleSnapshot = options.lifecycleSnapshot || null;
       const drawerState = lifecycleSnapshot?.detailDrawerState || options.drawerState || "half";
@@ -13170,39 +13750,48 @@
         detailBodyEl.innerHTML = `<p class="summary">This knowledgebase article is not available in this view yet.</p>`;
         return;
       }
-      // The article body is the primary response to a biography/map tap. Do
-      // not hold it behind the supplemental timeline request: on a slower
-      // mobile connection that made otherwise text-only biographies appear
-      // frozen for several seconds. Existing timeline rows render now and the
-      // targeted request hydrates the journey below as soon as it is ready.
+      // Show the primary biography/article as soon as its detail record is
+      // ready. The targeted timeline request is supplemental and hydrates the
+      // journey in place instead of holding a text-only article behind it.
       const timelinePromise = ensureTimelineDetailsForSource("wiki", article.id, article.slug);
       if (state.selectedWikiSlug !== slug) return;
       const event = options.timelineEventId
         ? (state.timelineById.get(String(options.timelineEventId)) || options.timelineEvent || state.timelineEvents.find(item => String(item.id) === String(options.timelineEventId)))
         : null;
-      const image = mobileSnapshotImageUrl(firstContentImage(article.content || ""));
+      const contentImage = firstContentImage(article.content || "");
+      const image = mobileSnapshotImageUrl(contentImage);
+      const sourceMediaHero = /^\s*<figure\b[^>]*\bdata-source-media=/i.test(article.content || "");
       const articleTimelineHtml = article.content ? sectionTimelineHtml(cleanHtml(article.content)) : "";
       const rawArticleContentHtml = article.content ? (articleTimelineHtml || cleanHtml(article.content)) : "";
+      const dedupedArticleContentHtml = removeRepeatedContent(removeFirstContentImageFromHtml(rawArticleContentHtml, contentImage));
+      const linked = new Set();
+      const excludeHref = `#wiki/${article.slug}`;
       const articleContentHtml = cleanupBiographyArticleHtml(
         article,
-        autoLinkHtml(isBiographyWikiArticle(article) ? rawArticleContentHtml : removeFootnoteReferenceMarkers(rawArticleContentHtml), {
-          used: new Set(),
-          excludeHref: `#wiki/${article.slug}`
+        autoLinkHtml(isBiographyWikiArticle(article) ? dedupedArticleContentHtml : removeFootnoteReferenceMarkers(dedupedArticleContentHtml), {
+          used: linked,
+          excludeHref
         })
       );
       const showArticleSummary = Boolean(publicCleanText(article.summary)) && !articleContentHtml;
       const wikiMoments = timelineEventsForSource("wiki", article.id, article.slug);
       const biographyTimeline = mobileBiographyTimelineData(article, wikiMoments);
+      const shouldFollowBiography = isBiographyWikiArticle(article)
+        && options.followBiography !== false
+        && mobileBiographyIconsEnabled()
+        && state.mobileBiographyFollowUserStoppedSlug !== article.slug
+        && mobileMovingBiographyItems().some(item => item.slug === article.slug);
+      if (!shouldFollowBiography) stopMobileBiographyFollow();
       const sourceUrl = safeExternalUrl(article.source_url);
       detailTitleEl.innerHTML = `
         <h2>${escapeHtml(article.title)}</h2>
         <p class="detail-meta">${article.lastmod ? "Knowledgebase article" : "Knowledgebase"}</p>
       `;
       detailBodyEl.innerHTML = `
-        ${image ? `<img class="hero article-sticky-hero" src="${escapeHtml(image)}" alt="${escapeHtml(article.title)}" loading="lazy" decoding="async" onerror="${imageErrorAction("")}">` : ""}
-        ${showArticleSummary ? `<p class="summary">${escapeHtml(publicCleanText(article.summary))}</p>` : ""}
+        ${image ? `<img class="hero article-sticky-hero${sourceMediaHero ? " source-media-hero" : ""}" src="${escapeHtml(image)}" alt="${escapeHtml(article.title)}" loading="lazy" decoding="async" onerror="${imageErrorAction("")}">` : ""}
+        ${showArticleSummary ? `<p class="summary">${autoLinkHtml(escapeHtml(publicCleanText(article.summary)), { used: linked, excludeHref })}</p>` : ""}
         ${articleContentHtml ? `<section class="section"><h3>Sections</h3><div class="section-content">${articleContentHtml}</div></section>` : ""}
-        ${whyThisMattersHtml(article)}
+        ${whyThisMattersHtml(article, { used: linked, excludeHref })}
         <div data-mobile-wiki-biography-path>${mobileBiographyPathHtml(article, wikiMoments)}</div>
         ${sourcesEvidenceSection(article)}
         ${plantWikiObservationSitesHtml(article)}
@@ -13230,7 +13819,7 @@
       if (detailScrollSnapshot) restoreAndroidLifecycleDetailScroll(detailScrollSnapshot);
       if (biographyTimeline?.places?.length >= 2) {
         showMobileBiographyPathOverlay(article, {
-          focus: options.restoreMapState === true ? false : options.focus !== false,
+          focus: shouldFollowBiography || options.restoreMapState === true ? false : options.focus !== false,
           events: wikiMoments
         });
       }
@@ -13247,22 +13836,30 @@
           });
         }
       }).catch(() => {});
+      if (shouldFollowBiography) startMobileBiographyFollow(article.slug);
       if (event?.id) {
         window.setTimeout(() => focusMobileHistoricMoment(event.id), 120);
       }
+      window.requestAnimationFrame(() => revealMobileWikiContentUpdate(article, contentUpdateItems));
       if (!options.skipCommentRefresh) refreshDiscussionSourceData("wiki", article).then(updated => {
-        if (updated) updateOpenDiscussionSection("wiki", article);
+        if (!updated) return;
+        updateOpenDiscussionSection("wiki", article);
+        if (contentUpdateItems.length) {
+          window.setTimeout(() => revealMobileWikiContentUpdate(article, contentUpdateItems), 40);
+        }
       });
     }
 
     function openInfoPanel(title, meta, bodyHtml, quizContext = null) {
       cancelAndroidLifecycleDetailScrollRestore();
+      stopMobileBiographyFollow();
+      state.mobileBiographyFollowUserStoppedSlug = "";
       clearMobileBiographyPathOverlay();
       detailTitleEl.innerHTML = `
         <h2>${escapeHtml(title)}</h2>
         <p class="detail-meta">${escapeHtml(meta || "On This Site")}</p>
       `;
-      detailBodyEl.innerHTML = bodyHtml;
+      detailBodyEl.innerHTML = removeRepeatedContent(bodyHtml);
       state.selectedSlug = "";
       state.selectedSite = null;
       state.selectedWikiSlug = "";
@@ -13379,12 +13976,28 @@
           </article>
           <article class="ots-page-card">
             <h3>Created by</h3>
-            <p>On This Site is created by Shinnecock artist and photographer Jeremy Dennis as part of Native Long Island cultural mapping and public history work.</p>
+            <div class="ots-about-person">
+              <a class="ots-about-portrait-link" href="https://www.jeremynative.com/" target="_blank" rel="noopener noreferrer" aria-label="Visit Jeremy Dennis's website">
+                <img class="ots-about-portrait" src="assets/about/jeremy-dennis.png" alt="Jeremy Dennis, Shinnecock artist and founder of On This Site" loading="lazy" decoding="async">
+              </a>
+              <div class="ots-about-person-copy">
+                <p>On This Site is created by Shinnecock artist and photographer Jeremy Dennis as part of Native Long Island cultural mapping and public history work.</p>
+                <a href="https://www.jeremynative.com/" target="_blank" rel="noopener noreferrer">Jeremy Dennis</a>
+              </div>
+            </div>
           </article>
         </section>
         <section class="section ots-support-strip">
           <h3>Project support</h3>
-          <p>On This Site has been supported in part through a Monument Lab fellowship, with continuing support from community members, collaborators, and visitors who help keep the project public.</p>
+          <p>Running Strong for American Indian Youth supported the project through its Dreamstarter program, and Monument Lab has supported the project through a fellowship. Community members, collaborators, and visitors continue to help keep the archive public.</p>
+          <div class="ots-support-logos" aria-label="Project supporters">
+            <a class="ots-support-logo-link" href="https://indianyouth.org/" target="_blank" rel="noopener noreferrer" aria-label="Visit Running Strong for American Indian Youth">
+              <img class="ots-support-logo" src="assets/about/running-strong-logo.png" alt="Running Strong for American Indian Youth" loading="lazy" decoding="async">
+            </a>
+            <a class="ots-support-logo-link" href="https://monumentlab.com/" target="_blank" rel="noopener noreferrer" aria-label="Visit Monument Lab">
+              <img class="ots-support-logo" src="assets/about/monument-lab-logo.svg" alt="Monument Lab" loading="lazy" decoding="async">
+            </a>
+          </div>
           <div class="actions">
             <button class="action secondary" type="button" data-app-page="support">Support Project</button>
             <button class="action secondary" type="button" data-app-page="contact">Contact</button>
@@ -13698,69 +14311,247 @@
       `);
     }
 
-    async function openKnowledgebasePanel() {
-      detailTitleEl.innerHTML = `<h2>Knowledgebase <span class="mobile-content-unread-badge" data-mobile-knowledgebase-unread-badge hidden></span></h2><p class="detail-meta">Articles</p>`;
-      detailBodyEl.innerHTML = `<p class="summary">Loading knowledgebase articles...</p>`;
-      detailEl.classList.add("open");
-      syncMobilePanelAccessibility();
-      await loadDeferredData();
-      const articles = [...state.wikiArticles].sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
-      const categoryItems = category => (category.entries || (category.slugs || []).map(slug => ["wiki", slug]))
+    function mobileKnowledgebaseCategoryItems(category) {
+      if (!category) return [];
+      return (category.entries || (category.slugs || []).map(slug => ["wiki", slug]))
         .map(([type, slug]) => {
           const item = type === "site" ? state.sites.find(site => site.slug === slug) : state.wikiBySlug.get(slug);
           return item ? { type, item } : null;
         })
         .filter(Boolean);
-      const categorizedSlugs = new Set(KNOWLEDGEBASE_CATEGORIES.flatMap(category => categoryItems(category).filter(entry => entry.type === "wiki").map(entry => entry.item.slug)));
-      const uncategorizedArticles = articles.filter(article => !categorizedSlugs.has(article.slug));
+    }
+
+    function mobileKnowledgebaseItemTimestamp(entry) {
+      const item = entry?.item || entry || {};
+      const value = item.last_reviewed || item.lastmod || item.updated_at || item.date_updated || item.modified || "";
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function mobileKnowledgebaseCategoryModel(category) {
+      const matches = mobileKnowledgebaseCategoryItems(category);
+      const newest = [...matches].sort((a, b) => {
+        const dateDifference = mobileKnowledgebaseItemTimestamp(b) - mobileKnowledgebaseItemTimestamp(a);
+        return dateDifference || String(a.item?.title || "").localeCompare(String(b.item?.title || ""));
+      })[0] || null;
+      return {
+        category,
+        label: category.label,
+        description: KNOWLEDGEBASE_CATEGORY_DESCRIPTIONS[category.label] || "Explore connected On This Site research and mapped history.",
+        matches,
+        count: matches.length || (category.entries || category.slugs || []).length,
+        updatedAt: mobileKnowledgebaseItemTimestamp(newest),
+        highlight: newest?.item || null
+      };
+    }
+
+    function orderedMobileKnowledgebaseCategories(mode = state.knowledgebaseSortMode) {
+      const normalizedMode = ["alpha", "updated", "quantity"].includes(mode) ? mode : "quantity";
+      return KNOWLEDGEBASE_CATEGORIES.map(mobileKnowledgebaseCategoryModel).sort((a, b) => {
+        if (normalizedMode === "updated") return (b.updatedAt - a.updatedAt) || a.label.localeCompare(b.label);
+        if (normalizedMode === "quantity") return (b.count - a.count) || a.label.localeCompare(b.label);
+        return a.label.localeCompare(b.label);
+      });
+    }
+
+    function mobileKnowledgebaseSortHtml() {
+      return `
+        <label class="mobile-knowledgebase-sort">
+          <span>Order categories</span>
+          <select data-mobile-kb-category-sort aria-label="Order knowledgebase categories">
+            <option value="alpha"${state.knowledgebaseSortMode === "alpha" ? " selected" : ""}>Alphabetical</option>
+            <option value="updated"${state.knowledgebaseSortMode === "updated" ? " selected" : ""}>Last Updated</option>
+            <option value="quantity"${state.knowledgebaseSortMode === "quantity" ? " selected" : ""}>Content Quantity</option>
+          </select>
+        </label>
+      `;
+    }
+
+    function mobileKnowledgebaseCategoryCardHtml(model) {
+      const highlightTitle = model.highlight?.title || "";
+      return `
+        <button class="mobile-knowledgebase-category-card" type="button" data-mobile-kb-category="${escapeHtml(model.label)}">
+          <span class="mobile-knowledgebase-category-topline">
+            <span class="section-kicker">Category</span>
+            <span>${model.count} item${model.count === 1 ? "" : "s"}</span>
+          </span>
+          <strong>${escapeHtml(model.label)}</strong>
+          <span class="mobile-knowledgebase-category-description">${escapeHtml(model.description)}</span>
+          ${highlightTitle ? `<span class="mobile-knowledgebase-category-highlight"><small>Section highlight</small>${escapeHtml(highlightTitle)}</span>` : ""}
+          <span class="mobile-knowledgebase-category-open">Explore category</span>
+        </button>
+      `;
+    }
+
+    function mobileKnowledgebaseEntryHtml(entry) {
+      return entry.type === "site"
+        ? siteCardButton(entry.item)
+        : `<button class="site-card" type="button" data-wiki-slug="${escapeHtml(entry.item.slug)}" data-mobile-activity-content-type="wiki" data-mobile-activity-content-slug="${escapeHtml(entry.item.slug)}">
+            <span class="thumb empty">${escapeHtml((entry.item.title || "K").slice(0, 1))}</span>
+            <span>
+              <h2>${escapeHtml(entry.item.title || "Knowledgebase article")}<span class="mobile-content-unread-badge" data-mobile-content-unread-badge hidden></span></h2>
+              <p>${escapeHtml(publicCleanText(entry.item.summary || "Open article").slice(0, 150))}</p>
+            </span>
+          </button>`;
+    }
+
+    function mobileBiographyKnowledgebaseGroups(matches = [], featuredSlugs = new Set()) {
+      const definitions = [
+        { title: "Leadership, diplomacy, and governance", description: "Leaders represented in diplomacy, land records, governance, and sovereignty struggles.", pattern: /chief|sachem|sagamore|sunksqua|wyandanch|quashawam|wuchikittawbut|mocomanto|mandush|momoweta|paucamp|wobetom|penhawitz|adam-achitteronose|ninigret|aquash|tackapousha|warawakmy|raseokan|nasseconset|keeossechok|mangwobe/ },
+        { title: "Maritime work, ministry, and community service", description: "Whaling, teaching, church work, craft, family responsibility, and service.", pattern: /worison|jeremiah-pharoah|sylvester-pharoah|nathan-jeffrey|samson-occom|rev-paul-cuffee|peter-john-cuffee|stephen-talkhouse|mary-rebecca-bunn|whaler|minister|teacher|elder|maritime/ },
+        { title: "Writing, research, and public history", description: "People who recorded, interpreted, photographed, and publicly taught Native Long Island history.", pattern: /william-wallace-tooker|john-a-strong|lois-princess-nowedonah-hunter|jeremy-dennis|author|historian|artist|photographer|research/ }
+      ];
+      const available = matches.filter(entry => !featuredSlugs.has(entry.item?.slug));
+      const claimed = new Set();
+      const groups = definitions.map(definition => {
+        const items = available.filter(entry => {
+          const slug = entry.item?.slug || "";
+          const text = `${slug} ${entry.item?.title || ""} ${entry.item?.summary || ""}`.toLowerCase();
+          if (claimed.has(slug) || !definition.pattern.test(text)) return false;
+          claimed.add(slug);
+          return true;
+        });
+        return { ...definition, items };
+      });
+      const remaining = available.filter(entry => !claimed.has(entry.item?.slug));
+      if (remaining.length) groups.push({ title: "Family, community, and cultural memory", description: "Kinship, women’s leadership, cultural memory, and continued community presence.", items: remaining });
+      return groups.filter(group => group.items.length);
+    }
+
+    function mobileBiographyKnowledgebaseHtml(model, matches) {
+      const featuredOrder = ["mary-emma-cuffee-bunn", "wickham-cuffee", "princess-sun-tama-ann-harding-murdock", "chief-robert-pharaoh"];
+      const featured = featuredOrder.map(slug => matches.find(entry => entry.item?.slug === slug)).filter(Boolean);
+      const featuredSlugs = new Set(featured.map(entry => entry.item.slug));
+      const groups = mobileBiographyKnowledgebaseGroups(matches, featuredSlugs);
+      const momentCount = matches.reduce((total, entry) => total + timelineEventsForSource("wiki", entry.item?.id, entry.item?.slug).length, 0);
+      const mappedCount = matches.filter(entry => {
+        const slug = entry.item?.slug || "";
+        return Boolean(BIOGRAPHY_PLACE_PATHS[slug]) || timelineEventsForSource("wiki", entry.item?.id, slug).some(event => Number.isFinite(Number(event.latitude)) && Number.isFinite(Number(event.longitude)));
+      }).length;
+      return `
+        <div class="actions mobile-knowledgebase-back-row">
+          <button class="action secondary" type="button" data-mobile-kb-back>All categories</button>
+        </div>
+        <section class="mobile-biography-kb-hero" aria-labelledby="mobile-biography-kb-title">
+          <p class="section-kicker">People and journeys</p>
+          <h3 id="mobile-biography-kb-title">Lives connected across Native Long Island</h3>
+          <p>${escapeHtml(model.description)} Read each person within family, community, land, labor, and historical context.</p>
+          <div class="mobile-knowledgebase-stats">
+            <span><strong>${matches.length}</strong> biographies</span>
+            <span><strong>${momentCount}</strong> moments</span>
+            <span><strong>${mappedCount}</strong> mapped</span>
+          </div>
+        </section>
+        ${featured.length ? `
+          <section class="section mobile-biography-kb-featured">
+            <div class="mobile-knowledgebase-section-heading"><div><p class="section-kicker">Newly expanded</p><h3>Begin with a life journey</h3></div></div>
+            <p class="mobile-biography-kb-section-copy">Dated moments connect these stories to public map locations. Map lines show chronology, not assumed travel.</p>
+            <div class="compact-list mobile-biography-kb-feature-grid">${featured.map(entry => mobileKnowledgebaseEntryHtml(entry)).join("")}</div>
+          </section>
+        ` : ""}
+        <section class="section mobile-biography-kb-pathways">
+          <div class="mobile-knowledgebase-section-heading"><div><p class="section-kicker">Ways into the collection</p><h3>Explore connected stories</h3></div></div>
+          ${groups.map(group => `
+            <section class="mobile-biography-kb-group">
+              <div class="mobile-biography-kb-group-heading">
+                <h4>${escapeHtml(group.title)}</h4>
+                <p>${escapeHtml(group.description)}</p>
+                <span>${group.items.length} ${group.items.length === 1 ? "biography" : "biographies"}</span>
+              </div>
+              <div class="compact-list mobile-biography-kb-list">${group.items.map(entry => mobileKnowledgebaseEntryHtml(entry)).join("")}</div>
+            </section>
+          `).join("")}
+        </section>
+      `;
+    }
+
+    async function openKnowledgebasePanel(options = {}) {
+      const previousScroll = detailBodyEl.scrollTop;
+      detailTitleEl.innerHTML = `<h2>Knowledgebase <span class="mobile-content-unread-badge" data-mobile-knowledgebase-unread-badge hidden></span></h2><p class="detail-meta">Articles</p>`;
+      detailBodyEl.innerHTML = `<p class="summary">Loading knowledgebase articles...</p>`;
+      detailEl.classList.add("open");
+      syncMobilePanelAccessibility();
+      await loadDeferredData();
+      const articles = [...state.wikiArticles];
+      const categoryModels = orderedMobileKnowledgebaseCategories();
+      const latest = [...articles]
+        .sort((a, b) => mobileKnowledgebaseItemTimestamp(b) - mobileKnowledgebaseItemTimestamp(a))
+        .slice(0, 3);
       detailTitleEl.innerHTML = `<h2>Knowledgebase <span class="mobile-content-unread-badge" data-mobile-knowledgebase-unread-badge hidden></span></h2><p class="detail-meta">${articles.length} articles</p>`;
       detailBodyEl.innerHTML = `
-        <p class="summary">Articles grouped by topic, with community notes when available.</p>
-        <section class="section">
-          <h3>Featured</h3>
-          <div class="compact-list">
-            <button class="site-card" type="button" data-app-page="native-plants">
-              <span class="thumb empty">P</span>
-              <span>
-                <h2>Native Plants</h2>
-                <p>Plant observations, Algonquian vocabulary, and natural-resource notes connected to On This Site.</p>
-              </span>
+        <section class="mobile-knowledgebase-intro" aria-labelledby="mobile-knowledgebase-intro-title">
+          <p class="section-kicker">Research library</p>
+          <h3 id="mobile-knowledgebase-intro-title">Follow a question, person, place, or theme</h3>
+          <p>Explore source-supported articles about Native Long Island history, living communities, language, land, and cultural knowledge.</p>
+          <div class="mobile-knowledgebase-stats">
+            <span><strong>${articles.length}</strong> articles</span>
+            <span><strong>${categoryModels.length}</strong> categories</span>
+          </div>
+        </section>
+        <section class="section mobile-knowledgebase-start">
+          <div class="mobile-knowledgebase-section-heading">
+            <div><p class="section-kicker">Suggested starting points</p><h3>Start exploring</h3></div>
+          </div>
+          <div class="mobile-knowledgebase-start-grid">
+            <button class="mobile-knowledgebase-start-card" type="button" data-wiki-slug="the-tribes-of-long-island">
+              <small>Overview</small><strong>Tribal Nations of Long Island</strong><span>Begin with living communities, homelands, and regional context.</span>
+            </button>
+            <button class="mobile-knowledgebase-start-card" type="button" data-app-page="native-plants">
+              <small>Living landscape</small><strong>Native Plants</strong><span>Connect plant knowledge, vocabulary, and community observations.</span>
             </button>
           </div>
         </section>
-        ${KNOWLEDGEBASE_CATEGORIES.map(category => {
-          const matches = categoryItems(category);
-          if (!matches.length) return "";
-          return `
-            <section class="section compact-list">
-              <h3>${escapeHtml(category.label)}</h3>
-              ${matches.map(entry => entry.type === "site"
-                ? siteCardButton(entry.item)
-                : `<button class="site-card" type="button" data-wiki-slug="${escapeHtml(entry.item.slug)}" data-mobile-activity-content-type="wiki" data-mobile-activity-content-slug="${escapeHtml(entry.item.slug)}">
-                    <span class="thumb empty">${escapeHtml((entry.item.title || "K").slice(0, 1))}</span>
-                    <span>
-                      <h2>${escapeHtml(entry.item.title || "Knowledgebase article")}<span class="mobile-content-unread-badge" data-mobile-content-unread-badge hidden></span></h2>
-                      <p>${escapeHtml(publicCleanText(entry.item.summary || "Open article").slice(0, 150))}</p>
-                    </span>
-                  </button>`).join("")}
-            </section>
-          `;
-        }).join("")}
-        ${uncategorizedArticles.length ? `
-          <section class="section compact-list">
-            <h3>More Articles</h3>
-            ${uncategorizedArticles.map(article => `
-              <button class="site-card" type="button" data-wiki-slug="${escapeHtml(article.slug)}" data-mobile-activity-content-type="wiki" data-mobile-activity-content-slug="${escapeHtml(article.slug)}">
-                <span class="thumb empty">${escapeHtml((article.title || "K").slice(0, 1))}</span>
-                <span>
-                  <h2>${escapeHtml(article.title || "Knowledgebase article")}<span class="mobile-content-unread-badge" data-mobile-content-unread-badge hidden></span></h2>
-                  <p>${escapeHtml(publicCleanText(article.summary || "Open article").slice(0, 150))}</p>
-                </span>
-              </button>
-            `).join("")}
+        <section class="section mobile-knowledgebase-categories">
+          <div class="mobile-knowledgebase-section-heading">
+            <div><p class="section-kicker">Browse by subject</p><h3>Categories</h3></div>
+            ${mobileKnowledgebaseSortHtml()}
+          </div>
+          <div class="mobile-knowledgebase-category-grid">
+            ${categoryModels.map(mobileKnowledgebaseCategoryCardHtml).join("")}
+          </div>
+        </section>
+        ${latest.length ? `
+          <section class="section compact-list mobile-knowledgebase-latest">
+            <div class="mobile-knowledgebase-section-heading">
+              <div><p class="section-kicker">Recently reviewed</p><h3>Latest articles</h3></div>
+            </div>
+            ${latest.map(article => mobileKnowledgebaseEntryHtml({ type: "wiki", item: article })).join("")}
           </section>
         ` : ""}
       `;
+      refreshMobileContentUnreadBadges();
+      if (options.preserveScroll) detailBodyEl.scrollTop = previousScroll;
+      else detailBodyEl.scrollTop = 0;
+    }
+
+    async function openMobileKnowledgebaseCategory(label) {
+      await loadDeferredData();
+      const category = KNOWLEDGEBASE_CATEGORIES.find(item => item.label === label);
+      if (!category) {
+        showBanner("That knowledgebase category is not available.");
+        return;
+      }
+      const model = mobileKnowledgebaseCategoryModel(category);
+      const matches = [...model.matches].sort((a, b) => String(a.item?.title || "").localeCompare(String(b.item?.title || "")));
+      detailTitleEl.innerHTML = `<h2>${escapeHtml(model.label)}</h2><p class="detail-meta">Knowledgebase category · ${matches.length} item${matches.length === 1 ? "" : "s"}</p>`;
+      if (model.label === "Biography") {
+        detailBodyEl.innerHTML = mobileBiographyKnowledgebaseHtml(model, matches);
+        detailBodyEl.scrollTop = 0;
+        refreshMobileContentUnreadBadges();
+        return;
+      }
+      detailBodyEl.innerHTML = `
+        <div class="actions mobile-knowledgebase-back-row">
+          <button class="action secondary" type="button" data-mobile-kb-back>All categories</button>
+        </div>
+        <section class="mobile-knowledgebase-category-intro">
+          <p>${escapeHtml(model.description)}</p>
+        </section>
+        <section class="section compact-list mobile-knowledgebase-category-results">
+          ${matches.map(mobileKnowledgebaseEntryHtml).join("") || `<p class="summary">No articles matched this category yet.</p>`}
+        </section>
+      `;
+      detailBodyEl.scrollTop = 0;
       refreshMobileContentUnreadBadges();
     }
 
@@ -13827,9 +14618,10 @@
     function openBlogPost(index) {
       const post = state.blogPosts[Number(index)];
       if (!post) return;
+      const contentHtml = removeRepeatedContent(cleanHtml(post.content?.rendered || post.excerpt?.rendered || ""));
       openInfoPanel(cleanPlainText(post.title?.rendered || "Blog post"), post.date ? new Date(post.date).toLocaleDateString() : "Blog", `
         ${post._embedded?.["wp:featuredmedia"]?.[0]?.source_url ? `<img class="hero" src="${escapeHtml(post._embedded["wp:featuredmedia"][0].source_url)}" alt="" loading="lazy" decoding="async">` : ""}
-        <section class="section"><div class="section-content">${cleanHtml(post.content?.rendered || post.excerpt?.rendered || "")}</div></section>
+        <section class="section"><div class="section-content">${contentHtml}</div></section>
       `, { type: "blog", item: { title: cleanPlainText(post.title?.rendered || "Blog post"), slug: post.slug || post.id || String(index) } });
     }
 
@@ -14013,6 +14805,10 @@
       return content ? [content.type, content.slug || content.page || ""].join(":") : "";
     }
 
+    function androidLifecycleSnapshotHasActiveContent(snapshot) {
+      return Boolean(androidLifecycleContentKey(snapshot?.content));
+    }
+
     function androidLifecycleSnapshotIsValid(snapshot, now = Date.now()) {
       if (LIFECYCLE_UTILS.snapshotIsValid) {
         return LIFECYCLE_UTILS.snapshotIsValid(snapshot, {
@@ -14117,9 +14913,8 @@
       state.timelineScrubberIndex = Math.max(0, Number(snapshot.timelineScrubberIndex || state.timelineWindowStart || 0));
       state.nearbyRenderLimit = Math.max(defaultNearbyRenderLimit(), Number(snapshot.nearbyRenderLimit || defaultNearbyRenderLimit()));
       state.timelineFeedSignature = visibleMobileTimelineEvents().map(event => String(event.id || "")).join("|");
-      renderMobileTimeline();
+      state.mobileTimelineRendered = false;
       renderList();
-      setMobilePanelMode(snapshot.panelMode === "timeline" ? "timeline" : "nearby");
       const legacyPanelState = snapshot.nearbyExpanded
         ? "maximized"
         : snapshot.nearbyPanelState === "hidden"
@@ -14128,6 +14923,7 @@
             ? "maximized"
             : snapshot.nearbyPanelState;
       setMobileBottomPanelState(snapshot.panelState || legacyPanelState || "normal");
+      setMobilePanelMode(snapshot.panelMode === "timeline" ? "timeline" : "nearby");
       if (searchEl && snapshot.search) {
         searchEl.value = snapshot.search;
         filterSites({ revealPanel: false });
@@ -14248,6 +15044,8 @@
 
     async function openSite(slug, options = {}) {
       cancelAndroidLifecycleDetailScrollRestore();
+      stopMobileBiographyFollow();
+      state.mobileBiographyFollowUserStoppedSlug = "";
       if (state.profileMapMode) exitMobileProfileMapMode();
       const hadStartupSpotlight = Boolean(mobileStartupSpotlightEl && !mobileStartupSpotlightEl.hidden);
       hideMobileStartupSpotlight({
@@ -14313,9 +15111,8 @@
           if (state.selectedSlug === slug) refreshMobileVisitActions(state.selectedSite || site);
         }).catch(() => []);
       }
-      // Render the primary listing as soon as its detail record arrives.
-      // Timeline moments and normalized source relations are supplemental and
-      // hydrate their own regions below instead of blocking every site tap.
+      // Render the core listing immediately. Historic moments and normalized
+      // source relations fill their own regions when those requests finish.
       site = await detailPromise;
       if (state.selectedSlug !== slug) return;
       state.selectedSite = site;
@@ -14338,16 +15135,20 @@
           field: field?.content
         });
       }).join("");
-      const historyHtml = moments.length ? historicMomentsHtml(moments, { showLocations: false }) : "";
+      const historyHtml = moments.length ? historicMomentsHtml(moments, {
+        showLocations: false,
+        linked,
+        excludeHref
+      }) : "";
       detailTitleEl.innerHTML = mobileSiteTitleHtml(site);
       restoreDetailHeroToBody();
       detailBodyEl.innerHTML = `
         ${siteHeroCarouselHtml(site, image, imageFallback)}
-        ${introductionPresentation.leadSummary ? `<p class="summary" data-site-introduction="summary">${escapeHtml(introductionPresentation.leadSummary)}</p>` : ""}
+        ${introductionPresentation.leadSummary ? `<p class="summary" data-site-introduction="summary">${autoLinkHtml(escapeHtml(introductionPresentation.leadSummary), { used: linked, excludeHref })}</p>` : ""}
         ${siteTagsHtml(site)}
         ${sections}
         <div data-mobile-site-timeline-slot>${historyHtml}</div>
-        ${whyThisMattersHtml(site)}
+        ${whyThisMattersHtml(site, { used: linked, excludeHref })}
         ${relatedSitesSection(site)}
         <div data-mobile-site-sources-slot>${sourcesEvidenceSection(site)}</div>
         ${mobileAdoptPlaceCtaHtml(site)}
@@ -14390,7 +15191,11 @@
         if (state.selectedSlug !== slug || !detailEl?.classList.contains("open")) return;
         const updatedMoments = timelineEventsForSource("site", site.id, site.slug);
         const timelineSlot = detailBodyEl.querySelector("[data-mobile-site-timeline-slot]");
-        if (timelineSlot) timelineSlot.innerHTML = historicMomentsHtml(updatedMoments, { showLocations: false });
+        if (timelineSlot) timelineSlot.innerHTML = historicMomentsHtml(updatedMoments, {
+          showLocations: false,
+          linked: new Set(),
+          excludeHref
+        });
       }).catch(() => {});
       void sourceListPromise.then(sourceList => {
         if (!Array.isArray(sourceList) || !sourceList.length || state.selectedSlug !== slug || !detailEl?.classList.contains("open")) return;
@@ -14402,10 +15207,6 @@
       if (!options.skipCommentRefresh) refreshDiscussionSourceData("site", site).then(updated => {
         if (!updated) return;
         updateOpenDiscussionSection("site", site);
-        // A newly fetched comment may not have existed during the initial
-        // reveal pass. Re-run the focused reveal after replacing only the
-        // discussion section so unread activity still lands on the exact card
-        // without rebuilding the entire detail panel.
         if (contentUpdateItems.length && options.focusNewContent !== false) {
           window.setTimeout(() => revealMobileContentUpdate(site, contentUpdateItems), 40);
         }
@@ -14414,6 +15215,8 @@
 
     function closeDetail(options = {}) {
       cancelAndroidLifecycleDetailScrollRestore();
+      stopMobileBiographyFollow();
+      state.mobileBiographyFollowUserStoppedSlug = "";
       stopSiteHeroCarousel();
       restoreDetailHeroToBody();
       const returnToLongIslandView = state.mobileStartupSpotlightReturnOnDetailClose;
@@ -15432,7 +16235,15 @@
         filter: ["all", ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], ["!=", ["get", "broad"], true], ["!=", ["get", "place_name_area_overlay"], true], ["!=", ["get", "geometry_surface"], "land"]],
         paint: {
           "fill-color": ["coalesce", ["get", "fillcolor"], "#7b9b68"],
-          "fill-opacity": ["min", ["coalesce", ["to-number", ["get", "opacity"]], 0.2], 0.28]
+          "fill-opacity": [
+            "case",
+            ["any",
+              ["==", ["get", "geometry_refinement"], SHORELINE_REFINED_GEOMETRY_NOTE],
+              ["==", ["get", "geometry_refinement"], SHINNECOCK_HILLS_REFINED_GEOMETRY_NOTE]
+            ],
+            ["min", ["coalesce", ["to-number", ["get", "opacity"]], 0.42], 0.42],
+            ["min", ["coalesce", ["to-number", ["get", "opacity"]], 0.2], 0.28]
+          ]
         }
       });
       addMobileLandLayer({
@@ -15457,6 +16268,7 @@
           "line-width": 1
         }
       });
+      addMobileWaterLabelLayers();
       state.map.addLayer({
         id: "mobile-site-attention-outer",
         type: "circle",
@@ -15811,7 +16623,7 @@
       state.mapSourceAppliedKey = state.mapSourceCacheKey || "";
       syncMobileBiographyPathLayers();
       prepareMobileStartupSiteRevealLayers();
-      startMobileSiteAttentionPulse();
+      syncMobileSiteAttentionPulseLifecycle();
       ensureMobileMovingFeatureMarkers();
       bindMobileMapLayerEvents();
     }
@@ -16009,8 +16821,28 @@
       state.map.setPaintProperty("mobile-site-attention-core", "circle-opacity", 0.26 + wave * 0.34);
     }
 
+    function stopMobileSiteAttentionPulse() {
+      if (!state.siteAttentionPulseTimer) return;
+      window.clearInterval(state.siteAttentionPulseTimer);
+      state.siteAttentionPulseTimer = null;
+    }
+
+    function mobileSiteAttentionPulseIsNeeded() {
+      if (!state.map || document.hidden || state.profileMapMode) return false;
+      return Boolean(cachedMobileMapSourceData().attention?.features?.length);
+    }
+
+    function syncMobileSiteAttentionPulseLifecycle() {
+      if (!mobileSiteAttentionPulseIsNeeded()) {
+        stopMobileSiteAttentionPulse();
+        return false;
+      }
+      startMobileSiteAttentionPulse();
+      return true;
+    }
+
     function startMobileSiteAttentionPulse() {
-      if (state.siteAttentionPulseTimer) return;
+      if (!mobileSiteAttentionPulseIsNeeded() || state.siteAttentionPulseTimer) return;
       state.siteAttentionPulseStartedAt = Date.now();
       updateMobileSiteAttentionPulse();
       state.siteAttentionPulseTimer = window.setInterval(updateMobileSiteAttentionPulse, 240);
@@ -16054,6 +16886,7 @@
       MAP_UTILS.setGeoJsonSourceDataMany(state.map, sources);
       state.mapSourceAppliedKey = sourceKey;
       syncMobileBiographyPathLayers();
+      syncMobileSiteAttentionPulseLifecycle();
       scheduleNativeMapStateSync("source-refresh");
     }
 
@@ -16063,7 +16896,9 @@
 
     function markAndroidMapGestureActive() {
       if (!isNativeAndroidApp()) return;
+      stopMobileBiographyFollow({ user: true });
       state.androidMapGestureActive = true;
+      pauseMobileMovingFeatureAnimation("native-map", performance.now());
       if (state.androidMapGestureSettleTimer) {
         window.clearTimeout(state.androidMapGestureSettleTimer);
         state.androidMapGestureSettleTimer = null;
@@ -16075,6 +16910,14 @@
       if (state.androidMapGestureSettleTimer) window.clearTimeout(state.androidMapGestureSettleTimer);
       state.androidMapGestureSettleTimer = window.setTimeout(() => {
         state.androidMapGestureActive = false;
+        const settledAt = performance.now();
+        // The hidden WebView map mirrors the native camera with jumpTo(),
+        // which can emit movestart without a dependable matching moveend.
+        // The native gesture-end callback is authoritative, so clear both
+        // pause reasons together instead of leaving icons frozen until the
+        // stale-state recovery timer fires.
+        resumeMobileMovingFeatureAnimation("map", settledAt);
+        resumeMobileMovingFeatureAnimation("native-map", settledAt);
         if (state.pendingAndroidMapRefresh) {
           state.pendingAndroidMapRefresh = false;
           refreshAndroidMapAfterSettle("android-map-post-gesture");
@@ -16937,7 +17780,7 @@
       };
       const mode = state.profileMapMode;
       document.body.classList.add("mobile-profile-map-mode", "mobile-profile-map-pending");
-      stopMobileMovingFeatureAnimation();
+      pauseMobileMovingFeatureAnimation("profile", performance.now());
       hostSheet?.classList.add("profile-progress-active");
       const profileSheetBody = hostSheet?.querySelector(".sheet-body");
       if (profileSheetBody) profileSheetBody.scrollTop = 0;
@@ -16972,12 +17815,13 @@
       }
       state.profileMapMode = null;
       document.body.classList.remove("mobile-profile-map-mode", "mobile-profile-map-pending");
-      syncMobileMovingFeatureVisibility();
+      resumeMobileMovingFeatureAnimation("profile", performance.now());
       mode.sheet?.classList.remove("profile-progress-active");
       profilesSheetEl?.classList.remove("profile-progress-active");
       loginSheetEl?.classList.remove("profile-progress-active");
       profilesSheetEl?.querySelector(".sheet-head h2")?.replaceChildren(document.createTextNode("Contributors"));
       if (accountSheetTitleEl) accountSheetTitleEl.textContent = state.profile ? "Contributor Account" : "Login";
+      restoreMobileMapLayers();
       scheduleNativeMapStateSync("profile-exit", 0);
       scheduleMobilePanelMapResize();
     }
@@ -17238,10 +18082,7 @@
       const comments = state.publicComments
         .filter(comment => followedIds.has(Number(comment.member_profile)))
         .map(comment => ({ type: "comment", date: comment.created_at, profile: state.contributorProfiles.find(profile => Number(profile.id) === Number(comment.member_profile)), item: comment }));
-      const visits = state.publicVisits
-        .filter(visit => followedIds.has(Number(visit.member_profile)))
-        .map(visit => ({ type: "visit", date: visit.visited_at, profile: state.contributorProfiles.find(profile => Number(profile.id) === Number(visit.member_profile)), item: visit }));
-      const feed = [...comments, ...visits]
+      const feed = comments
         .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
         .slice(0, 30);
       followingListEl.innerHTML = `
@@ -17250,9 +18091,6 @@
         <section class="section"><h3>Latest Activity</h3>
           ${feed.map(entry => {
             const name = entry.profile?.display_name || entry.profile?.username || "Contributor";
-            if (entry.type === "visit") {
-              return `<article class="comment"><strong>${escapeHtml(name)} visited</strong><button class="action secondary" type="button" data-profile-site="${escapeHtml(entry.item.site_slug || "")}">${escapeHtml(entry.item.site_title || "Visited site")}</button></article>`;
-            }
             const image = directusAssetUrl(entry.item.comment_image);
             return `<article class="comment"><strong>${escapeHtml(name)} commented</strong><button class="action secondary" type="button" data-profile-site="${escapeHtml(entry.item.site_slug || entry.item.source_slug || "")}">${escapeHtml(entry.item.site_title || entry.item.source_title || "Site")}</button><p>${escapeHtml(entry.item.comment || "")}</p>${image ? `<img class="hero" src="${escapeHtml(image)}" alt="" loading="lazy" decoding="async">` : ""}</article>`;
           }).join("") || `<p class="summary">No recent public activity from followed contributors yet.</p>`}
@@ -17306,7 +18144,9 @@
     function latestMobileActivity() {
       const comments = state.publicComments
         .filter(commentVisibleToCurrentViewer)
+        .filter(comment => !COMMENT_UTILS.isModeratedDeleted(comment) && !contributionIsModerated(comment))
         .map(comment => {
+          const deleted = COMMENT_UTILS.isModeratedDeleted(comment) || contributionIsModerated(comment);
           const profile = state.contributorProfiles.find(item => Number(item.id) === Number(comment.member_profile));
           const plantFields = isPlantObservationComment(comment) ? plantObservationFields(comment) : null;
           const sourceType = normalizeCommentSourceType(comment) || "site";
@@ -17316,28 +18156,32 @@
             commentId: String(comment.id || ""),
             slug: comment.source_slug || comment.site_slug || "",
             title: comment.site_title || comment.source_title || "Community note",
-            authorName: profile?.display_name || comment.author_name || "Contributor",
+            authorName: deleted ? "[deleted]" : (profile?.display_name || comment.author_name || "Contributor"),
             label: ACTIVITY_UTILS.commentLabel(sourceType, {
               plantObservation: Boolean(plantFields),
-              authorName: profile?.display_name || comment.author_name || "Contributor"
+              authorName: deleted ? "[deleted]" : (profile?.display_name || comment.author_name || "Contributor")
             }),
-            preview: plantFields ? publicCleanText(`${plantFields.name} - ${plantFields.vocabulary || plantFields.identification}`) : publicCleanText(comment.comment),
+            preview: deleted ? "[deleted]" : (plantFields ? publicCleanText(`${plantFields.name} - ${plantFields.vocabulary || plantFields.identification}`) : publicCleanText(comment.comment)),
             date: comment.created_at,
-            image: directusAssetUrl(comment.comment_image),
+            image: deleted ? "" : directusAssetUrl(comment.comment_image),
             imageFallback: ""
           };
         });
       const suggestions = (state.siteSuggestions || [])
         .filter(() => !isCurrentAdminReviewer())
         .filter(suggestion => String(suggestion.status || "").toLowerCase() === "approved")
-        .map(suggestion => ({
+        .filter(suggestion => !contributionIsModerated(suggestion, "author_profile"))
+        .map(suggestion => {
+          const deleted = contributionIsModerated(suggestion, "author_profile");
+          return ({
           type: "suggestion",
           slug: String(suggestion.id || ""),
           title: suggestion.title || "Suggested site",
           label: ACTIVITY_UTILS.suggestionLabel(suggestion),
-          preview: publicCleanText(suggestion.review_note || "A contributor sent information for On This Site."),
+          preview: deleted ? "[deleted]" : publicCleanText(suggestion.review_note || "A contributor sent information for On This Site."),
           date: ACTIVITY_UTILS.suggestionDate(suggestion)
-        }))
+        });
+        })
         .filter(item => activityDateValue(item.date));
       const historicMoments = (state.timelineEvents || [])
         .map(moment => {
@@ -17348,7 +18192,10 @@
             ? state.wikiArticles.find(article => article.slug === moment.source_slug || Number(article.id) === Number(moment.source_id))
             : null;
           if (sourceWiki && ACTIVITY_UTILS.wikiActivityLabel(sourceWiki) === "New Article") return null;
-          const date = ACTIVITY_UTILS.contentUpdateDate(sourceSite || sourceWiki);
+          const sourceItem = sourceSite || sourceWiki;
+          if (!sourceItem || !ACTIVITY_UTILS.contentActivityIsAdditive(sourceItem, { type: moment.source_type })) return null;
+          const date = ACTIVITY_UTILS.contentUpdateDate(sourceItem);
+          const momentImage = firstContentImage(moment.description || moment.source_excerpt || "");
           return {
             type: "historic-moment",
             sourceType: moment.source_type === "wiki" ? "wiki" : "site",
@@ -17358,33 +18205,31 @@
             label: "Historic moment updated",
              preview: publicCleanText(moment.description || moment.source_excerpt || moment.citation || ""),
              sourceTitle: (sourceSite || sourceWiki)?.title || moment.source_title || "",
+             image: momentImage,
+             imageFallback: "",
              date
           };
         })
         .filter(Boolean)
         .filter(item => item.slug && activityDateValue(item.date));
-      const visits = state.publicVisits.map(visit => ({
-        type: "site",
-        slug: visit.site_slug || "",
-        title: visit.site_title || "Visited site",
-        label: "Site visit",
-        preview: `${visit.visitor_name || "A contributor"} marked this place visited.`,
-        date: visit.visited_at
-      }));
-      const stories = activeMapStories().map(story => ({
+      const stories = activeMapStories().filter(story => !contributionIsModerated(story)).map(story => {
+        const deleted = contributionIsModerated(story);
+        return ({
         type: "map-story",
         slug: String(story.id || ""),
         contentSourceType: story.attached_site_slug ? "site" : "",
         contentSlug: story.attached_site_slug || "",
         title: story.attached_site_title || "Shared from the map",
-        authorName: MAP_STORY_UTILS.authorName(story),
-        label: `${story.author_name || "Contributor"} shared a story`,
-        preview: publicCleanText(story.caption || ""),
-        image: directusAssetUrl(story.photo),
+        authorName: deleted ? "[deleted]" : MAP_STORY_UTILS.authorName(story),
+        label: deleted ? "[deleted]" : `${story.author_name || "Contributor"} shared a story`,
+        preview: deleted ? "[deleted]" : publicCleanText(story.caption || ""),
+        image: deleted ? "" : directusAssetUrl(story.photo),
         date: story.created_at
-      }));
+      });
+      });
       const sites = state.sites
         .filter(site => site.slug !== "address-result")
+        .filter(site => ACTIVITY_UTILS.activityIsPinned(site) || ACTIVITY_UTILS.contentActivityIsAdditive(site, { type: "site" }))
         .map(site => {
           const pinned = ACTIVITY_UTILS.activityIsPinned(site);
           const label = pinned ? ACTIVITY_UTILS.activityPinLabel(site) : ACTIVITY_UTILS.siteActivityLabel(site);
@@ -17413,24 +18258,26 @@
           };
         })
         .filter(item => item.pinned || (activityDateValue(item.date) && item.preview));
-      const wikis = state.wikiArticles.map(article => {
-        const label = ACTIVITY_UTILS.wikiActivityLabel(article);
-        return {
-          type: "wiki",
-          slug: article.slug,
-          title: article.title || "Knowledgebase article",
-          label,
-          preview: ACTIVITY_UTILS.activityNewsPreview(article, {
+      const wikis = state.wikiArticles
+        .filter(article => ACTIVITY_UTILS.contentActivityIsAdditive(article, { type: "wiki" }))
+        .map(article => {
+          const label = ACTIVITY_UTILS.wikiActivityLabel(article);
+          return {
             type: "wiki",
-            timelineEvents: state.timelineEvents,
-            cleanText: publicCleanText,
-            isNew: label === "New Article"
-          }),
-          image: firstContentImage(article.content),
-          date: ACTIVITY_UTILS.wikiActivityDate(article),
-          activityPriority: ACTIVITY_UTILS.wikiActivityPriority(article)
-        };
-      }).filter(item => activityDateValue(item.date) && item.preview);
+            slug: article.slug,
+            title: article.title || "Knowledgebase article",
+            label,
+            preview: ACTIVITY_UTILS.activityNewsPreview(article, {
+              type: "wiki",
+              timelineEvents: state.timelineEvents,
+              cleanText: publicCleanText,
+              isNew: label === "New Article"
+            }),
+            image: firstContentImage(article.content),
+            date: ACTIVITY_UTILS.wikiActivityDate(article),
+            activityPriority: ACTIVITY_UTILS.wikiActivityPriority(article)
+          };
+        }).filter(item => activityDateValue(item.date) && item.preview);
       const events = state.exhibits.map(exhibit => {
         const pinned = ACTIVITY_UTILS.activityIsPinned(exhibit);
         const eventTargetSlug = exhibit.related_site_slug || exhibit.source_slug || String(exhibit.slug || exhibit.id || "");
@@ -17452,7 +18299,6 @@
           comments,
           suggestions,
           historicMoments,
-          visits,
           stories,
           sites,
           wikis,
@@ -17763,16 +18609,44 @@
     }
 
     function mobileActivitySeenItemsKey() {
+      return ACTIVITY_UTILS.lastSeenKey("nli-activity-seen-items-v3", mobileActivityReceiptProfileKeys()[0]);
+    }
+
+    function mobileActivityReceiptProfileKeys() {
       const profile = currentContributorProfile?.();
-      const key = profile?.id || state.profile?.profileId || state.profile?.email || "public";
-      return ACTIVITY_UTILS.lastSeenKey("nli-mobile-activity-seen-items-v2", key);
+      const candidates = [
+        profile?.id,
+        profile?.profileId,
+        state.profile?.profileId,
+        profile?.email,
+        profile?.username,
+        state.profile?.email
+      ].map(value => String(value || "").trim().toLowerCase()).filter(Boolean);
+      return [...new Set(candidates.length ? candidates : ["public"])];
+    }
+
+    function mobileActivitySeenItemsStorageKeys() {
+      const profileKeys = mobileActivityReceiptProfileKeys();
+      return [...new Set(profileKeys.flatMap(key => [
+        ACTIVITY_UTILS.lastSeenKey("nli-activity-seen-items-v3", key),
+        ACTIVITY_UTILS.lastSeenKey("nli-activity-seen-items-v2", key),
+        ACTIVITY_UTILS.lastSeenKey("nli-mobile-activity-seen-items-v2", key)
+      ]))];
+    }
+
+    function mobileActivitySessionSeenKeys(storageKey = mobileActivitySeenItemsKey()) {
+      if (!state.mobileActivitySeenSessionKeysByProfile.has(storageKey)) {
+        state.mobileActivitySeenSessionKeysByProfile.set(storageKey, new Set());
+      }
+      return state.mobileActivitySeenSessionKeysByProfile.get(storageKey);
     }
 
     const mobileActivityUnreadTracker = ACTIVITY_UTILS.createUnreadActivityTracker({
       getItems: latestMobileActivity,
       getBaseline: () => ACTIVITY_UTILS.readSeen(mobileActivityLastSeenKey()),
       getSeenStorageKey: mobileActivitySeenItemsKey,
-      getSessionSeenKeys: () => state.mobileActivitySeenSessionKeys
+      getSeenStorageKeys: mobileActivitySeenItemsStorageKeys,
+      getSessionSeenKeys: mobileActivitySessionSeenKeys
     });
 
     function mobileUnreadActivityItems() {
@@ -17780,7 +18654,10 @@
     }
 
     function mobileUnreadActivityCount() {
-      return mobileActivityUnreadTracker.count();
+      // Match the toolbar badge to the number of red-dotted cards the user
+      // can actually see in Community Activity. Grouped updates remain one
+      // card and are acknowledged together.
+      return mobileUnreadActivityItems().length;
     }
 
     function mobileContentUnreadCount(type, slug) {
@@ -17841,6 +18718,20 @@
       window.setTimeout(() => target.classList.remove("content-update-highlight"), 8000);
     }
 
+    function revealMobileWikiContentUpdate(item, activityItems = []) {
+      if (!item || !activityItems.length || state.selectedWikiSlug !== item.slug) return;
+      const target = mobileActivitySpecificContentTarget(activityItems)
+        || detailBodyEl.querySelector(".section-content")
+        || detailBodyEl.querySelector(".discussion-section")
+        || detailBodyEl.querySelector(".section");
+      if (!target) return;
+      detailBodyEl.querySelectorAll(".content-update-highlight").forEach(element => element.classList.remove("content-update-highlight"));
+      target.classList.add("content-update-highlight");
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      showBanner("New article content highlighted.");
+      window.setTimeout(() => target.classList.remove("content-update-highlight"), 8000);
+    }
+
     function mobileUnreadCountLabel(count) {
       const normalizedCount = Math.max(0, Number(count) || 0);
       return normalizedCount > 99 ? "99+" : String(normalizedCount);
@@ -17852,14 +18743,14 @@
       return `mobile-unread-count-${normalizedCount > 99 ? "99-plus" : normalizedCount}`;
     }
 
-    function markMobileActivityItemSeen(key) {
+    function markMobileActivityItemSeen(key, options = {}) {
       const keys = mobileActivityUnreadTracker.markItem(key);
       if (!keys.length) return;
       state.mobileActivityRenderedSignature = "";
       invalidateMapSourceCache({ nativeBase: false });
       refreshMobileMapSources({ force: true });
       updateMobileActivityUnreadBadge();
-      renderMobileActivitySheet();
+      if (options.renderSheet !== false) renderMobileActivitySheet();
     }
 
     function markMobileContentActivitySeen(type, slug) {
@@ -17924,11 +18815,24 @@
       refreshMobileContentUnreadBadges();
     }
 
+    function syncMobileActivityUnreadIdentity() {
+      mobileActivityUnreadTracker.invalidate();
+      state.mobileActivityRenderedSignature = "";
+      invalidateMapSourceCache({ nativeBase: false });
+      refreshMobileMapSources({ force: true });
+      updateMobileActivityUnreadBadge();
+      if (activitySheetEl?.classList.contains("open")) renderMobileActivitySheet();
+    }
+
     function mobileActivityFeedSignature(feed = []) {
       const cards = mobileActivityLearningCards(feed);
       const cardSignature = typeof LEARNING_CARD_UTILS.learningCardsSignature === "function"
         ? LEARNING_CARD_UTILS.learningCardsSignature(cards)
         : cards.map(card => JSON.stringify(card)).join("\u001e");
+      const unreadKeys = new Set(mobileUnreadActivityItems().map(item => ACTIVITY_UTILS.activityItemKey(item)));
+      const visibleUnreadKeys = cards
+        .map(card => card.activityItemKey)
+        .filter(key => unreadKeys.has(key));
       return `${cardSignature}\u001d${cards.map(card => [
         card.activityLabel,
         card.activityType,
@@ -17936,7 +18840,7 @@
         card.activityId,
         card.authorName,
         card.hasVoted ? "1" : "0"
-      ].join("\u001f")).join("\u001e")}`;
+      ].join("\u001f")).join("\u001e")}\u001dunread:${visibleUnreadKeys.join("\u001e")}`;
     }
 
     function mobileActivityCommentThreadHtml(card) {
@@ -18034,27 +18938,36 @@
         : card.sourceName;
       const commentLabel = card.comment ? "Reply" : "Comment";
       const unread = mobileUnreadActivityItems().some(item => ACTIVITY_UTILS.activityItemKey(item) === card.activityItemKey);
+      const isSupportActivity = [card.activityType, card.sourceType]
+        .some(value => String(value || "").toLowerCase() === "support");
+      const pinnedExpanded = Boolean(card.pinned && state.mobileActivityExpandedPinnedKeys.has(card.key));
+      const pinDetailsId = `mobile-activity-pinned-${index}`;
       return `
-        <article class="activity-feed-item activity-learning-card learning-card${card.pinned ? " is-pinned" : ""}${unread ? " is-unread" : ""}" data-learning-card-key="${escapeHtml(card.key)}" data-mobile-activity-key="${escapeHtml(card.key)}" data-mobile-activity-item-key="${escapeHtml(card.activityItemKey)}" data-mobile-activity-index="${index}" data-mobile-activity-type="${escapeHtml(card.activityType)}" data-mobile-activity-source-type="${escapeHtml(card.sourceType || "")}" data-mobile-activity-id="${escapeHtml(card.activityId || card.id || "")}" data-mobile-activity-slug="${escapeHtml(card.activitySlug || "")}">
+        <article class="activity-feed-item activity-learning-card learning-card${card.pinned ? " is-pinned" : ""}${pinnedExpanded ? " is-pin-expanded" : ""}${unread ? " is-unread" : ""}" data-learning-card-key="${escapeHtml(card.key)}" data-mobile-activity-key="${escapeHtml(card.key)}" data-mobile-activity-item-key="${escapeHtml(card.activityItemKey)}" data-mobile-activity-index="${index}" data-mobile-activity-type="${escapeHtml(card.activityType)}" data-mobile-activity-source-type="${escapeHtml(card.sourceType || "")}" data-mobile-activity-id="${escapeHtml(card.activityId || card.id || "")}" data-mobile-activity-slug="${escapeHtml(card.activitySlug || "")}">
+          ${unread ? `<span class="activity-card-unread-dot" data-mobile-activity-card-unread role="img" aria-label="New activity" title="New activity"></span>` : ""}
           <header class="learning-card-header">
             <span>${card.pinned ? mobileActivityPinIconHtml() : ""}${escapeHtml(card.activityLabel)}</span>
             <time datetime="${escapeHtml(card.date || "")}">${escapeHtml(activityDateLabel(card.date))}</time>
           </header>
           <div class="learning-card-layout">
-            ${learningCardImageHtml(card, canOpen ? openAttributes : "", "", { eager: index < MOBILE_ACTIVITY_INITIAL_LIMIT, priority: index < 2, hideWhenMissing: true })}
+            ${card.pinned ? `<div class="activity-pinned-media" data-mobile-activity-pinned-detail${pinnedExpanded ? "" : " hidden"}>${learningCardImageHtml(card, canOpen ? openAttributes : "", "", { eager: index < MOBILE_ACTIVITY_INITIAL_LIMIT, priority: index < 2, hideWhenMissing: true })}</div>` : learningCardImageHtml(card, canOpen ? openAttributes : "", "", { eager: index < MOBILE_ACTIVITY_INITIAL_LIMIT, priority: index < 2, hideWhenMissing: true })}
             <div class="learning-card-body">
               ${canOpen ? `<button class="learning-card-title" type="button" ${openAttributes}>${escapeHtml(card.title || "Archive activity")}</button>` : `<h3 class="learning-card-title-static">${escapeHtml(card.title || "Archive activity")}</h3>`}
               <p class="learning-card-source">Source: <strong>${escapeHtml(sourceLabel || "On This Site")}</strong></p>
                ${card.authorName ? `<p class="learning-card-author">By ${escapeHtml(card.authorName)}</p>` : ""}
-               ${mobileActivityUpdatesHtml(card)}
-               ${learningCardExcerptHtml(card)}
-              <p class="learning-card-counts" aria-label="${card.counts.upvotes} helpful votes and ${card.counts.comments} comments">
-                <span>${card.counts.upvotes} helpful</span>
-                <span>${card.counts.comments} comment${card.counts.comments === 1 ? "" : "s"}</span>
-              </p>
+              ${card.pinned ? `<button class="activity-pin-expand" type="button" data-mobile-activity-pin-expand aria-expanded="${pinnedExpanded ? "true" : "false"}" aria-controls="${escapeHtml(pinDetailsId)}">${pinnedExpanded ? "Collapse" : "Expand"}</button>` : ""}
+              <div class="activity-pinned-details" id="${escapeHtml(pinDetailsId)}"${card.pinned ? " data-mobile-activity-pinned-detail" : ""}${card.pinned && !pinnedExpanded ? " hidden" : ""}>
+                ${mobileActivityUpdatesHtml(card)}
+                ${learningCardExcerptHtml(card)}
+                <p class="learning-card-counts" aria-label="${card.counts.upvotes} helpful votes and ${card.counts.comments} comments">
+                  <span>${card.counts.upvotes} helpful</span>
+                  <span>${card.counts.comments} comment${card.counts.comments === 1 ? "" : "s"}</span>
+                </p>
+              </div>
             </div>
           </div>
           <div class="learning-card-actions" aria-label="Activity actions">
+            ${isSupportActivity ? `<button class="learning-card-action" type="button" data-mobile-activity-donate>Donate</button>` : ""}
             ${card.capabilities.vote ? `<button class="learning-card-action${card.hasVoted ? " is-active" : ""}" type="button" data-mobile-activity-helpful="${escapeHtml(card.key)}"${card.hasVoted ? " disabled" : ""}>${card.permissions.canVote ? "Helpful" : `${actionPrompt}vote`} ${card.counts.upvotes}</button>` : ""}
             ${card.capabilities.comment ? `<button class="learning-card-action" type="button" data-mobile-activity-comment="${escapeHtml(card.key)}" aria-expanded="${state.mobileActivityDiscussionKeys.has(card.key) ? "true" : "false"}"><span>${commentLabel}</span><span class="learning-card-action-count">${card.counts.comments}</span></button>` : ""}
             ${unread ? `<button class="learning-card-action" type="button" data-mobile-activity-dismiss aria-label="Dismiss this new update">Dismiss</button>` : ""}
@@ -18064,13 +18977,83 @@
       `;
     }
 
+    function chronologicalMobileActivityFeed() {
+      // Unread receipts vary by browser and APK installation. Keep one shared
+      // newest-first chronology and use receipts only to decorate its cards.
+      return latestMobileActivity();
+    }
+
+    function clearMobileActivitySeenObserver() {
+      state.mobileActivitySeenObserver?.disconnect?.();
+      state.mobileActivitySeenObserver = null;
+      state.mobileActivitySeenTimers.forEach(timer => window.clearTimeout(timer));
+      state.mobileActivitySeenTimers.clear();
+    }
+
+    function acknowledgeVisibleMobileActivityCard(card) {
+      if (!card?.classList.contains("is-unread")) return;
+      const key = card.dataset.mobileActivityItemKey || "";
+      if (!key) return;
+      state.mobileActivitySeenObserver?.unobserve?.(card);
+      markMobileActivityItemSeen(key, { renderSheet: false });
+      card.classList.remove("is-unread");
+      card.classList.add("was-unread-this-view");
+      const dot = card.querySelector("[data-mobile-activity-card-unread]");
+      dot?.setAttribute("aria-label", "New activity viewed");
+      dot?.setAttribute("title", "New activity viewed");
+      card.querySelector("[data-mobile-activity-dismiss]")?.setAttribute("hidden", "");
+    }
+
+    function observeVisibleMobileActivityCards() {
+      clearMobileActivitySeenObserver();
+      if (!mobileActivityListEl || !activitySheetEl?.classList.contains("open") || typeof IntersectionObserver !== "function") return;
+      const scrollRoot = activitySheetEl.querySelector(".sheet-body");
+      state.mobileActivitySeenObserver = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          const card = entry.target;
+          const priorTimer = state.mobileActivitySeenTimers.get(card);
+          const visibleHeight = Number(entry.intersectionRect?.height || 0);
+          const cardHeight = Number(entry.boundingClientRect?.height || card.getBoundingClientRect().height || 0);
+          const requiredHeight = Math.min(140, Math.max(48, cardHeight * 0.35));
+          if (!entry.isIntersecting || visibleHeight < requiredHeight) {
+            if (priorTimer) window.clearTimeout(priorTimer);
+            state.mobileActivitySeenTimers.delete(card);
+            return;
+          }
+          if (priorTimer) return;
+          const timer = window.setTimeout(() => {
+            state.mobileActivitySeenTimers.delete(card);
+            if (activitySheetEl?.classList.contains("open") && card.isConnected) acknowledgeVisibleMobileActivityCard(card);
+          }, 800);
+          state.mobileActivitySeenTimers.set(card, timer);
+        });
+      }, { root: scrollRoot || null, threshold: [0, 0.2, 0.35, 0.55] });
+      mobileActivityListEl.querySelectorAll(".activity-learning-card.is-unread").forEach(card => state.mobileActivitySeenObserver.observe(card));
+    }
+
+    function showFirstUnreadMobileActivityCard() {
+      if (!mobileActivityListEl?.querySelector(".activity-learning-card.is-unread")) return;
+      const scrollRoot = activitySheetEl?.querySelector(".sheet-body");
+      if (scrollRoot) scrollRoot.scrollTop = 0;
+      mobileActivityListEl.scrollTop = 0;
+    }
+
     function renderMobileActivitySheet(options = {}) {
       if (!mobileActivityListEl) return;
-      const feed = latestMobileActivity();
+      const feed = chronologicalMobileActivityFeed();
       const cards = mobileActivityLearningCards(feed);
-      const renderLimit = Math.max(1, Math.min(cards.length || 1, Number(state.mobileActivityRenderLimit || MOBILE_ACTIVITY_INITIAL_LIMIT)));
+      const unreadKeys = new Set(mobileUnreadActivityItems().map(item => ACTIVITY_UTILS.activityItemKey(item)));
+      const lastUnreadIndex = feed.reduce((lastIndex, item, index) =>
+        unreadKeys.has(ACTIVITY_UTILS.activityItemKey(item)) ? index : lastIndex, -1);
+      const renderLimit = Math.max(1, Math.min(
+        cards.length || 1,
+        Math.max(Number(state.mobileActivityRenderLimit || MOBILE_ACTIVITY_INITIAL_LIMIT), lastUnreadIndex + 1)
+      ));
       const signature = `${mobileActivityFeedSignature(feed)}\u001dlimit:${renderLimit}`;
-      if (signature === state.mobileActivityRenderedSignature && mobileActivityListEl.hasChildNodes()) return;
+      if (signature === state.mobileActivityRenderedSignature && mobileActivityListEl.hasChildNodes()) {
+        observeVisibleMobileActivityCards();
+        return;
+      }
       const preservedScrollTop = mobileActivityListEl.scrollTop;
       mobileActivityListEl.innerHTML = `
         <p class="summary">Recent public activity from the archive. Open a title or image for the full source; use the actions to respond in place.</p>
@@ -18079,6 +19062,7 @@
       `;
       state.mobileActivityRenderedSignature = signature;
       mobileActivityListEl.scrollTop = Math.min(preservedScrollTop, Math.max(0, mobileActivityListEl.scrollHeight - mobileActivityListEl.clientHeight));
+      observeVisibleMobileActivityCards();
     }
 
     function loadMoreMobileActivityCards() {
@@ -18115,9 +19099,11 @@
     }
 
     async function openMobileActivitySheet() {
+      state.mobileActivityExpandedPinnedKeys.clear();
       const activityReady = state.deferredCommunityDataLoaded;
       if (activityReady) renderMobileActivitySheet();
       openSheet(activitySheetEl);
+      showFirstUnreadMobileActivityCard();
       if (!activityReady) {
         state.mobileActivityRenderedSignature = "";
         if (mobileActivityListEl) {
@@ -18131,6 +19117,10 @@
         await loadDeferredData({ includeCommunity: true });
       }
       updateMobileActivityUnreadBadge();
+      window.requestAnimationFrame(() => {
+        showFirstUnreadMobileActivityCard();
+        observeVisibleMobileActivityCards();
+      });
     }
 
     async function openMobileNotificationsSheet() {
@@ -18175,16 +19165,16 @@
       } else if (type === "historic-moment") {
         if (sourceType === "wiki" && slug) {
           const event = activityId ? state.timelineEvents.find(item => String(item.id) === String(activityId)) : null;
-          openWikiArticle(slug, { timelineEventId: activityId, timelineEvent: event });
+          openWikiArticle(slug, { timelineEventId: activityId, timelineEvent: event, contentUpdateItems });
         } else if (slug) openSite(slug, { timelineEventId: activityId, contentUpdateItems });
       } else if (type === "support" || sourceType === "support") {
         openSupportPanel();
-      } else if (type === "wiki" && slug) openWikiArticle(slug);
+      } else if (type === "wiki" && slug) openWikiArticle(slug, { contentUpdateItems });
       else if (type === "event" && slug) {
         if (state.siteBySlug.has(slug)) return openSite(slug, { contentUpdateItems });
         const exhibit = state.exhibits.find(item => String(item.id) === String(activityId) || String(item.slug || item.id) === String(slug));
         if (exhibit) openExhibit(exhibit);
-      } else if (slug && state.wikiBySlug.has(slug)) openWikiArticle(slug);
+      } else if (slug && state.wikiBySlug.has(slug)) openWikiArticle(slug, { contentUpdateItems });
       else if (slug) openSite(slug, { contentUpdateItems });
       syncMobilePanelAccessibility();
     }
@@ -18236,10 +19226,19 @@
       syncMobilePanelAccessibility();
     }
 
+    function contributorDirectoryProfiles() {
+      const publicRows = publicContributorProfiles();
+      if (!isCurrentAdminReviewer()) return publicRows;
+      return [...publicRows, ...state.contributorProfiles.filter(profile =>
+        (PROFILE_UTILS.isProfileBanned(profile) || state.bannedContributorProfileIds.has(Number(relationId(profile.id))))
+        && !publicRows.some(item => Number(relationId(item.id)) === Number(relationId(profile.id)))
+      )];
+    }
+
     function renderProfiles() {
       if (!profilesListEl) return;
       if (profilesSortEl) profilesSortEl.value = state.contributorSortMode || "alpha";
-      const rows = publicContributorProfiles().map(profile => {
+      const rows = contributorDirectoryProfiles().map(profile => {
         const activity = profileActivity(profile);
         const languageWords = learnedLanguageWords(profile);
         const stats = mobileProfileStats(profile, { syncRemote: false });
@@ -18259,17 +19258,21 @@
         const userSinceLine = profileUserSinceLine(profile);
         const expanded = state.expandedMobileProfileKey === profileKey;
         const name = profile.display_name || profile.username || "Contributor";
+        const banned = PROFILE_UTILS.isProfileBanned(profile) || state.bannedContributorProfileIds.has(Number(relationId(profile.id)));
+        const protectedRole = ["admin", "administrator", "founder"].includes(String(profile.role_label || "").toLowerCase());
         return `
           <article class="comment contributor-card${expanded ? " is-expanded" : ""}" id="${escapeHtml(profileAnchor)}" data-mobile-profile-card="${escapeHtml(profileKey)}">
             <button class="contributor-summary" type="button" data-toggle-mobile-profile="${escapeHtml(profileKey)}" aria-expanded="${expanded ? "true" : "false"}">
               ${avatar ? `<img class="thumb" src="${escapeHtml(avatar)}" alt="">` : `<span class="thumb empty">${escapeHtml(name.slice(0, 1) || "?")}</span>`}
               <span class="contributor-summary-text">
                 <strong>${escapeHtml(name)}</strong>
+                ${banned ? `<span>Banned - public contributions show as [deleted]</span>` : ""}
                 <span>${escapeHtml(profile.role_label || "Contributor")}${profile.location_label ? ` - ${escapeHtml(profile.location_label)}` : ""}</span>
                 <span>${escapeHtml(totalPoints)} - ${activity.comments.length} comments - ${activity.visits.length} visits</span>
               </span>
               <span class="contributor-chevron" aria-hidden="true">${expanded ? "Hide" : "Open"}</span>
             </button>
+            ${isCurrentAdminReviewer() && !protectedRole ? `<button class="action ${banned ? "secondary" : "danger"}" type="button" data-contributor-ban="${escapeHtml(profileKey)}" data-ban-state="${banned ? "unban" : "ban"}">${banned ? "Unban user" : "Ban user"}</button>` : ""}
             <div class="contributor-body" ${expanded ? "" : "hidden"}>
               ${expanded ? mobileProfileProgressSummaryHtml(profile, mobileContributorProfileMapModel(profile), stats) : ""}
               ${userSinceLine ? `<p class="detail-meta">${escapeHtml(userSinceLine)}</p>` : ""}
@@ -18316,6 +19319,10 @@
         showBanner("Contributor profile is not public yet.");
         return;
       }
+      if ((PROFILE_UTILS.isProfileBanned(profile) || state.bannedContributorProfileIds.has(Number(relationId(profile.id)))) && !isCurrentAdminReviewer()) {
+        showBanner("This contributor profile is unavailable.");
+        return;
+      }
       const resolvedProfileKey = String(profile.id || profile.slug || profile.display_name || "");
       const mapProfileKey = String(profile.id || profile.slug || profile.username || "");
       if (profilesSheetEl?.classList.contains("open")
@@ -18342,6 +19349,9 @@
     }
 
     function openSheet(sheet, options = {}) {
+      if (sheet === activitySheetEl && !sheet.classList.contains("open")) {
+        state.mobileActivityExpandedPinnedKeys.clear();
+      }
       if (state.profileMapMode && sheet !== state.profileMapMode.sheet) exitMobileProfileMapMode();
       document.querySelectorAll(".sheet.open").forEach(item => item.classList.remove("open"));
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
@@ -18403,7 +19413,6 @@
       const linkedProfile = currentContributorProfile();
       if (linkedProfile) enterMobileProfileMapMode(linkedProfile, { sheet: loginSheetEl });
       if (state.profile) {
-        state.profileActivitySynced = false;
         ensureProfileStatsSynced()
           .then(() => renderProfile())
           .catch(error => console.warn("Profile sync will retry later.", error));
@@ -18893,9 +19902,6 @@
         maplibreLogo: false
       });
       state.map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
-      // Keep the lower-left edge free for the daily feature shortcuts. The
-      // compact attribution sits beneath the native location control on the
-      // opposite edge without competing for the same touch area.
       state.map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right");
       collapseMobileMapAttribution();
       state.map.on("click", event => {
@@ -18913,6 +19919,12 @@
             if (nativeBridgeTimer) window.clearTimeout(nativeBridgeTimer);
             try { state.map?.remove(); } catch {}
             state.map = null;
+            state.mobileMovingMarkerMapLifecycleBound = false;
+            window.clearTimeout(state.mobileMovingMarkerMapResumeTimer);
+            state.mobileMovingMarkerMapResumeTimer = null;
+            window.clearTimeout(state.mobileMovingMarkerBasemapResumeTimer);
+            state.mobileMovingMarkerBasemapResumeTimer = null;
+            state.mobileMovingMarkerPauseReasons.clear();
           };
           const resolveMapReady = () => {
             if (settled) return;
@@ -18972,7 +19984,7 @@
             syncMapStoryMarkers();
           });
           state.map.on("moveend", () => {
-            loadMobileSiteIconImages();
+            reprioritizeQueuedMobileSiteIcons();
             syncNativeMapCameraToAndroid();
           });
           window.setTimeout(() => {
@@ -19143,6 +20155,8 @@
         state.settings.showBiographyIcons = visible;
         state.settings.biographyIconsPreferenceSet = true;
         state.settings.biographyIconsPreferenceVersion = MOBILE_BIOGRAPHY_ICON_PREFERENCE_VERSION;
+        const now = performance.now();
+        state.mobileBiographyMotionControllers.forEach(controller => { controller.lastFrameAt = now; });
       }
       if (kind === "category") {
         state.settings.layerCategories = { ...(state.settings.layerCategories || {}) };
@@ -19162,7 +20176,7 @@
       syncMobileBiographyPathLayers();
       syncMarkers();
       ensureMobileMovingBiographyMarkers();
-      if (kind === "era") renderMobileTimeline();
+      if (kind === "era") renderMobileTimelineIfOpen();
     }
 
     function setAllMobileLayerVisibility(visible) {
@@ -19176,6 +20190,8 @@
       state.settings.showBiographyIcons = nextVisible;
       state.settings.biographyIconsPreferenceSet = true;
       state.settings.biographyIconsPreferenceVersion = MOBILE_BIOGRAPHY_ICON_PREFERENCE_VERSION;
+      const biographyToggleNow = performance.now();
+      state.mobileBiographyMotionControllers.forEach(controller => { controller.lastFrameAt = biographyToggleNow; });
       state.settings.layerCategories = {};
       mobileLayerCategoryInputs.forEach(input => {
         state.settings.layerCategories[input.value] = nextVisible;
@@ -19190,7 +20206,7 @@
       syncMobileBiographyPathLayers();
       syncMarkers();
       ensureMobileMovingBiographyMarkers();
-      renderMobileTimeline();
+      renderMobileTimelineIfOpen();
     }
 
     function setMobileBasemap(value) {
@@ -19205,7 +20221,18 @@
       state.mapSourceAppliedKey = "";
       state.mobileSiteIconImagesLoaded.clear();
       state.mobileSiteIconImagesLoading = false;
-      state.map.once("style.load", restoreMobileMapLayers);
+      pauseMobileMovingFeatureAnimation("basemap", performance.now());
+      window.clearTimeout(state.mobileMovingMarkerBasemapResumeTimer);
+      const finishBasemapMotionPause = () => {
+        window.clearTimeout(state.mobileMovingMarkerBasemapResumeTimer);
+        state.mobileMovingMarkerBasemapResumeTimer = null;
+        resumeMobileMovingFeatureAnimation("basemap", performance.now());
+      };
+      state.mobileMovingMarkerBasemapResumeTimer = window.setTimeout(finishBasemapMotionPause, 5000);
+      state.map.once("style.load", () => {
+        restoreMobileMapLayers();
+        finishBasemapMotionPause();
+      });
       state.map.setStyle(style, { diff: false });
     }
 
@@ -19382,7 +20409,7 @@
           syncActiveSiteMapLabel(site);
           if (fromSearchResults) {
             focusSite(site, { duration: 900, preview: true, zoom: 14.5 });
-            window.setTimeout(() => showMobileSearchResultMapHighlight(site), 560);
+            window.setTimeout(() => animateMobileSiteMarker(site, true), 560);
           } else {
             focusSite(site, { duration: 900, preview: true });
             animateMobileSiteMarker(site);
@@ -19460,6 +20487,21 @@
       activateMobileListTarget(event.target, event);
     });
     profilesListEl.addEventListener("click", event => {
+      const contributorBan = event.target.closest("[data-contributor-ban]");
+      if (contributorBan) {
+        const key = String(contributorBan.dataset.contributorBan || "");
+        const profile = state.contributorProfiles.find(item => String(item.id || item.slug || item.username || "") === key);
+        if (!profile) {
+          showBanner("Contributor account not found.");
+          return;
+        }
+        contributorBan.disabled = true;
+        setContributorBanState(profile, contributorBan.dataset.banState === "ban").catch(error => {
+          contributorBan.disabled = false;
+          showBanner(error.message || "The account could not be updated.");
+        });
+        return;
+      }
       const toggle = event.target.closest("[data-toggle-mobile-profile]");
       if (toggle?.dataset.toggleMobileProfile) {
         const key = toggle.dataset.toggleMobileProfile;
@@ -19575,15 +20617,49 @@
       }
       const seeMore = event.target.closest("[data-learning-see-more]");
       if (seeMore) {
+        const activityCard = seeMore.closest("[data-mobile-activity-key]");
+        if (activityCard) {
+          markMobileActivityItemSeen(activityCard.dataset.mobileActivityItemKey || "", { renderSheet: false });
+          activityCard.classList.remove("is-unread");
+          activityCard.querySelector("[data-mobile-activity-card-unread]")?.setAttribute("hidden", "");
+          activityCard.querySelector("[data-mobile-activity-dismiss]")?.setAttribute("hidden", "");
+        }
         toggleLearningCardExpansion(seeMore);
         return;
       }
       const cardElement = event.target.closest("[data-mobile-activity-key]");
       const key = cardElement?.dataset.mobileActivityKey || "";
       const card = key ? mobileActivityLearningCards().find(item => item.key === key) : null;
+      const pinnedToggle = event.target.closest("[data-mobile-activity-pin-expand]");
+      if (pinnedToggle && cardElement) {
+        event.preventDefault();
+        event.stopPropagation();
+        const expanded = !cardElement.classList.contains("is-pin-expanded");
+        cardElement.classList.toggle("is-pin-expanded", expanded);
+        cardElement.querySelectorAll("[data-mobile-activity-pinned-detail]").forEach(detail => { detail.hidden = !expanded; });
+        pinnedToggle.setAttribute("aria-expanded", String(expanded));
+        pinnedToggle.textContent = expanded ? "Collapse" : "Expand";
+        if (key) {
+          if (expanded) state.mobileActivityExpandedPinnedKeys.add(key);
+          else state.mobileActivityExpandedPinnedKeys.delete(key);
+        }
+        markMobileActivityItemSeen(cardElement.dataset.mobileActivityItemKey || "", { renderSheet: false });
+        cardElement.classList.remove("is-unread");
+        cardElement.querySelector("[data-mobile-activity-card-unread]")?.setAttribute("hidden", "");
+        cardElement.querySelector("[data-mobile-activity-dismiss]")?.setAttribute("hidden", "");
+        return;
+      }
       if (event.target.closest("[data-mobile-activity-dismiss]") && cardElement) {
         markMobileActivityItemSeen(cardElement.dataset.mobileActivityItemKey || "");
         return;
+      }
+      const activityFormField = event.target.closest("input, textarea, select, option");
+      const selectedText = window.getSelection?.()?.toString?.().trim?.() || "";
+      if (cardElement && !activityFormField && !selectedText) {
+        markMobileActivityItemSeen(cardElement.dataset.mobileActivityItemKey || "", { renderSheet: false });
+        cardElement.classList.remove("is-unread");
+        cardElement.querySelectorAll("[data-mobile-content-unread-badge], [data-mobile-activity-card-unread]").forEach(badge => { badge.hidden = true; });
+        cardElement.querySelector("[data-mobile-activity-dismiss]")?.setAttribute("hidden", "");
       }
       const cancelComment = event.target.closest("[data-mobile-activity-comment-cancel]");
       if (cancelComment && card) {
@@ -19606,6 +20682,10 @@
       if (event.target.closest("[data-mobile-activity-comment-login]")) {
         showBanner(contributorWritePrompt());
         openSheet(loginSheetEl);
+        return;
+      }
+      if (event.target.closest("[data-mobile-activity-donate]") && cardElement) {
+        openMobileActivityTarget(cardElement);
         return;
       }
       const helpfulButton = event.target.closest("[data-mobile-activity-helpful]");
@@ -19653,6 +20733,17 @@
       if (event.target === plantPhotoViewerEl) closePlantPhotoViewer();
     });
     detailBodyEl.addEventListener("click", event => {
+      const knowledgebaseCategory = event.target.closest("[data-mobile-kb-category]");
+      if (knowledgebaseCategory?.dataset.mobileKbCategory) {
+        event.preventDefault();
+        openMobileKnowledgebaseCategory(knowledgebaseCategory.dataset.mobileKbCategory);
+        return;
+      }
+      if (event.target.closest("[data-mobile-kb-back]")) {
+        event.preventDefault();
+        openKnowledgebasePanel();
+        return;
+      }
       const learningPathOpen = event.target.closest("[data-mobile-learning-path-open]");
       if (learningPathOpen?.dataset.mobileLearningPathOpen) {
         event.preventDefault();
@@ -20037,6 +21128,14 @@
       if (plantPanel && event.target.matches("[data-plant-notes]")) renderPlantContext(plantPanel);
     });
     detailBodyEl.addEventListener("change", event => {
+      const knowledgebaseSort = event.target.closest("[data-mobile-kb-category-sort]");
+      if (knowledgebaseSort) {
+        state.knowledgebaseSortMode = ["alpha", "updated", "quantity"].includes(knowledgebaseSort.value)
+          ? knowledgebaseSort.value
+          : "quantity";
+        openKnowledgebasePanel({ preserveScroll: true });
+        return;
+      }
       const discussion = event.target.closest(".discussion-section");
       if (discussion && event.target.matches("[data-discussion-image]")) {
         prepareSelectedCommentPhoto(discussion).catch(error => {
@@ -20570,6 +21669,13 @@
       }
     });
     registerSubmitBtn.addEventListener("click", async () => {
+      if (!registerAgreementEl?.checked) {
+        const message = "Read and agree to the Privacy policy before creating an account.";
+        showRegisterStatus(message, "error");
+        showBanner(message);
+        registerAgreementEl?.focus();
+        return;
+      }
       const originalLabel = registerSubmitBtn.textContent;
       registerSubmitBtn.disabled = true;
       registerSubmitBtn.textContent = "Saving...";
@@ -20585,6 +21691,7 @@
         loginPasswordEl.value = "";
         registerPasswordEl.value = "";
         if (registerInviteCodeEl) registerInviteCodeEl.value = "";
+        registerAgreementEl.checked = false;
         const message = profile.inviteRedeemed
           ? "Check your email to verify and activate your account. Your invite code was accepted and 100 points were awarded to the friend who invited you."
           : profile.inviteError
@@ -20604,6 +21711,7 @@
       const originalLabel = passwordResetSubmitBtn.textContent;
       passwordResetSubmitBtn.disabled = true;
       passwordResetSubmitBtn.textContent = "Sending...";
+      if (passwordResetReturnAppEl) passwordResetReturnAppEl.hidden = true;
       showPasswordResetStatus(state.passwordResetToken ? "Saving new password..." : "Sending reset email...");
       try {
         if (state.passwordResetToken) {
@@ -20612,6 +21720,7 @@
           renderPasswordResetPanelMode();
           const message = "Password updated. You can log in with the new password.";
           showPasswordResetStatus(message, "success");
+          if (passwordResetReturnAppEl) passwordResetReturnAppEl.hidden = false;
           showBanner(message);
           return;
         }
@@ -20851,6 +21960,7 @@
       syncSiteHeroCarouselLifecycle();
       if (document.hidden) {
         stopSearchValueWatch({ silent: true });
+        stopMobileSiteAttentionPulse();
         captureAndroidLifecycleSnapshot();
         cancelAndroidLifecycleDetailScrollRestore();
         scheduleMemberProfileActivityTracking({ force: true, throttleMs: 0 });
@@ -20858,7 +21968,6 @@
         if (document.activeElement === searchEl) startSearchValueWatch();
         scheduleMemberProfileActivityTracking();
         if (state.profile) {
-          state.profileActivitySynced = false;
           ensureProfileStatsSynced().then(() => {
             renderProfile();
             renderRewards();
@@ -20868,22 +21977,47 @@
         if (state.mapStoryRefreshTimer && Date.now() - state.mapStoryLastRefreshAt >= MAP_STORY_REFRESH_INTERVAL_MS) {
           refreshMapStories().catch(() => null);
         }
+        syncMobileSiteAttentionPulseLifecycle();
       }
     });
     window.addEventListener("storage", event => {
-      if (!["nli-contributor-session", "nli-contributor-profile", "nli-mobile-profile"].includes(event.key || "")) return;
-      state.profile = loadProfile();
-      state.profileActivitySynced = false;
-      state.profileActivityCache = null;
-      renderProfile();
-      if (state.profile) ensureProfileStatsSynced().then(() => {
+      const storageKey = event.key || "";
+      if (/^nli-(?:mobile-)?activity-seen-items-v[23]-/i.test(storageKey)) {
+        scheduleMobileActivityUnreadIdentitySync();
+        return;
+      }
+      if (!["nli-contributor-session", "nli-contributor-profile", "nli-mobile-profile"].includes(storageKey)) return;
+      window.clearTimeout(state.profileStorageSyncTimer);
+      state.profileStorageSyncTimer = window.setTimeout(() => {
+        state.profileStorageSyncTimer = null;
+        const previousKey = state.profile
+          ? `${state.profile.email || ""}:${state.profile.profileId || ""}:${state.profile.token || ""}`
+          : "";
+        const nextProfile = loadProfile();
+        const nextKey = nextProfile
+          ? `${nextProfile.email || ""}:${nextProfile.profileId || ""}:${nextProfile.token || ""}`
+          : "";
+        const identityChanged = nextKey !== previousKey;
+        state.profile = nextProfile;
+        state.profileActivityCache = null;
+        if (identityChanged) {
+          state.profileActivitySynced = false;
+          state.profileActivityLastAttemptAt = 0;
+          state.profileActivityLastSyncedAt = 0;
+          state.profilePointEventCanonicalIds.clear();
+        }
         renderProfile();
-        renderRewards();
-      }).catch(() => null);
+        scheduleMobileActivityUnreadIdentitySync();
+        if (state.profile) ensureProfileStatsSynced().then(() => {
+          renderProfile();
+          renderRewards();
+        }).catch(() => null);
+      }, 120);
     });
     window.addEventListener("pagehide", () => {
       stopSiteHeroCarousel();
       stopSearchValueWatch({ silent: true });
+      stopMobileSiteAttentionPulse();
       captureAndroidLifecycleSnapshot();
       cancelAndroidLifecycleDetailScrollRestore();
       scheduleMemberProfileActivityTracking({ force: true, throttleMs: 0 });
@@ -20915,19 +22049,21 @@
         syncMobilePanelAccessibility();
         renderCurrentTerritoryStatus();
         const androidLifecycleSnapshot = nativeAndroid ? readAndroidLifecycleSnapshot() : null;
-        if (nativeAndroid) {
-          idleTask(() => {
-            if (!state.mobileTimelineRendered) renderMobileTimeline();
-          });
-        } else {
-          renderMobileTimeline();
-        }
+        // A map-only snapshot is written whenever Android backgrounds or
+        // closes the WebView. It is not an active session to resume: allowing
+        // it to suppress the startup presentation made every later launch
+        // jump to an old, often zoomed-out camera with all sites already
+        // visible. Only an open site, article, or panel should restore the
+        // prior map and bypass the center-out site reveal.
+        const androidLifecycleResumeSnapshot = androidLifecycleSnapshotHasActiveContent(androidLifecycleSnapshot)
+          ? androidLifecycleSnapshot
+          : null;
         renderList();
         // A cold launch should always reveal the map first.  Only restore a
         // panel mode/size when Android is returning the user to content that
         // was already open (for example after taking a photo in a draft).
-        if (androidLifecycleSnapshot?.content) {
-          restoreAndroidLifecyclePanels(androidLifecycleSnapshot);
+        if (androidLifecycleResumeSnapshot) {
+          restoreAndroidLifecyclePanels(androidLifecycleResumeSnapshot);
         } else {
           setMobileBottomPanelState("collapsed", { persist: false });
           setMobilePanelMode("nearby");
@@ -20942,8 +22078,8 @@
         await openInitialRouteFromUrl();
         let androidLifecycleContentRestored = false;
         const routeAlreadyOpened = Boolean(detailEl?.classList.contains("open") || document.querySelector(".sheet.open"));
-        if (!routeAlreadyOpened && androidLifecycleSnapshot) {
-          androidLifecycleContentRestored = await restoreAndroidLifecycleContent(androidLifecycleSnapshot);
+        if (!routeAlreadyOpened && androidLifecycleResumeSnapshot) {
+          androidLifecycleContentRestored = await restoreAndroidLifecycleContent(androidLifecycleResumeSnapshot);
         }
         if (state.passwordResetToken) openSheet(loginSheetEl);
         const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
@@ -20951,7 +22087,7 @@
           nativeAndroid
           && !isOfflineTextMode()
           && !reducedMotion
-          && !androidLifecycleSnapshot
+          && !androidLifecycleResumeSnapshot
           && !routeAlreadyOpened
           && !androidLifecycleContentRestored
           && !state.passwordResetToken
@@ -21012,8 +22148,10 @@
         if (nativeAndroid) {
           [300, 1000, 2500].forEach(delay => window.setTimeout(updateMobileHeaderInstruction, delay));
         }
-        const androidLifecycleMapRestored = androidLifecycleSnapshot ? restoreAndroidLifecycleMap(androidLifecycleSnapshot) : false;
-        state.androidLifecycleRestored = Boolean(androidLifecycleSnapshot && (androidLifecycleMapRestored || androidLifecycleContentRestored));
+        const androidLifecycleMapRestored = androidLifecycleResumeSnapshot
+          ? restoreAndroidLifecycleMap(androidLifecycleResumeSnapshot)
+          : false;
+        state.androidLifecycleRestored = Boolean(androidLifecycleResumeSnapshot && (androidLifecycleMapRestored || androidLifecycleContentRestored));
         if (nativeAndroid && state.userLocation && !state.androidLifecycleRestored) {
           if (pointWithinBounds(state.userLocation, STARTUP_LOCATION_CENTER_BOUNDS)) {
             syncUserLocationMarker({ centerMap: true, zoom: NEAR_ME_ZOOM });

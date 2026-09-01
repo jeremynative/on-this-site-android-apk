@@ -131,6 +131,32 @@
     return score;
   }
 
+  function polygonUnreadBadgeOffset(title, fontSize, maxWidthEm = 8, textOffsetEm = 0) {
+    const words = String(title || "").trim().split(/\s+/).filter(Boolean);
+    const characterWidthEm = 0.56;
+    const lines = [];
+    let lineWidth = 0;
+    words.forEach(word => {
+      const wordWidth = Math.max(0.8, word.length * characterWidthEm);
+      const nextWidth = lineWidth ? lineWidth + characterWidthEm + wordWidth : wordWidth;
+      if (lineWidth && nextWidth > maxWidthEm) {
+        lines.push(lineWidth);
+        lineWidth = wordWidth;
+      } else {
+        lineWidth = nextWidth;
+      }
+    });
+    if (lineWidth || !lines.length) lines.push(lineWidth || 1);
+    const safeFontSize = Math.max(8, Number(fontSize) || 10);
+    const labelWidth = Math.min(maxWidthEm, Math.max(...lines)) * safeFontSize;
+    const labelHeight = lines.length * safeFontSize * 1.16;
+    const badgeRadius = 6;
+    return [
+      Math.round(labelWidth / 2 + badgeRadius),
+      Math.round(textOffsetEm * safeFontSize - labelHeight / 2 - badgeRadius)
+    ];
+  }
+
   window.NLI_SHARED_MAP_UTILS = {
     layerExists,
     sourceExists,
@@ -144,6 +170,7 @@
     queryRenderedFeaturesAround,
     rebindLayerEvent,
     bindPointerCursor,
-    scorePlaceSuggestion
+    scorePlaceSuggestion,
+    polygonUnreadBadgeOffset
   };
 }());

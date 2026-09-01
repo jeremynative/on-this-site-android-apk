@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260901-apk-map-polygon-stability-r222";
+const expectedBuild = "20260901-tablet-bio-detail-cache-r223";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -326,6 +326,7 @@ if (!bundledMobileJs.includes("function nativeUserLocationFeatures()")
   throw new Error("The WebView/native bridge must preserve user location and unread-content state in the visible native map.");
 }
 if (!nativeMapController.includes("CameraPosition cameraToPreserve = nativeGestureInProgress()")
+    || !/CameraPosition cameraToPreserve[\s\S]*?map\.setPadding\(0, 0, 0, viewportBottomOcclusion\)[\s\S]*?map\.moveCamera\(CameraUpdateFactory\.newCameraPosition\(cameraToPreserve\)\)/.test(nativeMapController)
     || !nativeMapController.includes("if (camera == null || map == null || nativeGestureInProgress()) return;")
     || !nativeMapController.includes("movingFeaturesJson = featuresJson;")
     || !nativeMapController.includes("if (nativeGestureInProgress()) return;")
@@ -517,7 +518,7 @@ if (!bundledMobileJs.includes('loginSheetEl?.classList.contains("open") && state
 if (!bundledMobileCss.includes("#profiles-sheet.profile-progress-active")
     || !bundledMobileCss.includes("#login-sheet.profile-progress-active")
     || !bundledMobileCss.includes("body:not(.native-android-app).mobile-content-open:not(.mobile-profile-map-mode):not(.mobile-contributor-sheet-open) .app header")
-    || !bundledMobileCss.includes("body.native-android-app.mobile-detail-open:not(.mobile-profile-map-mode) .app header")
+    || !bundledMobileCss.includes("body.native-android-app:not(.tablet-device).mobile-detail-open:not(.mobile-profile-map-mode) .app header")
     || !bundledMobileJs.includes('document.body.classList.toggle("mobile-contributor-sheet-open", contributorSheetOpen)')
     || !bundledMobileCss.includes("body.mobile-profile-map-mode .mobile-calendar-event-marker")
     || !bundledMobileCss.includes(".comment.contributor-card {")) {
@@ -1163,8 +1164,8 @@ for (const [label, document] of [
     throw new Error(`${label} must animate reviewed multi-stop biographies unless they explicitly opt out.`);
   }
   if (!document.includes("const geometry = state.landMaskData?.geometry || null;")
-      || !document.includes("!geometry) return false;")) {
-    throw new Error(`${label} must show the safe canoe state until land data is available.`);
+      || !document.includes("!geometry) return true;")) {
+    throw new Error(`${label} must show the safe walking state until land data is available.`);
   }
   if (document.includes("if (path?.animate !== true) return null;")) {
     throw new Error(`${label} still contains the obsolete explicit-travel-only biography animation rule.`);
@@ -1384,7 +1385,7 @@ if (!bundledMobileJs.includes("async function refreshDiscussionSourceData(source
 }
 if (!source.includes("body.mobile-detail-open .mobile-view-tabs,body.mobile-detail-open .mobile-timeline,body.mobile-detail-open .list-panel{visibility:hidden!important;pointer-events:none!important;}")
     || source.includes("header>.search-autocomplete{display:block!important;}")
-    || !source.includes("body.native-android-app.mobile-detail-open:not(.mobile-profile-map-mode) .app header>:not(.title-row){display:none!important;}")
+    || !source.includes("body.native-android-app:not(.tablet-device).mobile-detail-open:not(.mobile-profile-map-mode) .app header>:not(.title-row){display:none!important;}")
     || !source.includes("body.native-android-app:not(.tablet-landscape) .detail.drawer-half{--detail-drawer-height:min(48dvh")
     || source.includes("body.mobile-detail-open .app{grid-template-rows:auto minmax(0,1fr) 0 0!important;}")) {
   throw new Error("Android detail panels must preserve the map grid rectangle instead of resizing it during a site tap.");
@@ -1620,7 +1621,7 @@ for (const [needle, message] of [
   ["function resizeMobileProfileProgressMap()", "APK contributor mode must resize its overlay without refitting the geographic camera."],
   ["limit: options.limit || 3", "APK related sites must be capped at three."],
   ["const MOBILE_CANOE_LAND_SAMPLE_RADIUS_DEG = 0.00022", "APK canoe state must sample the moving icon footprint near narrow land."],
-  ["mobileMovingLandSamples(coordinates).some", "APK canoe state must hide when any sampled point touches land."],
+  ["surroundingLandSamples >= Math.ceil(samples.length / 2)", "APK canoe state must require a stable majority-footprint shoreline classification."],
   ["MEDIA_UTILS.optimizedMapIconUrl", "APK map markers must preserve optimized transparent artwork."],
   ["id=\"mobile-map-locate\"", "APK map must include a dedicated current-location control."],
   ["id=\"mobile-map-locate\" type=\"button\" data-allow-geolocation", "APK current-location control must pass the Android geolocation gate."],
@@ -2308,7 +2309,7 @@ requireBundledText('TIMELINE_UTILS.rangeLabel(event)', "Bundled Android app must
 requireBundledText('TIMELINE_UTILS.locationLabel(event, { cleanText: cleanPlainText })', "Bundled Android app must route timeline location labels through shared timeline utilities.");
 requireBundledText('<p class="timeline-location"><strong>Location:</strong> ${escapeHtml(location)}</p>', "Bundled Android app must render historic moment locations when available.");
 requireBundledText('window.NLI_FEEDBACK_UTILS', "Bundled Android app must include shared feedback utilities.");
-requireBundledPattern(/detailBodyEl\.innerHTML\s*=\s*`[\s\S]*?\$\{siteTagsHtml\(site\)\}[\s\S]*?\$\{sections\}[\s\S]*?\$\{historyHtml\}[\s\S]*?\$\{whyThisMattersHtml\(site\)\}[\s\S]*?\$\{relatedSitesSection\(site\)\}/, "Bundled Android site articles must place Why This Matters before related sites near the end.");
+requireBundledPattern(/detailBodyEl\.innerHTML\s*=\s*`[\s\S]*?\$\{siteTagsHtml\(site\)\}[\s\S]*?\$\{sections\}[\s\S]*?\$\{historyHtml\}[\s\S]*?\$\{whyThisMattersHtml\(site(?:,\s*\{[\s\S]*?\})?\)\}[\s\S]*?\$\{relatedSitesSection\(site\)\}/, "Bundled Android site articles must place Why This Matters before related sites near the end.");
 requireBundledText('const feedbackPayload = FEEDBACK_UTILS.buildFeedbackCommentPayload', "Bundled Android app must save feedback through the shared Directus payload.");
 requireBundledText('source_type: "feedback"', "Bundled Android app feedback must use the feedback source type.");
 requireBundledText('if (hiddenEl) hiddenEl.style.visibility = "hidden"', "Bundled Android app must hide the feedback sheet before screenshot capture.");
@@ -2353,7 +2354,7 @@ requireBundledText('ACTIVITY_UTILS.readSeen(mobileActivityLastSeenKey())', "Bund
 requireBundledText('nli-mobile-activity-seen-items-v2', "Bundled Android app must persist individual activity items until their connected content is viewed or they are dismissed.");
 requireBundledText('function createUnreadActivityTracker(options = {})', "Bundled Android app must include the indexed shared unread activity tracker.");
 requireBundledText('const mobileActivityUnreadTracker = ACTIVITY_UTILS.createUnreadActivityTracker({', "Bundled Android app must route unread activity through the shared tracker.");
-requireBundledText('return mobileActivityUnreadTracker.count()', "Bundled Android app must count grouped unread activity through one indexed snapshot.");
+requireBundledText('return mobileUnreadActivityItems().length', "Bundled Android app must count the grouped unread cards that are actually visible.");
 requireBundledText('data-mobile-activity-dismiss', "Bundled Android activity cards must expose an explicit unread dismissal action.");
 requireBundledText('mobile-site-unread-badges', "Bundled Android map must expose per-site unread badges.");
 requireBundledPattern(/function ensureMobileUnreadBadgeImages\(\)[\s\S]*?canvas\.width\s*=\s*28[\s\S]*?context\.arc\(14,\s*14,\s*12[\s\S]*?context\.fillText\(label,\s*14,\s*14\.5\)[\s\S]*?pixelRatio:\s*2/, "Bundled Android unread numbers must be baked into compact outline-free icons.");
@@ -2482,7 +2483,8 @@ requireBundledText('listTitleTextEl.textContent = showingSearch ? "Search result
 requireBundledPattern(/function\s+startSearchValueWatch\(\)[\s\S]*?document\.activeElement\s*!==\s*searchEl[\s\S]*?setInterval\(\(\)\s*=>[\s\S]*?refreshMobileSearchSuggestions\(\)[\s\S]*?function\s+stopSearchValueWatch\(options\s*=\s*\{\}\)[\s\S]*?clearInterval\(state\.searchValueWatchTimer\)/, "Bundled Android app must poll autocomplete only while the search field is focused.");
 requireBundledText('function mobileAutocompleteCandidates(rawQuery)', "Bundled Android app must derive autocomplete candidates from the current field query.");
 requireBundledText('state.mobileSearchIndex = [...state.sites, ...wikiSearchEntries];', "Bundled Android app must prepare one normalized site and wiki search index.");
-requireBundledPattern(/fetchMobileWikiIndexRows\(\)[\s\S]*?state\.wikiArticles\s*=\s*\(response\.data\s*\|\|\s*\[\]\)\.map\(sanitizePublicWikiArticle\)[\s\S]*?rebuildMobileSearchIndex\(\)/, "Bundled Android app must add deferred knowledgebase articles to the live search index as soon as they load.");
+requireBundledPattern(/function applyMobileWikiIndexRows\(rows = \[\]\)[\s\S]*?state\.wikiArticles\s*=\s*rows\.map\(sanitizePublicWikiArticle\)[\s\S]*?rebuildMobileSearchIndex\(\)/, "Bundled Android app must add deferred knowledgebase articles to the live search index as soon as they load.");
+requireBundledText('_wikiIndexApplied: applyMobileWikiIndexRows(response.data || [])', "Bundled Android app must apply deferred knowledgebase rows immediately when their request resolves.");
 requireBundledText('return mobileSearchCandidates(rawQuery);', "Bundled Android autocomplete must reuse the current indexed result cache.");
 requireBundledText('function scheduleSearchSync()', "Bundled Android app must watch mobile search value changes.");
 requireBundledText('function closeDetailForSearchResults()', "Bundled Android app must close open detail sheets before search results take over.");

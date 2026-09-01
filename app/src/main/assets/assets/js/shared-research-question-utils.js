@@ -2,6 +2,11 @@
   const FEEDBACK_UTILS = window.NLI_FEEDBACK_UTILS || {};
   const SUPPORT_UTILS = window.NLI_SUPPORT_UTILS || {};
   const SESSION_KEY = "nli-research-question-prompt-dismissed";
+  const ANDROID_BETA_SESSION_KEY = "nli-android-beta-prompt-dismissed";
+  const ANDROID_BETA_WEB_DISMISSED_UNTIL_KEY = "nli-android-beta-web-dismissed-until";
+  const ANDROID_BETA_WEB_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+  const QUESTION_PAGE_URL = "/question";
+  const ANDROID_BETA_EMAIL_URL = "mailto:jeremynative@gmail.com?subject=On%20This%20Site%20Android%20beta%20invite&body=Please%20invite%20this%20Google%20Account%20email%20to%20the%20On%20This%20Site%20Android%20closed%20beta%3A%20";
   let instance = null;
 
   function escapeHtml(value) {
@@ -29,20 +34,37 @@
     const route = ["site", "wiki", "page", "blog", "calendar", "event"]
       .map(key => params.get(key) ? `${key}=${params.get(key)}` : "")
       .find(Boolean);
-    return route || "Map home";
+    if (route) return route;
+    return /^\/question\/?$/i.test(window.location.pathname) ? "Question page" : "Map home";
   }
 
-  function promptHtml() {
+  function isAndroidWebBrowserContext() {
+    return /Android/i.test(navigator.userAgent || "")
+      && !window.AndroidApp
+      && !window.AndroidStory
+      && !document.body.classList.contains("native-android-app");
+  }
+
+  function promptHtml(platform, includeAndroidBeta, questionUrl) {
     return `
+      ${includeAndroidBeta ? `
+      <aside class="android-beta-prompt android-beta-prompt-${platform}" data-android-beta-prompt aria-label="Request an invitation to the On This Site Android beta" hidden>
+        <button class="android-beta-prompt-close" type="button" data-android-beta-dismiss aria-label="Dismiss Android beta invitation">&times;</button>
+        <div>
+          <strong>Help test the Android app</strong>
+          <span>Email us to receive an invite.</span>
+        </div>
+        <a class="android-beta-prompt-action" href="${ANDROID_BETA_EMAIL_URL}" title="Send email to receive an Android beta invitation">Send email</a>
+      </aside>` : ""}
       <aside class="research-question-prompt" data-research-question-prompt aria-label="Ask On This Site a research question" hidden>
         <button class="research-question-prompt-close" type="button" data-research-question-dismiss aria-label="Dismiss research question prompt">&times;</button>
         <div>
           <strong>Have a question?</strong>
           <span>Steer the research through your curiosity.</span>
         </div>
-        <button class="research-question-prompt-action" type="button" data-research-question-open>Ask a question</button>
+        <a class="research-question-prompt-action" href="${escapeHtml(questionUrl)}" data-research-question-open>Ask a question</a>
       </aside>
-      <button class="research-question-restore" type="button" data-research-question-open data-research-question-restore aria-label="Ask a research question" title="Ask a question" hidden>?</button>
+      <a class="research-question-restore" href="${escapeHtml(questionUrl)}" data-research-question-open data-research-question-restore aria-label="Ask a research question" title="Ask a question" hidden>?</a>
     `;
   }
 
@@ -116,12 +138,18 @@
   function init(options = {}) {
     if (instance) return instance;
     const platform = options.platform || "desktop";
+    const pageMode = options.pageMode === true;
+    const urlBackedModal = options.urlBackedModal === true;
+    const questionUrl = options.questionUrl || QUESTION_PAGE_URL;
+    const closeUrl = options.closeUrl || "/";
+    const androidWebBrowser = isAndroidWebBrowserContext();
     const identity = typeof options.getIdentity === "function" ? (options.getIdentity() || {}) : {};
     const shell = document.createElement("div");
     shell.className = `research-question-shell research-question-shell-${platform}`;
-    shell.innerHTML = promptHtml() + dialogHtml(identity);
+    shell.innerHTML = promptHtml(platform, androidWebBrowser, questionUrl) + dialogHtml(identity);
     document.body.appendChild(shell);
 
+    const androidBetaPrompt = shell.querySelector("[data-android-beta-prompt]");
     const prompt = shell.querySelector("[data-research-question-prompt]");
     const restore = shell.querySelector("[data-research-question-restore]");
     const dialog = shell.querySelector("[data-research-question-dialog]");
@@ -131,11 +159,27 @@
     const supportToggle = shell.querySelector("[data-research-support-enabled]");
     const supportFields = shell.querySelector("[data-research-support-fields]");
     const promptDismiss = shell.querySelector("[data-research-question-dismiss]");
+    const androidBetaDismiss = shell.querySelector("[data-android-beta-dismiss]");
+    const androidBetaAction = shell.querySelector(".android-beta-prompt-action");
     const showRestore = options.showRestore !== false;
     const autoPrompt = options.autoPrompt !== false;
     let promptRequested = false;
+    let androidBetaRequested = false;
     let questionSent = false;
     let checkoutAttempt = 0;
+
+    function isQuestionRoute() {
+      return /^\/question\/?$/i.test(window.location.pathname);
+    }
+
+    function setQuestionRoute(open) {
+      if (!urlBackedModal || pageMode) return;
+      const target = open ? questionUrl : closeUrl;
+      if (open && isQuestionRoute()) return;
+      if (!open && !isQuestionRoute()) return;
+      const method = open ? "pushState" : "replaceState";
+      window.history?.[method]?.({}, "", target);
+    }
 
     function dismissed() {
       try { return sessionStorage.getItem(SESSION_KEY) === "1"; } catch { return false; }
@@ -145,6 +189,29 @@
       try { sessionStorage.setItem(SESSION_KEY, "1"); } catch {}
     }
 
+    function androidBetaDismissed() {
+      if (isAndroidWebBrowser()) {
+        try {
+          return Number(localStorage.getItem(ANDROID_BETA_WEB_DISMISSED_UNTIL_KEY) || 0) > Date.now();
+        } catch {
+          return false;
+        }
+      }
+      try { return sessionStorage.getItem(ANDROID_BETA_SESSION_KEY) === "1"; } catch { return false; }
+    }
+
+    function setAndroidBetaDismissed() {
+      if (isAndroidWebBrowser()) {
+        try { localStorage.setItem(ANDROID_BETA_WEB_DISMISSED_UNTIL_KEY, String(Date.now() + ANDROID_BETA_WEB_COOLDOWN_MS)); } catch {}
+        return;
+      }
+      try { sessionStorage.setItem(ANDROID_BETA_SESSION_KEY, "1"); } catch {}
+    }
+
+    function isAndroidWebBrowser() {
+      return androidWebBrowser && isAndroidWebBrowserContext();
+    }
+
     function interfaceBusy() {
       if (dialog && !dialog.hidden) return false;
       return typeof options.isUiBusy === "function" && options.isUiBusy();
@@ -152,6 +219,9 @@
 
     function syncPrompt() {
       prompt.hidden = !promptRequested || dismissed() || interfaceBusy();
+      if (androidBetaPrompt) {
+        androidBetaPrompt.hidden = !androidBetaRequested || !isAndroidWebBrowser() || androidBetaDismissed() || interfaceBusy();
+      }
       restore.hidden = !showRestore || !promptRequested || !prompt.hidden || !dialog.hidden;
     }
 
@@ -169,7 +239,17 @@
       if (!emailInput.value && current.email) emailInput.value = current.email;
     }
 
-    function openDialog() {
+    function openDialog({ updateUrl = true } = {}) {
+      const nativeAndroidApp = Boolean(
+        window.AndroidApp
+        || window.AndroidStory
+        || document.body.classList.contains("native-android-app")
+      );
+      if (!pageMode && !urlBackedModal && !nativeAndroidApp) {
+        window.location.assign(questionUrl);
+        return;
+      }
+      if (updateUrl && !nativeAndroidApp) setQuestionRoute(true);
       setDismissed();
       prompt.hidden = true;
       refreshIdentity();
@@ -205,13 +285,18 @@
       }
     }
 
-    function closeDialog() {
+    function closeDialog({ updateUrl = true } = {}) {
       checkoutAttempt += 1;
       try {
         cancelPendingCheckout();
       } finally {
+        if (pageMode) {
+          window.location.assign(closeUrl);
+          return;
+        }
         dialog.hidden = true;
         document.body.classList.remove("research-question-dialog-open");
+        if (updateUrl) setQuestionRoute(false);
         window.requestAnimationFrame(syncPrompt);
       }
     }
@@ -222,6 +307,13 @@
       setDismissed();
       prompt.hidden = true;
       restore.hidden = !showRestore;
+    }
+
+    function dismissAndroidBeta(event) {
+      event?.preventDefault();
+      event?.stopPropagation();
+      setAndroidBetaDismissed();
+      if (androidBetaPrompt) androidBetaPrompt.hidden = true;
     }
 
     async function submitQuestion(event) {
@@ -305,6 +397,8 @@
       submit.textContent = supportToggle.checked ? "Send question and continue to payment" : "Send question";
     });
     promptDismiss?.addEventListener("click", dismissPrompt);
+    androidBetaDismiss?.addEventListener("click", dismissAndroidBeta);
+    androidBetaAction?.addEventListener("click", setAndroidBetaDismissed);
     shell.querySelectorAll("[data-research-question-close]").forEach(control => {
       control.addEventListener("click", event => {
         event.preventDefault();
@@ -313,7 +407,10 @@
       });
     });
     shell.addEventListener("click", event => {
-      if (event.target.closest("[data-research-question-open]")) openDialog();
+      if (event.target.closest("[data-research-question-open]")) {
+        event.preventDefault();
+        openDialog();
+      }
       window.requestAnimationFrame(syncPrompt);
     });
     form.addEventListener("submit", submitQuestion);
@@ -322,14 +419,30 @@
     });
     document.addEventListener("click", () => window.requestAnimationFrame(syncPrompt));
     window.addEventListener("resize", syncPrompt);
+    if (urlBackedModal && !pageMode) {
+      window.addEventListener("popstate", () => {
+        if (isQuestionRoute()) openDialog({ updateUrl: false });
+        else if (!dialog.hidden) closeDialog({ updateUrl: false });
+      });
+    }
 
-    if (autoPrompt) {
+    if (autoPrompt && !androidWebBrowser) {
       const delay = Number.isFinite(Number(options.delay)) ? Number(options.delay) : (platform === "mobile" ? 11000 : 9000);
       window.setTimeout(() => {
         promptRequested = true;
         syncPrompt();
       }, Math.max(0, delay));
     }
+    if (isAndroidWebBrowser()) {
+      const androidBetaDelay = Number.isFinite(Number(options.androidBetaDelay)) ? Number(options.androidBetaDelay) : 0;
+      const requestAndroidBetaPrompt = () => {
+        androidBetaRequested = true;
+        syncPrompt();
+      };
+      if (androidBetaDelay <= 0) requestAndroidBetaPrompt();
+      else window.setTimeout(requestAndroidBetaPrompt, androidBetaDelay);
+    }
+    if (pageMode || (urlBackedModal && isQuestionRoute())) openDialog({ updateUrl: false });
 
     instance = {
       shell,
@@ -347,5 +460,5 @@
     return instance;
   }
 
-  window.NLI_RESEARCH_QUESTION_UTILS = { init };
+  window.NLI_RESEARCH_QUESTION_UTILS = { init, QUESTION_PAGE_URL };
 }());
