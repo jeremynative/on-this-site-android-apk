@@ -20298,10 +20298,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       lastSearchDataVersion: -1,
       lastAutocompleteQuery: null,
       lastAutocompleteDataVersion: -1,
-      placeAutocompleteTimer: null,
-      placeAutocompleteRequest: 0,
-      placeAutocompleteQuery: "",
-      placeAutocompleteResults: [],
+      addressSearchFallbackQuery: "",
       androidImeSearchDraft: "",
       searchValueWatchTimer: null,
       nativeAndroidSearchWatchInstalled: false,
@@ -24039,6 +24036,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       // listing context steady until the visitor chooses a suggestion or
       // explicitly submits the search.
       state.lastSearchValue = activeMobileSearchValue();
+      if (state.addressSearchFallbackQuery !== state.lastSearchValue.trim().toLowerCase()) state.addressSearchFallbackQuery = "";
       state.lastSearchDataVersion = state.searchDataVersion;
       refreshMobileSearchSuggestions();
       window.clearTimeout(state.searchTimer);
@@ -24127,6 +24125,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.addressSearchMode = false;
       state.addressSearchPending = "";
       state.addressSearchToken = "";
+      state.addressSearchFallbackQuery = "";
       state.addressSearchResult = null;
       state.filtered = state.filtered.filter(site => site.slug !== "address-result");
       if (state.addressMarker) {
@@ -24144,163 +24143,38 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         const bbox = LONG_ISLAND_BOUNDS.flat().join(",");
         const tokenValue = window.mapboxgl?.accessToken || MAPBOX_PUBLIC_TOKEN;
         const normalizedQuery = query.replace(/\bstonybrook\b/ig, "stony brook");
-        const searchboxFeature = await searchboxPlaceSearch(normalizedQuery, tokenValue, bbox);
-        if (state.addressSearchToken !== token) return;
-        const feature = searchboxFeature || await geocodePlaceSearch(normalizedQuery, tokenValue, bbox);
+        const feature = await geocodePlaceSearch(normalizedQuery, tokenValue, bbox);
         if (state.addressSearchToken !== token) return;
         if (!feature?.center) {
           state.addressSearchMode = false;
-          state.addressSearchPending = "";
+          state.addressSearchFallbackQuery = query;
           state.filtered = [];
           resetNearbyRenderLimit();
           renderList();
           syncMarkers();
+          showBanner("Map search is unavailable. You can continue with this destination in Maps.");
           return;
         }
+        state.addressSearchFallbackQuery = "";
         applyAddressSearchFeature(feature);
       } catch {
         if (state.addressSearchToken === token) {
           state.addressSearchMode = false;
-          state.addressSearchPending = "";
+          state.addressSearchFallbackQuery = query;
           state.filtered = [];
           resetNearbyRenderLimit();
           renderList();
           syncMarkers();
+          showBanner("Map search is unavailable. You can continue with this destination in Maps.");
         }
       }
-    }
-
-    async function searchboxPlaceSearch(query, tokenValue, bbox) {
-      const sessionToken = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      const url = `https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(query)}&access_token=${encodeURIComponent(tokenValue)}&session_token=${encodeURIComponent(sessionToken)}&limit=6&bbox=${bbox}&proximity=-73.1,40.85`;
-      const response = await fetch(url);
-      if (!response.ok) return null;
-      const data = await response.json();
-      const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
-      const scored = suggestions
-        .filter(item => item?.mapbox_id)
-        .map(item => ({ item, score: placeSuggestionScore(item, query) }))
-        .filter(entry => entry.score > -100)
-        .sort((a, b) => b.score - a.score);
-      const suggestion = scored[0]?.item;
-      if (!suggestion) return null;
-      return retrieveSearchboxSuggestion({ ...suggestion, sessionToken }, tokenValue);
-    }
-
-    async function retrieveSearchboxSuggestion(suggestion, tokenValue) {
-      const mapboxId = suggestion?.mapboxId || suggestion?.mapbox_id;
-      const sessionToken = suggestion?.sessionToken;
-      if (!mapboxId || !sessionToken) return null;
-      const retrieveUrl = `https://api.mapbox.com/search/searchbox/v1/retrieve/${encodeURIComponent(mapboxId)}?access_token=${encodeURIComponent(tokenValue)}&session_token=${encodeURIComponent(sessionToken)}`;
-      const retrieveResponse = await fetch(retrieveUrl);
-      if (!retrieveResponse.ok) return null;
-      const retrieveData = await retrieveResponse.json();
-      const result = (retrieveData.features || [])[0];
-      const center = result?.geometry?.coordinates;
-      if (!pointWithinBounds(center, LONG_ISLAND_BOUNDS)) return null;
-      const props = result.properties || {};
-      const name = props.name || suggestion.name || "Search result";
-      const address = props.full_address || suggestion.full_address || props.place_formatted || suggestion.place_formatted || "";
-      return {
-        center,
-        placeName: address ? `${name}, ${address}` : name,
-        label: props.feature_type === "poi" || suggestion.feature_type === "poi" || suggestion.featureType === "poi" ? "Place search result" : "Search result",
-        summary: props.feature_type === "poi" || suggestion.feature_type === "poi" || suggestion.featureType === "poi" ? "Place or business search result" : "Map search result"
-      };
-    }
-
-    function schedulePlaceAutocomplete(rawQuery) {
-      const query = String(rawQuery || "").trim();
-      if (query === state.placeAutocompleteQuery) return;
-      state.placeAutocompleteQuery = query;
-      state.placeAutocompleteResults = [];
-      state.placeAutocompleteRequest += 1;
-      window.clearTimeout(state.placeAutocompleteTimer);
-      if (query.length < 3 || isOfflineTextMode() || navigator.onLine === false) return;
-      const requestId = state.placeAutocompleteRequest;
-      state.placeAutocompleteTimer = window.setTimeout(() => loadPlaceAutocomplete(query, requestId), 320);
-    }
-
-    async function loadPlaceAutocomplete(rawQuery, requestId) {
-      const query = rawQuery.replace(/\bstonybrook\b/ig, "stony brook");
-      const tokenValue = window.mapboxgl?.accessToken || MAPBOX_PUBLIC_TOKEN;
-      if (!tokenValue || String(tokenValue).startsWith("__NLI_")) return;
-      const sessionToken = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      const bbox = LONG_ISLAND_BOUNDS.flat().join(",");
-      const url = `https://api.mapbox.com/search/searchbox/v1/suggest?q=${encodeURIComponent(query)}&access_token=${encodeURIComponent(tokenValue)}&session_token=${encodeURIComponent(sessionToken)}&limit=6&bbox=${bbox}&proximity=-73.1,40.85`;
-      try {
-        const response = await fetch(url);
-        if (!response.ok || requestId !== state.placeAutocompleteRequest) return;
-        const data = await response.json();
-        if (requestId !== state.placeAutocompleteRequest || rawQuery !== state.placeAutocompleteQuery) return;
-        const seen = new Set();
-        state.placeAutocompleteResults = (Array.isArray(data.suggestions) ? data.suggestions : [])
-          .filter(item => item?.mapbox_id && placeSuggestionScore(item, query) > -100)
-          .map(item => ({
-            mapboxId: item.mapbox_id,
-            sessionToken,
-            title: String(item.name || item.full_address || "Map search result").trim(),
-            subtitle: String(item.full_address || item.place_formatted || "Long Island map result").trim(),
-            featureType: item.feature_type || "place"
-          }))
-          .filter(item => {
-            const key = `${item.title}|${item.subtitle}`.toLowerCase();
-            if (!item.title || seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          })
-          .slice(0, 4);
-        renderSearchSuggestions(rawQuery);
-      } catch {
-        if (requestId === state.placeAutocompleteRequest) state.placeAutocompleteResults = [];
-      }
-    }
-
-    async function openPlaceAutocompleteSuggestion(index) {
-      const suggestion = state.placeAutocompleteResults[Number(index)];
-      if (!suggestion) return false;
-      const tokenValue = window.mapboxgl?.accessToken || MAPBOX_PUBLIC_TOKEN;
-      searchEl.value = suggestion.title;
-      state.androidImeSearchDraft = suggestion.title;
-      searchSuggestionsEl?.replaceChildren();
-      if (searchSuggestionsEl) searchSuggestionsEl.hidden = true;
-      searchEl.setAttribute("aria-expanded", "false");
-      showBanner(`Finding ${suggestion.title} on Long Island...`);
-      const feature = await retrieveSearchboxSuggestion(suggestion, tokenValue);
-      if (!feature?.center) {
-        openMobileSearchResultsPage();
-        return false;
-      }
-      searchEl.value = feature.placeName;
-      state.androidImeSearchDraft = feature.placeName;
-      state.lastSearchValue = feature.placeName;
-      if (detailEl?.classList.contains("open")) closeDetail({ skipRoute: true, blockMapTap: false });
-      applyAddressSearchFeature(feature);
-      setMobilePanelMode("nearby");
-      setMobileBottomPanelState("maximized");
-      listEl?.scrollTo?.({ top: 0, behavior: "smooth" });
-      searchEl.blur();
-      showBanner(`Showing ${suggestion.title} with nearby On This Site places.`);
-      return true;
-    }
-
-    function placeSuggestionScore(suggestion, query) {
-      return MAP_UTILS.scorePlaceSuggestion(suggestion, query, {
-        normalizeText,
-        weights: {
-          street: -35,
-          place: -10,
-          nameTerm: 8,
-          missingTerm: -5
-        }
-      });
     }
 
     async function geocodePlaceSearch(query, tokenValue, bbox) {
       const geocodeQuery = /\b(new york|ny|long island|nassau|suffolk|brooklyn|queens)\b/i.test(query)
         ? query
         : `${query} Long Island NY`;
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(geocodeQuery)}.json?access_token=${encodeURIComponent(tokenValue)}&autocomplete=true&limit=5&types=poi,address,place,locality,neighborhood&bbox=${bbox}&proximity=-73.1,40.85`;
+      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(geocodeQuery)}.json?access_token=${encodeURIComponent(tokenValue)}&autocomplete=false&limit=5&types=poi,address,place,locality,neighborhood&bbox=${bbox}&proximity=-73.1,40.85`;
       const response = await fetch(url);
       if (!response.ok) return null;
       const data = await response.json();
@@ -24841,6 +24715,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       const showingSearch = Boolean(query);
       const showingAddressResults = state.filtered.some(site => site?.slug === "address-result");
       const didYouMean = showingSearch && !state.addressSearchMode ? mobileDidYouMeanSearch(query, state.filtered) : null;
+      const fallbackQuery = state.addressSearchFallbackQuery === query.toLowerCase() ? query : "";
       const renderLimit = Math.max(1, Math.min(count, Number(state.nearbyRenderLimit || defaultNearbyRenderLimit())));
       const visibleCards = state.filtered.slice(0, renderLimit).map((item, index) =>
         nearbyFeedCardModel(item, index, { showingAddressResults })
@@ -24849,6 +24724,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (listTitleTextEl) listTitleTextEl.textContent = showingSearch ? "Search results" : "Nearby sites";
       statusEl.textContent = state.addressSearchMode
         ? "Searching map..."
+        : fallbackQuery
+          ? `Map search unavailable for "${query}"`
         : showingSearch
           ? `${count} result${count === 1 ? "" : "s"} for "${query}"`
           : state.userLocation
@@ -24876,8 +24753,9 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         listEl.innerHTML = `
           <div class="site-card empty-state" role="status">
             <span class="site-copy">
-              <h2>${state.addressSearchMode ? "Searching the map..." : "No matching sites found"}</h2>
-              <p>${state.addressSearchMode && state.addressSearchPending ? `Looking for "${escapeHtml(state.addressSearchPending)}" as a place or business.` : query ? `No local site matched "${escapeHtml(query)}". Try a broader search or a nearby place name.` : "No sites are available for this view."}</p>
+              <h2>${state.addressSearchMode ? "Searching the map..." : fallbackQuery ? "Continue in Maps" : "No matching sites found"}</h2>
+              <p>${state.addressSearchMode && state.addressSearchPending ? `Looking for "${escapeHtml(state.addressSearchPending)}" as a place or business.` : fallbackQuery ? "On This Site map search is temporarily unavailable or its free allowance has been reached. Your destination is preserved." : query ? `No local site matched "${escapeHtml(query)}". Try a broader search or a nearby place name.` : "No sites are available for this view."}</p>
+              ${fallbackQuery ? `<a class="action primary" href="${escapeHtml(mapsDirectionsQueryUrl(fallbackQuery))}" target="_blank" rel="noreferrer">Open directions in Maps</a>` : ""}
               ${didYouMean ? `<button class="action secondary" type="button" data-search-suggestion="${escapeHtml(didYouMean.title)}">Did you mean: ${escapeHtml(didYouMean.title)}</button>` : ""}
             </span>
           </div>
@@ -24912,6 +24790,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function applyAddressSearchFeature(feature) {
       if (!feature?.center) return false;
+      state.addressSearchFallbackQuery = "";
       const addressSite = {
         id: "address-result",
         slug: "address-result",
@@ -24964,7 +24843,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function refreshMobileSearchSuggestions() {
       if (!searchEl) return;
       const value = activeMobileSearchValue();
-      schedulePlaceAutocomplete(value);
       if (value === state.lastAutocompleteQuery && state.lastAutocompleteDataVersion === state.searchDataVersion) return;
       state.lastAutocompleteQuery = value;
       state.lastAutocompleteDataVersion = state.searchDataVersion;
@@ -24999,22 +24877,20 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           seen.add(key);
           return true;
         });
-      const placeSuggestions = query === state.placeAutocompleteQuery ? state.placeAutocompleteResults : [];
-      const localLimit = placeSuggestions.length ? Math.min(3, localSuggestions.length) : 5;
-      const suggestions = localSuggestions.slice(0, localLimit);
-      const visiblePlaces = placeSuggestions.slice(0, Math.max(0, 5 - suggestions.length));
-      if (!suggestions.length && !visiblePlaces.length) return hide();
+      const suggestions = localSuggestions.slice(0, 4);
+      const offerMapSearch = query.length >= 3 && !localSuggestions.some(item => normalizeText(item.title) === normalizeText(query));
+      if (!suggestions.length && !offerMapSearch) return hide();
       searchSuggestionsEl.innerHTML = `${suggestions.map(item => `
-        <button class="search-suggestion" type="button" role="option" data-search-suggestion="${escapeHtml(item.title)}">
+        <button class="search-suggestion" type="button" role="option" data-search-suggestion="${escapeHtml(item.title)}"${item.resultType === "site" ? ` data-search-site="${escapeHtml(item.slug)}"` : ""}>
           <strong>${escapeHtml(item.title)}</strong>
           <span>${escapeHtml(item.resultType === "wiki" ? "Knowledgebase" : mobileSearchResultTypeLabel(item.site_type))}</span>
         </button>
-      `).join("")}${visiblePlaces.map((item, index) => `
-        <button class="search-suggestion place-search-suggestion" type="button" role="option" data-place-suggestion="${index}">
-          <strong>${escapeHtml(item.title)}</strong>
-          <span>${escapeHtml(item.featureType === "poi" ? "Place or business" : "Long Island map result")}${item.subtitle ? ` &middot; ${escapeHtml(item.subtitle)}` : ""}</span>
+      `).join("")}${offerMapSearch ? `
+        <button class="search-suggestion place-search-suggestion" type="button" role="option" data-map-search-query="${escapeHtml(query)}">
+          <strong>Search the map for “${escapeHtml(query)}”</strong>
+          <span>Address, business, or place on Long Island</span>
         </button>
-      `).join("")}`;
+      ` : ""}`;
       searchSuggestionsEl.hidden = false;
       searchEl.setAttribute("aria-expanded", "true");
     }
@@ -28465,6 +28341,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         ? `${lat},${lng}`
         : site.title;
       return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`;
+    }
+
+    function mapsDirectionsQueryUrl(query) {
+      return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(String(query || "").trim())}&travelmode=driving`;
     }
 
     function markVisited(site) {
@@ -38514,17 +38394,36 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function activateMobileListTarget(target, event) {
-      const placeSuggestion = target?.closest?.("[data-place-suggestion]");
-      if (placeSuggestion) {
+      const fromSearchResults = Boolean(activeMobileSearchValue().trim());
+      const mapSearch = target?.closest?.("[data-map-search-query]");
+      if (mapSearch) {
         event?.preventDefault?.();
         event?.stopPropagation?.();
-        openPlaceAutocompleteSuggestion(placeSuggestion.dataset.placeSuggestion);
+        const query = String(mapSearch.dataset.mapSearchQuery || "").trim();
+        searchEl.value = query;
+        state.androidImeSearchDraft = query;
+        state.addressSearchMode = true;
+        state.addressSearchPending = query.toLowerCase();
+        state.addressSearchFallbackQuery = "";
+        state.filtered = [];
+        resetNearbyRenderLimit();
+        renderList();
+        setMobilePanelMode("nearby");
+        setMobileBottomPanelState("maximized");
+        searchEl.blur();
+        updateAddressSearch(query.toLowerCase());
         return true;
       }
       const searchSuggestion = target?.closest?.("[data-search-suggestion]");
       if (searchSuggestion) {
         event?.preventDefault?.();
         event?.stopPropagation?.();
+        if (searchSuggestion.dataset.searchSite) {
+          clearMobileSearchForResultOpen();
+          searchEl?.blur?.();
+          openNearbySiteWithMapPreview(searchSuggestion.dataset.searchSite, { fromSearch: true });
+          return true;
+        }
         searchEl.value = searchSuggestion.dataset.searchSuggestion || "";
         searchSuggestionsEl?.replaceChildren();
         if (searchSuggestionsEl) searchSuggestionsEl.hidden = true;
@@ -38574,8 +38473,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           state.selectedSlug = site.slug;
           state.selectedSite = site;
           renderList({ preserveScroll: true });
-          focusSite(site, { duration: 900, preview: true });
-          animateMobileSiteMarker(site);
+          syncActiveSiteMapLabel(site);
+          if (fromSearchResults) {
+            focusSite(site, { duration: 900, preview: true, zoom: 14.5 });
+            window.setTimeout(() => showMobileSearchResultMapHighlight(site), 560);
+          } else {
+            focusSite(site, { duration: 900, preview: true });
+            animateMobileSiteMarker(site);
+          }
         }
         return true;
       }
@@ -38594,7 +38499,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         event?.stopPropagation?.();
         clearMobileSearchForResultOpen();
         searchEl?.blur?.();
-        openNearbySiteWithMapPreview(openSiteAction.dataset.nearbyOpen);
+        openNearbySiteWithMapPreview(openSiteAction.dataset.nearbyOpen, { fromSearch: fromSearchResults });
         return true;
       }
       const resultCard = target?.closest?.(".site-card[data-slug], .site-card[data-wiki-slug]");
@@ -38611,7 +38516,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           return true;
         }
         if (cardTarget.slug) {
-          openNearbySiteWithMapPreview(cardTarget.slug);
+          openNearbySiteWithMapPreview(cardTarget.slug, { fromSearch: fromSearchResults });
           return true;
         }
       }
