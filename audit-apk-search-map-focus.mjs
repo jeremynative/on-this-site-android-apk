@@ -59,15 +59,14 @@ const result = await evaluate(`new Promise(resolve => {
     }
     const input = document.querySelector("#search");
     if (!input) return resolve({ error: "Search input is missing.", status });
+    input.focus();
     input.value = "Whale's Fin";
     input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
     await wait(900);
-    const card = [...document.querySelectorAll(".site-card[data-slug]")]
-      .find(item => /whale['’]s fin/i.test(item.textContent || ""));
-    if (!card) return resolve({ error: "Whale's Fin search result card is missing.", status, list: document.querySelector("#site-list")?.innerText?.slice(0, 600) });
+    const suggestion = document.querySelector('.search-suggestion[data-search-site="whales-fin"]');
+    if (!suggestion) return resolve({ error: "Whale's Fin autocomplete result is missing.", status, suggestions: document.querySelector("#search-suggestions")?.innerText?.slice(0, 600) });
     const searchBeforeClick = input.value;
-    card.click();
+    suggestion.click();
     await wait(1350);
     const calls = window.__qaSearchFocusCalls || [];
     const camera = window.__nliMobileMapCameraSnapshot?.() || null;

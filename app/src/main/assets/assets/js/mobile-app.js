@@ -5826,7 +5826,7 @@
       const visiblePlaces = placeSuggestions.slice(0, Math.max(0, 5 - suggestions.length));
       if (!suggestions.length && !visiblePlaces.length) return hide();
       searchSuggestionsEl.innerHTML = `${suggestions.map(item => `
-        <button class="search-suggestion" type="button" role="option" data-search-suggestion="${escapeHtml(item.title)}">
+        <button class="search-suggestion" type="button" role="option" data-search-suggestion="${escapeHtml(item.title)}"${item.resultType === "site" ? ` data-search-site="${escapeHtml(item.slug)}"` : ""}>
           <strong>${escapeHtml(item.title)}</strong>
           <span>${escapeHtml(item.resultType === "wiki" ? "Knowledgebase" : mobileSearchResultTypeLabel(item.site_type))}</span>
         </button>
@@ -19402,6 +19402,12 @@
       if (searchSuggestion) {
         event?.preventDefault?.();
         event?.stopPropagation?.();
+        if (searchSuggestion.dataset.searchSite) {
+          clearMobileSearchForResultOpen();
+          searchEl?.blur?.();
+          openNearbySiteWithMapPreview(searchSuggestion.dataset.searchSite, { fromSearch: true });
+          return true;
+        }
         searchEl.value = searchSuggestion.dataset.searchSuggestion || "";
         searchSuggestionsEl?.replaceChildren();
         if (searchSuggestionsEl) searchSuggestionsEl.hidden = true;

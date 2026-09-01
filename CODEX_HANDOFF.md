@@ -1,5 +1,13 @@
 # Android APK — Codex Handoff
 
+## September 1 one-tap autocomplete follow-up
+
+- Branch `fix/mobile-autocomplete-map-focus-20260901` makes a site autocomplete row perform the requested action directly: one tap closes search, opens the article, focuses the native map at zoom 14.5, and starts the existing gold selected-site halo. Wiki and spelling-correction suggestions retain their previous fill/search behavior.
+- The focused verifier now selects Whale's Fin through the autocomplete row instead of the secondary full-results card. Shell marker is `20260901-search-autocomplete-focus-r216` and the local optimized/R8 QA build passes.
+- Release `0.1.628` from the preceding PR was downloaded, matched its published SHA-256 and the installed production signing certificate, and installed over the connected iPlay without clearing data. Physical testing exposed the autocomplete row's old text-only behavior, which is why this follow-up is required before declaring the feature complete.
+
+Safest next action: merge the web and Android follow-up PRs, wait for the signed `0.1.629` release, install that exact APK over production, and confirm one Whale's Fin autocomplete tap produces close focus, the gold halo, and the open article.
+
 ## September 1 search-result close focus and glow
 
 - Branch `fix/search-result-map-focus-20260901` distinguishes search-result selections from ordinary Nearby-card opens. Search results now request zoom 14.5, keep the selected article open, and show a temporary gold focus halo; ordinary Nearby content still preserves the visitor's existing camera.
