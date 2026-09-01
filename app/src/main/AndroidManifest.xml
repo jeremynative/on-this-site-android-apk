@@ -55,8 +55,12 @@
             android:name=".OnThisSiteNavigationActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize"
             android:exported="false"
+            android:launchMode="singleTop"
             android:screenOrientation="fullSensor"
             android:theme="@style/AppTheme" />
+        <receiver
+            android:name=".NavigationActionReceiver"
+            android:exported="false" />
         <activity
             android:name=".GoogleNavigationLegalActivity"
             android:exported="false"
