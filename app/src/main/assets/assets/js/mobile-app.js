@@ -920,6 +920,9 @@
       }
     }
 
+    let systemSafeAreaSignature = "";
+    let systemSafeAreaFrame = 0;
+
     function syncSystemSafeArea() {
       const isAndroid = /Android/i.test(navigator.userAgent);
       const isNativeAndroid = isAndroid && Boolean(window.AndroidApp || window.AndroidStory);
@@ -931,14 +934,6 @@
         document.documentElement.dataset.nativeTabletLandscape === "true"
         || window.matchMedia("(orientation: landscape) and (min-width: 600px)").matches
       );
-      document.body.classList.toggle("android-device", isAndroid);
-      document.documentElement.classList.toggle("android-device", isAndroid);
-      document.body.classList.toggle("native-android-app", isNativeAndroid);
-      document.documentElement.classList.toggle("native-android-app", isNativeAndroid);
-      document.body.classList.toggle("tablet-device", tabletDevice);
-      document.documentElement.classList.toggle("tablet-device", tabletDevice);
-      document.body.classList.toggle("tablet-landscape", tabletLandscape);
-      document.documentElement.classList.toggle("tablet-landscape", tabletLandscape);
       const viewport = window.visualViewport;
       const topGap = viewport ? Math.max(0, viewport.offsetTop) : 0;
       const bottomGap = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
@@ -948,6 +943,31 @@
       const nativeBottom = isNativeAndroid ? Math.ceil(androidBridgeCssPixel("getSafeInsetBottom")) : 0;
       const nativeLeft = isNativeAndroid ? Math.ceil(androidBridgeCssPixel("getSafeInsetLeft")) : 0;
       const nativeRight = isNativeAndroid ? Math.ceil(androidBridgeCssPixel("getSafeInsetRight")) : 0;
+      const nextSignature = [
+        isAndroid,
+        isNativeAndroid,
+        tabletDevice,
+        tabletLandscape,
+        Math.round(topGap),
+        Math.round(bottomGap),
+        Math.round(leftGap),
+        Math.round(rightGap),
+        nativeTop,
+        nativeBottom,
+        nativeLeft,
+        nativeRight
+      ].join("|");
+      if (nextSignature === systemSafeAreaSignature) return false;
+      systemSafeAreaSignature = nextSignature;
+      for (const [name, enabled] of [
+        ["android-device", isAndroid],
+        ["native-android-app", isNativeAndroid],
+        ["tablet-device", tabletDevice],
+        ["tablet-landscape", tabletLandscape]
+      ]) {
+        document.body.classList.toggle(name, enabled);
+        document.documentElement.classList.toggle(name, enabled);
+      }
       document.documentElement.style.setProperty("--viewport-top-safe", `${Math.round(topGap)}px`);
       document.documentElement.style.setProperty("--viewport-bottom-safe", `${Math.round(bottomGap)}px`);
       document.documentElement.style.setProperty("--viewport-left-safe", `${Math.round(leftGap)}px`);
@@ -956,11 +976,19 @@
       document.documentElement.style.setProperty("--native-bottom-safe", `${nativeBottom}px`);
       document.documentElement.style.setProperty("--native-left-safe", `${nativeLeft}px`);
       document.documentElement.style.setProperty("--native-right-safe", `${nativeRight}px`);
+      return true;
+    }
+
+    function scheduleSystemSafeAreaSync() {
+      if (systemSafeAreaFrame) return;
+      systemSafeAreaFrame = window.requestAnimationFrame(() => {
+        systemSafeAreaFrame = 0;
+        syncSystemSafeArea();
+      });
     }
 
     syncSystemSafeArea();
-    window.visualViewport?.addEventListener("resize", syncSystemSafeArea);
-    window.visualViewport?.addEventListener("scroll", syncSystemSafeArea);
+    window.visualViewport?.addEventListener("scroll", scheduleSystemSafeAreaSync, { passive: true });
     window.addEventListener("nli-native-insets-changed", () => {
       syncSystemSafeArea();
       window.requestAnimationFrame(() => {

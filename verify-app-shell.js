@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260901-navigation-pin-header-colors-r219";
+const expectedBuild = "20260901-safe-area-coalescing-r220";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1216,6 +1216,14 @@ if (!bundledMobileJs.includes('window.addEventListener("nli-native-insets-change
     || !bundledMobileJs.includes("fitMobileLayerMenu(layerMenu);")
     || !bundledMobileJs.includes('const reserved = cssPixelValue("--app-top-safe", 0) + cssPixelValue("--app-bottom-safe", 0);')) {
   throw new Error("Bundled Android runtime must refresh native insets and reserve both vertical edges for detail drawers.");
+}
+if (!bundledMobileJs.includes("if (nextSignature === systemSafeAreaSignature) return false;")
+    || !bundledMobileJs.includes("function scheduleSystemSafeAreaSync()")
+    || !bundledMobileJs.includes('window.visualViewport?.addEventListener("scroll", scheduleSystemSafeAreaSync, { passive: true });')) {
+  throw new Error("Bundled Android runtime must coalesce visual viewport safe-area updates and skip unchanged DOM writes.");
+}
+if (bundledMobileJs.includes('window.visualViewport?.addEventListener("resize", syncSystemSafeArea);')) {
+  throw new Error("Bundled Android runtime must use the shared coalesced layout path for visual viewport resize events.");
 }
 if (!bundledMobileJs.includes('const leftSafe = Math.max(pad, cssPixelValue("--app-left-safe", 0));')
     || !bundledMobileJs.includes('const rightSafe = Math.max(pad, cssPixelValue("--app-right-safe", 0));')
