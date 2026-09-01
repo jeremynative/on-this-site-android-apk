@@ -6354,6 +6354,43 @@
       window.setTimeout(() => marker.remove(), 1800);
     }
 
+    function clearMobileSearchResultMapHighlight() {
+      window.clearTimeout(state.mobileSearchResultHighlightTimer);
+      state.mobileSearchResultHighlightTimer = null;
+      state.mobileSearchResultHighlightMarker?.remove?.();
+      state.mobileSearchResultHighlightMarker = null;
+      state.mobileSearchResultHighlightSlug = "";
+      scheduleNativeMapStateSync("search-result-highlight-cleared", 0);
+    }
+
+    function showMobileSearchResultMapHighlight(site, duration = 2800) {
+      clearMobileSearchResultMapHighlight();
+      if (!site?.center) return;
+      state.mobileSearchResultHighlightSlug = site.slug || "";
+      state.lastSearchResultFocusCamera = { center: site.center.map(Number), zoom: 14.5 };
+      if (nativeMapBridgeAvailable() && typeof window.AndroidApp?.focusNativeSearchResult === "function") {
+        window.AndroidApp.focusNativeSearchResult(
+          androidBridgeToken(),
+          Number(site.center[0]),
+          Number(site.center[1]),
+          14.5,
+          duration
+        );
+      }
+      if (!state.map || !window.mapboxgl?.Marker) {
+        state.mobileSearchResultHighlightTimer = window.setTimeout(clearMobileSearchResultMapHighlight, duration);
+        return;
+      }
+      const element = document.createElement("div");
+      element.className = "search-result-map-pulse";
+      element.setAttribute("aria-hidden", "true");
+      state.mobileSearchResultHighlightMarker = new mapboxgl.Marker({ element, anchor: "center" })
+        .setLngLat(site.center)
+        .addTo(state.map);
+      scheduleNativeMapStateSync("search-result-highlight", 0);
+      state.mobileSearchResultHighlightTimer = window.setTimeout(clearMobileSearchResultMapHighlight, duration);
+    }
+
     function openMobileTimelineEvent(event) {
       if (!event) return;
       const target = mobileTimelineContentTarget(event);
@@ -6508,10 +6545,15 @@
       if (state.mobilePanelState === "maximized") setMobileBottomPanelState("normal");
     }
 
-    function openNearbySiteWithMapPreview(slug) {
+    function openNearbySiteWithMapPreview(slug, options = {}) {
       const site = state.sites.find(item => item.slug === slug);
       if (!site) return;
       collapseNearbyPanelForSiteOpen();
+      if (options.fromSearch) {
+        openSite(slug, { focus: true, focusZoom: 14.5 });
+        window.setTimeout(() => showMobileSearchResultMapHighlight(site), 560);
+        return;
+      }
       animateMobileSiteMarker(site);
       // Opening a card is a content action. Keep the visitor's exact camera;
       // the separate Map action remains available when they want to reframe.
@@ -7214,6 +7256,7 @@
             native_kind: "site",
             native_key: String(state.selectedSite.slug),
             temporary_kind: "selected-site",
+            search_result_highlight: state.mobileSearchResultHighlightSlug === state.selectedSite.slug,
             title: state.selectedSite.title || "Selected site"
           }
         });
@@ -7268,7 +7311,7 @@
       const temporaryFeatures = profileModel ? [] : nativeTemporaryMapFeatures();
       const userLocationSignature = userLocationFeatures[0]?.geometry?.coordinates?.join(",") || "none";
       const communitySignature = communityFeatures.map(feature => `${feature.properties.native_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}`).join("|");
-      const temporarySignature = temporaryFeatures.map(feature => `${feature.properties.temporary_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}`).join("|");
+      const temporarySignature = temporaryFeatures.map(feature => `${feature.properties.temporary_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}:${feature.properties.search_result_highlight ? 1 : 0}`).join("|");
       const nativeBasemap = Object.prototype.hasOwnProperty.call(MOBILE_BASEMAPS, state.settings.basemap) ? state.settings.basemap : "outdoors";
       const eventSignature = exhibitFeatures.map(feature => feature.properties.event_key).join(",");
       const baseSignature = `${state.nativeMapBaseRevision}|${profileKey}|${profileSignature}|basemap:${nativeBasemap}|bio-paths:${mobileBiographyPathsEnabled() ? 1 : 0}`;
@@ -9279,6 +9322,18 @@
         }
       }
     }
+
+    window.__nliMobileMapCameraSnapshot = () => {
+      const center = state.map?.getCenter?.();
+      const zoom = Number(state.map?.getZoom?.());
+      return {
+        center: center ? [Number(center.lng), Number(center.lat)] : null,
+        zoom: Number.isFinite(zoom) ? zoom : null,
+        selectedSlug: state.selectedSite?.slug || "",
+        searchResultHighlightSlug: state.mobileSearchResultHighlightSlug || "",
+        requestedSearchFocusCamera: state.lastSearchResultFocusCamera || null
+      };
+    };
 
     function googleMapsUrl(site) {
       const [lng, lat] = site.center || [];
@@ -19335,6 +19390,7 @@
     }
 
     function activateMobileListTarget(target, event) {
+      const fromSearchResults = Boolean(activeMobileSearchValue().trim());
       const placeSuggestion = target?.closest?.("[data-place-suggestion]");
       if (placeSuggestion) {
         event?.preventDefault?.();
@@ -19395,8 +19451,14 @@
           state.selectedSlug = site.slug;
           state.selectedSite = site;
           renderList({ preserveScroll: true });
-          focusSite(site, { duration: 900, preview: true });
-          animateMobileSiteMarker(site);
+          syncActiveSiteMapLabel(site);
+          if (fromSearchResults) {
+            focusSite(site, { duration: 900, preview: true, zoom: 14.5 });
+            window.setTimeout(() => showMobileSearchResultMapHighlight(site), 560);
+          } else {
+            focusSite(site, { duration: 900, preview: true });
+            animateMobileSiteMarker(site);
+          }
         }
         return true;
       }
@@ -19415,7 +19477,7 @@
         event?.stopPropagation?.();
         clearMobileSearchForResultOpen();
         searchEl?.blur?.();
-        openNearbySiteWithMapPreview(openSiteAction.dataset.nearbyOpen);
+        openNearbySiteWithMapPreview(openSiteAction.dataset.nearbyOpen, { fromSearch: fromSearchResults });
         return true;
       }
       const resultCard = target?.closest?.(".site-card[data-slug], .site-card[data-wiki-slug]");
@@ -19432,7 +19494,7 @@
           return true;
         }
         if (cardTarget.slug) {
-          openNearbySiteWithMapPreview(cardTarget.slug);
+          openNearbySiteWithMapPreview(cardTarget.slug, { fromSearch: fromSearchResults });
           return true;
         }
       }

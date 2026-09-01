@@ -110,6 +110,12 @@ class AppBridge {
     }
 
     @JavascriptInterface
+    public void focusNativeSearchResult(String token, double longitude, double latitude, double zoom, int durationMs) {
+        if (!activity.validBridgeToken(token)) return;
+        activity.runOnUiThread(() -> activity.focusNativeSearchResult(longitude, latitude, zoom, durationMs));
+    }
+
+    @JavascriptInterface
     public boolean runNativeMapGestureDiagnostic(String token, String gestureName) {
         if (!BuildConfig.DEBUG || !activity.validBridgeToken(token)) return false;
         if (Looper.myLooper() == Looper.getMainLooper()) return activity.runNativeMapGestureDiagnostic(gestureName);

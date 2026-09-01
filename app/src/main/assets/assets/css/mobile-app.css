@@ -219,6 +219,42 @@
       pointer-events: none;
     }
 
+    .search-result-map-pulse {
+      position: relative;
+      width: 18px;
+      height: 18px;
+      border: 3px solid #ffe56b;
+      border-radius: 50%;
+      background: rgba(255, 196, 45, 0.74);
+      box-shadow: 0 0 12px 4px rgba(255, 210, 62, 0.86);
+      pointer-events: none;
+    }
+
+    .search-result-map-pulse::before,
+    .search-result-map-pulse::after {
+      position: absolute;
+      inset: -9px;
+      border: 3px solid rgba(255, 220, 76, 0.88);
+      border-radius: 50%;
+      content: "";
+      animation: search-result-map-glow 1.15s ease-out infinite;
+    }
+
+    .search-result-map-pulse::after {
+      animation-delay: 0.56s;
+    }
+
+    @keyframes search-result-map-glow {
+      0% {
+        opacity: 0.95;
+        transform: scale(0.62);
+      }
+      100% {
+        opacity: 0;
+        transform: scale(2.1);
+      }
+    }
+
     .user-location-dot {
       display: grid;
       width: 20px;
