@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260831-s25-navigation-ui-r213";
+const expectedBuild = "20260901-navigation-cluster-pins-r214";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1651,7 +1651,7 @@ for (const needle of [
   "navigator.setDestinations",
   "off-screen sites show distance and direction at the edge",
   'setPositiveButton("Add stop"',
-  "MAX_VISIBLE_SITE_LABELS = 4",
+  "MAX_VISIBLE_SITE_LABELS = 10",
   "MAX_NEARBY_EDGE_INDICATORS = 3",
   "ROUTE_AREA_SITE_RANGE_METERS = 4828.032f",
   "LOCKED_GUIDANCE_EDGE_RANGE_METERS = 1609.344f",
@@ -1666,6 +1666,9 @@ for (const needle of [
   "guidanceControls.setVisibility(View.VISIBLE)",
   "The map is available, but routing needs location access.",
   "item.site.hasHeaderImage",
+  "sitePinIcon(site.hasHeaderImage, labelScale)",
+  "showNearbySiteChooser(cluster)",
+  "CLUSTER_TAP_RADIUS_DP = 36f",
   "Color.argb(224, 60, 137, 230)",
   "Color.argb(224, 74, 171, 101)",
   "cardinalDirection",
@@ -1678,6 +1681,14 @@ for (const needle of [
 if (!/refreshVisibleSiteMarkers\(\)[\s\S]*?result\[0\]\s*<=\s*ROUTE_AREA_SITE_RANGE_METERS/.test(googleNavigationActivity)
     || !/refreshNearbyEdgeIndicators\(\)[\s\S]*?result\[0\]\s*<=\s*LOCKED_GUIDANCE_EDGE_RANGE_METERS/.test(googleNavigationActivity)) {
   throw new Error("Navigation must keep zoomed route-area pins within three miles while limiting edge indicators to one mile.");
+}
+const visibleSiteMarkerMethod = googleNavigationActivity.match(/private void refreshVisibleSiteMarkers\(\) \{([\s\S]*?)\r?\n    \}\r?\n\r?\n    private void clearSiteMarkers/);
+if (!visibleSiteMarkerMethod
+    || !visibleSiteMarkerMethod[1].includes("for (NavigationSiteRepository.Site site : visible)")
+    || !visibleSiteMarkerMethod[1].includes("boolean showLabel")
+    || !visibleSiteMarkerMethod[1].includes("sitePinIcon(site.hasHeaderImage, labelScale)")
+    || /if\s*\(overlaps\)\s*continue/.test(visibleSiteMarkerMethod[1])) {
+  throw new Error("Navigation clusters must retain every visible safe site as a compact pin while spacing only the optional labels.");
 }
 if (!navigationSiteRepository.includes('"Point".equals(centerItem.optString("geometry_type"))')
     || !navigationSiteRepository.includes("isPublicNavigationCandidate")

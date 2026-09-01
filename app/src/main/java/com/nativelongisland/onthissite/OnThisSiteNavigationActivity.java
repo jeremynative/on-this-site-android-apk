@@ -47,18 +47,20 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 public class OnThisSiteNavigationActivity extends Activity {
     private static final String LOG_TAG = "OnThisSiteGoogleNav";
     private static final int LOCATION_PERMISSION_REQUEST = 71;
-    private static final int MAX_VISIBLE_SITE_LABELS = 4;
+    private static final int MAX_VISIBLE_SITE_LABELS = 10;
     private static final int MAX_NEARBY_EDGE_INDICATORS = 3;
     private static final float ROUTE_AREA_SITE_RANGE_METERS = 4828.032f;
     private static final float LOCKED_GUIDANCE_EDGE_RANGE_METERS = 1609.344f;
-    private static final float MIN_LABEL_HORIZONTAL_SPACING_DP = 190f;
-    private static final float MIN_LABEL_VERTICAL_SPACING_DP = 58f;
+    private static final float MIN_LABEL_HORIZONTAL_SPACING_DP = 132f;
+    private static final float MIN_LABEL_VERTICAL_SPACING_DP = 44f;
+    private static final float CLUSTER_TAP_RADIUS_DP = 36f;
     private static final String EXTRA_TITLE = "destination_title";
     private static final String EXTRA_SLUG = "destination_slug";
     private static final String EXTRA_LATITUDE = "destination_latitude";
@@ -90,6 +92,12 @@ public class OnThisSiteNavigationActivity extends Activity {
     private List<NavigationSiteRepository.Site> publicSites = new ArrayList<>();
     private final List<Marker> siteMarkers = new ArrayList<>();
     private final Map<Marker, NavigationSiteRepository.Site> siteByMarker = new HashMap<>();
+    private final Map<String, BitmapDescriptor> siteIconCache = new LinkedHashMap<String, BitmapDescriptor>(64, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, BitmapDescriptor> eldest) {
+            return size() > 96;
+        }
+    };
     private final Handler navigationHandler = new Handler(Looper.getMainLooper());
     private final Runnable navigationStartupTimeout = () -> {
         if (navigator != null || isFinishing()) return;
@@ -356,10 +364,13 @@ public class OnThisSiteNavigationActivity extends Activity {
         }
         visible.sort(Comparator.comparingDouble(site -> distanceSquared(center, site)));
         float density = getResources().getDisplayMetrics().density;
-        float minimumHorizontalSpacing = MIN_LABEL_HORIZONTAL_SPACING_DP * density;
-        float minimumVerticalSpacing = MIN_LABEL_VERTICAL_SPACING_DP * density;
-        List<NavigationSiteRepository.Site> spacedVisible = new ArrayList<>();
+        float zoom = googleMap.getCameraPosition().zoom;
+        float labelScale = clamp(0.72f + Math.max(0f, zoom - 10f) * 0.07f, 0.72f, 1f);
+        int labelLimit = Math.min(MAX_VISIBLE_SITE_LABELS, Math.max(4, Math.round(4f + Math.max(0f, zoom - 10f) * 1.5f)));
+        float minimumHorizontalSpacing = MIN_LABEL_HORIZONTAL_SPACING_DP * labelScale * density;
+        float minimumVerticalSpacing = MIN_LABEL_VERTICAL_SPACING_DP * labelScale * density;
         List<Point> labelAnchors = new ArrayList<>();
+        clearSiteMarkers();
         for (NavigationSiteRepository.Site site : visible) {
             Point anchor = projection.toScreenLocation(new LatLng(site.latitude, site.longitude));
             boolean overlaps = false;
@@ -370,25 +381,24 @@ public class OnThisSiteNavigationActivity extends Activity {
                     break;
                 }
             }
-            if (overlaps) continue;
-            spacedVisible.add(site);
-            labelAnchors.add(anchor);
-            if (spacedVisible.size() >= MAX_VISIBLE_SITE_LABELS) break;
-        }
-        clearSiteMarkers();
-        for (NavigationSiteRepository.Site site : spacedVisible) {
+            boolean showLabel = !overlaps && labelAnchors.size() < labelLimit;
+            if (showLabel) labelAnchors.add(anchor);
             Marker marker = googleMap.addMarker(new MarkerOptions()
                 .position(new LatLng(site.latitude, site.longitude))
                 .title(site.title)
-                .icon(siteLabelIcon(site.title))
-                .anchor(0.08f, 0.90f)
-                .zIndex(4f));
+                .icon(showLabel
+                    ? siteLabelIcon(site.title, site.hasHeaderImage, labelScale)
+                    : sitePinIcon(site.hasHeaderImage, labelScale))
+                .anchor(showLabel ? 0.08f : 0.5f, showLabel ? 0.90f : 0.5f)
+                .zIndex(showLabel ? 5f : 4f));
             if (marker != null) {
                 marker.setTag(site.slug);
                 siteMarkers.add(marker);
                 siteByMarker.put(marker, site);
             }
         }
+        Log.d(LOG_TAG, "Showing " + siteMarkers.size() + " visible navigation sites; "
+            + labelAnchors.size() + " have labels at zoom " + zoom + ".");
     }
 
     private void clearSiteMarkers() {
@@ -400,8 +410,42 @@ public class OnThisSiteNavigationActivity extends Activity {
     private boolean onMarkerClicked(Marker marker) {
         NavigationSiteRepository.Site site = siteByMarker.get(marker);
         if (site == null) return false;
+        List<NavigationSiteRepository.Site> cluster = nearbyMarkerSites(marker);
+        if (cluster.size() > 1) {
+            showNearbySiteChooser(cluster);
+            return true;
+        }
         showAddStopDialog(site);
         return true;
+    }
+
+    private List<NavigationSiteRepository.Site> nearbyMarkerSites(Marker selectedMarker) {
+        List<NavigationSiteRepository.Site> nearby = new ArrayList<>();
+        if (googleMap == null) return nearby;
+        Projection projection = googleMap.getProjection();
+        Point selected = projection.toScreenLocation(selectedMarker.getPosition());
+        float radius = CLUSTER_TAP_RADIUS_DP * getResources().getDisplayMetrics().density;
+        float radiusSquared = radius * radius;
+        for (Marker candidate : siteMarkers) {
+            NavigationSiteRepository.Site site = siteByMarker.get(candidate);
+            if (site == null) continue;
+            Point point = projection.toScreenLocation(candidate.getPosition());
+            float dx = point.x - selected.x;
+            float dy = point.y - selected.y;
+            if (dx * dx + dy * dy <= radiusSquared) nearby.add(site);
+        }
+        nearby.sort(Comparator.comparingDouble(site -> distanceSquared(selectedMarker.getPosition(), site)));
+        return nearby;
+    }
+
+    private void showNearbySiteChooser(List<NavigationSiteRepository.Site> sites) {
+        String[] titles = new String[sites.size()];
+        for (int index = 0; index < sites.size(); index += 1) titles[index] = sites.get(index).title;
+        new AlertDialog.Builder(this)
+            .setTitle(sites.size() + " nearby On This Site places")
+            .setItems(titles, (dialog, which) -> showAddStopDialog(sites.get(which)))
+            .setNegativeButton("Keep route", null)
+            .show();
     }
 
     private void showAddStopDialog(NavigationSiteRepository.Site site) {
@@ -566,30 +610,56 @@ public class OnThisSiteNavigationActivity extends Activity {
         calculateRoute(Arrays.asList(stop, primaryDestination));
     }
 
-    private BitmapDescriptor siteLabelIcon(String rawTitle) {
+    private BitmapDescriptor siteLabelIcon(String rawTitle, boolean hasHeaderImage, float requestedScale) {
         String title = rawTitle == null ? "On This Site" : rawTitle.trim();
         if (title.length() > 28) title = title.substring(0, 27) + "…";
+        float scale = Math.round(clamp(requestedScale, 0.72f, 1f) * 10f) / 10f;
+        String cacheKey = "label|" + scale + "|" + hasHeaderImage + "|" + title;
+        BitmapDescriptor cached = siteIconCache.get(cacheKey);
+        if (cached != null) return cached;
         float density = getResources().getDisplayMetrics().density;
         Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         textPaint.setColor(Color.WHITE);
-        textPaint.setTextSize(12f * density);
+        textPaint.setTextSize(12f * scale * density);
         textPaint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         float textWidth = textPaint.measureText(title);
-        int height = Math.max(34, Math.round(34f * density));
-        int pinWidth = Math.round(22f * density);
-        int horizontalPadding = Math.round(9f * density);
+        int height = Math.max(26, Math.round(34f * scale * density));
+        int pinWidth = Math.round(22f * scale * density);
+        int horizontalPadding = Math.round(8f * scale * density);
         int width = Math.max(height, Math.round(textWidth) + pinWidth + horizontalPadding * 2);
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         Paint background = new Paint(Paint.ANTI_ALIAS_FLAG);
         background.setColor(Color.argb(170, 30, 82, 60));
-        float radius = 8f * density;
-        canvas.drawRoundRect(new RectF(pinWidth / 2f, 0, width, height - 4f * density), radius, radius, background);
+        float radius = 8f * scale * density;
+        canvas.drawRoundRect(new RectF(pinWidth / 2f, 0, width, height - 3f * scale * density), radius, radius, background);
         Paint pin = new Paint(Paint.ANTI_ALIAS_FLAG);
-        pin.setColor(Color.argb(190, 196, 57, 46));
-        canvas.drawCircle(pinWidth / 2f, height / 2.5f, 7f * density, pin);
-        canvas.drawText(title, pinWidth + horizontalPadding, (height - 4f * density) / 2f - (textPaint.ascent() + textPaint.descent()) / 2f, textPaint);
-        return BitmapDescriptorFactory.fromBitmap(bitmap);
+        pin.setColor(hasHeaderImage ? Color.rgb(60, 137, 230) : Color.rgb(74, 171, 101));
+        canvas.drawCircle(pinWidth / 2f, height / 2.5f, 7f * scale * density, pin);
+        canvas.drawText(title, pinWidth + horizontalPadding, (height - 3f * scale * density) / 2f - (textPaint.ascent() + textPaint.descent()) / 2f, textPaint);
+        BitmapDescriptor descriptor = BitmapDescriptorFactory.fromBitmap(bitmap);
+        siteIconCache.put(cacheKey, descriptor);
+        return descriptor;
+    }
+
+    private BitmapDescriptor sitePinIcon(boolean hasHeaderImage, float requestedScale) {
+        float scale = Math.round(clamp(requestedScale, 0.72f, 1f) * 10f) / 10f;
+        String cacheKey = "pin|" + scale + "|" + hasHeaderImage;
+        BitmapDescriptor cached = siteIconCache.get(cacheKey);
+        if (cached != null) return cached;
+        float density = getResources().getDisplayMetrics().density;
+        int size = Math.max(16, Math.round(20f * scale * density));
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Paint halo = new Paint(Paint.ANTI_ALIAS_FLAG);
+        halo.setColor(Color.argb(210, 255, 255, 255));
+        canvas.drawCircle(size / 2f, size / 2f, size * 0.46f, halo);
+        Paint pin = new Paint(Paint.ANTI_ALIAS_FLAG);
+        pin.setColor(hasHeaderImage ? Color.rgb(60, 137, 230) : Color.rgb(74, 171, 101));
+        canvas.drawCircle(size / 2f, size / 2f, size * 0.34f, pin);
+        BitmapDescriptor descriptor = BitmapDescriptorFactory.fromBitmap(bitmap);
+        siteIconCache.put(cacheKey, descriptor);
+        return descriptor;
     }
 
     private double distanceSquared(LatLng center, NavigationSiteRepository.Site site) {
