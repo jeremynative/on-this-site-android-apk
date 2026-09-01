@@ -11,6 +11,22 @@
     "www.easthamptonstar.com"
   ]);
   const BLOCKED_REMOTE_IMAGE_TAG_PATTERN = /<img\b(?=[^>]*https?:\/\/(?:cdn\.newsday\.com|www\.easthamptonstar\.com)\b)[^>]*>/gi;
+  const INTERNAL_LINK_MATCHER_CACHE = new WeakMap();
+  const INTERNAL_LINK_IGNORED_LABELS = new Set(["home", "about", "blog", "map", "maps", "page"]);
+  const INTERNAL_LINK_CURATED_ALIASES = Object.freeze({
+    "lois-princess-nowedonah-hunter": ["Lois Hunter", "Lois Marie Hunter", "Princess Nowedonah"],
+    "william-wallace-tooker": ["William Tooker", "Tooker"],
+    "john-a-strong": ["John Strong"],
+    "rev-paul-cuffee": ["Paul Cuffee", "Reverend Paul Cuffee"],
+    "elizabeth-thunder-bird-haile-shinnecock": ["Elizabeth Haile", "Chee Chee"],
+    "mary-rebecca-bunn-aunt-becky": ["Mary Rebecca Bunn", "Aunt Becky"],
+    "stephen-talkhouse-pharoah": ["Stephen Talkhouse", "Talkhouse"],
+    "chief-mahue-mayhew-of-unkechaug": ["Mahue", "Mahew", "Mayhew", "John Mahue"],
+    "cockenoe": ["Cockenow", "Cheekanoo", "Chekkonnow", "Cheknow", "Chegonoe"],
+    "myth-of-the-thirteen-tribes": ["thirteen tribes myth", "13 tribes myth"],
+    "algonquian-language-and-place-names": ["Algonquian place names"],
+    "indigenous-whaling-and-maritime-labor": ["Indigenous whaling", "Shinnecock whaling"]
+  });
 
   function publicFacingWorkflowTextCleanup(value) {
     return String(value || "")
@@ -277,6 +293,88 @@
       .trim();
   }
 
+  function normalizedRepeatText(value) {
+    if (value?.nodeType) {
+      return String(value.textContent || "")
+        .normalize("NFKD")
+        .toLowerCase()
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[^a-z0-9]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+    const template = document.createElement("template");
+    template.innerHTML = String(value || "");
+    return String(template.content?.textContent || template.textContent || "")
+      .normalize("NFKD")
+      .toLowerCase()
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function repeatedTextMatch(left, right, options = {}) {
+    const minimumLength = Math.max(20, Number(options.minimumLength || 36));
+    const leftText = normalizedRepeatText(left);
+    const rightText = normalizedRepeatText(right);
+    if (!leftText || !rightText || Math.min(leftText.length, rightText.length) < minimumLength) return false;
+    if (leftText === rightText) return true;
+    const shorter = leftText.length <= rightText.length ? leftText : rightText;
+    const longer = leftText.length > rightText.length ? leftText : rightText;
+    return shorter.length >= 90
+      && shorter.length / longer.length >= 0.94
+      && longer.includes(shorter);
+  }
+
+  function safeRepeatedContentBlock(element) {
+    if (!element?.matches?.("p, div, section, article, blockquote, li")) return false;
+    return !element.querySelector("img, picture, video, audio, iframe, form, table, button, input, textarea, select, canvas, svg");
+  }
+
+  // Content editors often keep a short summary and repeat it as the first rich-text
+  // block. Render the summary once, and remove only an identical leading block or
+  // an immediately adjacent duplicate. Repeated references later in an article are
+  // intentionally preserved because they may carry legitimate historical context.
+  function removeRepeatedContent(value, options = {}) {
+    const html = String(value || "");
+    if (!html) return "";
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    const root = template.content;
+    const leadTexts = (Array.isArray(options.leadTexts) ? options.leadTexts : [options.leadText])
+      .map(normalizedRepeatText)
+      .filter(Boolean);
+
+    const firstElement = [...root.children].find(element => normalizedRepeatText(element).length > 0);
+    if (firstElement && safeRepeatedContentBlock(firstElement)) {
+      const firstText = normalizedRepeatText(firstElement);
+      if (leadTexts.some(lead => repeatedTextMatch(firstText, lead, options))) firstElement.remove();
+    }
+
+    if (options.removeAdjacent !== false) {
+      const removeAdjacentRepeats = parent => {
+        let previous = null;
+        for (const child of [...parent.children]) {
+          removeAdjacentRepeats(child);
+          if (!safeRepeatedContentBlock(child)) {
+            previous = null;
+            continue;
+          }
+          const text = normalizedRepeatText(child);
+          if (!text) continue;
+          if (previous && repeatedTextMatch(previous, text, options)) {
+            child.remove();
+            continue;
+          }
+          previous = text;
+        }
+      };
+      removeAdjacentRepeats(root);
+    }
+    return template.innerHTML.trim();
+  }
+
   function sourceReferences(item = {}) {
     const sources = Array.isArray(item?.source_list)
       ? item.source_list.filter(source => source?.title || source?.citation || source?.url)
@@ -352,6 +450,342 @@
     return TIMELINE_SECTION_TITLE_PATTERN.test(String(title || ""));
   }
 
+  function normalizedInternalLinkLabel(value) {
+    return String(value || "")
+      .replace(/^Private:\s*/i, "")
+      .replace(/&nbsp;|\u00a0/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function internalLinkLabelAllowed(value) {
+    const label = normalizedInternalLinkLabel(value);
+    return label.length >= 4
+      && !INTERNAL_LINK_IGNORED_LABELS.has(label.toLowerCase())
+      && !/^[0-9\s.,–—-]+$/.test(label);
+  }
+
+  function internalLinkLabelVariants(value) {
+    const variants = new Set();
+    const add = candidate => {
+      const label = normalizedInternalLinkLabel(candidate);
+      if (internalLinkLabelAllowed(label)) variants.add(label);
+    };
+    const label = normalizedInternalLinkLabel(value);
+    add(label);
+    add(label.replace(/[“”]/g, '"').replace(/[‘’]/g, "'"));
+    if (/["']/.test(label)) {
+      add(label
+        .replace(/"([^"\r\n]+)"/g, "“$1”")
+        .replace(/([A-Za-z])'([A-Za-z])/g, "$1’$2"));
+    }
+    return [...variants];
+  }
+
+  function plainInternalLinkText(value) {
+    return String(value || "")
+      .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#0?39;|&apos;/gi, "'")
+      .replace(/&amp;/gi, "&")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function biographyLeadAlias(item = {}) {
+    const summary = plainInternalLinkText(item.summary);
+    const lead = summary.match(/^(.{2,90}?)(?=,\s+(?:also|a|an|the)\b|\s+(?:was|is|were|are)\b)/i)?.[1] || "";
+    const words = normalizedInternalLinkLabel(lead).split(/\s+/).filter(Boolean);
+    if (words.length < 2 || words.length > 8 || /[.!?;:]/.test(lead)) return "";
+    return lead;
+  }
+
+  function internalLinkAliases(item = {}, options = {}) {
+    const aliases = new Set();
+    const title = normalizedInternalLinkLabel(item.title);
+    const add = value => internalLinkLabelVariants(value).forEach(label => aliases.add(label));
+    const addDerived = value => {
+      const label = normalizedInternalLinkLabel(value);
+      if (!label) return;
+      add(label);
+      add(label.replace(/^(?:Chief|Sachem|Sagamore|Rev\.?|Reverend|Princess)\s+/i, ""));
+      add(label.replace(/\s+of\s+(?:the\s+)?(?:Unkechaug|Montaukett|Setauket|Secatogue|Manhassets?|Shinnecock|Rockaway|Canarsie|Nissequogue)\s*$/i, ""));
+      const withoutParenthetical = normalizedInternalLinkLabel(label.replace(/\s*\([^)]{2,100}\)\s*/g, " "));
+      if (withoutParenthetical && withoutParenthetical !== label) {
+        add(withoutParenthetical);
+        add(withoutParenthetical.replace(/^(?:Chief|Sachem|Sagamore|Rev\.?|Reverend|Princess)\s+/i, ""));
+        add(withoutParenthetical.replace(/\s+of\s+(?:the\s+)?(?:Unkechaug|Montaukett|Setauket|Secatogue|Manhassets?|Shinnecock|Rockaway|Canarsie|Nissequogue)\s*$/i, ""));
+      }
+    };
+
+    add(title);
+    addDerived(title.replace(/\s*[“"][^”"\r\n]{2,80}[”"]\s*/g, " "));
+    addDerived(title.replace(/\s*\([^)]{2,100}\)\s*/g, " "));
+    for (const match of title.matchAll(/\(([^)]{2,80})\)/g)) {
+      const parenthetical = match[1].trim();
+      const communityQualifier = /^(?:Shinnecock|Unkechaug|Montaukett|Setauket|Secatogue|Manhansett|Matinecock|Rockaway|Canarsie|Nissequogue)$/i.test(parenthetical);
+      const isAlternateName = /\s+\/\s+/.test(title) || (options.biography && !communityQualifier);
+      if (isAlternateName && !/,/.test(parenthetical) && parenthetical.split(/\s+/).length <= 7) addDerived(parenthetical);
+    }
+    title.split(/\s+\/\s+|:\s+/).forEach(addDerived);
+
+    if (options.biography) addDerived(biographyLeadAlias(item));
+    (INTERNAL_LINK_CURATED_ALIASES[item.slug] || []).forEach(addDerived);
+    return [...aliases].filter(label => label.toLowerCase() !== title.toLowerCase());
+  }
+
+  function buildInternalLinkTerms(options = {}) {
+    const biographySlugs = new Set(options.biographySlugs || []);
+    const buckets = new Map();
+    const add = (label, href, priority, exact = false) => {
+      const normalized = normalizedInternalLinkLabel(label);
+      if (!internalLinkLabelAllowed(normalized) || !href) return;
+      const key = normalized.toLowerCase();
+      if (!buckets.has(key)) buckets.set(key, new Map());
+      const candidates = buckets.get(key);
+      const current = candidates.get(href);
+      const candidate = { label: normalized, href, priority, exact };
+      if (!current || Number(exact) > Number(current.exact) || priority < current.priority) candidates.set(href, candidate);
+    };
+    const addRecord = (item, href, priority, recordOptions = {}) => {
+      if (!item?.title || !item?.slug) return;
+      internalLinkLabelVariants(item.title).forEach(label => add(label, href, priority, true));
+      internalLinkAliases(item, recordOptions).forEach(label => add(label, href, priority, false));
+    };
+    (options.sites || []).forEach(item => addRecord(item, `#listing/${item.slug}`, 1));
+    (options.wikiArticles || []).forEach(item => addRecord(item, `#wiki/${item.slug}`, 2, {
+      biography: biographySlugs.has(item.slug)
+    }));
+    (options.siteContent || []).forEach(item => addRecord(item, `#page/${item.slug}`, 3));
+    (options.blogPosts || []).forEach(item => addRecord(item, `#blog/${item.slug}`, 4));
+
+    const terms = [];
+    for (const candidates of buckets.values()) {
+      const values = [...candidates.values()];
+      const exact = values.filter(candidate => candidate.exact);
+      if (exact.length) {
+        terms.push(exact.sort((a, b) => a.priority - b.priority)[0]);
+      } else if (values.length === 1) {
+        terms.push(values[0]);
+      }
+    }
+    return terms.sort((a, b) => b.label.length - a.label.length || a.priority - b.priority || a.label.localeCompare(b.label));
+  }
+
+  function indexOfInternalLinkTerm(value, term, fromIndex = 0) {
+    const text = String(value || "").toLowerCase();
+    const needle = String(term || "").toLowerCase();
+    let index = text.indexOf(needle, Math.max(0, Number(fromIndex) || 0));
+    while (index >= 0) {
+      const before = index ? text[index - 1] : "";
+      const after = text[index + needle.length] || "";
+      if (!/[a-z0-9]/i.test(before) && !/[a-z0-9]/i.test(after)) return index;
+      index = text.indexOf(needle, index + 1);
+    }
+    return -1;
+  }
+
+  function escapeInternalLinkPattern(value) {
+    return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function compileInternalLinkMatcher(terms = []) {
+    if (!Array.isArray(terms) || !terms.length) return { regex: null, termsByInitial: new Map() };
+    const cached = INTERNAL_LINK_MATCHER_CACHE.get(terms);
+    if (cached) return cached;
+    const unique = new Map();
+    terms.forEach(term => {
+      const label = normalizedInternalLinkLabel(term?.label);
+      if (!label || !term?.href) return;
+      const key = label.toLowerCase();
+      if (!unique.has(key)) unique.set(key, { ...term, label, normalizedLabel: key });
+    });
+    const sorted = [...unique.values()].sort((a, b) => b.label.length - a.label.length || a.label.localeCompare(b.label));
+    const termsByInitial = new Map();
+    sorted.forEach(term => {
+      const initial = term.normalizedLabel[0] || "";
+      if (!termsByInitial.has(initial)) termsByInitial.set(initial, []);
+      termsByInitial.get(initial).push(term);
+    });
+    const source = sorted.map(term => escapeInternalLinkPattern(term.label)).join("|");
+    const matcher = {
+      regex: source ? new RegExp(`(?<![A-Za-z0-9])(?:${source})(?![A-Za-z0-9])`, "gi") : null,
+      termsByInitial
+    };
+    INTERNAL_LINK_MATCHER_CACHE.set(terms, matcher);
+    return matcher;
+  }
+
+  function internalLinkTermAt(value, index, term) {
+    const text = String(value || "");
+    const before = index ? text[index - 1] : "";
+    const after = text[index + term.label.length] || "";
+    return !/[a-z0-9]/i.test(before)
+      && !/[a-z0-9]/i.test(after)
+      && text.slice(index, index + term.label.length).toLowerCase() === term.normalizedLabel;
+  }
+
+  function nextInternalLinkMatch(value, matcher, options = {}) {
+    const text = String(value || "");
+    const regex = matcher?.regex;
+    if (!regex) return null;
+    const used = options.used || new Set();
+    const excludeHref = options.excludeHref || "";
+    regex.lastIndex = Math.max(0, Number(options.fromIndex) || 0);
+    let match;
+    while ((match = regex.exec(text))) {
+      const candidates = matcher.termsByInitial.get((match[0][0] || "").toLowerCase()) || [];
+      const term = candidates.find(candidate => (
+        candidate.href !== excludeHref
+        && !used.has(candidate.href)
+        && internalLinkTermAt(text, match.index, candidate)
+      ));
+      if (term) return { index: match.index, term };
+      // A longer match may already be used while a shorter or overlapping project
+      // term is still eligible. Resume one character later to preserve the original
+      // first-reference behavior without rescanning the full catalog.
+      regex.lastIndex = match.index + 1;
+    }
+    return null;
+  }
+
+  function linkInternalTextNodes(root, options = {}) {
+    const terms = Array.isArray(options.terms) ? options.terms : [];
+    const ownerDocument = root?.ownerDocument || (root?.nodeType === 9 ? root : document);
+    if (!root || !ownerDocument?.createTreeWalker || !terms.length) return 0;
+    const used = options.used || new Set();
+    const excludeHref = options.excludeHref || "";
+    const skipSelector = [
+      "a", "button", "h1", "h2", "h3", "h4", "code", "pre", ".timeline-year",
+      options.skipSelector || ""
+    ].filter(Boolean).join(", ");
+    if (options.seedExistingLinks) {
+      root.querySelectorAll?.('a[href^="#listing/"], a[href^="#wiki/"], a[href^="#page/"], a[href^="#blog/"]')
+        .forEach(link => {
+          const href = link.getAttribute("href") || "";
+          if (href && href !== excludeHref) used.add(href);
+        });
+    }
+    const rootText = String(root.textContent || "").toLowerCase();
+    // Compiling and running one regular expression containing every site and
+    // knowledgebase title made text-only biographies take several seconds to
+    // open. Narrow the matcher to labels that actually occur in this article;
+    // boundary and first-reference rules are still enforced below.
+    const relevantTerms = terms.filter(term => {
+      const label = String(term?.label || "").toLowerCase();
+      return label && rootText.includes(label);
+    });
+    if (!relevantTerms.length) return 0;
+    const walker = ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (!node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        if (node.parentElement?.closest(skipSelector)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    const matcher = compileInternalLinkMatcher(relevantTerms);
+    let linkedCount = 0;
+    for (const node of textNodes) {
+      const text = node.nodeValue;
+      const fragment = ownerDocument.createDocumentFragment();
+      let cursor = 0;
+      let linked = false;
+      while (cursor < text.length) {
+        const best = nextInternalLinkMatch(text, matcher, { fromIndex: cursor, used, excludeHref });
+        if (!best) break;
+        if (best.index > cursor) fragment.appendChild(ownerDocument.createTextNode(text.slice(cursor, best.index)));
+        const link = ownerDocument.createElement("a");
+        link.href = best.term.href;
+        link.textContent = text.slice(best.index, best.index + best.term.label.length);
+        fragment.appendChild(link);
+        used.add(best.term.href);
+        cursor = best.index + best.term.label.length;
+        linked = true;
+        linkedCount += 1;
+      }
+      if (!linked) continue;
+      if (cursor < text.length) fragment.appendChild(ownerDocument.createTextNode(text.slice(cursor)));
+      node.replaceWith(fragment);
+    }
+    return linkedCount;
+  }
+
+  function autoLinkHtml(html, options = {}) {
+    const template = document.createElement("template");
+    template.innerHTML = html || "";
+    linkInternalTextNodes(template.content, options);
+    return template.innerHTML;
+  }
+
+  function linkInternalReferences(root, options = {}) {
+    return linkInternalTextNodes(root, { ...options, seedExistingLinks: true });
+  }
+
+  function cleanupBiographyArticleHtml(html, options = {}) {
+    if (!options.enabled || !html) return html;
+    const ownerDocument = options.document || window.document;
+    if (!ownerDocument?.createElement) return html;
+    const cleanText = typeof options.cleanText === "function"
+      ? options.cleanText
+      : value => String(value || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    const elementNode = ownerDocument.defaultView?.Node?.ELEMENT_NODE || 1;
+    const template = ownerDocument.createElement("template");
+    template.innerHTML = String(html || "");
+    [...template.content.querySelectorAll("h2, h3")].forEach(heading => {
+      const label = cleanText(heading.textContent || "");
+      const isIntroHeading = /^introduction$/i.test(label);
+      const isDuplicateSection = /^(places connected|connected places|places|why this matters)$/i.test(label);
+      if (!isIntroHeading && !isDuplicateSection) return;
+      const level = Number(heading.tagName.replace(/^H/i, "")) || 2;
+      let node = heading.nextSibling;
+      heading.remove();
+      if (isIntroHeading) return;
+      while (node) {
+        const next = node.nextSibling;
+        const isBoundary = node.nodeType === elementNode
+          && /^H[1-6]$/i.test(node.tagName || "")
+          && (Number(node.tagName.replace(/^H/i, "")) || 2) <= level;
+        if (isBoundary) break;
+        node.remove();
+        node = next;
+      }
+    });
+    return template.innerHTML.trim();
+  }
+
+  function firstCompleteSentences(text, maxSentences = 2, maxLength = 260, cleanText = publicCleanText) {
+    const cleaned = cleanText(text || "")
+      .replace(/\s+/g, " ")
+      .replace(/\b[A-Z]{1,2}\d{2,}\b/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!cleaned) return "";
+    const sentences = cleaned.match(/[^.!?]+[.!?]+(?=\s|$)/g) || [];
+    const chosen = sentences.slice(0, maxSentences).join(" ").replace(/\s+/g, " ").trim();
+    if (chosen && chosen.length <= maxLength) return chosen;
+    if (chosen) return chosen.slice(0, maxLength).replace(/\s+\S*$/, "").trim() + ".";
+    if (cleaned.length <= maxLength) return `${cleaned}.`;
+    return cleaned.slice(0, maxLength).replace(/\s+\S*$/, "").trim() + ".";
+  }
+
+  function isInternalKnowledgebaseProcessNote(value = "", stripText = stripHtml) {
+    return /source-supported biography|on this site knowledgebase|inline footnotes|public-safe context/i.test(stripText(value || ""));
+  }
+
+  function publicWikiSummary(article = {}, options = {}) {
+    const stripText = typeof options.stripText === "function" ? options.stripText : stripHtml;
+    const cleanText = typeof options.cleanText === "function" ? options.cleanText : publicCleanText;
+    const summary = article.summary || "";
+    if (!isInternalKnowledgebaseProcessNote(summary, stripText)) return summary;
+    const fallback = firstCompleteSentences(article.content || article.why_this_matters || "", 2, 300, cleanText);
+    return fallback && !isInternalKnowledgebaseProcessNote(fallback, stripText) ? fallback : "";
+  }
+
   window.NLI_HTML_UTILS = {
     normalizeImportedText,
     convertImportedFootnotes,
@@ -364,6 +798,20 @@
     sourceReferenceTextHtml,
     sourcesEvidenceHtml,
     shouldRenderSectionTimeline,
+    internalLinkAliases,
+    buildInternalLinkTerms,
+    indexOfInternalLinkTerm,
+    compileInternalLinkMatcher,
+    nextInternalLinkMatch,
+    autoLinkHtml,
+    linkInternalReferences,
+    cleanupBiographyArticleHtml,
+    firstCompleteSentences,
+    isInternalKnowledgebaseProcessNote,
+    publicWikiSummary,
+    normalizedRepeatText,
+    repeatedTextMatch,
+    removeRepeatedContent,
     cleanHtml
   };
 }());

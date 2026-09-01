@@ -907,30 +907,22 @@
 
     .content-update-highlight {
       position: relative;
-      border-radius: 14px;
-      outline: 2px solid rgba(198, 40, 40, 0.72);
-      outline-offset: 4px;
-      background-color: rgba(198, 40, 40, 0.07);
-      box-shadow: inset 4px 0 0 #c62828;
-      animation: content-update-highlight-pulse 1.25s ease-in-out 2;
+      border-radius: 10px;
+      background-color: rgba(198, 40, 40, 0.09);
     }
 
     .content-update-highlight::before {
       content: "";
       position: absolute;
       top: 10px;
-      right: 10px;
-      width: 13px;
-      height: 13px;
+      right: -5px;
+      width: 9px;
+      height: 9px;
       border-radius: 50%;
-      background: #c62828;
-      box-shadow: 0 0 0 3px #fff, 0 3px 9px rgba(89, 23, 20, 0.3);
+      background: rgba(198, 40, 40, 0.9);
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
       z-index: 2;
       pointer-events: none;
-    }
-
-    @keyframes content-update-highlight-pulse {
-      50% { background-color: rgba(198, 40, 40, 0.14); }
     }
 
     [data-app-page="browse"],
@@ -1410,7 +1402,7 @@
 
     .mobile-map-locate.is-long-pressing .mobile-map-locate-dot {
       transform: scale(1.12);
-      box-shadow: 0 0 0 7px rgba(26, 115, 232, 0.13);
+      box-shadow: 0 0 0 7px rgba(26, 115, 232, 0.1);
     }
 
     .mobile-map-locate:disabled {
@@ -2023,6 +2015,287 @@
     .site-card.active {
       border-color: var(--accent);
       box-shadow: 0 0 0 2px rgba(73, 111, 93, 0.14);
+    }
+
+    .mobile-knowledgebase-intro {
+      display: grid;
+      gap: 8px;
+      margin: 0 0 14px;
+      padding: 16px;
+      border: 1px solid rgba(73, 111, 93, 0.2);
+      border-radius: 16px;
+      background: linear-gradient(145deg, rgba(231, 243, 236, 0.98), rgba(250, 247, 235, 0.94));
+    }
+
+    .mobile-knowledgebase-intro h3,
+    .mobile-knowledgebase-intro p,
+    .mobile-knowledgebase-section-heading h3,
+    .mobile-knowledgebase-section-heading p,
+    .mobile-knowledgebase-category-intro p {
+      margin: 0;
+    }
+
+    .mobile-knowledgebase-intro > p:not(.section-kicker),
+    .mobile-knowledgebase-category-intro p {
+      color: #445148;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .mobile-knowledgebase-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 2px;
+    }
+
+    .mobile-knowledgebase-stats span,
+    .mobile-knowledgebase-category-topline > span:last-child {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-height: 27px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--accent-strong);
+      font-size: 11px;
+      font-weight: 780;
+    }
+
+    .mobile-knowledgebase-section-heading {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 0 0 10px;
+    }
+
+    .mobile-knowledgebase-start-grid,
+    .mobile-knowledgebase-category-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+
+    .mobile-knowledgebase-start-card,
+    .mobile-knowledgebase-category-card {
+      display: grid;
+      gap: 7px;
+      width: 100%;
+      padding: 14px;
+      border: 1px solid #dce5da;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #fff, #fafcf9);
+      color: inherit;
+      text-align: left;
+      box-shadow: 0 4px 14px rgba(24, 33, 26, 0.06);
+      touch-action: manipulation;
+    }
+
+    .mobile-knowledgebase-start-card {
+      min-height: 124px;
+      align-content: start;
+    }
+
+    .mobile-knowledgebase-start-card small,
+    .mobile-knowledgebase-category-highlight small {
+      color: var(--accent-strong);
+      font-size: 10px;
+      font-weight: 820;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .mobile-knowledgebase-start-card strong,
+    .mobile-knowledgebase-category-card > strong {
+      color: #1f2b23;
+      font-size: 17px;
+      line-height: 1.25;
+    }
+
+    .mobile-knowledgebase-start-card > span,
+    .mobile-knowledgebase-category-description {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .mobile-knowledgebase-category-card {
+      grid-template-rows: auto auto auto 1fr auto;
+      min-height: 196px;
+    }
+
+    .mobile-knowledgebase-category-card:active,
+    .mobile-knowledgebase-start-card:active {
+      border-color: var(--accent);
+      background: #f5faf6;
+    }
+
+    .mobile-knowledgebase-category-topline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .mobile-knowledgebase-category-description {
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+    }
+
+    .mobile-knowledgebase-category-highlight {
+      display: grid;
+      align-content: start;
+      gap: 2px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(73, 111, 93, 0.13);
+      color: #36463d;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .mobile-knowledgebase-category-open {
+      color: var(--accent-strong);
+      font-size: 12px;
+      font-weight: 820;
+    }
+
+    .mobile-knowledgebase-sort {
+      display: grid;
+      gap: 3px;
+      min-width: 142px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 820;
+      text-transform: uppercase;
+    }
+
+    .mobile-knowledgebase-sort select {
+      min-height: 38px;
+      padding: 7px 28px 7px 9px;
+      border: 1px solid #c7cec6;
+      border-radius: 9px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 740;
+      text-transform: none;
+    }
+
+    .mobile-knowledgebase-category-intro {
+      margin: 0 0 12px;
+      padding: 13px;
+      border: 1px solid rgba(73, 111, 93, 0.17);
+      border-radius: 12px;
+      background: rgba(232, 243, 237, 0.5);
+    }
+
+    .mobile-knowledgebase-back-row {
+      margin-bottom: 10px;
+    }
+
+    .mobile-biography-kb-hero {
+      display: grid;
+      gap: 9px;
+      margin: 0 0 15px;
+      padding: 17px;
+      border: 1px solid rgba(55, 100, 78, 0.23);
+      border-radius: 17px;
+      background:
+        radial-gradient(circle at 94% 8%, rgba(205, 226, 212, 0.9), transparent 44%),
+        linear-gradient(145deg, #f7fbf7, #f8f1df);
+      box-shadow: 0 7px 21px rgba(28, 48, 36, 0.08);
+    }
+
+    .mobile-biography-kb-hero h3,
+    .mobile-biography-kb-hero p,
+    .mobile-biography-kb-group-heading h4,
+    .mobile-biography-kb-group-heading p,
+    .mobile-biography-kb-section-copy {
+      margin: 0;
+    }
+
+    .mobile-biography-kb-hero h3 {
+      max-width: 23ch;
+      color: #1d2b22;
+      font-size: clamp(21px, 5.4vw, 27px);
+      line-height: 1.13;
+    }
+
+    .mobile-biography-kb-hero > p:not(.section-kicker) {
+      color: #435149;
+      font-size: 13.5px;
+      line-height: 1.52;
+    }
+
+    .mobile-biography-kb-featured,
+    .mobile-biography-kb-pathways {
+      margin-top: 14px;
+    }
+
+    .mobile-biography-kb-section-copy {
+      margin: -3px 0 10px;
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.46;
+    }
+
+    .mobile-biography-kb-feature-grid .site-card {
+      border-color: rgba(55, 100, 78, 0.24);
+      background: linear-gradient(180deg, #fff, #f5faf6);
+    }
+
+    .mobile-biography-kb-group {
+      display: grid;
+      gap: 9px;
+      padding: 14px 0;
+      border-top: 1px solid rgba(55, 100, 78, 0.14);
+    }
+
+    .mobile-biography-kb-group:first-of-type {
+      border-top: 0;
+    }
+
+    .mobile-biography-kb-group-heading {
+      display: grid;
+      gap: 5px;
+    }
+
+    .mobile-biography-kb-group-heading h4 {
+      color: #23342a;
+      font-size: 15px;
+      line-height: 1.28;
+    }
+
+    .mobile-biography-kb-group-heading p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .mobile-biography-kb-group-heading span {
+      color: var(--accent-strong);
+      font-size: 11px;
+      font-weight: 820;
+    }
+
+    .mobile-biography-kb-list .site-card {
+      margin-bottom: 7px;
+    }
+
+    @media (max-width: 440px) {
+      .mobile-knowledgebase-section-heading {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .mobile-knowledgebase-sort {
+        width: 100%;
+      }
     }
 
     .site-card.empty-state {
@@ -2782,6 +3055,13 @@
       resize: vertical;
     }
 
+    .field-help {
+      margin: -2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
     .suggest-prompt-list {
       display: grid;
       gap: 8px;
@@ -2836,6 +3116,11 @@
     .toggle-row input {
       width: 22px;
       height: 22px;
+    }
+
+    .account-agreement a {
+      color: var(--accent-strong);
+      font-weight: 800;
     }
 
     .profile-card,
@@ -5484,9 +5769,6 @@
         padding: 0;
       }
 
-      /* When the content panel is collapsed the map owns the full tablet
-         width, so the two remaining header controls can share one row. This
-         removes the otherwise empty second header row on the map-first view. */
       body.android-device.tablet-landscape .app.panel-collapsed .quick-actions {
         grid-template-columns: 96px 96px;
         grid-template-rows: 32px;
@@ -5725,13 +6007,13 @@
       display: none !important;
     }
 
-    body.native-android-app.mobile-detail-open:not(.mobile-profile-map-mode) .app header {
+    body.native-android-app:not(.tablet-device).mobile-detail-open:not(.mobile-profile-map-mode) .app header {
       gap: 0;
       padding-top: max(7px, var(--app-top-safe));
       padding-bottom: 7px;
     }
 
-    body.native-android-app.mobile-detail-open:not(.mobile-profile-map-mode) .app header > :not(.title-row) {
+    body.native-android-app:not(.tablet-device).mobile-detail-open:not(.mobile-profile-map-mode) .app header > :not(.title-row) {
       display: none !important;
     }
 
@@ -5943,6 +6225,24 @@
       color: transparent;
       font-size: 0;
       line-height: 0;
+    }
+
+    .hero.source-media-hero {
+      height: min(62vh, 520px);
+      max-height: 520px;
+      object-fit: contain;
+      background: #f4f0e7;
+    }
+
+    .site-hero-image-credit {
+      margin: -6px 0 14px;
+      color: #5d685f;
+      font-size: 12px;
+      line-height: 1.42;
+    }
+
+    .site-hero-image-credit[hidden] {
+      display: none;
     }
 
     .site-hero-carousel.hero {
@@ -6220,6 +6520,83 @@
     .ots-support-strip p,
     .section-content .ots-support-strip p {
       margin: 0;
+    }
+
+    .ots-about-person,
+    .section-content .ots-about-person {
+      display: grid;
+      grid-template-columns: 68px minmax(0, 1fr);
+      align-items: center;
+      gap: 11px;
+    }
+
+    .ots-about-portrait-link,
+    .section-content .ots-about-portrait-link {
+      display: block;
+      width: 68px;
+      height: 68px;
+      overflow: hidden;
+      border: 1px solid rgba(73, 111, 93, 0.22);
+      border-radius: 50%;
+      background: #eaf2eb;
+    }
+
+    .ots-about-portrait,
+    .section-content .ots-about-portrait {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .ots-about-person-copy,
+    .section-content .ots-about-person-copy {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .ots-about-person-copy a,
+    .section-content .ots-about-person-copy a {
+      width: fit-content;
+      color: var(--accent-strong);
+      font-weight: 800;
+    }
+
+    .ots-support-logos,
+    .section-content .ots-support-logos {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .ots-support-logo-link,
+    .section-content .ots-support-logo-link {
+      display: grid;
+      place-items: center;
+      min-height: 70px;
+      padding: 9px;
+      border: 1px solid rgba(111, 76, 0, 0.2);
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .ots-support-logo-link:active,
+    .ots-support-logo-link:focus-visible,
+    .section-content .ots-support-logo-link:active,
+    .section-content .ots-support-logo-link:focus-visible {
+      border-color: rgba(73, 111, 93, 0.65);
+    }
+
+    .ots-support-logo,
+    .section-content .ots-support-logo {
+      display: block;
+      width: auto;
+      max-width: 100%;
+      height: auto;
+      max-height: 46px;
+      object-fit: contain;
     }
 
     .support-form-section {
@@ -6582,6 +6959,7 @@
     }
 
     .activity-feed-item.activity-learning-card {
+      position: relative;
       display: block;
       gap: 0;
       padding: 0;
@@ -6607,6 +6985,29 @@
       letter-spacing: 0.035em;
       text-transform: uppercase;
     }
+
+    .activity-learning-card.is-unread .learning-card-header {
+      padding-right: 34px;
+    }
+
+    .activity-learning-card.was-unread-this-view .learning-card-header {
+      padding-right: 34px;
+    }
+
+    .activity-card-unread-dot {
+      position: absolute;
+      top: 10px;
+      right: 11px;
+      z-index: 3;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #c62828;
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.96), 0 2px 6px rgba(89, 23, 20, 0.3);
+      pointer-events: none;
+    }
+
+    .activity-card-unread-dot[hidden] { display: none !important; }
 
     .activity-learning-card .learning-card-header > span {
       display: inline-flex;
@@ -6658,6 +7059,43 @@
       gap: 12px;
       padding-top: 2px;
       font-weight: 760;
+    }
+
+    .activity-learning-card .activity-pinned-media {
+      width: 100%;
+    }
+
+    .activity-learning-card .activity-pinned-details {
+      display: grid;
+      gap: 8px;
+    }
+
+    .activity-learning-card [data-mobile-activity-pinned-detail][hidden] {
+      display: none !important;
+    }
+
+    .activity-learning-card .activity-pin-expand {
+      justify-self: start;
+      min-height: 34px;
+      padding: 5px 11px;
+      border: 1px solid rgba(122, 84, 21, 0.32);
+      border-radius: 999px;
+      background: #fffaf0;
+      color: #6a4812;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .activity-learning-card.is-pinned:not(.is-pin-expanded) .learning-card-layout {
+      display: block;
+    }
+
+    .activity-learning-card.is-pinned:not(.is-pin-expanded) .learning-card-source,
+    .activity-learning-card.is-pinned:not(.is-pin-expanded) .learning-card-author,
+    .activity-learning-card.is-pinned:not(.is-pin-expanded) > .learning-card-actions,
+    .activity-learning-card.is-pinned:not(.is-pin-expanded) > .activity-inline-discussion {
+      display: none;
     }
 
     .activity-learning-card > .learning-card-actions {
@@ -7179,6 +7617,10 @@
       user-select: none;
     }
 
+    .mobile-moving-biography-marker:is(:hover, :focus-visible, [data-followed="true"]) .mobile-moving-biography-shell img {
+      filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 4px #1e2a21);
+    }
+
     .mobile-moving-biography-canoe {
       position: absolute;
       left: 50%;
@@ -7533,3 +7975,8 @@
       font-size: 14px;
       font-weight: 700;
     }
+.action.danger {
+  border-color: #9f2f2f;
+  color: #8a2424;
+  background: #fff8f7;
+}

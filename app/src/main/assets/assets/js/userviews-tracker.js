@@ -10,6 +10,10 @@
   let activeSince = document.visibilityState === "visible" ? performance.now() : 0;
   let routeTimer = 0;
 
+  function analyticsOptedOut() {
+    return document.cookie.split(";").some(part => part.trim() === "nli_analytics_opt_out=1");
+  }
+
   function storedContributorEmail() {
     try {
       const session = JSON.parse(window.localStorage.getItem("nli-contributor-session") || "null");
@@ -20,6 +24,7 @@
   }
 
   function isInternalVisit() {
+    if (analyticsOptedOut()) return true;
     const email = storedContributorEmail();
     const agent = String(navigator.userAgent || "").toLowerCase();
     return email === "jeremynative@gmail.com"

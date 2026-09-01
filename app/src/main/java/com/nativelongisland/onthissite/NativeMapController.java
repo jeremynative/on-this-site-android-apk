@@ -448,13 +448,27 @@ final class NativeMapController {
         boolean occlusionChanged = viewportBottomOcclusion != safeBottomOcclusion;
         boolean rootChanged = touchRootScreenLeft != rootScreenLeft || touchRootScreenTop != rootScreenTop;
         boolean visibilityChanged = container.getVisibility() != nextVisibility;
+        // Capture the settled camera before changing MapLibre padding. Padding
+        // reprojects the camera synchronously, so waiting for the next posted
+        // layout pass exposes one visibly stretched/shifted frame on tablets.
+        CameraPosition cameraToPreserve = nativeGestureInProgress()
+            ? null
+            : (stableCamera != null
+                ? stableCamera
+                : (map == null ? null : map.getCameraPosition()));
         viewportLeft = safeLeft;
         viewportTop = safeTop;
         viewportRight = safeLeft + safeWidth;
         viewportBottom = safeTop + safeHeight;
         viewportBottomOcclusion = safeBottomOcclusion;
         viewportInteractiveBottom = viewportBottom - viewportBottomOcclusion;
-        if (map != null && occlusionChanged) map.setPadding(0, 0, 0, viewportBottomOcclusion);
+        if (map != null && occlusionChanged) {
+            map.setPadding(0, 0, 0, viewportBottomOcclusion);
+            if (cameraToPreserve != null && !sameCamera(map.getCameraPosition(), cameraToPreserve)) {
+                suppressNextCameraCallback = true;
+                map.moveCamera(CameraUpdateFactory.newCameraPosition(cameraToPreserve));
+            }
+        }
         touchRootScreenLeft = rootScreenLeft;
         touchRootScreenTop = rootScreenTop;
         FrameLayout.LayoutParams currentParams = (FrameLayout.LayoutParams) container.getLayoutParams();
@@ -470,14 +484,6 @@ final class NativeMapController {
         }
         startupViewportReady = nextStartupViewportReady;
         if (!boundsChanged && !occlusionChanged && !rootChanged && !visibilityChanged) return;
-        // Resizing a transparent WebView overlay while a native drag or its
-        // inertia is still settling must not restore the ACTION_DOWN camera.
-        // MapLibre already preserves its center through a viewport resize.
-        CameraPosition cameraToPreserve = nativeGestureInProgress()
-            ? null
-            : (stableCamera != null
-                ? stableCamera
-                : (map == null ? null : map.getCameraPosition()));
         long expectedCameraRevision = cameraIntentRevision;
         long restoreRevision = ++viewportRestoreRevision;
         if (boundsChanged) {

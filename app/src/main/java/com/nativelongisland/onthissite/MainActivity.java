@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260901-apk-map-polygon-stability-r222";
+    static final String APP_VERSION = "20260901-tablet-bio-detail-cache-r223";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -861,9 +861,11 @@ public class MainActivity extends Activity {
                 // Keep the underlying list/timeline grid rows reserved while
                 // the detail drawer overlays them. Visibility avoids the
                 // one-frame map stretch caused by removing those rows; the
-                // shared runtime separately compacts the header to its title.
-                + "s.textContent='body.native-android-app.mobile-detail-open:not(.mobile-profile-map-mode) .app header{gap:0!important;padding-top:max(7px,var(--app-top-safe))!important;padding-bottom:7px!important;}"
-                    + "body.native-android-app.mobile-detail-open:not(.mobile-profile-map-mode) .app header>:not(.title-row){display:none!important;}"
+                // shared runtime separately compacts the phone header to its
+                // title. Tablets retain their full header so the map rectangle
+                // does not resize while the detail drawer is opening.
+                + "s.textContent='body.native-android-app:not(.tablet-device).mobile-detail-open:not(.mobile-profile-map-mode) .app header{gap:0!important;padding-top:max(7px,var(--app-top-safe))!important;padding-bottom:7px!important;}"
+                    + "body.native-android-app:not(.tablet-device).mobile-detail-open:not(.mobile-profile-map-mode) .app header>:not(.title-row){display:none!important;}"
                     + "body.native-android-app:not(.tablet-landscape) .detail.drawer-half{--detail-drawer-height:min(48dvh,calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe) - 12px))!important;}"
                     + "body.mobile-detail-open .mobile-view-tabs,body.mobile-detail-open .mobile-timeline,body.mobile-detail-open .list-panel{visibility:hidden!important;pointer-events:none!important;}';"
                 + "var root=document.head||document.documentElement;if(!root)return;root.appendChild(s);"

@@ -197,6 +197,14 @@
     }
   }
 
+  function readSeenItemKeysFromStorageKeys(storageKeys = [], storage = defaultStorage()) {
+    const keys = new Set();
+    [...new Set((storageKeys || []).map(String).filter(Boolean))].forEach(storageKey => {
+      readSeenItemKeys(storageKey, storage).forEach(key => keys.add(key));
+    });
+    return keys;
+  }
+
   function writeSeenItemKeys(storageKey, keys = [], options = {}) {
     const storage = options.storage || defaultStorage();
     const existing = options.replace ? new Set() : readSeenItemKeys(storageKey, storage);
@@ -235,6 +243,7 @@
     const getItems = typeof options.getItems === "function" ? options.getItems : () => [];
     const getBaseline = typeof options.getBaseline === "function" ? options.getBaseline : () => 0;
     const getSeenStorageKey = typeof options.getSeenStorageKey === "function" ? options.getSeenStorageKey : () => "";
+    const getSeenStorageKeys = typeof options.getSeenStorageKeys === "function" ? options.getSeenStorageKeys : null;
     const getSessionSeenKeys = typeof options.getSessionSeenKeys === "function" ? options.getSessionSeenKeys : () => new Set();
     const schedule = typeof options.schedule === "function"
       ? options.schedule
@@ -245,9 +254,19 @@
       snapshot = null;
     }
 
+    function seenStorageKeys() {
+      const primaryKey = String(getSeenStorageKey() || "");
+      return [...new Set([
+        primaryKey,
+        ...(getSeenStorageKeys ? getSeenStorageKeys() : [])
+      ].map(String).filter(Boolean))];
+    }
+
     function buildSnapshot() {
-      const persistedSeenKeys = readSeenItemKeys(getSeenStorageKey(), options.storage || defaultStorage());
-      const seenKeys = new Set([...persistedSeenKeys, ...getSessionSeenKeys()].map(String));
+      const storageKeys = seenStorageKeys();
+      const primaryKey = storageKeys[0] || "";
+      const persistedSeenKeys = readSeenItemKeysFromStorageKeys(storageKeys, options.storage || defaultStorage());
+      const seenKeys = new Set([...persistedSeenKeys, ...getSessionSeenKeys(primaryKey)].map(String));
       const now = typeof options.now === "function" ? Number(options.now()) : Number(options.now);
       const items = unreadItems(getItems(), {
         baseline: Number(getBaseline() || 0),
@@ -287,12 +306,19 @@
     function markKeys(keys = []) {
       const normalizedKeys = [...new Set(keys.map(String).filter(Boolean))];
       if (!normalizedKeys.length) return [];
-      const sessionSeenKeys = getSessionSeenKeys();
+      const storageKeys = seenStorageKeys();
+      const primaryKey = storageKeys[0] || "";
+      const sessionSeenKeys = getSessionSeenKeys(primaryKey);
       normalizedKeys.forEach(key => sessionSeenKeys?.add?.(key));
-      writeSeenItemKeys(getSeenStorageKey(), normalizedKeys, {
-        storage: options.storage || defaultStorage(),
-        limit: options.limit
-      });
+      if (primaryKey) {
+        const migratedKeys = readSeenItemKeysFromStorageKeys(storageKeys, options.storage || defaultStorage());
+        normalizedKeys.forEach(key => migratedKeys.add(key));
+        writeSeenItemKeys(primaryKey, migratedKeys, {
+          storage: options.storage || defaultStorage(),
+          limit: options.limit,
+          replace: true
+        });
+      }
       invalidate();
       return normalizedKeys;
     }
@@ -323,7 +349,8 @@
         return key ? (current().countByTarget.get(key) || 0) : 0;
       },
       markItem,
-      markContent
+      markContent,
+      storageKeys: seenStorageKeys
     };
   }
 
@@ -384,6 +411,38 @@
   function contentActivityDate(item = {}, options = {}) {
     const created = options.type === "wiki" ? wikiCreatedDate(item) : siteCreatedDate(item);
     return contentUpdateDate(item) || created || "";
+  }
+
+  function contentActivityIsAdditive(item = {}, options = {}) {
+    item = item || {};
+    const type = String(options.type || "site").toLowerCase();
+    const created = type === "wiki" ? wikiCreatedDate(item) : siteCreatedDate(item);
+    const updated = contentUpdateDate(item);
+    if (created && (!updated || sameCalendarDate(created, updated))) return true;
+    if (!updated) return false;
+
+    const summary = String(item.activity_update_summary || item.activity_feed_summary || "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    if (!summary) return false;
+
+    // Community Activity is a discovery feed, not an edit log. A timestamp or
+    // generic edit verb is never enough: the summary must explicitly describe
+    // substantive information that entered the public archive. This keeps
+    // removals, consolidation, formatting, image crops, and other maintenance
+    // out of the feed even when their summaries contain words such as
+    // "included", "featured", or "expanded" in a non-additive sense.
+    const contentSubject = "(?:new(?:ly)?|additional|previously missing|previously omitted|information|content|history|historic(?:al)?|accounts?|biograph(?:y|ies|ical)|research|sources?|citations?|timelines?|moments?|articles?|sections?|paragraphs?|photographs?|photos?|images?|stories?|records?|maps?|boundar(?:y|ies)|languages?|words?|plants?|submissions?|sites?|listings?|events?|dates?|context|details?|material|books?|collections?|donations?|organizations?|programs?|exhibits?|awards?|interviews?|names?|persons?|places?|locations?|routes?|media|videos?)";
+    const maintenanceObject = "(?:spacing|padding|margin|border|color|font|layout|formatting|crop|button|control)";
+    const actionStart = "(?:^|[.;:!?]\\s*|\\b(?:and|then|while)\\s+)(?:also\\s+)?";
+    const directAddition = new RegExp(`${actionStart}(?:(?:added|adding|created|creating)\\b(?![^.;:!?]{0,60}\\b${maintenanceObject}\\b)|(?:documented|documenting|incorporated|incorporating|introduced|introducing|published|publishing|supplemented|supplementing)\\b)\\s*:?\\s*[^.;:!?]{0,180}\\b${contentSubject}\\b`);
+    const newlyFeatured = new RegExp(`${actionStart}newly\\s+featured\\b`);
+    const meaningfulExpansion = new RegExp(`${actionStart}expand(?:ed|ing|s)?\\b[^.;:!?]{0,120}\\b(?:with|to include|by adding)\\b[^.;:!?]{0,120}\\b${contentSubject}\\b`);
+    const missingContentRestored = new RegExp(`${actionStart}restor(?:e|ed|ing|es)?\\b[^.;:!?]{0,120}\\b(?:missing|omitted|lost)\\b[^.;:!?]{0,120}\\b${contentSubject}\\b`);
+    const nowContains = new RegExp(`\\bnow\\s+(?:contains?|documents?|features?|includes?)\\b[^.;:!?]{0,180}\\b${contentSubject}\\b`);
+    return newlyFeatured.test(summary) || directAddition.test(summary) || meaningfulExpansion.test(summary) || missingContentRestored.test(summary) || nowContains.test(summary);
   }
 
   function relatedActivityMoments(item = {}, options = {}) {
@@ -667,6 +726,9 @@
       }
       const direct = rows.find(row => activityItemType(row.item) === identity.sourceType);
       const baseRow = direct || rows[0];
+      const updateMediaRow = rows.find(row =>
+        activityItemType(row.item) === "historic-moment" && String(row.item.image || "").trim()
+      );
       const historicEntries = rows
         .filter(row => activityItemType(row.item) === "historic-moment")
         .map(row => activityUpdateEntry(row.item));
@@ -692,7 +754,11 @@
           groupedActivity: true,
           groupedCount: rows.length,
           activityGroupKey: `activity-group:${identity.key}`,
-          activityMembers: rows.map(row => row.item)
+          activityMembers: rows.map(row => row.item),
+          image: updateMediaRow?.item.image || base.image || "",
+          imageFallback: updateMediaRow
+            ? (updateMediaRow.item.imageFallback || base.image || base.imageFallback || "")
+            : (base.imageFallback || "")
         }
       });
     });
@@ -747,6 +813,7 @@
     contentUpdateActivityRecords,
     contentUpdateTargetCandidates,
     readSeenItemKeys,
+    readSeenItemKeysFromStorageKeys,
     writeSeenItemKeys,
     unreadItems,
     activityItemWeight,
@@ -763,6 +830,7 @@
     wikiCreatedDate,
     contentUpdateDate,
     contentActivityDate,
+    contentActivityIsAdditive,
     activityNewsPreview,
     contentUpdateFocusField,
     wikiActivityDate,

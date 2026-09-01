@@ -30,8 +30,37 @@
   }
 
   function sourceUrl(event = {}) {
-    const value = String(event.research_source_url || event.source_url || "").trim();
+    const relatedUrl = (Array.isArray(event.related_sources) ? event.related_sources : [])
+      .map(relation => relation?.source?.url || "")
+      .find(value => /^https?:\/\/\S+$/i.test(String(value || "").trim()));
+    const value = String(relatedUrl || event.research_source_url || event.source_url || "").trim();
     return /^https?:\/\/\S+$/i.test(value) ? value : "";
+  }
+
+  function sourceReferences(event = {}, options = {}) {
+    const references = [];
+    const push = value => {
+      const text = cleanText(options, value || "");
+      const key = text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      if (!key || references.some(item => item.key === key)) return;
+      references.push({ key, text });
+    };
+    const related = (Array.isArray(event.related_sources) ? event.related_sources : [])
+      .filter(Boolean)
+      .sort((left, right) => Number(left?.sort || 999999) - Number(right?.sort || 999999) || Number(left?.id || 0) - Number(right?.id || 0));
+    related.forEach(relation => {
+      const source = relation?.source && typeof relation.source === "object" ? relation.source : {};
+      const citation = cleanText(options, relation?.citation_context || source.citation || "") || cleanText(options, [
+        source.author,
+        source.title,
+        source.year ? `(${source.year})` : ""
+      ].filter(Boolean).join(", "));
+      const url = String(source.url || "").trim();
+      push(url && /^https?:\/\/\S+$/i.test(url) && !citation.includes(url) ? `${citation || source.title || "Source"}\n${url}` : citation);
+    });
+    push(event.citation || "");
+    footnoteSources(event, options).split(/;\s+/).filter(Boolean).forEach(push);
+    return references.map(item => item.text);
   }
 
   function sourceText(event = {}, options = {}) {
@@ -40,7 +69,10 @@
     const footnotes = footnoteSources(event, options);
     const section = cleanText(options, event.source_section || "");
     const source = cleanText(options, event.source_title || "");
-    const reference = citation ||
+    const references = sourceReferences(event, options);
+    const reference = references.length > 1
+      ? references.map((item, index) => `${index + 1}. ${item}`).join("\n\n")
+      : references[0] || citation ||
       (excerpt ? (excerpt.length > 240 ? `${excerpt.slice(0, 237).trim()}...` : excerpt) : "") ||
       footnotes ||
       (source && section ? `${source} - ${section}` : "") ||
@@ -49,6 +81,65 @@
       "Source details are being restored for this historic moment.";
     const url = sourceUrl(event);
     return url && !reference.includes(url) ? `${reference}\n${url}` : reference;
+  }
+
+  function normalizedMediaSource(value = "") {
+    const decoded = String(value || "")
+      .replace(/&amp;/gi, "&")
+      .trim();
+    if (!decoded) return "";
+    try {
+      const parsed = new URL(decoded, "https://nativelongisland.com/");
+      return `${parsed.origin}${parsed.pathname}`.toLowerCase();
+    } catch (_) {
+      return decoded.replace(/[?#].*$/, "").toLowerCase();
+    }
+  }
+
+  function mediaSources(value = "") {
+    return [...String(value || "").matchAll(/<(?:img|source)\b[^>]*\b(?:src|srcset)=["']([^"']+)/gi)]
+      .flatMap(match => String(match[1] || "").split(","))
+      .map(candidate => normalizedMediaSource(candidate.trim().split(/\s+/)[0]))
+      .filter(Boolean);
+  }
+
+  function stripDuplicateOverviewMedia(overviewContent = "", events = []) {
+    const rawOverview = String(overviewContent || "");
+    if (!rawOverview.trim()) return "";
+    const eventSources = new Set(mediaSources((events || []).map(event => event.description || "").join(" ")));
+    if (!eventSources.size) return rawOverview;
+    const allMediaAlreadyInEvents = block => {
+      const sources = mediaSources(block);
+      return sources.length > 0 && sources.every(source => eventSources.has(source));
+    };
+    return rawOverview
+      .replace(/<figure\b[\s\S]*?<\/figure>/gi, block => allMediaAlreadyInEvents(block) ? "" : block)
+      .replace(/<picture\b[\s\S]*?<\/picture>/gi, block => allMediaAlreadyInEvents(block) ? "" : block)
+      .replace(/<a\b[^>]*>\s*<img\b[^>]*>\s*<\/a>/gi, block => allMediaAlreadyInEvents(block) ? "" : block)
+      .replace(/<img\b[^>]*>/gi, block => allMediaAlreadyInEvents(block) ? "" : block)
+      .replace(/<p\b[^>]*>\s*<\/p>/gi, "")
+      .trim();
+  }
+
+  function overviewIsRedundant(overviewContent = "", events = [], options = {}) {
+    const rawOverview = String(overviewContent || "");
+    if (!rawOverview.trim() || /<(?:img|figure|picture|video|audio|iframe)\b/i.test(rawOverview)) return false;
+    const normalize = value => cleanText(options, value)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .split(/\s+/)
+      .filter(token => token.length >= 3 && !/^(?:the|and|for|that|with|from|this|was|were|are|has|had|its|into|their|then|than|but|not|also|who|when|where|which|while|about|over|under|after|before|during|through|between|upon|have|been|being|they|them|his|her|our|out|all|one|two|may|can)$/.test(token));
+    const overviewTokens = [...new Set(normalize(rawOverview))];
+    if (overviewTokens.length < Number(options.minimumTokens || 12)) return false;
+    const eventTokenSet = new Set(normalize((events || []).map(event => [
+      event.title,
+      event.description,
+      event.summary,
+      event.source_excerpt
+    ].filter(Boolean).join(" ")).join(" ")));
+    if (!eventTokenSet.size) return false;
+    const covered = overviewTokens.filter(token => eventTokenSet.has(token)).length;
+    return covered / overviewTokens.length >= Number(options.threshold || 0.88);
   }
 
   function periodLabel(period) {
@@ -246,9 +337,17 @@
   }
 
   function eventMatchesSource(event = {}, sourceType = "", sourceId = "", sourceSlug = "") {
-    if (!event || event.source_type !== sourceType) return false;
-    if (sourceSlug && event.source_slug === sourceSlug) return true;
+    if (!event) return false;
     const numericSourceId = Number(sourceId);
+    const relatedIdMatches = value => {
+      if (!Number.isFinite(numericSourceId)) return false;
+      return Number(relatedRecordId(value)) === numericSourceId;
+    };
+    if (sourceType === "site" && relatedIdMatches(event.site)) return true;
+    if (sourceType === "wiki" && relatedIdMatches(event.wiki_article)) return true;
+    if (sourceType === "calendar_event" && relatedIdMatches(event.calendar_event)) return true;
+    if (event.source_type !== sourceType) return false;
+    if (sourceSlug && event.source_slug === sourceSlug) return true;
     return Number.isFinite(numericSourceId) && Number(event.source_id) === numericSourceId;
   }
 
@@ -333,6 +432,127 @@
     const source = cleanText(options, event.source_title || "");
     if (source && options.sourceFallback !== false) return `Connected to ${source}.`;
     return options.fallback || "";
+  }
+
+  function waitForMediaElement(element, options = {}) {
+    const selector = String(options.mediaSelector || "img");
+    const timeoutMs = Math.max(250, Number(options.timeoutMs) || 3500);
+    const media = [
+      ...(element?.matches?.(selector) ? [element] : []),
+      ...Array.from(element?.querySelectorAll?.(selector) || [])
+    ];
+    if (!media.length) return Promise.resolve();
+    const waitForImage = image => new Promise(resolve => {
+      let settled = false;
+      let timer = null;
+      const cleanup = () => {
+        image.removeEventListener?.("load", onLoad);
+        image.removeEventListener?.("error", onError);
+        if (timer) clearTimeout(timer);
+      };
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve();
+      };
+      const decodeThenFinish = () => {
+        const decoded = typeof image.decode === "function" ? image.decode() : null;
+        if (decoded?.then) decoded.then(finish).catch(finish);
+        else finish();
+      };
+      const onLoad = () => decodeThenFinish();
+      const onError = () => {
+        const failedSource = String(image.currentSrc || image.src || "");
+        setTimeout(() => {
+          const replacementSource = String(image.currentSrc || image.src || "");
+          if (replacementSource && replacementSource !== failedSource && !image.complete) return;
+          if (replacementSource && replacementSource !== failedSource && Number(image.naturalWidth || 0) > 0) {
+            decodeThenFinish();
+            return;
+          }
+          finish();
+        }, 0);
+      };
+      try {
+        image.loading = "eager";
+      } catch (_) {}
+      image.addEventListener?.("load", onLoad);
+      image.addEventListener?.("error", onError);
+      timer = setTimeout(finish, timeoutMs);
+      if (image.complete) {
+        if (Number(image.naturalWidth || 0) > 0) decodeThenFinish();
+        else onError();
+      }
+    });
+    return Promise.all(media.map(waitForImage)).then(() => undefined);
+  }
+
+  function progressivelyAppendMediaItems(options = {}) {
+    const container = options.container;
+    const items = Array.isArray(options.items) ? options.items : [];
+    const createItem = typeof options.createItem === "function" ? options.createItem : () => null;
+    const waitForMedia = typeof options.waitForMedia === "function"
+      ? options.waitForMedia
+      : element => waitForMediaElement(element, options);
+    const schedule = typeof options.schedule === "function"
+      ? options.schedule
+      : callback => {
+          if (typeof requestAnimationFrame === "function") return requestAnimationFrame(callback);
+          return setTimeout(callback, 16);
+        };
+    let cancelled = false;
+    let resolveFinished;
+    const finished = new Promise(resolve => { resolveFinished = resolve; });
+    const controller = {
+      cancel() {
+        if (cancelled) return;
+        cancelled = true;
+        resolveFinished?.({ cancelled: true, rendered: controller.rendered, total: items.length });
+        resolveFinished = null;
+      },
+      finished,
+      rendered: 0,
+      total: items.length
+    };
+
+    const finish = result => {
+      if (!resolveFinished) return;
+      resolveFinished(result);
+      resolveFinished = null;
+    };
+    const run = async () => {
+      if (!container || !items.length) {
+        options.onComplete?.({ rendered: 0, total: items.length });
+        finish({ cancelled: false, rendered: 0, total: items.length });
+        return;
+      }
+      for (let index = 0; index < items.length; index += 1) {
+        if (cancelled) return;
+        const item = items[index];
+        const element = createItem(item, index);
+        if (!element) continue;
+        element.hidden = true;
+        const beforeNode = typeof options.beforeNode === "function" ? options.beforeNode() : options.beforeNode;
+        container.insertBefore(element, beforeNode?.parentNode === container ? beforeNode : null);
+        try {
+          await waitForMedia(element, item, index);
+        } catch (_) {}
+        if (cancelled) return;
+        element.hidden = false;
+        controller.rendered += 1;
+        options.onItemReady?.(element, item, index, controller.rendered);
+        if (index < items.length - 1) {
+          await new Promise(resolve => schedule(resolve));
+        }
+      }
+      if (cancelled) return;
+      const result = { cancelled: false, rendered: controller.rendered, total: items.length };
+      options.onComplete?.(result);
+      finish(result);
+    };
+    run();
+    return controller;
   }
 
   function buildBiographyTimelineData(options = {}) {
@@ -439,7 +659,10 @@
     footnoteSources,
     displayDescription,
     sourceUrl,
+    sourceReferences,
     sourceText,
+    stripDuplicateOverviewMedia,
+    overviewIsRedundant,
     periodLabel,
     rangeLabel,
     dateValue,
@@ -453,6 +676,8 @@
     eventsForSource,
     locationLabel,
     teaser,
+    waitForMediaElement,
+    progressivelyAppendMediaItems,
     buildBiographyTimelineData
   };
 }());

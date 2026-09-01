@@ -50,6 +50,49 @@
     return raw ? deps.rewriteMediaUrl?.(raw) || raw : "";
   }
 
+  function siteHasHeaderImage(site, deps = {}) {
+    return Boolean(
+      deps.directusAssetUrl?.(site?.listing_image_file) ||
+      cleanImageUrl(site?.listing_image_url) ||
+      cleanImageUrl(site?.listing_image_thumb_url)
+    );
+  }
+
+  const KNOWN_LISTING_IMAGE_CREDITS = Object.freeze({
+    "preservation-long-island": "Painting by Shinnecock artist David Bunn Martine, on view at Preservation Long Island as part of Indigenous History & Art at Good Little Water Place (2020)."
+  });
+
+  function cleanImageCredit(value) {
+    const text = String(value || "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#(?:39|x27);/gi, "'")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!text || text.length > 320) return "";
+    return /\b(?:painting|artwork|illustration|photograph|photo|image)\s+(?:by|courtesy of|from)\b|\bcourtesy of\b/i.test(text)
+      ? text
+      : "";
+  }
+
+  function isProjectAdminImageCreditName(value) {
+    const key = String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+    return ["jeremy dennis", "jeremynative", "on this site", "native long island", "on this site - native long island"].includes(key);
+  }
+
+  function listingImageCredit(site) {
+    const explicit = cleanImageCredit(site?.listing_image_credit || site?.listing_image_caption);
+    if (explicit) return explicit;
+    const slug = String(site?.slug || "").trim().toLowerCase();
+    const imageUrl = String(site?.listing_image_url || "");
+    if (KNOWN_LISTING_IMAGE_CREDITS[slug]) return KNOWN_LISTING_IMAGE_CREDITS[slug];
+    if (/E2013\.62_David_Martine-3(?:[-.])/i.test(imageUrl)) {
+      return KNOWN_LISTING_IMAGE_CREDITS["preservation-long-island"];
+    }
+    return cleanImageCredit(site?.listing_image_alt);
+  }
+
   function listingHeroImage(site, deps = {}) {
     const file = deps.directusAssetUrl?.(site?.listing_image_file) || "";
     if (file) return file;
@@ -274,6 +317,10 @@
     isBlockedRemoteImageUrl,
     cleanImageUrl,
     listingImage,
+    siteHasHeaderImage,
+    cleanImageCredit,
+    isProjectAdminImageCreditName,
+    listingImageCredit,
     listingHoverImage: listingImage,
     listingHeroImage,
     listingImageFallback,
