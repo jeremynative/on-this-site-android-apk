@@ -7075,7 +7075,10 @@
       if (!options.keepInlineHeight) detailEl.style.removeProperty("--detail-drawer-height");
       detailDrawerHandleEl?.setAttribute("aria-expanded", cleanState === "expanded" ? "true" : "false");
       detailDrawerHandleEl?.setAttribute("aria-label", cleanState === "expanded" ? "Reduce listing drawer height" : "Adjust listing drawer height");
-      window.requestAnimationFrame(() => state.map?.resize?.());
+      // The detail drawer overlays the map and never changes the map container.
+      // Resizing MapLibre here briefly stretches its canvas while a site or
+      // biography camera move is beginning, which is especially visible in
+      // native WebViews. Leave the already-correct map viewport untouched.
     }
 
     function nearestDetailDrawerState(height) {

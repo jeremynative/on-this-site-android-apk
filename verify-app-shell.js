@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260901-play-location-privacy-r226";
+const expectedBuild = "20260902-detail-map-stability-r227";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -2610,6 +2610,10 @@ requireBundledText('window.setTimeout(() => idleTask(refreshMobileSiteIconFields
 requireBundledText('if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {\n          idleTask(() => (state.profile ? ensureProfileStatsSynced() : Promise.resolve(false))', "Bundled Android app must skip Directus-backed profile refresh work in snapshot mode.");
 requireBundledText('function stabilizeAndroidMapPaint()', "Bundled Android app must include the Android map paint stabilizer.");
 requireBundledText('state.map.resize();', "Bundled Android app must resize the map after Android WebView startup.");
+const bundledDrawerState = bundledMobileJs.match(/function setDetailDrawerState\([\s\S]*?\n    \}/)?.[0] || "";
+if (!bundledDrawerState || /\.resize\s*\?*\.\s*\(/.test(bundledDrawerState) || /requestAnimationFrame/.test(bundledDrawerState)) {
+  throw new Error("Bundled Android site and biography drawers must not resize the unchanged map canvas during opening.");
+}
 requireBundledText('refreshMobileMapSources();', "Bundled Android app must refresh map sources after Android WebView startup.");
 requireBundledText('function bindAndroidMapGestureGuards()', "Bundled Android app must pause expensive map refreshes while the user is dragging or pinching.");
 requireBundledText('state.map.on("dragstart", markAndroidMapGestureActive);', "Bundled Android app must detect the start of finger map drags.");
