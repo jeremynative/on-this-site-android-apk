@@ -1240,3 +1240,12 @@ Safest next action: refresh Obtainium on the S25 and install 0.1.463 when conven
 - The shared runtime now bumps the biography-index version and revalidates `mobile-wiki-index.json` on launch. Android build marker is `20260901-wiki-index-refresh-r224`; `verify-app-shell.js` guards the refresh contract.
 - Web PR #182 merged as `2c4d6f1b903846058a4770f2629ead8c23fe934b`. Android shell/Play verifiers, whitespace checks, and the debug APK build pass.
 - Safest next action: deploy web PR #182, merge this Android follow-up, publish the next signed Obtainium APK, and confirm a returning production tablet reports 118 wiki articles without clearing app data.
+
+## 2026-09-02 site and biography detail map stability
+
+- Android PR #81 merged as `17767a1059a1468d2ce91ee0d678cf511d93d251`. The shared and bundled/offline runtimes no longer resize the unchanged MapLibre canvas when the fixed detail drawer changes state, removing the brief stretch seen while site and biography panels opened. Native build marker is `20260902-detail-map-stability-r227`.
+- `verify-app-shell.js`, Google Play readiness, JavaScript syntax, whitespace checks, and a clean debug APK build passed. The shell verifier now isolates `setDetailDrawerState` and rejects any future map resize or competing animation frame in that path.
+- Signed workflow `33632760447` passed the APK/AAB build, shell/readiness checks, and 16 KB compatibility, publishing Obtainium release `0.1.640` / `apk-640`. Google Play was not changed.
+- The hosted runtime was deployed first by web workflow `33631167612`, so current online Android sessions and the new APK receive the same fix.
+
+Safest next action: update through Obtainium to 0.1.640 when convenient, then open several site and biography markers normally and report only if a transient stretch remains on a specific device/orientation.
