@@ -120,6 +120,7 @@ final class NativeMapController {
     private static final String SITE_POLYGON_SOURCE_ID = "nli-site-polygons";
     private static final String SITE_POINT_SOURCE_ID = "nli-site-points";
     private static final String LABEL_SOURCE_ID = "nli-labels";
+    private static final String WATER_LABEL_SOURCE_ID = "nli-water-labels";
     private static final String BIOGRAPHY_PATH_SOURCE_ID = "nli-biography-paths";
     private static final String EVENT_SOURCE_ID = "nli-events";
     private static final String USER_LOCATION_SOURCE_ID = "nli-user-location";
@@ -157,7 +158,9 @@ final class NativeMapController {
     private static final String[] PUBLIC_BASE_LAYER_IDS = new String[] {
         "nli-base-landcover", "nli-base-landuse", "nli-base-boundaries",
         "nli-base-roads-casing", "nli-base-roads", "nli-base-buildings",
-        "nli-base-road-labels", "nli-base-place-labels"
+        "nli-base-road-labels", "nli-base-place-labels",
+        "nli-water-name-major", "nli-water-name-bay", "nli-water-name-inland",
+        "nli-water-name-canal", "nli-water-name-stream"
     };
     private static final String[] BUNDLED_TERRITORY_SLUGS = new String[] {
         "canarsie-traditional-land", "corchaug-ancestral-land", "manhansett-ancestral-land",
@@ -245,6 +248,7 @@ final class NativeMapController {
     private float touchRootScreenTop;
     private String pendingStateJson;
     private String pendingTransientStateJson;
+    private String bundledWaterLabelsJson;
     private String currentStateJson;
     private String movingFeaturesJson = EMPTY_FEATURE_COLLECTION;
     private long lastMovingFeatureApplyAt;
@@ -883,6 +887,7 @@ final class NativeMapController {
             addSource(style, SITE_POLYGON_SOURCE_ID, EMPTY_FEATURE_COLLECTION);
             addSource(style, SITE_POINT_SOURCE_ID, initialSitePoints);
             addSource(style, LABEL_SOURCE_ID, initialLabels);
+            addSource(style, WATER_LABEL_SOURCE_ID, bundledWaterLabelGeoJson());
             addSource(style, BIOGRAPHY_PATH_SOURCE_ID, EMPTY_FEATURE_COLLECTION);
             addSource(style, EVENT_SOURCE_ID, EMPTY_FEATURE_COLLECTION);
             addSource(style, USER_LOCATION_SOURCE_ID, EMPTY_FEATURE_COLLECTION);
@@ -941,6 +946,28 @@ final class NativeMapController {
                 .withProperties(
                     lineColor("#315a49"), lineWidth(0.9f), lineOpacity(0.45f), visibility(Property.NONE)
                 ));
+            // The compact native PMTiles style deliberately omits most
+            // basemap label layers. Restore the same official GNIS water
+            // names used by the mobile web map so ponds, bays, canals, and
+            // streams remain identifiable on the default road basemap.
+            addWaterNameLayer(style, "nli-water-name-major",
+                Expression.eq(Expression.get("water_tier"), Expression.literal(0)),
+                12.2f, 11f, 14f, 17f);
+            addWaterNameLayer(style, "nli-water-name-bay",
+                Expression.eq(Expression.get("water_tier"), Expression.literal(1)),
+                12.2f, 10.5f, 13f, 15f);
+            addWaterNameLayer(style, "nli-water-name-inland",
+                Expression.eq(Expression.get("water_tier"), Expression.literal(2)),
+                12.2f, 10.5f, 12.5f, 14f);
+            addWaterNameLayer(style, "nli-water-name-canal",
+                Expression.eq(Expression.get("water_class"), Expression.literal("Canal")),
+                13.2f, 9.75f, 11.5f, 13f);
+            addWaterNameLayer(style, "nli-water-name-stream",
+                Expression.any(
+                    Expression.eq(Expression.get("water_class"), Expression.literal("Stream")),
+                    Expression.eq(Expression.get("water_class"), Expression.literal("Spring"))
+                ),
+                13.7f, 9.5f, 11f, 12.5f);
             // Draw a quiet translucent location target below project icons so
             // nearby site artwork remains legible at the user's exact point.
             style.addLayer(new CircleLayer("nli-user-location-outer", USER_LOCATION_SOURCE_ID).withProperties(
@@ -1261,6 +1288,37 @@ final class NativeMapController {
         // scaling, which makes otherwise valid project icons disappear during
         // zoom. The bridge already coalesces state updates by signature.
         style.addSource(source);
+    }
+
+    private void addWaterNameLayer(
+        Style style,
+        String id,
+        Expression filter,
+        float minimumZoom,
+        float minimumSize,
+        float mediumSize,
+        float maximumSize
+    ) {
+        SymbolLayer layer = new SymbolLayer(id, WATER_LABEL_SOURCE_ID)
+            .withFilter(filter)
+            .withProperties(
+                textField(Expression.get("title")),
+                textFont(new String[] { "Noto Sans Regular" }),
+                textSize(Expression.interpolate(
+                    Expression.linear(), Expression.zoom(),
+                    Expression.stop(minimumZoom, minimumSize),
+                    Expression.stop(15, mediumSize),
+                    Expression.stop(18, maximumSize)
+                )),
+                textColor("#2f6471"),
+                textHaloColor("rgba(255,255,255,0.96)"),
+                textHaloWidth(1.35f),
+                textOptional(true),
+                textAllowOverlap(false),
+                textIgnorePlacement(false)
+            );
+        layer.setMinZoom(minimumZoom);
+        style.addLayer(layer);
     }
 
     private void addBundledMapIcons(Style style) {
@@ -2112,6 +2170,54 @@ final class NativeMapController {
             while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
             return output.toString(StandardCharsets.UTF_8.name());
         }
+    }
+
+    private String bundledWaterLabelGeoJson() {
+        if (bundledWaterLabelsJson != null) return bundledWaterLabelsJson;
+        try {
+            String source = readAsset("assets/js/water-labels.js");
+            int assignment = source.indexOf("window.NLI_WATER_LABELS");
+            int jsonStart = source.indexOf('{', assignment);
+            int runtimeStart = source.indexOf(";(function waterLabelRuntime", jsonStart);
+            if (assignment < 0 || jsonStart < 0 || runtimeStart < 0) {
+                throw new IllegalStateException("Bundled GNIS water-label catalog is malformed.");
+            }
+            String jsonText = source.substring(jsonStart, runtimeStart).trim();
+            if (jsonText.endsWith(";")) jsonText = jsonText.substring(0, jsonText.length() - 1);
+            JSONArray rows = new JSONObject(jsonText).optJSONArray("labels");
+            JSONArray features = new JSONArray();
+            if (rows != null) {
+                for (int index = 0; index < rows.length(); index++) {
+                    JSONArray row = rows.optJSONArray(index);
+                    if (row == null || row.length() < 7) continue;
+                    String title = row.optString(0, "").trim();
+                    double longitude = row.optDouble(1, Double.NaN);
+                    double latitude = row.optDouble(2, Double.NaN);
+                    if (title.isEmpty() || !Double.isFinite(longitude) || !Double.isFinite(latitude)) continue;
+                    JSONObject properties = new JSONObject()
+                        .put("title", title)
+                        .put("water_class", row.optString(3, "Water"))
+                        .put("water_tier", row.optInt(4, 0))
+                        .put("minzoom", Math.max(12.2, row.optDouble(5, 0) + 1.0))
+                        .put("gnis_id", row.optString(6, ""));
+                    JSONObject geometry = new JSONObject()
+                        .put("type", "Point")
+                        .put("coordinates", new JSONArray().put(longitude).put(latitude));
+                    features.put(new JSONObject()
+                        .put("type", "Feature")
+                        .put("geometry", geometry)
+                        .put("properties", properties));
+                }
+            }
+            bundledWaterLabelsJson = new JSONObject()
+                .put("type", "FeatureCollection")
+                .put("features", features)
+                .toString();
+        } catch (Exception error) {
+            Log.w(LOG_TAG, "Could not prepare bundled GNIS water names.", error);
+            bundledWaterLabelsJson = EMPTY_FEATURE_COLLECTION;
+        }
+        return bundledWaterLabelsJson;
     }
 
     private String loadPmtilesStyle(boolean online) throws Exception {

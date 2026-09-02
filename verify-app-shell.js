@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260902-content-panel-consistency-r229";
+const expectedBuild = "20260902-native-water-labels-r230";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -10,6 +10,7 @@ const bundledLiveAppPath = "app/src/main/assets/mobile-app-live.html";
 const lightweightOfflineAppPath = "app/src/main/assets/offline-app.html";
 const offlineArchiveUtilsPath = "app/src/main/assets/assets/js/offline-archive-utils.js";
 const bundledMobileJsPath = "app/src/main/assets/assets/js/mobile-app.js";
+const bundledWaterLabelsPath = "app/src/main/assets/assets/js/water-labels.js";
 const bundledSharedDirectusClientPath = "app/src/main/assets/assets/js/shared-directus-client.js";
 const bundledSharedProfileUtilsPath = "app/src/main/assets/assets/js/shared-profile-utils.js";
 const bundledSharedSearchUtilsPath = "app/src/main/assets/assets/js/shared-search-utils.js";
@@ -73,6 +74,7 @@ const gradleBuild = fs.readFileSync(gradleBuildPath, "utf8");
 const manifest = fs.readFileSync(manifestPath, "utf8");
 const appBridge = fs.readFileSync(appBridgePath, "utf8");
 const nativeMapController = fs.readFileSync(nativeMapControllerPath, "utf8").replace(/\r\n/g, "\n");
+const bundledWaterLabels = fs.readFileSync(bundledWaterLabelsPath, "utf8");
 const nativeSiteIconManifest = JSON.parse(fs.readFileSync(nativeSiteIconManifestPath, "utf8"));
 const nativeTerritoryFallback = JSON.parse(fs.readFileSync(nativeTerritoryFallbackPath, "utf8"));
 const storyBridge = fs.readFileSync(storyBridgePath, "utf8");
@@ -269,6 +271,36 @@ if (!nativeMapController.includes('new SymbolLayer("nli-moving-feature-labels", 
     || !nativeMapController.includes('textFont(new String[] { "Noto Sans Regular" }), textSize(10f)')
     || nativeMapController.includes('textFont(new String[] { "Noto Sans Bold" }), textSize(10f)')) {
   throw new Error("Native biography titles must use the bundled regular font so close-zoom labels render on Android.");
+}
+const waterCatalogAssignment = bundledWaterLabels.indexOf("window.NLI_WATER_LABELS");
+const waterCatalogStart = bundledWaterLabels.indexOf("{", waterCatalogAssignment);
+const waterCatalogRuntime = bundledWaterLabels.indexOf(";(function waterLabelRuntime", waterCatalogStart);
+const waterCatalogText = bundledWaterLabels.slice(waterCatalogStart, waterCatalogRuntime).trim().replace(/;$/, "");
+const waterCatalog = JSON.parse(waterCatalogText);
+if (!Array.isArray(waterCatalog.labels)
+    || waterCatalog.labels.length < 700
+    || !waterCatalog.labels.some(row => row?.[0] === "Georgica Pond" && row?.[3] === "Lake")) {
+  throw new Error("Android must bundle the complete GNIS water-name catalog, including Georgica Pond.");
+}
+for (const layerId of [
+  "nli-water-name-major",
+  "nli-water-name-bay",
+  "nli-water-name-inland",
+  "nli-water-name-canal",
+  "nli-water-name-stream"
+]) {
+  if (!nativeMapController.includes(`"${layerId}"`)) {
+    throw new Error(`Android native map is missing water-label layer ${layerId}.`);
+  }
+}
+if (!nativeMapController.includes('WATER_LABEL_SOURCE_ID = "nli-water-labels"')
+    || !nativeMapController.includes('readAsset("assets/js/water-labels.js")')
+    || !nativeMapController.includes("addSource(style, WATER_LABEL_SOURCE_ID, bundledWaterLabelGeoJson())")
+    || !nativeMapController.includes("layer.setMinZoom(minimumZoom)")
+    || !nativeMapController.includes("12.2f, 10.5f, 12.5f, 14f")
+    || !nativeMapController.includes("Expression.literal(\"Spring\")")
+    || !nativeMapController.includes("PUBLIC_BASE_LAYER_IDS")) {
+  throw new Error("Android native water labels must load the shared GNIS data, use close-zoom thresholds, and follow basemap visibility.");
 }
 if (!fs.existsSync(amethystShipIconPath) || fs.statSync(amethystShipIconPath).size < 10000) {
   throw new Error("Android must bundle the reviewed generic Amethyst-era bark icon.");
