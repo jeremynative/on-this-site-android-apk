@@ -3585,6 +3585,32 @@
       line-height: 1.28;
     }
 
+    .profile-feed-row.is-map-linked {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      cursor: pointer;
+    }
+
+    .profile-feed-row.is-map-linked:is(:hover, :focus-visible, .is-map-selected) {
+      border-color: rgba(49, 92, 72, 0.62);
+      box-shadow: 0 0 0 3px rgba(49, 92, 72, 0.12);
+      outline: none;
+    }
+
+    .profile-feed-map-stop {
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      background: #315c48;
+      box-shadow: 0 1px 5px rgba(18, 46, 34, 0.28);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
     .profile-feed-title {
       display: inline;
       padding: 0;
@@ -3814,9 +3840,58 @@
     #login-sheet.profile-progress-active {
       top: auto;
       bottom: var(--app-bottom-safe);
-      height: 44dvh;
-      max-height: 44dvh;
+      height: var(--mobile-profile-sheet-height, 44dvh);
+      max-height: min(74dvh, var(--mobile-profile-sheet-height, 44dvh));
       border-radius: 18px 18px 0 0;
+    }
+
+    #profiles-sheet.profile-progress-active[data-profile-sheet-size="compact"],
+    #login-sheet.profile-progress-active[data-profile-sheet-size="compact"] {
+      --mobile-profile-sheet-height: 30dvh;
+    }
+
+    #profiles-sheet.profile-progress-active[data-profile-sheet-size="expanded"],
+    #login-sheet.profile-progress-active[data-profile-sheet-size="expanded"] {
+      --mobile-profile-sheet-height: 74dvh;
+    }
+
+    .mobile-profile-sheet-resizer {
+      position: absolute;
+      top: -13px;
+      left: 50%;
+      z-index: 4;
+      width: 76px;
+      height: 28px;
+      padding: 0;
+      transform: translateX(-50%);
+      border: 0;
+      background: transparent;
+      cursor: ns-resize;
+      touch-action: none;
+    }
+
+    .mobile-profile-sheet-resizer::before {
+      content: "";
+      position: absolute;
+      top: 9px;
+      left: 50%;
+      width: 46px;
+      height: 5px;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: rgba(49, 92, 72, 0.52);
+      box-shadow: 0 1px 4px rgba(18, 46, 34, 0.18);
+    }
+
+    .mobile-profile-sheet-resizer:is(:hover, :focus-visible)::before,
+    body.mobile-profile-sheet-resizing .mobile-profile-sheet-resizer::before {
+      height: 7px;
+      background: #315c48;
+    }
+
+    body.mobile-profile-sheet-resizing {
+      cursor: ns-resize;
+      user-select: none;
     }
 
     #profiles-sheet.profile-progress-active .profile-sort-controls,
@@ -3892,6 +3967,11 @@
     .mobile-profile-progress-marker:focus-visible {
       outline: 3px solid rgba(49, 92, 72, 0.38);
       outline-offset: 3px;
+    }
+
+    .mobile-profile-progress-marker.is-active {
+      z-index: 4;
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.82), 0 0 0 7px rgba(49, 92, 72, 0.38), 0 3px 10px rgba(18, 46, 34, 0.42);
     }
 
     .mobile-profile-progress-marker::after {
@@ -4031,6 +4111,14 @@
       color: #1d2922;
     }
 
+    .mobile-profile-map-stop-label {
+      color: #52705f;
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
     .mobile-profile-progress-card {
       position: absolute;
       box-sizing: border-box;
@@ -4108,6 +4196,10 @@
         height: calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe));
         max-height: calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe));
         border-radius: 14px 0 0 0;
+      }
+
+      .mobile-profile-sheet-resizer {
+        display: none;
       }
 
     }

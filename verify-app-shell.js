@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260901-wiki-index-refresh-r224";
+const expectedBuild = "20260901-contributor-map-linked-activity-r225";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -836,12 +836,12 @@ function bundledTimelineEvents(document, label) {
 }
 
 const bundledTimeline = bundledTimelineEvents(bundledApp, "Bundled Android fallback");
-if (bundledTimeline.length !== 1375) {
-  throw new Error(`Bundled Android fallback must contain all 1,375 public timeline moments; found ${bundledTimeline.length}.`);
+if (bundledTimeline.length !== 1425) {
+  throw new Error(`Bundled Android fallback must contain all 1,425 public timeline moments; found ${bundledTimeline.length}.`);
 }
 const bundledSourceRecords = bundledTimeline.filter(event => !(event?.source_type && (event?.source_slug || event?.source_id)));
-if (bundledSourceRecords.length !== 288) {
-  throw new Error(`Bundled Android fallback must retain 288 unlinked public source records; found ${bundledSourceRecords.length}.`);
+if (bundledSourceRecords.length !== 286) {
+  throw new Error(`Bundled Android fallback must retain 286 unlinked public source records; found ${bundledSourceRecords.length}.`);
 }
 
 const bundledMobileDataMatch = bundledApp.match(/window\.NLI_MOBILE_DATA\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
@@ -910,6 +910,24 @@ function requireBundledPattern(pattern, message) {
 }
 
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
+for (const [needle, message] of [
+  ["group.stop_number = index + 1", "Android contributor-map groups must use stable chronological stop numbers."],
+  ["map_stop_number: mapped.stop_number", "Android recent activity must retain its matching map stop number."],
+  ["focusMobileProfileStop(stopNumber, options = {})", "Android contributor map and activity rows must focus each other."],
+  ["focusMobileProfileStop(group.stop_number || (Number(key) + 1)", "Native MapLibre profile-marker taps must reveal the matching activity row."],
+  ["window.setTimeout(() => popup.remove(), 8500)", "Android contributor-map context cards must dismiss automatically."],
+  ['state.profileMapMode?.sheet?.querySelector?.(".sheet-body")', "Android contributor-map context cards must survive concurrent activity refreshes."],
+  ["removeMobileProfileProgressLayers({ preservePopup: true })", "Android contributor-map layer refreshes must preserve an open context card."],
+  ["installMobileProfileSheetResizer(mode)", "Android contributor profiles must provide an adjustable lower sheet."]
+]) {
+  const haystack = needle.startsWith("group.") || needle.startsWith("map_")
+    ? bundledSharedProfileUtils
+    : bundledMobileJs;
+  if (!haystack.includes(needle)) throw new Error(message);
+}
+if (!bundledMobileCss.includes(".profile-feed-map-stop") || !bundledMobileCss.includes(".mobile-profile-sheet-resizer")) {
+  throw new Error("Android contributor profiles must style numbered activity stops and the adjustable sheet handle.");
+}
 for (const [needle, message] of [
   ['const fromSearchResults = Boolean(activeMobileSearchValue().trim())', "Android search-result taps must be distinguished from ordinary Nearby taps."],
   ['openSite(slug, { focus: true, focusZoom: 14.5 })', "Android search results must move the selected site into close focus."],

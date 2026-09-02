@@ -59,19 +59,78 @@ const result = await evaluate(`(async () => {
       camera: window.NLI_APK_SITE_CAMERA_AUDIT.snapshot(),
       body: document.body.className,
       profileMode: document.body.classList.contains("mobile-profile-map-mode"),
-      sheetOpen: Boolean(document.querySelector("#login-sheet.open")),
-      markers: document.querySelectorAll(".mobile-profile-progress-marker").length
+      sheetOpen: Boolean(document.querySelector("#login-sheet.open, #profiles-sheet.open")),
+      markers: document.querySelectorAll(".mobile-profile-progress-marker").length,
+      numberedActivity: document.querySelectorAll(".profile-feed-row[data-profile-map-stop]").length
     };
   };
-  const before = snapshot("before");
   const accountButton = document.querySelector("#login-open");
-  if (!/Jeremy Dennis/i.test(accountButton?.textContent || "")) {
-    return { passed: false, reason: "The signed-in username/points button was not rendered.", before, buttonText: accountButton?.textContent || "" };
+  let profileKey = "";
+  let closeProfile = null;
+  if (/Jeremy Dennis/i.test(accountButton?.textContent || "")) {
+    closeProfile = () => accountButton.click();
+  } else {
+    document.querySelector("#profiles-open")?.click();
+    const publicProfileReady = await waitFor(() => [...document.querySelectorAll("[data-toggle-mobile-profile]")]
+      .some(button => /Jeremy Dennis/i.test(button.textContent || "")));
+    if (!publicProfileReady) {
+      return { passed: false, reason: "Jeremy Dennis was unavailable in the public contributor directory.", buttonText: accountButton?.textContent || "" };
+    }
+    const publicButton = [...document.querySelectorAll("[data-toggle-mobile-profile]")]
+      .find(button => /Jeremy Dennis/i.test(button.textContent || ""));
+    profileKey = publicButton?.dataset.toggleMobileProfile || "";
+    closeProfile = () => document.querySelector('[data-toggle-mobile-profile="' + CSS.escape(profileKey) + '"]')?.click();
   }
-  accountButton.click();
-  await wait(700);
+  const before = snapshot("before");
+  if (profileKey) closeProfile();
+  else accountButton.click();
+  const profileReady = await waitFor(() => document.body.classList.contains("mobile-profile-map-mode")
+    && document.querySelectorAll(".mobile-profile-progress-marker").length > 0
+    && document.querySelectorAll(".profile-feed-row[data-profile-map-stop]").length > 0);
+  if (!profileReady) return {
+    passed: false,
+    reason: "Contributor progress map did not become interactive.",
+    before,
+    current: snapshot("profile-timeout"),
+    feedRows: [...document.querySelectorAll(".profile-feed-row")].slice(0, 8).map(row => ({
+      className: row.className,
+      stop: row.dataset.profileMapStop || "",
+      text: (row.textContent || "").trim().slice(0, 180)
+    }))
+  };
   const during = snapshot("during");
-  accountButton.click();
+  const nativeTapOpened = window.NLI_NATIVE_MAP_BRIDGE?.openFeature?.("profile", "0") === true;
+  await wait(260);
+  const nativeTap = {
+    opened: nativeTapOpened,
+    card: Boolean(document.querySelector(".mobile-profile-progress-card")),
+    selectedRows: document.querySelectorAll(".profile-feed-row.is-map-selected").length,
+    selectedStops: [...new Set([...document.querySelectorAll(".profile-feed-row.is-map-selected")]
+      .map(row => Number(row.dataset.profileMapStop || 0)).filter(Boolean))],
+    activeMarkers: document.querySelectorAll(".mobile-profile-progress-marker.is-active").length,
+    activeStop: Number(document.querySelector(".mobile-profile-progress-marker.is-active")?.dataset.profileMapStop || 0)
+  };
+  const numberedRows = [...document.querySelectorAll(".profile-feed-row[data-profile-map-stop]")];
+  const targetRow = numberedRows.find(row => row !== document.querySelector(".profile-feed-row.is-map-selected")) || numberedRows[0];
+  const targetStop = Number(targetRow?.dataset.profileMapStop || 0);
+  targetRow?.querySelector("[data-profile-map-stop-button]")?.click();
+  await wait(760);
+  const linkedTap = {
+    targetStop,
+    selectedStop: Number(document.querySelector(".profile-feed-row.is-map-selected")?.dataset.profileMapStop || 0),
+    activeStop: Number(document.querySelector(".mobile-profile-progress-marker.is-active")?.dataset.profileMapStop || 0),
+    popupText: document.querySelector(".mobile-profile-progress-card")?.textContent || ""
+  };
+  const resizer = document.querySelector(".mobile-profile-sheet-resizer");
+  resizer?.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+  await wait(120);
+  const expandedSize = document.querySelector("#login-sheet.profile-progress-active, #profiles-sheet.profile-progress-active")?.dataset.profileSheetSize || "";
+  resizer?.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+  await wait(120);
+  const compactSize = document.querySelector("#login-sheet.profile-progress-active, #profiles-sheet.profile-progress-active")?.dataset.profileSheetSize || "";
+  await wait(8800);
+  const popupDismissed = !document.querySelector(".mobile-profile-progress-card");
+  closeProfile();
   await wait(360);
   const after = snapshot("after");
   const sameNumber = (a, b, tolerance = 0.001) => Math.abs(Number(a) - Number(b)) <= tolerance;
@@ -89,9 +148,20 @@ const result = await evaluate(`(async () => {
     passed: sameRect(during) && sameRect(after)
       && sameCamera(during) && sameCamera(after)
       && during.profileMode && during.sheetOpen && during.markers > 0
+      && during.numberedActivity > 0
+      && nativeTap.opened && nativeTap.card && nativeTap.selectedRows > 0 && nativeTap.activeMarkers === 1
+      && nativeTap.selectedStops.length === 1 && nativeTap.selectedStops[0] === nativeTap.activeStop
+      && targetStop > 0 && linkedTap.selectedStop === targetStop && linkedTap.activeStop === targetStop
+      && linkedTap.popupText.includes("Stop " + targetStop)
+      && expandedSize === "expanded" && compactSize === "compact" && popupDismissed
       && !after.profileMode && !after.sheetOpen && after.markers === 0,
     before,
     during,
+    nativeTap,
+    linkedTap,
+    expandedSize,
+    compactSize,
+    popupDismissed,
     after
   };
 })()`);

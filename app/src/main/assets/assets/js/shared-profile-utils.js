@@ -1592,6 +1592,8 @@
       };
     const language = (options.languageWords || []).map(word => ({
       type: "Language",
+      activity_type: "language",
+      activity_id: defaultRelationId(word.id) || null,
       title: `${word.english || "Word"} - ${word.algonquian || "saved"}`,
       detail: word.source || "Language quiz",
       date: word.learned_at || word.answered_at || "",
@@ -1616,6 +1618,8 @@
       const sourceSlug = comment.site_slug || comment.source_slug || "";
       return {
         type: "Comment",
+        activity_type: "comment",
+        activity_id: defaultRelationId(comment.id) || null,
         title: comment.site_title || comment.source_title || "Community note",
         detail: activityPreview(comment.comment || "Approved comment", options.commentPreviewLength || 110),
         date: comment.created_at || "",
@@ -1633,6 +1637,8 @@
     });
     const visits = [...uniqueFeedVisits.values()].map(visit => ({
       type: hasSavedCheckinDistance(visit.distance_miles) ? "Check-in" : "Visit",
+      activity_type: hasSavedCheckinDistance(visit.distance_miles) ? "checkin" : "visit",
+      activity_id: defaultRelationId(visit.id) || null,
       title: visit.site_title || visit.site_slug || "Visited site",
       detail: hasSavedCheckinDistance(visit.distance_miles) ? `Checked in nearby (${Number(visit.distance_miles).toFixed(2)} mi)` : "Marked as visited",
       date: visit.visited_at || "",
@@ -1641,6 +1647,8 @@
     }));
     const suggestions = (activity.suggestions || []).map(suggestion => ({
       type: "Suggestion",
+      activity_type: "suggestion",
+      activity_id: defaultRelationId(suggestion.id) || null,
       title: suggestion.title || "Suggested site",
       detail: "Submitted for review",
       date: suggestion.submitted_at || suggestion.date_created || "",
@@ -1672,6 +1680,8 @@
       .filter(item => Object.prototype.hasOwnProperty.call(progressLabels, item.activity_type))
       .map(item => ({
         type: progressLabels[item.activity_type],
+        activity_type: item.activity_type,
+        activity_id: item.activity_id,
         title: item.title || "Contribution",
         detail: activityPreview(item.excerpt || progressLabels[item.activity_type], options.commentPreviewLength || 110),
         date: item.date_time || "",
@@ -1680,7 +1690,26 @@
         wiki_slug: item.related_type === "wiki" ? item.related_slug || "" : ""
       }));
     const includePurchases = options.includePurchases !== false;
+    const mapItems = Array.isArray(options.profileMapItems) ? options.profileMapItems : [];
+    const mapItemForFeedItem = feedItem => {
+      const activityId = String(feedItem.activity_id || "");
+      const activityType = String(feedItem.activity_type || "");
+      const exact = activityId && mapItems.find(item => String(item.activity_id || "") === activityId && (!activityType || item.activity_type === activityType));
+      if (exact) return exact;
+      const sourceType = feedItem.wiki_slug ? "wiki" : "site";
+      const sourceSlug = feedItem.wiki_slug || feedItem.site_slug || "";
+      return sourceSlug ? mapItems.find(item => item.related_type === sourceType && item.related_slug === sourceSlug && (!activityType || item.activity_type === activityType)) : null;
+    };
     return [...comments, ...visits, ...suggestions, ...friendInvites, ...language, ...extraProgress, ...logins, ...(includePurchases ? purchases : [])]
+      .map(item => {
+        const mapped = mapItemForFeedItem(item);
+        return mapped?.stop_number ? {
+          ...item,
+          map_stop_number: mapped.stop_number,
+          map_group_key: mapped.group_key || "",
+          map_coordinates: mapped.coordinates
+        } : item;
+      })
       .sort((a, b) => activityDateValue(b.date) - activityDateValue(a.date))
       .slice(0, Number(options.limit || 14));
   }
@@ -1930,6 +1959,13 @@
         points: group.items.reduce((sum, item) => sum + Number(item.points || 0), 0)
       };
     }).sort((a, b) => new Date(a.first_date || 0) - new Date(b.first_date || 0));
+    groups.forEach((group, index) => {
+      group.stop_number = index + 1;
+      group.items.forEach(item => {
+        item.stop_number = group.stop_number;
+        item.group_key = group.key;
+      });
+    });
     const journey = mappedItems
       .map((item, sourceIndex) => ({ item, sourceIndex, timestamp: Date.parse(item.date_time || "") }))
       .sort((a, b) => {

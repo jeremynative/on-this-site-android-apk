@@ -7683,8 +7683,11 @@
           if (kind === "profile") {
             const group = state.profileMapMode?.model?.groups?.[Number(key)];
             if (!group) return false;
-            openMobileProfileMapActivityCard(group);
-            return true;
+            return focusMobileProfileStop(group.stop_number || (Number(key) + 1), {
+              moveMap: false,
+              openCard: true,
+              revealActivity: true
+            });
           }
           if (kind === "wiki") {
             const slug = String(key || "");
@@ -17469,10 +17472,40 @@
       const labels = { checkin: "Checked in", visit: "Visited", comment: "Commented", language: "Learned a word", quiz: "Quiz completed", plant: "Plant find", story: "Story", suggestion: "Suggested site", interaction: "Community interaction" };
       return `<div class="mobile-profile-map-popup">
         ${group.image ? `<img src="${escapeHtml(group.image)}" alt="" loading="lazy" decoding="async">` : ""}
+        <span class="mobile-profile-map-stop-label">Stop ${Number(group.stop_number || 0) || ""}${group.first_date ? ` · first activity ${escapeHtml(activityDateLabel(group.first_date))}` : ""}</span>
         <strong>${escapeHtml(group.title)}</strong>
         ${group.items.slice().sort((a, b) => new Date(b.date_time || 0) - new Date(a.date_time || 0)).map(item => `<p><b>${escapeHtml(labels[item.activity_type] || "Activity")}</b> <small>${escapeHtml(activityDateLabel(item.date_time))}</small>${item.excerpt ? ` <span>${escapeHtml(item.excerpt)}</span>` : ""}</p>`).join("")}
         ${group.related_slug ? `<button type="button" data-profile-map-source="${escapeHtml(group.related_type)}" data-profile-map-slug="${escapeHtml(group.related_slug)}">Open full ${group.related_type === "wiki" ? "article" : "site"}</button>` : ""}
       </div>`;
+    }
+
+    function mobileProfileStopGroup(stopNumber) {
+      const target = Number(stopNumber);
+      return state.profileMapMode?.model?.groups?.find(group => Number(group.stop_number) === target) || null;
+    }
+
+    function highlightMobileProfileStop(stopNumber) {
+      const mode = state.profileMapMode;
+      if (!mode) return;
+      const target = Number(stopNumber);
+      mode.selectedStopNumber = target;
+      (mode.domMarkers || []).forEach(marker => {
+        const element = marker?.getElement?.();
+        const selected = Number(element?.dataset?.profileMapStop) === target;
+        element?.classList.toggle("is-active", selected);
+        element?.setAttribute("aria-pressed", String(selected));
+      });
+      mode.sheet?.querySelectorAll?.(".profile-feed-row[data-profile-map-stop]").forEach(row => {
+        row.classList.toggle("is-map-selected", Number(row.dataset.profileMapStop) === target);
+      });
+    }
+
+    function revealMobileProfileStopInActivity(stopNumber) {
+      const mode = state.profileMapMode;
+      if (!mode) return;
+      const row = mode.sheet?.querySelector?.(`.profile-feed-row[data-profile-map-stop="${Number(stopNumber)}"]`);
+      if (!row) return;
+      row.scrollIntoView({ block: "center", behavior: "smooth" });
     }
 
     function positionMobileProfileMapActivityCard(card = state.profileMapPopup?.element) {
@@ -17498,13 +17531,25 @@
       card.setAttribute("role", "dialog");
       card.setAttribute("aria-label", `${group.title || "Contribution"} activity`);
       card.innerHTML = `<button class="mobile-profile-progress-card-close" type="button" aria-label="Close activity card">x</button>${mobileProfileMapPopupHtml(group)}`;
+      const popup = {
+        element: card,
+        timer: null,
+        remove: () => {
+          window.clearTimeout(popup.timer);
+          card.remove();
+          if (state.profileMapPopup === popup) state.profileMapPopup = null;
+        }
+      };
+      const armDismissal = () => {
+        window.clearTimeout(popup.timer);
+        popup.timer = window.setTimeout(() => popup.remove(), 8500);
+      };
       card.querySelector(".mobile-profile-progress-card-close")?.addEventListener("click", event => {
         event.preventDefault();
-        card.remove();
-        if (state.profileMapPopup?.element === card) state.profileMapPopup = null;
+        popup.remove();
       });
       const nativeSheetHost = nativeMapBridgeAvailable()
-        ? state.profileMapMode?.sheet?.querySelector?.("[data-mobile-profile-map-summary]")
+        ? state.profileMapMode?.sheet?.querySelector?.(".sheet-body")
         : null;
       if (nativeSheetHost) {
         card.classList.add("is-native-sheet-card");
@@ -17512,8 +17557,32 @@
       } else {
         state.map.getContainer().appendChild(card);
       }
-      state.profileMapPopup = { element: card, remove: () => card.remove() };
+      state.profileMapPopup = popup;
+      card.addEventListener("pointerdown", armDismissal, { passive: true });
+      card.addEventListener("focusin", armDismissal);
+      armDismissal();
       if (!nativeSheetHost) positionMobileProfileMapActivityCard(card);
+    }
+
+    function focusMobileProfileStop(stopNumber, options = {}) {
+      const mode = state.profileMapMode;
+      const group = mobileProfileStopGroup(stopNumber);
+      if (!mode || !group || !state.map) return false;
+      highlightMobileProfileStop(group.stop_number);
+      if (options.moveMap !== false) {
+        const currentZoom = Number(state.map.getZoom?.());
+        state.map.stop?.();
+        state.map.easeTo?.({
+          center: group.coordinates,
+          zoom: Math.max(Number.isFinite(currentZoom) ? currentZoom : 10, 11.8),
+          duration: 620,
+          essential: true
+        });
+        window.setTimeout(() => scheduleNativeMapStateSync("profile-stop-focus", 0), 660);
+      }
+      if (options.openCard !== false) openMobileProfileMapActivityCard(group);
+      if (options.revealActivity !== false) revealMobileProfileStopInActivity(group.stop_number);
+      return true;
     }
 
     function mobileProfileJourneyMapData(model = {}) {
@@ -17567,7 +17636,7 @@
         }));
     }
 
-    function removeMobileProfileProgressLayers() {
+    function removeMobileProfileProgressLayers(options = {}) {
       if (!state.map) return;
       if (state.profileMapMode?.markerMoveHandler) state.map.off("moveend", state.profileMapMode.markerMoveHandler);
       if (state.profileMapMode) state.profileMapMode.markerMoveHandler = null;
@@ -17575,8 +17644,10 @@
       if (state.profileMapMode) state.profileMapMode.domMarkers = [];
       MOBILE_PROFILE_PROGRESS_LAYER_IDS.forEach(id => { if (state.map.getLayer(id)) state.map.removeLayer(id); });
       MOBILE_PROFILE_PROGRESS_SOURCE_IDS.forEach(id => { if (state.map.getSource(id)) state.map.removeSource(id); });
-      state.profileMapPopup?.remove?.();
-      state.profileMapPopup = null;
+      if (!options.preservePopup) {
+        state.profileMapPopup?.remove?.();
+        state.profileMapPopup = null;
+      }
     }
 
     function spreadMobileProfileProgressMarkers(mode = state.profileMapMode) {
@@ -17678,7 +17749,10 @@
         state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);
         mode.clickHandler = null;
       }
-      removeMobileProfileProgressLayers();
+      // Layer rebuilds can run shortly after profile mode opens while the land
+      // mask and native viewport settle. Keep an already-open activity card
+      // through that refresh; only profile exit or a failed render dismisses it.
+      removeMobileProfileProgressLayers({ preservePopup: true });
       mode.layerVisibility = mode.layerVisibility || new Map();
       for (const layer of state.map.getStyle()?.layers || []) {
         if (!layer.id.startsWith("mobile-") || layer.id.startsWith("mobile-profile-progress-")) continue;
@@ -17705,16 +17779,18 @@
       } });
       const openGroupPopup = group => {
         if (!group) return;
-        openMobileProfileMapActivityCard(group);
+        focusMobileProfileStop(group.stop_number, { moveMap: false });
       };
       mode.domMarkers = mode.model.groups.map((group, index) => {
         const markerButton = document.createElement("button");
         markerButton.type = "button";
         markerButton.className = "mobile-profile-progress-marker";
-        markerButton.textContent = String(index + 1);
+        markerButton.textContent = String(group.stop_number || index + 1);
         markerButton.dataset.title = group.title || "Contribution";
+        markerButton.dataset.profileMapStop = String(group.stop_number || index + 1);
         markerButton.style.setProperty("--profile-marker-color", MOBILE_PROFILE_ACTIVITY_COLORS[group.primary_type] || MOBILE_PROFILE_ACTIVITY_COLORS.interaction);
-        markerButton.setAttribute("aria-label", `${index + 1}. ${group.title || "Contribution"}; ${group.items.length} ${group.items.length === 1 ? "activity" : "activities"}`);
+        markerButton.setAttribute("aria-label", `Stop ${group.stop_number || index + 1}. ${group.title || "Contribution"}; ${group.items.length} ${group.items.length === 1 ? "activity" : "activities"}`);
+        markerButton.setAttribute("aria-pressed", "false");
         markerButton.addEventListener("click", event => {
           event.preventDefault();
           event.stopPropagation();
@@ -17732,6 +17808,7 @@
       };
       state.map.on("click", "mobile-profile-progress-points", onClick);
       mode.clickHandler = onClick;
+      if (mode.selectedStopNumber) highlightMobileProfileStop(mode.selectedStopNumber);
       document.body.classList.remove("mobile-profile-map-pending");
       ensureLandMask().then(mask => {
         if (mask && state.profileMapMode === mode && !state.map.getSource("mobile-profile-progress-island")) renderMobileProfileProgressMap();
@@ -17750,6 +17827,64 @@
       if (!mode || !state.map) return;
       state.map.resize?.();
       window.requestAnimationFrame(() => spreadMobileProfileProgressMarkers(mode));
+    }
+
+    function installMobileProfileSheetResizer(mode) {
+      if (!mode?.sheet) return;
+      const handle = document.createElement("button");
+      handle.type = "button";
+      handle.className = "mobile-profile-sheet-resizer";
+      handle.setAttribute("role", "separator");
+      handle.setAttribute("aria-orientation", "horizontal");
+      handle.setAttribute("aria-label", "Resize contributor profile panel");
+      mode.sheet.prepend(handle);
+      mode.sheetResizer = handle;
+      let startY = 0;
+      let dragging = false;
+      const sizes = ["compact", "normal", "expanded"];
+      const setSize = index => {
+        const size = sizes[Math.max(0, Math.min(2, index))];
+        mode.sheet.dataset.profileSheetSize = size;
+        handle.setAttribute("aria-valuenow", String([30, 44, 74][sizes.indexOf(size)]));
+        window.requestAnimationFrame(resizeMobileProfileProgressMap);
+      };
+      const finish = event => {
+        if (!dragging) return;
+        dragging = false;
+        document.body.classList.remove("mobile-profile-sheet-resizing");
+        handle.releasePointerCapture?.(event.pointerId);
+        const delta = event.clientY - startY;
+        const current = sizes.indexOf(mode.sheet.dataset.profileSheetSize || "normal");
+        if (Math.abs(delta) > 24) setSize(current + (delta < 0 ? 1 : -1));
+      };
+      const start = event => {
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        dragging = true;
+        startY = event.clientY;
+        document.body.classList.add("mobile-profile-sheet-resizing");
+        handle.setPointerCapture?.(event.pointerId);
+      };
+      const key = event => {
+        const current = mode.sheet.dataset.profileSheetSize || "normal";
+        let index = sizes.indexOf(current);
+        if (event.key === "ArrowUp" || event.key === "PageUp") index += 1;
+        else if (event.key === "ArrowDown" || event.key === "PageDown") index = Math.max(0, index - 1);
+        else if (event.key === "Home") index = 0;
+        else if (event.key === "End") index = 2;
+        else return;
+        event.preventDefault();
+        setSize(index);
+      };
+      handle.addEventListener("pointerdown", start);
+      handle.addEventListener("pointerup", finish);
+      handle.addEventListener("pointercancel", finish);
+      handle.addEventListener("keydown", key);
+      mode.sheetResizerCleanup = () => {
+        document.body.classList.remove("mobile-profile-sheet-resizing");
+        handle.remove();
+        delete mode.sheet.dataset.profileSheetSize;
+      };
+      setSize(1);
     }
 
     function settleMobileProfileProgressMap() {
@@ -17782,6 +17917,7 @@
       document.body.classList.add("mobile-profile-map-mode", "mobile-profile-map-pending");
       pauseMobileMovingFeatureAnimation("profile", performance.now());
       hostSheet?.classList.add("profile-progress-active");
+      installMobileProfileSheetResizer(mode);
       const profileSheetBody = hostSheet?.querySelector(".sheet-body");
       if (profileSheetBody) profileSheetBody.scrollTop = 0;
       hostSheet?.querySelector(".sheet-head h2")?.replaceChildren(document.createTextNode(hostSheet === loginSheetEl ? "Contributor Profile" : "Contributor Progress"));
@@ -17805,6 +17941,7 @@
       if (!mode) return;
       window.clearTimeout(mode.resizeTimer);
       window.clearTimeout(mode.renderRetryTimer);
+      mode.sheetResizerCleanup?.();
       if (mode.resizeHandler) window.removeEventListener("resize", mode.resizeHandler);
       if (state.map) {
         if (mode.styleLoadHandler) state.map.off("style.load", mode.styleLoadHandler);
@@ -17889,7 +18026,8 @@
         <section class="visit-preview profile-mini-feed">
           <strong>Recent Activity</strong>
           ${items.length ? items.map(item => `
-            <article class="profile-feed-row">
+            <article class="profile-feed-row${item.map_stop_number ? " is-map-linked" : ""}"${item.map_stop_number ? ` data-profile-map-stop="${Number(item.map_stop_number)}"` : ""}>
+              ${item.map_stop_number ? `<button class="profile-feed-map-stop" type="button" data-profile-map-stop-button="${Number(item.map_stop_number)}" aria-label="Show stop ${Number(item.map_stop_number)} on map">${Number(item.map_stop_number)}</button>` : ""}
               <div>
                 <span class="detail-meta">${escapeHtml(item.type)} - ${escapeHtml(activityDateLabel(item.date))}</span>
                 ${item.site_slug ? `<button class="profile-feed-title" type="button" data-profile-site="${escapeHtml(item.site_slug)}">${escapeHtml(item.title)}</button>` : item.wiki_slug ? `<button class="profile-feed-title" type="button" data-profile-wiki="${escapeHtml(item.wiki_slug)}">${escapeHtml(item.title)}</button>` : `<strong>${escapeHtml(item.title)}</strong>`}
@@ -20569,6 +20707,12 @@
       }
     });
     document.addEventListener("click", event => {
+      const stopRow = event.target.closest(".profile-feed-row[data-profile-map-stop]");
+      if (stopRow && !event.target.closest("[data-profile-site], [data-profile-wiki]")) {
+        event.preventDefault();
+        focusMobileProfileStop(stopRow.dataset.profileMapStop, { moveMap: true, openCard: true, revealActivity: false });
+        return;
+      }
       const target = event.target.closest("[data-profile-map-source][data-profile-map-slug]");
       if (!target) return;
       event.preventDefault();
@@ -20579,6 +20723,13 @@
       state.expandedMobileProfileKey = "";
       if (source === "wiki") openWikiArticle(slug);
       else openSite(slug);
+    });
+    document.addEventListener("keydown", event => {
+      if (!['Enter', ' '].includes(event.key)) return;
+      const stopRow = event.target.closest(".profile-feed-row[data-profile-map-stop]");
+      if (!stopRow || event.target.closest("[data-profile-site], [data-profile-wiki]")) return;
+      event.preventDefault();
+      focusMobileProfileStop(stopRow.dataset.profileMapStop, { moveMap: true, openCard: true, revealActivity: false });
     });
     profilesSortEl?.addEventListener("change", () => {
       exitMobileProfileMapMode();
