@@ -119,7 +119,8 @@ const result = await evaluate(`(async () => {
     targetStop,
     selectedStop: Number(document.querySelector(".profile-feed-row.is-map-selected")?.dataset.profileMapStop || 0),
     activeStop: Number(document.querySelector(".mobile-profile-progress-marker.is-active")?.dataset.profileMapStop || 0),
-    popupText: document.querySelector(".mobile-profile-progress-card")?.textContent || ""
+    popupText: document.querySelector(".mobile-profile-progress-card")?.textContent || "",
+    camera: window.NLI_APK_SITE_CAMERA_AUDIT.snapshot()
   };
   const resizer = document.querySelector(".mobile-profile-sheet-resizer");
   resizer?.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
@@ -135,18 +136,18 @@ const result = await evaluate(`(async () => {
   const after = snapshot("after");
   const sameNumber = (a, b, tolerance = 0.001) => Math.abs(Number(a) - Number(b)) <= tolerance;
   const sameRect = value => ["left", "top", "width", "height"].every(key => sameNumber(value.rect[key], before.rect[key]));
-  const sameCamera = value => (
+  const sameCamera = (value, expected = before.camera) => (
     value.camera.center?.length === 2
-    && before.camera.center?.length === 2
-    && sameNumber(value.camera.center[0], before.camera.center[0], 0.000001)
-    && sameNumber(value.camera.center[1], before.camera.center[1], 0.000001)
-    && sameNumber(value.camera.zoom, before.camera.zoom, 0.0001)
-    && sameNumber(value.camera.bearing, before.camera.bearing, 0.0001)
-    && sameNumber(value.camera.pitch, before.camera.pitch, 0.0001)
+    && expected.center?.length === 2
+    && sameNumber(value.camera.center[0], expected.center[0], 0.000001)
+    && sameNumber(value.camera.center[1], expected.center[1], 0.000001)
+    && sameNumber(value.camera.zoom, expected.zoom, 0.0001)
+    && sameNumber(value.camera.bearing, expected.bearing, 0.0001)
+    && sameNumber(value.camera.pitch, expected.pitch, 0.0001)
   );
   return {
     passed: sameRect(during) && sameRect(after)
-      && sameCamera(during) && sameCamera(after)
+      && sameCamera(during) && sameCamera(after, linkedTap.camera)
       && during.profileMode && during.sheetOpen && during.markers > 0
       && during.numberedActivity > 0
       && nativeTap.opened && nativeTap.card && nativeTap.selectedRows > 0 && nativeTap.activeMarkers === 1
