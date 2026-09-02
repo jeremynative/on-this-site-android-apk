@@ -706,7 +706,7 @@ const nativeInsetsValid = landscape
   : safeArea.app.top > 0 && safeArea.app.bottom > 0;
 const failures = [
   ...(!safeArea.propagated || !nativeInsetsValid ? [{ safeArea, landscape, nativeInsetsValid }] : []),
-  ...(startupPanel.native && (!startupPanel.timelineMode || !startupPanel.collapsed
+  ...(startupPanel.native && (startupPanel.timelineMode || !startupPanel.collapsed
     || startupPanel.timeline.height > 1 || startupPanel.nearby.height > 1)
     ? [{ startupPanel }]
     : []),

@@ -236,7 +236,9 @@ final class NativeMapController {
     private float viewportTop;
     private float viewportRight;
     private float viewportBottom;
+    private float viewportInteractiveRight;
     private float viewportInteractiveBottom;
+    private int viewportRightOcclusion;
     private int viewportBottomOcclusion;
     private boolean mapCreditExpanded;
     private float touchRootScreenLeft;
@@ -355,6 +357,7 @@ final class NativeMapController {
         FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) mapCreditView.getLayoutParams();
         params.gravity = Gravity.BOTTOM | Gravity.END;
         params.topMargin = 0;
+        params.rightMargin = viewportRightOcclusion + dp(6);
         params.bottomMargin = viewportBottomOcclusion + dp(expanded ? 92 : 4);
         mapCreditView.setLayoutParams(params);
     }
@@ -435,6 +438,7 @@ final class NativeMapController {
         float width,
         float height,
         float bottomOcclusion,
+        float rightOcclusion,
         boolean visible,
         float rootScreenLeft,
         float rootScreenTop
@@ -443,9 +447,11 @@ final class NativeMapController {
         int safeHeight = Math.max(1, Math.round(height));
         int safeLeft = Math.max(0, Math.round(left));
         int safeTop = Math.max(0, Math.round(top));
+        int safeRightOcclusion = Math.min(safeWidth - 1, Math.max(0, Math.round(rightOcclusion)));
         int safeBottomOcclusion = Math.min(safeHeight - 1, Math.max(0, Math.round(bottomOcclusion)));
         int nextVisibility = visible && safeWidth > 1 && safeHeight > 1 ? View.VISIBLE : View.GONE;
-        boolean occlusionChanged = viewportBottomOcclusion != safeBottomOcclusion;
+        boolean occlusionChanged = viewportBottomOcclusion != safeBottomOcclusion
+            || viewportRightOcclusion != safeRightOcclusion;
         boolean rootChanged = touchRootScreenLeft != rootScreenLeft || touchRootScreenTop != rootScreenTop;
         boolean visibilityChanged = container.getVisibility() != nextVisibility;
         // Capture the settled camera before changing MapLibre padding. Padding
@@ -460,10 +466,12 @@ final class NativeMapController {
         viewportTop = safeTop;
         viewportRight = safeLeft + safeWidth;
         viewportBottom = safeTop + safeHeight;
+        viewportRightOcclusion = safeRightOcclusion;
         viewportBottomOcclusion = safeBottomOcclusion;
+        viewportInteractiveRight = viewportRight - viewportRightOcclusion;
         viewportInteractiveBottom = viewportBottom - viewportBottomOcclusion;
         if (map != null && occlusionChanged) {
-            map.setPadding(0, 0, 0, viewportBottomOcclusion);
+            map.setPadding(0, 0, viewportRightOcclusion, viewportBottomOcclusion);
             if (cameraToPreserve != null && !sameCamera(map.getCameraPosition(), cameraToPreserve)) {
                 suppressNextCameraCallback = true;
                 map.moveCamera(CameraUpdateFactory.newCameraPosition(cameraToPreserve));
@@ -562,7 +570,7 @@ final class NativeMapController {
             }
             boolean blocked = pointInBlockedRegion(rootX, rootY);
             routingGesture = rootX >= viewportLeft
-                && rootX <= viewportRight
+                && rootX <= viewportInteractiveRight
                 && rootY >= viewportTop
                 && rootY <= viewportInteractiveBottom
                 && !blocked;
@@ -624,7 +632,7 @@ final class NativeMapController {
         if (!BuildConfig.DEBUG || map == null || container.getVisibility() != View.VISIBLE || !styleReady) return false;
         String gesture = String.valueOf(gestureName).toLowerCase(Locale.ROOT);
         if (!"tilt".equals(gesture) && !"rotate".equals(gesture)) return false;
-        float usableWidth = Math.max(dp(240), viewportRight - viewportLeft);
+        float usableWidth = Math.max(dp(240), viewportInteractiveRight - viewportLeft);
         float usableHeight = Math.max(dp(280), viewportInteractiveBottom - viewportTop);
         float centerX = viewportLeft + usableWidth * 0.5f;
         float centerY = viewportTop + usableHeight * 0.56f;
@@ -791,7 +799,7 @@ final class NativeMapController {
 
     private void prepareMap(MapLibreMap readyMap) {
         map = readyMap;
-        map.setPadding(0, 0, 0, viewportBottomOcclusion);
+        map.setPadding(0, 0, viewportRightOcclusion, viewportBottomOcclusion);
         map.getUiSettings().setLogoEnabled(false);
         map.getUiSettings().setAttributionEnabled(false);
         map.getUiSettings().setCompassEnabled(false);

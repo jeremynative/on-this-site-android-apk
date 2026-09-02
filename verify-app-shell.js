@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260902-detail-map-stability-r227";
+const expectedBuild = "20260902-side-panel-stability-r228";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -137,9 +137,13 @@ if (!bundledMobileJs.includes("function bindPlantCameraZoom(overlay, video, trac
   throw new Error("Android plant camera must support optical or centered digital zoom and group submitted photos by capture season.");
 }
 
-if (!source.includes("effectiveMapBottom=pr&&pr.top>r.bottom")
-    || !source.includes("effectiveMapHeight=Math.max(r.height,effectiveMapBottom-r.top)")) {
-  throw new Error("Native map viewport must extend to an open content panel instead of leaving a blank gap.");
+if (!source.includes("var bottomOcclusion=0,rightOcclusion=0;")
+    || !source.includes("rightDocked=tabletLandscape")
+    || !source.includes("panelWidth=Math.max(panel.offsetWidth||0,panel.clientWidth||0)")
+    || !source.includes("panelHeight=Math.max(panel.offsetHeight||0,panel.clientHeight||0)")
+    || source.includes("effectiveMapBottom=pr&&pr.top>r.bottom")
+    || source.includes("effectiveMapHeight=Math.max(r.height,effectiveMapBottom-r.top)")) {
+  throw new Error("Native map viewport must use settled panel dimensions instead of transient panel bounds.");
 }
 
 if (!bundledLiveApp.includes('id="maplibre-gl-script" src="assets/vendor/maplibre-gl/maplibre-gl.js')) {
@@ -295,7 +299,9 @@ if (!bundledMobileCss.includes("grid-template-columns: minmax(0, 1fr) 52px")
   throw new Error("Compact Nearby rows must reserve a consistent thumbnail column and align category with distance.");
 }
 if (!source.includes("document.querySelector('.sheet.open')")
-    || !source.includes("bottomOcclusion,window.innerWidth")
+    || !source.includes("var bottomOcclusion=0,rightOcclusion=0;")
+    || !source.includes("rightDocked=tabletLandscape")
+    || !source.includes("syncNativeMapViewport(token,r.left,r.top,r.width,r.height,bottomOcclusion,rightOcclusion,window.innerWidth,window.innerHeight,visible);")
     || !source.includes("private void settleNativeMapViewport()")
     || !source.includes("settleNativeMapViewport();\n                    hideLoadingCover();")
     || !source.includes("requestNativeMapViewportSync(900L)")
@@ -303,9 +309,10 @@ if (!source.includes("document.querySelector('.sheet.open')")
     || !source.includes("startupSyncCount>=8")
     || !source.includes("requestAnimationFrame(function(){if(window.__nliSyncNativeMapViewport)")
     || !appBridge.includes("double bottomOcclusion")
+    || !appBridge.includes("double rightOcclusion")
     || !appBridge.includes("syncNativeMapMovingFeatures")
     || source.includes(":not(.mobile-moving-biography-mapbox-icon)")) {
-  throw new Error("Native MapLibre must measure opaque mobile-panel overlap so credits and map gestures remain in the visible map area.");
+  throw new Error("Native MapLibre must use settled bottom and right panel occlusion so credits and map gestures remain in the visible map area.");
 }
 if (!bundledMobileJs.includes("function nativeUserLocationFeatures()")
     || !bundledMobileJs.includes("function nativeCommunityContributionFeatures()")
@@ -326,7 +333,7 @@ if (!bundledMobileJs.includes("function nativeUserLocationFeatures()")
   throw new Error("The WebView/native bridge must preserve user location and unread-content state in the visible native map.");
 }
 if (!nativeMapController.includes("CameraPosition cameraToPreserve = nativeGestureInProgress()")
-    || !/CameraPosition cameraToPreserve[\s\S]*?map\.setPadding\(0, 0, 0, viewportBottomOcclusion\)[\s\S]*?map\.moveCamera\(CameraUpdateFactory\.newCameraPosition\(cameraToPreserve\)\)/.test(nativeMapController)
+    || !/CameraPosition cameraToPreserve[\s\S]*?map\.setPadding\(0, 0, viewportRightOcclusion, viewportBottomOcclusion\)[\s\S]*?map\.moveCamera\(CameraUpdateFactory\.newCameraPosition\(cameraToPreserve\)\)/.test(nativeMapController)
     || !nativeMapController.includes("if (camera == null || map == null || nativeGestureInProgress()) return;")
     || !nativeMapController.includes("movingFeaturesJson = featuresJson;")
     || !nativeMapController.includes("if (nativeGestureInProgress()) return;")
@@ -393,7 +400,7 @@ if (!nativeMapController.includes("MAP_TAP_DISPATCH_DELAY_MS")
     || !nativeMapController.includes("float hitRadius = mapTapHitRadiusPx()")
     || !nativeMapController.includes("A nearby moving biography")
     || !nativeMapController.includes("listener.onFeatureSelected(featureKind, featureKey, featureLongitude, featureLatitude)")
-    || !nativeMapController.includes("map.setPadding(0, 0, 0, viewportBottomOcclusion)")
+    || !nativeMapController.includes("map.setPadding(0, 0, viewportRightOcclusion, viewportBottomOcclusion)")
     || !source.includes("mtSettled=setTimeout(sync,420)")
     || !nativeMapController.includes("suppressNextMapTap")
     || !nativeMapController.includes("Query the frame the user actually pressed")) {
@@ -2611,8 +2618,14 @@ requireBundledText('if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) {\n          idleT
 requireBundledText('function stabilizeAndroidMapPaint()', "Bundled Android app must include the Android map paint stabilizer.");
 requireBundledText('state.map.resize();', "Bundled Android app must resize the map after Android WebView startup.");
 const bundledDrawerState = bundledMobileJs.match(/function setDetailDrawerState\([\s\S]*?\n    \}/)?.[0] || "";
-if (!bundledDrawerState || /\.resize\s*\?*\.\s*\(/.test(bundledDrawerState) || /requestAnimationFrame/.test(bundledDrawerState)) {
-  throw new Error("Bundled Android site and biography drawers must not resize the unchanged map canvas during opening.");
+if (!bundledDrawerState
+    || !bundledMobileJs.includes('let mobileMapLayoutSizeKey = "";')
+    || !bundledMobileJs.includes("function resizeMobileMapForLayout(options = {})")
+    || !bundledMobileJs.includes("if (!mobileMapLayoutSizeKey && options.force !== true)")
+    || !bundledMobileJs.includes("if (options.force !== true && nextKey === mobileMapLayoutSizeKey) return false;")
+    || bundledDrawerState.includes("resizeMobileMapForLayout()")
+    || /state\.map\s*\.\s*resize\s*\(/.test(bundledDrawerState)) {
+  throw new Error("Bundled Android site and biography drawers must not resize their unchanged map container, and other layout resizes must be deduplicated.");
 }
 requireBundledText('refreshMobileMapSources();', "Bundled Android app must refresh map sources after Android WebView startup.");
 requireBundledText('function bindAndroidMapGestureGuards()', "Bundled Android app must pause expensive map refreshes while the user is dragging or pinching.");

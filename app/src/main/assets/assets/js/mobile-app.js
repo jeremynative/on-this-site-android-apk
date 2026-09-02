@@ -56,6 +56,7 @@
     const MAP_UTILS = window.NLI_SHARED_MAP_UTILS || {};
     const normalizeComparisonText = SHARED_UTILS.normalizeText || (value => String(value || "").toLowerCase().trim());
     const DIRECTUS = SHARED_CONFIG.directusUrl || "https://directus.nativelongisland.com";
+    const ENGAGEMENT_ACTION_ENDPOINT = SHARED_CONFIG.engagementActionEndpoint || "https://on-this-site-support.onthissiteny.workers.dev/engagement-action";
     const ADMIN_NOTIFICATION_FLOW_IDS = {
       approveSuggestion: "6f80f94d-c0d9-4266-9291-2a455e7a7f8d",
       declineSuggestion: "dd749434-2093-4d04-8ec4-5084400ce14c"
@@ -3451,7 +3452,7 @@
     }
 
     async function commitEngagementAction(eventType, activity = {}, sourceId = "") {
-      const response = await directusClient.fetchAuthenticated("https://nativelongisland.com/engagement-action.php", {
+      const response = await directusClient.fetchAuthenticated(ENGAGEMENT_ACTION_ENDPOINT, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ event_type: eventType, source_id: sourceId || undefined, activity })
@@ -5319,12 +5320,25 @@
       const response = await fetch(url);
       if (!response.ok) return null;
       const data = await response.json();
-      const feature = (data.features || []).find(item => {
+      const candidates = (data.features || []).filter(item => {
         if (!pointWithinBounds(item.center, LONG_ISLAND_BOUNDS)) return false;
         const resultName = normalizeText(item.text || item.place_name);
-        if (resultName === "long island" && normalizeText(query).split(" ").length > 1) return false;
-        return true;
+        return resultName !== "long island" || normalizeText(query).split(" ").length <= 1;
       });
+      const feature = candidates
+        .map(item => ({
+          item,
+          suggestion: {
+            feature_type: item.place_type?.[0] || "",
+            name: item.text || "",
+            full_address: item.place_name || "",
+            place_formatted: item.place_name || ""
+          }
+        }))
+        .sort((a, b) => {
+          const score = suggestion => MAP_UTILS.scorePlaceSuggestion(suggestion, query, { normalizeText });
+          return score(b.suggestion) - score(a.suggestion);
+        })[0]?.item;
       if (!feature?.center) return null;
       return {
         center: feature.center,
@@ -6882,8 +6896,25 @@
         landscapePanelLayoutFrame = 0;
         syncLandscapeHeaderControls();
         positionMobileMapActionButtons();
-        state.map?.resize?.();
+        resizeMobileMapForLayout();
       });
+    }
+
+    let mobileMapLayoutSizeKey = "";
+
+    function resizeMobileMapForLayout(options = {}) {
+      const mapElement = document.getElementById("map");
+      const rect = mapElement?.getBoundingClientRect?.();
+      if (!state.map || !rect?.width || !rect?.height) return false;
+      const nextKey = `${Math.round(rect.width)}x${Math.round(rect.height)}`;
+      if (!mobileMapLayoutSizeKey && options.force !== true) {
+        mobileMapLayoutSizeKey = nextKey;
+        return false;
+      }
+      if (options.force !== true && nextKey === mobileMapLayoutSizeKey) return false;
+      mobileMapLayoutSizeKey = nextKey;
+      state.map.resize?.();
+      return true;
     }
 
     function collapseMobileMapAttribution() {
@@ -9552,15 +9583,16 @@
       const openPanel = detailEl?.classList.contains("open")
         ? detailEl
         : document.querySelector(".sheet.open");
-      const panelRect = openPanel?.getBoundingClientRect?.();
-      const overlap = panelRect
-        ? Math.max(0, Math.min(mapRect.bottom, panelRect.bottom) - Math.max(mapRect.top, panelRect.top))
-        : 0;
+      const sidePanel = openPanel === detailEl && document.body.classList.contains("tablet-landscape");
+      const settledPanelSize = sidePanel
+        ? Math.max(0, Number(openPanel?.offsetWidth) || 0)
+        : Math.max(0, Number(openPanel?.offsetHeight) || 0);
       const maxBottom = Math.max(12, mapRect.height - 72);
+      const maxRight = Math.max(12, mapRect.width - 72);
       return {
         top: 12,
-        right: 12,
-        bottom: Math.min(maxBottom, Math.round(overlap + 14)),
+        right: sidePanel ? Math.min(maxRight, Math.round(settledPanelSize + 14)) : 12,
+        bottom: sidePanel ? 12 : Math.min(maxBottom, Math.round(settledPanelSize + 14)),
         left: 12
       };
     }
@@ -11707,7 +11739,9 @@
             comment_image: null,
             moderator_note: "Removed from the public app by an administrator."
           } : { status: "deleted" };
-          const updated = await patchDirectusItem("mobile_comments", id, payload, { requireAuth: true });
+          const updated = adminDeletion
+            ? await patchDirectusItem("mobile_comments", id, payload, { requireAuth: true })
+            : await commitEngagementAction("delete_comment", {}, id);
           if (adminDeletion) Object.assign(comment, payload, updated?.data || {});
         } catch (error) {
           showBanner("Could not delete the comment yet. Please try again.");
@@ -12003,10 +12037,8 @@
       let created = null;
       let commentEmailError = "";
       try {
-        created = await postDirectusItem("mobile_comments", payload, {
-          requireAuth: true,
-          authExpiredMessage: "Login expired. Please log in again, then post your comment."
-        });
+        const result = await commitEngagementAction("create_comment", payload);
+        created = { data: result?.data || result?.source || null };
         const visibleComment = {
           id: created?.data?.id || `pending-${Date.now()}`,
           ...payload,
@@ -15133,7 +15165,25 @@
         cleanText: publicCleanText,
         summary: site.summary
       });
+      let renderedSiteTimelineSlot = false;
+      const historyEntry = sectionEntries.find(([, , field]) => field?.content === "history_content") || null;
       const sections = sectionEntries.map(([title, content, field]) => {
+        if (field?.content === "history_content") {
+          renderedSiteTimelineSlot = true;
+          return `<div data-mobile-site-timeline-slot>${moments.length
+            ? historicMomentsHtml(moments, {
+              showLocations: false,
+              linked,
+              excludeHref,
+              overviewContent: content,
+              overviewField: field?.content
+            })
+            : sourceAwareSectionHtml(title, content, {
+              linked,
+              excludeHref,
+              field: field?.content
+            })}</div>`;
+        }
         return sourceAwareSectionHtml(title, content, {
           linked,
           excludeHref,
@@ -15153,7 +15203,7 @@
         ${introductionPresentation.leadSummary ? `<p class="summary" data-site-introduction="summary">${autoLinkHtml(escapeHtml(introductionPresentation.leadSummary), { used: linked, excludeHref })}</p>` : ""}
         ${siteTagsHtml(site)}
         ${sections}
-        <div data-mobile-site-timeline-slot>${historyHtml}</div>
+        ${renderedSiteTimelineSlot ? "" : `<div data-mobile-site-timeline-slot>${historyHtml}</div>`}
         ${whyThisMattersHtml(site, { used: linked, excludeHref })}
         ${relatedSitesSection(site)}
         <div data-mobile-site-sources-slot>${sourcesEvidenceSection(site)}</div>
@@ -15197,11 +15247,19 @@
         if (state.selectedSlug !== slug || !detailEl?.classList.contains("open")) return;
         const updatedMoments = timelineEventsForSource("site", site.id, site.slug);
         const timelineSlot = detailBodyEl.querySelector("[data-mobile-site-timeline-slot]");
-        if (timelineSlot) timelineSlot.innerHTML = historicMomentsHtml(updatedMoments, {
-          showLocations: false,
-          linked: new Set(),
-          excludeHref
-        });
+        if (timelineSlot) timelineSlot.innerHTML = updatedMoments.length
+          ? historicMomentsHtml(updatedMoments, {
+            showLocations: false,
+            linked: new Set(),
+            excludeHref,
+            overviewContent: historyEntry?.[1] || "",
+            overviewField: historyEntry?.[2]?.content || ""
+          })
+          : (historyEntry ? sourceAwareSectionHtml(historyEntry[0], historyEntry[1], {
+            linked: new Set(),
+            excludeHref,
+            field: historyEntry?.[2]?.content
+          }) : "");
       }).catch(() => {});
       void sourceListPromise.then(sourceList => {
         if (!Array.isArray(sourceList) || !sourceList.length || state.selectedSlug !== slug || !detailEl?.classList.contains("open")) return;
@@ -19690,7 +19748,7 @@
       document.body.classList.toggle("mobile-contributor-sheet-open", contributorSheetOpen);
       window.requestAnimationFrame(() => {
         positionMobileMapActionButtons();
-        state.map?.resize?.();
+        resizeMobileMapForLayout();
         scheduleNativeMapStateSync("panel-layout", 0);
       });
     }
