@@ -12307,7 +12307,7 @@
           ${externalUrl ? `<a class="action secondary" href="${escapeHtml(externalUrl)}" target="_blank" rel="noopener noreferrer">Event link</a>` : ""}
           ${isAdminContributor() ? `<a class="action secondary" href="${DIRECTUS}/admin/content/calendar_events/${escapeHtml(exhibit.id)}" target="_blank" rel="noreferrer">Edit event</a>` : ""}
           <button class="action secondary" type="button" id="mark-visited">Mark visited</button>
-          <button class="action secondary" type="button" id="check-in-site">Check in nearby</button>
+          <button class="action secondary" type="button" id="check-in-site">Check in</button>
         </div>
       `;
       state.selectedSite = exhibit;
@@ -13828,7 +13828,7 @@
       detailBodyEl.innerHTML = `
         ${image ? `<img class="hero article-sticky-hero${sourceMediaHero ? " source-media-hero" : ""}" src="${escapeHtml(image)}" alt="${escapeHtml(article.title)}" loading="lazy" decoding="async" onerror="${imageErrorAction("")}">` : ""}
         ${showArticleSummary ? `<p class="summary">${autoLinkHtml(escapeHtml(publicCleanText(article.summary)), { used: linked, excludeHref })}</p>` : ""}
-        ${articleContentHtml ? `<section class="section"><h3>Sections</h3><div class="section-content">${articleContentHtml}</div></section>` : ""}
+        ${articleContentHtml ? `<section class="section"><div class="section-content">${articleContentHtml}</div></section>` : ""}
         ${whyThisMattersHtml(article, { used: linked, excludeHref })}
         <div data-mobile-wiki-biography-path>${mobileBiographyPathHtml(article, wikiMoments)}</div>
         ${sourcesEvidenceSection(article)}
@@ -16108,12 +16108,12 @@
     function mobileVisitActionsHtml(site) {
       const profile = currentContributorProfile();
       if (profile && siteHasRecordedCheckin(profile, site)) {
-        return `<button class="action secondary checkin-complete" type="button" disabled aria-disabled="true">Checked In!</button>`;
+        return `<button class="action secondary checkin-complete" type="button" disabled aria-disabled="true">Checked in</button>`;
       }
       if (PROFILE_UTILS.isEligiblePublicVisitSite(site)) {
         return `
           <button class="action secondary" type="button" id="mark-visited">Mark visited</button>
-          <button class="action secondary" type="button" id="check-in-site">Check in nearby</button>
+          <button class="action secondary" type="button" id="check-in-site">Check in</button>
         `;
       }
       return `<p class="detail-meta">Learn from this map entry; public visits or check-ins are not encouraged here.</p>`;
@@ -19739,6 +19739,8 @@
         sheet.setAttribute("aria-hidden", open ? "false" : "true");
       });
       const detailOpen = detailEl?.classList.contains("open");
+      const contentEntryOpen = Boolean(detailOpen && (state.selectedSlug || state.selectedWikiSlug));
+      detailBodyEl?.classList.toggle("content-entry-body", contentEntryOpen);
       detailEl?.toggleAttribute("inert", !detailOpen);
       detailEl?.setAttribute("aria-hidden", detailOpen ? "false" : "true");
       const contributorSheetOpen = Boolean(loginSheetEl?.classList.contains("open") || profilesSheetEl?.classList.contains("open"));

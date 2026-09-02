@@ -6496,6 +6496,12 @@
       line-height: 1.48;
     }
 
+    .content-entry-body > .summary {
+      margin: 14px 0 0;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
     .public-faq-section {
       display: grid;
       gap: 9px;
@@ -7433,9 +7439,59 @@
       padding-bottom: 28px;
     }
 
-    .section h3 {
+    .section > h3 {
       margin: 0 0 8px;
       font-size: 15px;
+      line-height: 1.3;
+    }
+
+  .content-entry-body .section-content {
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+  .content-entry-body .section-content :is(p, ul, ol, blockquote, figure) {
+      margin: 0 0 12px;
+    }
+
+  .content-entry-body .section-content :is(ul, ol) {
+      padding-left: 22px;
+    }
+
+  .content-entry-body .section-content li + li {
+      margin-top: 6px;
+    }
+
+  .content-entry-body .section-content :is(h1, h2) {
+      margin: 20px 0 8px;
+      padding: 0;
+      font-size: 18px;
+      font-weight: 850;
+      line-height: 1.28;
+    }
+
+  .content-entry-body .section-content h3 {
+      margin: 18px 0 7px;
+      padding: 0;
+      font-size: 16px;
+      font-weight: 820;
+      line-height: 1.3;
+    }
+
+  .content-entry-body .section-content h4 {
+      margin: 16px 0 6px;
+      padding: 0;
+      font-size: 15px;
+      font-weight: 820;
+      line-height: 1.3;
+    }
+
+  .content-entry-body .section-content > :first-child {
+      margin-top: 0;
+    }
+
+  .content-entry-body .section-content > :last-child {
+      margin-bottom: 0;
     }
 
     .form-status {
@@ -7970,11 +8026,16 @@
       align-items: center;
       justify-content: center;
       min-height: 44px;
+      padding: 8px 12px;
       border: 1px solid var(--accent);
       border-radius: 8px;
       background: var(--accent);
       color: white;
+      font: inherit;
+      font-size: 13px;
       font-weight: 800;
+      line-height: 1.2;
+      text-align: center;
       text-decoration: none;
     }
 
@@ -33385,7 +33446,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
           ${externalUrl ? `<a class="action secondary" href="${escapeHtml(externalUrl)}" target="_blank" rel="noopener noreferrer">Event link</a>` : ""}
           ${isAdminContributor() ? `<a class="action secondary" href="${DIRECTUS}/admin/content/calendar_events/${escapeHtml(exhibit.id)}" target="_blank" rel="noreferrer">Edit event</a>` : ""}
           <button class="action secondary" type="button" id="mark-visited">Mark visited</button>
-          <button class="action secondary" type="button" id="check-in-site">Check in nearby</button>
+          <button class="action secondary" type="button" id="check-in-site">Check in</button>
         </div>
       `;
       state.selectedSite = exhibit;
@@ -34906,7 +34967,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       detailBodyEl.innerHTML = `
         ${image ? `<img class="hero article-sticky-hero${sourceMediaHero ? " source-media-hero" : ""}" src="${escapeHtml(image)}" alt="${escapeHtml(article.title)}" loading="lazy" decoding="async" onerror="${imageErrorAction("")}">` : ""}
         ${showArticleSummary ? `<p class="summary">${autoLinkHtml(escapeHtml(publicCleanText(article.summary)), { used: linked, excludeHref })}</p>` : ""}
-        ${articleContentHtml ? `<section class="section"><h3>Sections</h3><div class="section-content">${articleContentHtml}</div></section>` : ""}
+        ${articleContentHtml ? `<section class="section"><div class="section-content">${articleContentHtml}</div></section>` : ""}
         ${whyThisMattersHtml(article, { used: linked, excludeHref })}
         <div data-mobile-wiki-biography-path>${mobileBiographyPathHtml(article, wikiMoments)}</div>
         ${sourcesEvidenceSection(article)}
@@ -37186,12 +37247,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     function mobileVisitActionsHtml(site) {
       const profile = currentContributorProfile();
       if (profile && siteHasRecordedCheckin(profile, site)) {
-        return `<button class="action secondary checkin-complete" type="button" disabled aria-disabled="true">Checked In!</button>`;
+        return `<button class="action secondary checkin-complete" type="button" disabled aria-disabled="true">Checked in</button>`;
       }
       if (PROFILE_UTILS.isEligiblePublicVisitSite(site)) {
         return `
           <button class="action secondary" type="button" id="mark-visited">Mark visited</button>
-          <button class="action secondary" type="button" id="check-in-site">Check in nearby</button>
+          <button class="action secondary" type="button" id="check-in-site">Check in</button>
         `;
       }
       return `<p class="detail-meta">Learn from this map entry; public visits or check-ins are not encouraged here.</p>`;
@@ -40817,6 +40878,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         sheet.setAttribute("aria-hidden", open ? "false" : "true");
       });
       const detailOpen = detailEl?.classList.contains("open");
+      const contentEntryOpen = Boolean(detailOpen && (state.selectedSlug || state.selectedWikiSlug));
+      detailBodyEl?.classList.toggle("content-entry-body", contentEntryOpen);
       detailEl?.toggleAttribute("inert", !detailOpen);
       detailEl?.setAttribute("aria-hidden", detailOpen ? "false" : "true");
       const contributorSheetOpen = Boolean(loginSheetEl?.classList.contains("open") || profilesSheetEl?.classList.contains("open"));
