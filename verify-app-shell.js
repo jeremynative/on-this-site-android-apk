@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260902-side-panel-stability-r228";
+const expectedBuild = "20260902-content-panel-consistency-r229";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -917,6 +917,27 @@ function requireBundledPattern(pattern, message) {
 }
 
 requireText(`APP_VERSION = "${expectedBuild}"`, `Android shell build id must be ${expectedBuild}.`);
+if (!bundledLiveApp.includes('src="assets/js/mobile-app.js?v=') || /mobile-app\.min\.[a-f0-9]+\.js/.test(bundledLiveApp)) {
+  throw new Error("Android's modular offline shell must load the packaged mobile-app.js runtime, not an absent website-only minified asset.");
+}
+for (const [needle, message] of [
+  ['detailBodyEl?.classList.toggle("content-entry-body", contentEntryOpen)', "Android site/wiki panels must opt into the shared article formatting layer."],
+  ['>Check in</button>', "Android visit actions must use the concise Check in label."],
+  ['>Checked in</button>', "Android completed visit actions must use consistent sentence case."]
+]) {
+  if (!bundledMobileJs.includes(needle)) throw new Error(message);
+}
+for (const [needle, message] of [
+  [".content-entry-body .section-content :is(h1, h2)", "Android content panels must normalize imported h1/h2 headings."],
+  [".content-entry-body .section-content h3", "Android content panels must normalize imported h3 headings."],
+  [".content-entry-body .section-content h4", "Android content panels must normalize imported h4 headings."],
+  ["font: inherit;", "Android panel actions must inherit the app typeface."]
+]) {
+  if (!bundledMobileCss.includes(needle)) throw new Error(message);
+}
+for (const staleCopy of ["Check in nearby", "Checked In!", "<h3>Sections</h3>"]) {
+  if (bundledMobileJs.includes(staleCopy)) throw new Error(`Android content panels still contain stale copy: ${staleCopy}`);
+}
 for (const [needle, message] of [
   ["group.stop_number = index + 1", "Android contributor-map groups must use stable chronological stop numbers."],
   ["map_stop_number: mapped.stop_number", "Android recent activity must retain its matching map stop number."],
