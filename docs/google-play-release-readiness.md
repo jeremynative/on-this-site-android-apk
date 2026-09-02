@@ -8,6 +8,7 @@ Updated: August 10, 2026
 - Minimum Android: API 23
 - Compile and target Android: API 36
 - CI outputs the existing signed universal APK for Obtainium and a separately retained signed Android App Bundle for Google Play.
+- When the repository secret `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` is present, each successful main-branch Obtainium release also publishes the matching bundle to the Google Play closed-testing `alpha` track. Documentation-only and workflow-only commits do not create app releases, and tagged `v*` releases are deliberately excluded from this beta automation.
 - Release builds require the existing keystore environment variables; unsigned release APKs and bundles fail closed.
 - Android backup and cleartext traffic are disabled.
 - The camera is optional; no background-location, broad-storage, or all-packages permission is declared.
@@ -43,5 +44,7 @@ All first-party traffic is HTTPS. Mapbox is a third-party mapping service and mu
 5. Supply store listing copy, contact details, app category, content rating, target-audience declaration, screenshots, feature graphic, and a reviewer login/instructions for gated contributor features.
 6. Upload the CI-produced `.aab` to an internal testing track first. Review the pre-launch report and generated device catalog before closed or production release.
 7. On one physical Samsung device, verify: clean install with no startup permission dialog; Near me contextual location request; denial fallback; check-in distance; camera and library comment photos; notification opt-in; login/registration; offline recovery; search and keyboard submit; account deletion entry point.
+
+For automated closed-testing uploads, grant the service account access only to this app and only the permissions needed to manage testing-track releases. If the repository secret is absent, the Play step is skipped and the Obtainium release still completes normally.
 
 Do not describe the app as production-ready until the Play Console declarations are accepted and the internal-track review has passed.
