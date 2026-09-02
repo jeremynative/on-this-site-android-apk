@@ -1,5 +1,15 @@
 # Android APK — Codex Handoff
 
+## September 2 native default-basemap water labels
+
+- Android PR #86 merged as `53bd3d8a1c5bc4229338ea1bcb550283b182b1c1`. The native MapLibre road/default basemap now reads the already packaged official GNIS water-name catalog and renders collision-aware major-water, bay, inland-water, canal, stream, and spring labels at the same close-zoom thresholds used by the mobile website. The labels remain hidden on satellite imagery.
+- The shell marker is `20260902-native-water-labels-r230`. The release verifier requires the five native symbol layers, catalog parsing, zoom thresholds, Spring coverage, basemap visibility rules, at least 700 packaged labels, and `Georgica Pond` classified as a lake.
+- `verify-app-shell.js`, Google Play readiness, whitespace, debug APK, `lintDebug`, and the release-equivalent `assembleOptimizedQa` build pass. Physical iPlay 50 mini Pro QA visibly showed `Georgica Pond` and `Georgica Cove` on the default road map with no native-map warning, fatal exception, or ANR. The temporary QA app was removed.
+- Signed workflow `33665726266` passed and published Obtainium/GitHub release `0.1.643` / `apk-643`. The APK is 54,949,097 bytes with SHA-256 `3E850F08618D69B571E72AEC076D00D89E849EF1568D398EF92F283919748C24`; the production signing-certificate SHA-256 remains `B17B4D4505513C52ADFAA215CAC95EE062431D22410938FA5C13D34A70025787`. The exact published APK was installed over production without clearing data, launched successfully, and reports version code 643/name 0.1.643. Google Play submission was skipped under the milestone cadence.
+- No Directus record, website runtime, archive-test surface, iOS app, or Google Play release was changed. The screenshot's `Labels 23/24` state is the separate biography-path control and was not the cause of missing basemap water names.
+
+Safest next action: let Android devices update through Obtainium and confirm local water names at close zoom. Use the same packaged GNIS catalog if future native basemap styles are added, and keep these symbol layers out of satellite mode.
+
 ## September 2 consistent content-panel release
 
 - Android PR #84 merged as `1b133dde7e9f5653337ebdd78e39bf569a46b731`; shell marker is `20260902-content-panel-consistency-r229`. The APK now carries the shared site/knowledge article type scale, paragraph/list rhythm, compact 13 px actions, `Check in` copy, and no redundant mobile `Sections` heading.
