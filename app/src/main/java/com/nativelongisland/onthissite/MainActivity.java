@@ -90,7 +90,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260902-detail-map-stability-r227";
+    static final String APP_VERSION = "20260902-side-panel-stability-r228";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -1189,9 +1189,13 @@ public class MainActivity extends Activity {
                 + "var sync=function(){var map=document.getElementById('map');if(!map)return false;"
                     + "var r=map.getBoundingClientRect();var visible=r.width>2&&r.height>2&&r.bottom>0&&r.right>0;"
                     + "var panel=document.getElementById('detail');if(!panel||!panel.classList.contains('open'))panel=document.querySelector('.sheet.open');"
-                    + "var pr=panel&&panel.getBoundingClientRect();var effectiveMapBottom=pr&&pr.top>r.bottom?Math.min(window.innerHeight,pr.top):r.bottom;var effectiveMapHeight=Math.max(r.height,effectiveMapBottom-r.top);"
-                    + "var bottomOcclusion=pr?Math.max(0,Math.min(r.top+effectiveMapHeight,pr.bottom)-Math.max(r.top,pr.top)):0;"
-                    + "window.AndroidApp.syncNativeMapViewport(token,r.left,r.top,r.width,effectiveMapHeight,bottomOcclusion,window.innerWidth,window.innerHeight,visible);"
+                    + "var bottomOcclusion=0,rightOcclusion=0;"
+                    + "if(panel){var panelStyle=getComputedStyle(panel);var panelWidth=Math.max(panel.offsetWidth||0,panel.clientWidth||0);var panelHeight=Math.max(panel.offsetHeight||0,panel.clientHeight||0);"
+                        + "var tabletLandscape=document.documentElement.dataset.nativeTabletLandscape==='true'||document.body&&document.body.dataset.nativeTabletLandscape==='true';"
+                        + "var rightDocked=tabletLandscape&&panelWidth>2&&panelHeight>Math.min(window.innerHeight*0.5,r.height*0.66);"
+                        + "if(rightDocked){rightOcclusion=Math.max(0,Math.min(r.width,panelWidth));}"
+                        + "else if(panelStyle.display!=='none'&&panelStyle.visibility!=='hidden'&&panelHeight>2){bottomOcclusion=Math.max(0,Math.min(r.height,panelHeight));}}"
+                    + "window.AndroidApp.syncNativeMapViewport(token,r.left,r.top,r.width,r.height,bottomOcclusion,rightOcclusion,window.innerWidth,window.innerHeight,visible);"
                     + "var blocked=[];document.querySelectorAll('button,a,input,select,textarea,[role=button]').forEach(function(el){"
                         + "var marker=el.closest('.mapboxgl-marker,.maplibregl-marker');"
                         + "if(el.disabled||el.hidden||el.closest('.mapboxgl-control-container,.maplibregl-control-container')||marker)return;"
@@ -1235,6 +1239,7 @@ public class MainActivity extends Activity {
         double cssWidth,
         double cssHeight,
         double cssBottomOcclusion,
+        double cssRightOcclusion,
         double cssViewportWidth,
         double cssViewportHeight,
         boolean visible
@@ -1252,6 +1257,7 @@ public class MainActivity extends Activity {
             (float) cssWidth * scaleX,
             (float) cssHeight * scaleY,
             (float) Math.max(0.0, cssBottomOcclusion) * scaleY,
+            (float) Math.max(0.0, cssRightOcclusion) * scaleX,
             visible,
             webViewLocation[0],
             webViewLocation[1]

@@ -47,6 +47,7 @@ class AppBridge {
         double width,
         double height,
         double bottomOcclusion,
+        double rightOcclusion,
         double viewportWidth,
         double viewportHeight,
         boolean visible
@@ -58,6 +59,7 @@ class AppBridge {
             width,
             height,
             bottomOcclusion,
+            rightOcclusion,
             viewportWidth,
             viewportHeight,
             visible
