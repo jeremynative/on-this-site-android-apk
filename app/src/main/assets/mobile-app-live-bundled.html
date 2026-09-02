@@ -28153,7 +28153,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!options.keepInlineHeight) detailEl.style.removeProperty("--detail-drawer-height");
       detailDrawerHandleEl?.setAttribute("aria-expanded", cleanState === "expanded" ? "true" : "false");
       detailDrawerHandleEl?.setAttribute("aria-label", cleanState === "expanded" ? "Reduce listing drawer height" : "Adjust listing drawer height");
-      window.requestAnimationFrame(() => state.map?.resize?.());
+      // The fixed drawer overlays the map; resizing its unchanged canvas here
+      // briefly distorts it while site and biography details are opening.
     }
 
     function nearestDetailDrawerState(height) {
