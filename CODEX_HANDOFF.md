@@ -1,5 +1,14 @@
 # Android APK — Codex Handoff
 
+## September 2 consistent content-panel release
+
+- Android PR #84 merged as `1b133dde7e9f5653337ebdd78e39bf569a46b731`; shell marker is `20260902-content-panel-consistency-r229`. The APK now carries the shared site/knowledge article type scale, paragraph/list rhythm, compact 13 px actions, `Check in` copy, and no redundant mobile `Sections` heading.
+- Offline physical QA on iPlay `T811MA256GB23516041180` measured William Floyd Estate and Sunksqua Weany in the packaged WebView at 15 px / 23.25 px body type, 18/16/15 px article headings, and 13 px / 8 x 12 px ordinary actions. The audit found and fixed a pre-existing fallback reference to an absent website-only minified runtime; `mobile-app-live.html` now loads the packaged `mobile-app.js`, with a release guard preventing recurrence. No fatal exception or ANR occurred; Wi-Fi/mobile-data state was restored and the QA package was removed.
+- `verify-app-shell.js`, Google Play readiness, JavaScript syntax, whitespace, debug build, `lintDebug`, and `assembleOptimizedQa` pass. Signed workflow `33662320393` passed and published Obtainium `0.1.642` / `apk-642`; APK SHA-256 is `8AD5E5D56C0F91FAF25BD7E9035BC1680CE8450E37E2A6FD5028BD0C095E27FA`, certificate SHA-256 is `B17B4D4505513C52ADFAA215CAC95EE062431D22410938FA5C13D34A70025787`, and Google Play submission was skipped.
+- The exact signed 0.1.642 APK was installed over production 0.1.641 on the iPlay without clearing data and launched successfully. Matching web PR #189 merged as `678973417981b417cedaa2034057d901026f99fc`; deployment `33662015198` passed and production serves `mobile-app.min.a4dfd04cdbac.js`.
+
+Safest next action: allow other Android devices to update through Obtainium; do not submit this micro-release to Google Play separately. Preserve the new packaged-runtime guard whenever refreshing the modular offline shell.
+
 ## September 2 contributor-map release and Play closed-testing submission
 
 - Web PRs #183–#186 are merged; final web `main` is `142f17de6cc0e91a707ba5d74d1cf725cb23f9bc`, deployment `33586780076` passed, and production serves `mobile-app.min.8f0226884c16.js`. Contributor profiles now have numbered map stops, temporary place/action/date cards, map/activity bidirectional focus, and an adjustable mobile sheet.
