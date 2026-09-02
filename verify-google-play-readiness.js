@@ -58,8 +58,9 @@ forbid(appGradle, "org.maplibre.gl:android-sdk-vulkan",
   "The Vulkan-only MapLibre artifact cannot be used for the production Play build.");
 requireMatch(manifest, /android:name="\.CaptureFileProvider"[\s\S]*?android:exported="false"/,
   "The capture provider must remain private.");
+requireMatch(manifest, /android:name="android\.permission\.ACCESS_BACKGROUND_LOCATION"[\s\S]*?tools:node="remove"/,
+  "Google Play build must remove the Navigation SDK's optional unrestricted background-location permission.");
 for (const permission of [
-  "ACCESS_BACKGROUND_LOCATION",
   "MANAGE_EXTERNAL_STORAGE",
   "READ_EXTERNAL_STORAGE",
   "WRITE_EXTERNAL_STORAGE",

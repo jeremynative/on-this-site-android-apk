@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260901-contributor-map-linked-activity-r225";
+const expectedBuild = "20260901-play-location-privacy-r226";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -1687,8 +1687,9 @@ requireText("showNearbyNotification", "Android shell must expose native nearby n
 if (!appBridge.includes("showNotification") || !appBridge.includes("showNearbyNotification")) {
   throw new Error("Android app bridge must expose native notifications to the mobile web app.");
 }
-if (manifest.includes("android.permission.ACCESS_BACKGROUND_LOCATION")) {
-  throw new Error("In-app Google navigation must not request unrestricted background location.");
+if (!manifest.includes('android:name="android.permission.ACCESS_BACKGROUND_LOCATION"')
+    || !manifest.includes('tools:node="remove"')) {
+  throw new Error("In-app Google navigation must explicitly remove the SDK's unrestricted background-location permission.");
 }
 if (!manifest.includes('android:name=".OnThisSiteApplication"')
     || !manifest.includes('android:name=".OnThisSiteNavigationActivity"')
