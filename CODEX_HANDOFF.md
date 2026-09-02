@@ -1,5 +1,16 @@
 # Android APK — Codex Handoff
 
+## September 2 contributor-map release and Play closed-testing submission
+
+- Web PRs #183–#186 are merged; final web `main` is `142f17de6cc0e91a707ba5d74d1cf725cb23f9bc`, deployment `33586780076` passed, and production serves `mobile-app.min.8f0226884c16.js`. Contributor profiles now have numbered map stops, temporary place/action/date cards, map/activity bidirectional focus, and an adjustable mobile sheet.
+- Android PR #78 merged as `b45b6fa304395c477d13af803dc9582b892f4fe9`. Physical iPlay 50 mini Pro QA passed for native marker-to-card focus, numbered Recent Activity selection, activity-to-map movement, compact/expanded sheet states, popup dismissal, and camera stability. The Galaxy S25 was unavailable for this final pass.
+- Android PR #79 merged as `c52c6747f678ef4afe3a7501dfadafbf16d43380`. The manifest explicitly removes the Google Navigation SDK's optional `ACCESS_BACKGROUND_LOCATION`; source verifiers and the exact signed APK confirm that background location is absent while coarse/fine foreground navigation remains.
+- Signed Obtainium release `0.1.639` / `apk-639` is public. APK SHA-256: `940946C34DDE3EE9E74F3772089D12DC2B2DD1551D31CE526FB8A58195576B9D`. AAB SHA-256: `1558F9127584831C3624EF17DA84A04642E7E26D2D6527809B8DCD8DACEA7864`. A privacy-safe navigation/foreground-service demonstration recorded with a synthetic emulator location is attached to that release.
+- Google Play closed Alpha contains only bundle 639; unpublished superseded bundles 590 and 638 were removed. The foreground-service declaration is `Navigation` only. Release `639 (0.1.639)` was sent for review on September 2 and is shown under **Changes in review** while automated checks run. Remaining messages are non-blocking warnings for the API 24 minimum (1,023 older devices), increased download size, and optional native debug symbols.
+- Cadence: publish every stable tested APK to Obtainium, but submit milestone builds to Play closed testing instead of every micro-build.
+
+Safest next action: wait for Play review to finish and confirm Alpha 0.1.639 is available. Do not upload another Play bundle unless 639 is rejected or a verified milestone fix supersedes it.
+
 ## September 1 active-navigation notification return and exit
 
 - Branch `fix/navigation-return-swipe-exit-20260901` configures the Google Navigation SDK foreground notification with a real resume target. Tapping the ongoing notification now brings the existing single-top `OnThisSiteNavigationActivity` route back to the foreground; persisted destination extras provide a safe recreation fallback if Android has removed the activity.
