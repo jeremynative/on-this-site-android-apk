@@ -21248,7 +21248,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const MOBILE_MOVING_MARKER_MAP_RECOVERY_MAX_MS = 5000;
     const MOBILE_MOVING_LAND_CACHE_MAX = 4000;
     const mobileMovingRouteModelCache = new WeakMap();
-    const MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS = 720000;
+    const MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS = 300000;
+    const MOBILE_BIOGRAPHY_ROUTE_DURATION_MS = 300000;
+    const MOBILE_BIOGRAPHY_REFERENCE_ROUTE_DISTANCE = 0.35;
+    const MOBILE_BIOGRAPHY_MIN_SEGMENT_MS = 4000;
+    const MOBILE_BIOGRAPHY_BASE_MOTION_SCALE = 0.72;
     const MOBILE_BIOGRAPHY_MARKER_STAGGER_MS = 85;
     const MOBILE_BIOGRAPHY_MARKER_FADE_MS = 1600;
     const MOBILE_BIOGRAPHY_MARKER_RESET_MS = 2400;
@@ -34119,16 +34123,21 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     function mobileBiographyZoomMotionScale(zoomValue = Number(state.map?.getZoom?.())) {
       const zoom = Number(zoomValue);
-      // Treat an unavailable startup zoom as an overview. This avoids a brief
-      // full-speed burst while the hidden compatibility map synchronizes with
-      // the visible native camera.
-      if (!Number.isFinite(zoom)) return 0.12;
-      if (zoom <= 8) return 0.12;
-      if (zoom <= 11.5) return 0.12 + ((zoom - 8) / 3.5) * 0.1;
-      // More map pixels represent the same ground distance as the visitor
-      // zooms closer. Keep frequent native frames for smoothness, but reduce
-      // route advancement so the person never appears to sprint.
-      return Math.max(0.08, 0.22 / Math.pow(2, (zoom - 11.5) * 0.5));
+      // Keep overview travel visibly alive. Above the ordinary detail zoom,
+      // halve geographic advance for each zoom step so the same route stays
+      // calm in screen pixels instead of appearing to sprint when magnified.
+      if (!Number.isFinite(zoom) || zoom <= 11.5) return MOBILE_BIOGRAPHY_BASE_MOTION_SCALE;
+      return MOBILE_BIOGRAPHY_BASE_MOTION_SCALE / Math.pow(2, zoom - 11.5);
+    }
+
+    function mobileMovingMarkerMaxFrameDeltaMs() {
+      // The browser fallback updates every 360 ms while the native bridge runs
+      // at a much finer cadence. Cap each clock to one expected frame for its
+      // renderer: delayed work never catches up in a jump, but the browser does
+      // not accidentally run at only 22 percent of the intended pace.
+      return nativeMapBridgeAvailable()
+        ? MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS
+        : MOBILE_MOVING_MARKER_INTERVAL_MS;
     }
 
     function mobileNativeMovingMarkerIntervalMs() {
@@ -34178,7 +34187,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         if (!paused) {
           const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
           const motionScale = mobileBiographyZoomMotionScale() * (reducedMotion ? 0.5 : 1);
-          const delta = Math.min(rawDelta, MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS) * motionScale;
+          const delta = Math.min(rawDelta, mobileMovingMarkerMaxFrameDeltaMs()) * motionScale;
           controller.elapsedMs = (Math.max(0, Number(controller.elapsedMs) || 0) + delta) % cycleDuration;
         }
         controller.progress = controller.elapsedMs / cycleDuration;
@@ -34187,8 +34196,19 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function mobileMovingRouteDuration(route = []) {
-      const totalMiles = mobileMovingRouteModel(route).total;
-      return Math.max(360000, Math.min(1440000, totalMiles * 42000));
+      const segments = mobileMovingRouteSegments(route);
+      if (!segments.length) return MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS;
+      return segments.reduce((total, segment) => {
+        const coordinateDistance = Math.hypot(
+          Number(segment.end?.[0] || 0) - Number(segment.start?.[0] || 0),
+          Number(segment.end?.[1] || 0) - Number(segment.start?.[1] || 0)
+        );
+        if (!coordinateDistance) return total;
+        return total + Math.max(
+          MOBILE_BIOGRAPHY_MIN_SEGMENT_MS,
+          (coordinateDistance / MOBILE_BIOGRAPHY_REFERENCE_ROUTE_DISTANCE) * MOBILE_BIOGRAPHY_ROUTE_DURATION_MS
+        );
+      }, 0) || MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS;
     }
 
     const MOBILE_CANOE_LAND_SAMPLE_RADIUS_DEG = 0.00022;
@@ -34370,9 +34390,11 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function mobileBiographyDisplayCoordinates(coordinates, offset = [0, 0], slug = "") {
-      const siteAwareOffset = mobileBiographySiteAwareOffset(slug, coordinates, offset);
-      const x = Number(siteAwareOffset?.[0]) || 0;
-      const y = Number(siteAwareOffset?.[1]) || 0;
+      // The site-pin clearance is resolved once from the route origin when the
+      // item is created. Recalculating it from every moving coordinate pins a
+      // nearby biography to the edge of the clearance circle until map zoom.
+      const x = Number(offset?.[0]) || 0;
+      const y = Number(offset?.[1]) || 0;
       if (!Array.isArray(coordinates) || (!x && !y) || !state.map?.project || !state.map?.unproject) return coordinates;
       try {
         const point = state.map.project(coordinates);
@@ -34420,7 +34442,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         })
         .filter(Boolean);
       const displayOffsets = mobileBiographyDisplayOffsets(items);
-      items.forEach(item => { item.displayOffset = displayOffsets.get(item.slug) || [0, 0]; });
+      items.forEach(item => {
+        const groupedOffset = displayOffsets.get(item.slug) || [0, 0];
+        item.displayOffset = mobileBiographySiteAwareOffset(item.slug, item.route[0], groupedOffset);
+      });
       return items;
     }
 
@@ -34825,7 +34850,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     }
 
     function updateMobileMovingFeatureMarkers(now = performance.now()) {
-      if (!state.map || document.hidden || state.profileMapMode || state.mobileMovingMarkerPauseReasons.size || isAndroidMapGestureActive() || now < (state.mobileMovingMarkerInteractionUntil || 0)) return;
+      if (!state.map || document.hidden || state.profileMapMode || state.mobileMovingMarkerPauseReasons.size || now < (state.mobileMovingMarkerInteractionUntil || 0)) return;
       if (nativeMapBridgeAvailable()) {
         removeMobileMovingDomMarkers();
         syncNativeMovingFeaturesToAndroid(now);
@@ -34900,22 +34925,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.mobileMovingMarkerMapLifecycleBound = true;
       state.map.on("movestart", () => {
         if (state.mobileBiographyFollowCameraMoving) return;
-        // In the native APK this is the hidden compatibility map mirroring
-        // the visible MapLibre camera. NativeMapController already supplies
-        // the real gesture lifecycle, so this event must not pause motion.
-        if (nativeMapBridgeAvailable()) return;
         stopMobileBiographyFollow({ user: true });
-        window.clearTimeout(state.mobileMovingMarkerMapResumeTimer);
-        state.mobileMovingMarkerMapResumeTimer = null;
-        pauseMobileMovingFeatureAnimation("map", performance.now());
       });
       state.map.on("moveend", () => {
-        if (nativeMapBridgeAvailable()) return;
-        window.clearTimeout(state.mobileMovingMarkerMapResumeTimer);
-        state.mobileMovingMarkerMapResumeTimer = window.setTimeout(() => {
-          state.mobileMovingMarkerMapResumeTimer = null;
-          resumeMobileMovingFeatureAnimation("map", performance.now());
-        }, 160);
+        updateMobileMovingFeatureMarkers(performance.now());
       });
     }
 
@@ -34983,6 +34996,8 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     window.__nliMobileMovingFeatureDiagnostics = () => {
       const now = performance.now();
+      const sampleItem = (state.nativeMovingBiographyItems || [])[0] || null;
+      const sampleController = sampleItem ? state.mobileBiographyMotionControllers.get(sampleItem.slug) : null;
       return {
         documentHidden: document.hidden,
         profileMapMode: state.profileMapMode,
@@ -34993,7 +35008,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         lastUpdateAgeMs: Math.max(0, now - Number(state.mobileMovingMarkerLastAt || now)),
         nativeBridgeAvailable: nativeMapBridgeAvailable(),
         biographyCount: (state.nativeMovingBiographyItems || []).length,
-        mapReady: Boolean(state.map)
+        mapReady: Boolean(state.map),
+        mapZoom: Number(state.map?.getZoom?.()),
+        motionScale: mobileBiographyZoomMotionScale(),
+        sampleSlug: sampleItem?.slug || "",
+        sampleDurationMs: Number(sampleItem?.duration || 0),
+        sampleElapsedMs: Number(sampleController?.elapsedMs || 0)
       };
     };
 
@@ -38277,7 +38297,6 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (!isNativeAndroidApp()) return;
       stopMobileBiographyFollow({ user: true });
       state.androidMapGestureActive = true;
-      pauseMobileMovingFeatureAnimation("native-map", performance.now());
       if (state.androidMapGestureSettleTimer) {
         window.clearTimeout(state.androidMapGestureSettleTimer);
         state.androidMapGestureSettleTimer = null;
@@ -38289,14 +38308,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       if (state.androidMapGestureSettleTimer) window.clearTimeout(state.androidMapGestureSettleTimer);
       state.androidMapGestureSettleTimer = window.setTimeout(() => {
         state.androidMapGestureActive = false;
-        const settledAt = performance.now();
-        // The hidden WebView map mirrors the native camera with jumpTo(),
-        // which can emit movestart without a dependable matching moveend.
-        // The native gesture-end callback is authoritative, so clear both
-        // pause reasons together instead of leaving icons frozen until the
-        // stale-state recovery timer fires.
-        resumeMobileMovingFeatureAnimation("map", settledAt);
-        resumeMobileMovingFeatureAnimation("native-map", settledAt);
+        updateMobileMovingFeatureMarkers(performance.now());
         if (state.pendingAndroidMapRefresh) {
           state.pendingAndroidMapRefresh = false;
           refreshAndroidMapAfterSettle("android-map-post-gesture");
