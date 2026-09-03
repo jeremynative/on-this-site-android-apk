@@ -37043,9 +37043,18 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileMapLocateBtn.setAttribute("aria-busy", busy ? "true" : "false");
     }
 
+    const NATIVE_LOCATION_CACHE_MAX_AGE_MS = 300000;
+
     function nativeCachedUserPosition() {
       try {
-        return JSON.parse(window.AndroidApp.getCachedLocation(androidBridgeToken(), 120000));
+        const position = JSON.parse(window.AndroidApp.getCachedLocation(
+          androidBridgeToken(),
+          NATIVE_LOCATION_CACHE_MAX_AGE_MS
+        ));
+        const longitude = Number(position?.longitude);
+        const latitude = Number(position?.latitude);
+        if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return null;
+        return { ...position, longitude, latitude };
       } catch (_) {
         return null;
       }
@@ -43540,6 +43549,17 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         checkAndroidAppCompatibility();
         installTabletProjectTitleRotation();
         const nativeAndroid = isNativeAndroidApp();
+        // Read Android's recent fused fix before archive and map preparation.
+        // The map stays shielded until its reviewed polygons are ready, but the
+        // first location-control tap and the eventual reveal can center without
+        // waiting for the WebView geolocation provider to warm up.
+        const nativeStartupPosition = nativeAndroid ? nativeCachedUserPosition() : null;
+        if (nativeStartupPosition && !state.userLocation) {
+          state.userLocation = [nativeStartupPosition.longitude, nativeStartupPosition.latitude];
+          state.settings.locationEnabled = true;
+          state.settings.locationPrompted = true;
+          saveSettings();
+        }
         state.mobileStartupRendering = true;
         setLoadingMessage("Loading sites and nearby tools.");
         const startupLandMask = window.NLI_MOBILE_DATA && !isOfflineTextMode()
