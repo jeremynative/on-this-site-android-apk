@@ -1177,6 +1177,17 @@ Safest next action: leave 0.1.462 installed through Obtainium and report only ne
 - Preserve the pre-existing modified generated map/data files, modified audit helper, and untracked screenshots/XML. Only the two security commits were pushed.
 
 Safest next action: refresh Obtainium on the S25 and install 0.1.463 when convenient. No debug APK was installed on the physical phone.
+
+## September 3, 2026 biography motion/site-pin stability and Obtainium 0.1.645
+
+- Android PR #89 merged as `1609daa49322da4971ba602fe84edcac8095036c`, packaging web runtime PRs #202/#203. Programmatic hidden-WebView camera changes can no longer claim the native gesture pause that previously froze every moving biography.
+- Native biography canoe/person layers render below site circles. Near-exact touch ties prefer a real site pin, while actual projected distance still lets a clearly closer moving biography win. The shared runtime also moves biographies to a deterministic 30-pixel screen-space clearance from visible point-site pins.
+- Debug builds now expose `audit-apk-biography-motion.mjs status`, combining the JavaScript timer/pause state with native received/applied counters, source readiness, payload size, and last-apply age. Release builds do not expose the native diagnostic bridge.
+- `verify-app-shell.js`, debug compilation, lint, JavaScript syntax, and web motion/tap/startup/hit-target/payload checks passed. On connected iPlay 50 Mini Pro `T811MA256GB23516041180`, 51 biographies loaded and native applied counts increased 270 -> 353 after both a programmatic recenter and synthetic two-finger tilt. Physical taps opened Ma's House and Sunksqua Weany independently; no crash or ANR occurred.
+- Workflow `33777018683` succeeded and published latest Obtainium release `apk-645` / version `0.1.645`. Exact asset: 54,950,253 bytes, SHA-256 `0907fb33fcccb59cd1a66753208ae167cc4c22007ad86308528f077037cfa870`. It installed over production with data preserved and launched successfully; the QA package was removed. Google Play was skipped because no Play service-account credential was available.
+- Web deployment `33775964021` succeeded, and the production Directus/VPS shell now serves `assets/js/mobile-app.min.f5cafcc3eb67.js`. Directus content/schema and native iOS code were unchanged.
+
+Safest next action: use Obtainium 0.1.645 normally. For any future biography regression, install a debug QA build, start it with `native_map_bundle_qa=true`, establish the WebView CDP forward, and compare two `audit-apk-biography-motion.mjs status` snapshots before and after the suspected gesture/camera operation.
 ## 2026-08-19 Android map-motion optimization
 
 - Branch `optimize/shared-runtime-android-20260819` refactors the bundled moving biography/dog/whale runtime without changing visible cadence or public behavior.
