@@ -6340,6 +6340,7 @@
       padding: 0 14px calc(24px + var(--app-bottom-safe));
       -webkit-overflow-scrolling: touch;
       overscroll-behavior-y: contain;
+      touch-action: pan-y;
     }
 
     .detail.dragging {
