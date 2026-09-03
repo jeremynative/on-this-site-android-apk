@@ -119,6 +119,8 @@
     const MOBILE_BIOGRAPHY_MARKER_RESET_MS = 2400;
     const MOBILE_BIOGRAPHY_LOCAL_WANDER_RADIUS_DEG = 0.00115;
     const MOBILE_BIOGRAPHY_LOCAL_WANDER_POINT_COUNT = 4;
+    const MOBILE_BIOGRAPHY_SITE_PIN_CLEARANCE_PX = 30;
+    const MOBILE_SITE_OVER_BIOGRAPHY_TAP_BIAS_PX = 5;
     const MOBILE_BIOGRAPHY_CONTINUOUS_SLUGS = new Set([
       "chief-harry-wallace-of-the-unkechaug",
       "jeremy-dennis"
@@ -1272,6 +1274,7 @@
       mobileMovingMarkerInteractionUntil: 0,
       mobileMovingLandCacheGeometry: null,
       mobileMovingLandStateCache: new Map(),
+      mobileSitePinProjectionCache: null,
       mapStoryRefreshTimer: null,
       passwordResetToken: ROUTE_UTILS.passwordResetTokenFromUrl(window.location),
       plantMarkers: new Map(),
@@ -1286,7 +1289,6 @@
       androidMapGestureActive: false,
       androidMapGestureSettleTimer: null,
       pendingAndroidMapRefresh: false,
-      androidMapGestureGuardsBound: false,
       androidMapRefreshTimers: new Set(),
       androidMapRefreshToken: 0,
       androidMapResizeObserver: null,
@@ -1974,7 +1976,7 @@
         supportGoalEl.innerHTML = "";
         return;
       }
-      const goal = Number(settings.monthly_goal || 200);
+      const goal = Number(settings.monthly_goal || 300);
       const current = monthlySupportCurrent();
       const pct = goal > 0 ? Math.min(100, Math.round((current / goal) * 100)) : 0;
       supportGoalEl.hidden = false;
@@ -8236,7 +8238,7 @@
         best = { site, distance };
       });
       if (!best?.site) return null;
-      return {
+      const feature = {
         type: "Feature",
         geometry: { type: "Point", coordinates: best.site.center },
         properties: {
@@ -8248,6 +8250,8 @@
           bounds_area: 0
         }
       };
+      feature.__nliTapDistance = best.distance;
+      return feature;
     }
 
     function nearestMobileMovingFeature(event, radius = 18) {
@@ -8290,7 +8294,21 @@
         title: "Amethyst: global Shinnecock whaling",
         feature_kind: "moving-ship"
       });
-      return best?.feature || null;
+      if (!best?.feature) return null;
+      best.feature.__nliTapDistance = best.distance;
+      return best.feature;
+    }
+
+    function preferredMobilePrimaryMarkerFeature(siteFeature, movingFeature) {
+      if (!siteFeature) return movingFeature || null;
+      if (!movingFeature) return siteFeature;
+      const siteDistance = Number(siteFeature.__nliTapDistance);
+      const movingDistance = Number(movingFeature.__nliTapDistance);
+      if (!Number.isFinite(siteDistance)) return movingFeature;
+      if (!Number.isFinite(movingDistance)) return siteFeature;
+      return siteDistance <= movingDistance + MOBILE_SITE_OVER_BIOGRAPHY_TAP_BIAS_PX
+        ? siteFeature
+        : movingFeature;
     }
 
     function openMobileMapTap(event) {
@@ -8311,16 +8329,16 @@
       const biographyFeature = bestMobileRenderedBiographyFeature(event);
       const renderedPointFeature = bestMobileRenderedPointHitFeature(event);
       const preciseMarkerFeature = nearestMobileMarkerFeature(event, mobileMarkerTapRadius(androidWebViewTap));
+      const primaryMarkerFeature = preferredMobilePrimaryMarkerFeature(preciseMarkerFeature, movingFeature);
       const polygonFeature = androidWebViewTap
         ? bestAndroidPolygonFeature(event)
         : null;
       const layerEventFeature = androidWebViewTap
         ? null
         : bestMobileLayerEventFeature(event);
-      const feature = movingFeature ||
-        biographyFeature ||
+      const feature = primaryMarkerFeature ||
         renderedPointFeature ||
-        preciseMarkerFeature ||
+        biographyFeature ||
         polygonFeature ||
         layerEventFeature ||
         bestMobileRenderedTapFeature(event);
@@ -13107,9 +13125,60 @@
       return offsets;
     }
 
-    function mobileBiographyDisplayCoordinates(coordinates, offset = [0, 0]) {
-      const x = Number(offset?.[0]) || 0;
-      const y = Number(offset?.[1]) || 0;
+    function mobileSitePinScreenPoints() {
+      if (!state.map?.project || state.settings.showPins === false) return [];
+      const center = state.map.getCenter?.();
+      const canvas = state.map.getCanvas?.();
+      const key = [
+        state.mapSourceCacheKey || "",
+        Number(center?.lng || 0).toFixed(5),
+        Number(center?.lat || 0).toFixed(5),
+        Number(state.map.getZoom?.() || 0).toFixed(3),
+        Number(state.map.getBearing?.() || 0).toFixed(2),
+        Number(state.map.getPitch?.() || 0).toFixed(2),
+        canvas?.clientWidth || 0,
+        canvas?.clientHeight || 0
+      ].join("|");
+      if (state.mobileSitePinProjectionCache?.key === key) return state.mobileSitePinProjectionCache.points;
+      const points = (cachedMobileMapSourceData().sites?.features || [])
+        .filter(feature => feature?.geometry?.type === "Point" && feature.geometry.coordinates?.every(Number.isFinite))
+        .map(feature => {
+          try { return state.map.project(feature.geometry.coordinates); }
+          catch { return null; }
+        })
+        .filter(Boolean);
+      state.mobileSitePinProjectionCache = { key, points };
+      return points;
+    }
+
+    function mobileBiographySiteAwareOffset(slug, coordinates, offset = [0, 0]) {
+      const baseX = Number(offset?.[0]) || 0;
+      const baseY = Number(offset?.[1]) || 0;
+      if (!Array.isArray(coordinates) || !state.map?.project) return [baseX, baseY];
+      let projected;
+      try { projected = state.map.project(coordinates); }
+      catch { return [baseX, baseY]; }
+      const x = Number(projected?.x) + baseX;
+      const y = Number(projected?.y) + baseY;
+      let nearest = null;
+      for (const sitePoint of mobileSitePinScreenPoints()) {
+        const dx = x - Number(sitePoint.x);
+        const dy = y - Number(sitePoint.y);
+        const distance = Math.hypot(dx, dy);
+        if (!nearest || distance < nearest.distance) nearest = { dx, dy, distance };
+      }
+      if (!nearest || nearest.distance >= MOBILE_BIOGRAPHY_SITE_PIN_CLEARANCE_PX) return [baseX, baseY];
+      const angle = nearest.distance > 0.5
+        ? Math.atan2(nearest.dy, nearest.dx)
+        : (mobileBiographyStableHash(`${slug}:site-clearance`) % 360) * Math.PI / 180;
+      const shift = MOBILE_BIOGRAPHY_SITE_PIN_CLEARANCE_PX - nearest.distance + 2;
+      return [baseX + Math.cos(angle) * shift, baseY + Math.sin(angle) * shift];
+    }
+
+    function mobileBiographyDisplayCoordinates(coordinates, offset = [0, 0], slug = "") {
+      const siteAwareOffset = mobileBiographySiteAwareOffset(slug, coordinates, offset);
+      const x = Number(siteAwareOffset?.[0]) || 0;
+      const y = Number(siteAwareOffset?.[1]) || 0;
       if (!Array.isArray(coordinates) || (!x && !y) || !state.map?.project || !state.map?.unproject) return coordinates;
       try {
         const point = state.map.project(coordinates);
@@ -13239,7 +13308,7 @@
         const followed = item.slug === state.mobileFollowedBiographySlug;
         features.push({
           type: "Feature",
-          geometry: { type: "Point", coordinates: mobileBiographyDisplayCoordinates(motion.coordinates, item.displayOffset) },
+          geometry: { type: "Point", coordinates: mobileBiographyDisplayCoordinates(motion.coordinates, item.displayOffset, item.slug) },
           properties: {
             native_kind: "wiki",
             native_key: item.slug,
@@ -13365,7 +13434,7 @@
 
     function updateMobileMovingBiographyMarker(item, marker, now = performance.now()) {
       const motion = mobileBiographyMotionFor(item, now);
-      marker.setLngLat(mobileBiographyDisplayCoordinates(motion.coordinates, item.displayOffset));
+      marker.setLngLat(mobileBiographyDisplayCoordinates(motion.coordinates, item.displayOffset, item.slug));
       const element = marker.getElement?.();
       const button = element?.querySelector?.(".mobile-moving-biography-marker");
       if (!button) return;
@@ -13717,6 +13786,22 @@
       const interval = nativeMapBridgeAvailable() ? mobileNativeMovingMarkerIntervalMs() : MOBILE_MOVING_MARKER_INTERVAL_MS;
       state.mobileMovingMarkerTimer = window.setTimeout(tick, Math.max(0, interval - elapsed));
     }
+
+    window.__nliMobileMovingFeatureDiagnostics = () => {
+      const now = performance.now();
+      return {
+        documentHidden: document.hidden,
+        profileMapMode: state.profileMapMode,
+        pauseReasons: [...state.mobileMovingMarkerPauseReasons],
+        androidMapGestureActive: state.androidMapGestureActive,
+        interactionRemainingMs: Math.max(0, Number(state.mobileMovingMarkerInteractionUntil || 0) - now),
+        timerActive: Boolean(state.mobileMovingMarkerTimer),
+        lastUpdateAgeMs: Math.max(0, now - Number(state.mobileMovingMarkerLastAt || now)),
+        nativeBridgeAvailable: nativeMapBridgeAvailable(),
+        biographyCount: (state.nativeMovingBiographyItems || []).length,
+        mapReady: Boolean(state.map)
+      };
+    };
 
     async function ensureMobileMovingFeatureMarkers() {
       if (!state.map) return;
@@ -17016,17 +17101,6 @@
       }, 260);
     }
 
-    function bindAndroidMapGestureGuards() {
-      if (!isNativeAndroidApp() || !state.map || state.androidMapGestureGuardsBound) return;
-      state.androidMapGestureGuardsBound = true;
-      state.map.on("dragstart", markAndroidMapGestureActive);
-      state.map.on("dragend", markAndroidMapGestureSettled);
-      state.map.on("zoomstart", markAndroidMapGestureActive);
-      state.map.on("zoomend", markAndroidMapGestureSettled);
-      state.map.on("rotateend", markAndroidMapGestureSettled);
-      state.map.on("pitchend", markAndroidMapGestureSettled);
-    }
-
     function refreshAndroidMapAfterSettle(reason = "android-map-settle") {
       if (!isNativeAndroidApp() || !state.map) return;
       state.androidMapRefreshToken += 1;
@@ -20153,6 +20227,7 @@
             window.clearTimeout(state.mobileMovingMarkerBasemapResumeTimer);
             state.mobileMovingMarkerBasemapResumeTimer = null;
             state.mobileMovingMarkerPauseReasons.clear();
+            state.androidMapGestureActive = false;
           };
           const resolveMapReady = () => {
             if (settled) return;
@@ -20200,7 +20275,6 @@
           syncNativeMapState("map-load");
           syncMarkers();
           syncUserLocationMarker({ centerMap: false });
-          bindAndroidMapGestureGuards();
           bindAndroidMapResizeObserver();
           stabilizeAndroidMapPaint();
           state.map.once?.("idle", () => {

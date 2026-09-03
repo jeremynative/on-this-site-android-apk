@@ -39,15 +39,24 @@ async function evaluate(webSocketDebuggerUrl, expression) {
 }
 
 const action = String(process.argv[2] || "").toLowerCase();
+const status = action === "status";
 const closeDetail = action === "close";
 const gesture = action === "tilt" || action === "rotate" ? action : "";
 const zoom = gesture ? null : Number(action || 0);
-if (!closeDetail && !gesture && (!Number.isFinite(zoom) || zoom < 1 || zoom > 20)) {
-  throw new Error("Pass a target zoom between 1 and 20, close, or tilt/rotate.");
+if (!status && !closeDetail && !gesture && (!Number.isFinite(zoom) || zoom < 1 || zoom > 20)) {
+  throw new Error("Pass status, a target zoom between 1 and 20, close, or tilt/rotate.");
 }
 const page = (await targets()).find(target => target.type === "page");
 if (!page?.webSocketDebuggerUrl) throw new Error("No APK WebView page is available.");
-const result = await evaluate(page.webSocketDebuggerUrl, closeDetail ? `(() => {
+const result = await evaluate(page.webSocketDebuggerUrl, status ? `(() => ({
+  href: location.href,
+  buildId: window.AndroidApp?.getBuildId?.() || "",
+  debugBuild: window.AndroidApp?.isDebugBuild?.() === true,
+  detailOpen: document.querySelector("#detail")?.classList?.contains("open") === true,
+  detailTitle: document.querySelector("#detail-title h2")?.textContent?.trim?.() || "",
+  motion: window.__nliMobileMovingFeatureDiagnostics?.() || null,
+  nativeMotion: JSON.parse(window.AndroidApp?.getNativeMapMovingFeatureDiagnostics?.(String(window.__NLI_ANDROID_BRIDGE_TOKEN || "")) || "{}")
+}))()` : closeDetail ? `(() => {
   document.querySelector("#close-detail")?.click();
   return { ok: true, action: "close", href: location.href };
 })()` : gesture ? `(() => {
