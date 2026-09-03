@@ -85,6 +85,7 @@
 
   const plantObservationFields = fields([
     "id", "status", "site_slug", "site_title", "source_type", "source_id", "source_slug", "source_title",
+    "ancestral_territory", "ancestral_territory_slug", "ancestral_territory_title",
     "member_profile", "author_name", "photo", "common_name", "scientific_name", "confidence",
     "identification_status", "identification_source", "algonquian_word", "algonquian_source",
     "indigenous_context", "edible_safety", "medicinal_use", "native_status", "invasive_status",
@@ -95,6 +96,7 @@
   const mapStoryFields = fields([
     "id", "status", "prompt_key", "prompt_label", "caption", "photo",
     "latitude", "longitude", "location_source", "attached_site", "attached_site_slug", "attached_site_title",
+    "ancestral_territory", "ancestral_territory_slug", "ancestral_territory_title", "plant_observation",
     "member_profile", "author_name", "created_at", "expires_at", "expires_original_at",
     "permanent", "admin_permanent", "up_votes", "down_votes", "vote_score"
   ]);

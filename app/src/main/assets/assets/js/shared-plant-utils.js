@@ -283,12 +283,28 @@
       photo_taken_at: record?.public_submitted_at || record?.photo_taken_at || record?.created_at || "",
       public_submitted_at: record?.public_submitted_at || "",
       created_at: record?.created_at || "",
+      site_slug: record?.site_slug || record?.source_slug || "",
+      site_title: record?.site_title || record?.source_title || "",
+      ancestral_territory: relationId(record?.ancestral_territory) || null,
+      ancestral_territory_slug: record?.ancestral_territory_slug || "",
+      ancestral_territory_title: record?.ancestral_territory_title || "",
       _structured: true
     };
   }
 
   function plantObservationSourceMatches(record = {}, sourceType = "site", item = {}) {
-    if (!item || sourceType !== "site") return false;
+    if (!item) return false;
+    if (sourceType === "territory") {
+      const itemId = String(item.id || "");
+      const itemSlug = String(item.slug || "");
+      const territoryValue = record.ancestral_territory;
+      const territoryId = String(typeof territoryValue === "object"
+        ? (territoryValue?.id || territoryValue?.value || "")
+        : (territoryValue || ""));
+      const territorySlug = String(record.ancestral_territory_slug || "");
+      return Boolean((itemId && territoryId === itemId) || (itemSlug && territorySlug === itemSlug));
+    }
+    if (sourceType !== "site") return false;
     if (String(record.source_type || "site") !== "site") return false;
     const sourceId = String(item.id || "");
     const sourceSlug = String(item.slug || "");
@@ -356,6 +372,7 @@
     knownPlantStatsText,
     plantStatusLabel,
     plantObservationRecordFields,
+    plantObservationSourceMatches,
     plantObservationDateValue,
     plantObservationSeason,
     plantObservationSeasonGroups,

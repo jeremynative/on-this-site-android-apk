@@ -1431,6 +1431,8 @@
     const notificationsSheetEl = document.getElementById("notifications-sheet");
     const contributeSheetEl = document.getElementById("contribute-sheet");
     const mapStorySheetEl = document.getElementById("map-story-sheet");
+    const plantStorySheetEl = document.getElementById("plant-story-sheet");
+    const plantStoryPanelEl = plantStorySheetEl?.querySelector("[data-plant-story]");
     const mapStoryViewSheetEl = document.getElementById("map-story-view-sheet");
     const mapStoryPromptEl = document.getElementById("map-story-prompt");
     const mapStoryPromptHelpEl = document.getElementById("map-story-prompt-help");
@@ -1446,6 +1448,7 @@
     const mobileNotificationsOpenBtn = document.getElementById("mobile-notifications-open");
     const mobileNotificationsListEl = document.getElementById("mobile-notifications-list");
     const contributeStoryOpenBtn = document.getElementById("contribute-story-open");
+    const contributePlantStoryOpenBtn = document.getElementById("contribute-plant-story-open");
     const contributeSiteOpenBtn = document.getElementById("contribute-site-open");
     const contributeSiteNoteEl = document.getElementById("contribute-site-note");
     const eventsSheetEl = document.getElementById("events-sheet");
@@ -2501,6 +2504,16 @@
         .map(site => ({ site, geometry: siteDisplayGeometry(site) }))
         .filter(item => pointInGeometry(point, item.geometry))
         .sort((a, b) => geometryBoundsArea(a.geometry) - geometryBoundsArea(b.geometry))[0]?.site || null;
+    }
+
+    function userLocationCoordinates() {
+      if (Array.isArray(state.userLocation)) {
+        const coordinates = state.userLocation.slice(0, 2).map(Number);
+        return coordinates.length === 2 && coordinates.every(Number.isFinite) ? coordinates : null;
+      }
+      const longitude = Number(state.userLocation?.lng ?? state.userLocation?.longitude);
+      const latitude = Number(state.userLocation?.lat ?? state.userLocation?.latitude);
+      return Number.isFinite(longitude) && Number.isFinite(latitude) ? [longitude, latitude] : null;
     }
 
     function territoryLineForPoint(point) {
@@ -4585,8 +4598,11 @@
           ttl: DISCUSSION_SOURCE_REFRESH_TTL_MS,
           fresh: options.fresh === true
         });
+        const plantInventoryFilter = sourceType === "site" && isBroadTerritory(item)
+          ? `filter[ancestral_territory_slug][_eq]=${encodeURIComponent(String(item.slug || ""))}`
+          : `filter[site_slug][_eq]=${encodeURIComponent(String(item.slug || ""))}`;
         const plantsRequest = sourceType === "site"
-          ? fetchJson(`/items/mobile_plant_observations?limit=100&filter[status][_eq]=approved&filter[site_slug][_eq]=${encodeURIComponent(String(item.slug || ""))}&fields=${PLANT_OBSERVATION_FIELDS}`, {
+          ? fetchJson(`/items/mobile_plant_observations?limit=100&filter[status][_eq]=approved&${plantInventoryFilter}&fields=${PLANT_OBSERVATION_FIELDS}`, {
               cacheKey: `mobile-plants-${key}`,
               ttl: DISCUSSION_SOURCE_REFRESH_TTL_MS,
               fresh: options.fresh === true
@@ -9202,11 +9218,55 @@
         .sort((a, b) => a.miles - b.miles)[0]?.site || null;
     }
 
+    function plantSiteForCoordinates(coords, preferredSite = null) {
+      if (preferredSite?.slug && !isBroadTerritory(preferredSite)) {
+        const preferredGeometry = siteDisplayGeometry(preferredSite);
+        const preferredCenter = preferredSite.center || geometryCenter(preferredGeometry);
+        const isInsidePreferredSite = preferredGeometry?.type !== "Point"
+          && pointInGeometry(coords, preferredGeometry);
+        const isNearPreferredSite = milesBetween(coords, preferredCenter) <= 0.18;
+        if (isInsidePreferredSite || isNearPreferredSite) return preferredSite;
+      }
+      const containingSite = activeMapSites()
+        .filter(site => site?.slug && !isBroadTerritory(site))
+        .map(site => ({ site, geometry: siteDisplayGeometry(site) }))
+        .filter(entry => entry.geometry && pointInGeometry(coords, entry.geometry))
+        .sort((a, b) => geometryBoundsArea(a.geometry) - geometryBoundsArea(b.geometry))[0]?.site;
+      return containingSite || storyAttachmentSite(coords);
+    }
+
+    function plantObservationAssignment(coords, preferredSite = null) {
+      const territory = territoryForPoint(coords);
+      if (!territory?.slug) return null;
+      return { territory, site: plantSiteForCoordinates(coords, preferredSite) };
+    }
+
+    function plantStoryLocationText(assignment) {
+      if (!assignment?.territory) return "Current location is outside the thirteen mapped Long Island ancestral-land sections.";
+      const siteText = assignment.site?.title
+        ? ` Near ${assignment.site.title}, so the site will also be linked.`
+        : " No mapped site is close enough to attach automatically.";
+      return `Assigned to ${assignment.territory.title}.${siteText}`;
+    }
+
+    function updatePlantStoryLocation() {
+      const label = plantStoryPanelEl?.querySelector("[data-plant-story-location]");
+      if (!label) return null;
+      const coordinates = userLocationCoordinates();
+      const assignment = coordinates ? plantObservationAssignment(coordinates) : null;
+      label.textContent = coordinates
+        ? plantStoryLocationText(assignment)
+        : "Current location is required to select one of the thirteen ancestral-land sections.";
+      return assignment;
+    }
+
     function mapStoryMarkerElement(story) {
       const element = document.createElement("button");
       element.type = "button";
-      element.className = `mobile-story-marker${story.attached_site_slug ? " is-attached" : ""}`;
-      element.setAttribute("aria-label", "Open visitor story");
+      const isPlantStory = String(story?.prompt_key || "") === "plant_observation" || Boolean(relationId(story?.plant_observation));
+      element.className = `mobile-story-marker${story.attached_site_slug ? " is-attached" : ""}${isPlantStory ? " is-plant-story" : ""}`;
+      element.setAttribute("aria-label", isPlantStory ? "Open plant ID story" : "Open visitor story");
+      if (isPlantStory) element.textContent = "✿";
       element.addEventListener("click", event => {
         event.preventDefault();
         event.stopPropagation();
@@ -9269,13 +9329,19 @@
       const attached = story.attached_site_slug
         ? `<button class="action secondary" type="button" data-story-site="${escapeHtml(story.attached_site_slug)}">Open ${escapeHtml(story.attached_site_title || "attached site")}</button>`
         : "";
+      const territory = story.ancestral_territory_slug && story.ancestral_territory_slug !== story.attached_site_slug
+        ? `<button class="action secondary" type="button" data-story-territory="${escapeHtml(story.ancestral_territory_slug)}">Open ${escapeHtml(story.ancestral_territory_title || "ancestral-land plant inventory")}</button>`
+        : "";
+      const isPlantStory = String(story.prompt_key || "") === "plant_observation" || Boolean(relationId(story.plant_observation));
       mapStoryViewEl.innerHTML = `
         ${photo ? `<img class="map-story-photo" src="${escapeHtml(photo)}" alt="" loading="lazy" decoding="async">` : ""}
-        <p class="map-story-kicker">Visitor Story</p>
+        <p class="map-story-kicker">${isPlantStory ? "Plant ID Story" : "Visitor Story"}</p>
         <h3>${deleted ? "[deleted]" : `${escapeHtml(MAP_STORY_UTILS.authorName(story))} says:`}</h3>
         <p class="map-story-text">${deleted ? "[deleted]" : escapeHtml(MAP_STORY_UTILS.quotedText(story))}</p>
         <p class="detail-meta">${escapeHtml(MAP_STORY_UTILS.timeLabel(story, state.mapStoryVotes, MAP_STORY_RULES))}</p>
         ${attached}
+        ${territory}
+        ${isPlantStory ? `<p class="detail-meta">This Story is temporary. Its plant observation remains in the ancestral-land inventory.</p>` : ""}
         <div class="map-story-vote-row">
           ${deleted ? "" : `<button class="action secondary" type="button" data-story-vote="1" data-story-id="${escapeHtml(story.id)}">Helpful ${counts.up}</button>`}
           ${isAdminContributor() ? `<button class="action secondary" type="button" data-delete-map-story="${escapeHtml(story.id)}">Delete contribution</button>` : ""}
@@ -9367,6 +9433,33 @@
       if (mapStoryPhotoPreviewEl) mapStoryPhotoPreviewEl.innerHTML = "";
       if (mapStoryLocationEl) mapStoryLocationEl.textContent = state.userLocation ? "Using your current location." : "Location will be requested when you submit.";
       openSheet(mapStorySheetEl);
+    }
+
+    async function openPlantStoryComposer() {
+      if (!isApprovedContributor()) {
+        showBanner("Login as an approved contributor to add a plant ID story.");
+        openSheet(loginSheetEl);
+        return;
+      }
+      if (!contributorCanUseDailyAction("plants", currentContributorProfile())) return;
+      if (plantStoryPanelEl) {
+        resetPlantPhotoPanel(plantStoryPanelEl);
+        const input = plantStoryPanelEl.querySelector("[data-plant-image]");
+        const notes = plantStoryPanelEl.querySelector("[data-plant-notes]");
+        if (input) input.value = "";
+        if (notes) notes.value = "";
+        renderPlantContext(plantStoryPanelEl);
+      }
+      openSheet(plantStorySheetEl);
+      if (!userLocationCoordinates()) {
+        await requestUserLocation({
+          centerMap: false,
+          silent: false,
+          restrictToLongIslandScope: true,
+          positionOptions: { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+        });
+      }
+      updatePlantStoryLocation();
     }
 
     function updateContributionReviewCopy() {
@@ -9478,7 +9571,7 @@
     }
 
     function approvedPlantObservationsForSite(site) {
-      if (!site?.slug) return [];
+      if (!site?.slug || isBroadTerritory(site)) return [];
       return PLANT_UTILS.plantObservationsForSource(state.plantObservations, "site", site, {
         normalizeStatus: normalizeCommentStatus
       });
@@ -10165,21 +10258,22 @@
       };
     }
 
-    function plantObservationPayload({ site, discussion, profile, analysis, guess, notes, imageId, photoTakenAt }) {
+    function plantObservationPayload({ site, territory, coordinates, discussion, profile, analysis, guess, notes, imageId, photoTakenAt }) {
       const resolvedProfile = profile?.id ? profile : currentContributorProfile();
       const submittedAt = new Date().toISOString();
       const capturedAt = photoTakenAt && Number.isFinite(new Date(photoTakenAt).getTime()) ? new Date(photoTakenAt).toISOString() : submittedAt;
-      const location = state.userLocation && Number.isFinite(Number(state.userLocation.lat)) && Number.isFinite(Number(state.userLocation.lng))
-        ? state.userLocation
-        : null;
+      const source = site || territory;
       return {
         status: "approved",
-        site_slug: site?.slug || discussion?.dataset.discussionSlug || null,
-        site_title: site?.title || discussion?.dataset.discussionTitle || "Site",
-        source_type: "site",
-        source_id: Number(discussion?.dataset.discussionId) || site?.id || null,
-        source_slug: site?.slug || discussion?.dataset.discussionSlug || null,
-        source_title: site?.title || discussion?.dataset.discussionTitle || "Site",
+        site_slug: site?.slug || null,
+        site_title: site?.title || null,
+        source_type: site ? "site" : "territory",
+        source_id: Number(source?.id) || null,
+        source_slug: source?.slug || discussion?.dataset.discussionSlug || null,
+        source_title: source?.title || discussion?.dataset.discussionTitle || "Ancestral land",
+        ancestral_territory: Number(territory?.id) || null,
+        ancestral_territory_slug: territory?.slug || null,
+        ancestral_territory_title: territory?.title || null,
         member_profile: resolvedProfile?.id || null,
         author_name: resolvedProfile?.display_name || profile?.display_name || resolvedProfile?.username || profile?.username || state.profile?.email || "Contributor",
         photo: imageId || null,
@@ -10199,9 +10293,9 @@
         visitor_guidance: analysis?.visitorGuidance || "Photograph only. Do not pick, disturb, harvest, or remove plants.",
         visitor_notes: notes || "",
         raw_plantnet_data: analysis?.rawPlantNetData || null,
-        observation_latitude: location ? Number(location.lat) : null,
-        observation_longitude: location ? Number(location.lng) : null,
-        observation_location_source: location ? "user_location_at_submission" : "",
+        observation_latitude: coordinates ? Number(coordinates[1]) : null,
+        observation_longitude: coordinates ? Number(coordinates[0]) : null,
+        observation_location_source: coordinates ? "device_current_location" : "",
         public_submitted_at: capturedAt,
         created_at: submittedAt
       };
@@ -10211,6 +10305,7 @@
       const output = section.querySelector("[data-plant-preview]");
       if (!output) return;
       const submitButton = section.querySelector("[data-submit-plant-report]");
+      const isPlantStory = section.dataset.plantStory === "true";
       const analysis = section._plantAnalysis || null;
       const guess = plantObservationGuess(section, analysis);
       const compressed = section._plantPhotoFile;
@@ -10260,7 +10355,9 @@
       if (limitStatus) limitStatus.textContent = limitState.reached ? " Daily plant submission limit reached for today." : "";
       if (submitButton) {
         submitButton.disabled = limitState.reached;
-        submitButton.textContent = "Submit to this site's plant grid";
+        submitButton.textContent = isPlantStory
+          ? "Share Story + save to land inventory"
+          : "Share Story + save plant observation";
       }
       output.innerHTML = `
         <div class="plant-context-card plant-review-card">
@@ -11168,7 +11265,8 @@
 
     function plantObservationsForSource(sourceType, item) {
       if (sourceType !== "site") return [];
-      return PLANT_UTILS.plantObservationsForSource(state.plantObservations, sourceType, item, {
+      const inventoryType = isBroadTerritory(item) ? "territory" : "site";
+      return PLANT_UTILS.plantObservationsForSource(state.plantObservations, inventoryType, item, {
         normalizeStatus: normalizeCommentStatus,
         mapRecord: plantObservationRecordFields
       });
@@ -11609,10 +11707,11 @@
     function plantObservationGridHtml(sourceType, item) {
       const observations = plantObservationsForSource(sourceType, item);
       if (!observations.length) return "";
+      const territoryGrid = isBroadTerritory(item);
       const seasonGroups = PLANT_UTILS.plantObservationSeasonGroups(observations);
       return `
-        <div class="site-plant-grid" aria-label="Plants reported at this site">
-          <h4>Plants Identified at This Site</h4>
+        <div class="site-plant-grid${territoryGrid ? " territory-plant-grid" : ""}" aria-label="Plants reported in ${escapeHtml(item.title || "this place")}">
+          <h4>${territoryGrid ? "Plant Inventory for This Ancestral Land" : "Plants Identified at This Site"}</h4>
           <p class="detail-meta">${escapeHtml(knownPlantStatsText(item, observations))}</p>
           <div class="site-plant-seasons">
             ${seasonGroups.map(group => `
@@ -11667,6 +11766,8 @@
                       ${author ? `<button class="site-plant-contributor" type="button" data-open-mobile-profile="${escapeHtml(contributorKey)}">${escapeHtml(contributor)}</button>` : escapeHtml(contributor)}
                       ${photoDate ? ` - photographed ${escapeHtml(new Date(photoDate).toLocaleDateString())}` : ""}${fields.confidence ? ` - ${escapeHtml(fields.confidence)}% confidence` : ""}
                     </span>
+                    ${territoryGrid && fields.site_slug ? `<button class="site-plant-card-action site-plant-site-link" type="button" data-slug="${escapeHtml(fields.site_slug)}">Open ${escapeHtml(fields.site_title || "linked site")}</button>` : ""}
+                    ${!territoryGrid && fields.ancestral_territory_slug ? `<button class="site-plant-card-action site-plant-territory-link" type="button" data-slug="${escapeHtml(fields.ancestral_territory_slug)}">Open ${escapeHtml(fields.ancestral_territory_title || "ancestral-land inventory")}</button>` : ""}
                     ${guideMatch ? (plantWiki?.slug
                       ? `<button class="site-plant-card-action" type="button" data-open-plant-wiki="${escapeHtml(plantWiki.slug)}">Open plant wiki</button>`
                       : `<button class="site-plant-card-action" type="button" data-open-native-plants="${escapeHtml(guideMatch.common)}">Open plant guide</button>`)
@@ -11898,6 +11999,7 @@
       const comments = commentsForSource(sourceType, item);
       const profile = currentContributorProfile();
       const canContribute = isApprovedContributor();
+      const territoryPage = sourceType === "site" && isBroadTerritory(item);
       const plantInputId = `plant-image-${String(item.slug || item.id || "site").replace(/[^a-z0-9_-]+/gi, "-")}`;
       const commentThread = COMMENT_UTILS.commentThreadIndex(comments, { excludeRoot: isPlantObservationComment });
       const rootComments = commentThread.roots;
@@ -11993,11 +12095,11 @@
                   <svg viewBox="0 0 24 24"><path d="M12 21c-1.2-4.8-.3-8.3 2.8-10.6 1.8-1.3 4.1-1.8 6.7-1.4-.4 2.8-1.5 5-3.3 6.6-1.7 1.5-3.8 2.1-6.2 1.8"/><path d="M11.2 16.3c-2.6.3-4.8-.4-6.4-2C3.2 12.7 2.4 10.6 2.3 8c2.7-.2 5 .4 6.7 1.9 1.9 1.6 2.6 3.8 2.2 6.4Z"/><path d="M12 21V9"/></svg>
                 </span>
                 <span>
-                  <strong>Report a plant seen here</strong>
-                  <small>Help document the living landscape with one clear photo.</small>
+                  <strong>${territoryPage ? "Add to this ancestral-land plant inventory" : "Report a plant seen here"}</strong>
+                  <small>Help document the living landscape with one clear photo and a temporary Story.</small>
                 </span>
               </summary>
-              <p class="detail-meta">Take or upload one clear plant photo. You can review the result before submitting it to this site.</p>
+              <p class="detail-meta">Take or upload one clear plant photo. It will appear as a temporary Story and remain in the ${territoryPage ? "ancestral-land inventory" : "site and ancestral-land inventories"}.</p>
               <button class="site-plant-card-action plant-guide-button" type="button" data-open-native-plants>Open Native plants guide</button>
               <div class="plant-camera-row">
                 <div class="plant-camera-actions">
@@ -12197,6 +12299,7 @@
 
     async function submitPlantObservation(section) {
       const discussion = section.closest(".discussion-section");
+      const isPlantStory = section.dataset.plantStory === "true";
       const profile = currentContributorProfile();
       if (!profile || !isApprovedContributor()) {
         showBanner(state.profile?.pending
@@ -12209,7 +12312,10 @@
         renderPlantContext(section);
         return;
       }
-      const site = state.selectedSite || state.sites.find(item => item.slug === discussion?.dataset.discussionSlug);
+      if (!contributorCanUseDailyAction("stories", profile)) return;
+      const preferredSite = isPlantStory
+        ? null
+        : (state.selectedSite || state.sites.find(item => item.slug === discussion?.dataset.discussionSlug));
       let image = section._plantPhotoFile || section.querySelector("[data-plant-image]")?.files?.[0] || null;
       if (!image) {
         showBanner("Take a plant photo first.");
@@ -12222,23 +12328,44 @@
         return;
       }
       const notes = section.querySelector("[data-plant-notes]")?.value?.trim() || "";
+      const moderation = moderationCheck(notes, "Your plant Story note");
+      if (!moderation.ok) {
+        showBanner(moderation.message);
+        return;
+      }
       if (!section._plantAnalysis) {
         section._plantAnalysis = await analyzePlantPhoto(image, section);
         renderPlantContext(section);
       }
       const guess = plantObservationGuess(section, section._plantAnalysis);
       const button = section.querySelector("[data-submit-plant-report]");
-      const originalLabel = button?.textContent || "Submit to this site's plant grid";
+      const originalLabel = button?.textContent || "Share Story + save plant observation";
       if (button) {
         button.disabled = true;
-        button.textContent = "Uploading photo...";
+        button.textContent = "Checking location...";
       }
       let imageId = null;
       try {
-        imageId = await uploadDirectusFile(image, `Plant observation - ${site?.title || "On This Site"}`, { requireAuth: true });
-        if (button) button.textContent = "Submitting...";
+        await requestUserLocation({
+          centerMap: false,
+          silent: false,
+          restrictToLongIslandScope: true,
+          positionOptions: { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
+        });
+        const coordinates = userLocationCoordinates();
+        const assignment = coordinates ? plantObservationAssignment(coordinates, preferredSite) : null;
+        if (!coordinates || !assignment?.territory) {
+          throw new Error("A current location within one of the thirteen Long Island ancestral-land sections is required.");
+        }
+        const { site, territory } = assignment;
+        if (isPlantStory) updatePlantStoryLocation();
+        if (button) button.textContent = "Uploading photo...";
+        imageId = await uploadDirectusFile(image, `Plant observation - ${site?.title || territory.title}`, { requireAuth: true });
+        if (button) button.textContent = "Saving inventory...";
         const observationPayload = plantObservationPayload({
           site,
+          territory,
+          coordinates,
           discussion,
           profile,
           analysis: section._plantAnalysis,
@@ -12248,14 +12375,68 @@
           photoTakenAt: section._plantPhotoTakenAt
         });
         const createdObservation = await postDirectusItem("mobile_plant_observations", observationPayload, { requireAuth: true });
-        mergePlantObservationRecords([{
+        const observationRecord = {
           id: createdObservation.data?.id || `plant-${Date.now()}`,
           ...observationPayload,
           ...(createdObservation.data || {})
-        }]);
-        showBanner("Plant added to this site's plant grid.");
-        syncSitePlantMarkers(site);
-        if (site?.slug) openSite(site.slug, { focus: false, skipCommentRefresh: true });
+        };
+        mergePlantObservationRecords([observationRecord]);
+
+        if (button) button.textContent = "Sharing Story...";
+        const now = new Date();
+        const expires = new Date(now.getTime() + MAP_STORY_BASE_LIFETIME_MS);
+        const plantName = section._plantAnalysis?.commonName || guess?.common || "Plant observation";
+        const storyCaption = [
+          `${plantName} observed on ${territory.title}${site?.title ? ` near ${site.title}` : ""}.`,
+          notes
+        ].filter(Boolean).join(" ");
+        const storyPayload = {
+          prompt_key: "plant_observation",
+          prompt_label: "Plant identification",
+          caption: storyCaption,
+          photo: imageId,
+          latitude: coordinates[1],
+          longitude: coordinates[0],
+          location_source: "device_current_location",
+          attached_site: site?.id || null,
+          attached_site_slug: site?.slug || "",
+          attached_site_title: site?.title || "",
+          ancestral_territory: territory.id || null,
+          ancestral_territory_slug: territory.slug || "",
+          ancestral_territory_title: territory.title || "",
+          plant_observation: Number(observationRecord.id) || null,
+          created_at: now.toISOString(),
+          expires_at: expires.toISOString(),
+          expires_original_at: expires.toISOString()
+        };
+        try {
+          const createdStory = await postDirectusItem("mobile_map_stories", storyPayload, { requireAuth: true, timeout: 20000 });
+          state.mapStories.push({
+            id: createdStory.data?.id || `plant-story-${Date.now()}`,
+            ...storyPayload,
+            status: createdStory.data?.status || "active",
+            member_profile: profile?.id || null,
+            author_name: profile?.display_name || state.profile?.display_name || state.profile?.email || "Contributor",
+            permanent: false,
+            admin_permanent: false,
+            up_votes: 0,
+            down_votes: 0,
+            vote_score: 0,
+            ...(createdStory.data || {})
+          });
+          syncMapStoryMarkers();
+        } catch (storyError) {
+          if (isPlantStory) plantStorySheetEl?.classList.remove("open");
+          showBanner(`Plant saved to ${site?.title || territory.title}, but its temporary Story could not be shared.`);
+          return;
+        }
+        if (isPlantStory) plantStorySheetEl?.classList.remove("open");
+        const inventoryName = site?.title || territory.title;
+        showBanner(`Plant saved to ${inventoryName} and shared as a temporary Story.`);
+        if (site?.slug) {
+          syncSitePlantMarkers(site);
+          if (!isPlantStory) openSite(site.slug, { focus: false, skipCommentRefresh: true });
+        }
       } catch (error) {
         showBanner(error.message || "Could not submit plant observation.");
       } finally {
@@ -16008,6 +16189,7 @@
       state.settings.locationPrompted = true;
       saveSettings();
       renderCurrentTerritoryStatus();
+      if (plantStorySheetEl?.classList.contains("open")) updatePlantStoryLocation();
       const mayCenter = !centerMap || !centerBounds || pointWithinBounds(nextLocation, centerBounds);
       syncUserLocationMarker({ centerMap: centerMap && mayCenter, zoom: mapZoom });
       if (centerMap && mayCenter) refreshAndroidMapAfterSettle("android-location-center");
@@ -21123,6 +21305,72 @@
       }
       if (event.target.closest("[data-open-mobile-notification]") && item) openMobileNotificationTarget(item);
     });
+    function openPlantFileInput(panel, camera = false) {
+      const input = panel?.querySelector("[data-plant-image]");
+      if (!input) return;
+      if (camera) input.setAttribute("capture", "environment");
+      else input.removeAttribute("capture");
+      input.value = "";
+      try {
+        input.showPicker ? input.showPicker() : input.click();
+      } catch {
+        input.click();
+      }
+    }
+
+    function resetPlantPhotoPanel(panel) {
+      panel._plantAnalysis = null;
+      panel._plantPhotoFile = null;
+      panel._plantOriginalPhotoFile = null;
+      panel._plantPhotoTakenAt = "";
+      if (panel._plantPreviewUrl) URL.revokeObjectURL(panel._plantPreviewUrl);
+      panel._plantPreviewUrl = "";
+      renderPlantContext(panel);
+    }
+
+    function handlePlantPanelClick(event) {
+      const panel = event.target.closest("[data-plant-observation]");
+      if (!panel) return false;
+      if (event.target.closest("[data-take-plant-photo]")) {
+        event.preventDefault();
+        state.pendingPlantObservationPanel = panel;
+        const button = panel.querySelector("[data-take-plant-photo]");
+        if (button) button.textContent = "Opening camera...";
+        openInAppPlantCamera(panel).then(opened => {
+          if (button) button.textContent = "Take plant photo";
+          if (!opened && !nativeTakePlantPhoto()) openPlantFileInput(panel, true);
+        }).catch(error => {
+          if (button) button.textContent = "Take plant photo";
+          showBanner(error.message || "Could not open the camera.");
+        });
+        return true;
+      }
+      if (event.target.closest("[data-upload-plant-photo]")) {
+        event.preventDefault();
+        state.pendingPlantObservationPanel = panel;
+        openPlantFileInput(panel, false);
+        return true;
+      }
+      if (event.target.closest("[data-retake-plant-photo]")) {
+        event.preventDefault();
+        resetPlantPhotoPanel(panel);
+        openPlantFileInput(panel, true);
+        return true;
+      }
+      if (event.target.closest("[data-submit-plant-report]")) {
+        submitPlantObservation(panel).catch(error => showBanner(error.message || "Could not submit plant report."));
+        return true;
+      }
+      return false;
+    }
+
+    function handlePlantPanelChange(event) {
+      const panel = event.target.closest("[data-plant-observation]");
+      if (!panel || !event.target.matches("[data-plant-image]")) return false;
+      processPlantCameraPhoto(panel);
+      event.target.setAttribute("capture", "environment");
+      return true;
+    }
     plantPhotoViewerCloseBtn?.addEventListener("click", closePlantPhotoViewer);
     plantPhotoViewerEl?.addEventListener("click", event => {
       if (event.target === plantPhotoViewerEl) closePlantPhotoViewer();
@@ -21378,71 +21626,7 @@
         }
         return;
       }
-      const plantPanel = event.target.closest("[data-plant-observation]");
-      if (event.target.closest("[data-take-plant-photo]") && plantPanel) {
-        event.preventDefault();
-        state.pendingPlantObservationPanel = plantPanel;
-        const button = plantPanel.querySelector("[data-take-plant-photo]");
-        if (button) button.textContent = "Opening camera...";
-        openInAppPlantCamera(plantPanel).then(opened => {
-          if (button) button.textContent = "Take plant photo";
-          if (opened) return;
-          if (nativeTakePlantPhoto()) {
-            if (button) button.textContent = "Opening camera...";
-            return;
-          }
-          const input = plantPanel.querySelector("[data-plant-image]");
-          if (input) {
-            input.setAttribute("capture", "environment");
-            input.value = "";
-            try {
-              input.showPicker ? input.showPicker() : input.click();
-            } catch {
-              input.click();
-            }
-          }
-        }).catch(error => {
-          if (button) button.textContent = "Take plant photo";
-          showBanner(error.message || "Could not open the camera.");
-        });
-          return;
-      }
-      if (event.target.closest("[data-upload-plant-photo]") && plantPanel) {
-        event.preventDefault();
-        state.pendingPlantObservationPanel = plantPanel;
-        const input = plantPanel.querySelector("[data-plant-image]");
-        if (input) {
-          input.removeAttribute("capture");
-          input.value = "";
-          try {
-            input.showPicker ? input.showPicker() : input.click();
-          } catch {
-            input.click();
-          }
-        }
-        return;
-      }
-      if (event.target.closest("[data-retake-plant-photo]") && plantPanel) {
-        event.preventDefault();
-        plantPanel._plantAnalysis = null;
-        plantPanel._plantPhotoFile = null;
-        plantPanel._plantOriginalPhotoFile = null;
-        plantPanel._plantPhotoTakenAt = "";
-        if (plantPanel._plantPreviewUrl) URL.revokeObjectURL(plantPanel._plantPreviewUrl);
-        plantPanel._plantPreviewUrl = "";
-        const input = plantPanel.querySelector("[data-plant-image]");
-        if (input) {
-          input.setAttribute("capture", "environment");
-          input.value = "";
-        }
-        renderPlantContext(plantPanel);
-        input?.click();
-        return;
-      }
-      if (event.target.closest("[data-submit-plant-report]") && plantPanel) {
-        submitPlantObservation(plantPanel).catch(error => showBanner(error.message || "Could not submit plant report."));
-        return;
-      }
+      if (handlePlantPanelClick(event)) return;
       const voteButton = event.target.closest("[data-comment-vote]");
       if (voteButton?.dataset.commentId) {
         setCommentReaction(voteButton.dataset.commentId, voteButton.dataset.commentVote).catch(error => showBanner(error.message || "Could not save comment vote."));
@@ -21539,9 +21723,7 @@
         });
         return;
       }
-      const plantPanel = event.target.closest("[data-plant-observation]");
-      if (plantPanel && event.target.matches("[data-plant-image]")) processPlantCameraPhoto(plantPanel);
-      if (plantPanel && event.target.matches("[data-plant-image]")) event.target.setAttribute("capture", "environment");
+      handlePlantPanelChange(event);
     });
     detailBodyEl.addEventListener("keydown", event => {
       const trigger = event.target.closest?.("[data-take-plant-photo]");
@@ -21800,6 +21982,9 @@
     mapStoryOpenBtn?.addEventListener("click", openContributionSheet);
     mapStoryOpenMenuBtn?.addEventListener("click", openContributionSheet);
     contributeStoryOpenBtn?.addEventListener("click", openMapStoryComposer);
+    contributePlantStoryOpenBtn?.addEventListener("click", () => {
+      openPlantStoryComposer().catch(error => showBanner(error.message || "Could not open the plant ID Story."));
+    });
     contributeSiteOpenBtn?.addEventListener("click", () => {
       if (requireRegisteredContributor()) openSheet(suggestSiteSheetEl);
     });
@@ -21831,7 +22016,26 @@
       if (siteLink?.dataset.storySite) {
         mapStoryViewSheetEl.classList.remove("open");
         openSite(siteLink.dataset.storySite);
+        return;
       }
+      const territoryLink = event.target.closest("[data-story-territory]");
+      if (territoryLink?.dataset.storyTerritory) {
+        mapStoryViewSheetEl.classList.remove("open");
+        openSite(territoryLink.dataset.storyTerritory);
+      }
+    });
+    plantStorySheetEl?.addEventListener("click", event => {
+      if (event.target.closest("[data-open-native-plants]")) {
+        plantStorySheetEl.classList.remove("open");
+        openNativePlantsGuide();
+        return;
+      }
+      handlePlantPanelClick(event);
+    });
+    plantStorySheetEl?.addEventListener("change", handlePlantPanelChange);
+    plantStorySheetEl?.addEventListener("input", event => {
+      const plantPanel = event.target.closest("[data-plant-observation]");
+      if (plantPanel && event.target.matches("[data-plant-notes]")) renderPlantContext(plantPanel);
     });
     mobileRefreshAppBtn?.addEventListener("click", async () => {
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");

@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260903-biography-continuous-motion-r235";
+const expectedBuild = "20260903-plant-story-inventory-r236";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -139,6 +139,15 @@ if (!bundledMobileJs.includes("function bindPlantCameraZoom(overlay, video, trac
     || !bundledSharedPlantUtils.includes("function plantObservationSeasonGroups(observations = [])")) {
   throw new Error("Android plant camera must support optical or centered digital zoom and group submitted photos by capture season.");
 }
+if (!bundledLiveApp.includes('id="contribute-plant-story-open"')
+    || !bundledLiveApp.includes('id="plant-story-sheet"')
+    || !bundledMobileJs.includes("function plantObservationAssignment(coords, preferredSite = null)")
+    || !bundledMobileJs.includes('prompt_key: "plant_observation"')
+    || !bundledMobileJs.includes("ancestral_territory_slug: territory.slug")
+    || !bundledMobileJs.includes("plant_observation: Number(observationRecord.id) || null")
+    || !bundledSharedPlantUtils.includes('sourceType === "territory"')) {
+  throw new Error("Android must include the location-assigned Plant ID Story and permanent ancestral-land inventory flow.");
+}
 if (!bundledMobileJs.includes('const PLANT_IDENTIFICATION_CANONICAL_ENDPOINT = "https://nativelongisland.com/native-plant-photo-api-20260523e.php";')
     || !bundledMobileJs.includes("function fetchPlantEndpointCandidates(options = {})")
     || !bundledMobileJs.includes("PLANT_IDENTIFICATION_ROUTE_FAILURE_STATUSES.has(response.status)")
@@ -185,8 +194,8 @@ if (!bundledSharedMapUtils.includes("function basemapWaterBoundaryLayerId(map)")
     || !bundledMobileJs.includes('MAP_UTILS.addLandLayerBeneathBasemapWater(state.map, layer)')
     || !bundledMobileJs.includes('["==", ["get", "geometry_surface"], "land"]')
     || !bundledMobileJs.includes('["!=", ["get", "geometry_surface"], "land"]')
-    || !bundledApp.includes('id: "mobile-site-land-polygons"')
-    || !bundledApp.includes('id: "mobile-place-name-area-land-fill"')
+    || !/id\s*:\s*"mobile-site-land-polygons"/.test(bundledApp)
+    || !/id\s*:\s*"mobile-place-name-area-land-fill"/.test(bundledApp)
     || !bundledApp.includes("function addLandLayerBeneathBasemapWater(map, layer)")) {
   throw new Error("Android WebView and offline fallbacks must route site and reviewed place-name land polygons beneath vector water while preserving non-land overlays.");
 }
@@ -963,7 +972,7 @@ if (!Array.isArray(bundledMobileData.learningPathSites) || bundledMobileData.lea
 for (const runtime of [bundledApp, bundledLiveRuntime]) {
   if (!runtime.includes('openAppPage("learn")')
       || !runtime.includes("function openMobileLearningPathsPanel")
-      || !runtime.includes("function openMobileLearningPath(pathSlug)")
+      || !runtime.includes("function openMobileLearningPath(")
       || !runtime.includes("data-mobile-learning-path-complete")) {
     throw new Error("Bundled Android shells must route Learn to guided learning paths with stop progress.");
   }
