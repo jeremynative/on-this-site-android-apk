@@ -9891,12 +9891,67 @@
       return prepareCommentPhotoFile(section, input?.files?.[0] || null);
     }
 
-    function plantIdentificationEndpoint() {
-      if (window.NLI_PLANT_ID_ENDPOINT) return window.NLI_PLANT_ID_ENDPOINT;
-      if (/nativelongisland\.com$/i.test(window.location.hostname)) {
-        return new URL("native-plant-photo-api-20260523e.php", window.location.href).toString();
+    const PLANT_IDENTIFICATION_CANONICAL_ENDPOINT = "https://nativelongisland.com/native-plant-photo-api-20260523e.php";
+    const PLANT_IDENTIFICATION_ROUTE_FAILURE_STATUSES = new Set([404, 405, 410]);
+
+    function safePlantIdentificationEndpoint(value) {
+      try {
+        const endpoint = new URL(String(value || "").trim(), window.location.href);
+        const localDevelopment = /^(?:localhost|127\.0\.0\.1)$/i.test(endpoint.hostname);
+        if (endpoint.protocol !== "https:" && !(localDevelopment && endpoint.protocol === "http:")) return "";
+        endpoint.hash = "";
+        return endpoint.toString();
+      } catch {
+        return "";
       }
-      return "";
+    }
+
+    function plantIdentificationEndpoints() {
+      const configured = Array.isArray(window.NLI_PLANT_ID_ENDPOINTS)
+        ? window.NLI_PLANT_ID_ENDPOINTS
+        : [window.NLI_PLANT_ID_ENDPOINT];
+      const host = String(window.location.hostname || "").toLowerCase();
+      const liveArchive = host === "nativelongisland.com" || host === "www.nativelongisland.com";
+      const liveAndroidApp = isNativeAndroidApp() || host === "directus.nativelongisland.com";
+      const candidates = configured.filter(Boolean);
+      if (liveArchive || liveAndroidApp) candidates.push(PLANT_IDENTIFICATION_CANONICAL_ENDPOINT);
+      if (liveArchive) {
+        candidates.push(new URL("/native-plant-photo-api-20260523e.php", window.location.origin).toString());
+      }
+      const unique = [];
+      candidates.forEach(value => {
+        const endpoint = safePlantIdentificationEndpoint(value);
+        if (endpoint && !unique.includes(endpoint)) unique.push(endpoint);
+      });
+      return unique;
+    }
+
+    function plantIdentificationEndpoint() {
+      const candidates = plantIdentificationEndpoints();
+      const resolved = safePlantIdentificationEndpoint(state.plantProviderEndpoint);
+      return resolved && candidates.includes(resolved) ? resolved : (candidates[0] || "");
+    }
+
+    async function fetchPlantEndpointCandidates(options = {}) {
+      const endpoints = plantIdentificationEndpoints();
+      let lastResponse = null;
+      let lastError = null;
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint, options);
+          lastResponse = response;
+          if (!PLANT_IDENTIFICATION_ROUTE_FAILURE_STATUSES.has(response.status)) {
+            state.plantProviderEndpoint = endpoint;
+            return { endpoint, response };
+          }
+          console.warn(`Plant identification route ${response.status}; trying the canonical endpoint.`, endpoint);
+        } catch (error) {
+          lastError = error;
+          console.warn("Plant identification route could not be reached.", endpoint, error);
+        }
+      }
+      if (lastResponse) return { endpoint: endpoints[endpoints.length - 1] || "", response: lastResponse };
+      throw lastError || new Error("Could not reach the plant identification service.");
     }
 
     async function fetchPlantProviderStatus() {
@@ -9911,7 +9966,7 @@
       if (state.plantProviderStatus && Date.now() - state.plantProviderStatus.checkedAt < 5 * 60 * 1000) {
         return state.plantProviderStatus;
       }
-      const response = await fetch(endpoint, {
+      const { response } = await fetchPlantEndpointCandidates({
         method: "GET",
         cache: "no-store",
         headers: { accept: "application/json" }
@@ -9921,7 +9976,11 @@
         throw new Error("Plant ID service status could not be checked from this connection.");
       }
       const data = await response.json();
-      state.plantProviderStatus = { ...data, checkedAt: Date.now() };
+      state.plantProviderStatus = {
+        ...data,
+        endpoint: state.plantProviderEndpoint || plantIdentificationEndpoint(),
+        checkedAt: Date.now()
+      };
       return state.plantProviderStatus;
     }
 
@@ -10017,7 +10076,7 @@
       const endpoint = plantIdentificationEndpoint();
       if (endpoint) {
         const providerStatus = await fetchPlantProviderStatus().catch(() => null);
-        if (providerStatus && providerStatus.plantnet_configured === false) {
+        if (providerStatus && providerStatus.ready_for_species_id === false) {
           const vocabularyMatch = analysisFromPlantGuess(plantObservationGuess(section, { rawName: file?.name || "" }));
           if (vocabularyMatch) return vocabularyMatch;
           return {
@@ -10027,7 +10086,7 @@
             rawName: "",
             source: "Visitor plant photo pending review",
             status: "service_error",
-            serviceError: "Automatic species ID needs Pl@ntNet connected on the backend. This photo was compressed and can still be submitted for human review."
+            serviceError: `${providerStatus.message || "Automatic species ID is not ready on the backend."} This photo was compressed and can still be submitted for human review.`
           };
         }
         try {
@@ -10043,7 +10102,7 @@
             body.append("lat", String(Number(coords.lat).toFixed(5)));
             body.append("lng", String(Number(coords.lng).toFixed(5)));
           }
-          const response = await fetch(endpoint, { method: "POST", body });
+          const { response } = await fetchPlantEndpointCandidates({ method: "POST", body });
           if (response.ok) {
             const contentType = response.headers.get("content-type") || "";
             if (!contentType.includes("application/json")) {

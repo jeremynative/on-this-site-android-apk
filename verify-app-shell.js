@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260903-mobile-bio-stability-r232";
+const expectedBuild = "20260903-plant-id-route-stability-r233";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -138,6 +138,12 @@ if (!bundledMobileJs.includes("function bindPlantCameraZoom(overlay, video, trac
     || !bundledMobileCss.includes("padding-bottom: max(80px, calc(var(--app-bottom-safe) + 28px));")
     || !bundledSharedPlantUtils.includes("function plantObservationSeasonGroups(observations = [])")) {
   throw new Error("Android plant camera must support optical or centered digital zoom and group submitted photos by capture season.");
+}
+if (!bundledMobileJs.includes('const PLANT_IDENTIFICATION_CANONICAL_ENDPOINT = "https://nativelongisland.com/native-plant-photo-api-20260523e.php";')
+    || !bundledMobileJs.includes("function fetchPlantEndpointCandidates(options = {})")
+    || !bundledMobileJs.includes("PLANT_IDENTIFICATION_ROUTE_FAILURE_STATUSES.has(response.status)")
+    || bundledMobileJs.includes('return new URL("native-plant-photo-api-20260523e.php", window.location.href).toString();')) {
+  throw new Error("Android Plant ID must use the canonical live endpoint with bounded missing-route recovery instead of resolving under the Directus app path.");
 }
 
 if (!source.includes("var bottomOcclusion=0,rightOcclusion=0;")
