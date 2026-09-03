@@ -1,6 +1,7 @@
 package com.nativelongisland.onthissite;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Notification;
@@ -34,6 +35,8 @@ import android.graphics.BitmapFactory;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.location.Location;
+import android.location.LocationManager;
 import android.view.Gravity;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.ExtractedText;
@@ -90,7 +93,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260902-native-water-labels-r230";
+    static final String APP_VERSION = "20260903-fast-user-location-r231";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -2496,6 +2499,48 @@ public class MainActivity extends Activity {
     boolean hasLocationPermission() {
         return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    @SuppressLint("MissingPermission") // Guarded by hasLocationPermission and a SecurityException-safe runtime catch.
+    String cachedLocationJson(long requestedMaxAgeMs) {
+        if (!hasLocationPermission()) return "";
+        long maxAgeMs = Math.max(0L, Math.min(requestedMaxAgeMs, 10L * 60L * 1000L));
+        LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        if (manager == null) return "";
+        Location freshest = null;
+        long freshestElapsedNanos = Long.MIN_VALUE;
+        try {
+            for (String provider : manager.getProviders(true)) {
+                Location candidate = manager.getLastKnownLocation(provider);
+                if (candidate == null) continue;
+                long elapsedNanos = candidate.getElapsedRealtimeNanos();
+                long ageMs = elapsedNanos > 0L
+                    ? Math.max(0L, (SystemClock.elapsedRealtimeNanos() - elapsedNanos) / 1_000_000L)
+                    : Math.max(0L, System.currentTimeMillis() - candidate.getTime());
+                if (ageMs > maxAgeMs || elapsedNanos < freshestElapsedNanos) continue;
+                freshest = candidate;
+                freshestElapsedNanos = elapsedNanos;
+            }
+        } catch (RuntimeException error) {
+            Log.w(LOG_TAG, "Could not read the cached device location", error);
+            return "";
+        }
+        if (freshest == null) return "";
+        long ageMs = freshestElapsedNanos > 0L
+            ? Math.max(0L, (SystemClock.elapsedRealtimeNanos() - freshestElapsedNanos) / 1_000_000L)
+            : Math.max(0L, System.currentTimeMillis() - freshest.getTime());
+        try {
+            JSONObject result = new JSONObject();
+            result.put("longitude", freshest.getLongitude());
+            result.put("latitude", freshest.getLatitude());
+            result.put("accuracy", freshest.hasAccuracy() ? freshest.getAccuracy() : JSONObject.NULL);
+            result.put("timestamp", freshest.getTime());
+            result.put("ageMs", ageMs);
+            return result.toString();
+        } catch (Exception error) {
+            Log.w(LOG_TAG, "Could not serialize the cached device location", error);
+            return "";
+        }
     }
 
     boolean hasCameraPermission() {

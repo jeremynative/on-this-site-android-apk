@@ -36612,7 +36612,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         element.setAttribute("aria-hidden", "true");
         state.userMarker = new mapboxgl.Marker({ element, anchor: "center" }).setLngLat(state.userLocation).addTo(state.map);
       }
-      if (centerMap) state.map.easeTo({ center: state.userLocation, zoom, duration });
+      if (centerMap && isNativeAndroidApp()) {
+        state.map.jumpTo({ center: state.userLocation, zoom });
+        syncNativeMapCameraToAndroid();
+      } else if (centerMap) {
+        state.map.easeTo({ center: state.userLocation, zoom, duration });
+      }
     }
 
     function fitLongIslandMapView(reason = "long-island-view") {
@@ -36898,6 +36903,14 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       mobileMapLocateBtn.setAttribute("aria-busy", busy ? "true" : "false");
     }
 
+    function nativeCachedUserPosition() {
+      try {
+        return JSON.parse(window.AndroidApp.getCachedLocation(androidBridgeToken(), 120000));
+      } catch (_) {
+        return null;
+      }
+    }
+
     function mapIsCenteredOnLocation(location, tolerancePixels = 12) {
       if (!state.map || !Array.isArray(location) || location.length < 2) return false;
       const longitude = Number(location[0]);
@@ -36960,17 +36973,17 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
       state.settings.locationEnabled = true;
       state.settings.locationPrompted = true;
       saveSettings();
-      setLocationControlsBusy(false);
       renderCurrentTerritoryStatus();
-      if (moved || centerMap) {
-        sortSites();
-        renderList();
-      }
       const mayCenter = !centerMap || !centerBounds || pointWithinBounds(nextLocation, centerBounds);
       syncUserLocationMarker({ centerMap: centerMap && mayCenter, zoom: mapZoom });
       if (centerMap && mayCenter) refreshAndroidMapAfterSettle("android-location-center");
       else if (centerMap && centerBounds && !mayCenter) {
         fitLongIslandMapView("android-location-outside-long-island");
+      }
+      if (moved || centerMap) {
+        sortSites();
+        if (centerMap && isNativeAndroidApp()) setTimeout(renderList, 0);
+        else renderList();
       }
       state.lastLocationMarkerUpdateAt = Date.now();
       startLocationWatch();
@@ -36989,12 +37002,12 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         if (!silent) showBanner("Location is not available on this device.");
         return false;
       }
-      setLocationControlsBusy(true);
+      if (!silent) setLocationControlsBusy(true);
       return new Promise(resolve => {
         navigator.geolocation.getCurrentPosition(position => {
           const nextLocation = [position.coords.longitude, position.coords.latitude];
           if (restrictToLongIslandScope && !locationWithinLongIslandScope(nextLocation)) {
-            setLocationControlsBusy(false);
+            if (!silent) setLocationControlsBusy(false);
             if (!silent) showOutOfScopeLocationNotice();
             resolve(false);
             return;
@@ -37003,6 +37016,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             ? nextLocationControlZoom()
             : mapZoom;
           applyUserLocation(position, { centerMap, mapZoom: resolvedMapZoom, centerBounds });
+          if (!silent) setLocationControlsBusy(false);
           resolve(true);
       }, error => {
         if (window.NLI_STARTUP_LOCATION_AUDIT) {
@@ -37011,14 +37025,13 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             message: String(error?.message || "")
           };
         }
-        state.settings.locationEnabled = false;
+        state.settings.locationEnabled = Boolean(state.userLocation);
         state.settings.locationPrompted = true;
         saveSettings();
-        setLocationControlsBusy(false);
-        state.userLocation = null;
-        scheduleNativeMapTransientStateSync("user-location-cleared", 0);
+        if (!silent) setLocationControlsBusy(false);
+        if (!state.userLocation) scheduleNativeMapTransientStateSync("user-location-cleared", 0);
         renderCurrentTerritoryStatus();
-          renderList();
+          if (!state.userLocation) renderList();
           if (!silent) showBanner("Location permission was not available. Showing sites near central Long Island without personal distances.");
           resolve(false);
       }, positionOptions || { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
@@ -37033,6 +37046,16 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
 
     async function locateMapUser() {
       if (centerMapOnKnownUserLocation({ zoomIfAlreadyCentered: isNativeAndroidApp() })) return true;
+      const cachedPosition = nativeCachedUserPosition();
+      if (cachedPosition) {
+        const nextLocation = [cachedPosition.longitude, cachedPosition.latitude];
+        if (!locationWithinLongIslandScope(nextLocation)) {
+          showOutOfScopeLocationNotice();
+          return false;
+        }
+        applyUserLocation({ coords: cachedPosition }, { centerMap: true, mapZoom: NEAR_ME_ZOOM });
+        return true;
+      }
       return requestUserLocation({
         centerMap: true,
         silent: false,
@@ -37137,6 +37160,10 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
             center: [state.userLocation[0] + 0.18, state.userLocation[1]],
             zoom: state.map.getZoom()
           });
+          return snapshot();
+        },
+        clearKnownLocation() {
+          state.userLocation = null;
           return snapshot();
         },
         showOutOfScopeView() {

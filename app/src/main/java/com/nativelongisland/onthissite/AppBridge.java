@@ -40,6 +40,12 @@ class AppBridge {
     }
 
     @JavascriptInterface
+    public String getCachedLocation(String token, long maxAgeMs) {
+        if (!activity.validBridgeToken(token)) return "";
+        return activity.cachedLocationJson(maxAgeMs);
+    }
+
+    @JavascriptInterface
     public void syncNativeMapViewport(
         String token,
         double left,
