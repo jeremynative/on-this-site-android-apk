@@ -7159,6 +7159,11 @@
       let armed = false;
       let touchStartX = null;
 
+      const disarmForNativeScroll = () => {
+        armed = false;
+        touchStartX = null;
+      };
+
       const reset = () => {
         dragging = false;
         armed = false;
@@ -7209,13 +7214,24 @@
       });
 
       detailEl.addEventListener("pointermove", event => {
+        // Android sends pointer events as well as touch events for one finger.
+        // The touch path owns those gestures; otherwise this pointer handler
+        // sees its shared armed state and turns an upward reading swipe into a
+        // drawer resize before touchmove can hand it to native scrolling.
+        if (event.pointerType === "touch") return;
         if (!armed) return;
         movePanel(event.clientY);
         if (dragging) event.preventDefault();
       });
 
-      detailEl.addEventListener("pointerup", finishDrag);
-      detailEl.addEventListener("pointercancel", reset);
+      detailEl.addEventListener("pointerup", event => {
+        if (event.pointerType === "touch") return;
+        finishDrag();
+      });
+      detailEl.addEventListener("pointercancel", event => {
+        if (event.pointerType === "touch") return;
+        reset();
+      });
 
       detailEl.addEventListener("touchstart", event => {
         if (event.touches.length !== 1) return;
@@ -7230,13 +7246,22 @@
       }, { passive: true });
 
       detailEl.addEventListener("touchmove", event => {
-        if (!armed || event.touches.length !== 1) return reset();
+        // An upward or horizontal body swipe may already have been handed to
+        // native scrolling. Do not reset the drawer on later move events from
+        // that same touch, because the style writes in reset() cancel WebView
+        // scrolling even though this listener never calls preventDefault().
+        if (!armed) return;
+        if (event.touches.length !== 1) return reset();
         const touch = event.touches[0];
         if (touchStartX !== null && !dragging) {
           const deltaX = Math.abs(touch.clientX - touchStartX);
           const deltaY = touch.clientY - startY;
-          if (deltaX <= 6 && Math.abs(deltaY) <= 6) return;
-          if (deltaY <= deltaX) return reset();
+          const distanceY = Math.abs(deltaY);
+          if (deltaX <= 6 && distanceY <= 6) return;
+          // Once a body gesture is upward or primarily horizontal, leave the
+          // active touch entirely to the browser. Calling reset() here writes
+          // panel styles during touchmove and can cancel native WebView scroll.
+          if (deltaY < 0 || deltaX >= distanceY) return disarmForNativeScroll();
         }
         movePanel(touch.clientY);
         if (dragging) event.preventDefault();
@@ -9823,7 +9848,7 @@
         showBanner("Location is not available on this device.");
         return;
       }
-      const center = site.center || site.checkinCenter || getGeometryCenter(site.geojson || site.display_geojson || null);
+      const center = site.center || site.checkinCenter || geometryCenter(site.geojson || site.display_geojson || null);
       if (!center) {
         showBanner("This site does not have a public check-in location.");
         return;
@@ -10173,7 +10198,7 @@
       const endpoint = plantIdentificationEndpoint();
       if (endpoint) {
         const providerStatus = await fetchPlantProviderStatus().catch(() => null);
-        if (providerStatus && providerStatus.ready_for_species_id === false) {
+        if (providerStatus && providerStatus.ready_for_species_id === false && providerStatus.automatic_review_available !== true) {
           const vocabularyMatch = analysisFromPlantGuess(plantObservationGuess(section, { rawName: file?.name || "" }));
           if (vocabularyMatch) return vocabularyMatch;
           return {
@@ -10194,7 +10219,7 @@
           body.append("original_filename", section._plantOriginalPhotoFile?.name || file.name || "");
           const organ = plantOrganForAnalysis(section, file);
           if (organ !== "auto") body.append("organ", organ);
-          const coords = state.userLocation || getGeometryCenter(state.selectedSite?.geojson || state.selectedSite?.display_geojson || null);
+          const coords = state.userLocation || geometryCenter(state.selectedSite?.geojson || state.selectedSite?.display_geojson || null);
           if (coords && Number.isFinite(Number(coords.lat)) && Number.isFinite(Number(coords.lng))) {
             body.append("lat", String(Number(coords.lat).toFixed(5)));
             body.append("lng", String(Number(coords.lng).toFixed(5)));
@@ -14042,8 +14067,6 @@
 
     window.__nliMobileMovingFeatureDiagnostics = () => {
       const now = performance.now();
-      const sampleItem = (state.nativeMovingBiographyItems || [])[0] || null;
-      const sampleController = sampleItem ? state.mobileBiographyMotionControllers.get(sampleItem.slug) : null;
       return {
         documentHidden: document.hidden,
         profileMapMode: state.profileMapMode,
@@ -14054,12 +14077,7 @@
         lastUpdateAgeMs: Math.max(0, now - Number(state.mobileMovingMarkerLastAt || now)),
         nativeBridgeAvailable: nativeMapBridgeAvailable(),
         biographyCount: (state.nativeMovingBiographyItems || []).length,
-        mapReady: Boolean(state.map),
-        mapZoom: Number(state.map?.getZoom?.()),
-        motionScale: mobileBiographyZoomMotionScale(),
-        sampleSlug: sampleItem?.slug || "",
-        sampleDurationMs: Number(sampleItem?.duration || 0),
-        sampleElapsedMs: Number(sampleController?.elapsedMs || 0)
+        mapReady: Boolean(state.map)
       };
     };
 
