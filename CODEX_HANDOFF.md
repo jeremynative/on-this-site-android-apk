@@ -1,5 +1,15 @@
 # Android APK — Codex Handoff
 
+## September 3 continuous biography motion
+
+- Android PR #94 merged as `8831dd8ce69ff63904b398952589a9d65855a61a`. The native moving-feature renderer no longer drops all position updates during a pan/zoom gesture; it coalesces the compact source at 80 ms while touching, resumes the normal 20 ms guard when idle, and explicitly invalidates the map after source updates.
+- The packaged mobile runtime now uses visible route timing and a renderer-specific delayed-frame cap. Its site-pin separation is calculated once from each route origin instead of re-clamping every changing coordinate to the same clearance boundary, which was the remaining reason icons appeared frozen and only jumped after zoom.
+- Shell marker is `20260903-biography-continuous-motion-r235`. `verify-app-shell.js`, Google Play readiness, JavaScript syntax, whitespace, debug APK, and `lintDebug` pass. The verifier rejects the former native gesture early-return and per-frame site clearance clamp.
+- Physical iPlay 50 mini Pro QA loaded 51 biographies at zoom 10.5. A sampled biography changed coordinates continuously across five one-second samples. During a 3.5-second held pan, its motion clock advanced from 11097.6 ms to 13276.9 ms and the native renderer continued roughly 9–11 updates per second, then settled normally.
+- Signed workflow `33797430624` passed and published Obtainium/GitHub `0.1.648` / `apk-648`. APK size is 54,951,377 bytes, SHA-256 is `C9566C8AFCCD099B0782E6D0915770078937C1A26ED8FB0382157313BC8FFD84`, and certificate SHA-256 remains `B17B4D4505513C52ADFAA215CAC95EE062431D22410938FA5C13D34A70025787`. The exact release installed over production without clearing data, launched successfully, reports code/name 648/0.1.648, and produced no fatal exception or ANR. The temporary QA package and debugging forward were removed. Google Play submission was skipped under the milestone cadence.
+
+Safest next action: update the S25 and other devices through Obtainium, then visually confirm a nearby biography keeps walking while idle and during a held pan. Preserve the one-time route-origin clearance rule; do not restore a per-frame collision clamp.
+
 ## September 3 center-on-user cold-start follow-up
 
 - Android PR #92 merged as `015c6230206a4c1b727ca4f7e2a20b35b0ce3c72`. The APK now restores a valid native cached location before the 439-site archive initializes, using the same five-minute freshness window as WebView geolocation. The map remains shielded until the reviewed ancestral-land polygons are ready, and the normal live location watch refreshes the cached fix afterward.
