@@ -1,5 +1,14 @@
 # Android APK — Codex Handoff
 
+## September 3 center-on-user cold-start follow-up
+
+- Android PR #92 merged as `015c6230206a4c1b727ca4f7e2a20b35b0ce3c72`. The APK now restores a valid native cached location before the 439-site archive initializes, using the same five-minute freshness window as WebView geolocation. The map remains shielded until the reviewed ancestral-land polygons are ready, and the normal live location watch refreshes the cached fix afterward.
+- Shell marker is `20260903-location-cache-startup-r234`. `verify-app-shell.js`, Google Play readiness, whitespace, debug APK, and `lintDebug` pass. Physical iPlay 50 mini Pro QA measured 10 ms for normal recenter, 109 ms and 89 ms for repeated zoom, and 116 ms for forced native-cache recovery, all below the 900 ms interaction budget.
+- Signed workflow `33786294822` passed and published Obtainium/GitHub release `0.1.647` / `apk-647`. The 54,951,257-byte APK has SHA-256 `A66F0AECE412F76D3AAFD377BFE9334E128B39E43A033A1C01691404F3B04530`. The exact published APK was installed over production on the tablet without clearing data, launched successfully, reports version code 647/name 0.1.647, and produced no fatal exception or ANR. The temporary QA package and debugging forward were removed.
+- Google Play submission was skipped under the milestone cadence. The Galaxy S25 supplied a fresh fused location in about 0.3 seconds during diagnosis, confirming that GPS itself was not the bottleneck, but wireless ADB went offline before a clean interaction test; no S25-specific completion claim is made.
+
+Safest next action: update the S25 through Obtainium to `0.1.647` when wireless debugging is stable and confirm first-launch recenter behavior under normal location settings. Do not discard or reset the dirty canonical Android checkout.
+
 ## September 2 native default-basemap water labels
 
 - Android PR #86 merged as `53bd3d8a1c5bc4229338ea1bcb550283b182b1c1`. The native MapLibre road/default basemap now reads the already packaged official GNIS water-name catalog and renders collision-aware major-water, bay, inland-water, canal, stream, and spring labels at the same close-zoom thresholds used by the mobile website. The labels remain hidden on satellite imagery.
