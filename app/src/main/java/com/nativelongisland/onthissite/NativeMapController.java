@@ -112,6 +112,10 @@ final class NativeMapController {
     // use a 24 ms cadence so biography artwork glides rather than stepping;
     // retain a small guard here to coalesce accidental duplicate bridge calls.
     private static final long MOVING_FEATURE_MIN_UPDATE_MS = 20L;
+    // Camera gestures already redraw the native map continuously. Keep the
+    // compact moving-feature source alive during a drag as well, but coalesce
+    // it to a lighter cadence so route motion never competes with touch input.
+    private static final long MOVING_FEATURE_GESTURE_UPDATE_MS = 80L;
     private static final long MAP_TAP_DISPATCH_DELAY_MS = 300L;
     private static final int BUNDLED_ICON_BATCH_SIZE = 4;
     private static final String EMPTY_FEATURE_COLLECTION = "{\"type\":\"FeatureCollection\",\"features\":[]}";
@@ -1553,13 +1557,15 @@ final class NativeMapController {
                 }
             } catch (Exception ignored) {}
         }
-        if (nativeGestureInProgress()) return;
+        long minimumUpdateMs = nativeGestureInProgress()
+            ? MOVING_FEATURE_GESTURE_UPDATE_MS
+            : MOVING_FEATURE_MIN_UPDATE_MS;
         long elapsed = SystemClock.uptimeMillis() - lastMovingFeatureApplyAt;
         mapView.removeCallbacks(applyLatestMovingFeaturesTask);
-        if (elapsed >= MOVING_FEATURE_MIN_UPDATE_MS) {
+        if (elapsed >= minimumUpdateMs) {
             applyMovingFeaturesToStyle();
         } else {
-            mapView.postDelayed(applyLatestMovingFeaturesTask, MOVING_FEATURE_MIN_UPDATE_MS - elapsed);
+            mapView.postDelayed(applyLatestMovingFeaturesTask, minimumUpdateMs - elapsed);
         }
     }
 
@@ -1576,6 +1582,7 @@ final class NativeMapController {
         GeoJsonSource source = map.getStyle().getSourceAs(MOVING_FEATURE_SOURCE_ID);
         if (source != null) {
             source.setGeoJson(collection);
+            mapView.postInvalidateOnAnimation();
             lastMovingFeatureApplyAt = SystemClock.uptimeMillis();
             movingFeatureAppliedCount += 1;
             recordMovingFeatureDebugSample(collection, lastMovingFeatureApplyAt);
@@ -1595,6 +1602,31 @@ final class NativeMapController {
             result.put("sourceReady", map != null && map.getStyle() != null
                 && map.getStyle().getSourceAs(MOVING_FEATURE_SOURCE_ID) != null);
             result.put("payloadBytes", movingFeaturesJson == null ? 0 : movingFeaturesJson.length());
+            FeatureCollection collection = FeatureCollection.fromJson(movingFeaturesJson);
+            List<Feature> features = collection.features();
+            if (features != null) {
+                for (Feature feature : features) {
+                    if (!"biography".equals(feature.getStringProperty("moving_kind")) || !(feature.geometry() instanceof Point)) continue;
+                    Point point = (Point) feature.geometry();
+                    result.put("sampleSlug", feature.getStringProperty("slug"));
+                    JSONArray coordinate = new JSONArray();
+                    coordinate.put(point.longitude());
+                    coordinate.put(point.latitude());
+                    result.put("sampleCoordinate", coordinate);
+                    CameraPosition camera = map == null ? null : map.getCameraPosition();
+                    if (camera != null) result.put("sampleZoom", camera.zoom);
+                    if (map != null) {
+                        try {
+                            PointF screenPoint = map.getProjection().toScreenLocation(new LatLng(point.latitude(), point.longitude()));
+                            JSONArray screen = new JSONArray();
+                            screen.put(screenPoint.x);
+                            screen.put(screenPoint.y);
+                            result.put("sampleScreenPoint", screen);
+                        } catch (Exception ignored) {}
+                    }
+                    break;
+                }
+            }
         } catch (Exception ignored) {}
         return result.toString();
     }

@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260903-location-cache-startup-r234";
+const expectedBuild = "20260903-biography-continuous-motion-r235";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -390,26 +390,42 @@ if (!nativeMapController.includes("CameraPosition cameraToPreserve = nativeGestu
     || !/CameraPosition cameraToPreserve[\s\S]*?map\.setPadding\(0, 0, viewportRightOcclusion, viewportBottomOcclusion\)[\s\S]*?map\.moveCamera\(CameraUpdateFactory\.newCameraPosition\(cameraToPreserve\)\)/.test(nativeMapController)
     || !nativeMapController.includes("if (camera == null || map == null || nativeGestureInProgress()) return;")
     || !nativeMapController.includes("movingFeaturesJson = featuresJson;")
-    || !nativeMapController.includes("if (nativeGestureInProgress()) return;")
     || !nativeMapController.includes("MOVING_FEATURE_MIN_UPDATE_MS = 20L")
-    || !nativeMapController.includes("mapView.postDelayed(applyLatestMovingFeaturesTask")
+    || !nativeMapController.includes("MOVING_FEATURE_GESTURE_UPDATE_MS = 80L")
+    || !nativeMapController.includes("long minimumUpdateMs = nativeGestureInProgress()")
+    || !nativeMapController.includes("mapView.postDelayed(applyLatestMovingFeaturesTask, minimumUpdateMs - elapsed)")
+    || !nativeMapController.includes("mapView.postInvalidateOnAnimation();")
     || !nativeMapController.includes("boolean gestureSettled = cameraGestureAwaitingIdle;")
     || !nativeMapController.includes("applyMovingFeaturesToStyle();")
     || !nativeMapController.includes("listener.onGestureChanged(true);")
     || !nativeMapController.includes("listener.onGestureChanged(false);")) {
-  throw new Error("Native map gestures must own the camera and pause moving-source updates until camera idle.");
+  throw new Error("Native map gestures must own the camera while compact moving-source updates continue at a coalesced cadence.");
+}
+const nativeMovingUpdateStart = nativeMapController.indexOf("    void updateMovingFeatures(String featuresJson) {");
+const nativeMovingUpdateEnd = nativeMapController.indexOf("\n    private void applyMovingFeaturesToStyle()", nativeMovingUpdateStart);
+const nativeMovingUpdate = nativeMovingUpdateStart >= 0 && nativeMovingUpdateEnd > nativeMovingUpdateStart
+  ? nativeMapController.slice(nativeMovingUpdateStart, nativeMovingUpdateEnd)
+  : "";
+if (!nativeMovingUpdate || nativeMovingUpdate.includes("if (nativeGestureInProgress()) return;")) {
+  throw new Error("Native biography positions must keep advancing throughout a held pan or zoom gesture.");
 }
 if (!bundledMobileJs.includes("function mobileMovingBiographyLoop")
     || !bundledMobileJs.includes("const MOBILE_NATIVE_MOVING_MARKER_OVERVIEW_INTERVAL_MS = 56")
     || !bundledMobileJs.includes("const MOBILE_NATIVE_MOVING_MARKER_CLOSE_INTERVAL_MS = 24")
     || !bundledMobileJs.includes("const MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS = 80")
+    || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_ROUTE_DURATION_MS = 300000")
+    || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_REFERENCE_ROUTE_DISTANCE = 0.35")
+    || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_MIN_SEGMENT_MS = 4000")
+    || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_BASE_MOTION_SCALE = 0.72")
     || !bundledMobileJs.includes("function mobileBiographyZoomMotionScale(zoomValue = Number(state.map?.getZoom?.()))")
+    || !bundledMobileJs.includes("function mobileMovingMarkerMaxFrameDeltaMs()")
+    || !bundledMobileJs.includes("function mobileMovingRouteDuration(route = [])")
     || !bundledMobileJs.includes("function mobileNativeMovingMarkerIntervalMs()")
     || !bundledMobileJs.includes("function mobileBiographyMotionFor(item, now = performance.now())")
     || !bundledMobileJs.includes("const motion = mobileBiographyMotionFor(item, now)")
-    || !bundledMobileJs.includes("if (zoom <= 8) return 0.12")
-    || !bundledMobileJs.includes("return Math.max(0.08, 0.22 / Math.pow(2, (zoom - 11.5) * 0.5))")
-    || !bundledMobileJs.includes("Math.min(rawDelta, MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS) * motionScale")
+    || !bundledMobileJs.includes("if (!Number.isFinite(zoom) || zoom <= 11.5) return MOBILE_BIOGRAPHY_BASE_MOTION_SCALE")
+    || !bundledMobileJs.includes("MOBILE_BIOGRAPHY_BASE_MOTION_SCALE / Math.pow(2, zoom - 11.5)")
+    || !bundledMobileJs.includes("Math.min(rawDelta, mobileMovingMarkerMaxFrameDeltaMs()) * motionScale")
     || !bundledMobileJs.includes('phase: "fade-out"')
     || !bundledMobileJs.includes('phase: "reset"')
     || !bundledMobileJs.includes('phase: "fade-in"')
@@ -418,6 +434,17 @@ if (!bundledMobileJs.includes("function mobileMovingBiographyLoop")
     || !nativeMapController.includes('iconOpacity(Expression.coalesce(Expression.get("motion_opacity")')
     || !nativeMapController.includes('textOpacity(Expression.coalesce(Expression.get("motion_opacity")')) {
   throw new Error("Biography icons and titles must fade at the route end, reset invisibly, and fade back in at the start on Android.");
+}
+if (!bundledMobileJs.includes("item.displayOffset = mobileBiographySiteAwareOffset(item.slug, item.route[0], groupedOffset)")) {
+  throw new Error("Android biography routes must resolve site-pin clearance once from a stable route origin.");
+}
+const biographyDisplayCoordinatesStart = bundledMobileJs.indexOf("    function mobileBiographyDisplayCoordinates(");
+const biographyDisplayCoordinatesEnd = bundledMobileJs.indexOf("\n    function mobileMovingBiographyItems()", biographyDisplayCoordinatesStart);
+const biographyDisplayCoordinates = biographyDisplayCoordinatesStart >= 0 && biographyDisplayCoordinatesEnd > biographyDisplayCoordinatesStart
+  ? bundledMobileJs.slice(biographyDisplayCoordinatesStart, biographyDisplayCoordinatesEnd)
+  : "";
+if (!biographyDisplayCoordinates || biographyDisplayCoordinates.includes("mobileBiographySiteAwareOffset(")) {
+  throw new Error("Android biography display coordinates must preserve route movement instead of re-clamping every frame to a nearby site pin.");
 }
 if (!nativeMapController.includes("mapTapHitRadiusPx()")
     || !nativeMapController.includes("zoom < 8.5 ? 18f : zoom < 10.0 ? 24f : 32f")) {
@@ -2793,8 +2820,8 @@ for (const [label, runtime] of [["modular", bundledMobileJs], ["full offline", b
       || !runtime.includes("Open directions in Maps")) {
     throw new Error(`Android ${label} search must use explicit one-request geocoding with a provider fallback.`);
   }
-  if (!/function\s+mobileBiographyZoomMotionScale\(zoomValue[\s\S]*?return\s+0\.12[\s\S]*?Math\.max\(0\.08,\s*0\.22\s*\/\s*Math\.pow/.test(runtime)) {
-    throw new Error(`Android ${label} biography routes must decelerate at close zoom without lowering native frame cadence.`);
+  if (!/MOBILE_BIOGRAPHY_BASE_MOTION_SCALE\s*=\s*0\.72[\s\S]*?function\s+mobileBiographyZoomMotionScale\(zoomValue[\s\S]*?zoom\s*<=\s*11\.5\)\s*return\s+MOBILE_BIOGRAPHY_BASE_MOTION_SCALE[\s\S]*?MOBILE_BIOGRAPHY_BASE_MOTION_SCALE\s*\/\s*Math\.pow\(2,\s*zoom\s*-\s*11\.5\)/.test(runtime)) {
+    throw new Error(`Android ${label} biography routes must remain visibly active at overview zoom and decelerate at close zoom without lowering native frame cadence.`);
   }
   if (!runtime.includes("const movingArticle = (state.nativeMovingBiographyItems || [])")
       || !runtime.includes("openWikiArticle(state.wikiBySlug.get(wikiSlug) || movingArticle || wikiSlug, {")
