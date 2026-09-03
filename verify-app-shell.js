@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260903-plant-id-route-stability-r233";
+const expectedBuild = "20260903-location-cache-startup-r234";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -2225,8 +2225,14 @@ if (!appBridge.includes("getCachedLocation(String token, long maxAgeMs)")
     || !source.includes("String cachedLocationJson(long requestedMaxAgeMs)")
     || !source.includes("manager.getLastKnownLocation(provider)")
     || !bundledMobileJs.includes("function nativeCachedUserPosition()")
+    || !bundledMobileJs.includes("const NATIVE_LOCATION_CACHE_MAX_AGE_MS = 300000")
     || !bundledMobileJs.includes("const cachedPosition = nativeCachedUserPosition();")) {
   throw new Error("APK location control must use a recent token-protected Android system location before waiting on WebView geolocation.");
+}
+if (!bundledMobileJs.includes("const nativeStartupPosition = nativeAndroid ? nativeCachedUserPosition() : null;")
+    || !bundledMobileJs.includes("state.userLocation = [nativeStartupPosition.longitude, nativeStartupPosition.latitude];")
+    || bundledMobileJs.indexOf("const nativeStartupPosition = nativeAndroid ? nativeCachedUserPosition() : null;") > bundledMobileJs.indexOf("await loadData();")) {
+  throw new Error("APK startup must restore a recent Android location before archive loading while the map readiness shield remains active.");
 }
 if (!bundledMobileJs.includes("if (!silent) setLocationControlsBusy(true);")
     || !bundledMobileJs.includes("if (centerMap && isNativeAndroidApp()) setTimeout(renderList, 0);")
