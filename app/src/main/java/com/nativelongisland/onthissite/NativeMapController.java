@@ -256,6 +256,8 @@ final class NativeMapController {
     private long movingFeatureDebugLastApplyAt;
     private long movingFeatureDebugMaxGapMs;
     private int movingFeatureDebugApplyCount;
+    private long movingFeatureReceivedCount;
+    private long movingFeatureAppliedCount;
     private String lastBlockedTouchRegionsJson = "";
     private float lastBlockedTouchScaleX = Float.NaN;
     private float lastBlockedTouchScaleY = Float.NaN;
@@ -1203,7 +1205,7 @@ final class NativeMapController {
                 textHaloColor("rgba(42,47,44,0.7)"), textHaloWidth(0.6f),
                 textAllowOverlap(true), textIgnorePlacement(true)
             ));
-            style.addLayer(new SymbolLayer("nli-moving-biography-canoes", MOVING_FEATURE_SOURCE_ID)
+            style.addLayerBelow(new SymbolLayer("nli-moving-biography-canoes", MOVING_FEATURE_SOURCE_ID)
                 .withFilter(Expression.all(
                     Expression.eq(Expression.get("moving_kind"), Expression.literal("biography")),
                     Expression.eq(Expression.get("on_water"), Expression.literal(true))
@@ -1218,8 +1220,8 @@ final class NativeMapController {
                     )),
                     iconOpacity(Expression.coalesce(Expression.get("motion_opacity"), Expression.literal(1f))),
                     iconAllowOverlap(true), iconIgnorePlacement(true)
-                ));
-            style.addLayer(new SymbolLayer("nli-moving-biography-icons", MOVING_FEATURE_SOURCE_ID)
+                ), "nli-site-point-circles");
+            style.addLayerBelow(new SymbolLayer("nli-moving-biography-icons", MOVING_FEATURE_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("moving_kind"), Expression.literal("biography")))
                 .withProperties(
                     iconImage(Expression.get("icon_key")),
@@ -1231,7 +1233,7 @@ final class NativeMapController {
                     )),
                     iconOpacity(Expression.coalesce(Expression.get("motion_opacity"), Expression.literal(1f))),
                     iconAllowOverlap(true), iconIgnorePlacement(true)
-                ));
+                ), "nli-site-point-circles");
             style.addLayer(new SymbolLayer("nli-moving-dog-icons", MOVING_FEATURE_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("moving_kind"), Expression.literal("dog")))
                 .withProperties(
@@ -1540,6 +1542,7 @@ final class NativeMapController {
 
     void updateMovingFeatures(String featuresJson) {
         if (featuresJson == null || featuresJson.isEmpty() || featuresJson.length() > 256 * 1024) return;
+        movingFeatureReceivedCount += 1;
         movingFeaturesJson = featuresJson;
         if (startupVisualTracking && !startupMovingFeaturesSeen) {
             try {
@@ -1574,8 +1577,26 @@ final class NativeMapController {
         if (source != null) {
             source.setGeoJson(collection);
             lastMovingFeatureApplyAt = SystemClock.uptimeMillis();
+            movingFeatureAppliedCount += 1;
             recordMovingFeatureDebugSample(collection, lastMovingFeatureApplyAt);
         }
+    }
+
+    String movingFeatureDiagnosticsJson() {
+        if (!BuildConfig.DEBUG) return "{}";
+        JSONObject result = new JSONObject();
+        try {
+            long now = SystemClock.uptimeMillis();
+            result.put("receivedCount", movingFeatureReceivedCount);
+            result.put("appliedCount", movingFeatureAppliedCount);
+            result.put("lastApplyAgeMs", lastMovingFeatureApplyAt <= 0L ? -1L : Math.max(0L, now - lastMovingFeatureApplyAt));
+            result.put("nativeGestureInProgress", nativeGestureInProgress());
+            result.put("styleReady", styleReady);
+            result.put("sourceReady", map != null && map.getStyle() != null
+                && map.getStyle().getSourceAs(MOVING_FEATURE_SOURCE_ID) != null);
+            result.put("payloadBytes", movingFeaturesJson == null ? 0 : movingFeaturesJson.length());
+        } catch (Exception ignored) {}
+        return result.toString();
     }
 
     private void recordMovingFeatureDebugSample(FeatureCollection collection, long now) {
@@ -2035,7 +2056,9 @@ final class NativeMapController {
      * box, not necessarily the one closest to the finger. Picking the first
      * result made dense clusters open an adjacent site and made the pressed
      * artwork appear unresponsive. Prefer the closest actionable point while
-     * retaining event-over-site priority when two markers share coordinates.
+     * retaining event priority and letting a site pin win a near-exact tie with
+     * a moving biography. The biography remains selectable when it is clearly
+     * closer to the visitor's finger.
      */
     private Feature nearestActionablePointFeature(
         List<Feature> features,
@@ -2061,9 +2084,13 @@ final class NativeMapController {
             double x = renderedPoint.x - pressedPoint.x;
             double y = renderedPoint.y - pressedPoint.y;
             double distance = x * x + y * y;
+            boolean sitePoint = feature.hasProperty("slug")
+                && !feature.hasProperty("native_kind")
+                && !feature.hasProperty("wiki_slug");
             int priority = feature.hasProperty("event_key") ? 0
-                : feature.hasProperty("native_kind") ? 1
-                : feature.hasProperty("wiki_slug") ? 2 : 3;
+                : sitePoint ? 1
+                : feature.hasProperty("native_kind") ? 2
+                : feature.hasProperty("wiki_slug") ? 3 : 4;
             if (distance < nearestDistance - 0.25
                 || (Math.abs(distance - nearestDistance) <= 0.25 && priority < nearestPriority)) {
                 nearest = feature;

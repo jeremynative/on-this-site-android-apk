@@ -142,6 +142,12 @@ class AppBridge {
     }
 
     @JavascriptInterface
+    public String getNativeMapMovingFeatureDiagnostics(String token) {
+        if (!BuildConfig.DEBUG || !activity.validBridgeToken(token)) return "{}";
+        return activity.nativeMapMovingFeatureDiagnosticsJson();
+    }
+
+    @JavascriptInterface
     public float getSafeInsetTop() {
         return activity.safeInsetTopCss();
     }

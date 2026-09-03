@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260903-fast-user-location-r231";
+const expectedBuild = "20260903-mobile-bio-stability-r232";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -121,9 +121,10 @@ if (!bundledMobileJs.includes('{ label: "Unkechaug homeland", place: "Poospatuck
     || !bundledMobileJs.includes('"cockenoe"')
     || !bundledMobileJs.includes("function mobileBiographyUniqueRoute(route = [])")
     || !bundledMobileJs.includes("function mobileBiographyDisplayOffsets(items = [])")
-    || !bundledMobileJs.includes("function mobileBiographyDisplayCoordinates(coordinates, offset = [0, 0])")
-    || !bundledMobileJs.includes("mobileBiographyDisplayCoordinates(motion.coordinates, item.displayOffset)")) {
-  throw new Error("Bundled Android runtime must map Indigenous biographies to their homelands and space shared-location icons.");
+    || !bundledMobileJs.includes('function mobileBiographyDisplayCoordinates(coordinates, offset = [0, 0], slug = "")')
+    || !bundledMobileJs.includes("function mobileBiographySiteAwareOffset(slug, coordinates, offset = [0, 0])")
+    || !bundledMobileJs.includes("mobileBiographyDisplayCoordinates(motion.coordinates, item.displayOffset, item.slug)")) {
+  throw new Error("Bundled Android runtime must map Indigenous biographies to their homelands and keep them clear of site pins.");
 }
 
 if (!bundledMobileJs.includes("function bindPlantCameraZoom(overlay, video, track)")
@@ -271,6 +272,21 @@ if (!nativeMapController.includes('new SymbolLayer("nli-moving-feature-labels", 
     || !nativeMapController.includes('textFont(new String[] { "Noto Sans Regular" }), textSize(10f)')
     || nativeMapController.includes('textFont(new String[] { "Noto Sans Bold" }), textSize(10f)')) {
   throw new Error("Native biography titles must use the bundled regular font so close-zoom labels render on Android.");
+}
+if (!appBridge.includes("getNativeMapMovingFeatureDiagnostics")
+    || !nativeMapController.includes("String movingFeatureDiagnosticsJson()")
+    || !nativeMapController.includes('result.put("receivedCount", movingFeatureReceivedCount)')
+    || !nativeMapController.includes('result.put("appliedCount", movingFeatureAppliedCount)')
+    || !bundledMobileJs.includes("window.__nliMobileMovingFeatureDiagnostics")) {
+  throw new Error("Debug APKs must expose bounded JavaScript/native motion health counters for physical-device regression tests.");
+}
+if (!nativeMapController.includes('style.addLayerBelow(new SymbolLayer("nli-moving-biography-canoes", MOVING_FEATURE_SOURCE_ID)')
+    || !nativeMapController.includes('style.addLayerBelow(new SymbolLayer("nli-moving-biography-icons", MOVING_FEATURE_SOURCE_ID)')
+    || !nativeMapController.includes('), "nli-site-point-circles");')
+    || !nativeMapController.includes('boolean sitePoint = feature.hasProperty("slug")')
+    || !nativeMapController.includes(': sitePoint ? 1')
+    || !nativeMapController.includes(': feature.hasProperty("native_kind") ? 2')) {
+  throw new Error("Native biographies must render below site pins and site pins must win only near-exact tap ties.");
 }
 const waterCatalogAssignment = bundledWaterLabels.indexOf("window.NLI_WATER_LABELS");
 const waterCatalogStart = bundledWaterLabels.indexOf("{", waterCatalogAssignment);
@@ -2695,8 +2711,11 @@ if (!bundledDrawerState
   throw new Error("Bundled Android site and biography drawers must not resize their unchanged map container, and other layout resizes must be deduplicated.");
 }
 requireBundledText('refreshMobileMapSources();', "Bundled Android app must refresh map sources after Android WebView startup.");
-requireBundledText('function bindAndroidMapGestureGuards()', "Bundled Android app must pause expensive map refreshes while the user is dragging or pinching.");
-requireBundledText('state.map.on("dragstart", markAndroidMapGestureActive);', "Bundled Android app must detect the start of finger map drags.");
+requireBundledText('gestureChanged(active) {', "Bundled Android app must receive authoritative native gesture state.");
+requireBundledText('if (active) markAndroidMapGestureActive();', "Bundled Android app must pause expensive map refreshes during a real native gesture.");
+if (/state\.map\.on\("(?:dragstart|zoomstart)",\s*markAndroidMapGestureActive\)/.test(bundledMobileJs)) {
+  throw new Error("Bundled Android app must not let its hidden compatibility map freeze biography motion.");
+}
 requireBundledText('if (isAndroidMapGestureActive()) {\n          state.pendingAndroidMapRefresh = true;\n          return;\n        }', "Bundled Android app must defer settle refreshes during active map gestures.");
 requireBundledText('androidMapRefreshTimers: new Set()', "Bundled Android app must keep one cancellable map refresh chain.");
 requireBundledText('[280, 1100, 2600].forEach(delay => {', "Bundled Android paint stabilization must use a short bounded retry sequence.");
