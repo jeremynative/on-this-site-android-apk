@@ -94,6 +94,11 @@ const audit = await evaluate(`(async () => {
 
   window.NLI_APK_LOCATION_CONTROL_AUDIT.moveAway();
   await wait(150);
+  window.NLI_APK_LOCATION_CONTROL_AUDIT.clearKnownLocation();
+  const cachedRecenter = await press("native-cached-recenter");
+
+  window.NLI_APK_LOCATION_CONTROL_AUDIT.moveAway();
+  await wait(150);
   const awayBeforeReset = snapshot("away-before-reset");
   const resetRecenter = await press("reset-recenter");
 
@@ -107,6 +112,9 @@ const audit = await evaluate(`(async () => {
     && near(zoomedOnce.zoom, recentered.zoom + 1)
     && zoomedTwice.centered
     && near(zoomedTwice.zoom, zoomedOnce.zoom + 1)
+    && cachedRecenter.centered
+    && cachedRecenter.centeredWithinBudget
+    && near(cachedRecenter.zoom, 10.5)
     && !awayBeforeReset.centered
     && resetRecenter.centered
     && resetRecenter.centeredWithinBudget
@@ -121,6 +129,7 @@ const audit = await evaluate(`(async () => {
       recentered,
       zoomedOnce,
       zoomedTwice,
+      cachedRecenter,
       awayBeforeReset,
       resetRecenter
     ]

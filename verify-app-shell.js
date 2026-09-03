@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260902-native-water-labels-r230";
+const expectedBuild = "20260903-fast-user-location-r231";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -2197,6 +2197,20 @@ if (!bundledMobileJs.includes("function centerMapOnKnownUserLocation({ zoomIfAlr
     || !bundledMobileJs.includes("if (centerMapOnKnownUserLocation({ zoomIfAlreadyCentered: isNativeAndroidApp() })) return true;")
     || !bundledMobileJs.includes("positionOptions: { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }")) {
   throw new Error("Bundled mobile JavaScript must recenter immediately from the known user location and use a bounded cached first fix.");
+}
+if (!appBridge.includes("getCachedLocation(String token, long maxAgeMs)")
+    || !appBridge.includes("validBridgeToken(token)")
+    || !source.includes("String cachedLocationJson(long requestedMaxAgeMs)")
+    || !source.includes("manager.getLastKnownLocation(provider)")
+    || !bundledMobileJs.includes("function nativeCachedUserPosition()")
+    || !bundledMobileJs.includes("const cachedPosition = nativeCachedUserPosition();")) {
+  throw new Error("APK location control must use a recent token-protected Android system location before waiting on WebView geolocation.");
+}
+if (!bundledMobileJs.includes("if (!silent) setLocationControlsBusy(true);")
+    || !bundledMobileJs.includes("if (centerMap && isNativeAndroidApp()) setTimeout(renderList, 0);")
+    || !bundledMobileJs.includes("state.map.jumpTo({ center: state.userLocation, zoom });")
+    || !bundledMobileJs.includes("syncNativeMapCameraToAndroid();")) {
+  throw new Error("APK location control must stay available during silent startup and move the native map before deferred list work.");
 }
 if (!bundledMobileJs.includes("zoomIfAlreadyCentered: isNativeAndroidApp()")) {
   throw new Error("Bundled mobile JavaScript must enable repeated location zoom only in the APK.");
