@@ -1308,3 +1308,13 @@ Safest next action: use Obtainium 0.1.645 normally. For any future biography reg
 - The hosted runtime was deployed first by web workflow `33631167612`, so current online Android sessions and the new APK receive the same fix.
 
 Safest next action: update through Obtainium to 0.1.640 when convenient, then open several site and biography markers normally and report only if a transient stretch remains on a specific device/orientation.
+
+## 2026-09-03 mobile article touch-scroll repair and 0.1.650 release
+
+- Android WebView was dispatching pointer and touch events for the same finger. The touch path armed the shared drawer gesture, then the pointer-move path consumed an upward article swipe as drawer resizing, preventing native content scrolling.
+- The synchronized runtime now ignores touch-originated pointer move/end events, disarms drawer handling without layout writes when a gesture belongs to native article scrolling, and gives `.detail-body` explicit `touch-action: pan-y`. Downward pull-to-collapse at scroll top remains intact. Native marker is `20260903-content-touch-scroll-r237`.
+- Android PR #98 merged as `98ebb703650e323a30b240a12f602c2004bda014`. Workflow `33812911693` passed shell/readiness, APK/AAB, ABI, and 16 KB compatibility checks and published Obtainium/GitHub `0.1.650` / `apk-650`: https://github.com/jeremynative/on-this-site-android-apk/releases/tag/apk-650. The APK is 54,956,137 bytes with SHA-256 `3c5d1de4267284aa7dc117b85162ddb93ed1d597a1d6883d17bfac9fac33ceb6`; Google Play was skipped under the existing cadence.
+- Physical QA on iPlay tablet `T811MA256GB23516041180` measured one upward swipe moving `scrollTop` from 0 to about 365 px while the drawer remained in its stable half state. Device audits also passed downward pull-to-collapse and the delayed hero-collapse/intro-preservation behavior. The exact signed release was installed over production without clearing data and visibly scrolled Ma's House from the opening image to later sections with no fatal exception or ANR.
+- Web PR #213 merged as `fdae5e86629cdb7b2b9eeae278f203337ce52eb4`; deployment `33812544215` completed the synchronized VPS runtime switch. The temporary QA package and WebView debugging forward were removed.
+
+Safest next action: use Obtainium 0.1.650 normally. No data reset is required; if an older hosted runtime is retained in an already-running session, fully close and reopen the app once.
