@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://directus.nativelongisland.com">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link href="assets/vendor/maplibre-gl/maplibre-gl.css?v=ab1e70d59ec4" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/mobile-app.css?v=51552b1784d9">
+  <link rel="stylesheet" href="assets/css/mobile-app.css?v=bbb30cd267c1">
   <link rel="stylesheet" href="assets/css/shared-research-question.css?v=58d7f9115b8a">
 </head>
 <body>
@@ -411,6 +411,8 @@
         <p class="summary">Choose what you want to add. Stories are immediate and temporary. Site suggestions are saved for review before becoming public.</p>
         <button class="action" id="contribute-story-open" type="button">Add temporary story</button>
         <p class="detail-meta">Appears on the map right away and expires after about 24 hours unless kept by community votes.</p>
+        <button class="action secondary" id="contribute-plant-story-open" type="button">Add plant ID story</button>
+        <p class="detail-meta">The Story is temporary; the reviewed photo stays in the plant inventory for its ancestral-land section.</p>
         <button class="action secondary" id="contribute-site-open" type="button">Suggest a site</button>
         <p class="detail-meta" id="contribute-site-note">Requires project review before it becomes public.</p>
       </div>
@@ -435,6 +437,34 @@
         <div id="map-story-photo-preview" class="map-story-preview"></div>
         <p class="detail-meta" id="map-story-location">Location will be taken from your device when you submit.</p>
         <button class="action" id="map-story-submit" type="button">Submit story</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="sheet" id="plant-story-sheet" aria-live="polite">
+    <div class="sheet-head">
+      <h2>Add Plant ID Story</h2>
+      <button class="close" data-close-sheet type="button" aria-label="Close plant ID story">x</button>
+    </div>
+    <div class="sheet-body">
+      <div class="profile-card plant-story-card plant-observation-panel" data-plant-observation data-plant-story="true">
+        <p class="summary">Take a plant photo anywhere on Long Island. Its Story appears for about 24 hours, while the photo remains in the plant inventory for the ancestral-land section assigned from your location.</p>
+        <p class="detail-meta" data-plant-story-location>Location will be requested before submission. The temporary Story appears near that location; the permanent inventory names the ancestral-land section and an optional nearby site.</p>
+        <button class="site-plant-card-action plant-guide-button" type="button" data-open-native-plants>Open Native plants guide</button>
+        <div class="plant-camera-row">
+          <div class="plant-camera-actions">
+            <button class="action plant-camera-trigger" type="button" data-take-plant-photo>Take plant photo</button>
+            <button class="action secondary plant-camera-trigger" type="button" data-upload-plant-photo>Choose photo</button>
+          </div>
+          <input id="plant-story-image" data-plant-image type="file" accept="image/*" capture="environment">
+        </div>
+        <div data-plant-preview></div>
+        <div class="field">
+          <label for="plant-story-notes">Optional Story note</label>
+          <textarea id="plant-story-notes" data-plant-notes rows="3" placeholder="What did you notice about the plant or habitat?"></textarea>
+        </div>
+        <p class="plant-safety-warning plant-submit-limit-note">The photo is an observation, not harvesting or medical guidance.<span data-plant-limit-status></span></p>
+        <button class="action" type="button" data-submit-plant-report disabled>Take a plant photo first</button>
       </div>
     </div>
   </section>
@@ -610,7 +640,7 @@
 <script src="assets/data/mobile-media-map.js?v=df457a8718f1" defer></script>
 <script src="assets/data/place-name-area-overlays.js?v=adb2735000cd" defer></script>
 <script id="maplibre-gl-script" src="assets/vendor/maplibre-gl/maplibre-gl.js?v=45a9b07a9189" async></script>
-  <script src="assets/js/shared-directus-config.js?v=fef05b53e355" defer></script>
+  <script src="assets/js/shared-directus-config.js?v=a4498547e06c" defer></script>
   <script src="assets/js/water-labels.js?v=897e649388c9" defer></script>
   <script src="assets/js/shared-utils.js?v=17d9a13be172" defer></script>
   <script src="assets/js/shared-site-utils.js?v=b7776568ee89" defer></script>
@@ -623,22 +653,22 @@
   <script src="assets/js/shared-activity-utils.js?v=d5edd0482c84" defer></script>
   <script src="assets/js/shared-comment-utils.js?v=36fd425be871" defer></script>
   <script src="assets/js/shared-quote-comment-utils.js?v=a023f2a30d3c" defer></script>
-  <script src="assets/js/shared-timeline-utils.e005e33efb3c.js?v=e005e33efb3c" defer></script>
+  <script src="assets/js/shared-timeline-utils.js?v=e005e33efb3c" defer></script>
   <script src="assets/js/shared-moderation-utils.js?v=1ad838b0ba73" defer></script>
-  <script src="assets/js/shared-plant-utils.js?v=e4850ec4165d" defer></script>
-  <script src="assets/js/shared-calendar-utils.4643d26b4828.js?v=4643d26b4828" defer></script>
+  <script src="assets/js/shared-plant-utils.js?v=45303bfe8cd4" defer></script>
+  <script src="assets/js/shared-calendar-utils.js?v=4643d26b4828" defer></script>
   <script src="assets/js/shared-geometry-utils.js?v=acf0224db6df" defer></script>
   <script src="assets/js/shared-route-utils.js?v=016707562f5e" defer></script>
-  <script src="assets/js/shared-html-utils.6ebde5a746e1.js?v=6ebde5a746e1" defer></script>
+  <script src="assets/js/shared-html-utils.js?v=6ebde5a746e1" defer></script>
   <script src="assets/js/shared-directus-client.js?v=1012864517da" defer></script>
-  <script src="assets/js/shared-media-utils.589868155ec4.js?v=589868155ec4" defer></script>
-  <script src="assets/js/shared-map-utils.dd706b0d6326.js?v=dd706b0d6326" defer></script>
+  <script src="assets/js/shared-media-utils.js?v=589868155ec4" defer></script>
+  <script src="assets/js/shared-map-utils.js?v=dd706b0d6326" defer></script>
   <script src="assets/js/shared-feedback-utils.js?v=880c8eadb9cd" defer></script>
   <script src="assets/js/support-public-config.js?v=53b5261a2538" defer></script>
   <script src="assets/js/shared-support-utils.js?v=87c59f4d11ab" defer></script>
   <script src="assets/js/shared-research-question-utils.js?v=bc939b15024b" defer></script>
   <script src="assets/js/language-quiz-words.js?v=9395720dbb1d" defer></script>
   <script src="assets/js/userviews-tracker.js?v=c3326553d1b0" defer></script>
-  <script src="assets/js/mobile-app.js?v=497e391d771d" defer></script>
+  <script src="assets/js/mobile-app.js?v=plant-story-inventory-r236" defer></script>
 </body>
 </html>

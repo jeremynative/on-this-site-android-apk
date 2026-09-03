@@ -4444,6 +4444,30 @@
       box-shadow: 0 8px 24px rgba(24, 36, 28, 0.06);
     }
 
+    .plant-story-card {
+      display: grid;
+      gap: 12px;
+    }
+
+    .plant-story-card .plant-camera-row,
+    .plant-story-card .field,
+    .plant-story-card [data-plant-preview] {
+      margin: 0;
+    }
+
+    .plant-story-card [data-plant-story-location] {
+      padding: 9px 10px;
+      border-radius: 10px;
+      background: #edf5f1;
+      color: #245847;
+    }
+
+    .site-plant-site-link,
+    .site-plant-territory-link {
+      justify-self: start;
+      margin-top: 3px;
+    }
+
     .plant-observation-panel summary {
       display: grid;
       grid-template-columns: 42px minmax(0, 1fr);
@@ -4608,6 +4632,20 @@
 
     .mobile-story-marker.is-attached {
       border-color: rgba(164, 126, 32, 0.45);
+    }
+
+    .mobile-story-marker.is-plant-story {
+      display: grid;
+      place-items: center;
+      color: #2f6d4d;
+      background: #eff8f1;
+      font-size: 20px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .mobile-story-marker.is-plant-story::before {
+      display: none;
     }
 
     .site-plant-image-button {
