@@ -1,5 +1,15 @@
 # Android APK — Codex Handoff
 
+## September 3 location-based plant Story inventories
+
+- Android PR #96 merged as `06dfb68f57ae6ebb82995376d7e3e642fee0212b`. The shared mobile contribution flow now lets a signed-in visitor take or choose a plant-identification photo anywhere inside the thirteen mapped Long Island ancestral-land sections. A fresh foreground location assigns the permanent plant observation to the containing ancestral-land inventory; an ordinary mapped site is also linked only when the observation is inside or within 0.18 mile of that site.
+- The same image creates a separate 24-hour map Story. Ancestral-land entries show permanent approved observations in a seasonal grid with links to any linked sites, while individual sites show their own grid and link back to the ancestral inventory. Broad territory inventory cards do not expose exact permanent observation coordinates.
+- The existing site plant form now stores coordinates in the correct longitude/latitude order and uses the same territory assignment. Directus permissions remain contributor-only for creation, and the public can read only approved observations/stories. The app requests foreground location only when this feature is chosen.
+- Shell marker is `20260903-plant-story-inventory-r236`. Shell/readiness checks, JavaScript syntax, whitespace, debug APK, `lintDebug`, and the optimized/R8 QA build passed. Physical iPlay 50 mini Pro QA loaded the map successfully from the temporary QA build without making a real production contribution; that QA package was removed.
+- Signed workflow `33806311833` passed and published Obtainium/GitHub release `0.1.649` / `apk-649`. The exact 54,955,797-byte APK has SHA-256 `D3C097F510F5FCBE19B85D5EBA16632FD83E1582A13F63A35054725B02B5F935`. It installed over production without clearing app data, launched successfully, reports version code/name 649/0.1.649, loaded the live map, and produced no fatal exception or ANR. Google Play submission was skipped under the milestone cadence.
+
+Safest next action: update other Android devices through Obtainium and make one signed-in, intentionally disposable plant submission outdoors to verify the complete camera/location/upload journey. Do not expose exact permanent observation coordinates on broad ancestral-land inventory pages, and keep Google Play to milestone releases.
+
 ## September 3 continuous biography motion
 
 - Android PR #94 merged as `8831dd8ce69ff63904b398952589a9d65855a61a`. The native moving-feature renderer no longer drops all position updates during a pan/zoom gesture; it coalesces the compact source at 80 ms while touching, resumes the normal 20 ms guard when idle, and explicitly invalidates the map after source updates.
