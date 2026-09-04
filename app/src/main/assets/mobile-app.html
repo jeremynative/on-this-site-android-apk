@@ -21321,9 +21321,10 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
     const WHALING_FEATURE_SLUG = "whaling";
     const MOVING_DOG_ICON_URL = "assets/map-icons/dog-moving-icon.png";
     const MOVING_DOG_WIKI_SLUG = "dog-ceremonialism";
-    // Three updates per second keep slow route travel visually continuous while
-    // avoiding hundreds of JNI/GeoJSON updates per minute on older Android devices.
-    const MOBILE_MOVING_MARKER_INTERVAL_MS = 360;
+    // The browser fallback uses DOM markers, so keep their route samples close
+    // enough to read as continuous motion. Android uses the separate compact
+    // native-source cadence below and does not pay this DOM update cost.
+    const MOBILE_MOVING_MARKER_INTERVAL_MS = 120;
     // The native renderer receives only the compact moving-feature collection.
     // Use a zoom-aware cadence: overview motion is deliberately slow and does
     // not need to wake the renderer as often, while close views need enough
@@ -21342,6 +21343,7 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
     const MOBILE_BIOGRAPHY_REFERENCE_ROUTE_DISTANCE = 0.35;
     const MOBILE_BIOGRAPHY_MIN_SEGMENT_MS = 4000;
     const MOBILE_BIOGRAPHY_BASE_MOTION_SCALE = 0.72;
+    const MOBILE_BIOGRAPHY_SCREEN_PACE_ZOOM = 11.5;
     const MOBILE_BIOGRAPHY_MARKER_STAGGER_MS = 85;
     const MOBILE_BIOGRAPHY_MARKER_FADE_MS = 1600;
     const MOBILE_BIOGRAPHY_MARKER_RESET_MS = 2400;
@@ -34418,11 +34420,15 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
 
     function mobileBiographyZoomMotionScale(zoomValue = Number(state.map?.getZoom?.())) {
       const zoom = Number(zoomValue);
-      // Keep overview travel visibly alive. Above the ordinary detail zoom,
-      // halve geographic advance for each zoom step so the same route stays
-      // calm in screen pixels instead of appearing to sprint when magnified.
-      if (!Number.isFinite(zoom) || zoom <= 11.5) return MOBILE_BIOGRAPHY_BASE_MOTION_SCALE;
-      return MOBILE_BIOGRAPHY_BASE_MOTION_SCALE / Math.pow(2, zoom - 11.5);
+      // Map pixels double with every zoom level. Apply the inverse change to
+      // route time at every mobile zoom so a biography remains visibly alive
+      // at the island overview and does not accelerate when zoomed closer.
+      // Clamp to the map's supported zoom range so a malformed camera echo
+      // cannot advance a route by an extreme amount in one frame.
+      if (!Number.isFinite(zoom)) return MOBILE_BIOGRAPHY_BASE_MOTION_SCALE;
+      const boundedZoom = Math.max(6, Math.min(18, zoom));
+      return MOBILE_BIOGRAPHY_BASE_MOTION_SCALE
+        * Math.pow(2, MOBILE_BIOGRAPHY_SCREEN_PACE_ZOOM - boundedZoom);
     }
 
     function mobileMovingMarkerMaxFrameDeltaMs() {
@@ -35300,6 +35306,8 @@ window.NLI_LANGUAGE_QUIZ_WORDS = [
         timerActive: Boolean(state.mobileMovingMarkerTimer),
         lastUpdateAgeMs: Math.max(0, now - Number(state.mobileMovingMarkerLastAt || now)),
         nativeBridgeAvailable: nativeMapBridgeAvailable(),
+        zoom: Number(state.map?.getZoom?.()),
+        motionScale: mobileBiographyZoomMotionScale(),
         biographyCount: (state.nativeMovingBiographyItems || []).length,
         mapReady: Boolean(state.map)
       };
