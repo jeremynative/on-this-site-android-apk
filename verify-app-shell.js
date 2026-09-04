@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260903-plant-inventory-map-r239";
+const expectedBuild = "20260904-biography-zoom-water-r240";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -299,6 +299,8 @@ if (!appBridge.includes("getNativeMapMovingFeatureDiagnostics")
     || !nativeMapController.includes("String movingFeatureDiagnosticsJson()")
     || !nativeMapController.includes('result.put("receivedCount", movingFeatureReceivedCount)')
     || !nativeMapController.includes('result.put("appliedCount", movingFeatureAppliedCount)')
+    || !nativeMapController.includes('result.put("waterBiographyCount", waterBiographyCount)')
+    || !nativeMapController.includes('result.put("sampleWaterSlug", feature.getStringProperty("native_key"))')
     || !bundledMobileJs.includes("window.__nliMobileMovingFeatureDiagnostics")) {
   throw new Error("Debug APKs must expose bounded JavaScript/native motion health counters for physical-device regression tests.");
 }
@@ -309,6 +311,11 @@ if (!nativeMapController.includes('style.addLayerBelow(new SymbolLayer("nli-movi
     || !nativeMapController.includes(': sitePoint ? 1')
     || !nativeMapController.includes(': feature.hasProperty("native_kind") ? 2')) {
   throw new Error("Native biographies must render below site pins and site pins must win only near-exact tap ties.");
+}
+const nativeBiographyIconLayerIndex = nativeMapController.indexOf('style.addLayerBelow(new SymbolLayer("nli-moving-biography-icons", MOVING_FEATURE_SOURCE_ID)');
+const nativeBiographyCanoeLayerIndex = nativeMapController.indexOf('style.addLayerBelow(new SymbolLayer("nli-moving-biography-canoes", MOVING_FEATURE_SOURCE_ID)');
+if (nativeBiographyIconLayerIndex < 0 || nativeBiographyCanoeLayerIndex <= nativeBiographyIconLayerIndex) {
+  throw new Error("Native Android must paint biography canoes above the person artwork, matching mobile web.");
 }
 const waterCatalogAssignment = bundledWaterLabels.indexOf("window.NLI_WATER_LABELS");
 const waterCatalogStart = bundledWaterLabels.indexOf("{", waterCatalogAssignment);
@@ -434,15 +441,14 @@ if (!bundledMobileJs.includes("function mobileMovingBiographyLoop")
     || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_REFERENCE_ROUTE_DISTANCE = 0.35")
     || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_MIN_SEGMENT_MS = 4000")
     || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_BASE_MOTION_SCALE = 0.72")
-    || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_SCREEN_PACE_ZOOM = 11.5")
-    || !bundledMobileJs.includes("function mobileBiographyZoomMotionScale(zoomValue = Number(state.map?.getZoom?.()))")
     || !bundledMobileJs.includes("function mobileMovingMarkerMaxFrameDeltaMs()")
     || !bundledMobileJs.includes("function mobileMovingRouteDuration(route = [])")
     || !bundledMobileJs.includes("function mobileNativeMovingMarkerIntervalMs()")
     || !bundledMobileJs.includes("function mobileBiographyMotionFor(item, now = performance.now())")
     || !bundledMobileJs.includes("const motion = mobileBiographyMotionFor(item, now)")
-    || !bundledMobileJs.includes("const boundedZoom = Math.max(6, Math.min(18, zoom))")
-    || !bundledMobileJs.includes("Math.pow(2, MOBILE_BIOGRAPHY_SCREEN_PACE_ZOOM - boundedZoom)")
+    || bundledMobileJs.includes("MOBILE_BIOGRAPHY_SCREEN_PACE_ZOOM")
+    || bundledMobileJs.includes("mobileBiographyZoomMotionScale")
+    || !bundledMobileJs.includes("const motionScale = MOBILE_BIOGRAPHY_BASE_MOTION_SCALE * (reducedMotion ? 0.5 : 1)")
     || !bundledMobileJs.includes("Math.min(rawDelta, mobileMovingMarkerMaxFrameDeltaMs()) * motionScale")
     || !bundledMobileJs.includes('phase: "fade-out"')
     || !bundledMobileJs.includes('phase: "reset"')
@@ -2843,8 +2849,9 @@ for (const [label, runtime] of [["modular", bundledMobileJs], ["full offline", b
       || !runtime.includes("Open directions in Maps")) {
     throw new Error(`Android ${label} search must use explicit one-request geocoding with a provider fallback.`);
   }
-  if (!/MOBILE_BIOGRAPHY_BASE_MOTION_SCALE\s*=\s*0\.72[\s\S]*?MOBILE_BIOGRAPHY_SCREEN_PACE_ZOOM\s*=\s*11\.5[\s\S]*?function\s+mobileBiographyZoomMotionScale\(zoomValue[\s\S]*?boundedZoom\s*=\s*Math\.max\(6,\s*Math\.min\(18,\s*zoom\)\)[\s\S]*?Math\.pow\(2,\s*MOBILE_BIOGRAPHY_SCREEN_PACE_ZOOM\s*-\s*boundedZoom\)/.test(runtime)) {
-    throw new Error(`Android ${label} biography routes must keep a visible, constant screen pace across the supported zoom range.`);
+  if (!/MOBILE_BIOGRAPHY_BASE_MOTION_SCALE\s*=\s*0\.72[\s\S]*?const\s+motionScale\s*=\s*MOBILE_BIOGRAPHY_BASE_MOTION_SCALE\s*\*\s*\(reducedMotion\s*\?\s*0\.5\s*:\s*1\)/.test(runtime)
+      || /MOBILE_BIOGRAPHY_SCREEN_PACE_ZOOM|mobileBiographyZoomMotionScale/.test(runtime)) {
+    throw new Error(`Android ${label} biography routes must use a zoom-independent route clock.`);
   }
   if (!runtime.includes("const movingArticle = (state.nativeMovingBiographyItems || [])")
       || !runtime.includes("openWikiArticle(state.wikiBySlug.get(wikiSlug) || movingArticle || wikiSlug, {")

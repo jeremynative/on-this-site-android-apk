@@ -41,10 +41,11 @@ async function evaluate(webSocketDebuggerUrl, expression) {
 const action = String(process.argv[2] || "").toLowerCase();
 const status = action === "status";
 const closeDetail = action === "close";
+const centerWater = action === "water";
 const gesture = action === "tilt" || action === "rotate" ? action : "";
 const zoom = gesture ? null : Number(action || 0);
-if (!status && !closeDetail && !gesture && (!Number.isFinite(zoom) || zoom < 1 || zoom > 20)) {
-  throw new Error("Pass status, a target zoom between 1 and 20, close, or tilt/rotate.");
+if (!status && !closeDetail && !centerWater && !gesture && (!Number.isFinite(zoom) || zoom < 1 || zoom > 20)) {
+  throw new Error("Pass status, water, a target zoom between 1 and 20, close, or tilt/rotate.");
 }
 const page = (await targets()).find(target => target.type === "page");
 if (!page?.webSocketDebuggerUrl) throw new Error("No APK WebView page is available.");
@@ -59,6 +60,16 @@ const result = await evaluate(page.webSocketDebuggerUrl, status ? `(() => ({
 }))()` : closeDetail ? `(() => {
   document.querySelector("#close-detail")?.click();
   return { ok: true, action: "close", href: location.href };
+})()` : centerWater ? `(() => {
+  const token = String(window.__NLI_ANDROID_BRIDGE_TOKEN || "");
+  const bridge = window.AndroidApp;
+  if (!token || typeof bridge?.syncNativeMapCameraPose !== "function") return { ok: false };
+  const nativeMotion = JSON.parse(bridge.getNativeMapMovingFeatureDiagnostics?.(token) || "{}");
+  const coordinate = nativeMotion.sampleWaterCoordinate;
+  if (!Array.isArray(coordinate) || coordinate.length < 2) return { ok: false, reason: "no-water-biography" };
+  bridge.syncNativeMapCameraPose(token, coordinate[0], coordinate[1], 15, 0, 0);
+  window.NLI_NATIVE_MAP_BRIDGE?.cameraChanged?.(coordinate[0], coordinate[1], 15, 0, 0);
+  return { ok: true, action: "water", slug: nativeMotion.sampleWaterSlug, coordinate };
 })()` : gesture ? `(() => {
   const token = String(window.__NLI_ANDROID_BRIDGE_TOKEN || "");
   const bridge = window.AndroidApp;
