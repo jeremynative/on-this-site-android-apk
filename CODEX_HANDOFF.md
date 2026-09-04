@@ -2,12 +2,13 @@
 
 ## September 3 active Shinnecock plant-inventory map display
 
-- Branch `fix/plant-observation-map-icons-20260903` makes approved plant observations visible while their linked site or ancestral-land listing is active. The native map now draws a green plant symbol above the existing contribution marker, and plant cards offer a map action with an explicit exact-point versus inventory-area disclosure.
+- Android PR #101 merged as `b537901718421171b149200e847eea93c6491f0d`. Approved plant observations are visible while their linked site or ancestral-land listing is active. The native map draws a green plant symbol and count above the existing contribution marker, and plant cards offer a map action with an explicit exact-point versus inventory-area disclosure.
 - Directus observations 7 (Wisteria) and 8 (Jacaranda) are correctly assigned to `shinnecock-ancestral-land`, not Ma's House. Both source photos were checked and contain no EXIF/GPS metadata, and both records have null latitude/longitude fields. The app therefore shows one dashed Shinnecock inventory-area plant marker with a count of two rather than inventing two exact points; future coordinate-bearing observations render as individual pins.
 - A physical QA pass caught and fixed JavaScript's `Number(null) === 0` behavior before release. Missing legacy coordinates are now rejected before numeric conversion in the source, bundled live fallback, and full offline shell. Shell marker is `20260903-plant-inventory-map-r239`.
-- `verify-app-shell.js`, `verify-offline-archive.js`, whitespace checks, the debug APK, and `lintDebug` pass. Web PRs #216 and #217 provide the matching live/runtime behavior; final hosted tablet QA and the signed Obtainium release are still pending.
+- `verify-app-shell.js`, `verify-offline-archive.js`, whitespace checks, the debug APK, `lintDebug`, and the optimized/R8 QA build pass. Web PRs #216 and #217 and deployment `33830339794` provide the matching live/runtime behavior. Physical iPlay QA loaded both Shinnecock cards, verified the exact-location disclosure and inventory-area map action, and produced no fatal exception or ANR.
+- Signed workflow `33831579915` passed and published Obtainium/GitHub release `0.1.652` / `apk-652`. The exact 54,958,093-byte APK has SHA-256 `EF6BF6DDCAFF4FBC12787A4C1BAB6083FC57C8DE15719371B96C7BAE5BEADC70`. It installed over production without clearing app data, launched successfully, reports version code/name 652/0.1.652, and the disposable QA package was removed. Google Play submission was skipped under the milestone cadence.
 
-Safest next action: wait for web deployment `33830339794`, rerun the Shinnecock plant-card/map audit against the hosted runtime on the iPlay, then merge this branch, publish the signed APK, install that exact release over production, and record its version and hash here. Do not assign the observations to Ma's House or synthesize exact coordinates.
+Safest next action: update other Android devices through Obtainium, then make a future GPS-backed plant observation outdoors and confirm it renders as an individual exact pin. Do not assign the two legacy observations to Ma's House or synthesize exact coordinates for them.
 
 ## September 3 location-based plant Story inventories
 
