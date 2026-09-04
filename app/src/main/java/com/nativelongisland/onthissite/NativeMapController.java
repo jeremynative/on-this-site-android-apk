@@ -8,6 +8,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PointF;
 import android.graphics.RectF;
 import android.graphics.drawable.GradientDrawable;
@@ -68,6 +69,7 @@ import static org.maplibre.android.style.layers.PropertyFactory.circleTranslate;
 import static org.maplibre.android.style.layers.PropertyFactory.fillColor;
 import static org.maplibre.android.style.layers.PropertyFactory.fillOpacity;
 import static org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap;
+import static org.maplibre.android.style.layers.PropertyFactory.iconAnchor;
 import static org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement;
 import static org.maplibre.android.style.layers.PropertyFactory.iconImage;
 import static org.maplibre.android.style.layers.PropertyFactory.iconOpacity;
@@ -1134,11 +1136,14 @@ final class NativeMapController {
                     circleStrokeColor("#ffffff"), circleStrokeWidth(1.6f),
                     circleTranslate(new Float[] { 14f, -5f })
                 ));
-            style.addLayer(new CircleLayer("nli-story-markers", COMMUNITY_SOURCE_ID)
+            style.addLayer(new SymbolLayer("nli-story-markers", COMMUNITY_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("contribution_kind"), Expression.literal("story")))
                 .withProperties(
-                    circleRadius(7f), circleColor("#72577e"), circleOpacity(0.98f),
-                    circleStrokeColor("#ffffff"), circleStrokeWidth(2.2f)
+                    iconImage("nli-icon-story-bubble"),
+                    iconSize(0.58f),
+                    iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+                    iconAllowOverlap(true),
+                    iconIgnorePlacement(true)
                 ));
             style.addLayer(new CircleLayer("nli-plant-markers", COMMUNITY_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("contribution_kind"), Expression.literal("plant")))
@@ -1371,6 +1376,7 @@ final class NativeMapController {
 
     private void addBundledMapIcons(Style style) {
         try {
+            style.addImage("nli-icon-story-bubble", createStoryBubbleBitmap());
             Bitmap canoe = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888);
             Canvas canoeCanvas = new Canvas(canoe);
             Paint canoeFill = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -1393,6 +1399,52 @@ final class NativeMapController {
         } catch (Exception error) {
             Log.w(LOG_TAG, "Could not enumerate bundled project map icons.", error);
         }
+    }
+
+    private Bitmap createStoryBubbleBitmap() {
+        Bitmap bubble = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bubble);
+
+        Path shape = new Path();
+        shape.moveTo(18f, 7f);
+        shape.lineTo(46f, 7f);
+        shape.quadTo(57f, 7f, 57f, 18f);
+        shape.lineTo(57f, 35f);
+        shape.quadTo(57f, 47f, 45f, 47f);
+        shape.lineTo(34f, 47f);
+        shape.lineTo(19f, 59f);
+        shape.lineTo(22f, 47f);
+        shape.lineTo(19f, 47f);
+        shape.quadTo(7f, 47f, 7f, 35f);
+        shape.lineTo(7f, 18f);
+        shape.quadTo(7f, 7f, 18f, 7f);
+        shape.close();
+
+        Paint shadow = new Paint(Paint.ANTI_ALIAS_FLAG);
+        shadow.setColor(Color.argb(42, 32, 47, 38));
+        canvas.save();
+        canvas.translate(0f, 2f);
+        canvas.drawPath(shape, shadow);
+        canvas.restore();
+
+        Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        fill.setColor(Color.WHITE);
+        fill.setStyle(Paint.Style.FILL);
+        canvas.drawPath(shape, fill);
+
+        Paint outline = new Paint(Paint.ANTI_ALIAS_FLAG);
+        outline.setColor(Color.argb(112, 52, 82, 67));
+        outline.setStyle(Paint.Style.STROKE);
+        outline.setStrokeWidth(2f);
+        outline.setStrokeJoin(Paint.Join.ROUND);
+        canvas.drawPath(shape, outline);
+
+        Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);
+        dot.setColor(Color.rgb(79, 109, 92));
+        canvas.drawCircle(23f, 28f, 3.2f, dot);
+        canvas.drawCircle(32f, 28f, 3.2f, dot);
+        canvas.drawCircle(41f, 28f, 3.2f, dot);
+        return bubble;
     }
 
     private void addBundledMapIconBatch(Style style, String[] assets, int startIndex, int loadedCount) {

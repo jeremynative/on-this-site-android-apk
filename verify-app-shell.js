@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260904-biography-screen-offsets-r241";
+const expectedBuild = "20260904-native-story-bubble-r242";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -244,7 +244,13 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes('new SymbolLayer("nli-moving-ship-icons", MOVING_FEATURE_SOURCE_ID)')
     || !nativeMapController.includes('Expression.literal("ship")')
     || !nativeMapController.includes('iconSize(0.34f)')
-    || !nativeMapController.includes('"nli-story-markers"')
+    || !nativeMapController.includes('new SymbolLayer("nli-story-markers", COMMUNITY_SOURCE_ID)')
+    || !nativeMapController.includes('style.addImage("nli-icon-story-bubble", createStoryBubbleBitmap())')
+    || !nativeMapController.includes('iconImage("nli-icon-story-bubble")')
+    || !nativeMapController.includes('iconAnchor(Property.ICON_ANCHOR_BOTTOM)')
+    || !nativeMapController.includes('private Bitmap createStoryBubbleBitmap()')
+    || !nativeMapController.includes('dot.setColor(Color.rgb(79, 109, 92))')
+    || nativeMapController.includes('new CircleLayer("nli-story-markers", COMMUNITY_SOURCE_ID)')
     || !nativeMapController.includes('"nli-plant-markers"')
     || !nativeMapController.includes('new SymbolLayer("nli-plant-marker-icons", COMMUNITY_SOURCE_ID)')
     || !nativeMapController.includes('new CircleLayer("nli-plant-marker-count-badges", COMMUNITY_SOURCE_ID)')
