@@ -1143,6 +1143,33 @@ final class NativeMapController {
                     circleRadius(7f), circleColor("#5d7d3a"), circleOpacity(0.98f),
                     circleStrokeColor("#ffffff"), circleStrokeWidth(2.2f)
                 ));
+            style.addLayer(new SymbolLayer("nli-plant-marker-icons", COMMUNITY_SOURCE_ID)
+                .withFilter(Expression.eq(Expression.get("contribution_kind"), Expression.literal("plant")))
+                .withProperties(
+                    textField("✿"), textFont(new String[] { "Noto Sans Regular" }),
+                    textSize(12f), textColor("#ffffff"),
+                    textAllowOverlap(true), textIgnorePlacement(true)
+                ));
+            style.addLayer(new CircleLayer("nli-plant-marker-count-badges", COMMUNITY_SOURCE_ID)
+                .withFilter(Expression.all(
+                    Expression.eq(Expression.get("contribution_kind"), Expression.literal("plant")),
+                    Expression.eq(Expression.get("plant_location_precision"), Expression.literal("inventory_area"))
+                ))
+                .withProperties(
+                    circleRadius(6.5f), circleColor("#244b35"),
+                    circleStrokeColor("#ffffff"), circleStrokeWidth(1.5f),
+                    circleTranslate(new Float[] { 10f, -10f })
+                ));
+            style.addLayer(new SymbolLayer("nli-plant-marker-count-labels", COMMUNITY_SOURCE_ID)
+                .withFilter(Expression.all(
+                    Expression.eq(Expression.get("contribution_kind"), Expression.literal("plant")),
+                    Expression.eq(Expression.get("plant_location_precision"), Expression.literal("inventory_area"))
+                ))
+                .withProperties(
+                    textField(Expression.toString(Expression.get("plant_count"))), textFont(new String[] { "Noto Sans Regular" }),
+                    textSize(8.5f), textColor("#ffffff"), textOffset(new Float[] { 1.2f, -1.2f }),
+                    textAllowOverlap(true), textIgnorePlacement(true)
+                ));
             style.addLayer(new CircleLayer("nli-approved-suggestion-markers", COMMUNITY_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("contribution_kind"), Expression.literal("suggestion")))
                 .withProperties(
@@ -1805,6 +1832,9 @@ final class NativeMapController {
         setLayerVisibility(style, "nli-user-location-inner", !profileMode);
         setLayerVisibility(style, "nli-story-markers", !profileMode);
         setLayerVisibility(style, "nli-plant-markers", !profileMode);
+        setLayerVisibility(style, "nli-plant-marker-icons", !profileMode);
+        setLayerVisibility(style, "nli-plant-marker-count-badges", !profileMode);
+        setLayerVisibility(style, "nli-plant-marker-count-labels", !profileMode);
         setLayerVisibility(style, "nli-approved-suggestion-markers", !profileMode);
         setLayerVisibility(style, "nli-approved-suggestion-labels", !profileMode);
         setLayerVisibility(style, "nli-search-result-marker", !profileMode);
@@ -1965,7 +1995,7 @@ final class NativeMapController {
             List<Feature> exactPoints = map.queryRenderedFeatures(screenPoint,
                 "nli-suggestion-draft-label", "nli-suggestion-draft-marker", "nli-search-result-marker",
                 "nli-approved-suggestion-labels", "nli-approved-suggestion-markers",
-                "nli-plant-markers", "nli-story-markers", "nli-selected-site-label",
+                "nli-plant-marker-count-labels", "nli-plant-marker-count-badges", "nli-plant-marker-icons", "nli-plant-markers", "nli-story-markers", "nli-selected-site-label",
                 "nli-moving-feature-labels", "nli-moving-biography-canoes", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons", "nli-moving-ship-icons",
                 "nli-calendar-event-labels", "nli-calendar-event-circles", "nli-exhibit-circles",
                 "nli-biography-path-numbers", "nli-biography-path-points", "nli-biography-path-labels",
@@ -2009,7 +2039,7 @@ final class NativeMapController {
             "nli-profile-point-numbers", "nli-profile-point-circles",
             "nli-suggestion-draft-label", "nli-suggestion-draft-marker", "nli-search-result-marker",
             "nli-approved-suggestion-labels", "nli-approved-suggestion-markers",
-            "nli-plant-markers", "nli-story-markers", "nli-selected-site-label",
+            "nli-plant-marker-count-labels", "nli-plant-marker-count-badges", "nli-plant-marker-icons", "nli-plant-markers", "nli-story-markers", "nli-selected-site-label",
             "nli-moving-feature-labels", "nli-moving-biography-canoes", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons", "nli-moving-ship-icons",
             "nli-calendar-event-labels", "nli-calendar-event-circles", "nli-exhibit-circles",
             "nli-biography-path-numbers", "nli-biography-path-points", "nli-biography-path-labels",

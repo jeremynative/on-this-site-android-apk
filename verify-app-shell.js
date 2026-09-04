@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260903-content-touch-scroll-r237";
+const expectedBuild = "20260903-plant-inventory-map-r239";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -148,6 +148,9 @@ if (!bundledLiveApp.includes('id="contribute-plant-story-open"')
     || !bundledSharedPlantUtils.includes('sourceType === "territory"')) {
   throw new Error("Android must include the location-assigned Plant ID Story and permanent ancestral-land inventory flow.");
 }
+if (!/function\s+plantObservationCoordinates\(record\s*=?.*?\)[\s\S]*?rawLatitude\s*=\s*record\?\.observation_latitude[\s\S]*?rawLatitude\s*===\s*null[\s\S]*?rawLongitude\s*===\s*null[\s\S]*?Number\(rawLatitude\)/.test(bundledMobileJs)) {
+  throw new Error("Android plant inventory markers must reject missing legacy coordinates before numeric conversion.");
+}
 if (!bundledMobileJs.includes('const PLANT_IDENTIFICATION_CANONICAL_ENDPOINT = "https://nativelongisland.com/native-plant-photo-api-20260523e.php";')
     || !bundledMobileJs.includes("function fetchPlantEndpointCandidates(options = {})")
     || !bundledMobileJs.includes("PLANT_IDENTIFICATION_ROUTE_FAILURE_STATUSES.has(response.status)")
@@ -241,6 +244,10 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes('iconSize(0.34f)')
     || !nativeMapController.includes('"nli-story-markers"')
     || !nativeMapController.includes('"nli-plant-markers"')
+    || !nativeMapController.includes('new SymbolLayer("nli-plant-marker-icons", COMMUNITY_SOURCE_ID)')
+    || !nativeMapController.includes('new CircleLayer("nli-plant-marker-count-badges", COMMUNITY_SOURCE_ID)')
+    || !nativeMapController.includes('new SymbolLayer("nli-plant-marker-count-labels", COMMUNITY_SOURCE_ID)')
+    || !nativeMapController.includes('textField("✿")')
     || !nativeMapController.includes('"nli-approved-suggestion-markers"')
     || !nativeMapController.includes('"nli-search-result-marker"')
     || !nativeMapController.includes('"nli-satellite-layer"')
