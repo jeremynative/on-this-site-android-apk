@@ -1,5 +1,14 @@
 # Android APK — Codex Handoff
 
+## September 3 active Shinnecock plant-inventory map display
+
+- Branch `fix/plant-observation-map-icons-20260903` makes approved plant observations visible while their linked site or ancestral-land listing is active. The native map now draws a green plant symbol above the existing contribution marker, and plant cards offer a map action with an explicit exact-point versus inventory-area disclosure.
+- Directus observations 7 (Wisteria) and 8 (Jacaranda) are correctly assigned to `shinnecock-ancestral-land`, not Ma's House. Both source photos were checked and contain no EXIF/GPS metadata, and both records have null latitude/longitude fields. The app therefore shows one dashed Shinnecock inventory-area plant marker with a count of two rather than inventing two exact points; future coordinate-bearing observations render as individual pins.
+- A physical QA pass caught and fixed JavaScript's `Number(null) === 0` behavior before release. Missing legacy coordinates are now rejected before numeric conversion in the source, bundled live fallback, and full offline shell. Shell marker is `20260903-plant-inventory-map-r239`.
+- `verify-app-shell.js`, `verify-offline-archive.js`, whitespace checks, the debug APK, and `lintDebug` pass. Web PRs #216 and #217 provide the matching live/runtime behavior; final hosted tablet QA and the signed Obtainium release are still pending.
+
+Safest next action: wait for web deployment `33830339794`, rerun the Shinnecock plant-card/map audit against the hosted runtime on the iPlay, then merge this branch, publish the signed APK, install that exact release over production, and record its version and hash here. Do not assign the observations to Ma's House or synthesize exact coordinates.
+
 ## September 3 location-based plant Story inventories
 
 - Android PR #96 merged as `06dfb68f57ae6ebb82995376d7e3e642fee0212b`. The shared mobile contribution flow now lets a signed-in visitor take or choose a plant-identification photo anywhere inside the thirteen mapped Long Island ancestral-land sections. A fresh foreground location assigns the permanent plant observation to the containing ancestral-land inventory; an ordinary mapped site is also linked only when the observation is inside or within 0.18 mile of that site.

@@ -288,6 +288,9 @@
       ancestral_territory: relationId(record?.ancestral_territory) || null,
       ancestral_territory_slug: record?.ancestral_territory_slug || "",
       ancestral_territory_title: record?.ancestral_territory_title || "",
+      observation_latitude: record?.observation_latitude ?? null,
+      observation_longitude: record?.observation_longitude ?? null,
+      observation_location_source: record?.observation_location_source || "",
       _structured: true
     };
   }

@@ -5078,6 +5078,58 @@
       cursor: pointer;
     }
 
+    .plant-observation-map-marker {
+      position: relative;
+      display: grid;
+      width: 32px;
+      height: 32px;
+      place-items: center;
+      padding: 0;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      background: #5d7d3a;
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, .24);
+      cursor: pointer;
+    }
+
+    .plant-observation-map-marker svg {
+      width: 20px;
+      height: 20px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .plant-observation-map-marker.inventory-area {
+      border-style: dashed;
+      background: #496b35;
+    }
+
+    .plant-observation-map-marker > span {
+      position: absolute;
+      right: -7px;
+      top: -8px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 4px;
+      border: 2px solid #fff;
+      border-radius: 999px;
+      background: #244b35;
+      color: #fff;
+      font: 700 10px/14px system-ui, sans-serif;
+      text-align: center;
+    }
+
+    .site-plant-card-location {
+      display: block;
+      color: #496455;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
     .plant-camera-overlay {
       position: fixed;
       inset: 0;

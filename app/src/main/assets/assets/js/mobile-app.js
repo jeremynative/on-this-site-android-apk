@@ -5284,7 +5284,8 @@
       const queryTerms = normalizeText(query).split(" ").filter(term => term.length >= 3);
       return /\d/.test(query)
         || /\b(street|st|road|rd|avenue|ave|lane|ln|drive|dr|court|ct|boulevard|blvd|highway|hwy|route|ny-|zip|new york|long island|university|college|school|hospital|museum|library|park|station|airport|restaurant|cafe|store|market|church|cemetery|beach|marina|hotel|center|centre|campus)\b/i.test(query)
-        || queryTerms.length >= 2;
+        || queryTerms.length >= 2
+        || matches.length === 0;
     }
 
     function clearAddressSearch() {
@@ -5339,7 +5340,7 @@
     async function geocodePlaceSearch(query, tokenValue, bbox) {
       const geocodeQuery = /\b(new york|ny|long island|nassau|suffolk|brooklyn|queens)\b/i.test(query)
         ? query
-        : `${query} Long Island NY`;
+        : `${query}, NY`;
       const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(geocodeQuery)}.json?access_token=${encodeURIComponent(tokenValue)}&autocomplete=false&limit=5&types=poi,address,place,locality,neighborhood&bbox=${bbox}&proximity=-73.1,40.85`;
       const response = await fetch(url);
       if (!response.ok) return null;
@@ -7541,8 +7542,8 @@
           }
         });
       });
-      approvedPlantObservationsForSite(state.selectedSite).forEach(record => {
-        const coordinates = plantObservationCoordinates(record)?.map(Number) || [];
+      plantObservationMarkerEntriesForSite(state.selectedSite).forEach(entry => {
+        const { record, coordinates } = entry;
         if (coordinates.length < 2 || !coordinates.every(Number.isFinite)) return;
         features.push({
           type: "Feature",
@@ -7551,7 +7552,11 @@
             native_kind: "plant",
             native_key: String(record.id || plantObservationDomId(record)),
             contribution_kind: "plant",
-            title: record.common_name || "Plant observation"
+            plant_location_precision: record._plantInventoryFallback ? "inventory_area" : "submitted_point",
+            plant_count: Number(record._plantInventoryCount || 1),
+            title: record._plantInventoryFallback
+              ? `${record._plantInventoryCount || 1} plant observations - exact spots unavailable`
+              : (record.common_name || "Plant observation")
           }
         });
       });
@@ -7800,7 +7805,11 @@
           if (kind === "plant") {
             const record = (state.plantObservations || []).find(item => String(item.id || plantObservationDomId(item)) === String(key || ""));
             if (!record) return false;
-            const slug = String(record.source_slug || record.site_slug || "");
+            const activeSiteContainsRecord = state.selectedSite
+              && approvedPlantObservationsForSite(state.selectedSite).some(item => String(item.id || "") === String(record.id || ""));
+            const slug = activeSiteContainsRecord
+              ? String(state.selectedSite.slug || "")
+              : String(record.source_slug || record.site_slug || record.ancestral_territory_slug || "");
             if (slug && state.siteBySlug.has(slug)) openSite(slug, { focus: false });
             window.setTimeout(() => {
               detailEl?.classList.add("open", "plant-browse-mode");
@@ -9598,17 +9607,77 @@
     }
 
     function approvedPlantObservationsForSite(site) {
-      if (!site?.slug || isBroadTerritory(site)) return [];
-      return PLANT_UTILS.plantObservationsForSource(state.plantObservations, "site", site, {
+      if (!site?.slug) return [];
+      const inventoryType = isBroadTerritory(site) ? "territory" : "site";
+      return PLANT_UTILS.plantObservationsForSource(state.plantObservations, inventoryType, site, {
         normalizeStatus: normalizeCommentStatus
       });
     }
 
     function plantObservationCoordinates(record) {
-      const lat = Number(record?.observation_latitude);
-      const lng = Number(record?.observation_longitude);
+      const rawLatitude = record?.observation_latitude;
+      const rawLongitude = record?.observation_longitude;
+      if (rawLatitude === null || rawLatitude === undefined || String(rawLatitude).trim() === "") return null;
+      if (rawLongitude === null || rawLongitude === undefined || String(rawLongitude).trim() === "") return null;
+      const lat = Number(rawLatitude);
+      const lng = Number(rawLongitude);
       if (Number.isFinite(lat) && Number.isFinite(lng)) return [lng, lat];
       return null;
+    }
+
+    function plantInventoryAreaCoordinates(site) {
+      const coordinates = site?.center || site?.checkinCenter || geometryCenter(siteDisplayGeometry(site));
+      const point = Array.isArray(coordinates) ? coordinates.slice(0, 2).map(Number) : [];
+      return point.length === 2 && point.every(Number.isFinite) ? point : null;
+    }
+
+    function plantObservationMarkerEntriesForSite(site = state.selectedSite) {
+      if (!site?.slug) return [];
+      const observations = approvedPlantObservationsForSite(site);
+      const entries = observations
+        .map(record => {
+          const coordinates = plantObservationCoordinates(record);
+          return coordinates ? {
+            key: String(record.id || `${record.site_slug}-${record.common_name}-${record.created_at}`),
+            coordinates,
+            record
+          } : null;
+        })
+        .filter(Boolean);
+      const missingCoordinates = observations.filter(record => !plantObservationCoordinates(record));
+      const inventoryCoordinates = missingCoordinates.length ? plantInventoryAreaCoordinates(site) : null;
+      if (inventoryCoordinates) {
+        const first = missingCoordinates[0];
+        entries.push({
+          key: `inventory-area:${site.slug}`,
+          coordinates: inventoryCoordinates,
+          record: {
+            ...first,
+            _plantInventoryFallback: true,
+            _plantInventoryCount: missingCoordinates.length,
+            _plantInventoryTitle: site.title || "this mapped place"
+          }
+        });
+      }
+      return entries;
+    }
+
+    function plantObservationMapEntry(record, site = state.selectedSite) {
+      if (!record || !site) return null;
+      const id = String(record.id || "");
+      const entries = plantObservationMarkerEntriesForSite(site);
+      return entries.find(entry => !entry.record._plantInventoryFallback && String(entry.record.id || "") === id)
+        || entries.find(entry => entry.record._plantInventoryFallback
+          && approvedPlantObservationsForSite(site).some(item => String(item.id || "") === id && !plantObservationCoordinates(item)))
+        || null;
+    }
+
+    function plantObservationLocationText(record, site = state.selectedSite) {
+      if (plantObservationCoordinates(record)) {
+        return "Submitted location shown on the map while this article is open.";
+      }
+      const territory = record?.ancestral_territory_title || (isBroadTerritory(site) ? site?.title : "") || site?.title || "this mapped place";
+      return `Saved to ${territory}. The exact spot was not retained in this older observation.`;
     }
 
     function plantObservationDomId(record) {
@@ -9618,6 +9687,16 @@
     }
 
     function plantPopupHtml(record, guideMatch) {
+      if (record._plantInventoryFallback) {
+        const count = Number(record._plantInventoryCount || 1);
+        return `
+          <div class="plant-observation-popup-card inventory-area">
+            <strong>${escapeHtml(`${count} plant observation${count === 1 ? "" : "s"}`)}</strong>
+            <span>${escapeHtml(`These older reports belong to ${record._plantInventoryTitle || "this plant inventory"}, but their exact spots were not saved. This plant icon marks the active inventory area, not an invented observation point.`)}</span>
+            <button type="button" data-plant-popup-observation="${escapeHtml(plantObservationDomId(record))}">View plant inventory</button>
+          </div>
+        `;
+      }
       const image = directusAssetUrl(record.photo);
       const commonName = record.common_name || "Plant observation";
       const scientific = record.scientific_name || "Scientific name not yet verified";
@@ -9678,16 +9757,15 @@
     function plantMarkerElement(record, coordinates) {
       const element = document.createElement("button");
       element.type = "button";
-      element.setAttribute("aria-label", record.common_name || "Plant observation");
-      element.style.width = "28px";
-      element.style.height = "28px";
-      element.style.border = "2px solid white";
-      element.style.borderRadius = "50%";
-      element.style.background = "#fff";
-      element.style.boxShadow = "0 4px 12px rgba(0,0,0,.22)";
-      element.style.fontSize = "17px";
-      element.style.lineHeight = "24px";
-      element.textContent = "\u273f";
+      element.className = `plant-observation-map-marker${record._plantInventoryFallback ? " inventory-area" : ""}`;
+      const count = Number(record._plantInventoryCount || 1);
+      element.setAttribute("aria-label", record._plantInventoryFallback
+        ? `${count} plant observations in ${record._plantInventoryTitle || "this inventory"}; exact spots unavailable`
+        : (record.common_name || "Plant observation"));
+      element.innerHTML = `
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V9"/><path d="M12 16c-2.7.3-4.9-.4-6.5-2.1C3.9 12.3 3 10.2 3 7.5c2.8-.2 5.1.5 6.9 2 1.8 1.6 2.5 3.8 2.1 6.5Z"/><path d="M12 17c1.1-4.8 4.1-7.4 9-7.8-.2 2.8-1.2 5-3 6.5-1.6 1.4-3.6 1.8-6 1.3Z"/></svg>
+        ${record._plantInventoryFallback ? `<span>${count}</span>` : ""}
+      `;
       element.addEventListener("click", event => {
         event.preventDefault();
         event.stopPropagation();
@@ -9699,10 +9777,8 @@
     function syncSitePlantMarkers(site = state.selectedSite) {
       if (!state.map || !state.plantMarkers) return;
       const active = new Set();
-      approvedPlantObservationsForSite(site).forEach(record => {
-        const coordinates = plantObservationCoordinates(record);
-        if (!coordinates) return;
-        const key = String(record.id || `${record.site_slug}-${record.common_name}-${record.created_at}`);
+      plantObservationMarkerEntriesForSite(site).forEach(entry => {
+        const { key, coordinates, record } = entry;
         active.add(key);
         if (state.plantMarkers.has(key)) return;
         const marker = new mapboxgl.Marker({ element: plantMarkerElement(record, coordinates), anchor: "center" })
@@ -11767,6 +11843,8 @@
               const plantWiki = plantWikiArticleForMatch(guideMatch, commonName);
               const cardId = plantObservationDomId(sourceRecord);
               const detailsId = `${cardId}-details`;
+              const mapCoordinates = plantObservationCoordinates(sourceRecord);
+              const locationText = plantObservationLocationText(sourceRecord, item);
               const photoDate = fields.photo_taken_at || sourceRecord.public_submitted_at || sourceRecord.created_at || "";
               const detailLines = [
                 fields.source ? `Identification source: ${fields.source}` : "",
@@ -11789,11 +11867,13 @@
                     ${plantObservationFactsHtml(fields)}
                     ${context ? `<span class="site-plant-card-context">${escapeHtml(context)}</span>` : ""}
                     ${fields.visitor_notes ? `<span class="site-plant-card-context">${escapeHtml(fields.visitor_notes)}</span>` : ""}
+                    <span class="site-plant-card-location">${escapeHtml(locationText)}</span>
                     <span class="site-plant-card-meta">
                       ${author ? `<button class="site-plant-contributor" type="button" data-open-mobile-profile="${escapeHtml(contributorKey)}">${escapeHtml(contributor)}</button>` : escapeHtml(contributor)}
                       ${photoDate ? ` - photographed ${escapeHtml(new Date(photoDate).toLocaleDateString())}` : ""}${fields.confidence ? ` - ${escapeHtml(fields.confidence)}% confidence` : ""}
                     </span>
-                    ${territoryGrid && fields.site_slug ? `<button class="site-plant-card-action site-plant-site-link" type="button" data-slug="${escapeHtml(fields.site_slug)}">Open ${escapeHtml(fields.site_title || "linked site")}</button>` : ""}
+                    <button class="site-plant-card-action site-plant-map-link" type="button" data-show-plant-on-map="${escapeHtml(String(sourceRecord.id || ""))}">${mapCoordinates ? "Show observation on map" : "Show inventory area on map"}</button>
+                    ${territoryGrid && fields.site_slug && fields.site_slug !== item.slug ? `<button class="site-plant-card-action site-plant-site-link" type="button" data-slug="${escapeHtml(fields.site_slug)}">Open ${escapeHtml(fields.site_title || "linked site")}</button>` : ""}
                     ${!territoryGrid && fields.ancestral_territory_slug ? `<button class="site-plant-card-action site-plant-territory-link" type="button" data-slug="${escapeHtml(fields.ancestral_territory_slug)}">Open ${escapeHtml(fields.ancestral_territory_title || "ancestral-land inventory")}</button>` : ""}
                     ${guideMatch ? (plantWiki?.slug
                       ? `<button class="site-plant-card-action" type="button" data-open-plant-wiki="${escapeHtml(plantWiki.slug)}">Open plant wiki</button>`
@@ -21580,6 +21660,28 @@
           details.open = true;
           details.scrollIntoView({ block: "center" });
         }
+        return;
+      }
+      const plantMapButton = event.target.closest("[data-show-plant-on-map]");
+      if (plantMapButton) {
+        event.preventDefault();
+        const record = (state.plantObservations || []).find(item => String(item.id || "") === String(plantMapButton.dataset.showPlantOnMap || ""));
+        const entry = plantObservationMapEntry(record, state.selectedSite);
+        if (!entry) {
+          showBanner("This older observation does not have a saved map location.");
+          return;
+        }
+        detailEl.classList.add("open", "plant-browse-mode");
+        setDetailDrawerState("collapsed");
+        if (entry.record._plantInventoryFallback) {
+          focusSite(state.selectedSite, { forPanel: true, duration: 420 });
+          showBanner("Showing the ancestral-land inventory area; the older observation's exact spot was not saved.");
+        } else {
+          const currentZoom = Number(state.map?.getZoom?.()) || 10;
+          focusMobileCoordinateInVisibleMap(entry.coordinates, { zoom: Math.max(currentZoom, 15), duration: 420 });
+          showBanner("Showing this plant observation on the map.");
+        }
+        window.setTimeout(() => openPlantObservationPopup(entry.record, entry.coordinates), 460);
         return;
       }
       const mobileProfileButton = event.target.closest("[data-open-mobile-profile]");
