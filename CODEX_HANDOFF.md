@@ -1,12 +1,14 @@
 # Android APK — Codex Handoff
 
-## September 4 active biography zoom continuity and canoe parity
+## September 4 biography zoom continuity and canoe parity
 
 - Android PR #103 merged as `eb02f0deeff419a0ac0f5d82364a2de370f4f81a` and release `0.1.653` / `apk-653` established the constant `0.72` route clock and painted native water-route canoes above the person artwork. Physical QA then caught a second zoom jump before completion: the runtime was converting each fixed pixel clearance offset through project/unproject, so the offset itself became miles at overview zoom even though route time was stable. Treat 0.1.653 as superseded by this follow-up.
-- Branch `fix/mobile-biography-screen-offsets-20260904` keeps the native GeoJSON geometry at the true route coordinate and sends the site/cluster clearance as a separate `display_offset`. Native person, canoe, and title layers apply that offset in viewport pixels; the browser fallback uses the marker's own screen offset. Zoom can therefore change scale without changing a biography's longitude/latitude.
-- Shell marker is `20260904-biography-screen-offsets-r241`. The shell/readiness/offline verifiers, whitespace checks, debug build, `lintDebug`, and the optimized/R8 QA build pass. Debug diagnostics report route coordinate, screen offset, water-biography count, and a water sample for physical verification.
+- Android PR #104 merged as `89aeca120b5132fe887e604974f5e90b0fc42830`. The native GeoJSON geometry now stays at the true route coordinate while site/cluster clearance travels as a separate `display_offset`. Native person, canoe, and title layers apply that offset in viewport pixels; the browser fallback uses the marker's own screen offset. Zoom can therefore change scale without changing a biography's longitude/latitude.
+- Shell marker is `20260904-biography-screen-offsets-r241`. The shell/readiness/offline verifiers, whitespace checks, debug build, `lintDebug`, and optimized/R8 QA build passed. On iPlay tablet `T811MA256GB23516041180`, changing zoom from 8 to 15 retained the same continuous Jeremy Dennis route coordinate and fixed display offset. Sylvester Pharoah rendered over Fort Pond with the brown canoe hull above the person artwork, and no fatal exception or ANR appeared.
+- Web PR #219 merged as `ff43445002bf2feccef83926affb9826aaf1c960`; production deployment `33835121640` completed successfully through SiteGround and the synchronized Directus/VPS APK runtime.
+- Signed workflow `33836040308` passed and published Obtainium/GitHub release `0.1.654` / `apk-654`. The exact 54,957,841-byte APK has SHA-256 `467D5D0460C15E770D420E1489CC06AAB3C6C0AE34AAAFD42208F403BDD97E35` and signing-certificate SHA-256 `B17B4D4505513C52ADFAA215CAC95EE062431D22410938FA5C13D34A70025787`. It installed over production without clearing app data, launched successfully, and reports version code/name 654/0.1.654. Google Play submission was skipped under the micro-release cadence.
 
-Safest next action: wait for web PR #219 deployment, install the r241 QA build, prove the sampled route coordinate remains continuous across zoom 8 and 15, visually confirm the canoe, then merge and publish the superseding signed Obtainium release. Do not alter the canonical dirty Android checkout or submit this micro-release to Google Play.
+Safest next action: update other Android devices through Obtainium to 0.1.654 and use the moving biographies normally. The disposable QA package and debugging forward may be removed; do not alter the unrelated dirty canonical Android checkout.
 
 ## September 3 active Shinnecock plant-inventory map display
 
