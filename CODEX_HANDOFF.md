@@ -2,11 +2,11 @@
 
 ## September 4 active biography zoom continuity and canoe parity
 
-- Branch `fix/mobile-biography-zoom-water-icons-20260904` packages the web runtime's constant `0.72` biography route clock. Zooming no longer changes how much logical route time each animation frame advances, removing the large route jumps exposed by zoom gestures.
-- The native MapLibre biography person layer is now created before the canoe layer, so the water-route canoe is visibly painted above the person just as it is on desktop. Debug diagnostics also report the current water-biography count, sample slug, and sample coordinate for physical verification.
-- Shell marker is `20260904-biography-zoom-water-r240`. Focused shell/readiness/offline checks, JavaScript checks, whitespace checks, debug build, `lintDebug`, and the optimized/R8 QA build pass. Physical iPlay QA confirmed that the old hosted runtime reproduced the zoom-dependent clock and that native payload classification identifies water-route biographies; final fixed-runtime physical verification and signed Obtainium release are pending the web deployment retry.
+- Android PR #103 merged as `eb02f0deeff419a0ac0f5d82364a2de370f4f81a` and release `0.1.653` / `apk-653` established the constant `0.72` route clock and painted native water-route canoes above the person artwork. Physical QA then caught a second zoom jump before completion: the runtime was converting each fixed pixel clearance offset through project/unproject, so the offset itself became miles at overview zoom even though route time was stable. Treat 0.1.653 as superseded by this follow-up.
+- Branch `fix/mobile-biography-screen-offsets-20260904` keeps the native GeoJSON geometry at the true route coordinate and sends the site/cluster clearance as a separate `display_offset`. Native person, canoe, and title layers apply that offset in viewport pixels; the browser fallback uses the marker's own screen offset. Zoom can therefore change scale without changing a biography's longitude/latitude.
+- Shell marker is `20260904-biography-screen-offsets-r241`. The shell/readiness/offline verifiers, whitespace checks, debug build, `lintDebug`, and the optimized/R8 QA build pass. Debug diagnostics report route coordinate, screen offset, water-biography count, and a water sample for physical verification.
 
-Safest next action: wait for the web deployment retry, reload the QA app, verify `motionScale` remains `0.72` before and after zoom and visually confirm the canoe, then merge and publish the signed Android release. Do not alter the canonical dirty Android checkout or submit this micro-release to Google Play.
+Safest next action: wait for web PR #219 deployment, install the r241 QA build, prove the sampled route coordinate remains continuous across zoom 8 and 15, visually confirm the canoe, then merge and publish the superseding signed Obtainium release. Do not alter the canonical dirty Android checkout or submit this micro-release to Google Play.
 
 ## September 3 active Shinnecock plant-inventory map display
 

@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260904-biography-zoom-water-r240";
+const expectedBuild = "20260904-biography-screen-offsets-r241";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -121,9 +121,11 @@ if (!bundledMobileJs.includes('{ label: "Unkechaug homeland", place: "Poospatuck
     || !bundledMobileJs.includes('"cockenoe"')
     || !bundledMobileJs.includes("function mobileBiographyUniqueRoute(route = [])")
     || !bundledMobileJs.includes("function mobileBiographyDisplayOffsets(items = [])")
-    || !bundledMobileJs.includes('function mobileBiographyDisplayCoordinates(coordinates, offset = [0, 0], slug = "")')
     || !bundledMobileJs.includes("function mobileBiographySiteAwareOffset(slug, coordinates, offset = [0, 0])")
-    || !bundledMobileJs.includes("mobileBiographyDisplayCoordinates(motion.coordinates, item.displayOffset, item.slug)")) {
+    || !bundledMobileJs.includes('geometry: { type: "Point", coordinates: motion.coordinates }')
+    || !bundledMobileJs.includes("display_offset: [")
+    || !bundledMobileJs.includes('new mapboxgl.Marker({ element, anchor: "center", offset: item.displayOffset || [0, 0] })')
+    || bundledMobileJs.includes("mobileBiographyDisplayCoordinates")) {
   throw new Error("Bundled Android runtime must map Indigenous biographies to their homelands and keep them clear of site pins.");
 }
 
@@ -292,8 +294,13 @@ if (!nativeMapController.includes("logoEnabled(false)")
 }
 if (!nativeMapController.includes('new SymbolLayer("nli-moving-feature-labels", MOVING_FEATURE_SOURCE_ID)')
     || !nativeMapController.includes('textFont(new String[] { "Noto Sans Regular" }), textSize(10f)')
+    || !nativeMapController.includes('iconTranslate(Expression.array(Expression.get("display_offset")))')
+    || !nativeMapController.includes('iconTranslateAnchor(Property.ICON_TRANSLATE_ANCHOR_VIEWPORT)')
+    || !nativeMapController.includes('textTranslate(Expression.coalesce(')
+    || !nativeMapController.includes('Expression.array(Expression.get("display_offset"))')
+    || !nativeMapController.includes('textTranslateAnchor(Property.TEXT_TRANSLATE_ANCHOR_VIEWPORT)')
     || nativeMapController.includes('textFont(new String[] { "Noto Sans Bold" }), textSize(10f)')) {
-  throw new Error("Native biography titles must use the bundled regular font so close-zoom labels render on Android.");
+  throw new Error("Native biography icons and labels must retain screen-space clearance while using the bundled regular font.");
 }
 if (!appBridge.includes("getNativeMapMovingFeatureDiagnostics")
     || !nativeMapController.includes("String movingFeatureDiagnosticsJson()")
@@ -301,6 +308,7 @@ if (!appBridge.includes("getNativeMapMovingFeatureDiagnostics")
     || !nativeMapController.includes('result.put("appliedCount", movingFeatureAppliedCount)')
     || !nativeMapController.includes('result.put("waterBiographyCount", waterBiographyCount)')
     || !nativeMapController.includes('result.put("sampleWaterSlug", feature.getStringProperty("native_key"))')
+    || !nativeMapController.includes('result.put("sampleDisplayOffset", new JSONArray(feature.getProperty("display_offset").toString()))')
     || !bundledMobileJs.includes("window.__nliMobileMovingFeatureDiagnostics")) {
   throw new Error("Debug APKs must expose bounded JavaScript/native motion health counters for physical-device regression tests.");
 }
@@ -462,13 +470,10 @@ if (!bundledMobileJs.includes("function mobileMovingBiographyLoop")
 if (!bundledMobileJs.includes("item.displayOffset = mobileBiographySiteAwareOffset(item.slug, item.route[0], groupedOffset)")) {
   throw new Error("Android biography routes must resolve site-pin clearance once from a stable route origin.");
 }
-const biographyDisplayCoordinatesStart = bundledMobileJs.indexOf("    function mobileBiographyDisplayCoordinates(");
-const biographyDisplayCoordinatesEnd = bundledMobileJs.indexOf("\n    function mobileMovingBiographyItems()", biographyDisplayCoordinatesStart);
-const biographyDisplayCoordinates = biographyDisplayCoordinatesStart >= 0 && biographyDisplayCoordinatesEnd > biographyDisplayCoordinatesStart
-  ? bundledMobileJs.slice(biographyDisplayCoordinatesStart, biographyDisplayCoordinatesEnd)
-  : "";
-if (!biographyDisplayCoordinates || biographyDisplayCoordinates.includes("mobileBiographySiteAwareOffset(")) {
-  throw new Error("Android biography display coordinates must preserve route movement instead of re-clamping every frame to a nearby site pin.");
+if (bundledMobileJs.includes("mobileBiographyDisplayCoordinates")
+    || !bundledMobileJs.includes('geometry: { type: "Point", coordinates: motion.coordinates }')
+    || !bundledMobileJs.includes("display_offset: [")) {
+  throw new Error("Android biography payload coordinates must remain geographic while pixel clearance stays renderer-only.");
 }
 if (!nativeMapController.includes("mapTapHitRadiusPx()")
     || !nativeMapController.includes("zoom < 8.5 ? 18f : zoom < 10.0 ? 24f : 32f")) {

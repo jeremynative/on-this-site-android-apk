@@ -13536,24 +13536,6 @@
       return [baseX + Math.cos(angle) * shift, baseY + Math.sin(angle) * shift];
     }
 
-    function mobileBiographyDisplayCoordinates(coordinates, offset = [0, 0], slug = "") {
-      // The site-pin clearance is resolved once from the route origin when the
-      // item is created. Recalculating it from every moving coordinate pins a
-      // nearby biography to the edge of the clearance circle until map zoom.
-      const x = Number(offset?.[0]) || 0;
-      const y = Number(offset?.[1]) || 0;
-      if (!Array.isArray(coordinates) || (!x && !y) || !state.map?.project || !state.map?.unproject) return coordinates;
-      try {
-        const point = state.map.project(coordinates);
-        const projected = state.map.unproject([Number(point.x) + x, Number(point.y) + y]);
-        const lng = Number(projected?.lng);
-        const lat = Number(projected?.lat);
-        return Number.isFinite(lng) && Number.isFinite(lat) ? [lng, lat] : coordinates;
-      } catch {
-        return coordinates;
-      }
-    }
-
     function mobileMovingBiographyItems() {
       const items = Object.keys(BIOGRAPHY_PLACE_PATHS)
         .map((slug, index) => {
@@ -13674,7 +13656,10 @@
         const followed = item.slug === state.mobileFollowedBiographySlug;
         features.push({
           type: "Feature",
-          geometry: { type: "Point", coordinates: mobileBiographyDisplayCoordinates(motion.coordinates, item.displayOffset, item.slug) },
+          // Keep the route geometry geographic. A pixel clearance converted
+          // through project/unproject changes ground distance with zoom and
+          // makes an otherwise stable biography appear to jump along its path.
+          geometry: { type: "Point", coordinates: motion.coordinates },
           properties: {
             native_kind: "wiki",
             native_key: item.slug,
@@ -13686,6 +13671,10 @@
             motion_opacity: Number(motion.opacity.toFixed(3)),
             motion_phase: motion.phase,
             direction: motion.direction,
+            display_offset: [
+              Number(item.displayOffset?.[0]) || 0,
+              Number(item.displayOffset?.[1]) || 0
+            ],
             on_water: item.fixedSurfaceIsLand == null
               ? !mobileMovingPointIsOnLand(motion.coordinates)
               : !item.fixedSurfaceIsLand,
@@ -13800,7 +13789,7 @@
 
     function updateMobileMovingBiographyMarker(item, marker, now = performance.now()) {
       const motion = mobileBiographyMotionFor(item, now);
-      marker.setLngLat(mobileBiographyDisplayCoordinates(motion.coordinates, item.displayOffset, item.slug));
+      marker.setLngLat(motion.coordinates);
       const element = marker.getElement?.();
       const button = element?.querySelector?.(".mobile-moving-biography-marker");
       if (!button) return;
@@ -13855,7 +13844,7 @@
         element.className = "mobile-moving-biography-mapbox-icon";
         element.innerHTML = mobileMovingBiographyHtml(item);
         const initialMotion = mobileBiographyMotionFor(item, performance.now());
-        const marker = new mapboxgl.Marker({ element, anchor: "center" })
+        const marker = new mapboxgl.Marker({ element, anchor: "center", offset: item.displayOffset || [0, 0] })
           .setLngLat(initialMotion.coordinates)
           .addTo(state.map);
         state.mobileMovingBiographyMarkers.set(item.slug, { item, marker });
