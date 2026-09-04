@@ -119,7 +119,6 @@
     const MOBILE_BIOGRAPHY_REFERENCE_ROUTE_DISTANCE = 0.35;
     const MOBILE_BIOGRAPHY_MIN_SEGMENT_MS = 4000;
     const MOBILE_BIOGRAPHY_BASE_MOTION_SCALE = 0.72;
-    const MOBILE_BIOGRAPHY_SCREEN_PACE_ZOOM = 11.5;
     const MOBILE_BIOGRAPHY_MARKER_STAGGER_MS = 85;
     const MOBILE_BIOGRAPHY_MARKER_FADE_MS = 1600;
     const MOBILE_BIOGRAPHY_MARKER_RESET_MS = 2400;
@@ -13274,21 +13273,8 @@
       return { coordinates: first, direction: "right", progress: 0, opacity: Math.min(1, elapsed / MOBILE_BIOGRAPHY_MARKER_FADE_MS), phase: "fade-in" };
     }
 
-    function mobileBiographyZoomMotionScale(zoomValue = Number(state.map?.getZoom?.())) {
-      const zoom = Number(zoomValue);
-      // Map pixels double with every zoom level. Apply the inverse change to
-      // route time at every mobile zoom so a biography remains visibly alive
-      // at the island overview and does not accelerate when zoomed closer.
-      // Clamp to the map's supported zoom range so a malformed camera echo
-      // cannot advance a route by an extreme amount in one frame.
-      if (!Number.isFinite(zoom)) return MOBILE_BIOGRAPHY_BASE_MOTION_SCALE;
-      const boundedZoom = Math.max(6, Math.min(18, zoom));
-      return MOBILE_BIOGRAPHY_BASE_MOTION_SCALE
-        * Math.pow(2, MOBILE_BIOGRAPHY_SCREEN_PACE_ZOOM - boundedZoom);
-    }
-
     function mobileMovingMarkerMaxFrameDeltaMs() {
-      // The browser fallback updates every 360 ms while the native bridge runs
+      // The browser fallback updates every 120 ms while the native bridge runs
       // at a much finer cadence. Cap each clock to one expected frame for its
       // renderer: delayed work never catches up in a jump, but the browser does
       // not accidentally run at only 22 percent of the intended pace.
@@ -13343,7 +13329,11 @@
         controller.lastFrameAt = now;
         if (!paused) {
           const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
-          const motionScale = mobileBiographyZoomMotionScale() * (reducedMotion ? 0.5 : 1);
+          // Geographic route time must never depend on camera zoom. Scaling the
+          // clock to counter screen magnification made an overview frame count
+          // as several route-seconds and exposed that accumulated advance as a
+          // large jump during the next pinch or zoom-button step.
+          const motionScale = MOBILE_BIOGRAPHY_BASE_MOTION_SCALE * (reducedMotion ? 0.5 : 1);
           const delta = Math.min(rawDelta, mobileMovingMarkerMaxFrameDeltaMs()) * motionScale;
           controller.elapsedMs = (Math.max(0, Number(controller.elapsedMs) || 0) + delta) % cycleDuration;
         }
@@ -14163,7 +14153,7 @@
         lastUpdateAgeMs: Math.max(0, now - Number(state.mobileMovingMarkerLastAt || now)),
         nativeBridgeAvailable: nativeMapBridgeAvailable(),
         zoom: Number(state.map?.getZoom?.()),
-        motionScale: mobileBiographyZoomMotionScale(),
+        motionScale: MOBILE_BIOGRAPHY_BASE_MOTION_SCALE,
         biographyCount: (state.nativeMovingBiographyItems || []).length,
         mapReady: Boolean(state.map)
       };

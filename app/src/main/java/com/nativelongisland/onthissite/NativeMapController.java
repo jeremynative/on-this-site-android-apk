@@ -1236,13 +1236,10 @@ final class NativeMapController {
                 textHaloColor("rgba(42,47,44,0.7)"), textHaloWidth(0.6f),
                 textAllowOverlap(true), textIgnorePlacement(true)
             ));
-            style.addLayerBelow(new SymbolLayer("nli-moving-biography-canoes", MOVING_FEATURE_SOURCE_ID)
-                .withFilter(Expression.all(
-                    Expression.eq(Expression.get("moving_kind"), Expression.literal("biography")),
-                    Expression.eq(Expression.get("on_water"), Expression.literal(true))
-                ))
+            style.addLayerBelow(new SymbolLayer("nli-moving-biography-icons", MOVING_FEATURE_SOURCE_ID)
+                .withFilter(Expression.eq(Expression.get("moving_kind"), Expression.literal("biography")))
                 .withProperties(
-                    iconImage("nli-icon-biography-canoe"),
+                    iconImage(Expression.get("icon_key")),
                     iconSize(Expression.interpolate(
                         Expression.linear(), Expression.zoom(),
                         Expression.stop(6, 0.62f),
@@ -1252,10 +1249,16 @@ final class NativeMapController {
                     iconOpacity(Expression.coalesce(Expression.get("motion_opacity"), Expression.literal(1f))),
                     iconAllowOverlap(true), iconIgnorePlacement(true)
                 ), "nli-site-point-circles");
-            style.addLayerBelow(new SymbolLayer("nli-moving-biography-icons", MOVING_FEATURE_SOURCE_ID)
-                .withFilter(Expression.eq(Expression.get("moving_kind"), Expression.literal("biography")))
+            // Match the web marker stack: paint the canoe after (above) the
+            // person so its narrow hull remains visible instead of being
+            // covered by the biography artwork on native Android.
+            style.addLayerBelow(new SymbolLayer("nli-moving-biography-canoes", MOVING_FEATURE_SOURCE_ID)
+                .withFilter(Expression.all(
+                    Expression.eq(Expression.get("moving_kind"), Expression.literal("biography")),
+                    Expression.eq(Expression.get("on_water"), Expression.literal(true))
+                ))
                 .withProperties(
-                    iconImage(Expression.get("icon_key")),
+                    iconImage("nli-icon-biography-canoe"),
                     iconSize(Expression.interpolate(
                         Expression.linear(), Expression.zoom(),
                         Expression.stop(6, 0.62f),
@@ -1632,10 +1635,24 @@ final class NativeMapController {
             FeatureCollection collection = FeatureCollection.fromJson(movingFeaturesJson);
             List<Feature> features = collection.features();
             if (features != null) {
+                int waterBiographyCount = 0;
+                boolean recordedSample = false;
                 for (Feature feature : features) {
                     if (!"biography".equals(feature.getStringProperty("moving_kind")) || !(feature.geometry() instanceof Point)) continue;
+                    if (feature.hasProperty("on_water") && feature.getBooleanProperty("on_water")) {
+                        waterBiographyCount += 1;
+                        if (!result.has("sampleWaterSlug")) {
+                            result.put("sampleWaterSlug", feature.getStringProperty("native_key"));
+                            Point waterPoint = (Point) feature.geometry();
+                            JSONArray waterCoordinate = new JSONArray();
+                            waterCoordinate.put(waterPoint.longitude());
+                            waterCoordinate.put(waterPoint.latitude());
+                            result.put("sampleWaterCoordinate", waterCoordinate);
+                        }
+                    }
+                    if (recordedSample) continue;
                     Point point = (Point) feature.geometry();
-                    result.put("sampleSlug", feature.getStringProperty("slug"));
+                    result.put("sampleSlug", feature.getStringProperty("native_key"));
                     JSONArray coordinate = new JSONArray();
                     coordinate.put(point.longitude());
                     coordinate.put(point.latitude());
@@ -1651,8 +1668,9 @@ final class NativeMapController {
                             result.put("sampleScreenPoint", screen);
                         } catch (Exception ignored) {}
                     }
-                    break;
+                    recordedSample = true;
                 }
+                result.put("waterBiographyCount", waterBiographyCount);
             }
         } catch (Exception ignored) {}
         return result.toString();
