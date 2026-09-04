@@ -115,7 +115,7 @@ final class NativeMapController {
     // Camera gestures already redraw the native map continuously. Keep the
     // compact moving-feature source alive during a drag as well, but coalesce
     // it to a lighter cadence so route motion never competes with touch input.
-    private static final long MOVING_FEATURE_GESTURE_UPDATE_MS = 80L;
+    private static final long MOVING_FEATURE_GESTURE_UPDATE_MS = 32L;
     private static final long MAP_TAP_DISPATCH_DELAY_MS = 300L;
     private static final int BUNDLED_ICON_BATCH_SIZE = 4;
     private static final String EMPTY_FEATURE_COLLECTION = "{\"type\":\"FeatureCollection\",\"features\":[]}";

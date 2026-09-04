@@ -400,7 +400,7 @@ if (!nativeMapController.includes("CameraPosition cameraToPreserve = nativeGestu
     || !nativeMapController.includes("if (camera == null || map == null || nativeGestureInProgress()) return;")
     || !nativeMapController.includes("movingFeaturesJson = featuresJson;")
     || !nativeMapController.includes("MOVING_FEATURE_MIN_UPDATE_MS = 20L")
-    || !nativeMapController.includes("MOVING_FEATURE_GESTURE_UPDATE_MS = 80L")
+    || !nativeMapController.includes("MOVING_FEATURE_GESTURE_UPDATE_MS = 32L")
     || !nativeMapController.includes("long minimumUpdateMs = nativeGestureInProgress()")
     || !nativeMapController.includes("mapView.postDelayed(applyLatestMovingFeaturesTask, minimumUpdateMs - elapsed)")
     || !nativeMapController.includes("mapView.postInvalidateOnAnimation();")
@@ -419,6 +419,7 @@ if (!nativeMovingUpdate || nativeMovingUpdate.includes("if (nativeGestureInProgr
   throw new Error("Native biography positions must keep advancing throughout a held pan or zoom gesture.");
 }
 if (!bundledMobileJs.includes("function mobileMovingBiographyLoop")
+    || !bundledMobileJs.includes("const MOBILE_MOVING_MARKER_INTERVAL_MS = 120")
     || !bundledMobileJs.includes("const MOBILE_NATIVE_MOVING_MARKER_OVERVIEW_INTERVAL_MS = 56")
     || !bundledMobileJs.includes("const MOBILE_NATIVE_MOVING_MARKER_CLOSE_INTERVAL_MS = 24")
     || !bundledMobileJs.includes("const MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS = 80")
@@ -426,14 +427,15 @@ if (!bundledMobileJs.includes("function mobileMovingBiographyLoop")
     || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_REFERENCE_ROUTE_DISTANCE = 0.35")
     || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_MIN_SEGMENT_MS = 4000")
     || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_BASE_MOTION_SCALE = 0.72")
+    || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_SCREEN_PACE_ZOOM = 11.5")
     || !bundledMobileJs.includes("function mobileBiographyZoomMotionScale(zoomValue = Number(state.map?.getZoom?.()))")
     || !bundledMobileJs.includes("function mobileMovingMarkerMaxFrameDeltaMs()")
     || !bundledMobileJs.includes("function mobileMovingRouteDuration(route = [])")
     || !bundledMobileJs.includes("function mobileNativeMovingMarkerIntervalMs()")
     || !bundledMobileJs.includes("function mobileBiographyMotionFor(item, now = performance.now())")
     || !bundledMobileJs.includes("const motion = mobileBiographyMotionFor(item, now)")
-    || !bundledMobileJs.includes("if (!Number.isFinite(zoom) || zoom <= 11.5) return MOBILE_BIOGRAPHY_BASE_MOTION_SCALE")
-    || !bundledMobileJs.includes("MOBILE_BIOGRAPHY_BASE_MOTION_SCALE / Math.pow(2, zoom - 11.5)")
+    || !bundledMobileJs.includes("const boundedZoom = Math.max(6, Math.min(18, zoom))")
+    || !bundledMobileJs.includes("Math.pow(2, MOBILE_BIOGRAPHY_SCREEN_PACE_ZOOM - boundedZoom)")
     || !bundledMobileJs.includes("Math.min(rawDelta, mobileMovingMarkerMaxFrameDeltaMs()) * motionScale")
     || !bundledMobileJs.includes('phase: "fade-out"')
     || !bundledMobileJs.includes('phase: "reset"')
@@ -2834,8 +2836,8 @@ for (const [label, runtime] of [["modular", bundledMobileJs], ["full offline", b
       || !runtime.includes("Open directions in Maps")) {
     throw new Error(`Android ${label} search must use explicit one-request geocoding with a provider fallback.`);
   }
-  if (!/MOBILE_BIOGRAPHY_BASE_MOTION_SCALE\s*=\s*0\.72[\s\S]*?function\s+mobileBiographyZoomMotionScale\(zoomValue[\s\S]*?zoom\s*<=\s*11\.5\)\s*return\s+MOBILE_BIOGRAPHY_BASE_MOTION_SCALE[\s\S]*?MOBILE_BIOGRAPHY_BASE_MOTION_SCALE\s*\/\s*Math\.pow\(2,\s*zoom\s*-\s*11\.5\)/.test(runtime)) {
-    throw new Error(`Android ${label} biography routes must remain visibly active at overview zoom and decelerate at close zoom without lowering native frame cadence.`);
+  if (!/MOBILE_BIOGRAPHY_BASE_MOTION_SCALE\s*=\s*0\.72[\s\S]*?MOBILE_BIOGRAPHY_SCREEN_PACE_ZOOM\s*=\s*11\.5[\s\S]*?function\s+mobileBiographyZoomMotionScale\(zoomValue[\s\S]*?boundedZoom\s*=\s*Math\.max\(6,\s*Math\.min\(18,\s*zoom\)\)[\s\S]*?Math\.pow\(2,\s*MOBILE_BIOGRAPHY_SCREEN_PACE_ZOOM\s*-\s*boundedZoom\)/.test(runtime)) {
+    throw new Error(`Android ${label} biography routes must keep a visible, constant screen pace across the supported zoom range.`);
   }
   if (!runtime.includes("const movingArticle = (state.nativeMovingBiographyItems || [])")
       || !runtime.includes("openWikiArticle(state.wikiBySlug.get(wikiSlug) || movingArticle || wikiSlug, {")
