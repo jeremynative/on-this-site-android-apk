@@ -20196,6 +20196,7 @@
       document.body.classList.toggle("mobile-detail-open", Boolean(detailOpen));
       document.body.classList.toggle("mobile-sheet-open", Boolean(sheetOpen));
       document.body.classList.toggle("mobile-contributor-sheet-open", contributorSheetOpen);
+      window.__nliSyncNativeMapViewport?.();
       window.requestAnimationFrame(() => {
         positionMobileMapActionButtons();
         resizeMobileMapForLayout();
@@ -20927,6 +20928,7 @@
       panel.style.setProperty("max-height", `${maxHeight}px`, "important");
       if (options.disableTransform) panel.style.setProperty("transform", "none", "important");
       if (options.zIndex) panel.style.setProperty("z-index", String(options.zIndex), "important");
+      window.__nliSyncNativeMapViewport?.();
     }
 
     function fitMobileMoreMenu(menu) {

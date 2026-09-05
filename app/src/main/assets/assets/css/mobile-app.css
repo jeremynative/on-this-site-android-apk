@@ -7628,6 +7628,23 @@
       border-top: 1px solid #e2e8df;
     }
 
+    .timeline-item > .actions {
+      grid-column: 2;
+      grid-template-columns: minmax(0, 1fr);
+      justify-self: start;
+      min-width: 0;
+      max-width: 100%;
+      position: static;
+      padding: 4px 0;
+      background: transparent;
+    }
+
+    .timeline-item > .actions .action {
+      min-width: 0;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+
     .timeline-item:first-child {
       border-top: 0;
     }

@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260904-native-story-bubble-r242";
+    static final String APP_VERSION = "20260905-mobile-menu-touch-r243";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -1199,17 +1199,22 @@ public class MainActivity extends Activity {
                         + "if(rightDocked){rightOcclusion=Math.max(0,Math.min(r.width,panelWidth));}"
                         + "else if(panelStyle.display!=='none'&&panelStyle.visibility!=='hidden'&&panelHeight>2){bottomOcclusion=Math.max(0,Math.min(r.height,panelHeight));}}"
                     + "window.AndroidApp.syncNativeMapViewport(token,r.left,r.top,r.width,r.height,bottomOcclusion,rightOcclusion,window.innerWidth,window.innerHeight,visible);"
-                    + "var blocked=[];document.querySelectorAll('button,a,input,select,textarea,[role=button]').forEach(function(el){"
-                        + "var marker=el.closest('.mapboxgl-marker,.maplibregl-marker');"
-                        + "if(el.disabled||el.hidden||el.closest('.mapboxgl-control-container,.maplibregl-control-container')||marker)return;"
+                    + "var blocked=[];var protectedElements=[];var protect=function(el){"
+                        + "if(el.hidden||el.closest('.mapboxgl-control-container,.maplibregl-control-container,.mapboxgl-marker,.maplibregl-marker'))return;"
+                        + "if(protectedElements.some(function(parent){return parent.contains(el);}))return;"
                         + "var s=getComputedStyle(el);if(s.display==='none'||s.visibility==='hidden'||s.pointerEvents==='none')return;"
                         + "var b=el.getBoundingClientRect();if(b.width<2||b.height<2||b.right<=r.left||b.left>=r.right||b.bottom<=r.top||b.top>=r.bottom)return;"
-                        + "blocked.push({left:b.left-5,top:b.top-5,right:b.right+5,bottom:b.bottom+5});});"
+                        + "protectedElements.push(el);blocked.push({left:b.left-5,top:b.top-5,right:b.right+5,bottom:b.bottom+5});};"
+                    // Scroll surfaces own the whole gesture, including label text
+                    // and gaps. Collect them before controls so the native region
+                    // cap cannot drop a menu behind a long article's links.
+                    + "document.querySelectorAll('.mobile-more-menu[open] .mobile-more-grid,.mobile-layer-menu[open] .mobile-layer-panel,.detail.open,.sheet.open,.list-panel,.mobile-timeline,[role=dialog],.language-quiz-card').forEach(protect);"
+                    + "document.querySelectorAll('button,a,input,select,textarea,summary,[role=button]').forEach(protect);"
                     + "window.AndroidApp.syncNativeMapTouchRegions(token,JSON.stringify(blocked),window.innerWidth,window.innerHeight);return true;};"
                 + "window.__nliSyncNativeMapViewport=sync;"
                 + "window.addEventListener('resize',sync,{passive:true});window.addEventListener('scroll',sync,{passive:true});"
                 + "if(window.ResizeObserver){var ro=new ResizeObserver(sync);var map=document.getElementById('map');if(map)ro.observe(map);var app=document.querySelector('.app');if(app)ro.observe(app);window.__nliNativeMapResizeObserver=ro;}"
-                + "if(window.MutationObserver){var mt=0,mtSettled=0;var mo=new MutationObserver(function(){clearTimeout(mt);clearTimeout(mtSettled);mt=setTimeout(sync,80);mtSettled=setTimeout(sync,420);});mo.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','class','open','data-native-tablet-landscape']});window.__nliNativeMapMutationObserver=mo;}"
+                + "if(window.MutationObserver){var mt=0,mtSettled=0;var mo=new MutationObserver(function(){if(!mt)mt=setTimeout(function(){mt=0;sync();},16);clearTimeout(mtSettled);mtSettled=setTimeout(sync,420);});mo.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','class','open','data-native-tablet-landscape']});window.__nliNativeMapMutationObserver=mo;}"
                 + "requestAnimationFrame(function(){sync();requestAnimationFrame(sync);});"
                 + "setTimeout(sync,250);setTimeout(sync,900);setTimeout(sync,2200);setTimeout(sync,5000);"
                 // ResizeObserver and MutationObserver own steady-state layout.

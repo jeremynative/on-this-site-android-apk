@@ -1,5 +1,15 @@
 # Android APK — Codex Handoff
 
+## September 5 S25 menu touch ownership
+
+- Physical S25 Ultra SM-S938U1 production 0.1.655 reproduced Labels scrolling failing twice. Native map gesture routing protected individual controls but left label text and panel gaps exposed. MainActivity now prioritizes full visible scrolling surfaces, deduplicates descendant controls before the 80-region cap, and coalesces layout changes without indefinitely postponing them.
+- Bundled runtime updates touch boundaries immediately when menus are positioned or panels open. Timeline Edit moment actions use the content column and a single button column, fixing text spilling from the date column. Shell marker 20260905-mobile-menu-touch-r243.
+- Physical S25 QA with live and bundled runtime: first Labels swipe advances 338/336 CSS px; another scroll leaves map center/zoom unchanged. Learn and Contributors scroll on their first swipes; Events, Achievements, Following, Notifications and login layouts fit. Search and Feedback accept text after one real tap. Chrome 320px action layout fits and 832x384 menu scrolls on first touch. FullSensor rotation was not physically exercised; device settings restored.
+- verify-native-menu-touch.js executes the shipped injected JS to test full surfaces, descendant deduplication, hidden/offscreen layers, disabled controls, and non-starving timer behavior. It runs through verify-app-shell.js. Shell, offline archive, Play readiness, debug build and lintDebug passed.
+- Branch fix/mobile-menu-touch-audit-20260904 based on 802f055. Native source, bundled HTML/JS/CSS, shell verifier and new behavior test modified. Evidence in sibling _mobile_menu_audit_evidence_20260904. Signed release and final production S25 installation/check remain; preserve production app data.
+
+Safest next action: merge tested changes, watch signed APK workflow and install exact production release on S25, then retest Labels and article actions. Do not touch the dirty canonical checkout.
+
 ## September 4 biography zoom continuity and canoe parity
 
 - Android PR #103 merged as `eb02f0deeff419a0ac0f5d82364a2de370f4f81a` and release `0.1.653` / `apk-653` established the constant `0.72` route clock and painted native water-route canoes above the person artwork. Physical QA then caught a second zoom jump before completion: the runtime was converting each fixed pixel clearance offset through project/unproject, so the offset itself became miles at overview zoom even though route time was stable. Treat 0.1.653 as superseded by this follow-up.
