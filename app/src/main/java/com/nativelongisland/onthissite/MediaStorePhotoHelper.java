@@ -4,11 +4,14 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.MediaStore;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.IOException;
+import androidx.exifinterface.media.ExifInterface;
 
 class MediaStorePhotoHelper {
     private MediaStorePhotoHelper() {}
@@ -43,6 +46,18 @@ class MediaStorePhotoHelper {
     }
 
     static byte[] compressedJpegBytes(Context context, Uri uri) throws Exception {
+        Matrix orientation = new Matrix();
+        try (InputStream input = context.getContentResolver().openInputStream(uri)) {
+            if (input != null) {
+                ExifInterface exif = new ExifInterface(input);
+                // BitmapFactory decodes sensor pixels, not their display orientation.
+                // EXIF defines mirrored orientations as a horizontal flip, then rotation.
+                if (exif.isFlipped()) orientation.setScale(-1, 1);
+                orientation.postRotate(exif.getRotationDegrees());
+            }
+        } catch (IOException ignored) {
+            // Images without readable EXIF still use their ordinary pixel orientation.
+        }
         BitmapFactory.Options bounds = new BitmapFactory.Options();
         bounds.inJustDecodeBounds = true;
         try (InputStream input = context.getContentResolver().openInputStream(uri)) {
@@ -60,15 +75,24 @@ class MediaStorePhotoHelper {
         }
         if (bitmap == null) throw new Exception("Could not read the photo.");
 
-        int quality = 78;
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        do {
-            output.reset();
-            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, output);
-            quality -= 10;
-        } while (output.size() > 900 * 1024 && quality >= 38);
-        bitmap.recycle();
-        if (output.size() > 900 * 1024) throw new Exception("Photo is too large. Try a closer crop.");
-        return output.toByteArray();
+        try {
+            if (!orientation.isIdentity()) {
+                Bitmap upright = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(),
+                    bitmap.getHeight(), orientation, true);
+                if (upright != bitmap) bitmap.recycle();
+                bitmap = upright;
+            }
+            int quality = 78;
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            do {
+                output.reset();
+                bitmap.compress(Bitmap.CompressFormat.JPEG, quality, output);
+                quality -= 10;
+            } while (output.size() > 900 * 1024 && quality >= 38);
+            if (output.size() > 900 * 1024) throw new Exception("Photo is too large. Try a closer crop.");
+            return output.toByteArray();
+        } finally {
+            bitmap.recycle();
+        }
     }
 }
