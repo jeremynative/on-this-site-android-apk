@@ -8243,3 +8243,20 @@
   color: #8a2424;
   background: #fff8f7;
 }
+
+    .map-story-status {
+      margin: 0;
+      padding: 10px 12px;
+      border: 1px solid #cbd8cf;
+      border-radius: 8px;
+      background: #eef5f0;
+      color: #244b35;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .map-story-status[data-tone="error"] {
+      border-color: #d4a39c;
+      background: #fff4f2;
+      color: #852b20;
+    }
+    .map-story-status[hidden] { display: none; }

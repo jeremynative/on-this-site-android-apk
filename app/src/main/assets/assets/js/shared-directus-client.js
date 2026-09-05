@@ -396,23 +396,30 @@
       body.append("title", title || file.name);
       const token = tokenProvider();
       const requireAuth = requestOptions.requireAuth === true;
-      let response = await withAuthRetry(authToken => fetch(`${baseUrl}/files`, { method: "POST", headers: authHeaders(authToken), body }), { ...requestOptions, missingAuthMessage: "Login required to upload images." });
-      if ((response.status === 401 || response.status === 403) && token && !requireAuth) {
-        response = await fetch(`${baseUrl}/files`, { method: "POST", body });
-      }
-      if (!response.ok) {
-        const text = await readErrorBody(response);
-        if (requireAuth && responseLooksExpired(response, text)) {
-          onAuthExpired();
-          throw expiredAuthError(requestOptions.authExpiredMessage || authExpiredMessage("upload the image"));
+      const timeout = Number(requestOptions.timeout || 0);
+      const controller = timeout && typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timer = controller ? window.setTimeout(() => controller.abort(), timeout) : null;
+      try {
+        let response = await withAuthRetry(authToken => fetch(`${baseUrl}/files`, { method: "POST", headers: authHeaders(authToken), body, signal: controller?.signal }), { ...requestOptions, missingAuthMessage: "Login required to upload images." });
+        if ((response.status === 401 || response.status === 403) && token && !requireAuth) {
+          response = await fetch(`${baseUrl}/files`, { method: "POST", body, signal: controller?.signal });
         }
-        if (response.status === 401 || response.status === 403) {
-          throw new Error("This account does not have permission to upload images yet.");
+        if (!response.ok) {
+          const text = await readErrorBody(response);
+          if (requireAuth && responseLooksExpired(response, text)) {
+            onAuthExpired();
+            throw expiredAuthError(requestOptions.authExpiredMessage || authExpiredMessage("upload the image"));
+          }
+          if (response.status === 401 || response.status === 403) {
+            throw new Error("This account does not have permission to upload images yet.");
+          }
+          throw new Error(`Could not upload image: ${response.status}`);
         }
-        throw new Error(`Could not upload image: ${response.status}`);
+        const data = await response.json();
+        return normalizeUploadFileId(data);
+      } finally {
+        if (timer) window.clearTimeout(timer);
       }
-      const data = await response.json();
-      return normalizeUploadFileId(data);
     }
 
     return { fetchJson, postItem, patchItem, deleteItem, filterValue, fetchFirstItem, triggerFlow, triggerReviewAction, loginWithPassword, fetchProfileForToken, uploadFile, ensureAuthSession, fetchAuthenticated, logout };

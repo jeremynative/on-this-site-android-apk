@@ -9463,6 +9463,7 @@
       const profile = currentContributorProfile();
       if (!contributorCanUseDailyAction("stories", profile)) return;
       renderMapStoryPrompts();
+      setMapStoryStatus();
       if (mapStoryCaptionEl) mapStoryCaptionEl.value = "";
       if (mapStoryPhotoEl) mapStoryPhotoEl.value = "";
       if (mapStoryPhotoPreviewEl) mapStoryPhotoPreviewEl.innerHTML = "";
@@ -9522,42 +9523,68 @@
       openSheet(contributeSheetEl);
     }
 
+    function setMapStoryStatus(message = "", tone = "") {
+      if (!mapStorySubmitEl) return;
+      let status = mapStorySheetEl.querySelector("#map-story-status");
+      if (!status) {
+        status = document.createElement("p");
+        status.id = "map-story-status";
+        status.className = "map-story-status";
+        status.setAttribute("role", "status");
+        status.setAttribute("aria-live", "polite");
+        mapStorySubmitEl.before(status);
+      }
+      status.textContent = message;
+      status.dataset.tone = tone;
+      status.hidden = !message;
+    }
+
     async function submitMapStory() {
-      if (!isApprovedContributor()) {
-        showBanner("Login as an approved contributor to add a map story.");
-        return;
-      }
-      const profile = currentContributorProfile();
-      if (!contributorCanUseDailyAction("stories", profile)) return;
-      const file = mapStoryPhotoEl?.files?.[0];
-      const caption = mapStoryCaptionEl?.value.trim() || "";
-      if (!caption && !file) {
-        showBanner("Add story text or an optional photo before submitting.");
-        return;
-      }
-      const moderation = moderationCheck(caption, "Your story");
-      if (!moderation.ok) {
-        showBanner(moderation.message);
-        return;
-      }
-      const imageError = file ? validatePlantImage(file) : "";
-      if (imageError) {
-        showBanner(imageError);
-        return;
-      }
+      if (!mapStorySubmitEl || mapStorySubmitEl.disabled) return;
       mapStorySubmitEl.disabled = true;
-      mapStorySubmitEl.textContent = "Submitting...";
+      mapStorySubmitEl.textContent = "Preparing story...";
+      setMapStoryStatus("Preparing your story...");
       try {
-        if (!state.userLocation) await requestUserLocation({ centerMap: false, silent: false });
+        if (!isApprovedContributor()) throw new Error("Login as an approved contributor to add a map story.");
+        const profile = currentContributorProfile();
+        if (!contributorCanUseDailyAction("stories", profile)) {
+          throw new Error(contributorDailyLimitMessage("stories", profile));
+        }
+        const file = mapStoryPhotoEl?.files?.[0];
+        const caption = mapStoryCaptionEl?.value.trim() || "";
+        if (!caption && !file) throw new Error("Add story text or an optional photo before submitting.");
+        const moderation = moderationCheck(caption, "Your story");
+        if (!moderation.ok) throw new Error(moderation.message);
+        // Camera originals can exceed the upload limit. Check their type now,
+        // then enforce the size limit on the prepared photo, not the original.
+        const imageError = file ? validateSuggestionImage(file) : "";
+        if (imageError) throw new Error(imageError);
+        let preparedPhoto = null;
+        if (file) {
+          setMapStoryStatus("Preparing your photo...");
+          preparedPhoto = await compressPlantImage(file);
+          if (!preparedPhoto) throw new Error("Could not prepare that photo. Try choosing it again.");
+          const preparedError = validatePlantImage(preparedPhoto);
+          if (preparedError) throw new Error(preparedError);
+        }
+        if (!state.userLocation) {
+          setMapStoryStatus("Getting your current location...");
+          mapStorySubmitEl.textContent = "Getting location...";
+          await requestUserLocation({ centerMap: false, silent: false });
+        }
         const coords = state.userLocation;
-        if (!coords) throw new Error("Current location is needed for map stories.");
+        if (!coords) throw new Error("Current location is needed for map stories. Enable location access and try again.");
         const attachedSite = storyAttachmentSite(coords);
         const prompt = MAP_STORY_UTILS.promptForKey(MAP_STORY_PROMPTS, mapStoryPromptEl?.value);
         let imageId = null;
-        if (file) {
-          const compressed = await compressPlantImage(file);
-          imageId = await uploadDirectusFile(compressed || file, `Map story - ${prompt.label}`, { requireAuth: true });
+        if (preparedPhoto) {
+          setMapStoryStatus("Uploading your photo...");
+          mapStorySubmitEl.textContent = "Uploading photo...";
+          imageId = await uploadDirectusFile(preparedPhoto, `Map story - ${prompt.label}`, { requireAuth: true, timeout: 45000 });
+          if (!imageId) throw new Error("The photo upload did not finish. Please try again.");
         }
+        setMapStoryStatus("Saving your story...");
+        mapStorySubmitEl.textContent = "Saving story...";
         const now = new Date();
         const expires = new Date(now.getTime() + MAP_STORY_BASE_LIFETIME_MS);
         const payload = {
@@ -9598,7 +9625,10 @@
         updateMobileActivityUnreadBadge();
         showBanner(attachedSite ? `Story attached to ${attachedSite.title}.` : "Story added to the map.");
       } catch (error) {
-        showBanner(error.message || "Could not submit map story.");
+        const message = error.name === "AbortError"
+          ? "The submission took too long. Check your connection and try again."
+          : error.message || "Could not submit map story. Please try again.";
+        setMapStoryStatus(message, "error");
       } finally {
         mapStorySubmitEl.disabled = false;
         mapStorySubmitEl.textContent = "Submit story";

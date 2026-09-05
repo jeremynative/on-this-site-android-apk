@@ -1,3 +1,11 @@
+## September 5 Story photo submission repair
+
+- Camera originals are type-checked, compressed and then checked against the upload size limit. Story preparation/upload/save stages and failures render inside the composer, preserving failed drafts. Repeated taps are guarded and photo uploads have a 45-second timeout; missing upload IDs cannot silently create a photo-less Story.
+- Canonical Android runtime and both bundled shells include the focused change; existing Android-specific runtime remains intact. Shell marker 20260905-story-photo-submit-r244. Shared web fix PR #243 merged as f781a15128dca54fdf7f7143305402b61ae76223.
+- Story behavior tests, shell/menu behavior, offline archive, Play readiness and debug build passed. Chrome compressed a real 12,712,476-byte PNG to 600,048-byte JPEG, displayed a simulated upload error inside the composer and retried successfully without any network upload or public Story.
+- Branch fix/mobile-story-photo-submit-20260905 based on c658330. Modified runtime/CSS/shared client, bundled shells and shell marker/verifier. Signed release pending. S25 is not connected; no S25 test claimed.
+
+Safest next action: complete signed release and live deployment verification; preserve production data and do not publish the user's Story as a test.
 # Android APK — Codex Handoff
 
 ## September 5 S25 menu touch ownership

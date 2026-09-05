@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260905-mobile-menu-touch-r243";
+const expectedBuild = "20260905-story-photo-submit-r244";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
