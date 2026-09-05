@@ -850,6 +850,8 @@
     .app.mobile-map-actions-hidden .mobile-activity-button,
     .app.mobile-map-actions-hidden .mobile-notification-button,
     .app.mobile-search-results .mobile-notification-button,
+    body:has(.search-suggestions:not([hidden])) .mobile-activity-button,
+    body:has(.search-suggestions:not([hidden])) .mobile-notification-button,
     body:has(.mobile-more-menu[open]) .mobile-activity-button,
     body:has(.mobile-more-menu[open]) .mobile-notification-button,
     body:has(.mobile-layer-menu[open]) .mobile-activity-button,

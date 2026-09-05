@@ -27,8 +27,13 @@ let regions;
 vm.runInNewContext(`var sync = function(){${code} sync();`, {
   r: rect(0, 180, 384, 652), token: 'test',
   getComputedStyle: el => el.style,
-  document: {querySelectorAll: selector => selector.startsWith('.mobile-more-menu')
-    ? [menu, hidden, offscreen] : [...children, disabled, marker]},
+  document: {querySelectorAll: selector => {
+    if (selector.startsWith('.mobile-more-menu')) {
+      assert(selector.includes('.search-suggestions:not([hidden])'), 'search list gaps also own their gestures');
+      return [menu, hidden, offscreen];
+    }
+    return [...children, disabled, marker];
+  }},
   window: {innerWidth: 384, innerHeight: 832, AndroidApp: {
     syncNativeMapTouchRegions: (_, json) => { regions = JSON.parse(json); }
   }}
