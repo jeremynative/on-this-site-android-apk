@@ -1208,7 +1208,7 @@ public class MainActivity extends Activity {
                     // Scroll surfaces own the whole gesture, including label text
                     // and gaps. Collect them before controls so the native region
                     // cap cannot drop a menu behind a long article's links.
-                    + "document.querySelectorAll('.mobile-more-menu[open] .mobile-more-grid,.mobile-layer-menu[open] .mobile-layer-panel,.detail.open,.sheet.open,.list-panel,.mobile-timeline,[role=dialog],.language-quiz-card').forEach(protect);"
+                    + "document.querySelectorAll('.mobile-more-menu[open] .mobile-more-grid,.mobile-layer-menu[open] .mobile-layer-panel,.search-suggestions:not([hidden]),.detail.open,.sheet.open,.list-panel,.mobile-timeline,[role=dialog],.language-quiz-card').forEach(protect);"
                     + "document.querySelectorAll('button,a,input,select,textarea,summary,[role=button]').forEach(protect);"
                     + "window.AndroidApp.syncNativeMapTouchRegions(token,JSON.stringify(blocked),window.innerWidth,window.innerHeight);return true;};"
                 + "window.__nliSyncNativeMapViewport=sync;"
