@@ -1,3 +1,11 @@
+## September 6 contribution release — verified checkpoint
+
+Supersedes older unreleased notes. PR111 merged23d6bb63b65ff4ef31919492d8ab88a22690a2b7; signed workflow34022695992 passed. APK0.1.659/apk-659 digest/signature verified and installed physical S25SM-S938U1 with Jeremy207 session preserved. Branch fix/native-suggestion-picker-20260906 implementationd9f8c8c before this documentation commit; APP_VERSION20260906-contribution-capture-r246.
+
+Fallback assets, native picker ownership, PixelCopy and focused IME callbacks are released. Debug/lint/shell/menu checks pass. Physical QA saved suggestion87 and native-map feedback6292, verified actual Search key and logout. Signed659 Capture returned success; attachment removed without submitting as Jeremy. Hosted runtime release7b0db6b1/deployment34024142654 passed; all6 current hashed helpers match verified code. No new binary required for hosted hash filenames;659 fallback already contains equivalent canonical code.
+
+All disposable records/uploads/account290 removed; QA package logged out/stopped, interceptor/forwarding/fixtures removed. Real6285 preserved. Root handoff and sibling web contribution audit report contain final evidence/limitations. SMTP delivery unconfigured; desktop location denied/no iOS target; remaining daily adapters explicitly blocked. No pending native implementation or release in this audit. Safest next action: normal signed659 use and separate bounded follow-ups; do not restart old broad audit or reuse deleted QA credentials.
+
 ## September 6 contribution release preparation
 
 Web PR250 merged as4ea079b4; deploy pending. Native source8c133ab now has synchronized contribution runtime/helpers/CSS and fallback HTML from web514880b3, with public Mapbox placeholders preserved. The modular shell uses packaged mobile-app.js; full offline shells use refreshed canonical inline helpers. Shell contracts reflect the previously deployed Shinnecock consolidation, exact shoreline classification, focus-owned IME and picker transient state. Debug build and lintDebug pass. Physical S25 staged-runtime Search keyboard action returned seven Powwow results; Logout returned Login and Logged out. Signed release and production verification remain. Keep QA account290 for final checks; explicit QA marker is excluded from rebuilt public data.
