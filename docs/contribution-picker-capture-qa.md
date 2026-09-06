@@ -11,3 +11,5 @@ Physical S25 capture after the fix includes the map, labels, icons and controls.
 Debug build and shell verification pass. Hosted JavaScript behavior tests cover picker ownership/stale delivery, screenshot callbacks/duplicate taps/timeouts, shared capture restoration and clone sizing. Physical testing used the separate QA package with staged hosted files through QA-only request interception, not a production release. APP_VERSION was subsequently bumped to 20260906-contribution-capture-r246; final asset synchronization, release build and production verification remain.
 
 Evidence is in the sibling `_contribution_reliability_evidence_20260905` directory: s25-native-picker-success.png, qa-s25-suggestion-saved.json, qa-s25-feedback-captured-before.png, qa-s25-feedback-captured-after.jpg, qa-s25-feedback-server.jpg, qa-s25-feedback-saved.json and exact cleanup records. Do not remove real comment6285 or its photo.
+
+Final asset synchronization completed from web514880b3 (PR250). Debug build, lintDebug and shell/menu checks pass. Source marker is r246. Physical staged-runtime Search-key and Logout checks passed; no production release claim yet.

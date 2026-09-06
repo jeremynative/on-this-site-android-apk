@@ -1,3 +1,12 @@
+## September 6 contribution release preparation
+
+Web PR250 merged as4ea079b4; deploy pending. Native source8c133ab now has synchronized contribution runtime/helpers/CSS and fallback HTML from web514880b3, with public Mapbox placeholders preserved. The modular shell uses packaged mobile-app.js; full offline shells use refreshed canonical inline helpers. Shell contracts reflect the previously deployed Shinnecock consolidation, exact shoreline classification, focus-owned IME and picker transient state. Debug build and lintDebug pass. Physical S25 staged-runtime Search keyboard action returned seven Powwow results; Logout returned Login and Logged out. Signed release and production verification remain. Keep QA account290 for final checks; explicit QA marker is excluded from rebuilt public data.
+
+## September 6 ACTIVE contribution picker/capture work — unreleased
+
+Source commit8c133ab on fix/native-suggestion-picker-20260906 fixes native suggestion selection ownership and adds bounded own-window feedback capture. Physical S25 QA picked coordinates over a pin and saved pending suggestion87; native screenshot includes map and saved feedback6292/imageffa29dfa-9644-43c4-9fa6-604394f0791e. Saved screenshot matches captured bytes. All those QA backend artifacts are removed; production account/package untouched. See docs/contribution-picker-capture-qa.md and root handoff for evidence and ongoing QA account.
+
+Debug build and shell/menu checks pass. Source marker20260906-contribution-capture-r246 was bumped after the physical QA build. Native bundled web assets have NOT yet been synchronized with contribution sourcef229e7a6. Safest next action: finish the remaining contribution audit, remove QA account before web rebuild, sync final hosted/bundled runtime into this checkout, build/lint, release through normal APK workflow and physically verify production. Do not mark the broad goal complete or send ntfy at this checkpoint.
 ## September 5 Story photo submission repair
 
 - Camera originals are type-checked, compressed and then checked against the upload size limit. Story preparation/upload/save stages and failures render inside the composer, preserving failed drafts. Repeated taps are guarded and photo uploads have a 45-second timeout; missing upload IDs cannot silently create a photo-less Story.

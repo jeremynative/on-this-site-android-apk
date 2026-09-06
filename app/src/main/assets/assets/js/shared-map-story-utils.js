@@ -1,4 +1,5 @@
 (function () {
+  const parseTimestamp = window.NLI_SHARED_UTILS?.parseContributionTimestamp || (value => new Date(value));
   const relationId = window.NLI_SHARED_UTILS?.relationId || (value => {
     if (!value) return "";
     if (typeof value === "object") return value.id || value.value || "";
@@ -111,8 +112,8 @@
     if (story?.permanent || story?.admin_permanent) return null;
     const baseLifetimeMs = Number(options.baseLifetimeMs || 24 * 60 * 60 * 1000);
     const voteHourMs = Number(options.voteHourMs || 60 * 60 * 1000);
-    const created = Date.parse(story?.created_at || "") || currentTime(options);
-    const original = Date.parse(story?.expires_original_at || story?.expires_at || "") || (created + baseLifetimeMs);
+    const created = parseTimestamp(story?.created_at || "").getTime() || currentTime(options);
+    const original = parseTimestamp(story?.expires_original_at || story?.expires_at || "").getTime() || (created + baseLifetimeMs);
     const counts = storyVoteCounts(story, votes);
     return new Date(original + (counts.up - counts.down) * voteHourMs);
   }

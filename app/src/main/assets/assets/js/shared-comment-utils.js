@@ -465,7 +465,7 @@
       const parsed = parse(comment) || {};
       const body = parsed.body || (!parsed.quote ? comment.comment || "" : "");
       const attachment = attachmentUrl(comment) || "";
-      const date = comment.created_at ? new Date(comment.created_at).toLocaleString() : "Approved comment";
+      const date = comment.created_at ? (window.NLI_PROFILE_UTILS?.parseContributionTimestamp?.(comment.created_at) || new Date(comment.created_at)).toLocaleString() : "Approved comment";
       return `<article class="activity-thread-entry${comment.parent_comment ? " is-reply" : ""}"><strong>${escape(name)}</strong>${parsed.quote ? `<q>${escape(parsed.quote)}</q>` : ""}${body ? `<span class="activity-thread-caption">${escape(body)}</span>` : ""}${attachment ? `<img class="comment-image activity-thread-image" src="${escape(attachment)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">` : ""}<time>${escape(date)}</time></article>`;
     }).join("");
     return `<div class="activity-comment-thread" aria-label="Existing comments"><div class="activity-comment-thread-heading"><strong>${comments.length} comment${comments.length === 1 ? "" : "s"}</strong><span>${comments.length ? "Join the conversation below." : "Start the conversation."}</span></div>${entries || `<p class="activity-thread-empty">No comments yet.</p>`}</div>`;

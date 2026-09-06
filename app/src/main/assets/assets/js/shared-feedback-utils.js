@@ -174,8 +174,15 @@
     return html2canvasRuntimePromise;
   }
 
-  async function captureFeedbackScreenshot(options = {}) {
-    const html2canvas = options.html2canvas || await loadHtml2canvasRuntime();
+  let activeFeedbackCapture = null;
+  function captureFeedbackScreenshot(options = {}) {
+    if (activeFeedbackCapture) return activeFeedbackCapture;
+    activeFeedbackCapture = performFeedbackScreenshotCapture(options).finally(() => { activeFeedbackCapture = null; });
+    return activeFeedbackCapture;
+  }
+
+  async function performFeedbackScreenshotCapture(options = {}) {
+    const html2canvas = options.captureFile ? null : options.html2canvas || await loadHtml2canvasRuntime();
     const statusEl = options.statusEl || null;
     const hiddenEl = options.hiddenEl || null;
     if (statusEl) statusEl.textContent = options.captureMessage || "Capturing the current page...";
@@ -183,21 +190,40 @@
     if (hiddenEl) hiddenEl.style.visibility = "hidden";
     await new Promise(resolve => setTimeout(resolve, Number(options.delay || 350)));
     let canvas;
+    let file;
     try {
+      if (options.captureFile) {
+        file = await options.captureFile();
+        if (!file) throw new Error("Could not capture the screen. Upload a screenshot instead.");
+      } else {
       const ignoredId = options.ignoreElementId || "";
       canvas = await html2canvas(options.target || document.body, {
         backgroundColor: options.backgroundColor || "#f8fbf6",
         scale: Math.min(Number(options.maxScale || 1.4), window.devicePixelRatio || 1),
         useCORS: true,
+        onclone: clonedDocument => {
+          // The desktop map uses fixed layers and a zero-height body. Give
+          // only the capture clone a viewport floor so those layers aren't clipped.
+          clonedDocument.body.style.minHeight = `${window.innerHeight}px`;
+          clonedDocument.querySelectorAll("details:not([open])").forEach(details => {
+            Array.from(details.children).forEach(child => {
+              if (child.tagName !== "SUMMARY") child.style.display = "none";
+            });
+          });
+        },
         ignoreElements: element => {
           if (typeof options.ignoreElements === "function" && options.ignoreElements(element)) return true;
           return Boolean(ignoredId && element?.id === ignoredId);
         }
       });
+      }
+    } catch (error) {
+      if (statusEl) statusEl.textContent = error.message || "Screen capture failed. Try again or upload a screenshot.";
+      throw error;
     } finally {
       if (hiddenEl) hiddenEl.style.visibility = previousVisibility;
     }
-    const file = await canvasToFeedbackFile(canvas, options.basename || "feedback-screenshot");
+    file = file || await canvasToFeedbackFile(canvas, options.basename || "feedback-screenshot");
     if (statusEl) statusEl.textContent = options.successMessage || "Screenshot captured and will be sent with your feedback.";
     return file;
   }
