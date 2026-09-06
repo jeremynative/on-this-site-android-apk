@@ -94,6 +94,12 @@ class AppBridge {
     }
 
     @JavascriptInterface
+    public void captureFeedbackScreenshot(String token, String requestId) {
+        if (!activity.validBridgeToken(token) || requestId == null || !requestId.matches("[a-zA-Z0-9-]{1,64}")) return;
+        activity.runOnUiThread(() -> activity.captureFeedbackScreenshot(requestId));
+    }
+
+    @JavascriptInterface
     public void syncNativeMapTransientState(String token, String stateJson) {
         if (!activity.validBridgeToken(token)) return;
         activity.runOnUiThread(() -> activity.syncNativeMapTransientState(stateJson));

@@ -208,6 +208,7 @@ final class NativeMapController {
     private MapLibreMap map;
     private boolean styleReady;
     private boolean profileMode;
+    private boolean suggestionMapPickMode;
     private boolean routingGesture;
     private boolean routedGestureMoved;
     private float routedGestureDownX;
@@ -1509,6 +1510,7 @@ final class NativeMapController {
             JSONObject payload = new JSONObject(stateJson);
             String signature = payload.optString("signature", "");
             String baseSignature = payload.optString("baseSignature", signature);
+            suggestionMapPickMode = payload.optBoolean("suggestionMapPickMode", false);
             profileMode = "profile".equals(payload.optString("mode", "public"));
             String nextBasemap = normalizeBasemap(payload.optString("basemap", "outdoors"));
             if (!nextBasemap.equals(currentBasemap)) {
@@ -1582,6 +1584,8 @@ final class NativeMapController {
         }
         try {
             JSONObject payload = new JSONObject(stateJson);
+            boolean pickModeChanged = suggestionMapPickMode != payload.optBoolean("suggestionMapPickMode", false);
+            suggestionMapPickMode = payload.optBoolean("suggestionMapPickMode", false);
             String signature = payload.optString("signature", "");
             Style style = map.getStyle();
             if (!signature.isEmpty() && signature.equals(lastStateSignature)) {
@@ -1603,8 +1607,9 @@ final class NativeMapController {
             if (labelsUpdated) {
                 setSource(style, LABEL_SOURCE_ID, withBundledTerritoryLabels(payload.optJSONObject("labels")));
             }
-            if ((pointsUpdated || labelsUpdated || eventsUpdated || unreadUpdated) && currentStateJson != null && !currentStateJson.isEmpty()) {
+            if ((pointsUpdated || labelsUpdated || eventsUpdated || unreadUpdated || pickModeChanged) && currentStateJson != null && !currentStateJson.isEmpty()) {
                 JSONObject cachedState = new JSONObject(currentStateJson);
+                cachedState.put("suggestionMapPickMode", suggestionMapPickMode);
                 if (pointsUpdated) cachedState.put("sitePoints", payload.optJSONObject("sitePoints"));
                 if (labelsUpdated) cachedState.put("labels", payload.optJSONObject("labels"));
                 if (eventsUpdated) cachedState.put("events", payload.optJSONObject("events"));
@@ -2063,6 +2068,12 @@ final class NativeMapController {
         // the release and must never open whatever marker happens to be below
         // the finger at that moment.
         if (routedGestureMoved) return false;
+        // A location picker owns the actual tapped coordinate, including water,
+        // territories and pins. Do not let feature hit testing replace it.
+        if (suggestionMapPickMode) {
+            listener.onFeatureSelected("suggestion-location", "", point.getLongitude(), point.getLatitude());
+            return true;
+        }
         PointF screenPoint = map.getProjection().toScreenLocation(point);
         if (!profileMode) {
             List<Feature> territoryLabels = map.queryRenderedFeatures(screenPoint, "nli-territory-labels");
