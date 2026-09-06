@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260905-photo-orientation-r245";
+const expectedBuild = "20260906-contribution-capture-r246";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -914,13 +914,19 @@ function verifyGeneralPlaceNameQuotes(document, label) {
   const payload = JSON.parse(match[1]);
   const placeNames = (Array.isArray(payload.sites) ? payload.sites : [])
     .filter(site => site.site_type === "placename");
-  if (placeNames.length !== 321) {
-    throw new Error(`${label} must contain 321 place-name listings; found ${placeNames.length}.`);
+  // The reviewed Shinnecock placename was consolidated into its ancestral-land
+  // article in web PR246. Keep that canonical article and exclude the duplicate.
+  if ((payload.sites || []).some(site => site.slug === 'shinnecock-placename') ||
+      !(payload.sites || []).some(site => site.slug === 'shinnecock-ancestral-land')) {
+    throw new Error(`${label} must retain the canonical Shinnecock ancestral-land article.`);
+  }
+  if (placeNames.length !== 320) {
+    throw new Error(`${label} must contain 320 place-name listings; found ${placeNames.length}.`);
   }
 
   const quotedPlaceNames = placeNames.filter(site => /<blockquote class="place-name-quote">/.test(String(site.translation_content || "")));
-  if (quotedPlaceNames.length !== 305) {
-    throw new Error(`${label} must retain the 305 currently published reviewed place-name quotations; found ${quotedPlaceNames.length}.`);
+  if (quotedPlaceNames.length !== 304) {
+    throw new Error(`${label} must retain the 304 currently published reviewed place-name quotations; found ${quotedPlaceNames.length}.`);
   }
   const quotes = quotedPlaceNames.map(site => {
     const quoteMatch = String(site.translation_content || "")
@@ -928,8 +934,8 @@ function verifyGeneralPlaceNameQuotes(document, label) {
     return { slug: site.slug, text: decodeQuoteHtml(quoteMatch[1]) };
   });
   const normalized = quotes.map(({ text }) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim());
-  if (new Set(normalized).size !== 305) {
-    throw new Error(`${label} must retain 305 distinct reviewed place-name quotations.`);
+  if (new Set(normalized).size !== 304) {
+    throw new Error(`${label} must retain 304 distinct reviewed place-name quotations.`);
   }
 
   const subjectPattern = /\b(?:geographic(?:al)? names?|place[- ]names?|placenames|toponym\w*|names?|named|namer|naming|nomenclature|gazetteer)\b/i;
@@ -1791,7 +1797,8 @@ for (const [needle, message] of [
   ["function resizeMobileProfileProgressMap()", "APK contributor mode must resize its overlay without refitting the geographic camera."],
   ["limit: options.limit || 3", "APK related sites must be capped at three."],
   ["const MOBILE_CANOE_LAND_SAMPLE_RADIUS_DEG = 0.00022", "APK canoe state must sample the moving icon footprint near narrow land."],
-  ["surroundingLandSamples >= Math.ceil(samples.length / 2)", "APK canoe state must require a stable majority-footprint shoreline classification."],
+  ["const result = insidePolygons.size > 0", "APK canoe state must classify the exact position against polygon edges, preserving creeks and islands."],
+  ["Number(coordinates[0]).toFixed(5)", "APK canoe cache must retain metre-scale shoreline positions."],
   ["MEDIA_UTILS.optimizedMapIconUrl", "APK map markers must preserve optimized transparent artwork."],
   ["id=\"mobile-map-locate\"", "APK map must include a dedicated current-location control."],
   ["id=\"mobile-map-locate\" type=\"button\" data-allow-geolocation", "APK current-location control must pass the Android geolocation gate."],
@@ -2577,7 +2584,7 @@ requireBundledText('function plantReferenceMatch(value = "", species = plantObse
 requireBundledPattern(/function\s+plantObservationGuess[\s\S]*?PLANT_UTILS\.plantGuideMatchFromFields\([\s\S]*?PLANT_OBSERVATION_SPECIES\)/, "Bundled Android plant guesses must use the shared indexed matcher.");
 requireBundledText('function commentThreadIndex(comments = [], options = {})', "Bundled Android app must include the shared comment thread index.");
 requireBundledText('const commentVoteIndexCache = new WeakMap()', "Bundled Android app must include the cached comment vote index.");
-requireBundledPattern(/function\s+discussionHtml\(sourceType,\s*item\)[\s\S]*?COMMENT_UTILS\.commentThreadIndex\(comments,\s*\{\s*excludeRoot:\s*isPlantObservationComment\s*\}\)[\s\S]*?commentThread\.parentFor\(comment\)/, "Bundled Android discussions must use indexed roots, replies, and parents.");
+requireBundledPattern(/function\s+discussionHtml\(sourceType,\s*item\)[\s\S]*?COMMENT_UTILS\.commentThreadIndex\(comments,\s*\{\s*excludeRoot:\s*comment => isPlantObservationComment\(comment\) \|\| PROFILE_UTILS\.isCheckinObservationComment\(comment\)\s*\}\)[\s\S]*?commentThread\.parentFor\(comment\)/, "Bundled Android discussions must use indexed roots, replies, and parents.");
 requireBundledPattern(/function\s+mobileActivityCommentThreadHtml\(card\)[\s\S]*?COMMENT_UTILS\.commentThreadIndex\(comments\)/, "Bundled Android activity discussions must use the shared thread index.");
 if (/repliesFor\s*=\s*parentId\s*=>[^;]*comments\.filter/.test(bundledMobileJs)) {
   throw new Error("Bundled Android comment threads must not rescan all comments for each parent.");
@@ -2689,7 +2696,7 @@ requireBundledText('searchEl.addEventListener("keyup", handleMobileSearchInput);
 requireBundledPattern(/function\s+handleMobileSearchInput\(nativeDraft\s*=\s*null\)[\s\S]*?const\s+hasNativeDraft\s*=\s*typeof\s+nativeDraft\s*===\s*"string"[\s\S]*?state\.androidImeSearchDraft\s*=\s*!hasNativeDraft[\s\S]*?:\s*nativeDraft/, "Bundled Android search must not mistake DOM Event objects for native IME query strings.");
 requireBundledPattern(/function\s+activeMobileSearchValue\(\)[\s\S]*?reconcileNativeSearchDraft\(nativeValue\)[\s\S]*?state\.androidImeSearchDraft\s*=\s*resolvedValue[\s\S]*?return\s+resolvedValue/, "Bundled Android search polling must promote a newer visible query over a stale native composition.");
 requireBundledPattern(/function\s+handleMobileSearchInput\(nativeDraft\s*=\s*null\)[\s\S]*?state\.androidImeSearchDraft\s*=\s*!hasNativeDraft[\s\S]*?!domValue[\s\S]*?\?\s*""/, "Bundled Android search clear must also clear its native draft.");
-requireBundledPattern(/function\s+reconcileNativeSearchDraft\(value\)[\s\S]*?domValue\.length\s*>\s*nativeValue\.length[\s\S]*?domKey\.startsWith\(nativeKey\)[\s\S]*?domKey\.endsWith\(nativeKey\)[\s\S]*?window\.__nliSetNativeSearchDraft\s*=\s*value\s*=>\s*handleMobileSearchInput\(reconcileNativeSearchDraft\(value\)\)/, "Bundled Android search must reconcile stale IME fragments with the full visible query.");
+requireBundledPattern(/function\s+reconcileNativeSearchDraft\(value\)[\s\S]*?domValue\.length\s*>\s*nativeValue\.length[\s\S]*?domKey\.startsWith\(nativeKey\)[\s\S]*?domKey\.endsWith\(nativeKey\)[\s\S]*?window\.__nliSetNativeSearchDraft\s*=\s*value\s*=>\s*\{\s*if \(document\.activeElement === searchEl\) handleMobileSearchInput\(reconcileNativeSearchDraft\(value\)\)/, "Bundled Android search must reconcile stale IME fragments with the full visible query.");
 requireBundledText('searchEl.addEventListener("focus", handleMobileSearchFocus);', "Bundled Android app must poll focused search values for WebView text changes.");
 requireBundledText('function installNativeAndroidSearchWatch()', "Bundled Android app must initialize native Android search values.");
 requireBundledText("state.nativeAndroidSearchWatchInstalled = true;", "Bundled Android app must install the focus-owned search watcher once.");
@@ -2697,7 +2704,7 @@ requireBundledPattern(/document\.addEventListener\("visibilitychange"[\s\S]*?doc
 requireBundledText('refreshMobileSearchSuggestions();', "Bundled Android app must persistently refresh native Android autocomplete.");
 requireBundledPattern(/const\s+startupGeometryReady\s*=\s*nativeAndroid\s*&&\s*!isOfflineTextMode\(\)[\s\S]*?hydrateMobileSiteGeometry\(\)[\s\S]*?Promise\.all\(\[[\s\S]*?initMap\(\)[\s\S]*?startupGeometryReady/, "Bundled Android startup must hydrate authoritative polygons in parallel with map construction and wait for both before reveal.");
 requireBundledText('if (!isOfflineTextMode() && !nativeAndroid) idleTask(hydrateMobileSiteGeometry);', "Non-native mobile browsers may keep detailed polygon hydration deferred after their first map.");
-requireBundledPattern(/const\s+eventSignature\s*=\s*exhibitFeatures\.map[\s\S]*?const\s+baseSignature\s*=\s*`[^`]+bio-paths:[^`]+`[\s\S]*?const\s+transientSignature\s*=\s*`[^`]+events:\$\{eventSignature\}`/, "Bundled Android calendar changes must remain outside the static native-map signature.");
+requireBundledPattern(/const\s+eventSignature\s*=\s*exhibitFeatures\.map[\s\S]*?const\s+baseSignature\s*=\s*`[^`]+bio-paths:[^`]+`[\s\S]*?const\s+transientSignature\s*=\s*`[^`]+events:\$\{eventSignature\}[^`]*`/, "Bundled Android calendar changes must remain outside the static native-map signature.");
 requireBundledPattern(/const\s+transientPayload\s*=\s*\{[\s\S]*?events:\s*nativeMapFeatureCollection\(exhibitFeatures\)[\s\S]*?syncNativeMapTransientState/, "Bundled Android calendar markers must use compact native-map updates after initial state.");
 requireBundledPattern(/function\s+nativeMapUnreadBadges\([\s\S]*?mobileContentUnreadCount\("site",\s*slug\)[\s\S]*?transientPayload\.unreadBadges\s*=\s*nativeMapUnreadBadges\(\)/, "Bundled Android unread changes must use compact slug/count updates.");
 if (/nativeMapPointSignature\s*!==\s*pointSignature[\s\S]{0,400}?transientPayload\.(?:sitePoints|labels)\s*=/.test(bundledMobileJs)) {
@@ -2847,8 +2854,8 @@ if (!bundledMobileJs.includes('fields=${SITE_DETAIL_FIELDS}`, { anonymous: true 
 if (!bundledMobileJs.includes('ttl: 60000, fresh: false, anonymous: true')) {
   throw new Error("Bundled Android public knowledgebase detail must bypass contributor-token refresh.");
 }
-if (!bundledMobileJs.includes('toFixed(3)},${Number(coordinates[1]).toFixed(3)')) {
-  throw new Error("Bundled Android biography motion must reuse shoreline state at a practical map-cell scale.");
+if (!bundledMobileJs.includes('toFixed(5)},${Number(coordinates[1]).toFixed(5)')) {
+  throw new Error("Bundled Android biography motion must reuse bounded shoreline state without merging opposite sides of narrow creeks.");
 }
 for (const [label, runtime] of [["modular", bundledMobileJs], ["full offline", bundledApp]]) {
   if (/search\/searchbox\/v1\/(?:suggest|retrieve)|session_token|autocomplete=true/.test(runtime)) {

@@ -24,6 +24,7 @@
     return ({
       montaukett: "montaukett-ancestral-land",
       nissaquogues: "nissaquogue",
+      "shinnecock-placename": "shinnecock-ancestral-land",
       setaukets: "setauket-ancestral-land"
     })[slug] || slug || "";
   }

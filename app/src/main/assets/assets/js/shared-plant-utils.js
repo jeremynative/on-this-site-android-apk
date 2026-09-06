@@ -256,18 +256,21 @@
       return value;
     };
     const confidence = Number(record?.confidence || 0);
+    const identificationStatus = String(record?.identification_status || "").toLowerCase();
+    const unresolvedServiceResult = /service_error|unavailable|provider_error/.test(identificationStatus)
+      || /identification unavailable/i.test(String(record?.common_name || ""));
     const vocabulary = record?.algonquian_word
       ? `${record.common_name || "Plant"} - ${record.algonquian_word}`
       : "";
     return {
       id: record?.id,
-      name: record?.common_name || "Plant observation",
-      identification: record?.scientific_name || record?.identification_status || "Awaiting identification review.",
+      name: unresolvedServiceResult ? "Unidentified nature observation" : (record?.common_name || "Plant observation"),
+      identification: unresolvedServiceResult ? "Identification pending review" : (record?.scientific_name || record?.identification_status || "Awaiting identification review."),
       vocabulary,
       algonquian: record?.algonquian_word || "",
       context: record?.indigenous_context || "",
       guidance: record?.visitor_guidance || "",
-      source: record?.identification_source || "",
+      source: unresolvedServiceResult ? "Visitor photo awaiting identification" : (record?.identification_source || ""),
       status_label: plantStatusLabel(record?.identification_status || record?.status),
       native_status: record?.native_status || "",
       invasive_status: record?.invasive_status || "",

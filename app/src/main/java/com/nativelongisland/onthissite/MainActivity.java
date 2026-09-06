@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260905-photo-orientation-r245";
+    static final String APP_VERSION = "20260906-contribution-capture-r246";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -123,6 +123,7 @@ public class MainActivity extends Activity {
     private static final String OFFLINE_BASE_URL =
         "https://directus.nativelongisland.com/app/";
     private final String bridgeCapabilityToken = UUID.randomUUID().toString();
+    private boolean feedbackCapturePending;
 
     private WebView webView;
     private NativeMapController nativeMapController;
@@ -2490,6 +2491,19 @@ public class MainActivity extends Activity {
 
     boolean validBridgeToken(String token) {
         return token != null && bridgeCapabilityToken.equals(token);
+    }
+
+    void captureFeedbackScreenshot(String requestId) {
+        if (webView == null || isFinishing() || isDestroyed() || feedbackCapturePending) return;
+        final String pageUrl = webView.getUrl();
+        if (pageUrl == null || !(isTrustedAppOrigin(Uri.parse(pageUrl)) || pageUrl.startsWith("file:///android_asset/"))) return;
+        feedbackCapturePending = true;
+        FeedbackScreenshotHelper.capture(this, webView, (base64, error) -> {
+            feedbackCapturePending = false;
+            if (webView == null || isFinishing() || isDestroyed() || !pageUrl.equals(webView.getUrl())) return;
+            webView.evaluateJavascript("window.onAndroidFeedbackScreenshot&&window.onAndroidFeedbackScreenshot("
+                + JSONObject.quote(requestId) + "," + JSONObject.quote(base64) + "," + JSONObject.quote(error) + ")", null);
+        });
     }
 
     private String safeLogUrl(String value) {

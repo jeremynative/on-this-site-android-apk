@@ -20,6 +20,7 @@
     const fetchErrorPrefix = options.fetchErrorPrefix || "Directus request failed";
     const fetchErrorSeparator = options.fetchErrorSeparator ?? ": ";
     const inFlightFetches = new Map();
+    const responseAuthTokens = new WeakMap();
     let refreshPromise = null;
     let expireAfterRefreshFailure = false;
 
@@ -52,6 +53,11 @@
       return token ? { ...extra, authorization: `Bearer ${token}` } : { ...extra };
     }
 
+    function expireResponseSession(response) {
+      const requestToken = responseAuthTokens.get(response);
+      if (requestToken && tokenProvider() === requestToken) onAuthExpired();
+    }
+
     async function refreshAuthToken(options = {}) {
       expireAfterRefreshFailure ||= options.expireOnAuthFailure !== false;
       if (refreshPromise) return refreshPromise;
@@ -77,6 +83,9 @@
           if (expireAfterRefreshFailure && tokenIsCurrent) onAuthExpired();
           return "";
         }
+        // A logout/new login may finish while the network refresh is pending.
+        // Never install credentials from the previous session into that account.
+        if (refreshTokenProvider() !== attemptedRefreshToken) return "";
         onTokenRefresh({
           token: accessToken,
           refreshToken: next.refresh_token || attemptedRefreshToken,
@@ -111,7 +120,7 @@
       if (!response.ok) {
         const body = await readErrorBody(response);
         if (responseLooksExpired(response, body)) {
-          onAuthExpired();
+          expireResponseSession(response);
           throw expiredAuthError(requestOptions.authExpiredMessage || authExpiredMessage());
         }
         let message = body;
@@ -133,9 +142,19 @@
         throw expiredAuthError(requestOptions.authExpiredMessage || requestOptions.missingAuthMessage || authExpiredMessage());
       }
       let response = await send(token);
+      responseAuthTokens.set(response, token);
       if (isAuthFailure(response) && token && requireAuth) {
+        if (tokenProvider() !== token) {
+          throw expiredAuthError("Your account changed. Please try again from the current account.");
+        }
         const refreshed = await refreshAuthToken();
-        if (refreshed) response = await send(refreshed);
+        if (refreshed) {
+          if (tokenProvider() !== refreshed) {
+            throw expiredAuthError("Your account changed. Please try again from the current account.");
+          }
+          response = await send(refreshed);
+          responseAuthTokens.set(response, refreshed);
+        }
       }
       return response;
     }
@@ -242,7 +261,7 @@
         if (!response.ok) {
           const text = await readErrorBody(response);
           if (requireAuth && responseLooksExpired(response, text)) {
-            onAuthExpired();
+            expireResponseSession(response);
             throw expiredAuthError(requestOptions.authExpiredMessage || authExpiredMessage(`save ${collection}`));
           }
           throw new Error(`Could not save ${collection}: ${response.status}${text ? ` ${text.slice(0, 240)}` : ""}`);
@@ -265,7 +284,7 @@
       if (!response.ok) {
         const text = await readErrorBody(response);
         if (requireAuth && responseLooksExpired(response, text)) {
-          onAuthExpired();
+          expireResponseSession(response);
           throw expiredAuthError(requestOptions.authExpiredMessage || authExpiredMessage(`update ${collection}`));
         }
         throw new Error(`Could not update ${collection}: ${response.status}${text ? ` ${text}` : ""}`);
@@ -283,7 +302,7 @@
       if (!response.ok) {
         const text = await readErrorBody(response);
         if (requireAuth && responseLooksExpired(response, text)) {
-          onAuthExpired();
+          expireResponseSession(response);
           throw expiredAuthError(requestOptions.authExpiredMessage || authExpiredMessage(`delete ${collection}`));
         }
         throw new Error(`Could not delete ${collection}: ${response.status}${text ? ` ${text}` : ""}`);
@@ -354,7 +373,9 @@
       const profileCollection = requestOptions.profileCollection || "mobile_member_profiles";
       const sessionProfileEndpoint = requestOptions.sessionProfileEndpoint === false
         ? ""
-        : (requestOptions.sessionProfileEndpoint || "https://nativelongisland.com/engagement-action.php");
+        : (requestOptions.sessionProfileEndpoint
+          || window.NLI_SHARED_CONFIG?.engagementActionEndpoint
+          || "https://on-this-site-support.onthissiteny.workers.dev/engagement-action");
       if (sessionProfileEndpoint) {
         try {
           const sessionResponse = await fetch(sessionProfileEndpoint, {
@@ -407,7 +428,7 @@
         if (!response.ok) {
           const text = await readErrorBody(response);
           if (requireAuth && responseLooksExpired(response, text)) {
-            onAuthExpired();
+            expireResponseSession(response);
             throw expiredAuthError(requestOptions.authExpiredMessage || authExpiredMessage("upload the image"));
           }
           if (response.status === 401 || response.status === 403) {

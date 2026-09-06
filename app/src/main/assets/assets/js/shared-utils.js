@@ -341,7 +341,64 @@
     return foundEvent ? output.join("") : "";
   }
 
-  window.NLI_SHARED_UTILS = {
+  const CONTRIBUTOR_TIERS = Object.freeze([
+    {
+      key: "new",
+      label: "New Contributor",
+      minPoints: 0,
+      commentsPerDay: 1,
+      storiesPerDay: 1,
+      plantsPerDay: 1,
+      unlocks: "1 comment, 1 map story, and 1 plant ID each day"
+    },
+    {
+      key: "trusted",
+      label: "Trusted Contributor",
+      minPoints: 100,
+      commentsPerDay: 10,
+      storiesPerDay: 10,
+      plantsPerDay: 5,
+      unlocks: "10 comments/stories and 5 plant IDs each day"
+    },
+    {
+      key: "steward",
+      label: "Community Steward",
+      minPoints: 500,
+      commentsPerDay: Infinity,
+      storiesPerDay: Infinity,
+      plantsPerDay: 10,
+      unlocks: "unlimited comments/stories and 10 plant IDs each day"
+    }
+  ]);
+
+  function contributorTierForPoints(points = 0) {
+    const total = Math.max(0, Number(points) || 0);
+    return [...CONTRIBUTOR_TIERS]
+      .sort((a, b) => Number(b.minPoints || 0) - Number(a.minPoints || 0))
+      .find(tier => total >= Number(tier.minPoints || 0)) || CONTRIBUTOR_TIERS[0];
+  }
+
+  function contributorDailyLimit(points = 0, kind = "comments") {
+    const tier = contributorTierForPoints(points);
+    if (kind === "plants" || kind === "plant") return tier.plantsPerDay;
+    if (kind === "stories" || kind === "story") return tier.storiesPerDay;
+    return tier.commentsPerDay;
+  }
+
+  function parseContributionTimestamp(value) {
+    // Directus timestamp fields omit the UTC suffix; never interpret them as device-local time.
+    const raw = typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value) ? `${value}Z` : value;
+    return new Date(value ? raw : NaN);
+  }
+
+  function contributionDayKey(value = new Date()) {
+    const date = parseContributionTimestamp(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+  }
+
+  const sharedUtilities = {
+    CONTRIBUTOR_TIERS, contributorTierForPoints, contributorDailyLimit, parseContributionTimestamp, contributionDayKey,
     escapeHtml,
     localDateKey,
     previousLocalDateKey,
@@ -374,4 +431,6 @@
     isInlineSectionHtml,
     isSectionTimelineHeading
   };
+  if (typeof module !== "undefined" && module.exports) module.exports = sharedUtilities;
+  else window.NLI_SHARED_UTILS = sharedUtilities;
 }());

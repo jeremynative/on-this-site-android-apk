@@ -103,6 +103,7 @@
 
   window.NLI_SHARED_CONFIG = {
     directusUrl: "https://directus.nativelongisland.com",
+    engagementActionEndpoint: "https://on-this-site-support.onthissiteny.workers.dev/engagement-action",
     publicArchiveBase: "https://nativelongisland.com/",
     fields: {
       profile: profileFields,

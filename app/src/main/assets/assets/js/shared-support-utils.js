@@ -1,4 +1,5 @@
 (function () {
+  // Cache revision: monthly Stripe totals and public supporter summaries.
   const DEFAULT_CONFIG = {
     projectName: "On This Site",
     supportEmail: "jeremynative@gmail.com",
@@ -7,6 +8,7 @@
     publishableKey: "",
     stripeJsUrl: "https://js.stripe.com/v3/",
     publicThankYousUrl: "support/public-thank-yous.json",
+    monthlyGoalUrl: "",
     adminActivityUrl: "",
     defaultAmounts: [10, 25, 50, 100],
     defaultAmount: 25
@@ -323,6 +325,43 @@
     };
   }
 
+  function sanitizeMonthlyGoal(record = {}, fallbackGoal = 300) {
+    const goal = Number(record.goal);
+    const raised = Number(record.raised);
+    const safeGoal = Number.isFinite(goal) && goal > 0 ? Math.round(goal * 100) / 100 : fallbackGoal;
+    const safeRaised = Number.isFinite(raised) && raised >= 0 ? Math.round(raised * 100) / 100 : 0;
+    const recent = Array.isArray(record.recent) ? record.recent.slice(0, 6).map(item => ({
+      displayName: cleanText(item?.displayName, 120) || "Anonymous supporter",
+      amount: Math.max(0, Math.round(Number(item?.amount || 0) * 100) / 100),
+      frequency: cleanText(item?.frequency, 40) || "Project support",
+      createdAt: cleanText(item?.createdAt, 80)
+    })).filter(item => item.amount > 0) : [];
+    const donors = Array.isArray(record.donors)
+      ? [...new Set(record.donors.map(name => cleanText(name, 120)).filter(Boolean))].slice(0, 20)
+      : [];
+    return {
+      goal: safeGoal,
+      raised: safeRaised,
+      percent: safeGoal > 0 ? Math.round((safeRaised / safeGoal) * 1000) / 10 : 0,
+      currency: "USD",
+      monthKey: cleanText(record.monthKey, 20),
+      monthLabel: cleanText(record.monthLabel, 80),
+      recent,
+      donors,
+      updatedAt: cleanText(record.updatedAt, 80)
+    };
+  }
+
+  async function fetchMonthlySupportGoal(options = {}) {
+    const fallbackGoal = Number(options.fallbackGoal || 300) || 300;
+    const url = config().monthlyGoalUrl;
+    if (!url || typeof fetch !== "function") return sanitizeMonthlyGoal({}, fallbackGoal);
+    const response = await fetch(url, { cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || "Monthly support could not be loaded.");
+    return sanitizeMonthlyGoal(data, fallbackGoal);
+  }
+
   function publicThankYousHtml(records = [], options = {}) {
     const esc = options.escapeHtml || escapeHtml;
     const publicRecords = records.map(record => sanitizePublicThankYou(record, options)).filter(Boolean);
@@ -489,42 +528,53 @@
     const hasStripe = Boolean(supportConfig.checkoutEndpoint);
     const hasEmbedded = hasStripe && hasEmbeddedCheckoutConfig(supportConfig);
     const initialThankYousHtml = publicThankYousHtml(window.NLI_PUBLIC_SUPPORTERS || [], { escapeHtml: esc });
+    const prefill = options.prefill || {};
+    const adoption = options.adoption || null;
+    const printPurchase = options.printPurchase || null;
+    const selectedFrequency = prefill.frequency === "monthly" ? "monthly" : "once";
+    const selectedAmount = Number(prefill.amount || 0);
+    const customAmount = selectedAmount > 0 && !amounts.includes(selectedAmount) ? selectedAmount : "";
+    const connection = prefill.connection || (adoption ? `Place adoption: ${adoption.siteTitle || "On This Site place"}` : (printPurchase ? `Print purchase: ${printPurchase.title || "On This Site artwork"}` : ""));
+    const artworkTitle = prefill.artworkTitle || printPurchase?.title || "";
+    const formTitle = adoption ? `Adopt ${adoption.siteTitle || "This Place"}` : (printPurchase ? "Purchase This Print" : title);
     return `
       <div class="ots-page-intro support-page-intro">
         <p class="summary">${esc(note)}</p>
       </div>
       <section class="section support-form-section" data-support-form data-support-platform="${esc(options.platform || "web")}">
-        <h3>${esc(title)}</h3>
+        <h3>${esc(formTitle)}</h3>
+        ${adoption ? `<p class="article-summary">Your ${esc(money(adoption.amount || 25))}/month stewardship support helps sustain research and public information connected to this place.</p>` : ""}
+        ${printPurchase ? `<p class="article-summary">${esc(`${printPurchase.sizeLabel} ${printPurchase.materialLabel} print of ${printPurchase.title}.`)}</p>` : ""}
         <p class="article-meta">${hasPlay ? "Payments are processed securely by Google Play." : (hasStripe ? (hasEmbedded ? "Secure payment opens here on the project site." : "Payments open through secure checkout.") : "Secure checkout is being connected. Payment will open here after the support system is ready.")}</p>
         ${supportReturnNoticeHtml(options.pageUrl || window.location.href, { escapeHtml: esc })}
         ${supportCompletionHtml({ escapeHtml: esc })}
         <div class="support-frequency" role="group" aria-label="Support frequency">
-          <label><input type="radio" name="support-frequency-${esc(options.platform || "web")}" data-support-frequency value="once" checked> One-time</label>
-          <label><input type="radio" name="support-frequency-${esc(options.platform || "web")}" data-support-frequency value="monthly"> Monthly</label>
+          <label><input type="radio" name="support-frequency-${esc(options.platform || "web")}" data-support-frequency value="once" ${selectedFrequency === "once" ? "checked" : ""}> One-time</label>
+          <label><input type="radio" name="support-frequency-${esc(options.platform || "web")}" data-support-frequency value="monthly" ${selectedFrequency === "monthly" ? "checked" : ""}> Monthly</label>
         </div>
         <div class="support-amount-grid" aria-label="Support amount">
           ${amounts.map(amount => `
             <label>
-              <input type="radio" name="support-amount-${esc(options.platform || "web")}" data-support-amount value="${amount}" ${amount === defaultAmount ? "checked" : ""}>
+              <input type="radio" name="support-amount-${esc(options.platform || "web")}" data-support-amount value="${amount}" ${amount === (selectedAmount || defaultAmount) ? "checked" : ""}>
               <span>${esc(money(amount))}</span>
             </label>
           `).join("")}
         </div>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-custom-amount">Custom amount</label>
-          <input id="${esc(options.platform || "web")}-support-custom-amount" data-support-custom-amount type="number" min="1" step="1" inputmode="decimal" placeholder="Optional">
+          <input id="${esc(options.platform || "web")}-support-custom-amount" data-support-custom-amount type="number" min="1" step="1" inputmode="decimal" placeholder="Optional" value="${esc(customAmount)}">
         </div>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-name">Name (private unless you choose to show it)</label>
-          <input id="${esc(options.platform || "web")}-support-name" data-support-name autocomplete="name" required>
+          <input id="${esc(options.platform || "web")}-support-name" data-support-name autocomplete="name" value="${esc(prefill.name || "")}" required>
         </div>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-email">Email (private)</label>
-          <input id="${esc(options.platform || "web")}-support-email" data-support-email autocomplete="email" inputmode="email" type="email" required>
+          <input id="${esc(options.platform || "web")}-support-email" data-support-email autocomplete="email" inputmode="email" type="email" value="${esc(prefill.email || "")}" required>
         </div>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-public-name">Public name (optional)</label>
-          <input id="${esc(options.platform || "web")}-support-public-name" data-support-public-name placeholder="Use a different public name">
+          <input id="${esc(options.platform || "web")}-support-public-name" data-support-public-name placeholder="Use a different public name" value="${esc(prefill.publicDisplayName || "")}">
         </div>
         <label class="support-check">
           <input type="checkbox" data-support-public-thanks>
@@ -536,15 +586,15 @@
         </div>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-connection">Artwork or project connection</label>
-          <input id="${esc(options.platform || "web")}-support-connection" data-support-connection placeholder="Optional">
+          <input id="${esc(options.platform || "web")}-support-connection" data-support-connection placeholder="Optional" value="${esc(connection)}">
         </div>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-artwork-title">Artwork collected</label>
-          <input id="${esc(options.platform || "web")}-support-artwork-title" data-support-artwork-title placeholder="Optional artwork or edition title">
+          <input id="${esc(options.platform || "web")}-support-artwork-title" data-support-artwork-title placeholder="Optional artwork or edition title" value="${esc(artworkTitle)}">
         </div>
         <div class="field">
           <label for="${esc(options.platform || "web")}-support-note">Private note to the project (optional)</label>
-          <textarea id="${esc(options.platform || "web")}-support-note" data-support-note rows="4" placeholder="Not shown publicly"></textarea>
+          <textarea id="${esc(options.platform || "web")}-support-note" data-support-note rows="4" placeholder="Not shown publicly">${esc(prefill.note || "")}</textarea>
         </div>
         <div class="actions">
           <button class="button action" type="button" data-support-submit ${hasStripe || hasPlay ? "" : "disabled"}>${hasPlay ? "Continue with Google Play" : "Continue to secure payment"}</button>
@@ -558,6 +608,38 @@
         <div data-public-thank-yous>${initialThankYousHtml}</div>
       </section>
     `;
+  }
+
+  function supportPageHtml(options = {}) {
+    const esc = options.escapeHtml || escapeHtml;
+    const identity = options.identity || {};
+    const adoption = options.adoption ? {
+      siteSlug: options.adoption.siteSlug || "",
+      siteTitle: options.adoption.siteTitle || "this place",
+      amount: Number(options.adoption.amount || 25)
+    } : null;
+    const printPurchase = options.printPurchase || null;
+    const title = adoption ? "Adopt This Place" : (printPurchase ? "Purchase a Print" : "Support Project");
+    return {
+      headHtml: `<p class="article-kicker">On This Site</p><h2>${title}</h2>${adoption ? `<p class="article-meta">Monthly stewardship support for ${esc(adoption.siteTitle)}.</p>` : ""}${printPurchase ? `<p class="article-meta">Secure print purchase supporting On This Site.</p>` : ""}`,
+      bodyHtml: supportFormHtml({
+        settings: options.settings || {},
+        platform: options.platform || "desktop",
+        adoption,
+        printPurchase,
+        prefill: {
+          name: identity.name && identity.name !== "Contributor" ? identity.name : "",
+          email: identity.email || "",
+          publicDisplayName: identity.name && identity.name !== "Contributor" ? identity.name : "",
+          frequency: adoption ? "monthly" : "once",
+          amount: adoption ? 25 : (printPurchase?.amount || undefined),
+          connection: printPurchase ? `Print purchase: ${printPurchase.title} — ${printPurchase.sizeLabel}, ${printPurchase.materialLabel}` : undefined,
+          artworkTitle: printPurchase?.title || undefined,
+          note: printPurchase?.customization ? `Print customization: ${printPurchase.customization}` : undefined
+        },
+        escapeHtml: esc
+      })
+    };
   }
 
   async function renderPublicThankYous(root = document, options = {}) {
@@ -702,6 +784,8 @@
     amountOptions,
     intentFromForm,
     sanitizePublicThankYou,
+    sanitizeMonthlyGoal,
+    fetchMonthlySupportGoal,
     publicThankYousHtml,
     supportReturnNotice,
     supportReturnNoticeHtml,
@@ -712,6 +796,7 @@
     fetchAdminSupportActivity,
     supportAdminActivityHtml,
     supportFormHtml,
+    supportPageHtml,
     hasNativePlayBilling,
     preparePlayBillingForm,
     startPlayCheckout,

@@ -451,42 +451,7 @@
     helpful_vote: 1
   });
 
-  const CONTRIBUTOR_TIERS = Object.freeze([
-    {
-      key: "new",
-      label: "New Contributor",
-      minPoints: 0,
-      commentsPerDay: 1,
-      storiesPerDay: 1,
-      plantsPerDay: 1,
-      unlocks: "1 comment, 1 map story, and 1 plant ID each day"
-    },
-    {
-      key: "trusted",
-      label: "Trusted Contributor",
-      minPoints: 100,
-      commentsPerDay: 10,
-      storiesPerDay: 10,
-      plantsPerDay: 5,
-      unlocks: "10 comments/stories and 5 plant IDs each day"
-    },
-    {
-      key: "steward",
-      label: "Community Steward",
-      minPoints: 500,
-      commentsPerDay: Infinity,
-      storiesPerDay: Infinity,
-      plantsPerDay: 10,
-      unlocks: "unlimited comments/stories and 10 plant IDs each day"
-    }
-  ]);
-
-  function contributorTierForPoints(points = 0) {
-    const total = Math.max(0, Number(points) || 0);
-    return [...CONTRIBUTOR_TIERS]
-      .sort((a, b) => Number(b.minPoints || 0) - Number(a.minPoints || 0))
-      .find(tier => total >= Number(tier.minPoints || 0)) || CONTRIBUTOR_TIERS[0];
-  }
+  const { CONTRIBUTOR_TIERS, contributorTierForPoints, contributorDailyLimit, parseContributionTimestamp } = sharedUtils;
 
   function nextContributorTier(points = 0) {
     const total = Math.max(0, Number(points) || 0);
@@ -518,20 +483,13 @@
     return Number.isFinite(Number(value)) ? String(Number(value)) : "unlimited";
   }
 
-  function contributorDailyLimit(points = 0, kind = "comments") {
-    const tier = contributorTierForPoints(points);
-    if (kind === "plants" || kind === "plant") return tier.plantsPerDay;
-    if (kind === "stories" || kind === "story") return tier.storiesPerDay;
-    return tier.commentsPerDay;
-  }
-
   function contributorActionDateKey(record = {}, fields = ["created_at"]) {
     const fieldList = Array.isArray(fields) ? fields : [fields];
     const value = fieldList.map(field => record?.[field]).find(Boolean);
     if (!value) return "";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-    return localDateKey(date);
+    const date = parseContributionTimestamp(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return sharedUtils.contributionDayKey(value);
   }
 
   function contributorDailyActionCount(records = [], profile = {}, options = {}) {
@@ -540,7 +498,7 @@
       ? options.identityIds
       : profileIdentityIds(profile, options.profiles || [], { relationId, ...options });
     if (!profileIds?.size) return 0;
-    const today = options.today || localDateKey();
+    const today = options.today || contributorActionDateKey({ created_at: new Date().toISOString() });
     const profileField = options.profileField || "member_profile";
     const dateFields = options.dateFields || ["created_at"];
     const statusFilter = typeof options.statusFilter === "function" ? options.statusFilter : null;
@@ -802,6 +760,64 @@
       if (!checkin?.data) throw new Error("The check-in point could not be confirmed.");
     }
     return { earned: true, checkin: distance.wantsCheckin, record };
+  }
+
+  const CHECKIN_OBSERVATION_SECTION = "Check-in observation";
+  const CHECKIN_OBSERVATION_CATEGORIES = Object.freeze([
+    { value: "plant", label: "Plant" },
+    { value: "animal", label: "Animal" },
+    { value: "development", label: "Development or construction" },
+    { value: "native_culture", label: "Native cultural connection" },
+    { value: "signage", label: "Signage or interpretation" },
+    { value: "other", label: "Other site condition" }
+  ]);
+
+  function checkinObservationCategory(value) {
+    const key = String(value || "").trim().toLowerCase();
+    return CHECKIN_OBSERVATION_CATEGORIES.find(category => category.value === key)
+      || CHECKIN_OBSERVATION_CATEGORIES[CHECKIN_OBSERVATION_CATEGORIES.length - 1];
+  }
+
+  function isCheckinObservationComment(comment = {}) {
+    return normalizeText(comment.source_section) === normalizeText(CHECKIN_OBSERVATION_SECTION);
+  }
+
+  function checkinObservationForProfile(comments = [], profileId, siteSlug, options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    const id = Number(relationId(profileId));
+    const slug = String(siteSlug || "").trim();
+    if (!id || !slug) return null;
+    return comments
+      .filter(comment => isCheckinObservationComment(comment))
+      .filter(comment => Number(relationId(comment.member_profile)) === id)
+      .filter(comment => String(comment.site_slug || comment.source_slug || "") === slug)
+      .filter(comment => String(comment.status || "approved").toLowerCase() === "approved")
+      .filter(comment => comment.public_activity !== false && comment.moderated_deleted !== true)
+      .sort((a, b) => (Date.parse(b.created_at || "") || 0) - (Date.parse(a.created_at || "") || 0))[0] || null;
+  }
+
+  function checkinHistoryEntries(visits = [], comments = [], profiles = [], site = {}, options = {}) {
+    const relationId = options.relationId || defaultRelationId;
+    const slug = String(site?.slug || "").trim();
+    if (!slug) return [];
+    const profileById = new Map(profiles.map(profile => [Number(relationId(profile?.id)), profile]));
+    return visits
+      .filter(visit => visit && visit.public_activity !== false)
+      .filter(visit => String(visit.site_slug || "") === slug)
+      .filter(visit => hasSavedCheckinDistance(visit.distance_miles))
+      .sort((a, b) => (Date.parse(b.visited_at || "") || 0) - (Date.parse(a.visited_at || "") || 0))
+      .map(visit => {
+        const profileId = Number(relationId(visit.member_profile));
+        const profile = profileById.get(profileId) || null;
+        const observation = checkinObservationForProfile(comments, profileId, slug, { relationId });
+        return {
+          visit,
+          profile,
+          profileId,
+          observation,
+          category: observation ? checkinObservationCategory(observation.source_excerpt) : null
+        };
+      });
   }
 
   function loginRewardStatsFromDates(dates = []) {
@@ -2075,6 +2091,7 @@
     contributorActionDateKey,
     contributorDailyActionCount,
     contributorDailyLimitState,
+    parseContributionTimestamp,
     contributorTierSummary,
     loginRewardStatsFromDates,
     profileLoginRewardRecords,
@@ -2109,6 +2126,12 @@
     checkinDistanceMessage,
     siteVisitPayload,
     syncSiteVisit,
+    CHECKIN_OBSERVATION_SECTION,
+    CHECKIN_OBSERVATION_CATEGORIES,
+    checkinObservationCategory,
+    isCheckinObservationComment,
+    checkinObservationForProfile,
+    checkinHistoryEntries,
     uniqueVisitRecords,
     mergeVisitRecords,
     pointEventIndex,

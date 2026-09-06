@@ -569,6 +569,7 @@
     }
 
     .account-button {
+      display: block;
       position: relative;
       z-index: 1202;
       min-width: 118px;
@@ -580,6 +581,8 @@
       color: var(--accent-strong);
       font-size: 11.5px;
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
       pointer-events: auto;
       touch-action: manipulation;
     }
@@ -3492,6 +3495,17 @@
       background: #fbfdfb;
     }
 
+    .map-story-card .form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .map-story-card .form-actions > button {
+      flex: 1 1 130px;
+      min-height: 44px;
+    }
+
     .map-story-kicker {
       margin: 0;
       color: var(--muted);
@@ -5105,25 +5119,6 @@
       stroke-linejoin: round;
     }
 
-    .plant-observation-map-marker.inventory-area {
-      border-style: dashed;
-      background: #496b35;
-    }
-
-    .plant-observation-map-marker > span {
-      position: absolute;
-      right: -7px;
-      top: -8px;
-      min-width: 18px;
-      height: 18px;
-      padding: 0 4px;
-      border: 2px solid #fff;
-      border-radius: 999px;
-      background: #244b35;
-      color: #fff;
-      font: 700 10px/14px system-ui, sans-serif;
-      text-align: center;
-    }
 
     .site-plant-card-location {
       display: block;
@@ -8141,6 +8136,85 @@
       cursor: default;
       opacity: 1;
     }
+
+    .checkin-observation-complete {
+      grid-column: 1 / -1;
+      color: var(--accent-strong);
+      font-size: 12px;
+      font-weight: 780;
+      text-align: center;
+    }
+
+    .checkin-observation-panel {
+      grid-column: 1 / -1;
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid #cbd8cf;
+      border-radius: 8px;
+      background: #f6faf7;
+    }
+
+    .checkin-observation-panel > summary {
+      color: var(--accent-strong);
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .checkin-observation-panel > summary span,
+    .checkin-observation-panel > p { color: var(--muted); font-size: 12px; font-weight: 500; }
+    .checkin-observation-panel[open] > summary { margin-bottom: 4px; }
+    .checkin-observation-panel textarea { min-height: 76px; }
+
+    .checkin-history-section {
+      margin-top: 16px;
+      border: 1px solid #cbd6ce;
+      border-radius: 8px;
+      background: #fbfcfa;
+      overflow: hidden;
+    }
+
+    .checkin-history-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px;
+      border-bottom: 1px solid #d8e0da;
+      background: #edf4ef;
+    }
+
+    .checkin-history-heading h3,
+    .checkin-history-heading p,
+    .checkin-history-row p { margin: 0; }
+    .checkin-history-heading p { margin-top: 3px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+    .checkin-history-heading > strong {
+      display: grid;
+      place-items: center;
+      min-width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+    }
+    .checkin-history-log { display: grid; }
+    .checkin-history-row { display: grid; gap: 7px; padding: 11px 12px; border-bottom: 1px solid #e2e7e3; }
+    .checkin-history-row:last-child { border-bottom: 0; }
+    .checkin-history-line { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; }
+    .checkin-history-line time { color: var(--muted); white-space: nowrap; }
+    .checkin-observation-category {
+      justify-self: start;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #e1ede5;
+      color: var(--accent-strong);
+      font-size: 10px;
+      font-weight: 800;
+    }
+    .checkin-history-row .comment-image-button { width: 100%; border: 0; padding: 0; background: transparent; }
+    .checkin-history-row img { width: 100%; max-height: 220px; object-fit: cover; border-radius: 7px; }
+    .checkin-history-empty { margin: 0; padding: 12px; color: var(--muted); font-size: 12px; }
 
     .action.purple {
       border-color: var(--purple);

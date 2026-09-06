@@ -1278,6 +1278,7 @@
       mobileMovingMarkerBasemapResumeTimer: null,
       mobileMovingMarkerInteractionUntil: 0,
       mobileMovingLandCacheGeometry: null,
+      mobileMovingLandEdgeRows: new Map(),
       mobileMovingLandStateCache: new Map(),
       mobileSitePinProjectionCache: null,
       mapStoryRefreshTimer: null,
@@ -1440,6 +1441,8 @@
     const mapStoryCaptionEl = document.getElementById("map-story-caption");
     const mapStoryPhotoEl = document.getElementById("map-story-photo");
     const mapStoryPhotoButtonEl = document.getElementById("map-story-photo-button");
+    const mapStoryCameraButtonEl = document.getElementById("map-story-camera-button");
+    let mapStoryPhotoDraft = null;
     const mapStoryPhotoPreviewEl = document.getElementById("map-story-photo-preview");
     const mapStoryLocationEl = document.getElementById("map-story-location");
     const mapStorySubmitEl = document.getElementById("map-story-submit");
@@ -1849,6 +1852,17 @@
       return incoming;
     }
 
+    async function refreshPublicCheckinsForSite(site) {
+      if (!site?.slug) return [];
+      const response = await fetchJson(
+        `/items/mobile_site_visits?limit=50&sort=-visited_at&filter[site_slug][_eq]=${encodeURIComponent(site.slug)}&filter[public_activity][_eq]=true&fields=${PUBLIC_VISIT_FIELDS}`,
+        { fresh: true }
+      );
+      const incoming = response.data || [];
+      mergeVisitRecords(incoming);
+      return incoming;
+    }
+
     function siteHasRecordedCheckin(profile, site) {
       return PROFILE_UTILS.siteHasRecordedCheckin(state.publicVisits, state.profilePointEvents, profile, site, {
         relationId,
@@ -2070,7 +2084,17 @@
     }
 
     function decorateCurrentDetailForLanguageQuiz(type, item) {
-      window.requestAnimationFrame(() => attachLanguageQuizMarkers(type, item));
+      const firstChild = detailBodyEl?.firstElementChild;
+      window.requestAnimationFrame(() => {
+        if (firstChild && detailBodyEl?.firstElementChild === firstChild) attachLanguageQuizMarkers(type, item);
+      });
+    }
+
+    function refreshVisibleDetailLanguageQuiz() {
+      if (!detailEl?.classList.contains("open")) return;
+      const wiki = state.selectedWikiSlug && state.wikiArticles.find(item => item.slug === state.selectedWikiSlug);
+      const site = !wiki && state.selectedSite;
+      if (wiki || site) decorateCurrentDetailForLanguageQuiz(wiki ? "wiki" : "site", wiki || site);
     }
 
     function languageQuizChoices(word) {
@@ -3485,7 +3509,9 @@
         if (eventType === "vocab_guess") mergeLanguageAttemptRecords([result.source]);
         if (eventType === "site_visit" || eventType === "site_checkin") mergeVisitRecords([result.source]);
       }
-      if (result?.data?.id) mergePointEventRecords([result.data]);
+      if (result?.data?.id && ["daily_open", "site_visit", "site_checkin", "vocab_guess", "approved_comment", "helpful_vote"].includes(eventType)) {
+        mergePointEventRecords([result.data]);
+      }
       state.profileActivityCache = null;
       updateProfileMenuButton();
       if (loginSheetEl?.classList.contains("open")) renderProfile();
@@ -3510,9 +3536,9 @@
         const record = created?.data ? { ...payload, ...created.data } : null;
         if (!record?.id) throw new Error("The points record could not be confirmed.");
         mergePointEventRecords([record]);
-        const confirmed = await refreshRemotePointEventForKey(event.event_key, profileId).catch(() => null);
-        if (!confirmed) throw new Error("The points record could not be confirmed.");
-        return confirmed;
+        // The authenticated save response already confirms this record. A
+        // cached pre-save GET can still be empty immediately after the write.
+        return record;
       } catch (error) {
         const latest = await refreshRemotePointEventForKey(event.event_key, profileId).catch(() => null);
         if (latest) return latest;
@@ -3886,8 +3912,37 @@
       return SHARED_DIRECTUS.uploadDirectusFile(directusClient, file, title, options);
     }
 
+    function captureNativeFeedbackScreenshot() {
+      if (state.feedbackCapturePending) return state.feedbackCapturePending.promise;
+      const id = `feedback-${Date.now()}`;
+      let resolve, reject;
+      const promise = new Promise((ok, fail) => { resolve = ok; reject = fail; });
+      const timer = window.setTimeout(() => {
+        if (state.feedbackCapturePending?.id !== id) return;
+        state.feedbackCapturePending = null;
+        reject(new Error("Screen capture timed out. Try again or upload a screenshot."));
+      }, 10000);
+      state.feedbackCapturePending = { id, promise, resolve, reject, timer };
+      try { window.AndroidApp.captureFeedbackScreenshot(androidBridgeToken(), id); }
+      catch (error) { window.onAndroidFeedbackScreenshot(id, "", error.message || "Screen capture failed."); }
+      return promise;
+    }
+
+    window.onAndroidFeedbackScreenshot = (id, base64, error) => {
+      const pending = state.feedbackCapturePending;
+      if (!pending || pending.id !== id) return false;
+      state.feedbackCapturePending = null;
+      window.clearTimeout(pending.timer);
+      try {
+        if (error || !base64) throw new Error(error || "Screen capture failed.");
+        pending.resolve(fileFromBase64(base64, "image/jpeg", "feedback-screenshot.jpg"));
+      } catch (failure) { pending.reject(failure); }
+      return true;
+    };
+
     async function captureFeedbackScreenshot() {
       state.feedbackScreenshotFile = await FEEDBACK_UTILS.captureFeedbackScreenshot({
+        captureFile: typeof window.AndroidApp?.captureFeedbackScreenshot === "function" ? captureNativeFeedbackScreenshot : null,
         hiddenEl: feedbackSheetEl,
         statusEl: feedbackScreenshotStatusEl,
         captureMessage: "Capturing the current screen...",
@@ -4621,7 +4676,7 @@
       return promise;
     }
 
-    function updateOpenDiscussionSection(sourceType, item) {
+    function updateOpenDiscussionSection(sourceType, item, options = {}) {
       const stillOpen = sourceType === "site"
         ? state.selectedSlug === item?.slug
         : state.selectedWikiSlug === item?.slug;
@@ -4632,7 +4687,14 @@
       template.innerHTML = discussionHtml(sourceType, item).trim();
       const replacement = template.content.firstElementChild;
       if (!replacement) return false;
+      const scrollTop = detailBodyEl.scrollTop;
       current.replaceWith(replacement);
+      detailBodyEl.scrollTop = scrollTop;
+      if (options.savedCommentId) {
+        setCommentSubmitStatus(replacement, options.status || "Your comment is now visible. Thank you.");
+        replacement.querySelector(`[data-comment-card="${CSS.escape(String(options.savedCommentId))}"]`)
+          ?.scrollIntoView({ block: "nearest", behavior: "auto" });
+      }
       decorateCurrentDetailForQuoteComments(sourceType, item);
       if (sourceType === "site") {
         detailEl.classList.toggle("plant-browse-mode", plantObservationsForSource("site", item).length > 0);
@@ -5165,6 +5227,7 @@
     }
 
     function handleMobileSearchCommand() {
+      if (document.activeElement !== searchEl) return;
       if (!activeMobileSearchValue().trim()) return;
       // The Android keyboard's Search action is delivered as this event and
       // may arrive immediately after the final character.  Always honor it.
@@ -5209,7 +5272,9 @@
 
     // Native WebView input can update the visible field without delivering a
     // usable DOM event. Expose the same closure-bound handler for Android.
-    window.__nliRefreshMobileSearchInput = handleMobileSearchInput;
+    window.__nliRefreshMobileSearchInput = () => {
+      if (document.activeElement === searchEl) handleMobileSearchInput();
+    };
     // Android's composing text can advance before Chromium updates input.value.
     // MainActivity forwards it here so every character drives the local search.
     function reconcileNativeSearchDraft(value) {
@@ -5224,12 +5289,16 @@
         : nativeValue;
     }
 
-    window.__nliSetNativeSearchDraft = value => handleMobileSearchInput(reconcileNativeSearchDraft(value));
+    window.__nliSetNativeSearchDraft = value => {
+      if (document.activeElement === searchEl) handleMobileSearchInput(reconcileNativeSearchDraft(value));
+    };
     window.__nliAppendNativeSearchText = value => {
+      if (document.activeElement !== searchEl) return;
       const fragment = String(value || "");
       if (fragment) handleMobileSearchInput(`${activeMobileSearchValue()}${fragment}`);
     };
     window.__nliDeleteNativeSearchText = count => {
+      if (document.activeElement !== searchEl) return;
       const amount = Math.max(1, Number(count) || 1);
       handleMobileSearchInput(activeMobileSearchValue().slice(0, -amount));
     };
@@ -5339,13 +5408,15 @@
     async function geocodePlaceSearch(query, tokenValue, bbox) {
       const geocodeQuery = /\b(new york|ny|long island|nassau|suffolk|brooklyn|queens)\b/i.test(query)
         ? query
-        : `${query}, NY`;
+        : `${query}, Long Island, NY`;
+      const explicitNyc = /\b(new york city|nyc|manhattan|brooklyn|queens|bronx|staten island)\b/i.test(query);
       const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(geocodeQuery)}.json?access_token=${encodeURIComponent(tokenValue)}&autocomplete=false&limit=5&types=poi,address,place,locality,neighborhood&bbox=${bbox}&proximity=-73.1,40.85`;
       const response = await fetch(url);
       if (!response.ok) return null;
       const data = await response.json();
       const candidates = (data.features || []).filter(item => {
         if (!pointWithinBounds(item.center, LONG_ISLAND_BOUNDS)) return false;
+        if (!explicitNyc && /\b(new york|manhattan|brooklyn|queens|bronx|staten island)\b/.test(normalizeText([item.place_name, item.text, ...(item.context || []).map(context => `${context.text || ""} ${context.short_code || ""}`)].join(" ")))) return false;
         const resultName = normalizeText(item.text || item.place_name);
         return resultName !== "long island" || normalizeText(query).split(" ").length <= 1;
       });
@@ -7551,11 +7622,9 @@
             native_kind: "plant",
             native_key: String(record.id || plantObservationDomId(record)),
             contribution_kind: "plant",
-            plant_location_precision: record._plantInventoryFallback ? "inventory_area" : "submitted_point",
-            plant_count: Number(record._plantInventoryCount || 1),
-            title: record._plantInventoryFallback
-              ? `${record._plantInventoryCount || 1} plant observations - exact spots unavailable`
-              : (record.common_name || "Plant observation")
+            plant_location_precision: "submitted_point",
+            plant_count: 1,
+            title: record.common_name || "Plant observation"
           }
         });
       });
@@ -7680,7 +7749,7 @@
       const baseSignature = `${state.nativeMapBaseRevision}|${profileKey}|${profileSignature}|basemap:${nativeBasemap}|bio-paths:${mobileBiographyPathsEnabled() ? 1 : 0}`;
       const staticParts = nativeMapStaticPayloadParts(sourceData, profileModel, `${state.mapSourceCacheKey}|${baseSignature}|${state.nativeMapPointRevision}`);
       const pointSignature = staticParts.pointSignature;
-      const transientSignature = `user:${userLocationSignature}|community:${communitySignature}|temporary:${temporarySignature}|events:${eventSignature}`;
+      const transientSignature = `user:${userLocationSignature}|community:${communitySignature}|temporary:${temporarySignature}|events:${eventSignature}|pick:${!!state.suggestionMapPickMode}`;
       const signature = `${baseSignature}|points:${pointSignature}|${transientSignature}`;
       const center = state.map.getCenter?.();
       const camera = center ? { center: [Number(center.lng), Number(center.lat)], zoom: Number(state.map.getZoom?.()) } : null;
@@ -7688,6 +7757,7 @@
         signature,
         baseSignature,
         transientSignature,
+        suggestionMapPickMode: !!state.suggestionMapPickMode,
         reason,
         mode: profileModel ? "profile" : "public",
         basemap: nativeBasemap,
@@ -7767,6 +7837,10 @@
           const selectedMapCenter = Array.isArray(mapCenter) && mapCenter.length >= 2 && mapCenter.map(Number).every(Number.isFinite)
             ? mapCenter.map(Number)
             : null;
+          if (kind === "suggestion-location") {
+            return selectedMapCenter ? handleSuggestionMapPick({ lngLat: { lng: selectedMapCenter[0], lat: selectedMapCenter[1] } }) : false;
+          }
+          if (state.suggestionMapPickMode) return false;
           if (kind === "profile") {
             const group = state.profileMapMode?.model?.groups?.[Number(key)];
             if (!group) return false;
@@ -9403,6 +9477,10 @@
       }
       try {
         const remoteVote = await refreshRemoteMapStoryVote(story.id, profile.id).catch(() => null);
+        if (String(currentContributorProfile()?.id) !== String(profile.id) || state.contributorSession?.pending) {
+          showBanner("Account changed. Review this story before voting.");
+          return;
+        }
         if (remoteVote) {
           showBanner("You already voted on this story.");
           if (options.reopen !== false) openMapStory(story);
@@ -9420,7 +9498,8 @@
         };
         try {
           const created = await postDirectusItem("mobile_map_story_votes", vote, { requireAuth: true, timeout: 10000 });
-          mergeMapStoryVoteRecords([{ id: created.data?.id || `local-${Date.now()}`, ...vote, member_profile: Number(profile.id), ...(created.data || {}) }]);
+          if (!created?.data?.id) throw new Error("Vote unconfirmed. Reopen this story before retrying.");
+          mergeMapStoryVoteRecords([{ id: created.data.id, ...vote, member_profile: Number(profile.id), ...(created.data || {}) }]);
           const counts = MAP_STORY_UTILS.storyVoteCounts(story, state.mapStoryVotes);
           const patch = {
             up_votes: counts.up,
@@ -9466,6 +9545,7 @@
       setMapStoryStatus();
       if (mapStoryCaptionEl) mapStoryCaptionEl.value = "";
       if (mapStoryPhotoEl) mapStoryPhotoEl.value = "";
+      mapStoryPhotoDraft = null;
       if (mapStoryPhotoPreviewEl) mapStoryPhotoPreviewEl.innerHTML = "";
       if (mapStoryLocationEl) mapStoryLocationEl.textContent = state.userLocation ? "Using your current location." : "Location will be requested when you submit.";
       openSheet(mapStorySheetEl);
@@ -9551,6 +9631,13 @@
           throw new Error(contributorDailyLimitMessage("stories", profile));
         }
         const file = mapStoryPhotoEl?.files?.[0];
+        const assertStoryAccount = () => {
+          if (!isApprovedContributor() || String(currentContributorProfile()?.id) !== String(profile?.id)) {
+            throw new Error("Account changed. Review your story before submitting.");
+          }
+        };
+        const cachedPhoto = mapStoryPhotoDraft?.file === file && mapStoryPhotoDraft?.profileId === profile?.id
+          ? mapStoryPhotoDraft : null;
         const caption = mapStoryCaptionEl?.value.trim() || "";
         if (!caption && !file) throw new Error("Add story text or an optional photo before submitting.");
         const moderation = moderationCheck(caption, "Your story");
@@ -9559,13 +9646,15 @@
         // then enforce the size limit on the prepared photo, not the original.
         const imageError = file ? validateSuggestionImage(file) : "";
         if (imageError) throw new Error(imageError);
-        let preparedPhoto = null;
-        if (file) {
+        let preparedPhoto = cachedPhoto?.preparedPhoto || null;
+        if (file && !preparedPhoto) {
           setMapStoryStatus("Preparing your photo...");
           preparedPhoto = await compressPlantImage(file);
           if (!preparedPhoto) throw new Error("Could not prepare that photo. Try choosing it again.");
           const preparedError = validatePlantImage(preparedPhoto);
           if (preparedError) throw new Error(preparedError);
+          assertStoryAccount();
+          mapStoryPhotoDraft = { file, profileId: profile.id, preparedPhoto, imageId: null };
         }
         if (!state.userLocation) {
           setMapStoryStatus("Getting your current location...");
@@ -9576,13 +9665,17 @@
         if (!coords) throw new Error("Current location is needed for map stories. Enable location access and try again.");
         const attachedSite = storyAttachmentSite(coords);
         const prompt = MAP_STORY_UTILS.promptForKey(MAP_STORY_PROMPTS, mapStoryPromptEl?.value);
-        let imageId = null;
-        if (preparedPhoto) {
+        assertStoryAccount();
+        let imageId = cachedPhoto?.imageId || null;
+        if (preparedPhoto && !imageId) {
           setMapStoryStatus("Uploading your photo...");
           mapStorySubmitEl.textContent = "Uploading photo...";
           imageId = await uploadDirectusFile(preparedPhoto, `Map story - ${prompt.label}`, { requireAuth: true, timeout: 45000 });
           if (!imageId) throw new Error("The photo upload did not finish. Please try again.");
+          assertStoryAccount();
+          if (mapStoryPhotoDraft?.file === file && mapStoryPhotoDraft?.profileId === profile.id) mapStoryPhotoDraft.imageId = imageId;
         }
+        assertStoryAccount();
         setMapStoryStatus("Saving your story...");
         mapStorySubmitEl.textContent = "Saving story...";
         const now = new Date();
@@ -9603,8 +9696,10 @@
           expires_original_at: expires.toISOString()
         };
         const created = await postDirectusItem("mobile_map_stories", payload, { requireAuth: true, timeout: 20000 });
+        if (!created?.data?.id) throw new Error("Save unconfirmed. Your draft is still here. Check your Stories before retrying.");
+        mapStoryPhotoDraft = null;
         state.mapStories.push({
-          id: created.data?.id || `local-${Date.now()}`,
+          id: created.data.id,
           ...payload,
           _pendingServerSync: true,
           _pendingServerSyncUntil: Date.now() + 2 * 60 * 1000,
@@ -9626,7 +9721,7 @@
         showBanner(attachedSite ? `Story attached to ${attachedSite.title}.` : "Story added to the map.");
       } catch (error) {
         const message = error.name === "AbortError"
-          ? "The submission took too long. Check your connection and try again."
+          ? "Save timed out. Your draft is still here. Check your Stories before retrying."
           : error.message || "Could not submit map story. Please try again.";
         setMapStoryStatus(message, "error");
       } finally {
@@ -9654,16 +9749,10 @@
       return null;
     }
 
-    function plantInventoryAreaCoordinates(site) {
-      const coordinates = site?.center || site?.checkinCenter || geometryCenter(siteDisplayGeometry(site));
-      const point = Array.isArray(coordinates) ? coordinates.slice(0, 2).map(Number) : [];
-      return point.length === 2 && point.every(Number.isFinite) ? point : null;
-    }
-
     function plantObservationMarkerEntriesForSite(site = state.selectedSite) {
       if (!site?.slug) return [];
       const observations = approvedPlantObservationsForSite(site);
-      const entries = observations
+      return observations
         .map(record => {
           const coordinates = plantObservationCoordinates(record);
           return coordinates ? {
@@ -9673,32 +9762,13 @@
           } : null;
         })
         .filter(Boolean);
-      const missingCoordinates = observations.filter(record => !plantObservationCoordinates(record));
-      const inventoryCoordinates = missingCoordinates.length ? plantInventoryAreaCoordinates(site) : null;
-      if (inventoryCoordinates) {
-        const first = missingCoordinates[0];
-        entries.push({
-          key: `inventory-area:${site.slug}`,
-          coordinates: inventoryCoordinates,
-          record: {
-            ...first,
-            _plantInventoryFallback: true,
-            _plantInventoryCount: missingCoordinates.length,
-            _plantInventoryTitle: site.title || "this mapped place"
-          }
-        });
-      }
-      return entries;
     }
 
     function plantObservationMapEntry(record, site = state.selectedSite) {
       if (!record || !site) return null;
       const id = String(record.id || "");
       const entries = plantObservationMarkerEntriesForSite(site);
-      return entries.find(entry => !entry.record._plantInventoryFallback && String(entry.record.id || "") === id)
-        || entries.find(entry => entry.record._plantInventoryFallback
-          && approvedPlantObservationsForSite(site).some(item => String(item.id || "") === id && !plantObservationCoordinates(item)))
-        || null;
+      return entries.find(entry => String(entry.record.id || "") === id) || null;
     }
 
     function plantObservationLocationText(record, site = state.selectedSite) {
@@ -9716,16 +9786,6 @@
     }
 
     function plantPopupHtml(record, guideMatch) {
-      if (record._plantInventoryFallback) {
-        const count = Number(record._plantInventoryCount || 1);
-        return `
-          <div class="plant-observation-popup-card inventory-area">
-            <strong>${escapeHtml(`${count} plant observation${count === 1 ? "" : "s"}`)}</strong>
-            <span>${escapeHtml(`These older reports belong to ${record._plantInventoryTitle || "this plant inventory"}, but their exact spots were not saved. This plant icon marks the active inventory area, not an invented observation point.`)}</span>
-            <button type="button" data-plant-popup-observation="${escapeHtml(plantObservationDomId(record))}">View plant inventory</button>
-          </div>
-        `;
-      }
       const image = directusAssetUrl(record.photo);
       const commonName = record.common_name || "Plant observation";
       const scientific = record.scientific_name || "Scientific name not yet verified";
@@ -9786,14 +9846,10 @@
     function plantMarkerElement(record, coordinates) {
       const element = document.createElement("button");
       element.type = "button";
-      element.className = `plant-observation-map-marker${record._plantInventoryFallback ? " inventory-area" : ""}`;
-      const count = Number(record._plantInventoryCount || 1);
-      element.setAttribute("aria-label", record._plantInventoryFallback
-        ? `${count} plant observations in ${record._plantInventoryTitle || "this inventory"}; exact spots unavailable`
-        : (record.common_name || "Plant observation"));
+      element.className = "plant-observation-map-marker";
+      element.setAttribute("aria-label", record.common_name || "Plant observation");
       element.innerHTML = `
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V9"/><path d="M12 16c-2.7.3-4.9-.4-6.5-2.1C3.9 12.3 3 10.2 3 7.5c2.8-.2 5.1.5 6.9 2 1.8 1.6 2.5 3.8 2.1 6.5Z"/><path d="M12 17c1.1-4.8 4.1-7.4 9-7.8-.2 2.8-1.2 5-3 6.5-1.6 1.4-3.6 1.8-6 1.3Z"/></svg>
-        ${record._plantInventoryFallback ? `<span>${count}</span>` : ""}
       `;
       element.addEventListener("click", event => {
         event.preventDefault();
@@ -9974,7 +10030,8 @@
         recordSiteVisit(site, { distanceMiles: miles })
           .then(result => {
             showBanner(result?.earned ? `Check-in saved: ${site.title}` : "You already checked in here.");
-            refreshMobileVisitActions(site);
+            refreshMobileVisitActions(site, { revealObservation: Boolean(result?.earned) });
+            refreshMobileCheckinHistory(site);
             renderRewards();
             renderProfile();
             renderProfiles();
@@ -10012,6 +10069,7 @@
 
     function setSuggestionMapPickMode(active) {
       state.suggestionMapPickMode = !!active;
+      scheduleNativeMapStateSync("suggestion-pick-mode", 0);
       suggestMapPickInstructionsEl?.classList.toggle("show", !!active);
       if (state.map?.getCanvas) state.map.getCanvas().style.cursor = active ? "crosshair" : "";
       if (active) {
@@ -10092,6 +10150,7 @@
 
     async function prepareCommentPhotoFile(section, rawFile) {
       if (!section) return null;
+      section._commentUploadedImage = null;
       section._commentPhotoFile = null;
       setCommentPhotoPreview(section, null);
       if (!rawFile) {
@@ -10213,12 +10272,6 @@
       return state.plantProviderStatus;
     }
 
-    function setPlantProviderCooldown(minutes = 20) {
-      try {
-        localStorage.setItem("nliPlantProviderCooldownUntil", String(Date.now() + minutes * 60 * 1000));
-      } catch {}
-    }
-
     function normalizePlantIdentification(data) {
       const top = Array.isArray(data?.suggestions) ? data.suggestions[0] : null;
       const plant = top?.plant_details || top?.plant || {};
@@ -10255,7 +10308,23 @@
         algonquianSource: data?.algonquian_source || "",
         visitorGuidance: data?.visitor_guidance || "",
         status: data?.identification_status || data?.status || "identified",
-        rawPlantNetData: data?.raw_plantnet_data || null
+        rawPlantNetData: data?.raw_plantnet_data || null,
+        retryRecommended: data?.retry_recommended === true,
+        reviewMessage: data?.review_message || ""
+      };
+    }
+
+    function pendingPlantReviewAnalysis(message = "") {
+      return {
+        commonName: "Unidentified nature observation",
+        scientificName: "",
+        confidence: null,
+        rawName: "",
+        source: "Identification pending review",
+        status: "needs_review",
+        retryRecommended: true,
+        reviewMessage: message || "Automatic identification is temporarily unavailable. Try again, or save the photo for human review.",
+        safetyWarning: "Do not touch, eat, harvest, or use an unidentified plant, mushroom, or fungus based on this app."
       };
     }
 
@@ -10308,15 +10377,7 @@
         if (providerStatus && providerStatus.ready_for_species_id === false && providerStatus.automatic_review_available !== true) {
           const vocabularyMatch = analysisFromPlantGuess(plantObservationGuess(section, { rawName: file?.name || "" }));
           if (vocabularyMatch) return vocabularyMatch;
-          return {
-            commonName: "Photo compressed; pending plant review",
-            scientificName: "",
-            confidence: null,
-            rawName: "",
-            source: "Visitor plant photo pending review",
-            status: "service_error",
-            serviceError: `${providerStatus.message || "Automatic species ID is not ready on the backend."} This photo was compressed and can still be submitted for human review.`
-          };
+          return pendingPlantReviewAnalysis();
         }
         try {
           const body = new FormData();
@@ -10340,40 +10401,14 @@
             const data = await response.json();
             return normalizePlantIdentification(data);
           }
-          let message = `Plant identification service returned ${response.status}.`;
-          try {
-            const data = await response.json();
-            if (data?.error) message = data.detail ? `${data.error} ${data.detail}` : data.error;
-          } catch {}
-          if (response.status === 429) setPlantProviderCooldown(2);
-          if (response.status === 429) {
-            message = "Automatic plant identification is busy right now. The photo was still compressed and can be submitted for review.";
-          }
-          message = message.replace(/openai/ig, "plant identification provider");
           const vocabularyMatch = analysisFromPlantGuess(plantObservationGuess(section, { rawName: file?.name || "" }));
           if (vocabularyMatch) return vocabularyMatch;
-          return {
-            commonName: "Photo compressed; identification unavailable",
-            scientificName: "",
-            confidence: null,
-            rawName: "",
-            source: "Plant identification service",
-            status: "service_error",
-            serviceError: `${message} You can still submit this photo for human review.`
-          };
+          return pendingPlantReviewAnalysis();
         } catch (error) {
           console.warn("Plant identification service unavailable", error);
           const vocabularyMatch = analysisFromPlantGuess(plantObservationGuess(section, { rawName: file?.name || "" }));
           if (vocabularyMatch) return vocabularyMatch;
-          return {
-            commonName: "Photo compressed; identification unavailable",
-            scientificName: "",
-            confidence: null,
-            rawName: "",
-            source: "Plant identification service",
-            status: "service_error",
-            serviceError: `${error.message || "Could not reach the plant identification service."} You can still submit this photo for human review.`
-          };
+          return pendingPlantReviewAnalysis();
         }
       }
       const guess = plantObservationGuess(section, { rawName: file?.name || "" });
@@ -10504,9 +10539,10 @@
             <span>${escapeHtml(confidenceLabel)}</span>
           </div>
           <span>${escapeHtml(summary)}</span>
-          ${analysis.serviceError ? `<span>${escapeHtml(analysis.serviceError)}</span>` : ""}
+          ${analysis.reviewMessage ? `<span>${escapeHtml(analysis.reviewMessage)}</span>` : ""}
           <span class="plant-safety-warning">${escapeHtml(exactWarning)}</span>
           <div class="plant-review-actions">
+            ${analysis.retryRecommended || analysis.status === "needs_review" ? `<button class="action secondary" type="button" data-retry-plant-identification>Try ID again</button>` : ""}
             <button class="action secondary" type="button" data-retake-plant-photo>Retake</button>
           </div>
           <details class="plant-advanced-details">
@@ -10823,7 +10859,7 @@
     };
 
     window.onAndroidCommentPhoto = (ok, message, base64, mimeType, filename) => {
-      const section = state.pendingCommentPhotoDiscussion || document.querySelector(".discussion-section");
+      const section = state.pendingCommentPhotoDiscussion || document.querySelector("[data-checkin-observation-form][open], .discussion-section");
       if (!ok) {
         state.pendingCommentPhotoDiscussion = null;
         if (section) setCommentPhotoStatus(section, message || "Photo was cancelled.", "error");
@@ -10842,6 +10878,7 @@
     };
 
     async function submitSiteSuggestion() {
+      if (suggestSubmitBtn.disabled) return;
       if (!requireRegisteredContributor()) return;
       const title = suggestTitleEl.value.trim();
       const introduction = suggestIntroEl.value.trim();
@@ -10872,7 +10909,9 @@
         const profile = identity.profile;
         image = await prepareJpegUploadImage(image, "plant-observation");
         suggestSubmitBtn.textContent = image ? "Uploading image..." : (admin ? "Publishing..." : "Submitting...");
-        const imageId = image ? await uploadDirectusFile(image, title, { requireAuth: true }) : null;
+        const imageId = image ? await uploadDirectusFile(image, title, { requireAuth: true, timeout: 45000 }) : null;
+        if (image && !imageId) throw new Error("Photo upload failed. Your draft is still here.");
+        if (currentContributorProfile()?.id !== profile?.id) throw new Error("Account changed. Review your suggestion.");
         suggestSubmitBtn.textContent = admin ? "Publishing..." : "Submitting...";
         const submittedAt = new Date().toISOString();
         const payload = {
@@ -10891,8 +10930,10 @@
           author_name: identity.name,
           submitted_at: submittedAt
         };
-        const created = await postDirectusItem("site_suggestions", payload, { requireAuth: true });
-        state.siteSuggestions.push({ id: created?.data?.id || `local-${Date.now()}`, ...payload });
+        const created = admin ? await postDirectusItem("site_suggestions", payload, { requireAuth: true })
+          : await commitEngagementAction("create_site_suggestion", payload);
+        if (!created?.data?.id) throw new Error("Save unconfirmed. Check suggestions before retrying.");
+        state.siteSuggestions.push({ ...payload, ...created.data });
         suggestTitleEl.value = "";
         suggestIntroEl.value = "";
         suggestImageEl.value = "";
@@ -11901,7 +11942,7 @@
                       ${author ? `<button class="site-plant-contributor" type="button" data-open-mobile-profile="${escapeHtml(contributorKey)}">${escapeHtml(contributor)}</button>` : escapeHtml(contributor)}
                       ${photoDate ? ` - photographed ${escapeHtml(new Date(photoDate).toLocaleDateString())}` : ""}${fields.confidence ? ` - ${escapeHtml(fields.confidence)}% confidence` : ""}
                     </span>
-                    <button class="site-plant-card-action site-plant-map-link" type="button" data-show-plant-on-map="${escapeHtml(String(sourceRecord.id || ""))}">${mapCoordinates ? "Show observation on map" : "Show inventory area on map"}</button>
+                    ${mapCoordinates ? `<button class="site-plant-card-action site-plant-map-link" type="button" data-show-plant-on-map="${escapeHtml(String(sourceRecord.id || ""))}">Show observation on map</button>` : ""}
                     ${territoryGrid && fields.site_slug && fields.site_slug !== item.slug ? `<button class="site-plant-card-action site-plant-site-link" type="button" data-slug="${escapeHtml(fields.site_slug)}">Open ${escapeHtml(fields.site_title || "linked site")}</button>` : ""}
                     ${!territoryGrid && fields.ancestral_territory_slug ? `<button class="site-plant-card-action site-plant-territory-link" type="button" data-slug="${escapeHtml(fields.ancestral_territory_slug)}">Open ${escapeHtml(fields.ancestral_territory_title || "ancestral-land inventory")}</button>` : ""}
                     ${guideMatch ? (plantWiki?.slug
@@ -12137,7 +12178,9 @@
       const canContribute = isApprovedContributor();
       const territoryPage = sourceType === "site" && isBroadTerritory(item);
       const plantInputId = `plant-image-${String(item.slug || item.id || "site").replace(/[^a-z0-9_-]+/gi, "-")}`;
-      const commentThread = COMMENT_UTILS.commentThreadIndex(comments, { excludeRoot: isPlantObservationComment });
+      const commentThread = COMMENT_UTILS.commentThreadIndex(comments, {
+        excludeRoot: comment => isPlantObservationComment(comment) || PROFILE_UTILS.isCheckinObservationComment(comment)
+      });
       const rootComments = commentThread.roots;
       const repliesFor = parentId => commentThread.repliesFor(parentId);
       const renderComment = (comment, depth = 0) => {
@@ -12166,7 +12209,7 @@
                 ` : ""}`}
               </div>
               <div class="comment-meta-row">
-                <span>${deleted ? "Removed by moderator" : (comment.created_at ? escapeHtml(new Date(comment.created_at).toLocaleString()) : "Approved comment")}</span>
+                <span>${deleted ? "Removed by moderator" : (comment.created_at ? escapeHtml(PROFILE_UTILS.parseContributionTimestamp(comment.created_at).toLocaleString()) : "Approved comment")}</span>
                 ${pending ? `<span class="comment-status-pill">Not public</span>` : ""}
                 ${!pending && !deleted ? `<span class="comment-actions" data-comment-actions="${escapeHtml(comment.id)}">${commentReactionControls(comment)}</span>` : ""}
                 ${canContribute && !pending && !deleted ? `<button class="comment-reply-button" type="button" data-reply-comment="${escapeHtml(comment.id)}" data-reply-profile="${escapeHtml(comment.member_profile || "")}">Reply</button>` : ""}
@@ -12235,7 +12278,7 @@
                   <small>Help document the living landscape with one clear photo and a temporary Story.</small>
                 </span>
               </summary>
-              <p class="detail-meta">Take or upload one clear plant photo. It will appear as a temporary Story and remain in the ${territoryPage ? "ancestral-land inventory" : "site and ancestral-land inventories"}.</p>
+              <p class="detail-meta">Add a plant photo to Stories and ${territoryPage ? "ancestral-land inventory" : "site and ancestral-land inventories"}. Pl@ntNet identifies plants; excludes fungi, mosses, algae, and lichens.</p>
               <button class="site-plant-card-action plant-guide-button" type="button" data-open-native-plants>Open Native plants guide</button>
               <div class="plant-camera-row">
                 <div class="plant-camera-actions">
@@ -12264,22 +12307,45 @@
       `;
     }
 
+    function setCommentSubmitStatus(section, message, tone = "") {
+      const button = section?.querySelector("[data-submit-discussion]");
+      if (!button) return;
+      let status = section.querySelector("[data-comment-submit-status]");
+      if (!status) {
+        status = document.createElement("p");
+        status.dataset.commentSubmitStatus = "";
+        status.className = "comment-photo-status";
+        status.setAttribute("role", "status");
+        status.setAttribute("aria-live", "polite");
+        button.before(status);
+      }
+      status.textContent = message || "";
+      status.dataset.tone = tone;
+      status.hidden = !message;
+    }
+
     async function submitMobileDiscussion(section) {
       const submitButton = section.querySelector("[data-submit-discussion]");
       const originalLabel = submitButton?.textContent || "Post comment";
       const profile = currentContributorProfile();
       if (!profile || !isApprovedContributor()) {
+        setCommentSubmitStatus(section, contributorWritePrompt(), "error");
         showBanner(contributorWritePrompt());
         return;
       }
-      if (!contributorCanUseDailyAction("comments", profile)) return;
+      if (!contributorCanUseDailyAction("comments", profile)) {
+        setCommentSubmitStatus(section, contributorDailyLimitMessage("comments", profile), "error");
+        return;
+      }
       const text = section.querySelector("[data-discussion-input]")?.value?.trim() || "";
       if (!text) {
+        setCommentSubmitStatus(section, "Write a comment above the photo first.", "error");
         showBanner("Write a comment first.");
         return;
       }
       const moderation = moderationCheck(text, "Your comment");
       if (!moderation.ok) {
+        setCommentSubmitStatus(section, moderation.message, "error");
         showBanner(moderation.message);
         return;
       }
@@ -12293,42 +12359,40 @@
         showBanner("That comment is already being posted.");
         return;
       }
+      let submitted = false;
       try {
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = "Preparing...";
+      }
+      setCommentSubmitStatus(section, "Preparing your comment...");
       let image = section._commentPhotoFile || section.querySelector("[data-discussion-image]")?.files?.[0] || null;
       if (image && image !== section._commentPhotoFile) {
         try {
           image = await prepareSelectedCommentPhoto(section);
         } catch (error) {
-          showBanner(error.message || "Could not prepare that comment photo.");
-          return;
+          throw new Error(error.message || "Could not prepare that comment photo.");
         }
       }
       const imageError = validateJpegImage(image);
       if (imageError) {
-        showBanner(imageError);
-        return;
+        throw new Error(imageError);
       }
       if (submitButton) {
         submitButton.disabled = true;
         submitButton.textContent = image ? "Uploading image..." : "Posting...";
       }
-      let imageId = null;
-      try {
-        imageId = image ? await uploadDirectusFile(image, `Comment image - ${section.dataset.discussionTitle}`, { requireAuth: true }) : null;
-        if (submitButton) submitButton.textContent = "Posting...";
-      } catch (error) {
-        if (error?.code === "AUTH_EXPIRED") {
-          showBanner(error.message || "Login expired. Please log in again, then post your comment.");
-          if (submitButton) {
-            submitButton.disabled = false;
-            submitButton.textContent = originalLabel;
-          }
-          return;
-        }
-        imageId = null;
-        showBanner("The image could not upload, so the comment will post without it.");
+      const previousUpload = section._commentUploadedImage;
+      let imageId = image && previousUpload?.file === image && previousUpload.profileId === profile.id
+        ? previousUpload.id : null;
+      if (image && !imageId) {
+        setCommentSubmitStatus(section, "Uploading your photo...");
+        imageId = await uploadDirectusFile(image, `Comment image - ${sourceTitle}`, { requireAuth: true, timeout: 45000 });
+        if (!imageId) throw new Error("The photo upload did not finish. Please try again.");
+        section._commentUploadedImage = { file: image, id: imageId, profileId: profile.id };
       }
       if (submitButton) submitButton.textContent = "Posting...";
+      setCommentSubmitStatus(section, "Saving your comment...");
       const quoteContextFields = QUOTE_COMMENT_UTILS.quoteCommentContextFields(text, {
         source_type: sourceType,
         source_title: sourceTitle
@@ -12358,8 +12422,18 @@
       try {
         const result = await commitEngagementAction("create_comment", payload);
         created = { data: result?.data || result?.source || null };
+        if (!created.data?.id) throw new Error("Save unconfirmed. Check comments before retrying.");
+        submitted = true;
+        section.querySelector("[data-discussion-input]").value = "";
+        section._commentUploadedImage = null;
+        section._commentPhotoFile = null;
+        const photoInput = section.querySelector("[data-discussion-image]");
+        if (photoInput) photoInput.value = "";
+        setCommentPhotoPreview(section, null);
+        setCommentPhotoStatus(section, "");
+        setCommentSubmitStatus(section, "Your comment is now visible. Thank you.");
         const visibleComment = {
-          id: created?.data?.id || `pending-${Date.now()}`,
+          id: created.data.id,
           ...payload,
           status: created?.data?.status || payload.status,
           author_email: state.profile?.email || "",
@@ -12426,9 +12500,30 @@
         }
         state.mobileActivityRenderedSignature = "";
         renderMobileActivitySheet();
-      } else if (sourceType === "site" && sourceSlug) openSite(sourceSlug, { focus: false, skipCommentRefresh: true });
-      else if (sourceType === "wiki" && sourceSlug) openWikiArticle(sourceSlug, { focus: false, skipCommentRefresh: true });
+      } else {
+        const source = (sourceType === "site" ? state.sites : state.wikiArticles)
+          .find(item => item.slug === sourceSlug);
+        // A save refreshes just this discussion. Reopening the article reset
+        // the drawer and scrolled back to its top, hiding the saved comment.
+        // The helper also refuses to replace an article opened during upload.
+        if (source) updateOpenDiscussionSection(sourceType, source, {
+          savedCommentId: created.data.id,
+          status: commentEmailError || "Your comment is now visible. Thank you."
+        });
+      }
+      } catch (error) {
+        const message = submitted
+          ? "Your comment was saved. Reopen this article to refresh the comments."
+          : error?.name === "AbortError"
+            ? "The photo upload timed out. Your comment and photo are still here; please try again."
+            : `${error.message || "Could not post your comment."} Your comment and photo are still here.`;
+        setCommentSubmitStatus(section, message, submitted ? "" : "error");
+        showBanner(message);
       } finally {
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.textContent = originalLabel;
+        }
         mobileLearningActionGuard.end(actionKey);
       }
     }
@@ -13417,17 +13512,38 @@
       if (state.mobileMovingLandCacheGeometry !== geometry) {
         state.mobileMovingLandCacheGeometry = geometry;
         state.mobileMovingLandStateCache.clear();
+        state.mobileMovingLandEdgeRows = new Map();
+        const polygons = geometry.type === "MultiPolygon" ? geometry.coordinates : [geometry.coordinates];
+        polygons.forEach((rings, polygon) => rings.forEach(ring => {
+          for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            const [x1, y1] = ring[i], [x2, y2] = ring[j];
+            if (y1 === y2) continue;
+            const edge = { x1, y1, x2, y2, polygon };
+            for (let row = Math.floor(Math.min(y1, y2) * 500); row <= Math.floor(Math.max(y1, y2) * 500); row++) {
+              if (!state.mobileMovingLandEdgeRows.has(row)) state.mobileMovingLandEdgeRows.set(row, []);
+              state.mobileMovingLandEdgeRows.get(row).push(edge);
+            }
+          }
+        }));
       }
-      // Surface state changes at shoreline scale, not every few feet. Reusing
-      // a roughly 0.001-degree cell prevents every animation frame from
-      // rescanning the complete Long Island land mask.
-      const cacheKey = `${Number(coordinates[0]).toFixed(3)},${Number(coordinates[1]).toFixed(3)}`;
+      // A creek can cross a single 0.001-degree cell. Keep metre-scale
+      // positions distinct so travel direction cannot decide the surface.
+      // The bounded cache still reuses stationary and repeated positions.
+      const cacheKey = `${Number(coordinates[0]).toFixed(5)},${Number(coordinates[1]).toFixed(5)}`;
       if (state.mobileMovingLandStateCache.has(cacheKey)) return state.mobileMovingLandStateCache.get(cacheKey);
       try {
-        const samples = mobileMovingLandSamples(coordinates);
-        const centerIsLand = Boolean(samples[0] && pointInGeometry(samples[0], geometry));
-        const surroundingLandSamples = samples.slice(1).filter(sample => pointInGeometry(sample, geometry)).length;
-        const result = centerIsLand || surroundingLandSamples >= Math.ceil(samples.length / 2);
+        // Indexing selects candidate edges only; the ray test still uses
+        // the original coordinates, including polygon holes and islands.
+        const [lng, lat] = coordinates;
+        const insidePolygons = new Set();
+        for (const edge of state.mobileMovingLandEdgeRows.get(Math.floor(lat * 500)) || []) {
+          if ((edge.y1 > lat) !== (edge.y2 > lat)
+            && lng < ((edge.x2 - edge.x1) * (lat - edge.y1) / (edge.y2 - edge.y1)) + edge.x1) {
+            if (insidePolygons.has(edge.polygon)) insidePolygons.delete(edge.polygon);
+            else insidePolygons.add(edge.polygon);
+          }
+        }
+        const result = insidePolygons.size > 0;
         if (state.mobileMovingLandStateCache.size >= MOBILE_MOVING_LAND_CACHE_MAX) {
           state.mobileMovingLandStateCache.delete(state.mobileMovingLandStateCache.keys().next().value);
         }
@@ -13675,6 +13791,21 @@
       state.mobileMovingAmethystShipMarker = null;
     }
 
+    function mobileBiographyIsOnLand(item, coordinates) {
+      const offset = item.displayOffset || [0, 0];
+      // Clearance from a site pin is measured in pixels. At overview zoom it
+      // can put the displayed person across a shoreline from the route point.
+      // Classify that displayed anchor while keeping route geometry unchanged.
+      if ((offset[0] || offset[1]) && state.map?.project && state.map?.unproject) {
+        const point = state.map.project(coordinates);
+        const displayed = state.map.unproject([point.x + (Number(offset[0]) || 0), point.y + (Number(offset[1]) || 0)]);
+        if (Number.isFinite(displayed.lng) && Number.isFinite(displayed.lat)) {
+          return mobileMovingPointIsOnLand([displayed.lng, displayed.lat]);
+        }
+      }
+      return item.fixedSurfaceIsLand == null ? mobileMovingPointIsOnLand(coordinates) : item.fixedSurfaceIsLand;
+    }
+
     function nativeMovingFeatureCollection(now = performance.now()) {
       if (state.profileMapMode) return nativeMapFeatureCollection();
       const motionNow = Math.max(0, now - (state.mobileMovingMarkerPausedDurationMs || 0));
@@ -13705,9 +13836,7 @@
               Number(item.displayOffset?.[0]) || 0,
               Number(item.displayOffset?.[1]) || 0
             ],
-            on_water: item.fixedSurfaceIsLand == null
-              ? !mobileMovingPointIsOnLand(motion.coordinates)
-              : !item.fixedSurfaceIsLand,
+            on_water: !mobileBiographyIsOnLand(item, motion.coordinates),
             followed
           }
         });
@@ -13828,9 +13957,7 @@
       button.dataset.followed = item.slug === state.mobileFollowedBiographySlug ? "true" : "false";
       button.style.opacity = String(Math.max(0, Math.min(1, motion.opacity)));
       button.dataset.showLabel = state.map?.getZoom?.() >= SITE_POINT_LABEL_MIN_ZOOM || item.slug === state.mobileFollowedBiographySlug ? "true" : "false";
-      const isOnLand = item.fixedSurfaceIsLand == null
-        ? mobileMovingPointIsOnLand(motion.coordinates)
-        : item.fixedSurfaceIsLand;
+      const isOnLand = mobileBiographyIsOnLand(item, motion.coordinates);
       button.dataset.onWater = isOnLand ? "false" : "true";
       const status = button.querySelector(".mobile-moving-biography-status");
       if (status) status.textContent = mobileMovingBiographyStatus(item, motion);
@@ -15541,6 +15668,7 @@
     }
 
     async function openSite(slug, options = {}) {
+      slug = ROUTE_UTILS.listingSlugAlias?.(slug) || slug;
       cancelAndroidLifecycleDetailScrollRestore();
       stopMobileBiographyFollow();
       state.mobileBiographyFollowUserStoppedSlug = "";
@@ -15676,12 +15804,16 @@
           <a class="action secondary" href="${escapeHtml(ROUTE_UTILS.publicArchiveUrl({ site: site.slug }, { baseUrl: PUBLIC_ARCHIVE_BASE }))}" target="_blank" rel="noreferrer">Full page</a>
           ${isAdminContributor() ? `<button class="action secondary" type="button" data-open-frontend-editor="site" data-editor-slug="${escapeHtml(site.slug)}">Edit site</button>` : ""}
         </div>
+        ${mobileCheckinHistoryHtml(site)}
       `;
       removeUnbundledSnapshotImages(detailBodyEl);
       detailBodyEl.scrollTop = 0;
       syncDetailHeroScrollState();
       detailEl.classList.add("open");
       startSiteHeroCarousel();
+      void refreshPublicCheckinsForSite(site).then(() => {
+        if (state.selectedSlug === slug && detailEl?.classList.contains("open")) refreshMobileCheckinHistory(site);
+      }).catch(() => []);
       setDetailDrawerState(drawerState);
       detailEl.classList.toggle("plant-browse-mode", plantObservationsForSource("site", site).length > 0);
       syncMobilePanelAccessibility();
@@ -15731,6 +15863,8 @@
       if (!options.skipCommentRefresh) refreshDiscussionSourceData("site", site).then(updated => {
         if (!updated) return;
         updateOpenDiscussionSection("site", site);
+        refreshMobileVisitActions(site);
+        refreshMobileCheckinHistory(site);
         if (contentUpdateItems.length && options.focusNewContent !== false) {
           window.setTimeout(() => revealMobileContentUpdate(site, contentUpdateItems), 40);
         }
@@ -16605,7 +16739,10 @@
     function mobileVisitActionsHtml(site) {
       const profile = currentContributorProfile();
       if (profile && siteHasRecordedCheckin(profile, site)) {
-        return `<button class="action secondary checkin-complete" type="button" disabled aria-disabled="true">Checked in</button>`;
+        return `
+          <button class="action secondary checkin-complete" type="button" disabled aria-disabled="true">Checked in</button>
+          ${mobileCheckinObservationHtml(site, profile)}
+        `;
       }
       if (PROFILE_UTILS.isEligiblePublicVisitSite(site)) {
         return `
@@ -16616,9 +16753,173 @@
       return `<p class="detail-meta">Learn from this map entry; public visits or check-ins are not encouraged here.</p>`;
     }
 
-    function refreshMobileVisitActions(site = state.selectedSite) {
+    function refreshMobileVisitActions(site = state.selectedSite, options = {}) {
       const container = detailBodyEl?.querySelector?.("[data-mobile-visit-actions]");
       if (container && site) container.innerHTML = mobileVisitActionsHtml(site);
+      const observation = container?.querySelector?.("[data-checkin-observation-form]");
+      if (observation && options.revealObservation) {
+        observation.open = true;
+        window.requestAnimationFrame(() => observation.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+      }
+    }
+
+    function mobileCheckinObservationOptionsHtml() {
+      return PROFILE_UTILS.CHECKIN_OBSERVATION_CATEGORIES
+        .map(category => `<option value="${escapeHtml(category.value)}">${escapeHtml(category.label)}</option>`)
+        .join("");
+    }
+
+    function currentMobileCheckinVisit(profile, site) {
+      return PROFILE_UTILS.siteVisitRecord(state.publicVisits, profile, site, {
+        relationId,
+        fallbackProfileId: state.profile?.profileId
+      });
+    }
+
+    function currentMobileCheckinObservation(profile, site) {
+      return PROFILE_UTILS.checkinObservationForProfile(state.publicComments, profile?.id, site?.slug, { relationId });
+    }
+
+    function mobileCheckinObservationHtml(site, profile) {
+      if (currentMobileCheckinObservation(profile, site)) {
+        return `<span class="checkin-observation-complete">Observation added</span>`;
+      }
+      const inputId = `checkin-observation-photo-${String(site.slug || site.id || "site").replace(/[^a-z0-9_-]+/gi, "-")}`;
+      return `
+        <details class="checkin-observation-panel" data-checkin-observation-form data-site-slug="${escapeHtml(site.slug || "")}">
+          <summary>Add what you noticed <span>(optional)</span></summary>
+          <p>Share a plant or animal, development, Native cultural connection, sign, or other site condition.</p>
+          <p class="detail-meta">Photograph only from places you may legally visit. Do not disturb plants, animals, objects, or sensitive areas.</p>
+          <div class="field">
+            <label>What did you notice?</label>
+            <select data-checkin-observation-category>${mobileCheckinObservationOptionsHtml()}</select>
+          </div>
+          <div class="field">
+            <label>Optional note</label>
+            <textarea data-checkin-observation-note placeholder="Describe what you saw..."></textarea>
+          </div>
+          <div class="field">
+            <label for="${escapeHtml(inputId)}">Optional photo</label>
+            <input id="${escapeHtml(inputId)}" data-discussion-image data-checkin-observation-image type="file" accept="image/*" hidden>
+            <div class="discussion-composer-actions">
+              <button class="action secondary" type="button" data-take-comment-photo>Take photo</button>
+              <button class="action secondary" type="button" data-choose-comment-photo>Choose photo</button>
+            </div>
+            <p class="comment-photo-status" data-comment-photo-status hidden></p>
+            <img class="comment-photo-preview" data-comment-photo-preview alt="" hidden>
+          </div>
+          <button class="action secondary" type="button" data-submit-checkin-observation>Share observation</button>
+          <p class="form-status" data-checkin-observation-status hidden></p>
+        </details>
+      `;
+    }
+
+    function mobileCheckinHistoryName(entry) {
+      const currentId = Number(relationId(currentContributorProfile()?.id));
+      if (entry.profileId && entry.profileId === currentId) return "You";
+      const publicProfile = PROFILE_UTILS.publicContributorProfiles(entry.profile ? [entry.profile] : [])[0];
+      return publicProfile?.display_name || publicProfile?.username || "Community member";
+    }
+
+    function mobileCheckinHistoryHtml(site) {
+      const entries = PROFILE_UTILS.checkinHistoryEntries(
+        state.publicVisits,
+        state.publicComments,
+        state.contributorProfiles,
+        site,
+        { relationId }
+      );
+      return `
+        <section class="section checkin-history-section" data-mobile-checkin-history>
+          <div class="checkin-history-heading">
+            <div>
+              <h3>Check-in history</h3>
+              <p>A dated visitor log for people who confirmed they were near this place.</p>
+            </div>
+            <strong>${entries.length}</strong>
+          </div>
+          ${entries.length ? `<div class="checkin-history-log">${entries.slice(0, 24).map(entry => {
+            const observation = entry.observation;
+            const image = observation ? directusAssetUrl(observation.comment_image) : "";
+            return `<article class="checkin-history-row">
+              <div class="checkin-history-line"><strong>${escapeHtml(mobileCheckinHistoryName(entry))}</strong><time datetime="${escapeHtml(entry.visit.visited_at || "")}">${escapeHtml(formatVisitDate(entry.visit.visited_at))}</time></div>
+              ${observation ? `<span class="checkin-observation-category">${escapeHtml(entry.category?.label || "Observation")}</span>${observation.comment ? `<p>${escapeHtml(observation.comment)}</p>` : ""}${image ? `<button class="comment-image-button" type="button" data-comment-photo-view="${escapeHtml(image)}" data-comment-photo-title="Check-in observation"><img src="${escapeHtml(image)}" alt="Check-in observation" loading="lazy" decoding="async"></button>` : ""}` : ""}
+            </article>`;
+          }).join("")}</div>` : `<p class="checkin-history-empty">No nearby check-ins have been recorded yet.</p>`}
+        </section>
+      `;
+    }
+
+    function refreshMobileCheckinHistory(site = state.selectedSite) {
+      const slot = detailBodyEl?.querySelector?.("[data-mobile-checkin-history]");
+      if (!slot || !site) return false;
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = mobileCheckinHistoryHtml(site).trim();
+      slot.replaceWith(wrapper.firstElementChild);
+      return true;
+    }
+
+    async function submitMobileCheckinObservation(form) {
+      const profile = currentContributorProfile();
+      const site = state.sites.find(item => item.slug === form?.dataset.siteSlug) || state.selectedSite;
+      const visit = currentMobileCheckinVisit(profile, site);
+      if (!profile?.id || !site || !visit?.id || !siteHasRecordedCheckin(profile, site)) {
+        showBanner("Check in at this site before adding an observation.");
+        return false;
+      }
+      const category = form.querySelector("[data-checkin-observation-category]")?.value || "";
+      const note = form.querySelector("[data-checkin-observation-note]")?.value?.trim() || "";
+      let image = form._commentPhotoFile || form.querySelector("[data-checkin-observation-image]")?.files?.[0] || null;
+      if (!note && !image) {
+        showBanner("Add a note or photo before sharing this observation.");
+        return false;
+      }
+      const moderation = moderationCheck(note, "Your observation");
+      if (note && !moderation.ok) {
+        showBanner(moderation.message);
+        return false;
+      }
+      if (image && image !== form._commentPhotoFile) image = await prepareSelectedCommentPhoto(form);
+      const imageError = validateJpegImage(image);
+      if (imageError) {
+        showBanner(imageError);
+        return false;
+      }
+      const submit = form.querySelector("[data-submit-checkin-observation]");
+      const status = form.querySelector("[data-checkin-observation-status]");
+      if (submit) {
+        submit.disabled = true;
+        submit.textContent = image ? "Uploading photo..." : "Sharing...";
+      }
+      if (status) {
+        status.hidden = false;
+        status.textContent = "Saving your observation...";
+      }
+      try {
+        const imageId = image ? await uploadDirectusFile(image, `Check-in observation - ${site.title}`, { requireAuth: true }) : null;
+        const result = await commitEngagementAction("create_checkin_observation", {
+          site_slug: site.slug,
+          site_title: site.title,
+          category,
+          comment: note,
+          comment_image: imageId
+        }, visit.id);
+        const created = result?.source || result?.data;
+        if (!created?.id) throw new Error("The observation could not be confirmed.");
+        state.publicComments.push({ ...created, _local_pending: true });
+        refreshMobileVisitActions(site);
+        refreshMobileCheckinHistory(site);
+        showBanner("Observation added to the check-in history.");
+        return true;
+      } catch (error) {
+        if (submit) {
+          submit.disabled = false;
+          submit.textContent = "Share observation";
+        }
+        if (status) status.textContent = error.message || "Could not save this observation.";
+        showBanner(error.message || "Could not save this observation.");
+        return false;
+      }
     }
 
     function newContentAlertCandidates() {
@@ -17564,6 +17865,7 @@
       const displayName = activeProfile?.display_name || state.profile.display_name || state.profile.email || "Profile";
       loginOpenBtn.textContent = `${displayName} (${points})`;
       loginOpenBtn.title = pointsSyncing ? `${displayName}: refreshing profile points` : `${displayName}: ${points} profile ${points === 1 ? "point" : "points"}`;
+      refreshVisibleDetailLanguageQuiz();
     }
 
     function mobileContributorTierProgressHtml(stats = {}) {
@@ -19548,7 +19850,7 @@
                   </button>
                 ` : ""}
               </div>
-              <time>${comment.created_at ? escapeHtml(new Date(comment.created_at).toLocaleString()) : "Approved comment"}</time>
+              <time>${comment.created_at ? escapeHtml(PROFILE_UTILS.parseContributionTimestamp(comment.created_at).toLocaleString()) : "Approved comment"}</time>
             </div>
           </article>
           ${repliesFor(comment.id).map(reply => renderComment(reply, depth + 1)).join("")}
@@ -21474,6 +21776,28 @@
         openPlantFileInput(panel, true);
         return true;
       }
+      if (event.target.closest("[data-retry-plant-identification]")) {
+        event.preventDefault();
+        const file = panel._plantPhotoFile;
+        if (!file) {
+          showBanner("Take or upload a photo before trying identification again.");
+          return true;
+        }
+        const retryButton = event.target.closest("[data-retry-plant-identification]");
+        retryButton.disabled = true;
+        retryButton.textContent = "Trying again...";
+        state.plantProviderStatus = null;
+        analyzePlantPhoto(file, panel).then(analysis => {
+          panel._plantAnalysis = analysis;
+          renderPlantContext(panel);
+          showBanner(analysis.status === "identified" ? "Identification updated." : "No reliable match yet. You can retry or save it for review.");
+        }).catch(error => {
+          panel._plantAnalysis = pendingPlantReviewAnalysis();
+          renderPlantContext(panel);
+          showBanner(error.message || "Identification is still unavailable. You can save the photo for review.");
+        });
+        return true;
+      }
       if (event.target.closest("[data-submit-plant-report]")) {
         submitPlantObservation(panel).catch(error => showBanner(error.message || "Could not submit plant report."));
         return true;
@@ -21546,7 +21870,7 @@
         jumpToQuoteComment(heroCommentSlide.dataset.siteHeroComment);
         return;
       }
-      const discussion = event.target.closest(".discussion-section");
+      const discussion = event.target.closest(".discussion-section, [data-checkin-observation-form]");
       const quoteMarker = event.target.closest("[data-jump-quote-comment]");
       if (quoteMarker?.dataset.jumpQuoteComment) {
         jumpToQuoteComment(quoteMarker.dataset.jumpQuoteComment);
@@ -21684,14 +22008,9 @@
         }
         detailEl.classList.add("open", "plant-browse-mode");
         setDetailDrawerState("collapsed");
-        if (entry.record._plantInventoryFallback) {
-          focusSite(state.selectedSite, { forPanel: true, duration: 420 });
-          showBanner("Showing the ancestral-land inventory area; the older observation's exact spot was not saved.");
-        } else {
-          const currentZoom = Number(state.map?.getZoom?.()) || 10;
-          focusMobileCoordinateInVisibleMap(entry.coordinates, { zoom: Math.max(currentZoom, 15), duration: 420 });
-          showBanner("Showing this plant observation on the map.");
-        }
+        const currentZoom = Number(state.map?.getZoom?.()) || 10;
+        focusMobileCoordinateInVisibleMap(entry.coordinates, { zoom: Math.max(currentZoom, 15), duration: 420 });
+        showBanner("Showing this plant observation on the map.");
         window.setTimeout(() => openPlantObservationPopup(entry.record, entry.coordinates), 460);
         return;
       }
@@ -21726,6 +22045,10 @@
         return;
       }
       if (event.target.closest("[data-demo-login-inline]")) return;
+      if (event.target.closest("[data-submit-checkin-observation]") && discussion) {
+        submitMobileCheckinObservation(discussion).catch(error => showBanner(error.message || "Could not submit this observation."));
+        return;
+      }
       if (event.target.closest("[data-submit-discussion]") && discussion) {
         submitMobileDiscussion(discussion).catch(error => showBanner(error.message || "Could not submit comment."));
         return;
@@ -21854,7 +22177,7 @@
         openKnowledgebasePanel({ preserveScroll: true });
         return;
       }
-      const discussion = event.target.closest(".discussion-section");
+      const discussion = event.target.closest(".discussion-section, [data-checkin-observation-form]");
       if (discussion && event.target.matches("[data-discussion-image]")) {
         prepareSelectedCommentPhoto(discussion).catch(error => {
           setCommentPhotoStatus(discussion, error.message || "Could not prepare that comment photo.", "error");
@@ -22127,8 +22450,16 @@
     contributeSiteOpenBtn?.addEventListener("click", () => {
       if (requireRegisteredContributor()) openSheet(suggestSiteSheetEl);
     });
-    mapStoryPhotoButtonEl?.addEventListener("click", () => mapStoryPhotoEl?.click());
+    mapStoryPhotoButtonEl?.addEventListener("click", () => {
+      mapStoryPhotoEl?.removeAttribute("capture");
+      mapStoryPhotoEl?.click();
+    });
+    mapStoryCameraButtonEl?.addEventListener("click", () => {
+      mapStoryPhotoEl?.setAttribute("capture", "environment");
+      mapStoryPhotoEl?.click();
+    });
     mapStoryPhotoEl?.addEventListener("change", () => {
+      mapStoryPhotoDraft = null;
       const file = mapStoryPhotoEl.files?.[0];
       if (!mapStoryPhotoPreviewEl) return;
       if (!file) {
