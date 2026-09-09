@@ -1,0 +1,26 @@
+/* Species facts are compact and shared across desktop and mobile cards. */
+    .plant-insights { min-width: 0; margin: 8px 0; }
+    .plant-insights-label { margin: 0 0 8px; font-size: 12px; color: #52665a; }
+    .plant-status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; margin-bottom: 12px; }
+    .plant-status-tile { padding: 10px 12px; border: 1px solid #d7e2d9; border-radius: 10px; background: #f0f5f0; }
+    .plant-status-tile span { display: block; margin-bottom: 4px; font-size: 11px; color: #405449; }
+    .plant-status-tile strong { display: block; font-size: 14px; line-height: 1.35; color: #264d37; }
+    .plant-status-introduced, .plant-status-regional { background: #f7f2e7; border-color: #e5d8ba; }
+    .plant-status-protected { background: #f8ece5; border-color: #e6c9b9; }
+    .plant-status-protected strong { color: #753d24; }
+    .plant-insights .site-plant-fact { grid-template-columns: minmax(90px, 0.35fr) minmax(0, 1fr); padding: 8px 0; font-size: 13px; line-height: 1.45; }
+    .plant-insights .site-plant-fact strong { text-transform: none; font-size: 12px; line-height: 1.45; }
+    .plant-insights, .plant-insights a, .plant-insights span, .plant-insights strong { overflow-wrap: anywhere; }
+    .plant-species-sources { margin-top: 8px; font-size: 12px; line-height: 1.5; }
+    .plant-species-sources summary { padding: 10px 0; color: #315d47; font-weight: 700; cursor: pointer; }
+    .plant-species-sources[open] { padding-bottom: 8px; }
+    .plant-species-sources ul { padding-left: 20px; margin: 8px 0; }
+    .plant-species-sources li { margin: 6px 0; }
+    .plant-species-sources p { margin: 8px 0; }
+    .plant-species-sources a { color: #315d47; text-decoration: underline; }
+    .plant-source-date { color: #647167; }
+    .plant-id-check, .plant-inventory-guidance { font-size: 13px; line-height: 1.5; color: #52665a; }
+    .site-plant-card-body { min-width: 0; align-content: start; }
+.site-plant-cards { grid-template-columns: minmax(0, 1fr); container-type: inline-size; }
+.site-plant-card > img { height: auto; max-height: 340px; object-fit: contain; align-self: start; }
+@container (max-width: 520px) { .site-plant-card { grid-template-columns: minmax(0, 1fr); } .site-plant-card-body { padding: 12px; } .site-plant-card > img { max-height: 230px; } }

@@ -2,7 +2,8 @@
   const DEFAULT_ALIASES = {
     "#wiki/tribes": "#wiki/the-tribes-of-long-island",
     "#listing/matinecocks": "#listing/matinecock-traditional-land",
-    "#listing/matinecock-tribal-nation": "#listing/matinecock"
+    "#listing/matinecock-tribal-nation": "#listing/matinecock",
+    "#listing/west-woods-sweat-lodge": "#listing/west-woods"
   };
 
   const DEFAULT_PAGE_EXCLUSIONS = ["archive-test", "listing", "wiki", "wp-json", "wp-content", "wp-admin"];
@@ -25,7 +26,8 @@
       montaukett: "montaukett-ancestral-land",
       nissaquogues: "nissaquogue",
       "shinnecock-placename": "shinnecock-ancestral-land",
-      setaukets: "setauket-ancestral-land"
+      setaukets: "setauket-ancestral-land",
+      "west-woods-sweat-lodge": "west-woods"
     })[slug] || slug || "";
   }
 

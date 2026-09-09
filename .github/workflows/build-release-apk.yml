@@ -35,7 +35,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify Android app shell
-        run: node verify-app-shell.js
+        run: |
+          node verify-app-shell.js
+          node verify-native-animals.js
 
       - name: Verify Google Play readiness
         run: node verify-google-play-readiness.js

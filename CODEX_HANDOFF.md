@@ -1365,3 +1365,11 @@ Safest next action: update through Obtainium to 0.1.640 when convenient, then op
 - Web PR #213 merged as `fdae5e86629cdb7b2b9eeae278f203337ce52eb4`; deployment `33812544215` completed the synchronized VPS runtime switch. The temporary QA package and WebView debugging forward were removed.
 
 Safest next action: use Obtainium 0.1.650 normally. No data reset is required; if an older hosted runtime is retained in an already-running session, fully close and reopen the app once.
+
+## Native wildlife — 2026-09-09 (release in progress)
+
+Added native dog-layer support and facing variants for five dog-scale navy wildlife icons: deer, box turtle, turkey, black duck, eel. Packaged refreshed shared motion/runtime and 123-article offline catalog with five cited new animal articles. APP_VERSION is 20260909-native-wildlife-r247.
+
+Verified debug build, shell/menu checks, Play code readiness and dedicated symbol/offline article guards. Physical iPlay T811MA256GB23516041180 QA confirms five native symbols, no duplicate DOM animals, continuous native updates, and tapping the deer opens its cited article. Rotate/tilt and camera changes exercised. S25 is not attached. Production app data was not cleared; separate .qa package used.
+
+Branch feat/native-animal-map-20260909 based on main 23d6bb6. Web PR288/289 deliver corresponding shared code. Safest next step: finish signed release, verify published APK assets and successful web deployment, remove QA package, then final handoff and notification. No final notification at this intermediate checkpoint.
