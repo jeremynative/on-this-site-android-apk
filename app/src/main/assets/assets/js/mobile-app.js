@@ -241,6 +241,7 @@
       { label: "Tribal Nations and Communities", entries: [["wiki", "native-long-island-overview"], ["wiki", "continued-indigenous-presence-today"], ["wiki", "the-tribes-of-long-island"], ["wiki", "western-long-island-native-communities"], ["wiki", "central-long-island-native-communities"], ["wiki", "eastern-long-island-native-communities"], ["wiki", "myth-of-the-thirteen-tribes"], ["site", "montaukett-ancestral-land"], ["site", "shinnecock-indian-reservation"], ["site", "unkechaug-indian-reservation"], ["site", "corchaug-tribe"], ["site", "manhansack-aqua-quash-awamock"], ["site", "setauket-ancestral-land"], ["site", "nissaquogue"], ["site", "matinecock"], ["site", "secatogues"], ["site", "massapequas"], ["site", "merricks"], ["site", "rockaways"], ["site", "canarsie"]] },
       { label: "History", slugs: ["native-long-island-overview", "slavery", "indian-missions-on-long-island", "education-at-shinnecock", "shinnecock-veterans-and-wartime-service", "colonial-descriptions-of-indians", "indian-forts", "13-tribes-of-long-island-david-martine", "early-contact-period-1600-ad-1700-ad", "post-contact", "creation-of-long-island", "land-deeds-and-dispossession", "myth-of-extinction-and-survivance", "myth-of-the-thirteen-tribes", "historic-preservation", "history-and-place-names", "merrick-people-in-early-land-records"] },
       { label: "Sovereignty and Governance", slugs: ["tribal-trustees", "sovereignty-recognition-and-detribalization", "land-deeds-and-dispossession", "continued-indigenous-presence-today"] },
+      { label: "Native Animals and Ecology", slugs: ["white-tailed-deer", "eastern-box-turtle", "wild-turkey", "american-black-duck", "american-eel"] },
       { label: "Culture, Ceremony, and Lifeways", slugs: ["sweat-lodge", "nunnowa", "wampum", "burial", "powwow", "spirituality-ceremony-cosmology", "language", "algonquian-language-and-place-names", "dog-ceremonialism", "spring", "summer", "fall", "winter", "food", "fishing", "whaling", "indigenous-whaling-and-maritime-labor", "ecology-and-flexible-sedentism"] },
       { label: "Time Periods and Archaeology", slugs: ["paleo-indian-period", "archaic-period", "orient-transitional-period", "woodland-period", "late-woodland", "early-contact-period-1600-ad-1700-ad", "post-contact", "shell-midden", "killed-pottery", "arrow-heads", "phase-archaeology-investigation", "phase-ii-archaeology-investigation", "phase-iii-archaeological-investigation", "burial-protection-and-sacred-landscapes"] },
       { label: "Preservation and Site Protection", slugs: ["preservation", "burial-protection-and-sacred-landscapes", "vandalism", "phase-archaeology-investigation", "phase-ii-archaeology-investigation", "phase-iii-archaeological-investigation"] },
@@ -268,10 +269,7 @@
         title: "Chief Harry Wallace associated places",
         places: [{ place: "Poospatuck Reservation", coordinates: [-72.83454, 40.78913] }]
       },
-      "wuchikittawbut": {
-        title: "Wuchikittawbut associated places",
-        places: [{ place: "Montaukett homeland", coordinates: [-71.944, 41.036] }]
-      },
+      "wuchikittawbut": { ...window.NLI_BIOGRAPHY_PATH_DATA?.["wuchikittawbut"] },
       "betty-lewis-cromwell-shinnecock": {
         title: "Betty Lewis Cromwell associated places",
         places: [{ coordinates: [-72.432, 40.884] }]
@@ -288,10 +286,7 @@
         title: "Peter John Cuffee associated places",
         places: [{ coordinates: [-72.315, 40.937] }]
       },
-      "ninigret-eastern-niantic-sachem": {
-        title: "Ninigret associated places",
-        places: [{ place: "Eastern Niantic homeland", coordinates: [-71.66, 41.38] }]
-      },
+      "ninigret-eastern-niantic-sachem": { ...window.NLI_BIOGRAPHY_PATH_DATA?.["ninigret-eastern-niantic-sachem"] },
       "paucamp": {
         title: "Paucamp associated places",
         places: [{ coordinates: [-72.6, 40.94] }]
@@ -300,10 +295,7 @@
         title: "Samson Occom associated places",
         places: [{ place: "Mohegan homeland", coordinates: [-72.099, 41.478] }]
       },
-      "cockenoe": {
-        title: "Cockenoe associated places",
-        places: [{ coordinates: [-72.185, 40.963] }]
-      },
+      "cockenoe": { ...window.NLI_BIOGRAPHY_PATH_DATA?.["cockenoe"] },
       "mary-emma-cuffee-bunn": {
         title: "Mary Emma Cuffee Bunn life journey",
         mapLabel: "Mary Emma Cuffee Bunn",
@@ -445,78 +437,8 @@
           { label: "1938 — Reservation powwow", place: "Shinnecock Powwow Grounds", coordinates: [-72.42467, 40.86874], reason: "Stone and Martine associate Elliot Kellis and Zella de Milhau with organizing the documented gathering." }
         ]
       },
-      "wyandanch": {
-        title: "Wyandanch associated places",
-        note: "Broad associated places from the story; not a precise travel route.",
-        places: [
-          {
-            label: "Montaukett homeland",
-            place: "Montauk, East Hampton",
-            coordinates: [-71.944, 41.036],
-            reason: "Wyandanch is remembered as a Montaukett sachem."
-          },
-          {
-            label: "Fort Saybrook",
-            place: "Old Saybrook, Connecticut",
-            coordinates: [-72.351, 41.284],
-            reason: "Wyandanch negotiated an English alliance at Fort Saybrook after the Pequot War."
-          },
-          {
-            label: "Pequot War region",
-            place: "Mystic River area, Connecticut",
-            coordinates: [-71.966, 41.355],
-            reason: "His diplomacy is connected with the 1637 Pequot War and its aftermath."
-          },
-          {
-            label: "Shinnecock diplomacy",
-            place: "Southampton / Shinnecock area",
-            coordinates: [-72.436, 40.884],
-            reason: "Wyandanch is linked to 1649 negotiations involving Mandush of Shinnecock."
-          }
-        ]
-      },
-      "quashawam": {
-        title: "Quashawam associated places",
-        note: "Broad associated places from the records and historic moments; not a precise travel route.",
-        places: [
-          {
-            label: "1653 - Niantic raid and ransom",
-            place: "Montaukett homeland, Montauk / East Hampton",
-            coordinates: [-71.944, 41.036],
-            reason: "Quashawam was captured during a Niantic raid on the Montaukett and later ransomed with English assistance."
-          },
-          {
-            label: "1663/64 - Shinnecock agreement",
-            place: "Southampton / Shinnecock and Montaukett record context",
-            coordinates: [-72.436, 40.884],
-            reason: "Southampton records recognized Quashawam in an agreement involving Montaukett and Shinnecock authority and succession."
-          },
-          {
-            label: "1663/64 - Jamaica deed",
-            place: "Jamaica, Queens",
-            coordinates: [-73.795, 40.702],
-            reason: "A Jamaica land transaction handled by John Scott included a payment to Quashawam."
-          },
-          {
-            label: "1665 - Southold court",
-            place: "Southold",
-            coordinates: [-72.427, 41.064],
-            reason: "A court at Southold upheld an annual payment owed to the Montauk sunksquaw."
-          },
-          {
-            label: "1665 - Court of Assizes",
-            place: "New York colonial court / Long Island agreement",
-            coordinates: [-74.006, 40.705],
-            reason: "Governor Nicolls and Long Island leaders addressed the colonial superior-sachem title and Montaukett land issues."
-          },
-          {
-            label: "1665-1666 - Three Mile Harbor",
-            place: "Three Mile Harbor, East Hampton",
-            coordinates: [-72.188, 41.018],
-            reason: "Strong and Karabag place Quashawam and her Pequot husband in a Native village near Three Mile Harbor when Richard Smith sought her testimony."
-          }
-        ]
-      },
+      "wyandanch": { ...window.NLI_BIOGRAPHY_PATH_DATA?.wyandanch },
+      "quashawam": { ...window.NLI_BIOGRAPHY_PATH_DATA?.["quashawam"] },
       "elizabeth-thunder-bird-haile-shinnecock": {
         title: "Elizabeth Thunder Bird Haile life timeline and places",
         note: "Numbered entries use broad locations from the cited sources. Current sources do not provide a precise birth location, death date, or detailed off-Island travel route.",
@@ -644,34 +566,9 @@
           { label: "New Amsterdam", place: "Lower Manhattan", coordinates: [-74.006, 40.705], reason: "Dutch colonial records connect Penhawitz to New Netherland diplomacy." }
         ]
       },
-      "momoweta": {
-        title: "Momoweta associated places",
-        note: "Broad places connected to Corchaug and North Fork records.",
-        places: [
-          { label: "Corchaug homeland", place: "North Fork / Cutchogue area", coordinates: [-72.487, 41.011], reason: "Momoweta is remembered as a Corchaug sachem." },
-          { label: "Southold records", place: "Southold", coordinates: [-72.427, 41.064], reason: "North Fork records and colonial documentation preserve this connection." },
-          { label: "Peconic Bay diplomacy", place: "Peconic Bay", coordinates: [-72.460, 40.970], reason: "The Corchaug record context sits within the Peconic and North Fork landscape." }
-        ]
-      },
-      "poggatacut-sachem-of-the-manhassets-of-shelter-island": {
-        title: "Poggatacut associated places",
-        note: "Broad places from Manhansett and Shelter Island records.",
-        places: [
-          { label: "Manhansett homeland", place: "Shelter Island", coordinates: [-72.340, 41.070], reason: "Poggatacut is remembered as a Manhansett sachem of Shelter Island." },
-          { label: "Sylvester Manor area", place: "Shelter Island", coordinates: [-72.349, 41.084], reason: "Shelter Island colonial records and later histories preserve Manhansett place and leadership history." },
-          { label: "Peconic Bay connection", place: "Peconic Bay", coordinates: [-72.460, 40.970], reason: "Shelter Island is connected with wider Peconic and eastern Long Island diplomacy." }
-        ]
-      },
-      "sachem-tackapousha": {
-        title: "Tackapousha associated places",
-        note: "Broad places tied to western Long Island diplomacy. Sensitive sites are not pinned.",
-        places: [
-          { label: "Massapequa homeland", place: "Massapequa / Fort Neck area", coordinates: [-73.462, 40.681], reason: "Tackapousha is remembered as a Massapequa leader." },
-          { label: "Hempstead Plains", place: "Hempstead", coordinates: [-73.621, 40.706], reason: "The cited records connect him to Hempstead boundary and conference records." },
-          { label: "Merrick / Mericock", place: "Merrick", coordinates: [-73.555, 40.667], reason: "Western Long Island diplomacy included Merrick/Mericock interests." },
-          { label: "Rockaway / Jamaica Bay", place: "Rockaway and Jamaica Bay", coordinates: [-73.835, 40.592], reason: "The treaty and alliance records connect Massapequa leadership with Rockaway and other western communities." }
-        ]
-      },
+      "momoweta": { ...window.NLI_BIOGRAPHY_PATH_DATA?.["momoweta"] },
+      "poggatacut-sachem-of-the-manhassets-of-shelter-island": { ...window.NLI_BIOGRAPHY_PATH_DATA?.["poggatacut-sachem-of-the-manhassets-of-shelter-island"] },
+      "sachem-tackapousha": { ...window.NLI_BIOGRAPHY_PATH_DATA?.["sachem-tackapousha"] },
       "sagamore-raseokan-ratiocanof-matinnicoke-matinecock": {
         title: "Raseokan/Ratiocan associated places",
         note: "Broad North Shore places named in Matinecock records.",
@@ -700,15 +597,7 @@
           { label: "Peconic headwaters", place: "Wading River / Peconic headwaters area", coordinates: [-72.830, 40.930], reason: "The deed record connects Warawakmy to the headwaters boundary language." }
         ]
       },
-      "nasseconset-sachem-of-the-nissequogue": {
-        title: "Nasseconset associated places",
-        note: "Broad places connected with land and place-name records.",
-        places: [
-          { label: "Nissequogue River", place: "Nissequogue River", coordinates: [-73.203, 40.906], reason: "Nasseconset is tied to the Nissequogue River records." },
-          { label: "Smithtown", place: "Smithtown", coordinates: [-73.200, 40.856], reason: "Records connect Nasseconset with land that became part of Smithtown." },
-          { label: "Crab Meadow / Katawamake", place: "Crab Meadow area", coordinates: [-73.312, 40.928], reason: "Nearby place-name and land records provide context." }
-        ]
-      },
+      "nasseconset-sachem-of-the-nissequogue": { ...window.NLI_BIOGRAPHY_PATH_DATA?.["nasseconset-sachem-of-the-nissequogue"] },
       "keeossechok-sachem-of-the-secatogue": {
         title: "Keeossechok associated places",
         note: "Broad places connected with the brief deed and place-name record.",
@@ -736,15 +625,7 @@
           { label: "Montaukett diplomacy", place: "Montauk", coordinates: [-71.944, 41.036], reason: "The cited records link Mandush with regional diplomacy involving Montaukett leadership." }
         ]
       },
-      "sunksqua-weany-pametsechs": {
-        title: "Weany/Pametsechs associated places",
-        note: "Broad places connected with deed and land-record references to women's leadership.",
-        places: [
-          { label: "Shinnecock homeland", place: "Shinnecock, Southampton", coordinates: [-72.432, 40.884], reason: "Weany is remembered in Shinnecock leadership records." },
-          { label: "Quogue lands", place: "Quogue", coordinates: [-72.581, 40.823], reason: "Quogue-area land records preserve Weany's name." },
-          { label: "Canoe Place / Niamuck", place: "Canoe Place", coordinates: [-72.504, 40.884], reason: "The South Fork corridor provides broader context for Shinnecock and neighboring records." }
-        ]
-      },
+      "sunksqua-weany-pametsechs": { ...window.NLI_BIOGRAPHY_PATH_DATA?.["sunksqua-weany-pametsechs"] },
       "chief-mahue-mayhew-of-unkechaug": {
         title: "Mahue/Mayhew associated places",
         note: "Broad places connected with Unkechaug and Setauket records.",
@@ -897,7 +778,7 @@
     const SITE_DETAIL_FIELDS = SHARED_FIELDS.mobileSiteDetail;
     const WIKI_INDEX_FIELDS = SHARED_FIELDS.mobileWikiIndex;
     const WIKI_INDEX_URL = "assets/data/mobile-wiki-index.json";
-    const WIKI_INDEX_VERSION = "20260901-biography-introductions-v1";
+    const WIKI_INDEX_VERSION = "20260909-native-animals-v2";
     const WIKI_DETAIL_FIELDS = SHARED_FIELDS.mobileWikiDetail;
     const TIMELINE_FIELDS = SHARED_FIELDS.timeline;
     const BASIC_TIMELINE_FIELDS = SHARED_FIELDS.basicTimeline;
@@ -1157,6 +1038,7 @@
       learningPaths: [],
       learningPathBySlug: new Map(),
       learningPathsLoaded: false,
+      activeLearningPathSlug: "",
       knowledgebaseSortMode: "quantity",
       siteDetailCache: new Map(),
       siteDetailManifestPromise: null,
@@ -1264,6 +1146,8 @@
       nativeMovingBiographyItems: [],
       mobileMovingBiographyMarkerQueueTimer: null,
       mobileMovingDogMarker: null,
+      mobileNativeAnimalMarkers: new Map(),
+      mobileNativeAnimalClock: { elapsed: 0, lastAt: null },
       mobileMovingWhaleMarker: null,
       mobileMovingAmethystShipMarker: null,
       mobileMovingMarkerTimer: null,
@@ -1624,6 +1508,64 @@
       window.clearTimeout(state.mobileActivityIdentitySyncTimer);
       state.mobileActivityIdentitySyncTimer = window.setTimeout(() => syncMobileActivityUnreadIdentity(), 0);
     }
+
+    const contributorInvitationEl = document.getElementById("contributor-invitation");
+    const CONTRIBUTOR_INVITATION_DISMISSED_KEY = "nli-contributor-invitation-dismissed";
+    let contributorInvitationDismissed = false;
+    let contributorInvitationTimer = null;
+
+    function contributorInviteDismissed() {
+      try { return contributorInvitationDismissed || localStorage.getItem(CONTRIBUTOR_INVITATION_DISMISSED_KEY) === "1"; }
+      catch { return contributorInvitationDismissed; }
+    }
+
+    function dismissContributorInvite(persist = true) {
+      window.clearTimeout(contributorInvitationTimer);
+      contributorInvitationTimer = null;
+      if (persist) {
+        contributorInvitationDismissed = true;
+        try { localStorage.setItem(CONTRIBUTOR_INVITATION_DISMISSED_KEY, "1"); } catch { /* Keep dismissal for this session when storage is unavailable. */ }
+      }
+      if (contributorInvitationEl?.open) contributorInvitationEl.close();
+    }
+
+    function scheduleContributorInvite(delay = 8000) {
+      window.clearTimeout(contributorInvitationTimer);
+      contributorInvitationTimer = null;
+      if (!contributorInvitationEl || state.profile || state.passwordResetToken || contributorInviteDismissed()) return;
+      contributorInvitationTimer = window.setTimeout(() => {
+        contributorInvitationTimer = null;
+        if (state.profile || state.passwordResetToken || contributorInviteDismissed() || contributorInvitationEl.open) return;
+        const busy = document.hidden || state.mobileStartupRendering
+          || document.querySelector('.sheet.open, .detail.open, dialog[open], .mobile-more-menu[open], .mobile-layer-menu[open], #language-quiz-modal:not([hidden]), #plant-photo-viewer:not([hidden]), #mobile-startup-spotlight:not([hidden])')
+          || (state.researchQuestionInstance?.dialog && !state.researchQuestionInstance.dialog.hidden)
+          || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "");
+        if (busy) { scheduleContributorInvite(4000); return; }
+        contributorInvitationEl.showModal();
+      }, delay);
+    }
+
+    contributorInvitationEl?.addEventListener("cancel", event => {
+      event.preventDefault();
+      dismissContributorInvite();
+    });
+    contributorInvitationEl?.addEventListener("click", event => {
+      const account = event.target.closest?.("[data-contributor-invitation-account]");
+      if (account) {
+        dismissContributorInvite();
+        if (state.profile) return;
+        openSheet(loginSheetEl);
+        const registering = account.dataset.contributorInvitationAccount === "register";
+        registerPanelEl.hidden = !registering;
+        passwordResetPanelEl.hidden = true;
+        const target = registering ? registerNameEl : loginEmailEl;
+        // Take the user directly to the form they chose.
+        if (registering) registerPanelEl.scrollIntoView({ block: "start" });
+        target?.focus({ preventScroll: true });
+        return;
+      }
+      if (event.target === contributorInvitationEl || event.target.closest?.("[data-contributor-invitation-dismiss]")) dismissContributorInvite();
+    });
 
     function expireProfileSession(message = "Your login expired. Please log back in.") {
       if (!state.profile) return;
@@ -3071,7 +3013,7 @@
         }))
         : "";
       return `
-        <section class="section section-history-moments"${options.overviewField ? ` data-content-section-field="${escapeHtml(options.overviewField)}"` : ""}>
+        <section class="section section-history-moments${overviewSource ? " has-source" : ""}"${options.overviewField ? ` data-content-section-field="${escapeHtml(options.overviewField)}"` : ""}>
           <h3>${escapeHtml(title)}</h3>
           ${overviewHtml ? `
             <div class="historic-moments-overview section-content">${overviewHtml}</div>
@@ -8414,6 +8356,9 @@
         title: "Dog",
         feature_kind: "moving-dog"
       });
+      for (const {animal,marker} of state.mobileNativeAnimalMarkers.values()) {
+        consider(marker,{wiki_slug:animal.slug,title:animal.title,feature_kind:"native-animal"});
+      }
       const whalingProperties = state.siteBySlug.has(WHALING_FEATURE_SLUG)
         ? { slug: WHALING_FEATURE_SLUG, title: "Whaling", feature_kind: "moving-whale" }
         : { wiki_slug: WHALING_FEATURE_SLUG, title: "Whaling", feature_kind: "moving-whale" };
@@ -8598,6 +8543,7 @@
       ".mobile-startup-spotlight",
       ".plant-photo-viewer",
       ".language-quiz-modal",
+      ".contributor-invitation",
       ".mapboxgl-control-container",
       ".mapboxgl-ctrl",
       ".maplibregl-control-container",
@@ -9996,50 +9942,104 @@
         .catch(error => showBanner(error.message || "Could not save this visit yet."));
     }
 
-    async function checkInAtSite(site) {
-      if (!site || site.slug === "address-result") return;
+    let mobileCheckinPending = false;
+
+    async function checkInAtSite(site, button = detailBodyEl?.querySelector("#check-in-site")) {
+      if (mobileCheckinPending) {
+        showBanner("A check-in is already in progress. Please wait.");
+        return;
+      }
+      const container = button?.closest("[data-mobile-visit-actions], .actions");
+      const status = container?.querySelector("[data-checkin-status]") || document.createElement("p");
+      status.className = "form-status checkin-status";
+      status.dataset.checkinStatus = "";
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      const report = message => {
+        status.textContent = message;
+        if (container?.isConnected && !status.isConnected) container.append(status);
+        showBanner(message);
+      };
+      if (!site || site.slug === "address-result") {
+        report("Open a mapped place before checking in.");
+        return;
+      }
       if (!PROFILE_UTILS.isEligiblePublicVisitSite(site)) {
-        showBanner("This place is not available for public check-ins.");
+        report("This place is not available for public check-ins.");
         return;
       }
       if (!isApprovedContributor()) {
         openSheet(loginSheetEl);
-        showBanner("Login before checking in.");
+        report("Login before checking in.");
         return;
       }
       if (!navigator.geolocation) {
-        showBanner("Location is not available on this device.");
+        report("Location is not available on this device.");
         return;
       }
-      const center = site.center || site.checkinCenter || geometryCenter(site.geojson || site.display_geojson || null);
+      const center = site.checkinCenter || site.center || geometryCenter(site.geojson || site.display_geojson || null);
       if (!center) {
-        showBanner("This site does not have a public check-in location.");
+        report("This site does not have a public check-in location.");
         return;
       }
-      navigator.geolocation.getCurrentPosition(position => {
+      const bounded = (work, milliseconds, message) => new Promise((resolve, reject) => {
+        const timer = window.setTimeout(() => reject(new Error(message)), milliseconds);
+        Promise.resolve().then(work).then(resolve, reject).finally(() => window.clearTimeout(timer));
+      });
+      mobileCheckinPending = true;
+      const originalLabel = button?.textContent || "Check in";
+      const phase = label => {
+        if (button) {
+          button.disabled = true;
+          button.setAttribute("aria-busy", "true");
+          button.textContent = label;
+        }
+      };
+      try {
+        phase("Finding location…");
+        report("Checking your location. Allow location access if prompted.");
+        const position = await bounded(() => new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, error => {
+            const message = error?.code === 1
+              ? "Location access is off. Allow location for On This Site in your device or browser settings, then try again."
+              : error?.code === 3
+                ? "Location took too long. Move somewhere with a clearer signal and try again."
+                : "Could not find your location. Check that location services are on, then try again.";
+            reject(new Error(message));
+          }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
+        }), 15000, "Location did not respond. Check location permissions and try again.");
         const current = [position.coords.longitude, position.coords.latitude];
         const miles = milesBetween(current, center);
-        if (!Number.isFinite(miles)) {
-          showBanner("Could not compare your location with this site.");
-          return;
-        }
+        if (!Number.isFinite(miles)) throw new Error("Could not compare your location with this site.");
         if (miles > SITE_CHECKIN_RADIUS_MILES) {
-          showBanner(PROFILE_UTILS.checkinDistanceMessage(miles, { radiusMiles: SITE_CHECKIN_RADIUS_MILES }));
+          report(PROFILE_UTILS.checkinDistanceMessage(miles, { radiusMiles: SITE_CHECKIN_RADIUS_MILES }));
           return;
         }
-        recordSiteVisit(site, { distanceMiles: miles })
-          .then(result => {
-            showBanner(result?.earned ? `Check-in saved: ${site.title}` : "You already checked in here.");
-            refreshMobileVisitActions(site, { revealObservation: Boolean(result?.earned) });
-            refreshMobileCheckinHistory(site);
-            renderRewards();
-            renderProfile();
-            renderProfiles();
-          })
-          .catch(error => showBanner(error.message || "Could not save this check-in yet."));
-      }, () => {
-        showBanner("Could not get your current location.");
-      }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
+        phase("Saving check-in…");
+        report("Location confirmed. Saving your check-in…");
+        const result = await bounded(() => recordSiteVisit(site, { distanceMiles: miles }), 45000,
+          "Could not confirm the check-in yet. Check your connection and try again; any saved check-in will be recognized.");
+        if (!result?.record) throw new Error("Your check-in was not confirmed. Log in again and retry.");
+        if (state.selectedSite?.slug === site.slug) {
+          refreshMobileVisitActions(site, { revealObservation: Boolean(result.earned) });
+          refreshMobileCheckinHistory(site);
+        }
+        report(result.earned ? `Check-in saved: ${site.title}` : "You already checked in here.");
+        renderRewards();
+        renderProfile();
+        renderProfiles();
+      } catch (error) {
+        report(/Failed to fetch|NetworkError|Load failed/i.test(error.message || "")
+          ? "Could not reach the server. Check your connection and try again."
+          : error.message || "Could not save this check-in. Please try again.");
+      } finally {
+        mobileCheckinPending = false;
+        if (button?.isConnected) {
+          button.disabled = false;
+          button.removeAttribute("aria-busy");
+          button.textContent = originalLabel;
+        }
+      }
     }
 
     function requireRegisteredContributor() {
@@ -11333,6 +11333,7 @@
     }
 
     function enrichedPlantObservationFields(fields = {}) {
+      if (PLANT_UTILS.plantSpeciesProfile(fields)) return fields;
       const match = plantGuideMatchFromFields(fields);
       if (!match) return fields;
       return {
@@ -11852,13 +11853,7 @@
     }
 
     function plantObservationFactsHtml(fields = {}) {
-      return `
-        <div class="site-plant-facts">
-          ${plantObservationFactRows(fields).map(([label, value]) => `
-            <div class="site-plant-fact"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span></div>
-          `).join("")}
-        </div>
-      `;
+      return PLANT_UTILS.plantObservationInsightsHtml(fields, { escapeHtml, cleanText: publicCleanText });
     }
 
     function openPlantPhotoViewer(src, title = "Plant photo") {
@@ -11886,6 +11881,7 @@
         <div class="site-plant-grid${territoryGrid ? " territory-plant-grid" : ""}" aria-label="Plants reported in ${escapeHtml(item.title || "this place")}">
           <h4>${territoryGrid ? "Plant Inventory for This Ancestral Land" : "Plants Identified at This Site"}</h4>
           <p class="detail-meta">${escapeHtml(knownPlantStatsText(item, observations))}</p>
+          <p class="plant-inventory-guidance">Photo IDs are suggestions. Observe without picking, eating or disturbing plants.</p>
           <div class="site-plant-seasons">
             ${seasonGroups.map(group => `
               <section class="site-plant-season" aria-label="${escapeHtml(group.label)} plant observations">
@@ -11906,7 +11902,7 @@
               const context = publicPlantText(fields.context || guideMatch?.context || "");
               const rawStatusLabel = fields.status_label || plantStatusLabel(fields.identification);
               const statusLabel = /need|review|unavailable|pending/i.test(rawStatusLabel) ? "visitor suggested" : rawStatusLabel;
-              const indigenousName = fields.algonquian || "Indigenous name not yet added";
+              const indigenousName = fields.algonquian || "";
               const commonName = publicPlantText(fields.name, "Plant observation").replace(/\s*\([^)]*needs review[^)]*\)/ig, "");
               const scientificName = fields.identification || "Scientific name not yet verified";
               const imageLabel = `${commonName}${scientificName && scientificName !== "Scientific name not yet verified" ? ` - ${scientificName}` : ""}`;
@@ -11918,20 +11914,14 @@
               const photoDate = fields.photo_taken_at || sourceRecord.public_submitted_at || sourceRecord.created_at || "";
               const detailLines = [
                 fields.source ? `Identification source: ${fields.source}` : "",
-                fields.guidance ? `Visitor guidance: ${publicPlantText(fields.guidance)}` : "",
-                fields.native_status ? `Native status: ${publicPlantText(fields.native_status)}` : "Native status not yet documented",
-                fields.invasive_status ? `Invasive status: ${publicPlantText(fields.invasive_status)}` : "Invasive status not yet documented",
-                fields.medicinal_use ? `Medicinal use: ${publicPlantText(fields.medicinal_use)}` : "Medicinal use not shown without a source",
-                fields.endangered_status ? `Endangered/sensitive status: ${fields.endangered_status}` : "Endangered/sensitive status not assessed",
-                fields.vocabulary ? `Vocabulary: ${fields.vocabulary}` : "Indigenous name not yet added",
-                fields.edible_safety ? `Safety: ${publicPlantText(fields.edible_safety)}` : "Safety: verify with a field guide or expert before touching, eating, or using"
+                fields.vocabulary ? `Vocabulary: ${fields.vocabulary}` : ""
               ].filter(Boolean);
               return `
                 <article class="site-plant-card" id="${escapeHtml(cardId)}">
                   ${attachment ? `<button class="site-plant-image-button" type="button" data-plant-photo-view="${escapeHtml(attachment)}" data-plant-photo-title="${escapeHtml(imageLabel)}" aria-label="Open larger photo of ${escapeHtml(commonName)}"><img src="${escapeHtml(attachment)}" alt="" loading="lazy" decoding="async"></button>` : ""}
                   <div class="site-plant-card-body">
-                    <span class="site-plant-card-title">${plantWikiLinkHtml(indigenousName, guideMatch)}</span>
-                    <span>${plantWikiLinkHtml(commonName, guideMatch)}</span>
+                    <span class="site-plant-card-title">${plantWikiLinkHtml(commonName, guideMatch)}</span>
+                    ${indigenousName ? `<span>${plantWikiLinkHtml(indigenousName, guideMatch)}</span>` : ""}
                     <span><em>${plantWikiLinkHtml(scientificName, guideMatch)}</em></span>
                     <span class="site-plant-status-pill">${escapeHtml(pending ? "Pending review" : statusLabel)}</span>
                     ${plantObservationFactsHtml(fields)}
@@ -11940,7 +11930,7 @@
                     <span class="site-plant-card-location">${escapeHtml(locationText)}</span>
                     <span class="site-plant-card-meta">
                       ${author ? `<button class="site-plant-contributor" type="button" data-open-mobile-profile="${escapeHtml(contributorKey)}">${escapeHtml(contributor)}</button>` : escapeHtml(contributor)}
-                      ${photoDate ? ` - photographed ${escapeHtml(new Date(photoDate).toLocaleDateString())}` : ""}${fields.confidence ? ` - ${escapeHtml(fields.confidence)}% confidence` : ""}
+                      ${photoDate ? ` - photographed ${escapeHtml(new Date(photoDate).toLocaleDateString())}` : ""}${fields.confidence ? ` - ${escapeHtml(fields.confidence)}% photo match` : ""}
                     </span>
                     ${mapCoordinates ? `<button class="site-plant-card-action site-plant-map-link" type="button" data-show-plant-on-map="${escapeHtml(String(sourceRecord.id || ""))}">Show observation on map</button>` : ""}
                     ${territoryGrid && fields.site_slug && fields.site_slug !== item.slug ? `<button class="site-plant-card-action site-plant-site-link" type="button" data-slug="${escapeHtml(fields.site_slug)}">Open ${escapeHtml(fields.site_title || "linked site")}</button>` : ""}
@@ -11948,8 +11938,7 @@
                     ${guideMatch ? (plantWiki?.slug
                       ? `<button class="site-plant-card-action" type="button" data-open-plant-wiki="${escapeHtml(plantWiki.slug)}">Open plant wiki</button>`
                       : `<button class="site-plant-card-action" type="button" data-open-native-plants="${escapeHtml(guideMatch.common)}">Open plant guide</button>`)
-                      : `<span class="site-plant-card-meta">Plant guide not yet added.</span>`}
-                    <button class="site-plant-card-action" type="button" data-plant-observation-details="${escapeHtml(detailsId)}">View observation details</button>
+                      : ""}
                     ${isAdminContributor() ? `<button class="site-plant-card-action" type="button" data-delete-plant-observation="${escapeHtml(sourceRecord.id)}">Delete contribution</button>` : ""}
                     <details class="site-plant-card-details" id="${escapeHtml(detailsId)}">
                       <summary>Observation details</summary>
@@ -12877,6 +12866,7 @@
     }
 
     function mobileBiographyPathActionText(place = {}) {
+      if (place.actionLabel) return stripHtml(place.actionLabel).replace(/\s+/g, " " ).trim();
       const text = `${place.label || ""} ${place.place || ""} ${place.reason || ""}`.toLowerCase();
       if (/teach|teacher|school|training|college/.test(text)) return "to teach";
       if (/testif|testimony|voting|rights/.test(text)) return "for testimony";
@@ -12893,6 +12883,9 @@
 
     function mobileBiographyPathActionLabel(person, place = {}) {
       const who = mobileBiographyPathCompactPersonName(person);
+      // Authored event labels also cover deed locations without inventing a visit.
+      const authoredAction = stripHtml(place.actionLabel || "").replace(/\s+/g, " ").trim();
+      if (authoredAction) return mobileBiographyPathCompactWords(`${who}: ${authoredAction}`, 10);
       const where = mobileBiographyPathCompactPlace(place);
       const action = mobileBiographyPathActionText(place);
       let label = `${who} visits ${where} ${action}`.replace(/\s+/g, " ").trim();
@@ -13049,6 +13042,7 @@
 
     function mobileBiographyPlaceMatchesEvent(place, event) {
       if (!place || !event) return false;
+      if (place.eventTitle) return place.eventTitle === event.title;
       const placeYearMatch = [place.dateLabel, place.date_label, place.label].filter(Boolean).join(" ").match(/\b(1[5-9]\d{2}|20\d{2})\b/);
       const eventYearMatch = [event.start_year, event.date_label, event.title].filter(value => value !== null && value !== undefined).join(" ").match(/\b(1[5-9]\d{2}|20\d{2})\b/);
       if (placeYearMatch && eventYearMatch) {
@@ -13321,8 +13315,8 @@
       if (cached) return cached;
       const segments = route.slice(0, -1).map((start, index) => {
         const end = route[index + 1];
-        return { start, end, distance: milesBetween(start, end) || 0 };
-      }).filter(segment => segment.start?.every(Number.isFinite) && segment.end?.every(Number.isFinite));
+        return { start, end, distance: start?.skipToNext || end?.skipFromPrevious ? 0 : milesBetween(start, end) || 0 };
+      }).filter(segment => segment.distance > 0 && segment.start?.every(Number.isFinite) && segment.end?.every(Number.isFinite));
       const model = {
         segments,
         total: segments.reduce((sum, segment) => sum + segment.distance, 0)
@@ -13426,7 +13420,7 @@
       const cycleDuration = continuous
         ? routeDuration * 2
         : routeDuration + (MOBILE_BIOGRAPHY_MARKER_FADE_MS * 2) + MOBILE_BIOGRAPHY_MARKER_RESET_MS;
-      const signature = `${continuous ? "continuous" : "reset"}|${routeDuration}|${route.length}|${route[0]?.join(",") || ""}|${route[route.length - 1]?.join(",") || ""}`;
+      const signature = `${continuous ? "continuous" : "reset"}|${routeDuration}|${TIMELINE_UTILS.biographyRouteSignature(route)}`;
       const slug = String(item?.slug || "");
       let controller = state.mobileBiographyMotionControllers.get(slug);
       if (!controller) {
@@ -13441,8 +13435,11 @@
         state.mobileBiographyMotionControllers.set(slug, controller);
       } else {
         if (controller.signature !== signature || controller.cycleDuration !== cycleDuration) {
-          const normalized = Math.max(0, Math.min(1, Number(controller.progress) || 0));
-          controller.elapsedMs = normalized * cycleDuration;
+          const model = mobileMovingRouteModel(route);
+          const moves = model.segments.map(segment => ({ ...segment, type: "move", duration: segment.distance / model.total * routeDuration }));
+          if (continuous) moves.push(...moves.slice().reverse().map(segment => ({ ...segment, start: segment.end, end: segment.start })));
+          controller.elapsedMs = TIMELINE_UTILS.nearestBiographyRouteElapsed(moves, controller.coordinates, controller.elapsedMs);
+          controller.lastFrameAt = now;
           controller.cycleDuration = cycleDuration;
           controller.signature = signature;
         }
@@ -13464,7 +13461,9 @@
         }
         controller.progress = controller.elapsedMs / cycleDuration;
       }
-      return mobileMovingBiographyLoop(route, routeDuration, 0, controller.elapsedMs, { continuous });
+      const motion = mobileMovingBiographyLoop(route, routeDuration, 0, controller.elapsedMs, { continuous });
+      controller.coordinates = motion.coordinates;
+      return motion;
     }
 
     function mobileMovingRouteDuration(route = []) {
@@ -13595,12 +13594,13 @@
     }
 
     function mobileBiographyUniqueRoute(route = []) {
-      const seen = new Set();
+      let previous = null;
       return route.filter(coordinates => {
         if (!Array.isArray(coordinates) || !coordinates.every(Number.isFinite)) return false;
-        const key = `${Number(coordinates[0]).toFixed(5)},${Number(coordinates[1]).toFixed(5)}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
+        const duplicate = previous && coordinates[0] === previous[0] && coordinates[1] === previous[1]
+          && !previous.skipToNext && !coordinates.skipFromPrevious;
+        if (duplicate) return false;
+        previous = coordinates;
         return true;
       });
     }
@@ -13696,7 +13696,7 @@
           if (path?.animate === false) return null;
           if (!path?.places?.length) return null;
           const configuredRoute = mobileBiographyUniqueRoute((path.routePlaces?.length ? path.routePlaces : path.places)
-            .map(place => Array.isArray(place) ? place : place?.coordinates)
+            .map(place => Array.isArray(place) ? place : place?.coordinates && Object.assign(place.coordinates.slice(), { skipToNext: place.skipToNext, skipFromPrevious: place.skipFromPrevious }))
             .filter(coords => Array.isArray(coords) && coords.every(Number.isFinite)));
           const route = mobileBiographyLocalWanderRoute(slug, configuredRoute, path);
           if (route.length < 2) return null;
@@ -13737,7 +13737,7 @@
     }
 
     function syncMobileFollowedBiographyCamera(item, motion, now = performance.now(), options = {}) {
-      if (!state.map || !item || item.slug !== state.mobileFollowedBiographySlug || !motion?.coordinates?.every(Number.isFinite)) return;
+      if (!state.map || state.mobileBiographyFollowCameraMoving || !item || item.slug !== state.mobileFollowedBiographySlug || !motion?.coordinates?.every(Number.isFinite)) return;
       if (!options.force && now - Number(state.mobileBiographyFollowLastCenteredAt || 0) < MOBILE_MOVING_MARKER_INTERVAL_MS) return;
       state.mobileBiographyFollowCameraMoving = true;
       try {
@@ -13781,6 +13781,8 @@
     }
 
     function removeMobileMovingDomMarkers() {
+      for (const {marker} of state.mobileNativeAnimalMarkers.values()) marker.remove();
+      state.mobileNativeAnimalMarkers.clear();
       for (const entry of state.mobileMovingBiographyMarkers.values()) entry.marker?.remove?.();
       state.mobileMovingBiographyMarkers.clear();
       state.mobileMovingDogMarker?.remove?.();
@@ -13842,6 +13844,15 @@
         });
       });
       const dogMotion = mobileMovingPingPong(MOBILE_DOG_ROUTE, MOBILE_DOG_ONE_WAY_MS, MOBILE_DOG_START_OFFSET_MS, motionNow);
+      const animalElapsed = MAP_UTILS.stepNativeAnimalClock(state.mobileNativeAnimalClock,motionNow);
+      for (const animal of MAP_UTILS.nativeAnimals || []) {
+        const motion = MAP_UTILS.nativeAnimalMotion(animal,animalElapsed,window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+        features.push({type:"Feature",geometry:{type:"Point",coordinates:motion.coordinates},properties:{
+          native_kind:"wiki",native_key:animal.slug,moving_kind:"animal",
+          icon_key:`nli-icon-animal-${animal.slug}${motion.direction === "left" ? "-left" : ""}`,
+          title:animal.title,label:animal.title,show_label:false,direction:motion.direction
+        }});
+      }
       features.push({
         type: "Feature",
         geometry: { type: "Point", coordinates: dogMotion.coordinates },
@@ -13980,11 +13991,14 @@
         state.mobileMovingBiographyMarkerQueueTimer = null;
       }
       const items = mobileBiographyIconsEnabled() ? mobileMovingBiographyItems() : [];
-      const wanted = new Set(items.map(item => item.slug));
+      const wanted = new Map(items.map(item => [item.slug, item]));
       for (const [slug, entry] of state.mobileMovingBiographyMarkers) {
         if (!wanted.has(slug)) {
           entry.marker?.remove?.();
           state.mobileMovingBiographyMarkers.delete(slug);
+        } else {
+          entry.item = wanted.get(slug);
+          updateMobileMovingBiographyMarker(entry.item, entry.marker, performance.now());
         }
       }
       const missing = items.filter(item => !state.mobileMovingBiographyMarkers.has(item.slug));
@@ -14026,6 +14040,7 @@
     }
 
     function ensureMobileMovingDogMarker() {
+      ensureMobileNativeAnimalMarkers();
       if (!state.map || !window.mapboxgl?.Marker) return;
       if (nativeMapBridgeAvailable()) {
         state.mobileMovingDogMarker?.remove?.();
@@ -14050,6 +14065,7 @@
     }
 
     function updateMobileMovingDogMarker(now = performance.now()) {
+      updateMobileNativeAnimalMarkers(now);
       if (!state.mobileMovingDogMarker) return;
       const motion = mobileMovingPingPong(MOBILE_DOG_ROUTE, MOBILE_DOG_ONE_WAY_MS, MOBILE_DOG_START_OFFSET_MS, now);
       state.mobileMovingDogMarker.setLngLat(motion.coordinates);
@@ -14065,6 +14081,35 @@
           <span class="mobile-moving-whale-shell" aria-hidden="true"><img src="${escapeHtml(WHALING_WHALE_ICON_URL)}" alt=""></span>
         </button>
       `;
+    }
+
+    function ensureMobileNativeAnimalMarkers() {
+      if (!state.map || !window.mapboxgl?.Marker || nativeMapBridgeAvailable()) return;
+      for (const animal of MAP_UTILS.nativeAnimals || []) {
+        if (state.mobileNativeAnimalMarkers.has(animal.slug)) continue;
+        const element = document.createElement("div");
+        element.className = "native-animal-map-icon";
+        element.innerHTML = MAP_UTILS.nativeAnimalHtml(animal);
+        const motion = MAP_UTILS.nativeAnimalMotion(animal,state.mobileNativeAnimalClock.elapsed);
+        const marker = new mapboxgl.Marker({element,anchor:"center"}).setLngLat(motion.coordinates).addTo(state.map);
+        const button = element.querySelector(".native-animal-marker");
+        bindMobileMovingMarkerButton(button,()=> {
+          const point = marker.getLngLat();
+          openWikiArticle(animal.slug,{focus:false,mapCenter:[point.lng,point.lat]});
+        });
+        state.mobileNativeAnimalMarkers.set(animal.slug,{animal,marker,button});
+      }
+      updateMobileNativeAnimalMarkers(performance.now());
+    }
+
+    function updateMobileNativeAnimalMarkers(now) {
+      const elapsed = MAP_UTILS.stepNativeAnimalClock(state.mobileNativeAnimalClock,now);
+      const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      for (const {animal,marker,button} of state.mobileNativeAnimalMarkers.values()) {
+        const motion = MAP_UTILS.nativeAnimalMotion(animal,elapsed,reduced);
+        marker.setLngLat(motion.coordinates);
+        button.dataset.direction = motion.direction;
+      }
     }
 
     function mobileMovingWhaleCenter() {
@@ -14221,6 +14266,7 @@
         stopMobileBiographyFollow({ user: true });
       });
       state.map.on("moveend", () => {
+        if (state.mobileBiographyFollowCameraMoving) return;
         updateMobileMovingFeatureMarkers(performance.now());
       });
     }
@@ -14386,7 +14432,8 @@
       const contentImage = firstContentImage(article.content || "");
       const image = mobileSnapshotImageUrl(contentImage);
       const sourceMediaHero = /^\s*<figure\b[^>]*\bdata-source-media=/i.test(article.content || "");
-      const articleTimelineHtml = article.content ? sectionTimelineHtml(cleanHtml(article.content)) : "";
+      const articleTimelineHtml = article.content && !article.content.includes('class="biography-narrative"')
+        ? sectionTimelineHtml(cleanHtml(article.content)) : "";
       const rawArticleContentHtml = article.content ? (articleTimelineHtml || cleanHtml(article.content)) : "";
       const dedupedArticleContentHtml = removeRepeatedContent(removeFirstContentImageFromHtml(rawArticleContentHtml, contentImage));
       const linked = new Set();
@@ -14802,6 +14849,7 @@
           if (!pathRows.length) throw error;
         }
       }
+      [pathRows, stopRows] = window.NLILearningHub.mergePathRows(pathRows, stopRows, state.sites);
       const stopsByPath = new Map();
       stopRows.forEach((row, index) => {
         const pathId = String(relationId(row.learning_path_id) || "");
@@ -14847,38 +14895,24 @@
       return state.learningPaths;
     }
 
-    function mobileLearningPathCardHtml(path, index) {
-      const completed = completedMobileLearningPathStops(path.slug).size;
-      const meta = [
-        path.estimatedMinutes ? `${path.estimatedMinutes} min` : "",
-        path.recommendedGrades || "",
-        `${completed}/${path.stops.length} stops complete`
-      ].filter(Boolean).join(" · ");
-      return `
-        <button class="site-card mobile-learning-path-card" type="button" data-mobile-learning-path-open="${escapeHtml(path.slug)}">
-          <span class="thumb empty">${escapeHtml(String(index + 1))}</span>
-          <span>
-            <h2>${escapeHtml(path.title)}</h2>
-            <p>${escapeHtml(path.summary || "Open this guided learning path.")}</p>
-            <small>${escapeHtml(meta)}</small>
-          </span>
-        </button>
-      `;
-    }
-
     async function openMobileLearningPathsPanel(options = {}) {
+      state.activeLearningPathSlug = "";
       detailTitleEl.innerHTML = `<h2>Learning Paths</h2><p class="detail-meta">Guided learning</p>`;
       detailBodyEl.innerHTML = `<p class="summary">Loading guided learning paths...</p>`;
       detailEl.classList.add("open");
       syncMobilePanelAccessibility();
       try {
         const paths = await loadMobileLearningPaths(options);
-        openInfoPanel("Learning Paths", `${paths.length} guided paths`, `
-          <p class="summary">Choose a path to move through connected places, questions, and short activities. Your completed stops are saved on this device.</p>
-          <section class="section compact-list mobile-learning-path-list">
-            ${paths.map(mobileLearningPathCardHtml).join("") || `<p class="summary">No public learning paths are available yet.</p>`}
-          </section>
-        `);
+        openInfoPanel("Learn", "Explore Native Long Island", '<div data-learning-hub-mount></div>');
+        window.NLILearningHub.mount(detailBodyEl.querySelector("[data-learning-hub-mount]"), {
+          action: "data-mobile-learning-path-open",
+          paths: paths.map(path => ({
+            slug: path.slug, title: path.title, summary: path.summary, theme: path.theme,
+            minutes: path.estimatedMinutes, grades: path.recommendedGrades,
+            question: path.keyQuestions[0], stops: path.stops.map(stop => stop.title),
+            completed: path.stops.filter(stop => completedMobileLearningPathStops(path.slug).has(String(stop.id))).length
+          }))
+        });
       } catch (error) {
         console.warn("Learning paths are unavailable.", error);
         openInfoPanel("Learning Paths", "Temporarily unavailable", `
@@ -14896,6 +14930,7 @@
         return;
       }
       const completed = completedMobileLearningPathStops(path.slug);
+      state.activeLearningPathSlug = path.slug;
       const questions = path.keyQuestions.length ? `
         <section class="section mobile-learning-path-questions">
           <h3>Questions to carry with you</h3>
@@ -14920,9 +14955,7 @@
               <article class="section mobile-learning-path-stop${isComplete ? " is-complete" : ""}">
                 <p class="section-kicker">Stop ${escapeHtml(String(stop.stop_number))}${stop.is_required === false ? " · Optional" : ""}</p>
                 <h3>${escapeHtml(stop.title)}</h3>
-                ${stop.why ? `<p>${escapeHtml(stop.why)}</p>` : ""}
-                ${stop.question ? `<p><strong>Think about:</strong> ${escapeHtml(stop.question)}</p>` : ""}
-                ${stop.activity ? `<p><strong>Try this:</strong> ${escapeHtml(stop.activity)}</p>` : ""}
+                ${window.NLILearningGuide.mobileStopHtml(path, stop)}
                 ${stop.sensitiveNote ? `<p class="detail-meta">${escapeHtml(stop.sensitiveNote)}</p>` : ""}
                 ${stop.show_exact_location === false ? `<p class="detail-meta">Use the broad public location shown in the listing.</p>` : ""}
                 <div class="actions">
@@ -14934,6 +14967,11 @@
           }).join("")}
         </section>
       `);
+    }
+
+    function mobileLearningStopHeader(site) {
+      const path = state.learningPathBySlug.get(state.activeLearningPathSlug);
+      return window.NLILearningGuide.mobileHeader(path, site);
     }
 
     function mobileKnowledgebaseCategoryItems(category) {
@@ -15788,6 +15826,7 @@
       restoreDetailHeroToBody();
       detailBodyEl.innerHTML = `
         ${siteHeroCarouselHtml(site, image, imageFallback)}
+        ${mobileLearningStopHeader(site)}
         ${introductionPresentation.leadSummary ? `<p class="summary" data-site-introduction="summary">${autoLinkHtml(escapeHtml(introductionPresentation.leadSummary), { used: linked, excludeHref })}</p>` : ""}
         ${siteTagsHtml(site)}
         ${sections}
@@ -15898,7 +15937,7 @@
       renderList();
       if (!options.skipRoute) window.history.replaceState(null, "", window.location.pathname);
       syncMobilePanelAccessibility();
-      if (returnToLongIslandView) {
+      if (returnToLongIslandView && options.restoreMapView !== false) {
         window.setTimeout(() => fitLongIslandMapView("mobile-startup-spotlight-article-closed"), 120);
       }
     }
@@ -15958,6 +15997,7 @@
     }
 
     window.addEventListener("popstate", () => {
+      if (contributorInvitationEl?.open) dismissContributorInvite();
       const openMoreMenu = document.querySelector(".mobile-more-menu[open]");
       if (openMoreMenu) openMoreMenu.removeAttribute("open");
       const openLayerMenu = document.querySelector(".mobile-layer-menu[open]");
@@ -15984,6 +16024,7 @@
     });
 
     window.onAndroidBackPressed = function onAndroidBackPressed() {
+      if (contributorInvitationEl?.open) { dismissContributorInvite(); return true; }
       if (storySavePanelEl?.classList.contains("open")) {
         storySavePanelEl.classList.remove("open");
         return true;
@@ -17179,7 +17220,7 @@
           "circle-color": ["case", ["==", ["get", "has_header_image"], true], "#326fe3", "#496f5d"],
           "circle-opacity": 0.92,
           "circle-stroke-color": "rgba(255,255,255,0.36)",
-          "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 6, 0.4, 12, 0.8],
+          "circle-stroke-width": 0,
           "circle-stroke-opacity": 0.55
         }
       });
@@ -17918,6 +17959,7 @@
     }
 
     function renderProfile() {
+      if (state.profile) dismissContributorInvite(false);
       if (!profileCardEl) return;
       loginSheetEl?.classList.toggle("has-profile", !!state.profile);
       if (accountSheetTitleEl) accountSheetTitleEl.textContent = state.profile
@@ -19908,6 +19950,13 @@
       `;
     }
 
+    function mobileActivityActionIconHtml(kind) {
+      const path = kind === "like"
+        ? '<path d="M7 10H3v11h4m0-11 4-8h2v8h7l-2 11H7V10Z"/>'
+        : '<path d="M21 11a9 8 0 0 1-9 8H8l-5 3 1-7A9 8 0 1 1 21 11Z"/>';
+      return `<svg class="activity-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${path}</svg>`;
+    }
+
     function mobileActivityCardHtml(card, index) {
       const openAttributes = `data-mobile-activity-open data-mobile-activity-index="${index}"`;
       const canOpen = card.capabilities.open;
@@ -19938,17 +19987,13 @@
               <div class="activity-pinned-details" id="${escapeHtml(pinDetailsId)}"${card.pinned ? " data-mobile-activity-pinned-detail" : ""}${card.pinned && !pinnedExpanded ? " hidden" : ""}>
                 ${mobileActivityUpdatesHtml(card)}
                 ${learningCardExcerptHtml(card)}
-                <p class="learning-card-counts" aria-label="${card.counts.upvotes} helpful votes and ${card.counts.comments} comments">
-                  <span>${card.counts.upvotes} helpful</span>
-                  <span>${card.counts.comments} comment${card.counts.comments === 1 ? "" : "s"}</span>
-                </p>
               </div>
             </div>
           </div>
           <div class="learning-card-actions" aria-label="Activity actions">
             ${isSupportActivity ? `<button class="learning-card-action" type="button" data-mobile-activity-donate>Donate</button>` : ""}
-            ${card.capabilities.vote ? `<button class="learning-card-action${card.hasVoted ? " is-active" : ""}" type="button" data-mobile-activity-helpful="${escapeHtml(card.key)}"${card.hasVoted ? " disabled" : ""}>${card.permissions.canVote ? "Helpful" : `${actionPrompt}vote`} ${card.counts.upvotes}</button>` : ""}
-            ${card.capabilities.comment ? `<button class="learning-card-action" type="button" data-mobile-activity-comment="${escapeHtml(card.key)}" aria-expanded="${state.mobileActivityDiscussionKeys.has(card.key) ? "true" : "false"}"><span>${commentLabel}</span><span class="learning-card-action-count">${card.counts.comments}</span></button>` : ""}
+            ${card.capabilities.vote ? `<button class="learning-card-action${card.hasVoted ? " is-active" : ""}" type="button" data-mobile-activity-helpful="${escapeHtml(card.key)}" aria-label="${card.hasVoted ? "Liked" : card.permissions.canVote ? "Like" : `${actionPrompt}like`}, ${card.counts.upvotes} like${card.counts.upvotes === 1 ? "" : "s"}" title="${card.hasVoted ? "Liked" : "Like"}" aria-pressed="${card.hasVoted ? "true" : "false"}"${card.hasVoted ? " disabled" : ""}>${mobileActivityActionIconHtml("like")}<span class="learning-card-action-count">${card.counts.upvotes}</span></button>` : ""}
+            ${card.capabilities.comment ? `<button class="learning-card-action" type="button" data-mobile-activity-comment="${escapeHtml(card.key)}" aria-label="${commentLabel}, ${card.counts.comments} comment${card.counts.comments === 1 ? "" : "s"}" title="${commentLabel}" aria-expanded="${state.mobileActivityDiscussionKeys.has(card.key) ? "true" : "false"}">${mobileActivityActionIconHtml("comment")}<span class="learning-card-action-count">${card.counts.comments}</span></button>` : ""}
             ${unread ? `<button class="learning-card-action" type="button" data-mobile-activity-dismiss aria-label="Dismiss this new update">Dismiss</button>` : ""}
           </div>
           ${mobileActivityDiscussionHtml(card)}
@@ -20327,7 +20372,17 @@
       }, 60);
     }
 
+    function dismissPanelsForContributorSheet(sheet) {
+      if (detailEl?.classList.contains("open")) {
+        closeDetail({ skipRoute: true, restoreMapView: false });
+      }
+      document.querySelectorAll(".sheet.open").forEach(item => {
+        if (item !== sheet) dismissMobileSheet(item, { clearRoute: false });
+      });
+    }
+
     function openSheet(sheet, options = {}) {
+      if (sheet === loginSheetEl || sheet === profilesSheetEl) dismissPanelsForContributorSheet(sheet);
       if (sheet === activitySheetEl && !sheet.classList.contains("open")) {
         state.mobileActivityExpandedPinnedKeys.clear();
       }
@@ -20385,6 +20440,7 @@
         openSheet(loginSheetEl);
       } catch (error) {
         console.warn("Opening account sheet with fallback path.", error);
+        dismissPanelsForContributorSheet(loginSheetEl);
         document.querySelectorAll(".sheet.open").forEach(item => item.classList.remove("open"));
         loginSheetEl?.classList.add("open");
         syncMobilePanelAccessibility();
@@ -22038,7 +22094,11 @@
         return;
       }
       if (event.target.id === "mark-visited") markVisited(state.selectedSite);
-      if (event.target.id === "check-in-site") checkInAtSite(state.selectedSite);
+      const checkinButton = event.target.closest("#check-in-site");
+      if (checkinButton) {
+        checkInAtSite(state.selectedSite, checkinButton);
+        return;
+      }
       if (event.target.id === "open-story-current") openSheet(storySheetEl);
       if (event.target.closest("[data-open-login]")) {
         openSheet(loginSheetEl);
@@ -23244,6 +23304,7 @@
         if (state.selectedSite && !androidLifecycleMapRestored) focusSite(state.selectedSite);
         checkDailyHistoryMoment();
         checkNewContentAlerts();
+        scheduleContributorInvite();
         requestStartupLocation();
         if (/Android/i.test(navigator.userAgent)) window.setTimeout(() => {
           if (!state.userLocation) requestStartupLocation();

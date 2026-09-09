@@ -1282,7 +1282,10 @@ final class NativeMapController {
                     iconAllowOverlap(true), iconIgnorePlacement(true)
                 ), "nli-site-point-circles");
             style.addLayer(new SymbolLayer("nli-moving-dog-icons", MOVING_FEATURE_SOURCE_ID)
-                .withFilter(Expression.eq(Expression.get("moving_kind"), Expression.literal("dog")))
+                // Wildlife uses the established dog scale, visibility and hit testing.
+                .withFilter(Expression.any(
+                    Expression.eq(Expression.get("moving_kind"), Expression.literal("dog")),
+                    Expression.eq(Expression.get("moving_kind"), Expression.literal("animal"))))
                 .withProperties(
                     iconImage(Expression.get("icon_key")), iconSize(0.42f),
                     iconAllowOverlap(true), iconIgnorePlacement(true)
@@ -1475,7 +1478,7 @@ final class NativeMapController {
                 float top = (64f - height) / 2f;
                 canvas.drawBitmap(source, null, new RectF(left, top, left + width, top + height), paint);
                 style.addImage("nli-icon-" + base, normalized);
-                if ("dog-moving-icon".equals(base) || "whaling-moving-whale".equals(base)) {
+                if ("dog-moving-icon".equals(base) || "whaling-moving-whale".equals(base) || base.startsWith("animal-")) {
                     Matrix mirror = new Matrix();
                     mirror.preScale(-1f, 1f);
                     Bitmap mirrored = Bitmap.createBitmap(normalized, 0, 0, normalized.getWidth(), normalized.getHeight(), mirror, true);
@@ -1704,6 +1707,18 @@ final class NativeMapController {
             FeatureCollection collection = FeatureCollection.fromJson(movingFeaturesJson);
             List<Feature> features = collection.features();
             if (features != null) {
+                JSONArray animals = new JSONArray();
+                for (Feature feature : features) {
+                    if (!"animal".equals(feature.getStringProperty("moving_kind")) || !(feature.geometry() instanceof Point)) continue;
+                    Point point = (Point) feature.geometry();
+                    JSONObject animal = new JSONObject();
+                    animal.put("slug", feature.getStringProperty("native_key"));
+                    animal.put("icon", feature.getStringProperty("icon_key"));
+                    animal.put("coordinates", new JSONArray().put(point.longitude()).put(point.latitude()));
+                    // Bridge diagnostics may run off the UI thread; coordinates are sufficient here.
+                    animals.put(animal);
+                }
+                result.put("animals", animals);
                 int waterBiographyCount = 0;
                 boolean recordedSample = false;
                 for (Feature feature : features) {

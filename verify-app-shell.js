@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260906-contribution-capture-r246";
+const expectedBuild = "20260909-native-wildlife-r247";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -798,8 +798,8 @@ const detailedPolygonRows = bundledGeometryRows.filter((row) => row?.display_geo
 const bundledGeometryBytes = fs.statSync(
   "app/src/main/assets/assets/data/mobile-site-geometry.json"
 ).size;
-if (bundledGeometryRows.length !== 439 || detailedPolygonRows.length < 16) {
-  throw new Error("Bundled Android geometry must retain all 439 sites and the audited detailed polygon set.");
+if (bundledGeometryRows.length !== bundledSiteIndex.rows.length || bundledGeometryRows.length < 439 || detailedPolygonRows.length < 16) {
+  throw new Error("Bundled Android geometry must retain all indexed sites (at least 439) and the audited detailed polygon set.");
 }
 if (bundledGeometryBytes > 2_850_000) {
   throw new Error(`Bundled Android geometry exceeds its deferred-load budget: ${bundledGeometryBytes} bytes.`);
@@ -965,8 +965,8 @@ function bundledTimelineEvents(document, label) {
 }
 
 const bundledTimeline = bundledTimelineEvents(bundledApp, "Bundled Android fallback");
-if (bundledTimeline.length !== 1425) {
-  throw new Error(`Bundled Android fallback must contain all 1,425 public timeline moments; found ${bundledTimeline.length}.`);
+if (bundledTimeline.length !== 1479) {
+  throw new Error(`Bundled Android fallback must contain all 1,479 public timeline moments; found ${bundledTimeline.length}.`);
 }
 const bundledSourceRecords = bundledTimeline.filter(event => !(event?.source_type && (event?.source_slug || event?.source_id)));
 if (bundledSourceRecords.length !== 286) {
@@ -991,7 +991,7 @@ const reviewedBiographySlugs = [
 const bundledBiographyBySlug = new Map((bundledMobileData.wikiArticles || []).map(article => [article.slug, article]));
 for (const slug of reviewedBiographySlugs) {
   const article = bundledBiographyBySlug.get(slug);
-  if (!article || !/^<p class="biography-introduction">[\s\S]+?<\/p>/.test(String(article.content || ""))) {
+  if (!article || !(/^(?:<p class="biography-introduction">[\s\S]+?<\/p>|<div class="biography-narrative">\s*<h2>[\s\S]+?<\/h2>\s*<p>[\s\S]+?<\/p>)/.test(String(article.content || "")))) {
     throw new Error(`Bundled Android biography ${slug} must begin with its reviewed identifying introduction.`);
   }
 }
@@ -1700,7 +1700,7 @@ if (!bundledMobileJs.includes("const apkSnapshotMode = isApkSnapshotMode();")
     || !bundledMobileJs.includes("apkSnapshotMode\n            ? Promise.resolve({ data: [] })")) {
   throw new Error("The modular APK snapshot must not block cold offline startup on Directus-only configuration requests.");
 }
-if (!bundledMobileJs.includes('const WIKI_INDEX_VERSION = "20260901-biography-introductions-v1";')
+if (!bundledMobileJs.includes('const WIKI_INDEX_VERSION = "20260909-native-animals-v2";')
     || !bundledMobileJs.includes('fetch(`${WIKI_INDEX_URL}?v=${WIKI_INDEX_VERSION}`, { cache: "no-cache" })')) {
   throw new Error("The APK runtime must refresh the versioned biography index instead of retaining a stale cached list.");
 }

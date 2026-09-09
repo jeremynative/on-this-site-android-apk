@@ -33,6 +33,117 @@
     return cleaner(value || "");
   }
 
+  // Exact taxa only: photo-provider names include authors and change with taxonomy.
+  // These small, reviewed profiles are shared offline by both clients. No requests
+  // are made while rendering or moving the map. Add sources with every new profile.
+  const plantSpeciesProfiles = [
+    {
+      names: ["calamagrostis breviligulata", "ammophila breviligulata"], common: ["american beachgrass", "american beach grass"],
+      native: ["Native to Long Island", "native"], conservation: ["Not NY-listed as endangered or threatened", "secure"],
+      facts: [["Habitat", "Sandy beaches and coastal dunes."], ["Ecological role", "Traps windblown sand and helps build the dunes that shelter inland habitats."], ["What to notice", "Underground stems spread through the sand; new shoots can grow as sand accumulates."], ["Care for this habitat", "Use established beach access paths and keep off dune vegetation."]],
+      note: "The endangered Champlain beachgrass is a separately listed subspecies; its status should not be applied to all American beachgrass.",
+      sources: [["National Park Service: American beachgrass", "https://www.nps.gov/gate/learn/nature/american-beach-grass.htm"], ["Fire Island: sand dunes", "https://www.nps.gov/fiis/learn/nature/sanddunes.htm"], ["Kew: accepted name and synonym", "https://powo.science.kew.org/taxon/77165977-1"]], nyChecked: true
+    },
+    {
+      names: ["ammophila champlainensis", "ammophila breviligulata ssp champlainensis", "ammophila breviligulata subsp champlainensis"], common: ["champlain beachgrass"],
+      native: ["Native to northern New York; not Long Island", "regional"], conservation: ["Endangered in New York", "protected"],
+      facts: [["Habitat", "Freshwater dunes in the Lake Champlain and eastern Lake Ontario region."], ["Identification", "A distinct conservation concern from the American beachgrass of Long Island's coast."]],
+      sources: [["NatureServe: Champlain beachgrass", "https://explorer.natureserve.org/Taxon/ELEMENT_GLOBAL.2.154157/Ammophila_champlainensis"]], nyChecked: true
+    },
+    {
+      names: ["myrica pensylvanica", "morella pensylvanica"], common: ["northern bayberry"],
+      native: ["Native to Long Island", "native"], conservation: ["Not NY-listed as endangered or threatened", "secure"],
+      facts: [["Habitat", "Coastal dunes, thickets and other sandy or exposed ground."], ["Wildlife", "Waxy fruits feed migrating tree swallows and yellow-rumped warblers."], ["Ecological role", "A coastal shrub that provides cover and helps stabilize poor soils."]],
+      sources: [["Brooklyn Botanic Garden: northern bayberry", "https://nymf.bbg.org/species/539"], ["Long Island Botanical Society: bayberry", "https://www.libotanical.org/newsletters/2704.pdf"], ["NYSDEC: revegetation guide, p. 76", "https://extapps.dec.ny.gov/docs/materials_minerals_pdf/reveg3.pdf"]], nyChecked: true
+    },
+    {
+      names: ["myrica cerifera", "morella cerifera"], common: ["southern bayberry", "southern wax myrtle"],
+      native: ["Regional native; Long Island status uncertain", "regional"], conservation: ["Not NY-listed as endangered or threatened", "secure"],
+      facts: [["Native range", "Primarily the southeastern coastal plain, reaching north to New Jersey; New York reports are atypical."], ["Wildlife", "Its fruit and evergreen cover support birds and other wildlife."], ["Compare the ID", "Check against northern bayberry before treating a Long Island photo as southern wax myrtle."]],
+      note: "Brooklyn Botanic Garden records it as a rare native in the wider metropolitan region. That region includes New Jersey and does not establish a Long Island population.",
+      sources: [["US Forest Service: wax myrtle", "https://research.fs.usda.gov/feis/species-reviews/morcer"], ["Brooklyn Botanic Garden: wax myrtle", "https://nymf.bbg.org/species/537"], ["Kew: Myrica cerifera", "https://powo.science.kew.org/taxon/urn:lsid:ipni.org:names:166220-2"]], nyChecked: true
+    },
+    {
+      names: ["senecio inaequidens"], common: ["narrow leaved ragwort", "narrow-leaved ragwort", "south african ragwort"],
+      native: ["Not native to Long Island", "introduced"], conservation: ["Not NY-listed as endangered or threatened", "secure"],
+      facts: [["Native range", "Southern Africa, from Mozambique to South Africa."], ["Growth", "A perennial member of the daisy family associated with subtropical conditions."], ["Compare the ID", "Check flowers, leaves and the whole plant. A photo suggestion alone does not establish this species on Long Island."]],
+      sources: [["Kew: narrow-leaved ragwort", "https://powo.science.kew.org/taxon/urn:lsid:ipni.org:names:245637-1"]], nyChecked: true
+    },
+    {
+      names: ["solidago simplex"], common: ["mt albert goldenrod", "mt. albert goldenrod"],
+      native: ["North American native; local ID unresolved", "regional"], conservation: ["Variety needed: some are NY-protected", "protected"],
+      facts: [["Habitat", "This goldenrod group includes plants of rocky and mountain habitats."], ["Conservation detail", "New York lists variety racemosa as endangered and variety monticola as threatened."], ["Compare the ID", "The name Solidago simplex alone cannot identify the variety or establish its Long Island native status."]],
+      sources: [["NatureServe: Solidago simplex", "https://explorer.natureserve.org/Taxon/ELEMENT_GLOBAL.2.640050/Solidago_simplex"]], nyChecked: true
+    },
+    {
+      names: ["jacaranda mimosifolia"], common: ["blue jacaranda"],
+      native: ["Not native to Long Island", "introduced"], conservation: ["Vulnerable globally (IUCN)", "protected"],
+      facts: [["Native range", "South America, including Bolivia and northwestern Argentina."], ["What to notice", "A subtropical tree with finely divided leaves and purple-blue flowers."], ["Conservation detail", "Widely planted as an ornamental, but its wild populations are classed as Vulnerable. Global status differs from New York protection."]],
+      sources: [["Kew: jacaranda distribution", "https://powo.science.kew.org/taxon/130936-2"], ["Kew: IUCN assessment and description", "https://powo.science.kew.org/taxon/urn:lsid:ipni.org:names:130936-2/general-information"]]
+    },
+    {
+      names: ["wisteria sinensis"], common: ["chinese wisteria"],
+      native: ["Not native to Long Island", "introduced"], conservation: ["Invasive concern in the New York region", "introduced"],
+      facts: [["Growth", "A woody climbing vine introduced from China."], ["Ecological concern", "New York Botanical Garden records Chinese wisteria as invasive in the city flora."], ["Compare the ID", "Identify the species before applying this status to other wisterias."]],
+      sources: [["New York Botanical Garden: flora checklist", "https://www.nybg.org/content/uploads/2017/08/NYBG_NYCEcoFlora_Checklist_1Aug.pdf"]]
+    },
+    {
+      names: ["wisteria floribunda"], common: ["japanese wisteria"],
+      native: ["Not native to Long Island", "introduced"], conservation: ["Not NY-listed as endangered or threatened", "secure"],
+      facts: [["Growth", "An ornamental climbing vine introduced from Japan."], ["Regional status", "Recorded as non-native and naturalized in the New York City flora."]],
+      sources: [["New York Botanical Garden: flora checklist", "https://www.nybg.org/content/uploads/2017/08/NYBG_NYCEcoFlora_Checklist_1Aug.pdf"]], nyChecked: true
+    }
+  ];
+
+  const nyPlantProtectionSource = ["NYSDEC: protected plants and species lists", "https://dec.ny.gov/nature/animals-fish-plants/plants/state-protected-plants"];
+
+  function plantSpeciesProfile(fields = {}) {
+    const scientific = defaultNormalizeText(fields.scientific_name || fields.identification || "");
+    if (scientific) {
+      // A named variety must never inherit the parent species' conservation status.
+      const candidates = plantSpeciesProfiles.flatMap(profile => profile.names.map(name => ({ profile, name })))
+        .sort((a, b) => b.name.length - a.name.length);
+      return candidates.find(({ name }) => {
+        if (scientific !== name && !scientific.startsWith(name + " ")) return false;
+        const suffix = scientific.slice(name.length);
+        return !/\b(?:var|ssp|subsp|hybrid|x|or|cf|aff)\b/.test(suffix);
+      })?.profile || null;
+    }
+    const common = defaultNormalizeText(String(fields.common_name || fields.name || "").replace(/\([^)]*\)/g, ""));
+    return plantSpeciesProfiles.find(profile => profile.common.some(name => defaultNormalizeText(name) === common)) || null;
+  }
+
+  function plantConfidencePercent(value, alreadyPercent = false) {
+    if (value === null || value === undefined || String(value).trim() === "") return "";
+    const number = Number(value);
+    if (!Number.isFinite(number) || number < 0 || number > (alreadyPercent ? 100 : 1)) return "";
+    const percent = alreadyPercent ? number : number * 100;
+    return percent > 0 && percent < 1 ? "<1" : String(Math.round(percent));
+  }
+
+  function plantObservationInsightsHtml(fields = {}, options = {}) {
+    const escape = options.escapeHtml || (value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])));
+    const profile = plantSpeciesProfile(fields);
+    const source = usefulPlantText(fields.identification_source || fields.source || "", options);
+    const rows = plantObservationFactRows(fields, null, options);
+    const sources = profile ? [...profile.sources, ...(profile.nyChecked ? [nyPlantProtectionSource] : [])] : [];
+    const identity = cleanText(fields.scientific_name || fields.identification || fields.common_name || fields.name, options);
+    const lookup = "https://powo.science.kew.org/results?q=" + encodeURIComponent(identity || "plant");
+    const statusTile = ([value, tone], label) => `<div class="plant-status-tile plant-status-${tone}"><span>${label}</span><strong>${escape(value)}</strong></div>`;
+    return `<section class="plant-insights" aria-label="About the suggested plant species">
+      <p class="plant-insights-label">About this suggested species</p>
+      ${profile ? `<div class="plant-status-grid">${statusTile(profile.native, "Long Island native status")}${statusTile(profile.conservation, "Conservation / protection")}</div>` : `<p class="plant-id-check">${/wisteria/i.test(identity) ? "Wisterias differ by species. Chinese and Japanese wisteria are introduced; a genus-only identification cannot settle local native or conservation status." : /^[a-z]+ [a-z]+(?:\s|$)/i.test(String(fields.scientific_name || fields.identification || "")) ? "Explore the linked botanical sources for this species’ range and conservation status." : "A species-level identification is needed to check Long Island native status and New York protection."}</p>`}
+      <div class="site-plant-facts">${rows.map(([label, value]) => `<div class="site-plant-fact"><strong>${escape(label)}</strong><span>${escape(value)}</span></div>`).join("")}</div>
+      <details class="plant-species-sources"><summary>Species details &amp; sources</summary>
+        ${profile?.note ? `<p>${escape(profile.note)}</p>` : ""}
+        <p>These facts describe the suggested species; the photo identification still needs confirmation.</p>
+        ${source ? `<p>Photo identification: ${escape(source)}.</p>` : ""}
+        ${sources.length ? `<ul>${sources.map(([label, url]) => `<li><a href="${escape(url)}" target="_blank" rel="noopener noreferrer">${escape(label)}</a></li>`).join("")}</ul><p class="plant-source-date">Sources checked September 8, 2026.</p>` : ""}
+        <a href="${escape(lookup)}" target="_blank" rel="noopener noreferrer">Compare names and range in Kew's plant database</a>
+      </details>
+    </section>`;
+  }
+
   function defaultNormalizeText(value) {
     return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
   }
@@ -92,7 +203,7 @@
       text = text.replace(pattern, "");
     });
     text = text.replace(/\s{2,}/g, " ").replace(/\s+\./g, ".").trim();
-    return text || fallback;
+    return /^[\s.;,]*$/.test(text) ? fallback : text;
   }
 
   function usefulPlantText(value = "", options = {}) {
@@ -108,7 +219,10 @@
 
   function plantGuideMatchFromFields(fields = {}, species = plantObservationSpecies, options = {}) {
     const haystack = `${fields.name || ""} ${fields.identification || ""} ${fields.vocabulary || ""} ${fields.common_name || ""} ${fields.scientific_name || ""} ${fields.algonquian_word || ""}`;
-    return plantReferenceMatch(haystack, species, options);
+    const match = plantReferenceMatch(haystack, species, options);
+    const scientific = defaultNormalizeText(fields.scientific_name || fields.identification || "");
+    if (match?.common === "bayberry" && scientific && !/^(?:myrica|morella) pensylvanica\b/.test(scientific)) return null;
+    return match;
   }
 
   function plantNativeLabel(nativeStatus = "", invasiveStatus = "", match = null) {
@@ -145,22 +259,12 @@
   }
 
   function plantObservationFactRows(fields = {}, match = null, options = {}) {
-    const algonquianValue = options.algonquianValue ?? fields.algonquian ?? fields.algonquian_word ?? "";
-    const sourceValue = options.sourceValue ?? fields.source ?? fields.identification_source ?? fields.source_reference ?? "";
-    const guidanceValue = options.guidanceValue ?? fields.edible_safety ?? fields.visitor_guidance ?? fields.guidance ?? "";
-    const nativeStatus = usefulPlantText(fields.native_status, options) || match?.native || "";
-    const invasiveStatus = usefulPlantText(fields.invasive_status, options) || match?.invasive || "";
-    const nativeLabel = plantNativeLabel(nativeStatus, invasiveStatus, match);
-    const origin = plantOriginText(fields, match, options);
-    const source = usefulPlantText(sourceValue, options) || match?.source || "";
-    return [
-      ["Algonquian Word", plantFactValue(algonquianValue, "The word may exist or may have existed, but it has not been found in the sources reviewed.", options)],
-      ["Native / non-native", origin ? `${nativeLabel}. Origin: ${origin}.` : nativeLabel],
-      ["Status source", plantFactValue(source, "Not yet documented", options)],
-      ["Medicinal use", usefulPlantText(fields.medicinal_use, options) || match?.medicinal || "Not shown without a source"],
-      ["Endangered", plantEndangeredLabel(fields.endangered_status, match, options)],
-      ["Safety", usefulPlantText(guidanceValue, options) || match?.safety || "Verify with a field guide or expert before touching, eating, or using any plant"]
-    ];
+    const rows = [...(plantSpeciesProfile(fields)?.facts || [])];
+    const algonquian = usefulPlantText(options.algonquianValue ?? fields.algonquian ?? fields.algonquian_word, options);
+    if (algonquian) rows.push(["Recorded Indigenous name", algonquian]);
+    const medicinal = usefulPlantText(fields.medicinal_use, options);
+    if (medicinal && !/not shown|not documented|without .*source|not yet|not assessed/i.test(medicinal)) rows.push(["Medicinal use", medicinal]);
+    return rows;
   }
 
   function publicPlantReferenceFor(fields = {}, species = plantObservationSpecies, options = {}) {
@@ -255,7 +359,6 @@
       if (typeof value === "object") return value.id || value.value || "";
       return value;
     };
-    const confidence = Number(record?.confidence || 0);
     const identificationStatus = String(record?.identification_status || "").toLowerCase();
     const unresolvedServiceResult = /service_error|unavailable|provider_error/.test(identificationStatus)
       || /identification unavailable/i.test(String(record?.common_name || ""));
@@ -278,7 +381,7 @@
       medicinal_use: record?.medicinal_use || "",
       endangered_status: record?.endangered_status || "",
       visitor_notes: record?.visitor_notes || "",
-      confidence: confidence ? String(Math.round(confidence * 100)) : "",
+      confidence: plantConfidencePercent(record?.confidence),
       contributor: record?.author_name || "Contributor",
       member_profile: relationId(record?.member_profile) || null,
       photo: record?.photo || null,
@@ -360,6 +463,10 @@
   }
 
   window.NLI_PLANT_UTILS = {
+    plantSpeciesProfiles,
+    plantSpeciesProfile,
+    plantConfidencePercent,
+    plantObservationInsightsHtml,
     plantObservationSpecies,
     publicPlantReference: plantObservationSpecies,
     publicPlantText,
