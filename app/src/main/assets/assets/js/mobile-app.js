@@ -242,7 +242,7 @@
       { label: "History", slugs: ["native-long-island-overview", "slavery", "indian-missions-on-long-island", "education-at-shinnecock", "shinnecock-veterans-and-wartime-service", "colonial-descriptions-of-indians", "indian-forts", "13-tribes-of-long-island-david-martine", "early-contact-period-1600-ad-1700-ad", "post-contact", "creation-of-long-island", "land-deeds-and-dispossession", "myth-of-extinction-and-survivance", "myth-of-the-thirteen-tribes", "historic-preservation", "history-and-place-names", "merrick-people-in-early-land-records"] },
       { label: "Sovereignty and Governance", slugs: ["tribal-trustees", "sovereignty-recognition-and-detribalization", "land-deeds-and-dispossession", "continued-indigenous-presence-today"] },
       { label: "Native Animals and Ecology", slugs: ["white-tailed-deer", "eastern-box-turtle", "wild-turkey", "american-black-duck", "american-eel"] },
-      { label: "Culture, Ceremony, and Lifeways", slugs: ["sweat-lodge", "nunnowa", "wampum", "burial", "powwow", "spirituality-ceremony-cosmology", "language", "algonquian-language-and-place-names", "dog-ceremonialism", "spring", "summer", "fall", "winter", "food", "fishing", "whaling", "indigenous-whaling-and-maritime-labor", "ecology-and-flexible-sedentism"] },
+      { label: "Culture, Ceremony, and Lifeways", slugs: ["duck-decoys", "sweat-lodge", "nunnowa", "wampum", "burial", "powwow", "spirituality-ceremony-cosmology", "language", "algonquian-language-and-place-names", "dog-ceremonialism", "spring", "summer", "fall", "winter", "food", "fishing", "whaling", "indigenous-whaling-and-maritime-labor", "ecology-and-flexible-sedentism"] },
       { label: "Time Periods and Archaeology", slugs: ["paleo-indian-period", "archaic-period", "orient-transitional-period", "woodland-period", "late-woodland", "early-contact-period-1600-ad-1700-ad", "post-contact", "shell-midden", "killed-pottery", "arrow-heads", "phase-archaeology-investigation", "phase-ii-archaeology-investigation", "phase-iii-archaeological-investigation", "burial-protection-and-sacred-landscapes"] },
       { label: "Preservation and Site Protection", slugs: ["preservation", "burial-protection-and-sacred-landscapes", "vandalism", "phase-archaeology-investigation", "phase-ii-archaeology-investigation", "phase-iii-archaeological-investigation"] },
       { label: "Natural Resources", slugs: ["native-plants", "beach-plum", "spring", "summer", "fall", "winter", "food", "fishing", "whaling", "indigenous-whaling-and-maritime-labor", "shell-midden", "ecology-and-flexible-sedentism"] },
@@ -393,7 +393,7 @@
         note: "Source-supported public or broad locations from Bunn’s work and public service; the connecting line orders records by date and does not reconstruct his exact travel route.",
         places: [
           { label: "1900 — Trustee service at Shinnecock", place: "Shinnecock Indian Reservation / Art Village vicinity", coordinates: [-72.43013, 40.87195], reason: "Bunn and fellow trustees renewed an agreement governing art students’ access to paint on the reservation and use the Sailboat Dock." },
-          { label: "circa 1920 — Decoy display in New York", place: "National Sportsman’s Show in New York City", coordinates: [-73.9879655, 40.742203], reason: "A photograph shows Bunn with his decoy display, and family accounts describe him selling his locally carved birds at the annual show." },
+          { label: "1906 — Decoy display in New York", place: "National Sportsman’s Show in New York City", coordinates: [-73.9879655, 40.742203], reason: "Shelburne Museum dates the photograph of Bunn and his decoy display at the National Sportsmen’s Show to 1906." },
           { label: "April 2, 1935 — Voting-rights motion", place: "Southampton Town Hall", coordinates: [-72.3852129, 40.8873658], reason: "Attending as a tribal member, Bunn moved that state legislation be requested to allow Shinnecock women to vote at the annual meeting." },
           { label: "1952 — Reservation-boundary testimony", place: "Suffolk County Supreme Court, Riverhead", coordinates: [-72.666166, 40.9186928], reason: "At age eighty-six, Bunn shared community traditions in the King reservation-boundary litigation." }
         ]
@@ -1062,6 +1062,7 @@
       mobileActivityDiscussionKeys: new Set(),
       mobileActivityExpandedPinnedKeys: new Set(),
       mobileActivityDrafts: new Map(),
+      mobileActivityReactionMessages: new Map(),
       profileActivitySynced: false,
       profileActivitySyncPromise: null,
       profileActivityLastAttemptAt: 0,
@@ -4228,7 +4229,7 @@
         legacyExhibitsRequest,
         communityRequest(() => fetchJson(`/items/mobile_member_profiles?limit=-1&sort=display_name&fields=${PROFILE_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.contributorProfiles)), state.contributorProfiles),
         communityRequest(() => fetchJson(`/items/mobile_comments?limit=80&filter[status][_eq]=approved&filter[public_activity][_eq]=true&sort=-created_at&fields=${PUBLIC_COMMENT_FIELDS}`, { cacheKey: "mobile-comments", ttl: 45000, fresh: false }).catch(() => currentRowsFallback(state.publicComments)), state.publicComments),
-        communityRequest(() => fetchJson(`/items/mobile_comment_votes?limit=-1&fields=${COMMENT_VOTE_FIELDS}`, { cacheKey: "mobile-comment-votes", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.commentVotes)), state.commentVotes),
+        communityRequest(() => fetchJson(`/items/mobile_comment_votes?limit=-1&fields=${COMMENT_VOTE_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.commentVotes)), state.commentVotes),
         signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_point_events?limit=-1&fields=${POINT_EVENT_FIELDS}`, { cacheKey: "mobile-point-events", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.profilePointEvents)), state.profilePointEvents) : Promise.resolve({ ...currentRowsFallback(state.profilePointEvents), _skipped: true }),
         signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_plant_observations?limit=-1&filter[status][_eq]=approved&fields=${PLANT_OBSERVATION_FIELDS}`, { cacheKey: "mobile-plant-observations", ttl: 45000, fresh: false }).catch(() => ({ data: [] })), state.plantObservations) : Promise.resolve({ ...currentRowsFallback(state.plantObservations), _skipped: true }),
         communityRequest(() => fetchJson(`/items/mobile_site_visits?limit=80&sort=-visited_at&fields=${PUBLIC_VISIT_FIELDS}`, { cacheKey: "mobile-site-visits", ttl: 45000, fresh: false }).catch(() => currentRowsFallback(state.publicVisits)), state.publicVisits),
@@ -4246,7 +4247,7 @@
               ? state.mapStoryRefreshPromise.then(() => ({ data: state.mapStoryVotes, _sharedRefresh: true }))
               : state.mapStoryLastRefreshAt && Date.now() - state.mapStoryLastRefreshAt < 30000
                 ? Promise.resolve({ data: state.mapStoryVotes, _recent: true })
-                : fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { cacheKey: "mobile-map-story-votes", ttl: 30000, fresh: false }).catch(() => currentRowsFallback(state.mapStoryVotes)))
+                : fetchJson(`/items/mobile_map_story_votes?limit=-1&fields=${MAP_STORY_VOTE_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.mapStoryVotes)))
           : Promise.resolve({ data: state.mapStoryVotes }),
         signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_language_quiz_progress?limit=-1&fields=${LANGUAGE_PROGRESS_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.languageQuizAttempts)), state.languageQuizAttempts) : Promise.resolve({ ...currentRowsFallback(state.languageQuizAttempts), _skipped: true }),
         signedInCommunity ? communityRequest(() => fetchJson(`/items/mobile_profile_follows?limit=-1&fields=${FOLLOW_FIELDS}`, { fresh: true }).catch(() => currentRowsFallback(state.profileFollows)), state.profileFollows) : Promise.resolve({ ...currentRowsFallback(state.profileFollows), _skipped: true }),
@@ -9408,32 +9409,33 @@
     }
 
     async function voteMapStory(storyId, value, options = {}) {
+      const notify = options.notify || showBanner;
       const story = state.mapStories.find(item => String(item.id) === String(storyId));
-      if (!story) return;
+      if (!story) { notify("Story unavailable. Refresh Community Activity."); return false; }
       const profile = currentContributorProfile();
       if (!profile?.id || state.contributorSession?.pending) {
-        showBanner("Login as an approved contributor to vote on map stories.");
+        notify("Login as an approved contributor to vote on map stories.");
         openSheet(loginSheetEl);
         return;
       }
       const actionKey = `story-vote:${story.id}:${profile.id}`;
       if (!mobileLearningActionGuard.begin(actionKey)) {
-        showBanner("That helpful vote is already being saved.");
+        notify("That helpful vote is already being saved.");
         return;
       }
       try {
         const remoteVote = await refreshRemoteMapStoryVote(story.id, profile.id).catch(() => null);
         if (String(currentContributorProfile()?.id) !== String(profile.id) || state.contributorSession?.pending) {
-          showBanner("Account changed. Review this story before voting.");
+          notify("Account changed. Review this story before voting.");
           return;
         }
         if (remoteVote) {
-          showBanner("You already voted on this story.");
+          notify("You already voted on this story.");
           if (options.reopen !== false) openMapStory(story);
           return;
         }
         if (MAP_STORY_UTILS.hasMemberVote(story, state.mapStoryVotes, currentContributorProfile()?.id)) {
-          showBanner("You already voted on this story.");
+          notify("You already voted on this story.");
           return;
         }
         const vote = {
@@ -9443,8 +9445,8 @@
           created_at: new Date().toISOString()
         };
         try {
-          const created = await postDirectusItem("mobile_map_story_votes", vote, { requireAuth: true, timeout: 10000 });
-          if (!created?.data?.id) throw new Error("Vote unconfirmed. Reopen this story before retrying.");
+          const created = await commitEngagementAction("create_story_vote", vote);
+          if (!created?.data?.id) throw new Error(created?.error || "Vote unconfirmed. Reopen this story before retrying.");
           mergeMapStoryVoteRecords([{ id: created.data.id, ...vote, member_profile: Number(profile.id), ...(created.data || {}) }]);
           const counts = MAP_STORY_UTILS.storyVoteCounts(story, state.mapStoryVotes);
           const patch = {
@@ -9460,8 +9462,9 @@
           Object.assign(story, patch);
           if (options.reopen !== false) openMapStory(story);
           syncMapStoryMarkers();
+          return true;
         } catch (error) {
-          showBanner(error.message || "Could not save vote.");
+          notify(error.message || "Could not save vote.");
         }
       } finally {
         mobileLearningActionGuard.end(actionKey);
@@ -11985,50 +11988,56 @@
       });
     }
 
-    async function setCommentReaction(commentId, value) {
+    async function setCommentReaction(commentId, value, options = {}) {
+      const notify = options.notify || showBanner;
       const id = String(commentId);
       const profile = currentContributorProfile();
       if (!profile?.id || !isApprovedContributor()) {
-        showBanner("Log in to mark comments helpful or report a concern.");
+        notify("Log in to mark comments helpful or report a concern.");
         return false;
       }
       const votedComment = state.publicComments.find(item => String(item.id) === id);
       if (currentViewerOwnsComment(votedComment)) {
-        showBanner("You cannot vote on your own comment.");
+        notify("You cannot vote on your own comment.");
         return false;
       }
       if (commentReaction(id)) {
-        showBanner("Your vote for this comment is already saved.");
+        notify("Your vote for this comment is already saved.");
         return false;
       }
       const actionKey = `comment-vote:${id}:${profile.id}`;
       if (!mobileLearningActionGuard.begin(actionKey)) {
-        showBanner("That comment vote is already being saved.");
+        notify("That comment vote is already being saved.");
         return false;
       }
       try {
         await refreshRemoteCommentVote(id, profile.id).catch(() => null);
         if (commentReaction(id)) {
-          showBanner("Your vote for this comment is already saved.");
+          notify("Your vote for this comment is already saved.");
+          return false;
+        }
+        if (String(currentContributorProfile()?.id) !== String(profile.id)) {
+          notify("Your account changed. Please try again.");
           return false;
         }
         const vote = COMMENT_UTILS.votePayload(id, value, profile);
         let created;
         try {
-          created = await postDirectusItem("mobile_comment_votes", vote, { requireAuth: true });
+          created = await commitEngagementAction("create_comment_vote", vote);
+          if (!created?.data?.id) throw new Error(created?.error || "Vote unconfirmed. Reopen this post before retrying.");
         } catch (error) {
           await refreshRemoteCommentVote(id, profile.id).catch(() => null);
           if (commentReaction(id)) {
-            showBanner("Your vote for this comment is already saved.");
+            notify("Your vote for this comment is already saved.");
             return false;
           }
-          showBanner("Comment votes are not available yet. Please try again later.");
+          notify(error.message || "Could not save your reaction. Please try again.");
           return false;
         }
         const voteRecord = created?.data ? { ...vote, ...created.data } : vote;
         mergeCommentVoteRecords([voteRecord]);
         if (voteRecord.vote === "up" && votedComment?.member_profile) {
-          await recordProfilePointEvent(COMMENT_UTILS.helpfulVotePointEvent({
+          void recordProfilePointEvent(COMMENT_UTILS.helpfulVotePointEvent({
             commentId: id,
             profileId: profile.id,
             comment: votedComment,
@@ -12045,7 +12054,7 @@
           const comment = state.publicComments.find(item => String(item.id) === id);
           if (comment) container.innerHTML = commentReactionControls(comment);
         });
-        showBanner(value === "report" ? "Report saved." : "Comment vote saved.");
+        notify(value === "report" ? "Report saved." : "Comment vote saved.");
         return true;
       } finally {
         mobileLearningActionGuard.end(actionKey);
@@ -19837,6 +19846,9 @@
     }
 
     function syncMobileActivityUnreadIdentity() {
+      const reactionProfile = String(currentContributorProfile()?.id || "");
+      if (state.mobileActivityReactionProfile !== reactionProfile) state.mobileActivityReactionMessages.clear();
+      state.mobileActivityReactionProfile = reactionProfile;
       mobileActivityUnreadTracker.invalidate();
       state.mobileActivityRenderedSignature = "";
       invalidateMapSourceCache({ nativeBase: false });
@@ -19992,10 +20004,11 @@
           </div>
           <div class="learning-card-actions" aria-label="Activity actions">
             ${isSupportActivity ? `<button class="learning-card-action" type="button" data-mobile-activity-donate>Donate</button>` : ""}
-            ${card.capabilities.vote ? `<button class="learning-card-action${card.hasVoted ? " is-active" : ""}" type="button" data-mobile-activity-helpful="${escapeHtml(card.key)}" aria-label="${card.hasVoted ? "Liked" : card.permissions.canVote ? "Like" : `${actionPrompt}like`}, ${card.counts.upvotes} like${card.counts.upvotes === 1 ? "" : "s"}" title="${card.hasVoted ? "Liked" : "Like"}" aria-pressed="${card.hasVoted ? "true" : "false"}"${card.hasVoted ? " disabled" : ""}>${mobileActivityActionIconHtml("like")}<span class="learning-card-action-count">${card.counts.upvotes}</span></button>` : ""}
+            ${card.capabilities.vote ? `<button class="learning-card-action${card.hasVoted ? " is-active" : ""}" type="button" data-mobile-activity-helpful="${escapeHtml(card.key)}" aria-label="${card.hasVoted ? "Liked" : card.permissions.canVote ? "Like" : `${actionPrompt}like`}, ${card.counts.upvotes} like${card.counts.upvotes === 1 ? "" : "s"}" title="${card.hasVoted ? "Liked" : "Like"}" aria-pressed="${card.hasVoted ? "true" : "false"}">${mobileActivityActionIconHtml("like")}<span class="learning-card-action-count">${card.counts.upvotes}</span></button>` : ""}
             ${card.capabilities.comment ? `<button class="learning-card-action" type="button" data-mobile-activity-comment="${escapeHtml(card.key)}" aria-label="${commentLabel}, ${card.counts.comments} comment${card.counts.comments === 1 ? "" : "s"}" title="${commentLabel}" aria-expanded="${state.mobileActivityDiscussionKeys.has(card.key) ? "true" : "false"}">${mobileActivityActionIconHtml("comment")}<span class="learning-card-action-count">${card.counts.comments}</span></button>` : ""}
             ${unread ? `<button class="learning-card-action" type="button" data-mobile-activity-dismiss aria-label="Dismiss this new update">Dismiss</button>` : ""}
           </div>
+          <p data-activity-card-status role="status">${escapeHtml(state.mobileActivityReactionMessages?.get(card.key) || "")}</p>
           ${mobileActivityDiscussionHtml(card)}
         </article>
       `;
@@ -21747,15 +21760,32 @@
           openSheet(loginSheetEl);
           return;
         }
+        if (helpfulButton.disabled) return;
         helpfulButton.disabled = true;
+        helpfulButton.setAttribute("aria-busy", "true");
+        const status = cardElement.querySelector("[data-activity-card-status]");
+        let message = "Saving reaction...";
+        const notify = text => {
+          state.mobileActivityReactionMessages.set(key, text);
+          if (state.mobileActivityReactionMessages.size > 60) state.mobileActivityReactionMessages.delete(state.mobileActivityReactionMessages.keys().next().value);
+          status.textContent = message = text;
+        };
+        notify(message);
         try {
-          if (card.comment?.id) await setCommentReaction(card.comment.id, "up");
-          else if (card.story?.id) await voteMapStory(card.story.id, 1, { reopen: false });
+          const saved = card.comment?.id
+            ? await setCommentReaction(card.comment.id, "up", { notify })
+            : await voteMapStory(card.story?.id, 1, { reopen: false, notify });
+          if (saved) notify("Reaction saved.");
         } catch (error) {
-          showBanner(error.message || "Could not save the helpful vote.");
+          notify(error.message || "Could not save your reaction. Please try again.");
         } finally {
           state.mobileActivityRenderedSignature = "";
           renderMobileActivitySheet();
+          const next = Array.from(mobileActivityListEl.querySelectorAll("[data-mobile-activity-key]"))
+            .find(item => item.dataset.mobileActivityKey === key);
+          if (next) next.querySelector("[data-activity-card-status]").textContent = message;
+          helpfulButton.disabled = false;
+          helpfulButton.removeAttribute("aria-busy");
         }
         return;
       }
