@@ -1282,12 +1282,15 @@ final class NativeMapController {
                     iconAllowOverlap(true), iconIgnorePlacement(true)
                 ), "nli-site-point-circles");
             style.addLayer(new SymbolLayer("nli-moving-dog-icons", MOVING_FEATURE_SOURCE_ID)
-                // Wildlife uses the established dog scale, visibility and hit testing.
+                // Keep wildlife on the same visibility and hit-testing layer.
                 .withFilter(Expression.any(
                     Expression.eq(Expression.get("moving_kind"), Expression.literal("dog")),
                     Expression.eq(Expression.get("moving_kind"), Expression.literal("animal"))))
                 .withProperties(
-                    iconImage(Expression.get("icon_key")), iconSize(0.42f),
+                    iconImage(Expression.get("icon_key")),
+                    iconSize(Expression.switchCase(
+                        Expression.eq(Expression.get("moving_kind"), Expression.literal("animal")),
+                        Expression.literal(0.75f), Expression.literal(0.42f))),
                     iconAllowOverlap(true), iconIgnorePlacement(true)
                 ));
             style.addLayer(new SymbolLayer("nli-moving-whale-icons", MOVING_FEATURE_SOURCE_ID)
@@ -1469,6 +1472,9 @@ final class NativeMapController {
                 Bitmap source = BitmapFactory.decodeStream(input);
                 if (source == null || source.getWidth() < 1 || source.getHeight() < 1) continue;
                 Bitmap normalized = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888);
+                // These are fixed-size sprites, not device-density photographs.
+                // Otherwise MapLibre divides their visible size by screen density.
+                if (base.startsWith("animal-")) normalized.setDensity(android.util.DisplayMetrics.DENSITY_DEFAULT);
                 Canvas canvas = new Canvas(normalized);
                 Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
                 float scale = Math.min(56f / source.getWidth(), 56f / source.getHeight());
