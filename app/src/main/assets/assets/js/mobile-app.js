@@ -6077,7 +6077,7 @@
       const offerMapSearch = query.length >= 3 && !localSuggestions.some(item => normalizeText(item.title) === normalizeText(query));
       if (!suggestions.length && !offerMapSearch) return hide();
       searchSuggestionsEl.innerHTML = `${suggestions.map(item => `
-        <button class="search-suggestion" type="button" role="option" data-search-suggestion="${escapeHtml(item.title)}"${item.resultType === "site" ? ` data-search-site="${escapeHtml(item.slug)}"` : ""}>
+        <button class="search-suggestion" type="button" role="option" data-search-suggestion="${escapeHtml(item.title)}"${item.resultType === "site" ? ` data-search-site="${escapeHtml(item.slug)}"` : item.resultType === "wiki" ? ` data-search-wiki="${escapeHtml(item.slug)}"` : ""}>
           <strong>${escapeHtml(item.title)}</strong>
           <span>${escapeHtml(item.resultType === "wiki" ? "Knowledgebase" : mobileSearchResultTypeLabel(item.site_type))}</span>
         </button>
@@ -21406,10 +21406,12 @@
       if (searchSuggestion) {
         event?.preventDefault?.();
         event?.stopPropagation?.();
-        if (searchSuggestion.dataset.searchSite) {
+        const wikiSlug = searchSuggestion.dataset.searchWiki;
+        if (wikiSlug || searchSuggestion.dataset.searchSite) {
           clearMobileSearchForResultOpen();
           searchEl?.blur?.();
-          openNearbySiteWithMapPreview(searchSuggestion.dataset.searchSite, { fromSearch: true });
+          if (wikiSlug) openWikiArticle(wikiSlug);
+          else openNearbySiteWithMapPreview(searchSuggestion.dataset.searchSite, { fromSearch: true });
           return true;
         }
         searchEl.value = searchSuggestion.dataset.searchSuggestion || "";
