@@ -198,7 +198,11 @@
     if (!paused && delta > 0 && delta <= 2500) clock.elapsed = (clock.elapsed || 0)+delta;
     return clock.elapsed || 0;
   }
-  function nativeAnimalIcon(animal) { return `assets/map-icons/animal-${animal.slug}.png`; }
+  function nativeAnimalIcon(animal) {
+    // A distinct URL replaces the previously cached flying-duck artwork.
+    const name = animal.slug === "american-black-duck" ? "american-black-duck-decoy-v2" : animal.slug;
+    return `assets/map-icons/animal-${name}.png`;
+  }
   function nativeAnimalHtml(animal) {
     return `<button type="button" class="native-animal-marker" data-native-animal="${animal.slug}" aria-label="Open ${animal.title} article"><span class="native-animal-shell" aria-hidden="true"><img src="${nativeAnimalIcon(animal)}" alt=""></span></button>`;
   }
