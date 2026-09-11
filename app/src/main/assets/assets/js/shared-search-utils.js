@@ -41,7 +41,10 @@
     const address = String(options.address ?? entry.address_label ?? "");
     const type = String(options.type ?? entry.site_type ?? entry.type ?? "");
     const summary = String(options.summary ?? entry.summary ?? "");
-    const searchText = String(options.searchText ?? entry.searchText ?? [title, slug, address, type, summary, entry.body].filter(Boolean).join(" "));
+    const searchAliases = ["language", "algonquian-language-and-place-names"].includes(slug)
+      ? ["language", "languages", "algonquian", "algonquin", "translation", "translations", "words", "vocabulary", "dictionary", "place names", "native language", "indigenous language", "algonquian words", "language translations"]
+      : [];
+    const searchText = [String(options.searchText ?? entry.searchText ?? [title, slug, address, type, summary, entry.body].filter(Boolean).join(" ")), ...searchAliases].join(" ");
     const titleKey = normalizeText(title);
     const slugKey = normalizeText(slug);
     const normalizedSearchText = normalizeText(searchText);
@@ -50,6 +53,7 @@
       : [];
     return {
       ...entry,
+      searchAliasKeys: searchAliases.map(normalizeText),
       searchText: searchText.toLowerCase(),
       normalizedSearchText,
       searchTitleKey: titleKey,
@@ -123,7 +127,9 @@
     const matchEntries = matches.map(match => match?.entry || match);
     if (matchEntries.some(entry => {
       const title = normalizeText(titleOf(entry));
-      return title === query.normalized || title.startsWith(query.normalized);
+      return title === query.normalized || title.startsWith(query.normalized)
+        || (` ${title} `).includes(` ${query.normalized} `)
+        || entry.searchAliasKeys?.includes(query.normalized);
     })) return null;
     const threshold = Math.max(1, Math.floor(query.normalized.length / 4));
     let best = null;
