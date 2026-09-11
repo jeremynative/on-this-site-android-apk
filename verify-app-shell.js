@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260911-mobile-wildlife-size-r248";
+const expectedBuild = "20260911-duck-decoy-r249";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -965,8 +965,8 @@ function bundledTimelineEvents(document, label) {
 }
 
 const bundledTimeline = bundledTimelineEvents(bundledApp, "Bundled Android fallback");
-if (bundledTimeline.length !== 1479) {
-  throw new Error(`Bundled Android fallback must contain all 1,479 public timeline moments; found ${bundledTimeline.length}.`);
+if (bundledTimeline.length !== 1484) {
+  throw new Error(`Bundled Android fallback must contain all 1,484 public timeline moments; found ${bundledTimeline.length}.`);
 }
 const bundledSourceRecords = bundledTimeline.filter(event => !(event?.source_type && (event?.source_slug || event?.source_id)));
 if (bundledSourceRecords.length !== 286) {

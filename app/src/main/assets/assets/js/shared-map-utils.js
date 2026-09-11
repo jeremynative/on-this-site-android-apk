@@ -166,8 +166,8 @@
       route: [[-72.647,40.869],[-72.645,40.87],[-72.643,40.869],[-72.645,40.868],[-72.647,40.869]] },
     { slug: "wild-turkey", title: "Wild Turkey", habitat: "land", duration: 1200000, offset: 0.6,
       route: [[-72.804,40.837],[-72.797,40.839],[-72.79,40.837],[-72.797,40.833],[-72.804,40.837]] },
-    { slug: "american-black-duck", title: "American Black Duck", habitat: "sky", duration: 900000, offset: 0.25,
-      route: [[-72.966,40.733],[-72.942,40.749],[-72.913,40.74],[-72.933,40.723],[-72.966,40.733]] },
+    { slug: "american-black-duck", title: "American Black Duck", habitat: "water", duration: 900000, offset: 0.25,
+      route: [[-72.48,40.835],[-72.466,40.839],[-72.45,40.831],[-72.467,40.828],[-72.48,40.835]] },
     { slug: "american-eel", title: "American Eel", habitat: "water", duration: 1200000, offset: 0.45,
       route: [[-72.485,40.827],[-72.47,40.83],[-72.455,40.825],[-72.47,40.82],[-72.485,40.827]] }
   ].map(item => Object.freeze({ ...item, route: Object.freeze(item.route.map(point => Object.freeze(point))) })));
@@ -200,7 +200,7 @@
   }
   function nativeAnimalIcon(animal) { return `assets/map-icons/animal-${animal.slug}.png`; }
   function nativeAnimalHtml(animal) {
-    return `<button type="button" class="native-animal-marker" data-native-animal="${animal.slug}" aria-label="Open ${animal.title} article" title="${animal.title}"><span class="native-animal-shell" aria-hidden="true"><img src="${nativeAnimalIcon(animal)}" alt=""></span></button>`;
+    return `<button type="button" class="native-animal-marker" data-native-animal="${animal.slug}" aria-label="Open ${animal.title} article"><span class="native-animal-shell" aria-hidden="true"><img src="${nativeAnimalIcon(animal)}" alt=""></span></button>`;
   }
 
   window.NLI_SHARED_MAP_UTILS = {
