@@ -237,6 +237,7 @@
     const MOBILE_BIOGRAPHY_ICON_PREFERENCE_VERSION = 2;
     const MOBILE_BIOGRAPHY_PATH_PREFERENCE_VERSION = 1;
     const KNOWLEDGEBASE_CATEGORIES = [
+      { label: "Language, Words, and Place Names", slugs: ["language", "algonquian-language-and-place-names", "history-and-place-names"] },
       { label: "Biography", slugs: ["mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "quashawam", "elizabeth-thunder-bird-haile-shinnecock", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "mary-emma-cuffee-bunn", "wickham-cuffee", "princess-sun-tama-ann-harding-murdock", "chief-robert-pharaoh", "donald-treadwell-lone-otter", "anthony-beaman-chief-running-bull", "david-fowler-montaukett", "george-lewis-fowler", "sasarataicko-sassakataka", "charles-sumner-bunn", "alice-bunn-martinez", "charles-martinez", "eliza-fowler-beaman", "elliott-alphonso-kellis", "sachem-warawakmy-of-the-setauket", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "john-a-strong", "nathan-jeffrey-cuffee", "samson-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "penhawitz-sachem-of-the-canarsie", "stephen-talkhouse-pharoah", "nasseconset-sachem-of-the-nissequogue", "keeossechok-sachem-of-the-secatogue", "sunksquaws-and-indigenous-womens-leadership", "jeremy-dennis"] },
       { label: "Tribal Nations and Communities", entries: [["wiki", "native-long-island-overview"], ["wiki", "continued-indigenous-presence-today"], ["wiki", "the-tribes-of-long-island"], ["wiki", "western-long-island-native-communities"], ["wiki", "central-long-island-native-communities"], ["wiki", "eastern-long-island-native-communities"], ["wiki", "myth-of-the-thirteen-tribes"], ["site", "montaukett-ancestral-land"], ["site", "shinnecock-indian-reservation"], ["site", "unkechaug-indian-reservation"], ["site", "corchaug-tribe"], ["site", "manhansack-aqua-quash-awamock"], ["site", "setauket-ancestral-land"], ["site", "nissaquogue"], ["site", "matinecock"], ["site", "secatogues"], ["site", "massapequas"], ["site", "merricks"], ["site", "rockaways"], ["site", "canarsie"]] },
       { label: "History", slugs: ["native-long-island-overview", "slavery", "indian-missions-on-long-island", "education-at-shinnecock", "shinnecock-veterans-and-wartime-service", "colonial-descriptions-of-indians", "indian-forts", "13-tribes-of-long-island-david-martine", "early-contact-period-1600-ad-1700-ad", "post-contact", "creation-of-long-island", "land-deeds-and-dispossession", "myth-of-extinction-and-survivance", "myth-of-the-thirteen-tribes", "historic-preservation", "history-and-place-names", "merrick-people-in-early-land-records"] },
@@ -249,6 +250,7 @@
       { label: "Maps and Reference", slugs: ["13-tribes-of-long-island-david-martine", "history-and-place-names", "algonquian-language-and-place-names", "western-long-island-native-communities", "central-long-island-native-communities", "eastern-long-island-native-communities"] }
     ];
     const KNOWLEDGEBASE_CATEGORY_DESCRIPTIONS = {
+      "Language, Words, and Place Names": "Find Indigenous words, place-name translations, historical vocabulary, and language revitalization on Long Island.",
       "Biography": "Meet the people whose leadership, work, memory, and scholarship shape Native Long Island history.",
       "Tribal Nations and Communities": "Begin with living Nations and community histories, then explore ancestral lands across Long Island.",
       "History": "Follow major periods, records, encounters, and continuing histories from deep time to the present.",
@@ -4973,6 +4975,7 @@
       const compactTitle = article.searchCompactTitleKey || mobileCompactSearchKey(article.title || "");
       const compactSlug = article.searchCompactSlugKey || mobileCompactSearchKey(article.slug || "");
       let score = 0;
+      if (article.searchAliasKeys?.includes(queryKey)) score += 1500;
       if (compactQuery && compactTitle === compactQuery) score += 1800;
       if (compactQuery && compactTitle.startsWith(compactQuery)) score += 1400;
       if (compactQuery && compactSlug.startsWith(compactQuery)) score += 820;
