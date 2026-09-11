@@ -8489,7 +8489,11 @@ body.mobile-profile-map-mode .native-animal-map-icon { visibility:hidden!importa
 .activity-learning-card [data-activity-card-status]:not(:empty) { margin: 0; padding: 8px 12px; color: #285b48; font-size: 13px; overflow-wrap: anywhere; }
 
 .activity-learning-card [data-activity-card-status]:empty { display: none; }
-  </style>
+  
+.mobile-moving-biography-shell { scale: var(--biography-icon-scale, 1); transform-origin: center; }
+.mobile-calendar-event-marker { z-index: 30; }
+#map :is(.mapboxgl-popup, .maplibregl-popup) { z-index: 40; }
+</style>
   <style data-inline-source="assets/css/shared-research-question.css">
 .research-question-prompt {
   position: fixed;
@@ -20968,7 +20972,22 @@ window.NLI_BIOGRAPHY_PATH_DATA = {"wyandanch":{"title":"Wyandanch: family, diplo
     return `<button type="button" class="native-animal-marker" data-native-animal="${animal.slug}" aria-label="Open ${animal.title} article"><span class="native-animal-shell" aria-hidden="true"><img src="${nativeAnimalIcon(animal)}" alt=""></span></button>`;
   }
 
+  // Scale artwork only: map anchors and accessible hit targets stay fixed.
+  function biographyIconScale(zoom = 12) {
+    return Math.max(0.5, Math.min(1, 0.5 + (Number(zoom) - 7) / 12));
+  }
+  const biographyScaleMaps = new WeakSet();
+  function bindBiographyScale(map) {
+    if (!map || biographyScaleMaps.has(map)) return;
+    biographyScaleMaps.add(map);
+    const update = event => map.getContainer().style.setProperty("--biography-icon-scale", String(biographyIconScale(event?.zoom ?? map.getZoom())));
+    map.on("zoom", update);
+    map.on("zoomanim", update);
+    update();
+  }
+
   window.NLI_SHARED_MAP_UTILS = {
+    biographyIconScale, bindBiographyScale,
     nativeAnimals, nativeAnimalMotion, stepNativeAnimalClock, nativeAnimalIcon, nativeAnimalHtml,
     layerExists,
     sourceExists,
@@ -43796,6 +43815,7 @@ const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
         attributionControl: false,
         maplibreLogo: false
       });
+      MAP_UTILS.bindBiographyScale(state.map);
       state.map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
       state.map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right");
       collapseMobileMapAttribution();

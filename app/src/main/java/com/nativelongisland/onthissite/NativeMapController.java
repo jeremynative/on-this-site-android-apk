@@ -1115,28 +1115,6 @@ final class NativeMapController {
                 );
             biographyLabelLayer.setMinZoom(8.2f);
             style.addLayer(biographyLabelLayer);
-            style.addLayer(new CircleLayer("nli-calendar-event-circles", EVENT_SOURCE_ID)
-                .withFilter(Expression.eq(Expression.get("kind"), Expression.literal("calendar")))
-                .withProperties(
-                    circleRadius(9f), circleColor("#f7f0d4"), circleOpacity(0.98f),
-                    circleStrokeColor("#315c48"), circleStrokeWidth(1.6f),
-                    circleTranslate(new Float[] { 14f, -5f })
-                ));
-            style.addLayer(new SymbolLayer("nli-calendar-event-labels", EVENT_SOURCE_ID)
-                .withFilter(Expression.eq(Expression.get("kind"), Expression.literal("calendar")))
-                .withProperties(
-                    textField(Expression.get("calendar_label")), textFont(new String[] { "Noto Sans Regular" }),
-                    textSize(8.5f), textColor("#274c3c"),
-                    textAllowOverlap(true), textIgnorePlacement(true),
-                    textTranslate(new Float[] { 14f, -5f })
-                ));
-            style.addLayer(new CircleLayer("nli-exhibit-circles", EVENT_SOURCE_ID)
-                .withFilter(Expression.eq(Expression.get("kind"), Expression.literal("exhibit")))
-                .withProperties(
-                    circleRadius(6.5f), circleColor("#7c3fc5"), circleOpacity(0.94f),
-                    circleStrokeColor("#ffffff"), circleStrokeWidth(1.6f),
-                    circleTranslate(new Float[] { 14f, -5f })
-                ));
             style.addLayer(new SymbolLayer("nli-story-markers", COMMUNITY_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("contribution_kind"), Expression.literal("story")))
                 .withProperties(
@@ -1251,9 +1229,8 @@ final class NativeMapController {
                     iconImage(Expression.get("icon_key")),
                     iconSize(Expression.interpolate(
                         Expression.linear(), Expression.zoom(),
-                        Expression.stop(6, 0.62f),
-                        Expression.stop(10, 0.72f),
-                        Expression.stop(14, 0.86f)
+                        Expression.stop(7, 0.43f),
+                        Expression.stop(13, 0.86f)
                     )),
                     iconOpacity(Expression.coalesce(Expression.get("motion_opacity"), Expression.literal(1f))),
                     iconTranslate(Expression.array(Expression.get("display_offset"))),
@@ -1272,9 +1249,8 @@ final class NativeMapController {
                     iconImage("nli-icon-biography-canoe"),
                     iconSize(Expression.interpolate(
                         Expression.linear(), Expression.zoom(),
-                        Expression.stop(6, 0.62f),
-                        Expression.stop(10, 0.72f),
-                        Expression.stop(14, 0.86f)
+                        Expression.stop(7, 0.43f),
+                        Expression.stop(13, 0.86f)
                     )),
                     iconOpacity(Expression.coalesce(Expression.get("motion_opacity"), Expression.literal(1f))),
                     iconTranslate(Expression.array(Expression.get("display_offset"))),
@@ -1318,6 +1294,29 @@ final class NativeMapController {
                     )),
                     textTranslateAnchor(Property.TEXT_TRANSLATE_ANCHOR_VIEWPORT),
                     textOpacity(Expression.coalesce(Expression.get("motion_opacity"), Expression.literal(1f)))
+                ));
+            // Calendar dates remain readable above all moving and site icons.
+            style.addLayer(new CircleLayer("nli-calendar-event-circles", EVENT_SOURCE_ID)
+                .withFilter(Expression.eq(Expression.get("kind"), Expression.literal("calendar")))
+                .withProperties(
+                    circleRadius(9f), circleColor("#f7f0d4"), circleOpacity(0.98f),
+                    circleStrokeColor("#315c48"), circleStrokeWidth(1.6f),
+                    circleTranslate(new Float[] { 14f, -5f })
+                ));
+            style.addLayer(new SymbolLayer("nli-calendar-event-labels", EVENT_SOURCE_ID)
+                .withFilter(Expression.eq(Expression.get("kind"), Expression.literal("calendar")))
+                .withProperties(
+                    textField(Expression.get("calendar_label")), textFont(new String[] { "Noto Sans Regular" }),
+                    textSize(8.5f), textColor("#274c3c"),
+                    textAllowOverlap(true), textIgnorePlacement(true),
+                    textTranslate(new Float[] { 14f, -5f })
+                ));
+            style.addLayer(new CircleLayer("nli-exhibit-circles", EVENT_SOURCE_ID)
+                .withFilter(Expression.eq(Expression.get("kind"), Expression.literal("exhibit")))
+                .withProperties(
+                    circleRadius(6.5f), circleColor("#7c3fc5"), circleOpacity(0.94f),
+                    circleStrokeColor("#ffffff"), circleStrokeWidth(1.6f),
+                    circleTranslate(new Float[] { 14f, -5f })
                 ));
             styleReady = true;
             if (!usingOnlineArchive) startupStateReady = true;

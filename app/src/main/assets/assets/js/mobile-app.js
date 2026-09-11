@@ -20955,6 +20955,7 @@
         attributionControl: false,
         maplibreLogo: false
       });
+      MAP_UTILS.bindBiographyScale(state.map);
       state.map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
       state.map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right");
       collapseMobileMapAttribution();

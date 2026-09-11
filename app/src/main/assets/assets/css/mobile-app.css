@@ -8464,3 +8464,7 @@
 .native-animal-marker:hover .native-animal-shell img, .native-animal-marker:focus-visible .native-animal-shell img { filter:drop-shadow(0 0 3px #669c80); }
 .native-animal-marker:focus-visible { outline:2px solid #37624f!important; outline-offset:-6px; border-radius:10px!important; }
 body.mobile-profile-map-mode .native-animal-map-icon { visibility:hidden!important; pointer-events:none!important; }
+
+.mobile-moving-biography-shell { scale: var(--biography-icon-scale, 1); transform-origin: center; }
+.mobile-calendar-event-marker { z-index: 30; }
+#map :is(.mapboxgl-popup, .maplibregl-popup) { z-index: 40; }
