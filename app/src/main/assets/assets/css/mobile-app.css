@@ -8458,8 +8458,8 @@
 /* Wildlife shares the dog's 24 x 16 px visual scale, with a separate 44 px hit area. */
 .native-animal-map-icon { width:44px!important; height:44px!important; border:0!important; background:transparent!important; overflow:visible; pointer-events:auto; }
 .native-animal-marker { display:grid; place-items:center; width:44px!important; height:44px!important; min-width:0!important; min-height:0!important; padding:0!important; border:0!important; border-radius:0!important; background:transparent!important; box-shadow:none!important; cursor:pointer; touch-action:manipulation; }
-.native-animal-shell { display:block; width:24px; height:16px; pointer-events:none; }
-#map .native-animal-shell img { display:block; width:24px!important; height:16px!important; max-width:24px!important; max-height:16px!important; object-fit:contain; filter:drop-shadow(0 2px 3px rgba(12,29,47,.3)); pointer-events:none; }
+.native-animal-shell { display:block; width:40px; height:28px; pointer-events:none; }
+#map .native-animal-shell img { display:block; width:40px!important; height:28px!important; max-width:40px!important; max-height:28px!important; object-fit:contain; filter:drop-shadow(0 2px 3px rgba(12,29,47,.3)); pointer-events:none; }
 .native-animal-marker[data-direction="left"] .native-animal-shell { transform:scaleX(-1); }
 .native-animal-marker:hover .native-animal-shell img, .native-animal-marker:focus-visible .native-animal-shell img { filter:drop-shadow(0 0 3px #669c80); }
 .native-animal-marker:focus-visible { outline:2px solid #37624f!important; outline-offset:-6px; border-radius:10px!important; }
