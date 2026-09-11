@@ -167,7 +167,7 @@
     { slug: "wild-turkey", title: "Wild Turkey", habitat: "land", duration: 1200000, offset: 0.6,
       route: [[-72.804,40.837],[-72.797,40.839],[-72.79,40.837],[-72.797,40.833],[-72.804,40.837]] },
     { slug: "american-black-duck", title: "American Black Duck", habitat: "water", duration: 900000, offset: 0.25,
-      route: [[-72.48,40.835],[-72.466,40.839],[-72.45,40.831],[-72.467,40.828],[-72.48,40.835]] },
+      route: [[-72.482,40.859],[-72.476,40.862],[-72.47,40.857],[-72.477,40.855],[-72.482,40.859]] },
     { slug: "american-eel", title: "American Eel", habitat: "water", duration: 1200000, offset: 0.45,
       route: [[-72.485,40.827],[-72.47,40.83],[-72.455,40.825],[-72.47,40.82],[-72.485,40.827]] }
   ].map(item => Object.freeze({ ...item, route: Object.freeze(item.route.map(point => Object.freeze(point))) })));
