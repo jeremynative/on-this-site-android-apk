@@ -1266,7 +1266,7 @@ final class NativeMapController {
                     iconImage(Expression.get("icon_key")),
                     iconSize(Expression.switchCase(
                         Expression.eq(Expression.get("moving_kind"), Expression.literal("animal")),
-                        Expression.literal(0.75f), Expression.literal(0.42f))),
+                        Expression.literal(0.50f), Expression.literal(0.42f))),
                     iconAllowOverlap(true), iconIgnorePlacement(true)
                 ));
             style.addLayer(new SymbolLayer("nli-moving-whale-icons", MOVING_FEATURE_SOURCE_ID)
