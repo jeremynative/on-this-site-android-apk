@@ -12,4 +12,4 @@ assert(snapshot.timelineEvents.some(x=>x.wiki_article===138&&x.start_year===2021
 assert(!ctx.window.NLI_SHARED_MAP_UTILS.nativeAnimalHtml(ctx.window.NLI_SHARED_MAP_UTILS.nativeAnimals[0]).includes(' title='),'Duplicate animal tooltip');
 
 assert(source.includes('if (base.startsWith("animal-")) normalized.setDensity(android.util.DisplayMetrics.DENSITY_DEFAULT)'), 'Native animal sprites must retain logical size on high-density screens');
-assert(source.includes('Expression.literal(0.75f), Expression.literal(0.42f)'), 'Wildlife must have its larger scale without changing dog size');
+assert(source.includes('Expression.literal(0.50f), Expression.literal(0.42f)'), 'Wildlife artwork must use the balanced mobile scale without changing dog size');
