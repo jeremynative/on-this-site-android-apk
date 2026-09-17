@@ -473,11 +473,14 @@ final class NativeMapController {
         // Capture the settled camera before changing MapLibre padding. Padding
         // reprojects the camera synchronously, so waiting for the next posted
         // layout pass exposes one visibly stretched/shifted frame on tablets.
-        CameraPosition cameraToPreserve = nativeGestureInProgress()
+        CameraPosition previousCamera = nativeGestureInProgress()
             ? null
             : (stableCamera != null
                 ? stableCamera
                 : (map == null ? null : map.getCameraPosition()));
+        // A CameraPosition carries padding too. Restoring the old position
+        // verbatim would restore zero padding and put the selected icon under the drawer.
+        CameraPosition cameraToPreserve = cameraWithPanelPadding(previousCamera, safeRightOcclusion, safeBottomOcclusion);
         viewportLeft = safeLeft;
         viewportTop = safeTop;
         viewportRight = safeLeft + safeWidth;
@@ -2046,6 +2049,7 @@ final class NativeMapController {
         double desiredTilt = Double.isFinite(tilt) ? tilt : (current == null ? 0.0 : current.tilt);
         CameraPosition desired = new CameraPosition.Builder()
             .target(new LatLng(latitude, longitude))
+            .padding(new double[] { 0, 0, viewportRightOcclusion, viewportBottomOcclusion })
             .zoom(Math.max(6.0, Math.min(18.0, zoom)))
             .bearing(desiredBearing)
             .tilt(Math.max(0.0, Math.min(60.0, desiredTilt)))
@@ -2079,13 +2083,19 @@ final class NativeMapController {
         });
     }
 
+    static CameraPosition cameraWithPanelPadding(CameraPosition camera, int right, int bottom) {
+        return camera == null ? null : new CameraPosition.Builder(camera)
+            .padding(new double[] { 0, 0, right, bottom }).build();
+    }
+
     private boolean sameCamera(CameraPosition first, CameraPosition second) {
         if (first == null || second == null || first.target == null || second.target == null) return false;
         return Math.abs(first.target.getLongitude() - second.target.getLongitude()) < 0.00001
             && Math.abs(first.target.getLatitude() - second.target.getLatitude()) < 0.00001
             && Math.abs(first.zoom - second.zoom) < 0.01
             && Math.abs(first.bearing - second.bearing) < 0.1
-            && Math.abs(first.tilt - second.tilt) < 0.1;
+            && Math.abs(first.tilt - second.tilt) < 0.1
+            && java.util.Arrays.equals(first.padding, second.padding);
     }
 
     private void notifyCameraChanged() {

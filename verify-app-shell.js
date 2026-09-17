@@ -423,7 +423,9 @@ if (!bundledMobileJs.includes("function nativeUserLocationFeatures()")
     || !bundledMobileJs.includes("unread_count")) {
   throw new Error("The WebView/native bridge must preserve user location and unread-content state in the visible native map.");
 }
-if (!nativeMapController.includes("CameraPosition cameraToPreserve = nativeGestureInProgress()")
+if (!nativeMapController.includes("CameraPosition previousCamera = nativeGestureInProgress()")
+    || !nativeMapController.includes("cameraWithPanelPadding(previousCamera, safeRightOcclusion, safeBottomOcclusion)")
+    || !nativeMapController.includes(".padding(new double[] { 0, 0, viewportRightOcclusion, viewportBottomOcclusion })")
     || !/CameraPosition cameraToPreserve[\s\S]*?map\.setPadding\(0, 0, viewportRightOcclusion, viewportBottomOcclusion\)[\s\S]*?map\.moveCamera\(CameraUpdateFactory\.newCameraPosition\(cameraToPreserve\)\)/.test(nativeMapController)
     || !nativeMapController.includes("if (camera == null || map == null || nativeGestureInProgress()) return;")
     || !nativeMapController.includes("movingFeaturesJson = featuresJson;")
