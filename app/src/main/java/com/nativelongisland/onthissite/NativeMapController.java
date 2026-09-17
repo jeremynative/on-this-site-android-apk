@@ -1296,20 +1296,14 @@ final class NativeMapController {
                     textOpacity(Expression.coalesce(Expression.get("motion_opacity"), Expression.literal(1f)))
                 ));
             // Calendar dates remain readable above all moving and site icons.
-            style.addLayer(new CircleLayer("nli-calendar-event-circles", EVENT_SOURCE_ID)
-                .withFilter(Expression.eq(Expression.get("kind"), Expression.literal("calendar")))
-                .withProperties(
-                    circleRadius(9f), circleColor("#f7f0d4"), circleOpacity(0.98f),
-                    circleStrokeColor("#315c48"), circleStrokeWidth(1.6f),
-                    circleTranslate(new Float[] { 14f, -5f })
-                ));
             style.addLayer(new SymbolLayer("nli-calendar-event-labels", EVENT_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("kind"), Expression.literal("calendar")))
                 .withProperties(
-                    textField(Expression.get("calendar_label")), textFont(new String[] { "Noto Sans Regular" }),
-                    textSize(8.5f), textColor("#274c3c"),
-                    textAllowOverlap(true), textIgnorePlacement(true),
-                    textTranslate(new Float[] { 14f, -5f })
+                    iconImage(Expression.get("calendar_icon")), iconSize(0.5f),
+                    iconAnchor(Property.ICON_ANCHOR_BOTTOM_LEFT),
+                    iconAllowOverlap(true), iconIgnorePlacement(true),
+                    iconTranslate(new Float[] { 12f, -10f }),
+                    iconTranslateAnchor(Property.ICON_TRANSLATE_ANCHOR_VIEWPORT)
                 ));
             style.addLayer(new CircleLayer("nli-exhibit-circles", EVENT_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("kind"), Expression.literal("exhibit")))
@@ -1405,6 +1399,35 @@ final class NativeMapController {
         } catch (Exception error) {
             Log.w(LOG_TAG, "Could not enumerate bundled project map icons.", error);
         }
+    }
+
+    // The bitmap includes its date text: a full range must never overflow a tiny circle.
+    static Bitmap createCalendarBadgeBitmap(String label) {
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setTextSize(19f);
+        paint.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        int width = Math.max(52, (int) Math.ceil(paint.measureText(label)) + 20);
+        Bitmap bitmap = Bitmap.createBitmap(width, 54, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        RectF face = new RectF(2f, 6f, width - 2f, 52f);
+        paint.setColor(Color.WHITE);
+        canvas.drawRoundRect(face, 8f, 8f, paint);
+        paint.setColor(Color.parseColor("#315c48"));
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(2f);
+        canvas.drawRoundRect(face, 8f, 8f, paint);
+        paint.setStyle(Paint.Style.FILL);
+        canvas.drawRoundRect(new RectF(3f, 7f, width - 3f, 21f), 6f, 6f, paint);
+        canvas.drawRect(3f, 14f, width - 3f, 21f, paint);
+        paint.setStrokeWidth(4f);
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        canvas.drawLine(14f, 3f, 14f, 11f, paint);
+        canvas.drawLine(width - 14f, 3f, width - 14f, 11f, paint);
+        paint.setColor(Color.parseColor("#20382d"));
+        paint.setTextAlign(Paint.Align.CENTER);
+        Paint.FontMetrics metrics = paint.getFontMetrics();
+        canvas.drawText(label, width / 2f, 36f - (metrics.ascent + metrics.descent) / 2f, paint);
+        return bitmap;
     }
 
     private Bitmap createStoryBubbleBitmap() {
@@ -1857,6 +1880,22 @@ final class NativeMapController {
     private void setSource(Style style, String id, JSONObject collection) {
         GeoJsonSource source = style.getSourceAs(id);
         if (source == null) return;
+        if (EVENT_SOURCE_ID.equals(id) && collection != null) {
+            JSONArray features = collection.optJSONArray("features");
+            for (int i = 0; features != null && i < features.length(); i++) {
+                JSONObject feature = features.optJSONObject(i);
+                JSONObject properties = feature == null ? null : feature.optJSONObject("properties");
+                if (properties == null || !"calendar".equals(properties.optString("kind"))) continue;
+                String label = properties.optString("calendar_label", "").trim();
+                String imageKey = "nli-calendar-badge-" + label;
+                if (style.getImage(imageKey) == null) style.addImage(imageKey, createCalendarBadgeBitmap(label));
+                try {
+                    properties.put("calendar_icon", imageKey);
+                } catch (org.json.JSONException exception) {
+                    Log.w("NativeMap", "Could not prepare calendar badge", exception);
+                }
+            }
+        }
         source.setGeoJson(FeatureCollection.fromJson(collection == null ? EMPTY_FEATURE_COLLECTION : collection.toString()));
     }
 
@@ -1933,7 +1972,6 @@ final class NativeMapController {
         setLayerVisibility(style, "nli-biography-path-points", !profileMode);
         setLayerVisibility(style, "nli-biography-path-numbers", !profileMode);
         setLayerVisibility(style, "nli-biography-path-labels", !profileMode);
-        setLayerVisibility(style, "nli-calendar-event-circles", !profileMode);
         setLayerVisibility(style, "nli-calendar-event-labels", !profileMode);
         setLayerVisibility(style, "nli-exhibit-circles", !profileMode);
         setLayerVisibility(style, "nli-site-unread-badges", !profileMode);
@@ -2113,7 +2151,7 @@ final class NativeMapController {
                 "nli-approved-suggestion-labels", "nli-approved-suggestion-markers",
                 "nli-plant-marker-count-labels", "nli-plant-marker-count-badges", "nli-plant-marker-icons", "nli-plant-markers", "nli-story-markers", "nli-selected-site-label",
                 "nli-moving-feature-labels", "nli-moving-biography-canoes", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons", "nli-moving-ship-icons",
-                "nli-calendar-event-labels", "nli-calendar-event-circles", "nli-exhibit-circles",
+                "nli-calendar-event-labels", "nli-exhibit-circles",
                 "nli-biography-path-numbers", "nli-biography-path-points", "nli-biography-path-labels",
                 "nli-site-point-labels", "nli-site-point-icons", "nli-site-point-circles");
             if (exactPoints == null) exactPoints = Collections.emptyList();
@@ -2157,7 +2195,7 @@ final class NativeMapController {
             "nli-approved-suggestion-labels", "nli-approved-suggestion-markers",
             "nli-plant-marker-count-labels", "nli-plant-marker-count-badges", "nli-plant-marker-icons", "nli-plant-markers", "nli-story-markers", "nli-selected-site-label",
             "nli-moving-feature-labels", "nli-moving-biography-canoes", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons", "nli-moving-ship-icons",
-            "nli-calendar-event-labels", "nli-calendar-event-circles", "nli-exhibit-circles",
+            "nli-calendar-event-labels", "nli-exhibit-circles",
             "nli-biography-path-numbers", "nli-biography-path-points", "nli-biography-path-labels",
             "nli-site-point-labels", "nli-site-point-icons", "nli-site-point-circles",
             SITE_LAND_FILL_LAYER_ID, SITE_LAND_SATELLITE_FILL_LAYER_ID, SITE_NON_LAND_FILL_LAYER_ID);
