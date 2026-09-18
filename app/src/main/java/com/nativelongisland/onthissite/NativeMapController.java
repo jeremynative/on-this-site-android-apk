@@ -1267,15 +1267,26 @@ final class NativeMapController {
                     Expression.eq(Expression.get("moving_kind"), Expression.literal("animal"))))
                 .withProperties(
                     iconImage(Expression.get("icon_key")),
-                    iconSize(Expression.switchCase(
-                        Expression.eq(Expression.get("moving_kind"), Expression.literal("animal")),
-                        Expression.literal(0.50f), Expression.literal(0.42f))),
+                    // Zoom must be the outer expression for MapLibre camera styling.
+                    iconSize(Expression.interpolate(
+                        Expression.linear(), Expression.zoom(),
+                        Expression.stop(7, Expression.switchCase(
+                            Expression.eq(Expression.get("moving_kind"), Expression.literal("animal")),
+                            Expression.literal(0.20f), Expression.literal(0.21f))),
+                        Expression.stop(13, Expression.switchCase(
+                            Expression.eq(Expression.get("moving_kind"), Expression.literal("animal")),
+                            Expression.literal(0.40f), Expression.literal(0.42f)))
+                    )),
                     iconAllowOverlap(true), iconIgnorePlacement(true)
                 ));
             style.addLayer(new SymbolLayer("nli-moving-whale-icons", MOVING_FEATURE_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("moving_kind"), Expression.literal("whale")))
                 .withProperties(
-                    iconImage(Expression.get("icon_key")), iconSize(0.88f),
+                    iconImage(Expression.get("icon_key")),
+                    iconSize(Expression.interpolate(
+                        Expression.linear(), Expression.zoom(),
+                        Expression.stop(7, 0.32f), Expression.stop(13, 0.64f)
+                    )),
                     iconAllowOverlap(true), iconIgnorePlacement(true)
                 ));
             style.addLayer(new SymbolLayer("nli-moving-ship-icons", MOVING_FEATURE_SOURCE_ID)

@@ -12,4 +12,10 @@ assert(snapshot.timelineEvents.some(x=>x.wiki_article===138&&x.start_year===2021
 assert(!ctx.window.NLI_SHARED_MAP_UTILS.nativeAnimalHtml(ctx.window.NLI_SHARED_MAP_UTILS.nativeAnimals[0]).includes(' title='),'Duplicate animal tooltip');
 
 assert(source.includes('if (base.startsWith("animal-")) normalized.setDensity(android.util.DisplayMetrics.DENSITY_DEFAULT)'), 'Native animal sprites must retain logical size on high-density screens');
-assert(source.includes('Expression.literal(0.50f), Expression.literal(0.42f)'), 'Wildlife artwork must use the balanced mobile scale without changing dog size');
+for (const layer of ['dog', 'whale']) {
+  const block=source.split('new SymbolLayer("nli-moving-'+layer+'-icons"')[1].split('style.addLayer(')[0];
+  assert(block.includes('iconSize(Expression.interpolate('), layer+' needs zoom scaling');
+  assert(block.includes('Expression.linear(), Expression.zoom()'), layer+' must interpolate on camera zoom');
+  assert(block.includes('Expression.stop(7,') && block.includes('Expression.stop(13,'), layer+' zoom endpoints missing');
+}
+assert(source.includes('Expression.literal(0.40f), Expression.literal(0.42f)'), 'Wildlife maximum must be smaller while preserving dog size');
