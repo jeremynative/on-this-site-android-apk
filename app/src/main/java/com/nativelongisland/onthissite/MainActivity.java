@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260912-mobile-animal-scale-r255";
+    static final String APP_VERSION = "20260918-plant-camera-return-r256";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -117,6 +117,7 @@ public class MainActivity extends Activity {
     private static final long COMMENT_PHOTO_READ_RETRY_DELAY_MS = 350;
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
+    private static final String PREF_PENDING_PLANT_READY = "pending_plant_camera_ready";
     private static final String PREF_PENDING_COMMENT_URI = "pending_comment_camera_uri";
     private static final String APP_BASE_URL =
         "https://directus.nativelongisland.com/app/mobile-app-live.html";
@@ -211,6 +212,9 @@ public class MainActivity extends Activity {
     private String pendingPlantPhotoMimeType;
     private String pendingPlantPhotoFilename;
     private boolean hasPendingPlantPhotoDelivery;
+    private boolean plantPhotoProcessing;
+    private Uri plantPhotoDeliveryUri;
+    private final Runnable retryPlantPhotoDelivery = this::dispatchPendingPlantPhoto;
     private boolean pendingCommentPhotoOk;
     private String pendingCommentPhotoMessage;
     private String pendingCommentPhotoBase64;
@@ -2228,42 +2232,65 @@ public class MainActivity extends Activity {
     }
 
     private void deliverPlantBridgePhoto(Uri uri, int attempt) {
-        try {
-            byte[] bytes = MediaStorePhotoHelper.compressedJpegBytes(this, uri);
-            String base64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
-            clearPendingPlantCameraUri();
-            queuePlantPhoto(true, "", base64, "image/jpeg", "plant-observation-" + System.currentTimeMillis() + ".jpg");
-            getContentResolver().delete(uri, null, null);
-        } catch (Exception error) {
-            if (uri != null && attempt < COMMENT_PHOTO_READ_MAX_ATTEMPTS) {
-                startupHandler.postDelayed(
-                    () -> deliverPlantBridgePhoto(uri, attempt + 1),
-                    COMMENT_PHOTO_READ_RETRY_DELAY_MS * (attempt + 1)
-                );
-                return;
+        if (plantPhotoProcessing) return;
+        plantPhotoProcessing = true;
+        Log.i(LOG_TAG, "Preparing returned Plant ID photo off the UI thread.");
+        // Retain the private source until JavaScript accepts it. A camera can
+        // evict our process; the ready flag distinguishes a returned image
+        // from a capture that is still in progress.
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+            .putBoolean(PREF_PENDING_PLANT_READY, true).apply();
+        new Thread(() -> {
+            try {
+                byte[] bytes = MediaStorePhotoHelper.compressedJpegBytes(this, uri);
+                String base64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+                startupHandler.post(() -> {
+                    plantPhotoProcessing = false;
+                    if (isDestroyed()) return;
+                    plantPhotoDeliveryUri = uri;
+                    queuePlantPhoto(true, "", base64, "image/jpeg", "plant-observation-" + System.currentTimeMillis() + ".jpg");
+                });
+            } catch (Exception error) {
+                startupHandler.post(() -> {
+                    plantPhotoProcessing = false;
+                    if (isDestroyed()) return;
+                    if (uri != null && attempt < COMMENT_PHOTO_READ_MAX_ATTEMPTS) {
+                        startupHandler.postDelayed(() -> deliverPlantBridgePhoto(uri, attempt + 1),
+                            COMMENT_PHOTO_READ_RETRY_DELAY_MS * (attempt + 1));
+                        return;
+                    }
+                    clearPendingPlantCameraUri();
+                    if (uri != null) getContentResolver().delete(uri, null, null);
+                    queuePlantPhoto(false, "The captured plant photo could not be read. Please try again.", "", "", "");
+                });
             }
-            clearPendingPlantCameraUri();
-            if (uri != null) getContentResolver().delete(uri, null, null);
-            queuePlantPhoto(false, "The captured plant photo could not be read. Please try again.", "", "", "");
-        }
+        }, "plant-photo-prepare").start();
     }
 
     private void savePendingPlantCameraUri(Uri uri) {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .edit()
             .putString(PREF_PENDING_PLANT_URI, uri == null ? "" : uri.toString())
-            .apply();
+            .putBoolean(PREF_PENDING_PLANT_READY, false)
+            .commit();
     }
 
     private void restorePendingPlantCameraUri() {
         String uri = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(PREF_PENDING_PLANT_URI, "");
-        if (uri != null && !uri.isEmpty()) pendingPlantBridgeCameraUri = Uri.parse(uri);
+        if (uri != null && !uri.isEmpty()) {
+            pendingPlantBridgeCameraUri = Uri.parse(uri);
+            if (!hasPendingPlantPhotoDelivery && !plantPhotoProcessing
+                && getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(PREF_PENDING_PLANT_READY, false)) {
+                deliverPlantBridgePhoto(pendingPlantBridgeCameraUri);
+            }
+        }
     }
 
     private void clearPendingPlantCameraUri() {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .edit()
             .remove(PREF_PENDING_PLANT_URI)
+            .remove(PREF_PENDING_PLANT_READY)
             .apply();
     }
 
@@ -2275,15 +2302,13 @@ public class MainActivity extends Activity {
         pendingPlantPhotoFilename = filename == null ? "" : filename;
         hasPendingPlantPhotoDelivery = true;
         dispatchPendingPlantPhoto();
-        if (webView != null) {
-            webView.postDelayed(this::dispatchPendingPlantPhoto, 500);
-            webView.postDelayed(this::dispatchPendingPlantPhoto, 1500);
-            webView.postDelayed(this::dispatchPendingPlantPhoto, 3000);
-        }
     }
 
     private void dispatchPendingPlantPhoto() {
-        if (!hasPendingPlantPhotoDelivery || webView == null) return;
+        startupHandler.removeCallbacks(retryPlantPhotoDelivery);
+        if (!hasPendingPlantPhotoDelivery || webView == null || isDestroyed()) return;
+        // A restored shell can need longer than three seconds to open the form.
+        startupHandler.postDelayed(retryPlantPhotoDelivery, 1000);
         notifyPlantPhoto(
             pendingPlantPhotoOk,
             pendingPlantPhotoMessage,
@@ -2303,9 +2328,16 @@ public class MainActivity extends Activity {
                 + jsString(mimeType == null ? "" : mimeType) + ","
                 + jsString(filename == null ? "" : filename) + ")",
             value -> {
-                if ("true".equals(value)) {
+                if ("true".equals(value) && filename.equals(pendingPlantPhotoFilename)) {
+                    Log.i(LOG_TAG, "Plant ID photo accepted by restored content panel.");
                     hasPendingPlantPhotoDelivery = false;
                     pendingPlantPhotoBase64 = "";
+                    startupHandler.removeCallbacks(retryPlantPhotoDelivery);
+                    clearPendingPlantCameraUri();
+                    if (plantPhotoDeliveryUri != null) {
+                        getContentResolver().delete(plantPhotoDeliveryUri, null, null);
+                        plantPhotoDeliveryUri = null;
+                    }
                 }
             }
         );

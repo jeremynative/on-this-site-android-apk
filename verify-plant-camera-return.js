@@ -1,0 +1,11 @@
+const fs=require('node:fs'),assert=require('node:assert/strict');
+const java=fs.readFileSync('app/src/main/java/com/nativelongisland/onthissite/MainActivity.java','utf8');
+const prepare=java.slice(java.indexOf('private void deliverPlantBridgePhoto(Uri uri, int attempt)'),java.indexOf('private void savePendingPlantCameraUri'));
+assert(prepare.indexOf('new Thread(')<prepare.indexOf('compressedJpegBytes('),'Photo decoding must run off the main thread');
+assert(prepare.includes('PREF_PENDING_PLANT_READY, true'),'Returned photo must survive activity/process recreation');
+const success=prepare.slice(0,prepare.indexOf('catch (Exception'));
+assert(!success.includes('clearPendingPlantCameraUri()')&&!success.includes('getContentResolver().delete('),'Retain the source until JavaScript acknowledges it');
+assert(java.includes('startupHandler.postDelayed(retryPlantPhotoDelivery, 1000)'),'Retry slow page restoration');
+const ack=java.slice(java.indexOf('if ("true".equals(value) && filename.equals(pendingPlantPhotoFilename))'));
+assert(ack.indexOf('clearPendingPlantCameraUri()')<ack.indexOf('void launchCommentBridgeCamera'),'Clear acknowledged source only after accepted delivery');
+console.log('PASS: durable camera source, worker-thread preparation, slow-start retry and acknowledged cleanup.');

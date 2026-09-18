@@ -10658,9 +10658,26 @@
       await processPlantPhotoFile(section, file);
     }
 
+    function revealPlantIdentification(section) {
+      if (section.matches("details")) section.open = true;
+      const panel = section.closest(".detail,.sheet");
+      panel?.classList.add("plant-id-fullscreen");
+      const output = section.querySelector("[data-plant-preview]");
+      requestAnimationFrame(() => {
+        if (!output?.isConnected || !panel?.classList.contains("open")) return;
+        output.scrollIntoView({ block: "start", behavior: "instant" });
+      });
+    }
+
     async function processPlantPhotoFile(section, file) {
       const button = section.querySelector("[data-take-plant-photo]");
       const original = button?.textContent || "Take plant photo";
+      if (section._plantIdentifying) return;
+      section._plantIdentifying = true;
+      section._plantAnalysis = null;
+      section._plantPhotoError = "";
+      renderPlantContext(section);
+      revealPlantIdentification(section);
       try {
         if (button) {
           button.setAttribute("aria-disabled", "true");
@@ -10676,10 +10693,12 @@
         if (button) button.textContent = "Analyzing...";
         showBanner("Analyzing compressed plant photo...");
         section._plantAnalysis = await analyzePlantPhoto(compressed, section);
-        renderPlantContext(section);
       } catch (error) {
-        showBanner(error.message || "Could not prepare that plant photo.");
+        section._plantPhotoError = error.message || "Could not prepare that plant photo. Please try another photo.";
+        showBanner(section._plantPhotoError);
       } finally {
+        section._plantIdentifying = false;
+        renderPlantContext(section);
         if (button) {
           button.removeAttribute("aria-disabled");
           button.textContent = original;
@@ -10848,18 +10867,65 @@
       return true;
     }
 
+    const PLANT_CAMERA_RETURN_KEY = "nli-plant-camera-return";
+    function savePlantCameraReturn() {
+      const section = state.pendingPlantObservationPanel;
+      const context = {
+        savedAt: Date.now(),
+        story: section === plantStoryPanelEl,
+        site: state.selectedSlug || "",
+        notes: section?.querySelector("[data-plant-notes]")?.value || "",
+        location: state.userLocation || null
+      };
+      try { localStorage.setItem(PLANT_CAMERA_RETURN_KEY, JSON.stringify(context)); } catch {}
+      captureAndroidLifecycleSnapshot();
+    }
+
+    async function restorePlantCameraReturn() {
+      let context = null;
+      try { context = JSON.parse(localStorage.getItem(PLANT_CAMERA_RETURN_KEY) || "null"); } catch {}
+      if (!context || Date.now() - context.savedAt > 3600000) context = null;
+      if (context?.site && !context.story) {
+        await openSite(context.site, { focus: false, skipRoute: true });
+      } else {
+        openSheet(plantStorySheetEl);
+        if (context?.location) state.userLocation = context.location;
+        updatePlantStoryLocation();
+      }
+      const section = context?.site && !context.story
+        ? detailEl?.querySelector("[data-plant-observation]") : plantStoryPanelEl;
+      if (!section) throw new Error("Please reopen Plant ID to receive your photo.");
+      const notes = section.querySelector("[data-plant-notes]");
+      if (notes && context) notes.value = context.notes || "";
+      state.pendingPlantObservationPanel = section;
+      revealPlantIdentification(section);
+    }
+
     window.onAndroidPlantPhoto = (ok, message, base64, mimeType, filename) => {
-      const section = state.pendingPlantObservationPanel || document.querySelector("[data-plant-observation][open]") || document.querySelector("[data-plant-observation]");
-      state.pendingPlantObservationPanel = null;
+      if (state.mobileStartupRendering) return false;
       if (!ok) {
+        state.pendingPlantObservationPanel = null;
+        try { localStorage.removeItem(PLANT_CAMERA_RETURN_KEY); } catch {}
         showBanner(message || "Plant photo was cancelled.");
         return true;
       }
-      if (!section || !base64) {
-        showBanner("Could not return the plant photo to the page.");
-        return true;
+      if (!base64) return false;
+      if (filename && state.acceptedPlantCameraFilename === filename) return true;
+      const section = state.pendingPlantObservationPanel;
+      // Never acknowledge a photo into an arbitrary hidden form after Android
+      // recreates this page. Restore its destination first; native retries.
+      if (!section?.isConnected || !section.closest(".open")) {
+        if (!state.plantCameraReturnRestoring) {
+          state.plantCameraReturnRestoring = restorePlantCameraReturn()
+            .catch(error => showBanner(error.message))
+            .finally(() => { state.plantCameraReturnRestoring = null; });
+        }
+        return false;
       }
       const file = fileFromBase64(base64, mimeType, filename);
+      state.acceptedPlantCameraFilename = filename;
+      state.pendingPlantObservationPanel = null;
+      try { localStorage.removeItem(PLANT_CAMERA_RETURN_KEY); } catch {}
       processPlantPhotoFile(section, file).catch(error => showBanner(error.message || "Could not analyze that plant photo."));
       return true;
     };
@@ -15356,6 +15422,7 @@
     function nativeTakePlantPhoto() {
       try {
         if (window.AndroidApp?.takePlantPhoto) {
+          savePlantCameraReturn();
           const token = androidBridgeToken();
           if (token) window.AndroidApp.takePlantPhoto(token);
           else window.AndroidApp.takePlantPhoto();
@@ -21845,9 +21912,16 @@
       if (event.target.closest("[data-take-plant-photo]")) {
         event.preventDefault();
         state.pendingPlantObservationPanel = panel;
+        if (panel._plantIdentifying) return true;
+        // Use the phone camera's own lens controls instead of cropping a web preview.
+        if (nativeTakePlantPhoto()) return true;
+        if (matchMedia("(pointer: coarse)").matches) {
+          openPlantFileInput(panel, true);
+          return true;
+        }
         const button = panel.querySelector("[data-take-plant-photo]");
         if (button) button.textContent = "Opening camera...";
-        openInAppPlantCamera(panel).then(opened => {
+        window.NLI_PLANT_CAMERA.open(panel, processPlantPhotoFile, showBanner).then(opened => {
           if (button) button.textContent = "Take plant photo";
           if (!opened && !nativeTakePlantPhoto()) openPlantFileInput(panel, true);
         }).catch(error => {
@@ -21864,8 +21938,10 @@
       }
       if (event.target.closest("[data-retake-plant-photo]")) {
         event.preventDefault();
+        if (panel._plantIdentifying) return true;
         resetPlantPhotoPanel(panel);
-        openPlantFileInput(panel, true);
+        state.pendingPlantObservationPanel = panel;
+        if (!nativeTakePlantPhoto()) openPlantFileInput(panel, true);
         return true;
       }
       if (event.target.closest("[data-retry-plant-identification]")) {
@@ -21875,19 +21951,8 @@
           showBanner("Take or upload a photo before trying identification again.");
           return true;
         }
-        const retryButton = event.target.closest("[data-retry-plant-identification]");
-        retryButton.disabled = true;
-        retryButton.textContent = "Trying again...";
         state.plantProviderStatus = null;
-        analyzePlantPhoto(file, panel).then(analysis => {
-          panel._plantAnalysis = analysis;
-          renderPlantContext(panel);
-          showBanner(analysis.status === "identified" ? "Identification updated." : "No reliable match yet. You can retry or save it for review.");
-        }).catch(error => {
-          panel._plantAnalysis = pendingPlantReviewAnalysis();
-          renderPlantContext(panel);
-          showBanner(error.message || "Identification is still unavailable. You can save the photo for review.");
-        });
+        processPlantPhotoFile(panel, panel._plantOriginalPhotoFile || file);
         return true;
       }
       if (event.target.closest("[data-submit-plant-report]")) {

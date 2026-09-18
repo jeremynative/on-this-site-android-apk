@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260912-mobile-animal-scale-r255";
+const expectedBuild = "20260918-plant-camera-return-r256";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -129,14 +129,15 @@ if (!bundledMobileJs.includes('{ label: "Unkechaug homeland", place: "Poospatuck
   throw new Error("Bundled Android runtime must map Indigenous biographies to their homelands and keep them clear of site pins.");
 }
 
-if (!bundledMobileJs.includes("function bindPlantCameraZoom(overlay, video, track)")
-    || !bundledMobileJs.includes("applyConstraints({ advanced: [{ zoom: value }] })")
-    || !bundledMobileJs.includes("capturePlantVideoFrame(video, zoomState?.optical ? 1 : zoomState?.value || 1)")
+const bundledPlantCamera = fs.readFileSync("app/src/main/assets/assets/js/shared-plant-camera.js", "utf8");
+if (!bundledPlantCamera.includes("function bindPlantCameraZoom(overlay, video, track)")
+    || !bundledPlantCamera.includes("applyConstraints({ advanced: [{ zoom: value }] })")
+    || !bundledPlantCamera.includes("capturePlantVideoFrame(video, zoomState?.optical ? 1 : zoomState?.value || 1)")
     || !bundledMobileJs.includes("section._plantPhotoTakenAt = await plantPhotoTakenAt(file)")
     || !bundledMobileJs.includes("public_submitted_at: capturedAt")
     || !bundledMobileCss.includes(".plant-camera-zoom-indicator")
-    || !bundledMobileJs.includes("Pinch the live image to zoom")
-    || bundledMobileJs.includes('data-plant-camera-zoom type="range"')
+    || !bundledPlantCamera.includes("Pinch the live image to zoom")
+    || bundledPlantCamera.includes('data-plant-camera-zoom type="range"')
     || !bundledMobileCss.includes("padding-bottom: max(80px, calc(var(--app-bottom-safe) + 28px));")
     || !bundledSharedPlantUtils.includes("function plantObservationSeasonGroups(observations = [])")) {
   throw new Error("Android plant camera must support optical or centered digital zoom and group submitted photos by capture season.");
