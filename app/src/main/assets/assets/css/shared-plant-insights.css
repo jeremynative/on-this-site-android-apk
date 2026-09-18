@@ -24,3 +24,20 @@
 .site-plant-cards { grid-template-columns: minmax(0, 1fr); container-type: inline-size; }
 .site-plant-card > img { height: auto; max-height: 340px; object-fit: contain; align-self: start; }
 @container (max-width: 520px) { .site-plant-card { grid-template-columns: minmax(0, 1fr); } .site-plant-card-body { padding: 12px; } .site-plant-card > img { max-height: 230px; } }
+@media (max-width: 520px) {
+  .plant-insights .site-plant-fact { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+
+/* Keep the capture handoff and actual identification progress in view. */
+[data-plant-preview] { scroll-margin-top: 56px; }
+.plant-id-spinner { width: 24px; height: 24px; border: 3px solid #dbe7df; border-top-color: #486d5c; border-radius: 50%; animation: plant-id-spin 1s linear infinite; }
+@keyframes plant-id-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .plant-id-spinner { animation: none; } }
+.detail.open.plant-id-fullscreen, .sheet.open.plant-id-fullscreen {
+  top: var(--app-top-safe, 0px) !important;
+  bottom: var(--app-bottom-safe, 0px) !important;
+  height: calc(100dvh - var(--app-top-safe, 0px) - var(--app-bottom-safe, 0px)) !important;
+  max-height: none !important;
+  border-radius: 0;
+  transition: none;
+}
