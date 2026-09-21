@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260918-mobile-animal-scale-r257";
+    static final String APP_VERSION = "20260920-map-panel-gestures-r258";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -1187,7 +1187,7 @@ public class MainActivity extends Activity {
                 + "style.id='nli-native-map-style';"
                 + "style.textContent='html.nli-native-map,html.nli-native-map body{background:transparent!important;}"
                     + "html.nli-native-map .app,html.nli-native-map .mobile-map-shell{background:transparent!important;}"
-                    + "html.nli-native-map #map{background:transparent!important;}"
+                    + "html.nli-native-map #map{background:transparent!important;touch-action:none;}"
                     + "html.nli-native-map #map>.offline-map-index{visibility:hidden!important;}"
                     + "html.nli-native-map #map .mapboxgl-canvas-container,html.nli-native-map #map .maplibregl-canvas-container,"
                     + "html.nli-native-map #map .mapboxgl-control-container,html.nli-native-map #map .maplibregl-control-container{visibility:hidden!important;}"
@@ -1198,11 +1198,11 @@ public class MainActivity extends Activity {
                     + "var r=map.getBoundingClientRect();var visible=r.width>2&&r.height>2&&r.bottom>0&&r.right>0;"
                     + "var panel=document.getElementById('detail');if(!panel||!panel.classList.contains('open'))panel=document.querySelector('.sheet.open');"
                     + "var bottomOcclusion=0,rightOcclusion=0;"
-                    + "if(panel){var panelStyle=getComputedStyle(panel);var panelWidth=Math.max(panel.offsetWidth||0,panel.clientWidth||0);var panelHeight=Math.max(panel.offsetHeight||0,panel.clientHeight||0);"
+                    + "if(panel){var panelStyle=getComputedStyle(panel);var panelRect=panel.getBoundingClientRect();var panelWidth=Math.max(panel.offsetWidth||0,panel.clientWidth||0);var panelHeight=Math.max(panel.offsetHeight||0,panel.clientHeight||0);"
                         + "var tabletLandscape=document.documentElement.dataset.nativeTabletLandscape==='true'||document.body&&document.body.dataset.nativeTabletLandscape==='true';"
                         + "var rightDocked=tabletLandscape&&panelWidth>2&&panelHeight>Math.min(window.innerHeight*0.5,r.height*0.66);"
-                        + "if(rightDocked){rightOcclusion=Math.max(0,Math.min(r.width,panelWidth));}"
-                        + "else if(panelStyle.display!=='none'&&panelStyle.visibility!=='hidden'&&panelHeight>2){bottomOcclusion=Math.max(0,Math.min(r.height,panelHeight));}}"
+                        + "if(panelStyle.display!=='none'&&panelStyle.visibility!=='hidden'&&rightDocked){rightOcclusion=Math.max(0,Math.min(r.right,panelRect.right)-Math.max(r.left,panelRect.left));}"
+                        + "else if(panelStyle.display!=='none'&&panelStyle.visibility!=='hidden'&&panelHeight>2){bottomOcclusion=Math.max(0,Math.min(r.bottom,panelRect.bottom)-Math.max(r.top,panelRect.top));}}"
                     + "window.AndroidApp.syncNativeMapViewport(token,r.left,r.top,r.width,r.height,bottomOcclusion,rightOcclusion,window.innerWidth,window.innerHeight,visible);"
                     + "var blocked=[];var protectedElements=[];var protect=function(el){"
                         + "if(el.hidden||el.closest('.mapboxgl-control-container,.maplibregl-control-container,.mapboxgl-marker,.maplibregl-marker'))return;"
@@ -1218,7 +1218,7 @@ public class MainActivity extends Activity {
                     + "window.AndroidApp.syncNativeMapTouchRegions(token,JSON.stringify(blocked),window.innerWidth,window.innerHeight);return true;};"
                 + "window.__nliSyncNativeMapViewport=sync;"
                 + "window.addEventListener('resize',sync,{passive:true});window.addEventListener('scroll',sync,{passive:true});"
-                + "if(window.ResizeObserver){var ro=new ResizeObserver(sync);var map=document.getElementById('map');if(map)ro.observe(map);var app=document.querySelector('.app');if(app)ro.observe(app);window.__nliNativeMapResizeObserver=ro;}"
+                + "if(window.ResizeObserver){var ro=new ResizeObserver(sync);var map=document.getElementById('map');if(map)ro.observe(map);var app=document.querySelector('.app');if(app)ro.observe(app);document.querySelectorAll('.detail,.sheet').forEach(function(panel){ro.observe(panel);});window.__nliNativeMapResizeObserver=ro;}"
                 + "if(window.MutationObserver){var mt=0,mtSettled=0;var mo=new MutationObserver(function(){if(!mt)mt=setTimeout(function(){mt=0;sync();},16);clearTimeout(mtSettled);mtSettled=setTimeout(sync,420);});mo.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','class','open','data-native-tablet-landscape']});window.__nliNativeMapMutationObserver=mo;}"
                 + "requestAnimationFrame(function(){sync();requestAnimationFrame(sync);});"
                 + "setTimeout(sync,250);setTimeout(sync,900);setTimeout(sync,2200);setTimeout(sync,5000);"

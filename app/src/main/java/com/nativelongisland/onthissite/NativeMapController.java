@@ -588,10 +588,11 @@ final class NativeMapController {
                 }
             }
             boolean blocked = pointInBlockedRegion(rootX, rootY);
+            // Camera padding is not a touch exclusion: only actual UI rectangles block gestures.
             routingGesture = rootX >= viewportLeft
-                && rootX <= viewportInteractiveRight
+                && rootX <= viewportRight
                 && rootY >= viewportTop
-                && rootY <= viewportInteractiveBottom
+                && rootY <= viewportBottom
                 && !blocked;
             if (routingGesture) {
                 routedGestureMoved = false;

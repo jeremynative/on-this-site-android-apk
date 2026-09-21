@@ -1373,3 +1373,9 @@ Added native dog-layer support and facing variants for five dog-scale navy wildl
 Verified debug build, shell/menu checks, Play code readiness and dedicated symbol/offline article guards. Physical iPlay T811MA256GB23516041180 QA confirms five native symbols, no duplicate DOM animals, continuous native updates, and tapping the deer opens its cited article. Rotate/tilt and camera changes exercised. S25 is not attached. Production app data was not cleared; separate .qa package used.
 
 Branch feat/native-animal-map-20260909 based on main 23d6bb6. Web PR288/289 deliver corresponding shared code. Safest next step: finish signed release, verify published APK assets and successful web deployment, remove QA package, then final handoff and notification. No final notification at this intermediate checkpoint.
+
+## 2026-09-20 mobile map gestures with an open site panel
+- Fixed native viewport occlusion to measure the actual panel/map intersection instead of subtracting the entire drawer height. Touch routing uses the full map bounds plus actual protected UI rectangles, independently of camera padding. ResizeObserver now watches drawers/sheets.
+- Native map surface reserves pan/pinch gestures; build marker 20260920-map-panel-gestures-r258. Bundled content is unchanged.
+- Verified executed bridge geometry tests for phone, resized map, offscreen/hidden panel, resize, tablet and menu touch ownership; shell checks and debug APK build pass. Chrome touch QA for companion web CSS verified pan/pinch, unchanged page scale and independent article scrolling. No physical phone was used.
+- Branch fix/map-gestures-20260920. Next: merge and watch signed Android release; Google Play upload remains dependent on its configured service-account secret.
