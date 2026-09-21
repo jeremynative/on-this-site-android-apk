@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260918-mobile-animal-scale-r257";
+const expectedBuild = "20260920-map-panel-gestures-r258";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -266,7 +266,7 @@ if (!nativeMapController.includes("logoEnabled(false)")
     || !nativeMapController.includes("refreshMapCreditForVisibleBasemap();")
     || !nativeMapController.includes("params.gravity = Gravity.BOTTOM | Gravity.END")
     || !nativeMapController.includes("viewportBottomOcclusion + dp(expanded ? 92 : 4)")
-    || !nativeMapController.includes("rootY <= viewportInteractiveBottom")
+    || !nativeMapController.includes("rootY <= viewportBottom")
     || !nativeMapController.includes('"nli-site-unread-badges"')
     || !nativeMapController.includes('"nli-site-unread-counts"')
     || !nativeMapController.includes('"nli-site-point-icons"')
@@ -2892,3 +2892,5 @@ console.log(`Android shell verifier passed: ${expectedBuild}`);
 
 
 require('./verify-native-menu-touch.js');
+
+require('./verify-native-panel-gestures.js');
