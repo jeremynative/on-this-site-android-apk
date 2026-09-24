@@ -1,5 +1,10 @@
 const fs=require('node:fs'),assert=require('node:assert/strict');
 const java=fs.readFileSync('app/src/main/java/com/nativelongisland/onthissite/MainActivity.java','utf8');
+const renderer=java.slice(java.indexOf('public boolean onRenderProcessGone'),java.indexOf('public void onReceivedError'));
+assert(renderer.includes('PREF_RENDERER_RECOVERY_ATTEMPTED'),'Renderer failure must have a persisted one-shot recovery guard');
+assert(renderer.includes('MediaStorePhotoHelper.hasPhotoData(MainActivity.this, pendingPlantBridgeCameraUri)'),'Renderer recovery must preserve a completed Plant ID camera output');
+assert(renderer.includes('recreate()'),'Renderer failure must rebuild the dead WebView instead of immediately abandoning the in-app flow');
+assert(renderer.indexOf('recreate()')<renderer.indexOf('showWebViewCompatibilityFallback()'),'Browser fallback must be reserved for a repeated recovery failure');
 const prepare=java.slice(java.indexOf('private void deliverPlantBridgePhoto(Uri uri, int attempt)'),java.indexOf('private void savePendingPlantCameraUri'));
 assert(prepare.indexOf('new Thread(')<prepare.indexOf('compressedJpegBytes('),'Photo decoding must run off the main thread');
 assert(prepare.includes('PREF_PENDING_PLANT_READY, true'),'Returned photo must survive activity/process recreation');
