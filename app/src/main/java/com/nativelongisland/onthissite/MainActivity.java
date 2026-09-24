@@ -118,6 +118,7 @@ public class MainActivity extends Activity {
     private static final String PREFS_NAME = "on_this_site_native_state";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String PREF_PENDING_PLANT_READY = "pending_plant_camera_ready";
+    private static final String PREF_RENDERER_RECOVERY_ATTEMPTED = "webview_renderer_recovery_attempted";
     private static final String PREF_PENDING_COMMENT_URI = "pending_comment_camera_uri";
     private static final String APP_BASE_URL =
         "https://directus.nativelongisland.com/app/mobile-app-live.html";
@@ -231,6 +232,7 @@ public class MainActivity extends Activity {
     private boolean webTouchStartedOnLocationControl;
     private boolean loadingBundledFallback;
     private boolean appShellLoaded;
+    private boolean rendererRecoveryAttempted;
     private boolean runtimePermissionPromptActive;
     private boolean locationPermissionDeniedForSession;
     private boolean notificationPermissionPromptedForSession;
@@ -465,6 +467,8 @@ public class MainActivity extends Activity {
 
         if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true);
         nativeMapEnabled = true;
+        rendererRecoveryAttempted = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .getBoolean(PREF_RENDERER_RECOVERY_ATTEMPTED, false);
         nativeMapBundleQaEnabled = BuildConfig.DEBUG
             && getIntent().getBooleanExtra("native_map_bundle_qa", false);
 
@@ -666,8 +670,24 @@ public class MainActivity extends Activity {
 
             @Override
             public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
-                Log.e(LOG_TAG, "WebView renderer ended; showing browser compatibility fallback.");
-                showWebViewCompatibilityFallback();
+                Log.e(LOG_TAG, "WebView renderer ended; attempting one in-app WebView recovery.");
+                if (!rendererRecoveryAttempted && !isFinishing() && !isDestroyed()) {
+                    rendererRecoveryAttempted = true;
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                        .edit()
+                        .putBoolean(PREF_RENDERER_RECOVERY_ATTEMPTED, true)
+                        .apply();
+                    if (pendingPlantBridgeCameraUri != null
+                        && MediaStorePhotoHelper.hasPhotoData(MainActivity.this, pendingPlantBridgeCameraUri)) {
+                        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                            .edit()
+                            .putBoolean(PREF_PENDING_PLANT_READY, true)
+                            .apply();
+                    }
+                    recreate();
+                } else {
+                    showWebViewCompatibilityFallback();
+                }
                 return true;
             }
 
@@ -1427,6 +1447,11 @@ public class MainActivity extends Activity {
                         return;
                     }
                     appShellLoaded = true;
+                    rendererRecoveryAttempted = false;
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                        .edit()
+                        .remove(PREF_RENDERER_RECOVERY_ATTEMPTED)
+                        .apply();
                     appReadinessProbeActive = false;
                     startupHandler.removeCallbacks(revealBundledFallback);
                     startupHandler.removeCallbacks(offlineRenderDeadline);
