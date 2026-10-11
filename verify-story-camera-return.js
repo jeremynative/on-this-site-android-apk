@@ -27,3 +27,6 @@ const context={window:{onAndroidCommentPhoto:()=>ready,__otsReceiveNativeComment
 for(let attempt=0;attempt<30;attempt++)assert.equal(vm.runInNewContext(script,context),false);
 assert.equal(fallbackCalls,0);ready=true;assert.equal(vm.runInNewContext(script,context),true);
 console.log('PASS executed native receiver dispatch: slow readiness never acknowledges through another form.');
+
+assert(java.includes("data-camera-return-ready"));
+assert(java.includes('!value.contains("camera-ready")'), "Restored camera composer must bypass the map stability wait");

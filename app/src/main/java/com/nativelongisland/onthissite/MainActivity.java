@@ -1437,7 +1437,8 @@ public class MainActivity extends Activity {
                 + "if(window.__nliNativeStartupDomSignature!==startupDomSignature){window.__nliNativeStartupDomSignature=startupDomSignature;window.__nliNativeStartupDomChangedAt=startupDomNow;}"
                 + "var startupDomStable=startupDomNow-Number(window.__nliNativeStartupDomChangedAt||startupDomNow)>=" + STARTUP_DOM_STABLE_MS + ";"
                 + "var onlineReady=!offline&&shell&&loaderHidden&&archiveTextReady&&authoritativeGeometryReady&&deferredReady&&mapUiReady&&startupDomStable;"
-                + "return offlineReady||onlineReady?'ready':shell?'starting':'empty';"
+                + "var cameraDraftReady=!offline&&shell&&loaderHidden&&!!document.querySelector('#map-story-sheet.open[data-camera-return-ready=\"true\"]');"
+                + "return cameraDraftReady?'camera-ready':offlineReady||onlineReady?'ready':shell?'starting':'empty';"
                 + "}catch(error){return 'empty:'+String(error&&error.message||error);}})();",
             value -> {
                 if (appShellLoaded || !url.equals(appReadinessProbeUrl)) return;
@@ -1448,6 +1449,7 @@ public class MainActivity extends Activity {
                 if (value != null && value.contains("ready")) {
                     requestNativeMapViewportSync(0L);
                     if (nativeMapEnabled
+                        && !value.contains("camera-ready")
                         && nativeMapController != null
                         && !nativeMapController.isStartupVisualStable(STARTUP_VISUAL_STABLE_MS)
                         && appReadinessProbeAttempts < APP_READINESS_MAX_ATTEMPTS) {
