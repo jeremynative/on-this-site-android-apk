@@ -1379,3 +1379,7 @@ Branch feat/native-animal-map-20260909 based on main 23d6bb6. Web PR288/289 deli
 - Native map surface reserves pan/pinch gestures; build marker 20260920-map-panel-gestures-r258. Bundled content is unchanged.
 - Verified executed bridge geometry tests for phone, resized map, offscreen/hidden panel, resize, tablet and menu touch ownership; shell checks and debug APK build pass. Chrome touch QA for companion web CSS verified pan/pinch, unchanged page scale and independent article scrolling. No physical phone was used.
 - Branch fix/map-gestures-20260920. Next: merge and watch signed Android release; Google Play upload remains dependent on its configured service-account secret.
+
+
+## 2026-10-11 Story camera recovery
+Branch fix/story-camera-return-20261011 based on eee5d70. Story/comment camera now compresses off the UI thread, retains persisted source until JavaScript acknowledgement, retries through slow startup and restores returned captures after Activity recreation. Primary story receiver rejection cannot fall through into the comment form. Release workflow requires verify-story-camera-return.js. Shell/plant/story checks and debug APK build pass. No ADB device connected: actual camera UI/process-eviction coverage remains NOT TESTED. Preserve production drafts; next physical test must use QA package and check caption/prompt/location/photo after capture, slow start, cancellation and recreation.
