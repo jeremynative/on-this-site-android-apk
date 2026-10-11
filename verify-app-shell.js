@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20260920-map-panel-gestures-r258";
+const expectedBuild = "20261011-story-camera-recovery-r259";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";

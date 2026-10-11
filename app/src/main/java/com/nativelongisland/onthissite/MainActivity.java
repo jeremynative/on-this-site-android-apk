@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20260920-map-panel-gestures-r258";
+    static final String APP_VERSION = "20261011-story-camera-recovery-r259";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -119,6 +119,10 @@ public class MainActivity extends Activity {
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String PREF_PENDING_PLANT_READY = "pending_plant_camera_ready";
     private static final String PREF_RENDERER_RECOVERY_ATTEMPTED = "webview_renderer_recovery_attempted";
+    private static final String PREF_PENDING_COMMENT_READY = "pending_comment_camera_ready";
+    private boolean commentPhotoProcessing;
+    private Uri commentPhotoDeliveryUri;
+    private final Runnable retryCommentPhotoDelivery = this::dispatchPendingCommentPhoto;
     private static final String PREF_PENDING_COMMENT_URI = "pending_comment_camera_uri";
     private static final String APP_BASE_URL =
         "https://directus.nativelongisland.com/app/mobile-app-live.html";
@@ -684,6 +688,11 @@ public class MainActivity extends Activity {
                             .putBoolean(PREF_PENDING_PLANT_READY, true)
                             .apply();
                     }
+                    if (pendingCommentBridgeCameraUri != null
+                        && MediaStorePhotoHelper.hasPhotoData(MainActivity.this, pendingCommentBridgeCameraUri)) {
+                        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                            .putBoolean(PREF_PENDING_COMMENT_READY, true).commit();
+                    }
                     recreate();
                 } else {
                     showWebViewCompatibilityFallback();
@@ -729,9 +738,11 @@ public class MainActivity extends Activity {
         registerConnectivityMonitoring();
         if (nativeMapBundleQaEnabled) {
             restorePendingPlantCameraUri();
+            restorePendingCommentCameraUri();
             loadBundledFallback("native-map-bundle-qa");
         } else if (savedInstanceState != null && hasUsableNetwork()) {
             restorePendingPlantCameraUri();
+            restorePendingCommentCameraUri();
             android.webkit.WebBackForwardList restoredState = webView.restoreState(savedInstanceState);
             lastRefreshAt = System.currentTimeMillis();
             suppressResumeRefreshAfterPermissionPrompt();
@@ -744,6 +755,7 @@ public class MainActivity extends Activity {
             }
         } else {
             restorePendingPlantCameraUri();
+            restorePendingCommentCameraUri();
             refreshApp();
         }
         created = true;
@@ -2375,8 +2387,7 @@ public class MainActivity extends Activity {
                 queueCommentPhoto(false, "Could not create a local photo file.", "", "", "");
                 return;
             }
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putString(PREF_PENDING_COMMENT_URI, pendingCommentBridgeCameraUri.toString()).apply();
+            savePendingCommentCameraUri(pendingCommentBridgeCameraUri);
             Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
             intent.putExtra(MediaStore.EXTRA_OUTPUT, pendingCommentBridgeCameraUri);
             intent.setClipData(ClipData.newRawUri("comment-photo", pendingCommentBridgeCameraUri));
@@ -2453,35 +2464,66 @@ public class MainActivity extends Activity {
     }
 
     private void deliverCommentBridgePhoto(Uri uri, int attempt) {
-        try {
-            byte[] bytes = MediaStorePhotoHelper.compressedJpegBytes(this, uri);
-            clearPendingCommentCameraUri();
-            queueCommentPhoto(true, "", Base64.encodeToString(bytes, Base64.NO_WRAP), "image/jpeg", "comment-photo-" + System.currentTimeMillis() + ".jpg");
-            getContentResolver().delete(uri, null, null);
-        } catch (Exception error) {
-            // Samsung Camera can hand control back before its EXTRA_OUTPUT image is
-            // readable. Keep the persisted URI and retry briefly before treating a
-            // completed capture as cancelled or failed.
-            if (uri != null && attempt < COMMENT_PHOTO_READ_MAX_ATTEMPTS) {
-                startupHandler.postDelayed(
-                    () -> deliverCommentBridgePhoto(uri, attempt + 1),
-                    COMMENT_PHOTO_READ_RETRY_DELAY_MS * (attempt + 1)
-                );
-                return;
+        if (commentPhotoProcessing) return;
+        commentPhotoProcessing = true;
+        Log.i(LOG_TAG, "Preparing returned story/comment photo off the UI thread.");
+        // Retain the private source until JavaScript accepts it. A camera can
+        // evict our process; the ready flag distinguishes a returned image
+        // from a capture that is still in progress.
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+            .putBoolean(PREF_PENDING_COMMENT_READY, true).commit();
+        new Thread(() -> {
+            try {
+                byte[] bytes = MediaStorePhotoHelper.compressedJpegBytes(this, uri);
+                String base64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+                startupHandler.post(() -> {
+                    commentPhotoProcessing = false;
+                    if (isDestroyed()) return;
+                    commentPhotoDeliveryUri = uri;
+                    queueCommentPhoto(true, "", base64, "image/jpeg", "comment-photo-" + System.currentTimeMillis() + ".jpg");
+                });
+            } catch (Exception error) {
+                startupHandler.post(() -> {
+                    commentPhotoProcessing = false;
+                    if (isDestroyed()) return;
+                    if (uri != null && attempt < COMMENT_PHOTO_READ_MAX_ATTEMPTS) {
+                        startupHandler.postDelayed(() -> deliverCommentBridgePhoto(uri, attempt + 1),
+                            COMMENT_PHOTO_READ_RETRY_DELAY_MS * (attempt + 1));
+                        return;
+                    }
+                    clearPendingCommentCameraUri();
+                    if (uri != null) getContentResolver().delete(uri, null, null);
+                    queueCommentPhoto(false, "The captured comment photo could not be read. Please try again.", "", "", "");
+                });
             }
-            clearPendingCommentCameraUri();
-            if (uri != null) getContentResolver().delete(uri, null, null);
-            queueCommentPhoto(false, "The captured photo could not be read. Please try again.", "", "", "");
-        }
+        }, "comment-photo-prepare").start();
+    }
+
+    private void savePendingCommentCameraUri(Uri uri) {
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putString(PREF_PENDING_COMMENT_URI, uri == null ? "" : uri.toString())
+            .putBoolean(PREF_PENDING_COMMENT_READY, false)
+            .commit();
     }
 
     private void restorePendingCommentCameraUri() {
         String uri = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(PREF_PENDING_COMMENT_URI, "");
-        if (uri != null && !uri.isEmpty()) pendingCommentBridgeCameraUri = Uri.parse(uri);
+        if (uri != null && !uri.isEmpty()) {
+            pendingCommentBridgeCameraUri = Uri.parse(uri);
+            if (!hasPendingCommentPhotoDelivery && !commentPhotoProcessing
+                && getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(PREF_PENDING_COMMENT_READY, false)) {
+                deliverCommentBridgePhoto(pendingCommentBridgeCameraUri);
+            }
+        }
     }
 
     private void clearPendingCommentCameraUri() {
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().remove(PREF_PENDING_COMMENT_URI).apply();
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .remove(PREF_PENDING_COMMENT_URI)
+            .remove(PREF_PENDING_COMMENT_READY)
+            .apply();
     }
 
     private void queueCommentPhoto(boolean ok, String message, String base64, String mimeType, String filename) {
@@ -2492,15 +2534,13 @@ public class MainActivity extends Activity {
         pendingCommentPhotoFilename = filename == null ? "" : filename;
         hasPendingCommentPhotoDelivery = true;
         dispatchPendingCommentPhoto();
-        if (webView != null) {
-            webView.postDelayed(this::dispatchPendingCommentPhoto, 500);
-            webView.postDelayed(this::dispatchPendingCommentPhoto, 1500);
-            webView.postDelayed(this::dispatchPendingCommentPhoto, 3000);
-        }
     }
 
     private void dispatchPendingCommentPhoto() {
-        if (!hasPendingCommentPhotoDelivery || webView == null) return;
+        startupHandler.removeCallbacks(retryCommentPhotoDelivery);
+        if (!hasPendingCommentPhotoDelivery || webView == null || isDestroyed()) return;
+        startupHandler.postDelayed(retryCommentPhotoDelivery, 1000);
+        final String deliveryFilename = pendingCommentPhotoFilename;
         String arguments = pendingCommentPhotoOk + ","
             + jsString(pendingCommentPhotoMessage) + ","
             + jsString(pendingCommentPhotoBase64) + ","
@@ -2508,13 +2548,19 @@ public class MainActivity extends Activity {
             + jsString(pendingCommentPhotoFilename);
         webView.evaluateJavascript(
             "(function(){"
-                + "try{if(typeof window.onAndroidCommentPhoto==='function'&&window.onAndroidCommentPhoto(" + arguments + ")===true)return true;}catch(error){}"
+                + "try{if(typeof window.onAndroidCommentPhoto==='function')return window.onAndroidCommentPhoto(" + arguments + ")===true;}catch(error){return false;}"
                 + "try{return typeof window.__otsReceiveNativeCommentPhoto==='function'&&window.__otsReceiveNativeCommentPhoto(" + arguments + ")===true;}catch(error){return false;}"
                 + "})()",
             value -> {
-                if ("true".equals(value)) {
+                if ("true".equals(value) && deliveryFilename.equals(pendingCommentPhotoFilename)) {
                     hasPendingCommentPhotoDelivery = false;
                     pendingCommentPhotoBase64 = "";
+                    startupHandler.removeCallbacks(retryCommentPhotoDelivery);
+                    clearPendingCommentCameraUri();
+                    if (commentPhotoDeliveryUri != null) {
+                        getContentResolver().delete(commentPhotoDeliveryUri, null, null);
+                        commentPhotoDeliveryUri = null;
+                    }
                 }
             }
         );
@@ -2792,7 +2838,7 @@ public class MainActivity extends Activity {
             // MediaStore stream temporarily unreadable even though the output
             // photo is valid. Let the JPEG read be the final validation in
             // that case instead of discarding the URI prematurely.
-            if (hasCapturedPhoto || (resultCode == RESULT_CANCELED && pendingCommentBridgeCameraUri != null)) {
+            if (hasCapturedPhoto || ((resultCode == RESULT_OK || resultCode == RESULT_CANCELED) && pendingCommentBridgeCameraUri != null)) {
                 deliverCommentBridgePhoto(pendingCommentBridgeCameraUri);
             } else {
                 if (pendingCommentBridgeCameraUri != null) getContentResolver().delete(pendingCommentBridgeCameraUri, null, null);

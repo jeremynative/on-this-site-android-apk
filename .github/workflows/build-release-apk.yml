@@ -38,6 +38,7 @@ jobs:
         run: |
           node verify-app-shell.js
           node verify-plant-camera-return.js
+          node verify-story-camera-return.js
           node verify-native-animals.js
 
       - name: Verify Google Play readiness
