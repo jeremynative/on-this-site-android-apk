@@ -1023,7 +1023,9 @@ final class NativeMapController {
                     )),
                     iconAllowOverlap(true), iconIgnorePlacement(true)
                 );
-            siteIconLayer.setMinZoom(7f);
+            // Site icons stay visible across the entire map zoom range.
+            // Only the separate title layer participates in zoom-based decluttering.
+            siteIconLayer.setMinZoom(0f);
             style.addLayer(siteIconLayer);
             style.addLayer(new CircleLayer("nli-site-unread-badges", SITE_POINT_SOURCE_ID)
                 .withFilter(Expression.gt(

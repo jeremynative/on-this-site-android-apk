@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20261016-adaptive-pin-titles-r260";
+const expectedBuild = "20261016-persistent-site-pins-r261";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -2894,3 +2894,5 @@ console.log(`Android shell verifier passed: ${expectedBuild}`);
 require('./verify-native-menu-touch.js');
 
 require('./verify-native-panel-gestures.js');
+
+if (!nativeMapController.includes("siteIconLayer.setMinZoom(0f)")) throw new Error("Site icons must remain visible below the title zoom threshold.");
