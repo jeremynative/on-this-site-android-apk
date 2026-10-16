@@ -1078,15 +1078,19 @@ final class NativeMapController {
                     textField(Expression.get("title")), textFont(new String[] { "Noto Sans Regular" }),
                     textSize(Expression.interpolate(
                         Expression.linear(), Expression.zoom(),
-                        Expression.stop(11.4, 10f),
+                        Expression.stop(8.2, 10f),
+                        Expression.stop(12, 11.5f),
                         Expression.stop(16, 13f)
                     )),
                     textColor("#183528"),
                     textHaloColor("rgba(255,255,255,0.94)"), textHaloWidth(1.5f),
                     textOffset(new Float[] { 0f, -1.45f }), textAnchor(Property.TEXT_ANCHOR_BOTTOM),
+                    org.maplibre.android.style.layers.PropertyFactory.textVariableAnchor(new String[] { "bottom", "top", "left", "right" }),
+                    org.maplibre.android.style.layers.PropertyFactory.textRadialOffset(0.75f),
+                    org.maplibre.android.style.layers.PropertyFactory.textPadding(5f),
                     textOptional(true), textAllowOverlap(false), textIgnorePlacement(false)
                 );
-            sitePointLabelLayer.setMinZoom(11.4f);
+            sitePointLabelLayer.setMinZoom(8.2f);
             style.addLayer(sitePointLabelLayer);
             style.addLayer(new LineLayer("nli-biography-path-lines", BIOGRAPHY_PATH_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("kind"), Expression.literal("path")))

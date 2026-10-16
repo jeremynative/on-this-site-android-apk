@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20261011-story-camera-recovery-r259";
+const expectedBuild = "20261016-adaptive-pin-titles-r260";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -489,7 +489,7 @@ if (!nativeMapController.includes("mapTapHitRadiusPx()")
   throw new Error("Native map hit targets must remain accessible up close while tightening precision at overview zoom.");
 }
 if (!nativeMapController.includes('new SymbolLayer("nli-site-point-labels", SITE_POINT_SOURCE_ID)')
-    || !nativeMapController.includes("sitePointLabelLayer.setMinZoom(11.4f)")
+    || !nativeMapController.includes("sitePointLabelLayer.setMinZoom(8.2f)")
     || !nativeMapController.includes("setTerritorySource(style, payload.optJSONObject(\"territories\"))")
     || !nativeMapController.includes("withBundledTerritoryLabels(payload.optJSONObject(\"labels\"))")
     || !nativeMapController.includes("setLayerVisibility(style, TERRITORY_FILL_LAYER_ID, !satelliteBasemap)")
