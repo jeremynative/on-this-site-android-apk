@@ -10661,11 +10661,13 @@
     function revealPlantIdentification(section) {
       if (section.matches("details")) section.open = true;
       const panel = section.closest(".detail,.sheet");
-      panel?.classList.add("plant-id-fullscreen");
+      if (panel === detailEl) setDetailDrawerState("expanded");
       const output = section.querySelector("[data-plant-preview]");
       requestAnimationFrame(() => {
         if (!output?.isConnected || !panel?.classList.contains("open")) return;
-        output.scrollIntoView({ block: "start", behavior: "instant" });
+        const body = panel.querySelector(".detail-body,.sheet-body");
+        if (body) body.scrollTop += output.getBoundingClientRect().top - body.getBoundingClientRect().top - 12;
+        window.__nliSyncNativeMapViewport?.();
       });
     }
 

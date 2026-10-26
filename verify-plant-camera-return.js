@@ -14,3 +14,8 @@ assert(java.includes('startupHandler.postDelayed(retryPlantPhotoDelivery, 1000)'
 const ack=java.slice(java.indexOf('if ("true".equals(value) && filename.equals(pendingPlantPhotoFilename))'));
 assert(ack.indexOf('clearPendingPlantCameraUri()')<ack.indexOf('void launchCommentBridgeCamera'),'Clear acknowledged source only after accepted delivery');
 console.log('PASS: durable camera source, worker-thread preparation, slow-start retry and acknowledged cleanup.');
+
+const recovery=java.slice(java.indexOf('private final Runnable validatedNetworkRecovery ='),java.indexOf('private final Runnable validatedNetworkRecoveryRetry ='));
+assert(recovery.includes('captureRuntimeStateThen(activeWork ->') && recovery.includes('if (activeWork)'), 'Network recovery must respect unsent capture/draft work');
+assert(java.includes('if (hasPendingCameraWork())'), 'Camera handoff must be treated as active work');
+assert(java.includes('el._plantIdentifying||el._plantPhotoFile||el._plantOriginalPhotoFile'), 'Retain captured plant files through network transitions');

@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20261016-persistent-site-pins-r261";
+    static final String APP_VERSION = "20261026-plant-camera-draft-guard-r262";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -280,7 +280,12 @@ public class MainActivity extends Activity {
             || !hasUsableNetwork()
             || !loadingBundledFallback
             || liveRecoveryAttemptedForCurrentNetwork) return;
-        captureRuntimeStateThen(() -> {
+        captureRuntimeStateThen(activeWork -> {
+            if (activeWork) {
+                Log.i(LOG_TAG, "Deferring live recovery while a capture or draft is active.");
+                startupHandler.postDelayed(this.validatedNetworkRecoveryRetry, ACTIVE_WORK_RECHECK_DELAY_MS);
+                return;
+            }
             if (webView == null
                 || !hasUsableNetwork()
                 || !loadingBundledFallback
@@ -1641,6 +1646,10 @@ public class MainActivity extends Activity {
 
     private void requestBundledFallbackPreservingActiveWork(String reason) {
         if (webView == null || hasUsableNetwork() || loadingBundledFallback) return;
+        if (hasPendingCameraWork()) {
+            startupHandler.postDelayed(unusableNetworkFallback, ACTIVE_WORK_RECHECK_DELAY_MS);
+            return;
+        }
         if (!appShellLoaded) {
             loadBundledFallback(reason);
             return;
@@ -1662,6 +1671,10 @@ public class MainActivity extends Activity {
     }
 
     private void captureRuntimeStateThen(ActiveWorkCallback callback) {
+        if (hasPendingCameraWork()) {
+            callback.onResult(true);
+            return;
+        }
         if (webView == null) {
             callback.onResult(false);
             return;
@@ -1678,6 +1691,7 @@ public class MainActivity extends Activity {
                     + "if(el.isContentEditable)return String(el.textContent||'').trim().length>0;"
                     + "return String(el.value||'')!==String(el.defaultValue||'');"
                 + "});"
+                + "active=active||Array.prototype.some.call(document.querySelectorAll('[data-plant-observation]'),function(el){return !!(el._plantIdentifying||el._plantPhotoFile||el._plantOriginalPhotoFile);});"
                 + "return active?'active-work':'idle';"
             + "}catch(error){return 'idle';}})();",
             value -> callback.onResult(value != null && value.contains("active-work"))
@@ -1686,6 +1700,11 @@ public class MainActivity extends Activity {
 
     private interface ActiveWorkCallback {
         void onResult(boolean activeWork);
+    }
+
+    private boolean hasPendingCameraWork() {
+        return pendingPlantBridgeCameraUri != null || plantPhotoProcessing || hasPendingPlantPhotoDelivery
+            || pendingCommentBridgeCameraUri != null || commentPhotoProcessing || hasPendingCommentPhotoDelivery;
     }
 
     private void scheduleLiveStartupFallback() {
