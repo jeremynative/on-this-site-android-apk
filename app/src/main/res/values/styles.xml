@@ -5,4 +5,7 @@
         <item name="android:statusBarColor">#eef3ed</item>
         <item name="android:navigationBarColor">#eef3ed</item>
     </style>
+    <style name="ArTheme" parent="android:style/Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
 </resources>

@@ -17,6 +17,8 @@
         tools:node="remove" />
     <uses-permission android:name="com.android.vending.BILLING" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.ar" android:required="false" />
+    <uses-feature android:glEsVersion="0x00020000" android:required="false" />
 
     <queries>
         <package android:name="com.google.android.apps.maps" />
@@ -26,6 +28,10 @@
         <intent>
             <action android:name="android.intent.action.OPEN_DOCUMENT" />
             <data android:mimeType="image/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.OPEN_DOCUMENT" />
+            <data android:mimeType="audio/*" />
         </intent>
     </queries>
 
@@ -68,6 +74,19 @@
         <receiver
             android:name=".NavigationActionReceiver"
             android:exported="false" />
+        <meta-data android:name="com.google.ar.core" android:value="optional" />
+        <activity
+            android:name=".ArActivity"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/ArTheme" />
+        <activity
+            android:name=".ScanActivity"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/ArTheme" />
         <activity
             android:name=".GoogleNavigationLegalActivity"
             android:exported="false"

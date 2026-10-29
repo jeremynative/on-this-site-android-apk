@@ -30,6 +30,31 @@ class AppBridge {
     }
 
     @JavascriptInterface
+    public boolean isArSupported() {
+        return activity.isArSupported();
+    }
+
+    /** The web app passes a freshly refreshed access token; the scanner then uses a per-upload key. */
+    @JavascriptInterface
+    public void openScanSpace(String token, String spaceId, String accessToken, String creditName) {
+        if (!activity.validBridgeToken(token) || spaceId == null || !spaceId.matches("[0-9a-f-]{36}")) return;
+        activity.runOnUiThread(() -> activity.openScanSpace(spaceId, accessToken, creditName == null ? "" : creditName));
+    }
+
+    @JavascriptInterface
+    public void openArSpace(String token, String siteSlug, String spaceId, String accessToken) {
+        if (!activity.validBridgeToken(token) || siteSlug == null || !siteSlug.matches("[a-z0-9-]{1,64}")
+            || spaceId == null || !spaceId.matches("[0-9a-f-]{36}")) return;
+        activity.runOnUiThread(() -> activity.openArExperience(siteSlug, false, spaceId, accessToken));
+    }
+
+    @JavascriptInterface
+    public void openArExperience(String token, String siteId) {
+        if (!activity.validBridgeToken(token) || siteId == null || !siteId.matches("[a-z0-9-]{1,64}")) return;
+        activity.runOnUiThread(() -> activity.openArExperience(siteId, false));
+    }
+
+    @JavascriptInterface
     public boolean isDebugBuild() {
         return BuildConfig.DEBUG;
     }

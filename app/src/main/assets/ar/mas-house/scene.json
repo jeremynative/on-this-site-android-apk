@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "site_id": "mas-house",
+  "title": "Ma's House",
+  "markers": [
+    {
+      "id": "marker-1",
+      "asset": "asset:ar/markers/marker-1.png",
+      "width_m": 0.2
+    },
+    {
+      "id": "marker-2",
+      "asset": "asset:ar/markers/marker-2.png",
+      "width_m": 0.2
+    },
+    {
+      "id": "marker-3",
+      "asset": "asset:ar/markers/marker-3.png",
+      "width_m": 0.2
+    },
+    {
+      "id": "marker-4",
+      "asset": "asset:ar/markers/marker-4.png",
+      "width_m": 0.2
+    },
+    {
+      "id": "marker-5",
+      "asset": "asset:ar/markers/marker-5.png",
+      "width_m": 0.2
+    },
+    {
+      "id": "marker-6",
+      "asset": "asset:ar/markers/marker-6.png",
+      "width_m": 0.2
+    },
+    {
+      "id": "marker-7",
+      "asset": "asset:ar/markers/marker-7.png",
+      "width_m": 0.2
+    },
+    {
+      "id": "marker-8",
+      "asset": "asset:ar/markers/marker-8.png",
+      "width_m": 0.2
+    }
+  ],
+  "rooms": [],
+  "items": [
+    {
+      "id": "sample-language",
+      "layer": "language",
+      "kind": "phrase",
+      "placement": "discover",
+      "title": "Test language prompt",
+      "word": "Test prompt",
+      "pronunciation": "",
+      "meaning": "Placeholder only. Replace with a community-approved word in Author mode.",
+      "sample": true
+    },
+    {
+      "id": "sample-audio",
+      "layer": "audio",
+      "kind": "audio",
+      "placement": "discover",
+      "title": "Test audio clip",
+      "caption": "Placeholder only. Attach a recorded story in Author mode.",
+      "sample": true
+    }
+  ]
+}
