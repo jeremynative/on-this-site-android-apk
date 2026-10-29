@@ -104,6 +104,10 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private long lastKeyAt;
     private float[] lastPosition;
     private float compassDeg = Float.NaN;
+    private int updateErrors;
+    private int imageErrors;
+    private long lastDiagnosticAt;
+    private volatile String lastTrackingHelp = "no tracking";
 
     private TextView status;
     private TextView detail;
@@ -315,16 +319,30 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         try {
             frame = current.update();
         } catch (Exception error) {
+            if (updateErrors++ % 120 == 0) android.util.Log.w("OnThisSiteScan", "Frame update failed", error);
+            postStatus("The camera isn't delivering frames", "Close the scanner and try again. (" + error.getClass().getSimpleName() + ")");
             return;
         }
         gl.drawBackground(frame);
         Camera camera = frame.getCamera();
-        if (camera.getTrackingState() != TrackingState.TRACKING) {
-            postStatus("Hold still a moment — finding your place…", null);
+        TrackingState tracking = camera.getTrackingState();
+        long now = SystemClock.uptimeMillis();
+        if (now - lastDiagnosticAt > 2000) {
+            lastDiagnosticAt = now;
+            android.util.Log.i("OnThisSiteScan", "tracking=" + tracking + " reason=" + camera.getTrackingFailureReason()
+                + " recording=" + recording + " photos=" + frames + " encodeQueue=" + encodeQueue.get() + " imageErrors=" + imageErrors);
+        }
+        if (tracking != TrackingState.TRACKING) {
+            String help = trackingHelp(camera.getTrackingFailureReason());
+            // Before recording, keep the "who scanned what" summary in view.
+            postStatus(recording ? "Finding your place…" : "Camera: " + help, recording ? help : null);
             return;
         }
         synchronized (lock) {
-            if (!recording) return;
+            if (!recording) {
+                postStatus("Camera ready ✓", null);
+                return;
+            }
             Pose pose = camera.getPose();
             float[] position = pose.getTranslation();
             if (lastPosition != null) distance += dist(position, lastPosition);
@@ -351,6 +369,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         try {
             image = frame.acquireCameraImage();
         } catch (Exception error) {
+            if (imageErrors++ % 30 == 0) android.util.Log.w("OnThisSiteScan", "Camera image unavailable", error);
             return;
         }
         int width = image.getWidth();
@@ -411,6 +430,16 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 }
                 synchronized (framesOut) {
                     framesOut.close();
+                }
+                if (frames == 0) {
+                    // Nothing to process: don't queue an empty scan.
+                    ScanUploader.deleteTree(sessionDir);
+                    runOnUiThread(() -> {
+                        status.setText("No photos were recorded");
+                        detail.setText("The camera never locked on (" + lastTrackingHelp + "). Try again in good light, moving slowly while pointing at walls and objects.");
+                        finishButton.setVisibility(View.GONE);
+                    });
+                    return;
                 }
                 ScanUploader.write(new File(sessionDir, "anchors.json"), anchors.toString());
                 JSONObject meta = new JSONObject(ScanUploader.read(new File(sessionDir, "meta.json")));
@@ -551,6 +580,19 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             .setPositiveButton("Start", (d, w) -> startScan(area.getText().toString().trim(), credit.getText().toString().trim(), show.isChecked()))
             .setNegativeButton("Cancel", null)
             .show();
+    }
+
+    private String trackingHelp(com.google.ar.core.TrackingFailureReason reason) {
+        String help;
+        switch (reason) {
+            case INSUFFICIENT_LIGHT: help = "Too dark: turn on lights or move to a brighter spot."; break;
+            case EXCESSIVE_MOTION: help = "Moving too fast: slow down."; break;
+            case INSUFFICIENT_FEATURES: help = "Point at something with more detail (not a blank wall or sky)."; break;
+            case CAMERA_UNAVAILABLE: help = "The camera is busy in another app."; break;
+            default: help = "Move the phone slowly side to side so it can see the space.";
+        }
+        lastTrackingHelp = help;
+        return help;
     }
 
     private void postStatus(String statusText, String detailText) {
