@@ -264,7 +264,16 @@ final class ArScene {
         ArScene load() throws Exception {
             File saved = new File(directory(), "scene.json");
             if (saved.isFile()) return fromJson(readString(new FileInputStream(saved)));
-            return fromJson(readString(context.getAssets().open("ar/" + siteId + "/scene.json")));
+            try {
+                return fromJson(readString(context.getAssets().open("ar/" + siteId + "/scene.json")));
+            } catch (java.io.FileNotFoundException missing) {
+                // Sites without a bundled scene start empty; a scanned space
+                // supplies the frame and authors add the content.
+                ArScene scene = new ArScene();
+                scene.siteId = siteId;
+                scene.title = siteId;
+                return scene;
+            }
         }
 
         void save(ArScene scene) throws Exception {

@@ -42,6 +42,13 @@ class AppBridge {
     }
 
     @JavascriptInterface
+    public void openArSpace(String token, String siteSlug, String spaceId, String accessToken) {
+        if (!activity.validBridgeToken(token) || siteSlug == null || !siteSlug.matches("[a-z0-9-]{1,64}")
+            || spaceId == null || !spaceId.matches("[0-9a-f-]{36}")) return;
+        activity.runOnUiThread(() -> activity.openArExperience(siteSlug, false, spaceId, accessToken));
+    }
+
+    @JavascriptInterface
     public void openArExperience(String token, String siteId) {
         if (!activity.validBridgeToken(token) || siteId == null || !siteId.matches("[a-z0-9-]{1,64}")) return;
         activity.runOnUiThread(() -> activity.openArExperience(siteId, false));
