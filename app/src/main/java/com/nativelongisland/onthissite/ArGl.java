@@ -44,6 +44,18 @@ final class ArGl {
             + "uniform float u_Alpha;\n"
             + "void main() { vec4 c = texture2D(u_Texture, v_TexCoord); gl_FragColor = vec4(c.rgb, c.a * u_Alpha); }\n";
 
+    private static final String POINT_VERTEX =
+        "uniform mat4 u_Mvp;\n"
+            + "uniform float u_Size;\n"
+            + "attribute vec4 a_Position;\n"
+            + "attribute vec4 a_Color;\n"
+            + "varying vec4 v_Color;\n"
+            + "void main() { gl_Position = u_Mvp * vec4(a_Position.xyz, 1.0); gl_PointSize = u_Size / max(gl_Position.w, 0.4); v_Color = a_Color; }\n";
+    private static final String POINT_FRAGMENT =
+        "precision mediump float;\n"
+            + "varying vec4 v_Color;\n"
+            + "void main() { vec2 c = gl_PointCoord - 0.5; if (dot(c, c) > 0.25) discard; gl_FragColor = v_Color; }\n";
+
     private static final float[] NDC_QUAD = {-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f};
     // Unit quad in the XY plane facing +Z; texture v grows downwards.
     private static final float[] UNIT_QUAD = {
@@ -56,6 +68,7 @@ final class ArGl {
     int cameraTexture;
     private int backgroundProgram;
     private int quadProgram;
+    private int pointProgram;
     private FloatBuffer ndcCoords;
     private FloatBuffer cameraTexCoords;
     private FloatBuffer unitQuad;
@@ -76,6 +89,7 @@ final class ArGl {
 
         backgroundProgram = program(BACKGROUND_VERTEX, BACKGROUND_FRAGMENT);
         quadProgram = program(QUAD_VERTEX, QUAD_FRAGMENT);
+        pointProgram = program(POINT_VERTEX, POINT_FRAGMENT);
         ndcCoords = buffer(NDC_QUAD);
         cameraTexCoords = buffer(new float[8]);
         unitQuad = buffer(UNIT_QUAD);
@@ -147,6 +161,31 @@ final class ArGl {
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         GLES20.glDisableVertexAttribArray(position);
         GLES20.glDisableVertexAttribArray(texCoord);
+    }
+
+    /**
+     * Draws round points in world space: xyzrgba floats (7 per point). Size is
+     * in pixels at 1 m and shrinks with distance. Used for scan coverage.
+     */
+    void drawPoints(float[] viewProjection, FloatBuffer points, int count, float sizeAtOneMetre) {
+        if (count <= 0) return;
+        GLES20.glEnable(GLES20.GL_BLEND);
+        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
+        GLES20.glUseProgram(pointProgram);
+        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(pointProgram, "u_Mvp"), 1, false, viewProjection, 0);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(pointProgram, "u_Size"), sizeAtOneMetre);
+        int position = GLES20.glGetAttribLocation(pointProgram, "a_Position");
+        int color = GLES20.glGetAttribLocation(pointProgram, "a_Color");
+        points.position(0);
+        GLES20.glVertexAttribPointer(position, 3, GLES20.GL_FLOAT, false, 28, points);
+        points.position(3);
+        GLES20.glVertexAttribPointer(color, 4, GLES20.GL_FLOAT, false, 28, points);
+        GLES20.glEnableVertexAttribArray(position);
+        GLES20.glEnableVertexAttribArray(color);
+        GLES20.glDrawArrays(GLES20.GL_POINTS, 0, count);
+        GLES20.glDisableVertexAttribArray(position);
+        GLES20.glDisableVertexAttribArray(color);
+        GLES20.glDisable(GLES20.GL_BLEND);
     }
 
     /** Thread-safe: queue a bitmap; it is uploaded at the next frame. */
