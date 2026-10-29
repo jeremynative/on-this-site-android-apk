@@ -44,6 +44,36 @@ final class ScanUploader {
         return dirs == null ? new File[0] : dirs;
     }
 
+    /**
+     * Creates the server session when recording starts, so photos can be sent
+     * for the live coverage guide during the scan. Returns {sessionId, uploadKey}.
+     */
+    static String[] createSession(File dir, String spaceId, JSONObject meta, String accessToken) throws Exception {
+        JSONObject body = new JSONObject()
+            .put("area_label", meta.optString("area_label"))
+            .put("credit_name", meta.optString("credit_name"))
+            .put("credit_public", meta.optBoolean("credit_public", true))
+            .put("device", meta.optString("device"));
+        JSONObject data = request("POST", "/spaces/" + spaceId + "/sessions", body, "Bearer " + accessToken, null).getJSONObject("data");
+        JSONObject state = new JSONObject().put("session_id", data.getString("id")).put("upload_key", data.getString("upload_key"));
+        write(new File(dir, "upload.json"), state.toString());
+        return new String[] {data.getString("id"), data.getString("upload_key")};
+    }
+
+    /** Small JPEG to a live-coverage route, authorised by the session's upload key. */
+    static JSONObject postLive(String path, String uploadKey, byte[] jpeg) throws Exception {
+        HttpURLConnection connection = open("POST", path, null, uploadKey);
+        connection.setConnectTimeout(8000);
+        connection.setReadTimeout(15000);
+        connection.setRequestProperty("Content-Type", "image/jpeg");
+        connection.setFixedLengthStreamingMode(jpeg.length);
+        connection.setDoOutput(true);
+        try (OutputStream out = connection.getOutputStream()) {
+            out.write(jpeg);
+        }
+        return readResponse(connection);
+    }
+
     /** Runs on a background thread. accessToken is only needed the first time (to create the session). */
     void upload(String accessToken) throws Exception {
         JSONObject meta = new JSONObject(read(new File(dir, "meta.json")));
@@ -70,7 +100,7 @@ final class ScanUploader {
                 .put("transform", anchors.optJSONArray("transform"));
             JSONObject created = request("POST", "/spaces/" + meta.getString("space_id") + "/sessions", body, "Bearer " + accessToken, null);
             JSONObject data = created.getJSONObject("data");
-            state.put("session_id", data.getString("id")).put("upload_key", data.getString("upload_key")).put("parts", parts);
+            state.put("session_id", data.getString("id")).put("upload_key", data.getString("upload_key"));
             write(stateFile, state.toString());
         }
         String sessionId = state.getString("session_id");
@@ -95,7 +125,10 @@ final class ScanUploader {
         }
         progress.update("Submitting for processing…", 97);
         request("POST", "/sessions/" + sessionId + "/finish",
-            new JSONObject().put("parts", parts).put("frames", meta.optInt("frames")), null, key);
+            new JSONObject().put("parts", parts).put("frames", meta.optInt("frames"))
+                .put("area_label", meta.optString("area_label"))
+                .put("alignment", anchors.optJSONObject("alignment"))
+                .put("transform", anchors.optJSONArray("transform")), null, key);
         write(new File(dir, "uploaded"), sessionId);
         // Keep meta/anchors as a receipt; the photos are now safely queued.
         deleteTree(new File(dir, "frames"));

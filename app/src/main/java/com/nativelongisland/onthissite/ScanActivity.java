@@ -122,6 +122,10 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     // Live coverage preview: coloured points on scanned surfaces + mini map.
     private final ScanCoverage coverage = new ScanCoverage();
     private ScanCoverageMapView coverageMap;
+    // Live coverage guide over the whole camera view (works without AR tracking).
+    private volatile LiveCoverage live;
+    private CoverageOverlayView coverageOverlay;
+    private long lastViewCheckAt;
     private FloatBuffer coveragePoints;
     private int coveragePointCount;
     private int coverageVersionDrawn = -1;
@@ -269,6 +273,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         super.onDestroy();
         if (session != null) session.close();
         if (localizer != null) localizer.close();
+        if (live != null) live.close();
         encoder.shutdown();
     }
 
@@ -308,6 +313,15 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 .put("device", Build.MANUFACTURER + " " + Build.MODEL).put("arcore", "1.56.0")
                 .put("started_at", System.currentTimeMillis());
             ScanUploader.write(new File(sessionDir, "meta.json"), meta.toString());
+            File dir = sessionDir;
+            if (accessToken != null && spaceId != null) new Thread(() -> {
+                try {
+                    String[] ids = ScanUploader.createSession(dir, spaceId, meta, accessToken);
+                    live = new LiveCoverage(ids[0], ids[1], (grid, vertices) -> runOnUiThread(() -> coverageOverlay.show(grid, vertices)));
+                } catch (Exception error) {
+                    android.util.Log.w("OnThisSiteScan", "Live coverage unavailable: " + error.getMessage());
+                }
+            }).start();
         } catch (Exception error) {
             detail.setText("Couldn't start: " + error.getMessage());
             return;
@@ -321,7 +335,6 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         }
         if (spaceHasModel && accessToken != null) localizer = new SpaceLocalizer(spaceId, accessToken);
         startButton.setVisibility(View.GONE);
-        coverageMap.setVisibility(View.VISIBLE);
         finishButton.setVisibility(View.VISIBLE);
     }
 
@@ -385,6 +398,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 coverage.addPathPoint(xz[0], xz[1]);
             }
             maybeKeyframe(frame, camera, pose);
+            checkLiveView(frame, now);
             if (tracked) {
                 drawCoverage(camera, now);
                 if (localizer != null) localizer.onFrame(frame, camera);
@@ -395,9 +409,39 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 ? (localizer == null ? (spaceHasModel ? "Will be fitted to the space when processed" : "First scan of this place")
                     : localizer.locked() ? "Lined up with earlier scans ✓ " + localizer.status() : localizer.status())
                 : (lastFix == null ? "Recording photos · waiting for GPS" : String.format(Locale.US, "Recording photos · GPS ±%.0f m", lastFix.getAccuracy()));
-            postStatus(null, String.format(Locale.US, "%d photos%s\n%s", frames,
-                distance > 0.5f ? String.format(Locale.US, " · %.0f m walked", distance) : "", placement));
+            String legend = live != null ? "\nRed = not captured yet · green = covered" : "";
+            postStatus(null, String.format(Locale.US, "%d photos%s\n%s%s", frames,
+                distance > 0.5f ? String.format(Locale.US, " · %.0f m walked", distance) : "", placement, legend));
         }
+    }
+
+    /** About once a second, ask which parts of the current view are already captured. */
+    private void checkLiveView(Frame frame, long now) {
+        LiveCoverage guide = live;
+        if (guide == null || !guide.wantsView() || now - lastViewCheckAt < 900) return;
+        Image image;
+        try {
+            image = frame.acquireCameraImage();
+        } catch (Exception error) {
+            return;
+        }
+        lastViewCheckAt = now;
+        int width = image.getWidth();
+        int height = image.getHeight();
+        byte[] nv21 = SpaceLocalizer.toNv21(image);
+        image.close();
+        // Where the grid's corners land on screen for this frame.
+        int rows = LiveCoverage.ROWS, cols = LiveCoverage.COLS;
+        float[] corners = new float[(rows + 1) * (cols + 1) * 2];
+        for (int r = 0, i = 0; r <= rows; r++) {
+            for (int c = 0; c <= cols; c++) {
+                corners[i++] = width * c / (float) cols;
+                corners[i++] = height * r / (float) rows;
+            }
+        }
+        float[] onScreen = new float[corners.length];
+        frame.transformCoordinates2d(com.google.ar.core.Coordinates2d.IMAGE_PIXELS, corners, com.google.ar.core.Coordinates2d.VIEW, onScreen);
+        guide.checkView(nv21, width, height, onScreen);
     }
 
     /** Mini map from GPS while ARCore isn't tracking. */
@@ -469,6 +513,8 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         float[] focal = intrinsics.getFocalLength();
         float[] principal = intrinsics.getPrincipalPoint();
         int index = ++frames;
+        LiveCoverage guide = live;
+        if (guide != null) guide.addPhoto(index, nv21, width, height);
         if (p != null) trackedPhotos++;
         if (p != null) try (com.google.ar.core.PointCloud cloud = frame.acquirePointCloud()) {
             FloatBuffer points = cloud.getPoints();
@@ -661,11 +707,9 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         bottom.addView(startButton);
         bottom.addView(finishButton);
         root.addView(bottom, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
-        coverageMap = new ScanCoverageMapView(this);
-        coverageMap.setVisibility(View.GONE);
-        FrameLayout.LayoutParams mapParams = new FrameLayout.LayoutParams(dp(170), dp(190), Gravity.BOTTOM | Gravity.END);
-        mapParams.setMargins(0, 0, dp(12), dp(104));
-        root.addView(coverageMap, mapParams);
+        // The coverage tint sits directly over the camera, under the panels.
+        coverageOverlay = new CoverageOverlayView(this);
+        root.addView(coverageOverlay, 1, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
     }
 
