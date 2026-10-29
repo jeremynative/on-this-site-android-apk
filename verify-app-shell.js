@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20261026-plant-camera-draft-guard-r262";
+const expectedBuild = "20261029-site-title-declutter-r263";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
