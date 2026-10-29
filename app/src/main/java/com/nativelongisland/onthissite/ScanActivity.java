@@ -259,17 +259,23 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     }
 
     private void configure() {
-        // The largest CPU image gives photogrammetry the most detail.
+        // A sharp CPU image helps photogrammetry, but ARCore's tracking must
+        // keep up: the largest mode on the S25 overflowed ARCore's feature and
+        // IMU buffers and it never started tracking. Use the largest image up
+        // to 1920 px wide at <= 30 fps, else ARCore's default.
         CameraConfigFilter filter = new CameraConfigFilter(session);
+        filter.setTargetFps(java.util.EnumSet.of(CameraConfig.TargetFps.TARGET_FPS_30));
         CameraConfig best = null;
         for (CameraConfig config : session.getSupportedCameraConfigs(filter)) {
             Size size = config.getImageSize();
+            if (size.getWidth() > 1920) continue;
             if (best == null || size.getWidth() * size.getHeight() > best.getImageSize().getWidth() * best.getImageSize().getHeight()) best = config;
         }
         if (best != null) session.setCameraConfig(best);
+        android.util.Log.i("OnThisSiteScan", "camera config " + (best == null ? "default" : best.getImageSize() + " @ " + best.getFpsRange()));
         Config config = new Config(session);
         config.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL);
-        config.setFocusMode(Config.FocusMode.FIXED);
+        config.setFocusMode(Config.FocusMode.AUTO);
         config.setUpdateMode(Config.UpdateMode.LATEST_CAMERA_IMAGE);
         config.setLightEstimationMode(Config.LightEstimationMode.DISABLED);
         session.configure(config);
