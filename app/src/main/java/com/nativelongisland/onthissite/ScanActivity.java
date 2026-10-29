@@ -68,7 +68,7 @@ import org.json.JSONObject;
  * places it by matching photos. The finished session is uploaded to the scan
  * queue for the processing PC.
  */
-public class ScanActivity extends Activity implements GLSurfaceView.Renderer, SensorEventListener {
+public class ScanActivity extends Activity implements GLSurfaceView.Renderer, SensorEventListener, android.location.LocationListener {
     static final String EXTRA_SPACE_ID = "space_id";
     static final String EXTRA_ACCESS_TOKEN = "access_token";
     static final String EXTRA_CREDIT_NAME = "credit_name";
@@ -106,6 +106,14 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private long lastKeyAt;
     private float[] lastPosition;
     private float compassDeg = Float.NaN;
+    // Device attitude in east-north-up (rotation vector sensor), x,y,z,w, and
+    // the latest GPS fix: every photo carries both so scans can be placed on
+    // the map and synced by location even when ARCore never starts tracking.
+    private volatile float[] attitude;
+    private volatile android.location.Location lastFix;
+    private double[] gpsOrigin;
+    private static final long TIMED_PHOTO_MS = 600;
+    private int trackedPhotos;
     private int updateErrors;
     private int imageErrors;
     private long lastDiagnosticAt;
@@ -234,6 +242,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         SensorManager sensors = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         Sensor rotation = sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
         if (rotation != null) sensors.registerListener(this, rotation, SensorManager.SENSOR_DELAY_UI);
+        startLocationUpdates();
     }
 
     private void onResumeRetry() {
@@ -244,6 +253,11 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     protected void onPause() {
         super.onPause();
         ((SensorManager) getSystemService(Context.SENSOR_SERVICE)).unregisterListener(this);
+        try {
+            ((android.location.LocationManager) getSystemService(Context.LOCATION_SERVICE)).removeUpdates(this);
+        } catch (Exception ignored) {
+            // Location was never started.
+        }
         if (session != null) {
             surface.onPause();
             session.pause();
@@ -353,30 +367,49 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             android.util.Log.i("OnThisSiteScan", "tracking=" + tracking + " reason=" + camera.getTrackingFailureReason()
                 + " recording=" + recording + " photos=" + frames + " encodeQueue=" + encodeQueue.get() + " imageErrors=" + imageErrors);
         }
-        if (tracking != TrackingState.TRACKING) {
-            String help = trackingHelp(camera.getTrackingFailureReason());
-            // Before recording, keep the "who scanned what" summary in view.
-            postStatus(recording ? "Finding your place…" : "Camera: " + help, recording ? help : null);
-            return;
-        }
+        boolean tracked = tracking == TrackingState.TRACKING;
         synchronized (lock) {
             if (!recording) {
-                postStatus("Camera ready ✓", null);
+                // Scanning never waits for ARCore: photos + GPS are enough.
+                postStatus(lastFix == null ? "Ready · finding GPS…" : String.format(Locale.US, "Ready · GPS ±%.0f m", lastFix.getAccuracy()), null);
                 return;
             }
-            Pose pose = camera.getPose();
-            float[] position = pose.getTranslation();
-            if (lastPosition != null) distance += dist(position, lastPosition);
-            lastPosition = position;
+            Pose pose = tracked ? camera.getPose() : null;
+            if (pose != null) {
+                float[] position = pose.getTranslation();
+                if (lastPosition != null) distance += dist(position, lastPosition);
+                lastPosition = position;
+                coverage.addPathPoint(position[0], position[2]);
+            } else if (lastFix != null) {
+                float[] xz = gpsLocalXZ(lastFix);
+                coverage.addPathPoint(xz[0], xz[1]);
+            }
             maybeKeyframe(frame, camera, pose);
-            coverage.addPathPoint(position[0], position[2]);
-            drawCoverage(camera, now);
-            if (localizer != null) localizer.onFrame(frame, camera);
-            postStatus(null, String.format(Locale.US, "%d photos · %.0f m walked\n%s",
-                frames, distance,
-                localizer == null ? (spaceHasModel ? "Will be fitted to the space when processed" : "First scan of this place")
-                    : localizer.locked() ? "Lined up with earlier scans ✓ " + localizer.status() : localizer.status()));
+            if (tracked) {
+                drawCoverage(camera, now);
+                if (localizer != null) localizer.onFrame(frame, camera);
+            } else {
+                updateGpsMap(now);
+            }
+            String placement = tracked
+                ? (localizer == null ? (spaceHasModel ? "Will be fitted to the space when processed" : "First scan of this place")
+                    : localizer.locked() ? "Lined up with earlier scans ✓ " + localizer.status() : localizer.status())
+                : (lastFix == null ? "Recording photos · waiting for GPS" : String.format(Locale.US, "Recording photos · GPS ±%.0f m", lastFix.getAccuracy()));
+            postStatus(null, String.format(Locale.US, "%d photos%s\n%s", frames,
+                distance > 0.5f ? String.format(Locale.US, " · %.0f m walked", distance) : "", placement));
         }
+    }
+
+    /** Mini map from GPS while ARCore isn't tracking. */
+    private void updateGpsMap(long now) {
+        android.location.Location fix = lastFix;
+        if (coverageMap == null || fix == null || now - coverageMapAt < 500) return;
+        coverageMapAt = now;
+        float[] xz = gpsLocalXZ(fix);
+        float heading = Float.isNaN(compassDeg) ? 0f : (float) Math.toRadians(compassDeg);
+        ScanCoverage.Snapshot snapshot = coverage.snapshot();
+        String label = String.format(Locale.US, "%d photos · GPS ±%.0f m", frames, fix.getAccuracy());
+        runOnUiThread(() -> coverageMap.update(snapshot, xz[0], xz[1], heading, label));
     }
 
     /** Coloured points on the surfaces captured so far, and a 3 Hz mini-map refresh. */
@@ -411,11 +444,14 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
 
     private void maybeKeyframe(Frame frame, Camera camera, Pose pose) {
         long now = SystemClock.uptimeMillis();
-        float[] p = poseArray(pose);
-        if (lastKeyPose != null) {
+        float[] p = pose == null ? null : poseArray(pose);
+        if (p != null && lastKeyPose != null) {
             boolean moved = dist(p, lastKeyPose) >= KEYFRAME_MOVE_M;
             boolean turned = angleDeg(p, lastKeyPose) >= KEYFRAME_TURN_DEG;
-            if ((!moved && !turned) || now - lastKeyAt < KEYFRAME_MIN_MS) return;
+            boolean timed = now - lastKeyAt >= TIMED_PHOTO_MS * 3;
+            if ((!moved && !turned && !timed) || now - lastKeyAt < KEYFRAME_MIN_MS) return;
+        } else if (p == null && now - lastKeyAt < TIMED_PHOTO_MS) {
+            return;
         }
         if (encodeQueue.get() > 3) return; // phone is busy encoding; skip rather than lag
         Image image;
@@ -433,7 +469,8 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         float[] focal = intrinsics.getFocalLength();
         float[] principal = intrinsics.getPrincipalPoint();
         int index = ++frames;
-        try (com.google.ar.core.PointCloud cloud = frame.acquirePointCloud()) {
+        if (p != null) trackedPhotos++;
+        if (p != null) try (com.google.ar.core.PointCloud cloud = frame.acquirePointCloud()) {
             FloatBuffer points = cloud.getPoints();
             float[] values = new float[points.remaining()];
             points.get(values);
@@ -441,9 +478,11 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         } catch (Exception error) {
             android.util.Log.w("OnThisSiteScan", "Point cloud unavailable", error);
         }
-        lastKeyPose = p;
+        if (p != null) lastKeyPose = p;
         lastKeyAt = now;
         float compass = compassDeg;
+        float[] att = attitude;
+        android.location.Location fix = lastFix;
         encodeQueue.incrementAndGet();
         encoder.execute(() -> {
             try {
@@ -453,10 +492,14 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 }
                 JSONObject line = new JSONObject()
                     .put("i", index).put("t", now).put("file", name)
-                    .put("pose", new JSONArray(p))
                     .put("intrinsics", new JSONObject().put("fx", focal[0]).put("fy", focal[1])
                         .put("cx", principal[0]).put("cy", principal[1]).put("w", width).put("h", height))
-                    .put("tracking", "TRACKING");
+                    .put("tracking", p != null ? "TRACKING" : "NONE");
+                if (p != null) line.put("pose", new JSONArray(p));
+                if (att != null) line.put("attitude_enu", new JSONArray(att));
+                if (fix != null) line.put("gps", new JSONObject().put("lat", fix.getLatitude()).put("lng", fix.getLongitude())
+                    .put("alt", fix.hasAltitude() ? fix.getAltitude() : JSONObject.NULL).put("acc", fix.getAccuracy())
+                    .put("age_ms", Math.max(0, System.currentTimeMillis() - fix.getTime())));
                 if (!Float.isNaN(compass)) line.put("compass_deg", compass);
                 synchronized (framesOut) {
                     framesOut.write(line.toString());
@@ -519,7 +562,11 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         float[] transform = {0, 0, 0, 0, 0, 0, 1};
         float residual = 0f;
         int fixes = 0;
-        if (!spaceHasModel) {
+        if (trackedPhotos < frames / 2) {
+            // Mostly photos without ARCore positions: the processing PC builds
+            // this scan from the photos and places it with GPS + compass.
+            method = "gps";
+        } else if (!spaceHasModel) {
             method = "first";
         } else if (localizer != null && localizer.locked()) {
             method = "localized";
@@ -530,7 +577,8 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             method = "unaligned"; // the processing PC places it by matching photos
         }
         return new JSONObject()
-            .put("alignment", new JSONObject().put("method", method).put("fixes", fixes).put("residual_m", residual))
+            .put("alignment", new JSONObject().put("method", method).put("fixes", fixes).put("residual_m", residual)
+                .put("photos", frames).put("tracked_photos", trackedPhotos))
             .put("transform", new JSONArray(transform));
     }
 
@@ -695,12 +743,64 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         float[] rotation = new float[9];
         float[] orientation = new float[3];
         SensorManager.getRotationMatrixFromVector(rotation, event.values);
+        float[] q = new float[4];
+        SensorManager.getQuaternionFromVector(q, event.values); // w,x,y,z
+        attitude = new float[] {q[1], q[2], q[3], q[0]};
         SensorManager.getOrientation(rotation, orientation);
         compassDeg = (float) ((Math.toDegrees(orientation[0]) + 360) % 360);
     }
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+
+    private void startLocationUpdates() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[] {Manifest.permission.ACCESS_FINE_LOCATION}, 52);
+            return;
+        }
+        try {
+            android.location.LocationManager manager = (android.location.LocationManager) getSystemService(Context.LOCATION_SERVICE);
+            for (String provider : new String[] {android.location.LocationManager.GPS_PROVIDER, android.location.LocationManager.NETWORK_PROVIDER}) {
+                if (!manager.isProviderEnabled(provider)) continue;
+                manager.requestLocationUpdates(provider, 500L, 0f, this, android.os.Looper.getMainLooper());
+                android.location.Location known = manager.getLastKnownLocation(provider);
+                if (known != null && (lastFix == null || known.getAccuracy() < lastFix.getAccuracy())) lastFix = known;
+            }
+        } catch (SecurityException error) {
+            android.util.Log.w("OnThisSiteScan", "Location unavailable", error);
+        }
+    }
+
+    @Override
+    public void onLocationChanged(android.location.Location location) {
+        android.location.Location current = lastFix;
+        // Prefer fresh GPS; ignore a coarse network fix when a good GPS one is recent.
+        if (current == null || location.getAccuracy() <= current.getAccuracy() + 5
+            || location.getTime() - current.getTime() > 5000) lastFix = location;
+    }
+
+    @Override
+    public void onProviderEnabled(String provider) {}
+
+    @Override
+    public void onProviderDisabled(String provider) {}
+
+    @Override
+    public void onStatusChanged(String provider, int status, Bundle extras) {}
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 52 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) startLocationUpdates();
+    }
+
+    /** Local metres east/north of the first fix, for the mini map when ARCore isn't tracking. */
+    private float[] gpsLocalXZ(android.location.Location fix) {
+        if (gpsOrigin == null) gpsOrigin = new double[] {fix.getLatitude(), fix.getLongitude()};
+        double east = (fix.getLongitude() - gpsOrigin[1]) * 111320.0 * Math.cos(Math.toRadians(gpsOrigin[0]));
+        double north = (fix.getLatitude() - gpsOrigin[0]) * 110540.0;
+        return new float[] {(float) east, (float) -north};
+    }
 
     private static float[] poseArray(Pose pose) {
         return new float[] {pose.tx(), pose.ty(), pose.tz(), pose.qx(), pose.qy(), pose.qz(), pose.qw()};
