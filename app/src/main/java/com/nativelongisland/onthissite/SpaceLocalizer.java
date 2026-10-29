@@ -49,6 +49,10 @@ final class SpaceLocalizer {
     private float[] transform;
     private float residual = -1f;
     private int attempts;
+    // Latest camera pose in the space straight from the server (works without
+    // ARCore tracking: "photo mode" re-locates about once a second).
+    private volatile float[] lastSpacePose;
+    private volatile long lastSpacePoseAt;
 
     SpaceLocalizer(String spaceId, String accessToken) {
         this.spaceId = spaceId;
@@ -57,10 +61,15 @@ final class SpaceLocalizer {
 
     /** Call on the GL thread every tracked frame; sends a frame now and then. */
     void onFrame(Frame frame, Camera camera) {
+        onFrame(frame, camera, true);
+    }
+
+    /** tracked=false: ARCore isn't tracking, so keep re-locating every second and use the server pose directly. */
+    void onFrame(Frame frame, Camera camera, boolean tracked) {
         long now = SystemClock.uptimeMillis();
-        long every = locked() ? REFINE_EVERY_MS : SEARCH_EVERY_MS;
+        long every = !tracked ? 1000 : locked() ? REFINE_EVERY_MS : SEARCH_EVERY_MS;
         if (busy || unavailable || now - lastRequestAt < every) return;
-        if (locked() && sessionPoses.size() >= GOOD_FIXES) return;
+        if (tracked && locked() && sessionPoses.size() >= GOOD_FIXES) return;
         Image image;
         try {
             image = frame.acquireCameraImage();
@@ -87,7 +96,10 @@ final class SpaceLocalizer {
                     JSONArray pose = result.getJSONArray("pose");
                     float[] space = new float[7];
                     for (int i = 0; i < 7; i++) space[i] = (float) pose.getDouble(i);
-                    addFix(cameraPose, space);
+                    lastSpacePose = space;
+                    lastSpacePoseAt = SystemClock.uptimeMillis();
+                    if (tracked) addFix(cameraPose, space);
+                    else status = "Found your place in the scan";
                 } else if (!locked()) {
                     status = attempts < 4 ? "Looking around to find where you are…"
                         : "Point at walls and objects that were scanned (" + result.optString("reason", "no match") + ").";
@@ -123,6 +135,12 @@ final class SpaceLocalizer {
         residual = fit[7];
         status = String.format(Locale.US, "Found your place (%d fix%s, ±%.0f cm)",
             sessionPoses.size(), sessionPoses.size() == 1 ? "" : "es", residual * 100);
+    }
+
+    /** Camera pose in the space from the last server fix, or null if older than maxAgeMs. */
+    float[] recentSpacePose(long maxAgeMs) {
+        float[] pose = lastSpacePose;
+        return pose != null && SystemClock.uptimeMillis() - lastSpacePoseAt <= maxAgeMs ? pose : null;
     }
 
     synchronized float[] transform() {

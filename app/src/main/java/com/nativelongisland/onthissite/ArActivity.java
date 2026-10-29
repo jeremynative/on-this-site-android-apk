@@ -123,6 +123,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private String spaceId;
     private SpaceLocalizer spaceLocalizer;
     private int spaceFixesApplied;
+    // The scan's 3D points (from the server), drawn as faint dots over the real
+    // place so the visitor can see the AR lining up even before content exists.
+    private java.nio.FloatBuffer scanPoints;
+    private int scanPointCount;
     private int mode = MODE_NONE;
     private ArScene.Item pendingItem;
     private boolean anchorRephotoRequested;
@@ -166,7 +170,11 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         authorMode = BuildConfig.DEBUG && getIntent().getBooleanExtra(EXTRA_AUTHOR, false);
         spaceId = getIntent().getStringExtra(ScanActivity.EXTRA_SPACE_ID);
         String spaceToken = getIntent().getStringExtra(ScanActivity.EXTRA_ACCESS_TOKEN);
-        if (spaceId != null && spaceToken != null) spaceLocalizer = new SpaceLocalizer(spaceId, spaceToken);
+        if (spaceId != null && spaceToken != null) {
+            spaceLocalizer = new SpaceLocalizer(spaceId, spaceToken);
+            String token = spaceToken;
+            loader.execute(() -> loadScanPoints(token));
+        }
         store = new ArScene.Store(this, siteId);
         try {
             scene = store.load();
@@ -332,8 +340,12 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             trackMarkers(frame);
             localizeInSpace(frame, camera);
             if (camera.getTrackingState() != TrackingState.TRACKING) {
-                postStatus(trackingProblem(camera), "");
                 taps.clear();
+                if (spaceLocalizer != null) {
+                    drawPhotoMode(frame, camera);
+                } else {
+                    postStatus(trackingProblem(camera), "");
+                }
                 return;
             }
             float[] view = new float[16];
@@ -398,6 +410,78 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 runOnUiThread(() -> showRoomDialog(markerId, null));
             }
         }
+    }
+
+    private void loadScanPoints(String token) {
+        try {
+            org.json.JSONArray values = ScanUploader.get("/spaces/" + spaceId + "/points", token).getJSONArray("points");
+            int count = values.length() / 3;
+            java.nio.FloatBuffer buffer = java.nio.ByteBuffer.allocateDirect(count * 7 * 4).order(java.nio.ByteOrder.nativeOrder()).asFloatBuffer();
+            for (int i = 0; i < count; i++) {
+                buffer.put((float) values.getDouble(i * 3)).put((float) values.getDouble(i * 3 + 1)).put((float) values.getDouble(i * 3 + 2));
+                buffer.put(0.35f).put(0.85f).put(1f).put(0.75f);
+            }
+            buffer.position(0);
+            synchronized (lock) {
+                scanPoints = buffer;
+                scanPointCount = count;
+            }
+        } catch (Exception error) {
+            android.util.Log.w("OnThisSiteAR", "Scan points unavailable: " + error.getMessage());
+        }
+    }
+
+    /**
+     * Photo mode, for phones whose AR tracking can't start (e.g. no gyroscope):
+     * our positioning service re-locates the camera in the scanned space about
+     * once a second, and the scan's points and placed photos are drawn from
+     * that pose. Coarser than tracked AR, but works on any camera phone.
+     */
+    private void drawPhotoMode(Frame frame, Camera camera) {
+        spaceLocalizer.onFrame(frame, camera, false);
+        float[] pose = spaceLocalizer.recentSpacePose(4000);
+        if (pose == null) {
+            postStatus("Photo mode · point at the scanned place", spaceLocalizer.status()
+                + "\nThis phone can't track motion for live AR, so the view updates about once a second.");
+            return;
+        }
+        float[] cameraWorld = new float[16];
+        toPose(pose).toMatrix(cameraWorld, 0);
+        float[] view = new float[16];
+        Matrix.invertM(view, 0, cameraWorld, 0);
+        float[] projection = new float[16];
+        camera.getProjectionMatrix(projection, 0, 0.05f, 100f);
+        float[] viewProjection = new float[16];
+        Matrix.multiplyMM(viewProjection, 0, projection, 0, view, 0);
+        if (scanPoints != null) gl.drawPoints(viewProjection, scanPoints, scanPointCount, 9f * getResources().getDisplayMetrics().density / 2.6f);
+        // Placed photos and cards live in the space frame (the "space" room).
+        ArScene.Room room = scene.roomForMarker(SPACE_MARKER);
+        int shown = 0;
+        List<Draw> draws = new ArrayList<>();
+        if (room != null) {
+            float[] cameraPoint = {pose[0], pose[1], pose[2]};
+            for (ArScene.Item item : scene.items) {
+                if (!visible(item) || !room.id.equals(item.roomId) || item.pose == null) continue;
+                Pose world = toPose(item.pose);
+                float distance = distance(world.getTranslation(), cameraPoint);
+                if (ArScene.KIND_PHRASE.equals(item.kind) || ArScene.KIND_AUDIO.equals(item.kind)) {
+                    addCard(draws, item, world.getTranslation(), cameraPoint, 0.5f);
+                } else {
+                    String key = textureKey(item);
+                    ensureTexture(item, key);
+                    float aspect = gl.aspect(key);
+                    if (aspect > 0f) draws.add(Draw.posed(item.id, world, key, item.widthMeters, item.widthMeters * aspect, 0.95f, distance));
+                }
+                shown++;
+            }
+        }
+        Collections.sort(draws, (a, b) -> Float.compare(b.distance, a.distance));
+        gl.beginQuads();
+        for (Draw draw : draws) gl.drawQuad(viewProjection, draw.model, gl.texture(draw.texture), draw.alpha);
+        gl.endQuads();
+        postStatus(scene.title + " · photo mode", shown == 0
+            ? "Found your place in the scan (blue dots). Nothing has been placed here yet: photos and prompts added to this space will appear here."
+            : "Showing " + shown + " placed item" + (shown == 1 ? "" : "s") + ". This phone can't track motion, so the view updates about once a second.");
     }
 
     /** Feeds frames to the positioning service and re-anchors the space frame on each new fix. */
