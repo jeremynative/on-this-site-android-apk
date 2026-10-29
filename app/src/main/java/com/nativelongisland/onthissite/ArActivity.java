@@ -115,18 +115,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private final Set<String> promptedMarkers = new HashSet<>();
     private String lastMarkerId;
 
-    // Scanned-space localization: resolving the space's Cloud Anchors gives
-    // the session -> space transform; the space frame then acts as a "room"
-    // keyed SPACE_MARKER, so content can be placed without printed cards.
+    // Scanned-space localization: our own positioning service finds the phone
+    // in the space's 3D scan, giving the session -> space transform; the space
+    // frame then acts as a "room" keyed SPACE_MARKER, so content is placed
+    // without printed cards or any third-party anchor service.
     static final String SPACE_MARKER = "space";
     private String spaceId;
-    private String spaceToken;
-    private org.json.JSONArray spaceAnchors;
-    private boolean spaceResolveStarted;
-    private boolean spaceDirty;
-    private float spaceResidual = -1f;
-    private final List<Anchor> spaceResolved = new ArrayList<>();
-    private final List<float[]> spaceResolvedPoses = new ArrayList<>();
+    private SpaceLocalizer spaceLocalizer;
+    private int spaceFixesApplied;
     private int mode = MODE_NONE;
     private ArScene.Item pendingItem;
     private boolean anchorRephotoRequested;
@@ -169,8 +165,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (siteId == null || siteId.isEmpty()) siteId = "mas-house";
         authorMode = BuildConfig.DEBUG && getIntent().getBooleanExtra(EXTRA_AUTHOR, false);
         spaceId = getIntent().getStringExtra(ScanActivity.EXTRA_SPACE_ID);
-        spaceToken = getIntent().getStringExtra(ScanActivity.EXTRA_ACCESS_TOKEN);
-        if (spaceId != null) loader.execute(this::loadSpaceAnchors);
+        String spaceToken = getIntent().getStringExtra(ScanActivity.EXTRA_ACCESS_TOKEN);
+        if (spaceId != null && spaceToken != null) spaceLocalizer = new SpaceLocalizer(spaceId, spaceToken);
         store = new ArScene.Store(this, siteId);
         try {
             scene = store.load();
@@ -250,6 +246,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         super.onDestroy();
         if (session != null) session.close();
         session = null;
+        if (spaceLocalizer != null) spaceLocalizer.close();
         loader.shutdownNow();
         stopAudio();
     }
@@ -278,7 +275,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         config.setFocusMode(Config.FocusMode.AUTO);
         config.setUpdateMode(Config.UpdateMode.LATEST_CAMERA_IMAGE);
         config.setLightEstimationMode(Config.LightEstimationMode.DISABLED);
-        if (spaceId != null) config.setCloudAnchorMode(Config.CloudAnchorMode.ENABLED);
         if (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
             // Depth lets authors place photos on plain walls ARCore has not
             // yet detected as planes.
@@ -334,7 +330,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         gl.drawBackground(frame);
         synchronized (lock) {
             trackMarkers(frame);
-            localizeInSpace(camera);
+            localizeInSpace(frame, camera);
             if (camera.getTrackingState() != TrackingState.TRACKING) {
                 postStatus(trackingProblem(camera), "");
                 taps.clear();
@@ -404,57 +400,16 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
     }
 
-    private void loadSpaceAnchors() {
-        try {
-            org.json.JSONObject space = ScanUploader.get("/spaces/" + spaceId, spaceToken).getJSONObject("data");
-            synchronized (lock) {
-                spaceAnchors = space.optJSONArray("anchors");
-            }
-        } catch (Exception error) {
-            toast("Couldn't load the scanned space: " + error.getMessage());
-        }
-    }
-
-    /** Resolves the space's anchors once tracking starts and keeps the space frame fitted to them. */
-    private void localizeInSpace(Camera camera) {
-        if (spaceAnchors == null || camera.getTrackingState() != TrackingState.TRACKING) return;
-        if (!spaceResolveStarted) {
-            spaceResolveStarted = true;
-            int count = Math.min(12, spaceAnchors.length());
-            for (int i = spaceAnchors.length() - count; i < spaceAnchors.length(); i++) {
-                org.json.JSONObject anchor = spaceAnchors.optJSONObject(i);
-                org.json.JSONArray pose = anchor == null ? null : anchor.optJSONArray("pose");
-                if (pose == null || pose.length() != 7) continue;
-                float[] spacePose = new float[7];
-                for (int k = 0; k < 7; k++) spacePose[k] = (float) pose.optDouble(k);
-                try {
-                    session.resolveCloudAnchorAsync(anchor.optString("cloud_anchor_id"), (resolved, state) -> {
-                        if (state != Anchor.CloudAnchorState.SUCCESS || resolved == null) return;
-                        synchronized (lock) {
-                            spaceResolved.add(resolved);
-                            spaceResolvedPoses.add(spacePose);
-                            spaceDirty = true;
-                        }
-                    });
-                } catch (Exception error) {
-                    android.util.Log.w("OnThisSiteAR", "Resolve failed: " + error);
-                }
-            }
-        }
-        if (!spaceDirty) return;
-        spaceDirty = false;
-        List<float[]> inSession = new ArrayList<>();
-        List<float[]> inSpace = new ArrayList<>();
-        for (int i = 0; i < spaceResolved.size(); i++) {
-            if (spaceResolved.get(i).getTrackingState() != TrackingState.TRACKING) continue;
-            inSession.add(poseArray(spaceResolved.get(i).getPose()));
-            inSpace.add(spaceResolvedPoses.get(i));
-        }
-        float[] fit = ArPlacement.fitYawTranslation(inSession, inSpace);
-        if (fit == null) return;
-        spaceResidual = fit[7];
+    /** Feeds frames to the positioning service and re-anchors the space frame on each new fix. */
+    private void localizeInSpace(Frame frame, Camera camera) {
+        if (spaceLocalizer == null || camera.getTrackingState() != TrackingState.TRACKING) return;
+        spaceLocalizer.onFrame(frame, camera);
+        int fixes = spaceLocalizer.fixes();
+        float[] transform = spaceLocalizer.transform();
+        if (transform == null || fixes == spaceFixesApplied) return;
+        spaceFixesApplied = fixes;
         // The space frame's origin, expressed in this session, becomes the room anchor.
-        float[] origin = ArPlacement.inverse(java.util.Arrays.copyOf(fit, 7));
+        float[] origin = ArPlacement.inverse(transform);
         Anchor previous = roomAnchors.put(SPACE_MARKER, session.createAnchor(toPose(origin)));
         if (previous != null) previous.detach();
         if (scene.roomForMarker(SPACE_MARKER) == null) {
@@ -467,7 +422,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             runOnUiThread(this::saveScene);
         }
         if (lastMarkerId == null) lastMarkerId = SPACE_MARKER;
-        runOnUiThread(this::vibrateConfirm);
+        if (fixes == 1) runOnUiThread(this::vibrateConfirm);
     }
 
     /** The room whose drawn zone holds the visitor, else the room of the last marker scanned. */
@@ -784,8 +739,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private String statusText(ArScene.Room room) {
         if (room == null) {
             if (lastMarkerId != null) return authorMode ? "New marker: name this room to start." : "This marker isn't set up yet.";
-            if (spaceId != null) return spaceAnchors == null ? "Loading the scanned space…"
-                : "Look around slowly to find where you are in " + scene.title + ".";
+            if (spaceLocalizer != null) return spaceLocalizer.status();
             return "Point the camera at a " + scene.title + " marker card.";
         }
         int found = 0;

@@ -31,7 +31,6 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import com.google.ar.core.Anchor;
 import com.google.ar.core.ArCoreApk;
 import com.google.ar.core.Camera;
 import com.google.ar.core.CameraConfig;
@@ -39,12 +38,8 @@ import com.google.ar.core.CameraConfigFilter;
 import com.google.ar.core.CameraIntrinsics;
 import com.google.ar.core.Config;
 import com.google.ar.core.Frame;
-import com.google.ar.core.HitResult;
-import com.google.ar.core.Plane;
-import com.google.ar.core.Point;
 import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
-import com.google.ar.core.Trackable;
 import com.google.ar.core.TrackingState;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -65,10 +60,11 @@ import org.json.JSONObject;
 
 /**
  * Contributor scan mode: walk a space while the app records keyframes with
- * ARCore's metric, gravity-aligned camera poses, hosts Cloud Anchors every
- * few metres, and resolves anchors from earlier scans so this session joins
- * the same space frame (one person's room extends another's). The finished
- * session is uploaded to the scan queue for the processing PC.
+ * ARCore's metric, gravity-aligned camera poses. If the space already has a
+ * 3D model, our own positioning service (SpaceLocalizer) finds the phone in
+ * it so this session joins the same space frame; otherwise the processing PC
+ * places it by matching photos. The finished session is uploaded to the scan
+ * queue for the processing PC.
  */
 public class ScanActivity extends Activity implements GLSurfaceView.Renderer, SensorEventListener {
     static final String EXTRA_SPACE_ID = "space_id";
@@ -78,10 +74,6 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private static final float KEYFRAME_MOVE_M = 0.12f;
     private static final float KEYFRAME_TURN_DEG = 8f;
     private static final long KEYFRAME_MIN_MS = 300;
-    private static final float ANCHOR_EVERY_M = 2.5f;
-    private static final int MAX_HOSTED = 30;
-    private static final int MAX_RESOLVE = 12;
-    private static final int ANCHOR_TTL_DAYS = 365;
 
     private final ArGl gl = new ArGl();
     private final ExecutorService encoder = Executors.newSingleThreadExecutor();
@@ -98,7 +90,9 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private String spaceId;
     private String accessToken;
     private String creditName;
-    private JSONArray existingAnchors = new JSONArray();
+    private boolean spaceHasModel;
+    private String spaceTitle = "";
+    private SpaceLocalizer localizer;
     private File sessionDir;
     private FileWriter framesOut;
 
@@ -109,14 +103,6 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private float[] lastKeyPose;
     private long lastKeyAt;
     private float[] lastPosition;
-    private float[] lastAnchorPosition;
-    private final List<Anchor> pendingHosts = new ArrayList<>();
-    private final List<float[]> pendingHostPoses = new ArrayList<>();
-    private final JSONArray hosted = new JSONArray();
-    private final List<Anchor> resolving = new ArrayList<>();
-    private final List<float[]> resolvedSession = new ArrayList<>();
-    private final List<float[]> resolvedSpace = new ArrayList<>();
-    private final JSONArray resolvedIds = new JSONArray();
     private float compassDeg = Float.NaN;
 
     private TextView status;
@@ -153,7 +139,8 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 spaceId = spaces.getJSONObject(0).getString("id");
             }
             JSONObject space = ScanUploader.get("/spaces/" + spaceId, accessToken).getJSONObject("data");
-            existingAnchors = space.optJSONArray("anchors") == null ? new JSONArray() : space.getJSONArray("anchors");
+            spaceHasModel = space.optInt("model_version") > 0;
+            spaceTitle = space.optString("title");
             StringBuilder areas = new StringBuilder();
             JSONArray credits = space.optJSONArray("credits");
             for (int i = 0; credits != null && i < credits.length(); i++) {
@@ -161,9 +148,11 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 areas.append("\n• ").append(c.optString("name")).append(": ").append(join(c.optJSONArray("areas")));
             }
             String title = space.optString("title");
-            String summary = existingAnchors.length() == 0
+            String summary = credits == null || credits.length() == 0
                 ? "Nobody has scanned " + title + " yet. Your scan starts it."
-                : "Already scanned in " + title + ":" + areas + "\n\nStart where someone already scanned so your scan joins theirs.";
+                : "Already scanned in " + title + ":" + areas
+                    + (spaceHasModel ? "\n\nStart where someone already scanned so your scan lines up with theirs."
+                        : "\n\nAdd any room or area; it will be fitted to the others when processed.");
             runOnUiThread(() -> {
                 status.setText(title);
                 detail.setText(summary);
@@ -247,6 +236,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     protected void onDestroy() {
         super.onDestroy();
         if (session != null) session.close();
+        if (localizer != null) localizer.close();
         encoder.shutdown();
     }
 
@@ -260,7 +250,6 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         }
         if (best != null) session.setCameraConfig(best);
         Config config = new Config(session);
-        config.setCloudAnchorMode(Config.CloudAnchorMode.ENABLED);
         config.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL);
         config.setFocusMode(Config.FocusMode.FIXED);
         config.setUpdateMode(Config.UpdateMode.LATEST_CAMERA_IMAGE);
@@ -291,37 +280,10 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             distance = 0f;
             lastKeyPose = null;
             lastPosition = null;
-            lastAnchorPosition = null;
         }
-        surface.queueEvent(this::resolveExistingAnchors);
+        if (spaceHasModel && accessToken != null) localizer = new SpaceLocalizer(spaceId, accessToken);
         startButton.setVisibility(View.GONE);
         finishButton.setVisibility(View.VISIBLE);
-    }
-
-    private void resolveExistingAnchors() {
-        if (session == null) return;
-        int count = Math.min(MAX_RESOLVE, existingAnchors.length());
-        for (int i = existingAnchors.length() - count; i < existingAnchors.length(); i++) {
-            JSONObject anchor = existingAnchors.optJSONObject(i);
-            if (anchor == null) continue;
-            String id = anchor.optString("cloud_anchor_id");
-            float[] spacePose = poseFromJson(anchor.optJSONArray("pose"));
-            if (id.isEmpty() || spacePose == null) continue;
-            try {
-                session.resolveCloudAnchorAsync(id, (resolved, state) -> {
-                    if (state != Anchor.CloudAnchorState.SUCCESS || resolved == null) return;
-                    synchronized (lock) {
-                        resolving.add(resolved);
-                        resolvedSession.add(null);   // filled from the live anchor at finish
-                        resolvedSpace.add(spacePose);
-                        resolvedIds.put(id);
-                    }
-                    runOnUiThread(() -> vibrate());
-                });
-            } catch (Exception error) {
-                android.util.Log.w("OnThisSiteScan", "Resolve failed: " + error);
-            }
-        }
     }
 
     @Override
@@ -368,12 +330,11 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             if (lastPosition != null) distance += dist(position, lastPosition);
             lastPosition = position;
             maybeKeyframe(frame, camera, pose);
-            maybeHostAnchor(frame, camera, position);
-            postStatus(null, String.format(Locale.US,
-                "%d photos · %.0f m walked · %d anchors saved · %s",
-                frames, distance, hosted.length() + pendingHosts.size(),
-                existingAnchors.length() == 0 ? "first scan of this space"
-                    : resolvedSpace.isEmpty() ? "looking for earlier scans…" : "joined earlier scans ✓"));
+            if (localizer != null) localizer.onFrame(frame, camera);
+            postStatus(null, String.format(Locale.US, "%d photos · %.0f m walked\n%s",
+                frames, distance,
+                localizer == null ? (spaceHasModel ? "Will be fitted to the space when processed" : "First scan of this place")
+                    : localizer.locked() ? "Lined up with earlier scans ✓ " + localizer.status() : localizer.status()));
         }
     }
 
@@ -394,7 +355,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         }
         int width = image.getWidth();
         int height = image.getHeight();
-        byte[] nv21 = toNv21(image);
+        byte[] nv21 = SpaceLocalizer.toNv21(image);
         image.close();
         CameraIntrinsics intrinsics = camera.getImageIntrinsics();
         float[] focal = intrinsics.getFocalLength();
@@ -429,59 +390,16 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         });
     }
 
-    /** Hosts a Cloud Anchor every few metres where ARCore can see enough detail. */
-    private void maybeHostAnchor(Frame frame, Camera camera, float[] position) {
-        if (hosted.length() + pendingHosts.size() >= MAX_HOSTED) return;
-        if (lastAnchorPosition != null && dist(position, lastAnchorPosition) < ANCHOR_EVERY_M) return;
-        Session.FeatureMapQuality quality;
-        try {
-            quality = session.estimateFeatureMapQualityForHosting(camera.getPose());
-        } catch (Exception error) {
-            return;
-        }
-        if (quality != Session.FeatureMapQuality.GOOD) return;
-        for (HitResult hit : frame.hitTest(viewportWidth / 2f, viewportHeight / 2f)) {
-            Trackable trackable = hit.getTrackable();
-            if (!(trackable instanceof Plane) && !(trackable instanceof Point)) continue;
-            Anchor anchor = hit.createAnchor();
-            lastAnchorPosition = position;
-            pendingHosts.add(anchor);
-            pendingHostPoses.add(poseArray(anchor.getPose()));
-            try {
-                session.hostCloudAnchorAsync(anchor, ANCHOR_TTL_DAYS, (cloudId, state) -> {
-                    synchronized (lock) {
-                        int at = pendingHosts.indexOf(anchor);
-                        float[] hostedPose = at >= 0 ? pendingHostPoses.remove(at) : null;
-                        if (at >= 0) pendingHosts.remove(at);
-                        if (state == Anchor.CloudAnchorState.SUCCESS && cloudId != null && hostedPose != null) {
-                            try {
-                                hosted.put(new JSONObject().put("cloud_anchor_id", cloudId).put("pose_session", new JSONArray(poseArray(anchor.getPose()))));
-                            } catch (Exception ignored) {
-                                // JSON of floats cannot fail in practice.
-                            }
-                        } else if (state != Anchor.CloudAnchorState.SUCCESS) {
-                            android.util.Log.w("OnThisSiteScan", "Hosting failed: " + state);
-                        }
-                    }
-                });
-            } catch (Exception error) {
-                pendingHosts.remove(anchor);
-                pendingHostPoses.remove(pendingHostPoses.size() - 1);
-            }
-            return;
-        }
-    }
-
     // ---- Finish ----
 
     private void finishScan() {
         finishButton.setEnabled(false);
-        detail.setText("Saving the last anchors…");
+        detail.setText("Saving the last photos…");
         new Thread(() -> {
             long deadline = SystemClock.uptimeMillis() + 20000;
             while (SystemClock.uptimeMillis() < deadline) {
                 synchronized (lock) {
-                    if (pendingHosts.isEmpty() && encodeQueue.get() == 0) break;
+                    if (encodeQueue.get() == 0) break;
                 }
                 SystemClock.sleep(250);
             }
@@ -505,49 +423,25 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         }).start();
     }
 
-    /**
-     * Session -> space transform. Both frames are gravity-aligned, so only yaw
-     * and translation are solved: circular mean of the per-anchor yaw
-     * differences, then the mean translation, with the RMS residual reported.
-     */
+    /** Session -> space transform from our positioning fixes, if any. */
     private JSONObject alignment() throws Exception {
         String method;
         float[] transform = {0, 0, 0, 0, 0, 0, 1};
         float residual = 0f;
-        List<float[]> sessionPoses = new ArrayList<>();
-        for (Anchor anchor : resolving) sessionPoses.add(anchor.getTrackingState() == TrackingState.STOPPED ? null : poseArray(anchor.getPose()));
-        List<float[]> a = new ArrayList<>();
-        List<float[]> b = new ArrayList<>();
-        for (int i = 0; i < sessionPoses.size(); i++) {
-            if (sessionPoses.get(i) != null) {
-                a.add(sessionPoses.get(i));
-                b.add(resolvedSpace.get(i));
-            }
-        }
-        if (existingAnchors.length() == 0) {
+        int fixes = 0;
+        if (!spaceHasModel) {
             method = "first";
-        } else if (a.isEmpty()) {
-            method = "unaligned";
+        } else if (localizer != null && localizer.locked()) {
+            method = "localized";
+            transform = localizer.transform();
+            residual = localizer.residual();
+            fixes = localizer.fixes();
         } else {
-            method = "anchors";
-            float[] fit = ArPlacement.fitYawTranslation(a, b);
-            transform = java.util.Arrays.copyOf(fit, 7);
-            residual = fit[7];
-        }
-        JSONArray hostedSpace = new JSONArray();
-        if (!"unaligned".equals(method)) {
-            for (int i = 0; i < hosted.length(); i++) {
-                JSONObject h = hosted.getJSONObject(i);
-                float[] p = poseFromJson(h.getJSONArray("pose_session"));
-                hostedSpace.put(new JSONObject().put("cloud_anchor_id", h.getString("cloud_anchor_id"))
-                    .put("pose", new JSONArray(ArPlacement.compose(transform, p))).put("ttl_days", ANCHOR_TTL_DAYS));
-            }
+            method = "unaligned"; // the processing PC places it by matching photos
         }
         return new JSONObject()
-            .put("alignment", new JSONObject().put("method", method).put("anchors_resolved", a.size()).put("residual_m", residual).put("anchor_ids", resolvedIds))
-            .put("transform", new JSONArray(transform))
-            .put("hosted", hosted)
-            .put("hosted_space", hostedSpace);
+            .put("alignment", new JSONObject().put("method", method).put("fixes", fixes).put("residual_m", residual))
+            .put("transform", new JSONArray(transform));
     }
 
     private void upload(File dir) {
@@ -699,33 +593,6 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {}
-
-    /** YUV_420_888 camera image to NV21, respecting row and pixel strides. */
-    private static byte[] toNv21(Image image) {
-        int width = image.getWidth();
-        int height = image.getHeight();
-        byte[] out = new byte[width * height * 3 / 2];
-        Image.Plane[] planes = image.getPlanes();
-        ByteBuffer y = planes[0].getBuffer();
-        int yRow = planes[0].getRowStride();
-        for (int row = 0; row < height; row++) {
-            y.position(row * yRow);
-            y.get(out, row * width, width);
-        }
-        ByteBuffer u = planes[1].getBuffer();
-        ByteBuffer v = planes[2].getBuffer();
-        int uvRow = planes[1].getRowStride();
-        int uvPixel = planes[1].getPixelStride();
-        int offset = width * height;
-        for (int row = 0; row < height / 2; row++) {
-            for (int col = 0; col < width / 2; col++) {
-                int index = row * uvRow + col * uvPixel;
-                out[offset++] = v.get(index);
-                out[offset++] = u.get(index);
-            }
-        }
-        return out;
-    }
 
     private static float[] poseArray(Pose pose) {
         return new float[] {pose.tx(), pose.ty(), pose.tz(), pose.qx(), pose.qy(), pose.qz(), pose.qw()};

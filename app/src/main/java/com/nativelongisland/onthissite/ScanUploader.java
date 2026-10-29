@@ -93,12 +93,6 @@ final class ScanUploader {
                 putPart(sessionId, key, idx, buffer, length);
             }
         }
-        JSONArray hosted = anchors.optJSONArray("hosted_space");
-        if (hosted != null && hosted.length() > 0 && !state.optBoolean("anchors_sent")) {
-            request("POST", "/sessions/" + sessionId + "/anchors", new JSONObject().put("anchors", hosted), null, key);
-            state.put("anchors_sent", true);
-            write(stateFile, state.toString());
-        }
         progress.update("Submitting for processing…", 97);
         request("POST", "/sessions/" + sessionId + "/finish",
             new JSONObject().put("parts", parts).put("frames", meta.optInt("frames")), null, key);
