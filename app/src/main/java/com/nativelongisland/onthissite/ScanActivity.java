@@ -110,6 +110,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     // the latest GPS fix: every photo carries both so scans can be placed on
     // the map and synced by location even when ARCore never starts tracking.
     private volatile float[] attitude;
+    private volatile float[] gravity;
     private volatile android.location.Location lastFix;
     private double[] gpsOrigin;
     private static final long TIMED_PHOTO_MS = 600;
@@ -244,6 +245,10 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         }
         surface.onResume();
         SensorManager sensors = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        // Gravity from the accelerometer (every phone has one) lets the PC level
+        // the 3D model even when there's no gyroscope, compass or AR tracking.
+        Sensor accelerometer = sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        if (accelerometer != null) sensors.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
         Sensor rotation = sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
         if (rotation != null) sensors.registerListener(this, rotation, SensorManager.SENSOR_DELAY_UI);
         startLocationUpdates();
@@ -311,7 +316,8 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 .put("schema", 1).put("space_id", spaceId).put("area_label", areaLabel)
                 .put("credit_name", credit).put("credit_public", creditPublic)
                 .put("device", Build.MANUFACTURER + " " + Build.MODEL).put("arcore", "1.56.0")
-                .put("started_at", System.currentTimeMillis());
+                .put("started_at", System.currentTimeMillis())
+                .put("sensor_orientation", cameraSensorOrientation());
             ScanUploader.write(new File(sessionDir, "meta.json"), meta.toString());
             File dir = sessionDir;
             if (accessToken != null && spaceId != null) new Thread(() -> {
@@ -528,6 +534,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         lastKeyAt = now;
         float compass = compassDeg;
         float[] att = attitude;
+        float[] up = gravity;
         android.location.Location fix = lastFix;
         encodeQueue.incrementAndGet();
         encoder.execute(() -> {
@@ -543,6 +550,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                     .put("tracking", p != null ? "TRACKING" : "NONE");
                 if (p != null) line.put("pose", new JSONArray(p));
                 if (att != null) line.put("attitude_enu", new JSONArray(att));
+                if (up != null) line.put("gravity_device", new JSONArray(up));
                 if (fix != null) line.put("gps", new JSONObject().put("lat", fix.getLatitude()).put("lng", fix.getLongitude())
                     .put("alt", fix.hasAltitude() ? fix.getAltitude() : JSONObject.NULL).put("acc", fix.getAccuracy())
                     .put("age_ms", Math.max(0, System.currentTimeMillis() - fix.getTime())));
@@ -784,6 +792,13 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
 
     @Override
     public void onSensorChanged(SensorEvent event) {
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            float[] g = gravity;
+            float k = 0.9f; // low-pass: keep gravity, drop hand shake
+            gravity = g == null ? event.values.clone()
+                : new float[] {g[0] * k + event.values[0] * (1 - k), g[1] * k + event.values[1] * (1 - k), g[2] * k + event.values[2] * (1 - k)};
+            return;
+        }
         float[] rotation = new float[9];
         float[] orientation = new float[3];
         SensorManager.getRotationMatrixFromVector(rotation, event.values);
@@ -796,6 +811,18 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+
+    /** How the camera sensor is mounted (usually 90): maps device gravity into image axes. */
+    private int cameraSensorOrientation() {
+        try {
+            String id = session.getCameraConfig().getCameraId();
+            android.hardware.camera2.CameraManager manager = (android.hardware.camera2.CameraManager) getSystemService(Context.CAMERA_SERVICE);
+            Integer value = manager.getCameraCharacteristics(id).get(android.hardware.camera2.CameraCharacteristics.SENSOR_ORIENTATION);
+            return value == null ? 90 : value;
+        } catch (Exception error) {
+            return 90;
+        }
+    }
 
     private void startLocationUpdates() {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
