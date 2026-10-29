@@ -461,6 +461,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        publishArPilotShortcuts();
+        if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("qa_open_ar")) {
+            openArExperience(getIntent().getStringExtra("qa_open_ar"), getIntent().getBooleanExtra(ArActivity.EXTRA_AUTHOR, false));
+        }
 
         // Android 16 no longer dispatches Activity.onBackPressed() to apps that
         // target API 36. Register the supported platform callback so both the
@@ -2611,6 +2615,43 @@ public class MainActivity extends Activity {
         String host = uri.getHost();
         return "nativelongisland.com".equalsIgnoreCase(host)
             || "directus.nativelongisland.com".equalsIgnoreCase(host);
+    }
+
+    boolean isArSupported() {
+        try {
+            return com.google.ar.core.ArCoreApk.getInstance().checkAvailability(this).isSupported();
+        } catch (Exception error) {
+            return false;
+        }
+    }
+
+    void openArExperience(String siteId, boolean author) {
+        startActivity(new Intent(this, ArActivity.class)
+            .putExtra(ArActivity.EXTRA_SITE_ID, siteId)
+            .putExtra(ArActivity.EXTRA_AUTHOR, author));
+    }
+
+    /** QA builds get launcher shortcuts into the Ma's House AR pilot until the web panel links to it. */
+    private void publishArPilotShortcuts() {
+        if (!BuildConfig.DEBUG || Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return;
+        try {
+            android.content.pm.ShortcutManager shortcuts = getSystemService(android.content.pm.ShortcutManager.class);
+            if (shortcuts == null) return;
+            java.util.List<android.content.pm.ShortcutInfo> list = new java.util.ArrayList<>();
+            list.add(new android.content.pm.ShortcutInfo.Builder(this, "ar-mas-house")
+                .setShortLabel("Ma's House AR")
+                .setIntent(new Intent(this, ArActivity.class).setAction(Intent.ACTION_VIEW)
+                    .putExtra(ArActivity.EXTRA_SITE_ID, "mas-house"))
+                .build());
+            list.add(new android.content.pm.ShortcutInfo.Builder(this, "ar-mas-house-author")
+                .setShortLabel("AR author mode")
+                .setIntent(new Intent(this, ArActivity.class).setAction(Intent.ACTION_VIEW)
+                    .putExtra(ArActivity.EXTRA_SITE_ID, "mas-house").putExtra(ArActivity.EXTRA_AUTHOR, true))
+                .build());
+            shortcuts.setDynamicShortcuts(list);
+        } catch (Exception error) {
+            Log.w(LOG_TAG, "AR shortcuts unavailable", error);
+        }
     }
 
     boolean validBridgeToken(String token) {

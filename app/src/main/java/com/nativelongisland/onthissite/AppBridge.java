@@ -30,6 +30,17 @@ class AppBridge {
     }
 
     @JavascriptInterface
+    public boolean isArSupported() {
+        return activity.isArSupported();
+    }
+
+    @JavascriptInterface
+    public void openArExperience(String token, String siteId) {
+        if (!activity.validBridgeToken(token) || siteId == null || !siteId.matches("[a-z0-9-]{1,64}")) return;
+        activity.runOnUiThread(() -> activity.openArExperience(siteId, false));
+    }
+
+    @JavascriptInterface
     public boolean isDebugBuild() {
         return BuildConfig.DEBUG;
     }

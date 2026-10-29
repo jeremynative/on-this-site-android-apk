@@ -19,6 +19,10 @@ dependencies {
     // default artifact requires Vulkan, while the OpenGL artifact uses the
     // same Android API with the widest supported-device coverage.
     implementation "org.maplibre.gl:android-sdk-opengl:13.5.0"
+    // Walk-through AR (room marker cards, photos, discoverable prompts).
+    // Declared "optional" in the manifest so devices without ARCore still
+    // install the app and simply never offer the AR view.
+    implementation "com.google.ar:core:1.56.0"
 }
 
 def releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
