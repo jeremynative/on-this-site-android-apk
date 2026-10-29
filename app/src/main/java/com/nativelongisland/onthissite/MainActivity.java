@@ -463,7 +463,11 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         publishArPilotShortcuts();
         if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("qa_open_ar")) {
-            openArExperience(getIntent().getStringExtra("qa_open_ar"), getIntent().getBooleanExtra(ArActivity.EXTRA_AUTHOR, false));
+            boolean author = getIntent().getBooleanExtra(ArActivity.EXTRA_AUTHOR, false);
+            String site = getIntent().getStringExtra("qa_open_ar");
+            String space = getIntent().getStringExtra(ScanActivity.EXTRA_SPACE_ID);
+            if (space == null) openArExperience(site, author);
+            else withSavedSignIn(0, (token, name) -> openArExperience(site, author, space, token));
         }
         if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("qa_open_scan")) {
             openScanWithSavedSignIn(getIntent().getStringExtra("qa_open_scan"), 0);
@@ -2629,9 +2633,15 @@ public class MainActivity extends Activity {
     }
 
     void openArExperience(String siteId, boolean author) {
+        openArExperience(siteId, author, null, null);
+    }
+
+    void openArExperience(String siteId, boolean author, String spaceId, String accessToken) {
         startActivity(new Intent(this, ArActivity.class)
             .putExtra(ArActivity.EXTRA_SITE_ID, siteId)
-            .putExtra(ArActivity.EXTRA_AUTHOR, author));
+            .putExtra(ArActivity.EXTRA_AUTHOR, author)
+            .putExtra(ScanActivity.EXTRA_SPACE_ID, spaceId)
+            .putExtra(ScanActivity.EXTRA_ACCESS_TOKEN, accessToken));
     }
 
     void openScanSpace(String spaceId, String accessToken, String creditName) {
@@ -2641,8 +2651,16 @@ public class MainActivity extends Activity {
             .putExtra(ScanActivity.EXTRA_CREDIT_NAME, creditName));
     }
 
-    /** QA entry: reads the map's saved sign-in once the page has loaded, then opens the scanner. */
     private void openScanWithSavedSignIn(String spaceId, int attempt) {
+        withSavedSignIn(attempt, (token, name) -> openScanSpace(spaceId, token, name));
+    }
+
+    private interface SignedIn {
+        void run(String token, String name);
+    }
+
+    /** QA entry: reads the map's saved sign-in once the page has loaded. */
+    private void withSavedSignIn(int attempt, SignedIn then) {
         if (webView == null || attempt > 10) return;
         webView.postDelayed(() -> webView.evaluateJavascript(
             "(function(){try{var p=JSON.parse(localStorage.getItem('nli-contributor-profile')||'null');"
@@ -2651,13 +2669,13 @@ public class MainActivity extends Activity {
                 try {
                     String json = new org.json.JSONTokener(value).nextValue().toString();
                     if (json.isEmpty()) {
-                        openScanWithSavedSignIn(spaceId, attempt + 1);
+                        withSavedSignIn(attempt + 1, then);
                         return;
                     }
                     org.json.JSONObject profile = new org.json.JSONObject(json);
-                    openScanSpace(spaceId, profile.getString("t"), profile.optString("n"));
+                    then.run(profile.getString("t"), profile.optString("n"));
                 } catch (Exception error) {
-                    openScanWithSavedSignIn(spaceId, attempt + 1);
+                    withSavedSignIn(attempt + 1, then);
                 }
             }), attempt == 0 ? 4000 : 2000);
     }
@@ -2671,13 +2689,15 @@ public class MainActivity extends Activity {
             java.util.List<android.content.pm.ShortcutInfo> list = new java.util.ArrayList<>();
             list.add(new android.content.pm.ShortcutInfo.Builder(this, "ar-mas-house")
                 .setShortLabel("Ma's House AR")
-                .setIntent(new Intent(this, ArActivity.class).setAction(Intent.ACTION_VIEW)
-                    .putExtra(ArActivity.EXTRA_SITE_ID, "mas-house"))
+                .setIntent(new Intent(this, MainActivity.class).setAction(Intent.ACTION_VIEW)
+                    .putExtra("qa_open_ar", "mas-house")
+                    .putExtra(ScanActivity.EXTRA_SPACE_ID, "7e4ed2eb-7677-4cdc-a231-f973cb7c5aaa"))
                 .build());
             list.add(new android.content.pm.ShortcutInfo.Builder(this, "ar-mas-house-author")
                 .setShortLabel("AR author mode")
-                .setIntent(new Intent(this, ArActivity.class).setAction(Intent.ACTION_VIEW)
-                    .putExtra(ArActivity.EXTRA_SITE_ID, "mas-house").putExtra(ArActivity.EXTRA_AUTHOR, true))
+                .setIntent(new Intent(this, MainActivity.class).setAction(Intent.ACTION_VIEW)
+                    .putExtra("qa_open_ar", "mas-house").putExtra(ArActivity.EXTRA_AUTHOR, true)
+                    .putExtra(ScanActivity.EXTRA_SPACE_ID, "7e4ed2eb-7677-4cdc-a231-f973cb7c5aaa"))
                 .build());
             list.add(new android.content.pm.ShortcutInfo.Builder(this, "scan-mas-house")
                 .setShortLabel("Scan Ma's House")

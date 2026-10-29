@@ -530,28 +530,9 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             method = "unaligned";
         } else {
             method = "anchors";
-            double sin = 0, cos = 0;
-            for (int i = 0; i < a.size(); i++) {
-                double d = yaw(b.get(i)) - yaw(a.get(i));
-                sin += Math.sin(d);
-                cos += Math.cos(d);
-            }
-            float theta = (float) Math.atan2(sin, cos);
-            float[] q = ArPlacement.yawQuaternion(theta);
-            float tx = 0, ty = 0, tz = 0;
-            for (int i = 0; i < a.size(); i++) {
-                float[] r = ArPlacement.rotate(q, new float[] {a.get(i)[0], a.get(i)[1], a.get(i)[2]});
-                tx += b.get(i)[0] - r[0];
-                ty += b.get(i)[1] - r[1];
-                tz += b.get(i)[2] - r[2];
-            }
-            transform = new float[] {tx / a.size(), ty / a.size(), tz / a.size(), q[0], q[1], q[2], q[3]};
-            double sum = 0;
-            for (int i = 0; i < a.size(); i++) {
-                float[] mapped = ArPlacement.compose(transform, a.get(i));
-                sum += Math.pow(dist(mapped, b.get(i)), 2);
-            }
-            residual = (float) Math.sqrt(sum / a.size());
+            float[] fit = ArPlacement.fitYawTranslation(a, b);
+            transform = java.util.Arrays.copyOf(fit, 7);
+            residual = fit[7];
         }
         JSONArray hostedSpace = new JSONArray();
         if (!"unaligned".equals(method)) {
@@ -769,9 +750,4 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         return (float) Math.toDegrees(2 * Math.acos(Math.min(1.0, dot)));
     }
 
-    /** Heading of a pose's forward (-Z) direction about the up axis. */
-    private static double yaw(float[] pose) {
-        float[] forward = ArPlacement.rotate(new float[] {pose[3], pose[4], pose[5], pose[6]}, new float[] {0, 0, -1});
-        return Math.atan2(-forward[0], -forward[2]);
-    }
 }

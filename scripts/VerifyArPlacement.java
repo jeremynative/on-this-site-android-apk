@@ -62,6 +62,26 @@ public final class VerifyArPlacement {
         check("landscape photo fills phone width", ArPlacement.fitCenterWidthFraction(1080, 2340, 0.75f) == 1f);
         check("very tall photo is narrower", ArPlacement.fitCenterWidthFraction(1080, 2340, 3f) < 1f);
 
+        // A second volunteer's session, rotated 30 degrees and shifted, joins the
+        // first scan's frame through three shared anchors.
+        float[] truth = {2f, 0.1f, -1f, 0f, (float) Math.sin(Math.toRadians(15)), 0f, (float) Math.cos(Math.toRadians(15))};
+        List<float[]> inSession = new ArrayList<>();
+        List<float[]> inSpace = new ArrayList<>();
+        float[][] anchorPoses = {
+            {0.5f, 0f, -2f, 0, (float) Math.sin(0.4), 0, (float) Math.cos(0.4)},
+            {3f, 0.8f, 1f, 0, (float) Math.sin(-1.1), 0, (float) Math.cos(-1.1)},
+            {-2f, 0f, 4f, 0, 0, 0, 1},
+        };
+        for (float[] p : anchorPoses) {
+            inSession.add(p);
+            inSpace.add(ArPlacement.compose(truth, p));
+        }
+        float[] fit = ArPlacement.fitYawTranslation(inSession, inSpace);
+        near("anchor fit translation", Arrays.copyOf(fit, 3), 2f, 0.1f, -1f);
+        check("anchor fit rotation", Math.abs(Math.abs(fit[4]) - Math.sin(Math.toRadians(15))) < 1e-4);
+        check("anchor fit residual ~0", fit[7] < 1e-4);
+        check("no anchors gives no fit", ArPlacement.fitYawTranslation(new ArrayList<>(), new ArrayList<>()) == null);
+
         System.out.println(failures == 0 ? "AR placement checks passed." : failures + " AR placement check(s) failed.");
         System.exit(failures == 0 ? 0 : 1);
     }

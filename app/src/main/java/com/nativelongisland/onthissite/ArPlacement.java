@@ -102,6 +102,51 @@ final class ArPlacement {
         return Math.min(1f, (screenHeight / screenWidth) / photoHeightOverWidth);
     }
 
+    // ---- Joining a scanned space via Cloud Anchors ----
+
+    /** Heading of a pose's forward (-Z) direction about the up axis. */
+    static double yaw(float[] pose) {
+        float[] forward = rotate(new float[] {pose[3], pose[4], pose[5], pose[6]}, new float[] {0, 0, -1});
+        return Math.atan2(-forward[0], -forward[2]);
+    }
+
+    /**
+     * Session -> space transform from anchors seen in both frames. Both are
+     * gravity-aligned (ARCore), so only yaw and translation are solved: the
+     * circular mean of the yaw differences, then the mean translation.
+     * Returns {tx,ty,tz,qx,qy,qz,qw, rmsResidualMetres}, or null without anchors.
+     */
+    static float[] fitYawTranslation(List<float[]> sessionPoses, List<float[]> spacePoses) {
+        int n = Math.min(sessionPoses.size(), spacePoses.size());
+        if (n == 0) return null;
+        double sin = 0;
+        double cos = 0;
+        for (int i = 0; i < n; i++) {
+            double d = yaw(spacePoses.get(i)) - yaw(sessionPoses.get(i));
+            sin += Math.sin(d);
+            cos += Math.cos(d);
+        }
+        float[] q = yawQuaternion((float) Math.atan2(sin, cos));
+        float tx = 0;
+        float ty = 0;
+        float tz = 0;
+        for (int i = 0; i < n; i++) {
+            float[] a = sessionPoses.get(i);
+            float[] r = rotate(q, new float[] {a[0], a[1], a[2]});
+            tx += spacePoses.get(i)[0] - r[0];
+            ty += spacePoses.get(i)[1] - r[1];
+            tz += spacePoses.get(i)[2] - r[2];
+        }
+        float[] transform = {tx / n, ty / n, tz / n, q[0], q[1], q[2], q[3]};
+        double sum = 0;
+        for (int i = 0; i < n; i++) {
+            float[] mapped = compose(transform, sessionPoses.get(i));
+            float[] b = spacePoses.get(i);
+            sum += Math.pow(mapped[0] - b[0], 2) + Math.pow(mapped[1] - b[1], 2) + Math.pow(mapped[2] - b[2], 2);
+        }
+        return new float[] {transform[0], transform[1], transform[2], transform[3], transform[4], transform[5], transform[6], (float) Math.sqrt(sum / n)};
+    }
+
     // ---- Pose maths (matches ARCore's Pose conventions) ----
 
     static float[] rotate(float[] q, float[] v) {
