@@ -128,6 +128,10 @@ final class NativeMapController {
     private static final String TERRITORY_SOURCE_ID = "nli-territories";
     private static final String SITE_POLYGON_SOURCE_ID = "nli-site-polygons";
     private static final String SITE_POINT_SOURCE_ID = "nli-site-points";
+    private static final String SITE_POINT_FOOTPRINT_LAYER_ID = "nli-site-point-footprints";
+    private static final String SITE_POINT_FOOTPRINT_IMAGE = "nli-site-point-footprint";
+    private static final float SITE_FULL_TITLE_ZOOM = 11.5f;
+    private static final int SITE_SHORT_TITLE_MAX_CHARS = 22;
     private static final String LABEL_SOURCE_ID = "nli-labels";
     private static final String WATER_LABEL_SOURCE_ID = "nli-water-labels";
     private static final String BIOGRAPHY_PATH_SOURCE_ID = "nli-biography-paths";
@@ -828,8 +832,7 @@ final class NativeMapController {
         map.setMinZoomPreference(6.0);
         map.setMaxZoomPreference(18.0);
         stableCamera = map.getCameraPosition();
-        map.addOnCameraIdleListener(this::notifyCameraChanged);
-        mapView.addOnDidFailLoadingMapListener(error -> {
+        map.addOnCameraIdleListener(this::notifyCameraChanged);        mapView.addOnDidFailLoadingMapListener(error -> {
             if (!usingOnlineArchive || offlineFallbackAttempted || map == null) return;
             offlineFallbackAttempted = true;
             Log.w(LOG_TAG, "Online native map archive failed; switching to bundled offline detail: " + error);
@@ -1077,23 +1080,50 @@ final class NativeMapController {
             style.addLayer(projectLabelLayer);
             SymbolLayer sitePointLabelLayer = new SymbolLayer("nli-site-point-labels", SITE_POINT_SOURCE_ID)
                 .withProperties(
-                    textField(Expression.get("title")), textFont(new String[] { "Noto Sans Regular" }),
+                    // Long titles use their short form until the map is close enough to read them.
+                    textField(Expression.step(Expression.zoom(),
+                        Expression.coalesce(Expression.get("short_title"), Expression.get("title")),
+                        Expression.stop(SITE_FULL_TITLE_ZOOM, Expression.get("title")))),
+                    textFont(new String[] { "Noto Sans Regular" }),
                     textSize(Expression.interpolate(
                         Expression.linear(), Expression.zoom(),
-                        Expression.stop(8.2, 10f),
+                        Expression.stop(8.2, 9.5f),
                         Expression.stop(12, 11.5f),
                         Expression.stop(16, 13f)
                     )),
+                    org.maplibre.android.style.layers.PropertyFactory.textMaxWidth(8f),
                     textColor("#183528"),
                     textHaloColor("rgba(255,255,255,0.94)"), textHaloWidth(1.5f),
                     textOffset(new Float[] { 0f, -1.45f }), textAnchor(Property.TEXT_ANCHOR_BOTTOM),
                     org.maplibre.android.style.layers.PropertyFactory.textVariableAnchor(new String[] { "bottom", "top", "left", "right" }),
-                    org.maplibre.android.style.layers.PropertyFactory.textRadialOffset(0.75f),
-                    org.maplibre.android.style.layers.PropertyFactory.textPadding(5f),
+                    // Clear the pin's own footprint: artwork is wider than a plain dot.
+                    org.maplibre.android.style.layers.PropertyFactory.textRadialOffset(Expression.switchCase(
+                        Expression.neq(Expression.coalesce(Expression.get("native_icon_key"), Expression.literal("")), Expression.literal("")),
+                        Expression.literal(1.75f),
+                        Expression.literal(1.05f)
+                    )),
+                    org.maplibre.android.style.layers.PropertyFactory.textPadding(2f),
                     textOptional(true), textAllowOverlap(false), textIgnorePlacement(false)
                 );
             sitePointLabelLayer.setMinZoom(8.2f);
             style.addLayer(sitePointLabelLayer);
+            // Invisible footprints for every site dot and icon. Symbol layers higher in the
+            // style are placed first, so titles below this layer move to a free side of their
+            // pin or hide instead of covering another site's artwork.
+            // Only artwork reserves space; plain dots are small enough for a title to cross.
+            style.addLayer(new SymbolLayer(SITE_POINT_FOOTPRINT_LAYER_ID, SITE_POINT_SOURCE_ID)
+                .withFilter(Expression.neq(
+                    Expression.coalesce(Expression.get("native_icon_key"), Expression.literal("")),
+                    Expression.literal("")
+                ))
+                .withProperties(
+                    iconImage(SITE_POINT_FOOTPRINT_IMAGE),
+                    iconSize(Expression.interpolate(Expression.linear(), Expression.zoom(),
+                        Expression.stop(6, 0.7f), Expression.stop(14, 1.05f))),
+                    iconOpacity(0f),
+                    org.maplibre.android.style.layers.PropertyFactory.iconPadding(0f),
+                    iconAllowOverlap(true), iconIgnorePlacement(false)
+                ));
             style.addLayer(new LineLayer("nli-biography-path-lines", BIOGRAPHY_PATH_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("kind"), Expression.literal("path")))
                 .withProperties(
@@ -1397,6 +1427,10 @@ final class NativeMapController {
 
     private void addBundledMapIcons(Style style) {
         try {
+            // Transparent 24 dp square for the site footprint layer (see SITE_POINT_FOOTPRINT_LAYER_ID).
+            Bitmap footprint = Bitmap.createBitmap(24, 24, Bitmap.Config.ARGB_8888);
+            footprint.setDensity(android.util.DisplayMetrics.DENSITY_DEFAULT);
+            style.addImage(SITE_POINT_FOOTPRINT_IMAGE, footprint);
             style.addImage("nli-icon-story-bubble", createStoryBubbleBitmap());
             Bitmap canoe = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888);
             Canvas canoeCanvas = new Canvas(canoe);
@@ -1937,6 +1971,24 @@ final class NativeMapController {
         return count;
     }
 
+    // "Bethel Christian Ave., Laurel Hill Historic District" -> "Bethel Christian Ave."
+    // Cut at the first qualifier (comma, parenthesis, slash, dash), then at a word
+    // boundary with an ellipsis if it is still too long for a zoomed-out map.
+    static String shortSiteTitle(String title) {
+        String text = title == null ? "" : title.trim();
+        if (text.length() <= SITE_SHORT_TITLE_MAX_CHARS) return text;
+        String[] separators = { " (", ", ", " / ", " — ", " – ", " - ", ": " };
+        int cut = text.length();
+        for (String separator : separators) {
+            int index = text.indexOf(separator);
+            if (index >= 6 && index < cut) cut = index;
+        }
+        String head = text.substring(0, cut).trim();
+        if (head.length() <= SITE_SHORT_TITLE_MAX_CHARS) return head;
+        int space = head.lastIndexOf(' ', SITE_SHORT_TITLE_MAX_CHARS - 1);
+        return (space >= 8 ? head.substring(0, space) : head.substring(0, SITE_SHORT_TITLE_MAX_CHARS - 1)).trim() + "…";
+    }
+
     private JSONObject applyBundledSiteIconKeys(JSONObject collection) {
         if (collection == null) return null;
         JSONArray features = collection.optJSONArray("features");
@@ -1944,6 +1996,13 @@ final class NativeMapController {
         for (int index = 0; index < features.length(); index++) {
             JSONObject feature = features.optJSONObject(index);
             JSONObject properties = feature == null ? null : feature.optJSONObject("properties");
+            if (properties != null && !properties.has("short_title")) {
+                try {
+                    properties.put("short_title", shortSiteTitle(properties.optString("title", "")));
+                } catch (Exception ignored) {
+                    // The label falls back to the full title.
+                }
+            }
             if (properties == null || !properties.optString("native_icon_key", "").trim().isEmpty()) continue;
             String slug = properties.optString("slug", "").trim();
             String iconKey = bundledSiteIconKeysBySlug.optString(slug, "").trim();
