@@ -23,6 +23,8 @@ dependencies {
     // Declared "optional" in the manifest so devices without ARCore still
     // install the app and simply never offer the AR view.
     implementation "com.google.ar:core:1.56.0"
+    // Keyless (OAuth) authorization for 365-day Cloud Anchors.
+    implementation "com.google.android.gms:play-services-auth:21.5.1"
 }
 
 def releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")

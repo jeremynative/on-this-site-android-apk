@@ -465,6 +465,9 @@ public class MainActivity extends Activity {
         if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("qa_open_ar")) {
             openArExperience(getIntent().getStringExtra("qa_open_ar"), getIntent().getBooleanExtra(ArActivity.EXTRA_AUTHOR, false));
         }
+        if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("qa_open_scan")) {
+            openScanWithSavedSignIn(getIntent().getStringExtra("qa_open_scan"), 0);
+        }
 
         // Android 16 no longer dispatches Activity.onBackPressed() to apps that
         // target API 36. Register the supported platform callback so both the
@@ -2631,6 +2634,34 @@ public class MainActivity extends Activity {
             .putExtra(ArActivity.EXTRA_AUTHOR, author));
     }
 
+    void openScanSpace(String spaceId, String accessToken, String creditName) {
+        startActivity(new Intent(this, ScanActivity.class)
+            .putExtra(ScanActivity.EXTRA_SPACE_ID, spaceId)
+            .putExtra(ScanActivity.EXTRA_ACCESS_TOKEN, accessToken)
+            .putExtra(ScanActivity.EXTRA_CREDIT_NAME, creditName));
+    }
+
+    /** QA entry: reads the map's saved sign-in once the page has loaded, then opens the scanner. */
+    private void openScanWithSavedSignIn(String spaceId, int attempt) {
+        if (webView == null || attempt > 10) return;
+        webView.postDelayed(() -> webView.evaluateJavascript(
+            "(function(){try{var p=JSON.parse(localStorage.getItem('nli-contributor-profile')||'null');"
+                + "return p&&p.token?JSON.stringify({t:p.token,n:p.name||p.displayName||''}):'';}catch(e){return '';}})()",
+            value -> {
+                try {
+                    String json = new org.json.JSONTokener(value).nextValue().toString();
+                    if (json.isEmpty()) {
+                        openScanWithSavedSignIn(spaceId, attempt + 1);
+                        return;
+                    }
+                    org.json.JSONObject profile = new org.json.JSONObject(json);
+                    openScanSpace(spaceId, profile.getString("t"), profile.optString("n"));
+                } catch (Exception error) {
+                    openScanWithSavedSignIn(spaceId, attempt + 1);
+                }
+            }), attempt == 0 ? 4000 : 2000);
+    }
+
     /** QA builds get launcher shortcuts into the Ma's House AR pilot until the web panel links to it. */
     private void publishArPilotShortcuts() {
         if (!BuildConfig.DEBUG || Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return;
@@ -2647,6 +2678,11 @@ public class MainActivity extends Activity {
                 .setShortLabel("AR author mode")
                 .setIntent(new Intent(this, ArActivity.class).setAction(Intent.ACTION_VIEW)
                     .putExtra(ArActivity.EXTRA_SITE_ID, "mas-house").putExtra(ArActivity.EXTRA_AUTHOR, true))
+                .build());
+            list.add(new android.content.pm.ShortcutInfo.Builder(this, "scan-mas-house")
+                .setShortLabel("Scan Ma's House")
+                .setIntent(new Intent(this, MainActivity.class).setAction(Intent.ACTION_VIEW)
+                    .putExtra("qa_open_scan", "7e4ed2eb-7677-4cdc-a231-f973cb7c5aaa"))
                 .build());
             shortcuts.setDynamicShortcuts(list);
         } catch (Exception error) {

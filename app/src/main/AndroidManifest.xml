@@ -82,6 +82,12 @@
             android:screenOrientation="portrait"
             android:theme="@style/ArTheme" />
         <activity
+            android:name=".ScanActivity"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/ArTheme" />
+        <activity
             android:name=".GoogleNavigationLegalActivity"
             android:exported="false"
             android:theme="@style/AppTheme" />
