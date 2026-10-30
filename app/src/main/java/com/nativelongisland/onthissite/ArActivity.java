@@ -445,15 +445,18 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 + "\nThis phone can't track motion for live AR, so the view updates about once a second.");
             return;
         }
+        // The server pose uses the camera sensor's (landscape) axes; the projection
+        // is for the display, so turn the pose the same way ARCore does.
+        Pose sensorToDisplay = camera.getPose().inverse().compose(camera.getDisplayOrientedPose());
         float[] cameraWorld = new float[16];
-        toPose(pose).toMatrix(cameraWorld, 0);
+        toPose(pose).compose(sensorToDisplay).toMatrix(cameraWorld, 0);
         float[] view = new float[16];
         Matrix.invertM(view, 0, cameraWorld, 0);
         float[] projection = new float[16];
         camera.getProjectionMatrix(projection, 0, 0.05f, 100f);
         float[] viewProjection = new float[16];
         Matrix.multiplyMM(viewProjection, 0, projection, 0, view, 0);
-        if (scanPoints != null) gl.drawPoints(viewProjection, scanPoints, scanPointCount, 9f * getResources().getDisplayMetrics().density / 2.6f);
+        if (scanPoints != null) gl.drawPoints(viewProjection, scanPoints, scanPointCount, 30f * getResources().getDisplayMetrics().density / 2.6f);
         // Placed photos and cards live in the space frame (the "space" room).
         ArScene.Room room = scene.roomForMarker(SPACE_MARKER);
         int shown = 0;
