@@ -153,6 +153,11 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private int surfaceTriCount;
     private int surfaceLineCount;
     private static final int MESH_TILES = 25000;
+    // Earlier scans of this place, drawn once the localizer has lined us up.
+    private FloatBuffer archivePoints;
+    private int archivePointCount;
+    private final float[] archiveModel = new float[16];
+    private final float[] archiveMvp = new float[16];
     private int meshTriBuffer;
     private int meshLineBuffer;
     private long meshLoggedAt;
@@ -374,7 +379,10 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             lastKeyPose = null;
             lastPosition = null;
         }
-        if (spaceHasModel && accessToken != null) localizer = new SpaceLocalizer(spaceId, accessToken);
+        if (spaceHasModel && accessToken != null) {
+            localizer = new SpaceLocalizer(spaceId, accessToken);
+            new Thread(this::loadArchivePoints, "scan-archive").start();
+        }
         startButton.setVisibility(View.GONE);
         finishButton.setVisibility(View.VISIBLE);
     }
@@ -467,6 +475,9 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             String legend = tracked && depthEnabled && surfaceCoverage.cellCount() > 0
                 ? String.format(Locale.US, "\nRed = needs photos from more angles · green = complete (%.0f%%)", surfaceCoverage.capturedFraction() * 100)
                 : live != null ? "\nRed = not captured yet · green = covered" : "";
+            if (archivePointCount > 0 && localizer != null && localizer.locked()) {
+                legend += "\nBlue dots = already in the archive · violet = thin, worth rescanning";
+            }
             postStatus(null, String.format(Locale.US, "%d photos%s\n%s%s", frames,
                 distance > 0.5f ? String.format(Locale.US, " · %.0f m walked", distance) : "", placement, legend));
         }
@@ -578,6 +589,14 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         } else {
             gl.drawPoints(viewProjection, coveragePoints, coveragePointCount, 22f * getResources().getDisplayMetrics().density / 2.6f);
         }
+        if (archivePoints != null && localizer != null && localizer.locked()) {
+            // The localizer's transform maps this session into the space; points come in space coordinates.
+            float[] origin = ArPlacement.inverse(localizer.transform());
+            new Pose(new float[] {origin[0], origin[1], origin[2]}, new float[] {origin[3], origin[4], origin[5], origin[6]})
+                .toMatrix(archiveModel, 0);
+            android.opengl.Matrix.multiplyMM(archiveMvp, 0, viewProjection, 0, archiveModel, 0);
+            gl.drawPoints(archiveMvp, archivePoints, archivePointCount, 28f * getResources().getDisplayMetrics().density / 2.6f);
+        }
         if (now - coverageMapAt > 330 && coverageMap != null) {
             coverageMapAt = now;
             Pose display = camera.getDisplayOrientedPose();
@@ -587,6 +606,29 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             ScanCoverage.Snapshot snapshot = coverage.snapshot();
             String label = String.format(Locale.US, "~%.0f m² covered · %d photos", coverage.coveredAreaM2(), frames);
             runOnUiThread(() -> coverageMap.update(snapshot, x, z, heading, label));
+        }
+    }
+
+    /**
+     * The place's existing 3D points (what earlier scans already captured),
+     * shown once this scan has lined up with them so people can extend the
+     * archive or redo thin parts. Dense areas are blue, thin ones violet.
+     */
+    private void loadArchivePoints() {
+        try {
+            JSONArray values = ScanUploader.get("/spaces/" + spaceId + "/points", accessToken).getJSONArray("points");
+            float[] xyz = new float[values.length() / 3 * 3];
+            for (int i = 0; i < xyz.length; i++) xyz[i] = (float) values.getDouble(i);
+            float[] vertices = ArchiveDensity.colour(xyz);
+            FloatBuffer buffer = ByteBuffer.allocateDirect(vertices.length * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
+            buffer.put(vertices).position(0);
+            synchronized (lock) {
+                archivePoints = buffer;
+                archivePointCount = vertices.length / 7;
+            }
+            android.util.Log.i("OnThisSiteScan", "archive points=" + archivePointCount);
+        } catch (Exception error) {
+            android.util.Log.w("OnThisSiteScan", "Archive points unavailable: " + error.getMessage());
         }
     }
 
