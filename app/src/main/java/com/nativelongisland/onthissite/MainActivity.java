@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20261030-scan-polish-r272";
+    static final String APP_VERSION = "20261030-scan-live-notify-r273";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -539,6 +539,8 @@ public class MainActivity extends Activity {
         showLoadingCover("Loading On This Site");
         webView.post(webView::requestApplyInsets);
         createNotificationChannel();
+        // Picks up scans uploaded before the background go-live check existed; it stops itself when none are waiting.
+        ScanStatusJob.schedule(getApplicationContext());
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);

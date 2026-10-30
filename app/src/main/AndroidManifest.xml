@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- Google Navigation declares unrestricted background location for optional
@@ -74,6 +75,10 @@
         <receiver
             android:name=".NavigationActionReceiver"
             android:exported="false" />
+        <service
+            android:name=".ScanStatusJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
         <meta-data android:name="com.google.ar.core" android:value="optional" />
         <activity
             android:name=".ArActivity"
