@@ -18,6 +18,7 @@
     .offline-shell header{background:linear-gradient(180deg,#f7f2e6,#fbfcfa)}.offline-pill{background:#fff4e0;border-color:#b5683f;color:#8a4b2b}
     .offline-map-index,#map{background:linear-gradient(180deg,#a7d3e3,#d3ebf2)}
     .map-help{max-width:42%}
+    .offline-locate{position:absolute;top:52px;right:10px;z-index:4;display:flex;align-items:center;gap:6px;min-height:40px;padding:0 12px;border:1px solid rgba(23,33,25,.18);border-radius:20px;background:rgba(251,252,250,.96);color:#1f5d9e;font:800 13px system-ui,sans-serif;box-shadow:0 2px 7px rgba(24,39,30,.18)}.offline-locate::before{content:"";width:12px;height:12px;border:2px solid #fff;border-radius:50%;background:#2b7bd6;box-shadow:0 0 0 2px #2b7bd6}.offline-locate[aria-busy="true"]::before{animation:offline-locate-pulse 1s ease-in-out infinite}@keyframes offline-locate-pulse{50%{opacity:.3}}
     .offline-legend{position:absolute;right:10px;bottom:10px;z-index:3;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:3px 9px;max-width:56%;margin:0;padding:5px 8px;border:1px solid rgba(23,33,25,.16);border-radius:7px;background:rgba(251,252,250,.93);color:#38463c;font-size:11px;font-weight:750;line-height:1.3;pointer-events:none}
     .offline-legend span{white-space:nowrap}.offline-legend i{display:inline-block;width:9px;height:9px;margin-right:4px;border-radius:50%;background:var(--tone);box-shadow:0 0 0 1.5px #fff;vertical-align:-1px}
     .offline-shell .nearby-feed-card{border-left:5px solid var(--tone,#2f6f57)}.offline-shell .nearby-feed-card .learning-card-meta span{display:inline-flex;align-items:center;gap:7px;color:var(--tone,#2f6f57);font-weight:850}
@@ -63,7 +64,7 @@
     </header>
     <section class="mobile-map-shell offline-map-index" id="offline-map-section" aria-label="Offline place map">
       <div class="offline-map-head"><strong>Saved map</strong><span class="status" id="status" role="status">Loading saved places...</span></div>
-      <div id="map" aria-label="Simplified offline map of saved places"><canvas id="offline-map"></canvas><p class="map-help">Tap a dot to open it. Pinch or double-tap to zoom.</p><p class="offline-legend" id="offline-legend" aria-hidden="true"></p></div>
+      <div id="map" aria-label="Simplified offline map of saved places"><canvas id="offline-map"></canvas><button class="offline-locate" id="offline-locate" type="button" aria-label="Center map on my location">Center on me</button><p class="map-help">Tap a dot to open it. Pinch or double-tap to zoom.</p><p class="offline-legend" id="offline-legend" aria-hidden="true"></p></div>
     </section>
     <div class="mobile-view-tabs" role="group" aria-label="Offline section">
       <button class="mobile-view-tab" id="offline-tab-map" type="button" data-offline-jump="map" aria-pressed="false">Map</button>
@@ -136,7 +137,23 @@
       placed.filter(p=>!(p.img&&p.img.complete&&p.img.naturalWidth)&&p.tone!=="territory").forEach(p=>{c.beginPath();c.arc(p.x,p.y,3.4,0,Math.PI*2);c.fillStyle=TONES[p.tone][1];c.fill();c.lineWidth=1.2;c.strokeStyle="#fff";c.stroke()});
       placed.filter(p=>p.img&&p.img.complete&&p.img.naturalWidth).forEach(p=>c.drawImage(p.img,p.x-9,p.y-9,18,18));
       state.points=placed;
+      // You are here: GPS works without a data connection.
+      if(me){const [x,y]=pos(me.lon,me.lat,w,h),k=Math.cos(40.9*Math.PI/180),spanX=(M.east-M.west)*k,s=Math.min(w/spanX,h/(M.north-M.south))*view.scale,r=Math.min(Math.max(me.acc/111320*s,9),w);c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.fillStyle="rgba(43,123,214,.14)";c.fill();c.strokeStyle="rgba(43,123,214,.45)";c.lineWidth=1;c.stroke();c.beginPath();c.arc(x,y,7,0,Math.PI*2);c.fillStyle="#2b7bd6";c.fill();c.lineWidth=3;c.strokeStyle="#fff";c.stroke()}
     }
+    let me=null,meWatch=null,meCenter=false;
+    const locate=document.getElementById("offline-locate");
+    function centerOnMe(){const w=Math.max(300,canvas.clientWidth),h=Math.max(220,canvas.clientHeight);view.scale=Math.max(view.scale,5);view.x=0;view.y=0;const s=view.scale;view.scale=1;const [bx,by]=pos(me.lon,me.lat,w,h);view.scale=s;view.x=w/2-bx*s;view.y=h/2-by*s;requestAnimationFrame(draw)}
+    locate.addEventListener("click",()=>{
+      if(!navigator.geolocation){status.textContent="Location is not available on this device.";return}
+      if(me){centerOnMe();return}
+      meCenter=true;locate.setAttribute("aria-busy","true");status.textContent="Finding you (GPS works offline, may take a minute)...";
+      if(meWatch===null)meWatch=navigator.geolocation.watchPosition(p=>{
+        me={lon:p.coords.longitude,lat:p.coords.latitude,acc:p.coords.accuracy||30};locate.removeAttribute("aria-busy");
+        const inside=me.lon>M.west&&me.lon<M.east&&me.lat>M.south&&me.lat<M.north;
+        if(meCenter){meCenter=false;if(inside){centerOnMe();status.textContent=`You are here (about ${Math.round(me.acc*3.281)} ft)`}else status.textContent="You are outside the Long Island map."}
+        requestAnimationFrame(draw)
+      },e=>{locate.removeAttribute("aria-busy");meCenter=false;navigator.geolocation.clearWatch(meWatch);meWatch=null;status.textContent=e.code===1?"Location permission is off for On This Site.":"Could not get a GPS fix. Try near a window or outside."},{enableHighAccuracy:true,maximumAge:60000,timeout:60000});
+    });
     function filter(){
       state.filtered=OFFLINE.filterArchive(state.entries,{query:state.query,region:state.region,cache:state.queryCache,cacheLimit:OFFLINE_QUERY_CACHE_LIMIT,searchUtils:SEARCH});
     }
