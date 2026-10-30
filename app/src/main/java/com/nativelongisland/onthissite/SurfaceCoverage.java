@@ -135,23 +135,33 @@ final class SurfaceCoverage {
 
     private static final float[] EDGE = {1f, 1f, 1f, 0.55f};
 
+    private static final int[] TRI_ORDER = {0, 1, 2, 0, 2, 3};
+    private static final int[] LINE_ORDER = {0, 1, 1, 2, 2, 3, 3, 0};
+    private static final float[][] COLOURS = {colour(0), colour(1), colour(2), colour(3)};
+
     /**
      * Writes the tiles within maxDistance of (cx,cy,cz) as triangles (6
-     * vertices per tile) into tris and their outlines as lines (8 vertices per
-     * tile) into lines, VERTEX_FLOATS each. Returns {triangleVertices, lineVertices};
-     * stops when either array is full.
+     * vertices per tile) into tris, and outlines (8 vertices per tile) for the
+     * tiles within lineDistance into lines, VERTEX_FLOATS each. Returns
+     * {triangleVertices, lineVertices, full} where full is 1 when tris ran out
+     * of room (the caller can retry with a shorter distance so the nearest
+     * tiles win).
      */
-    synchronized int[] mesh(float cx, float cy, float cz, float maxDistance, float[] tris, float[] lines) {
-        int t = 0, l = 0;
+    synchronized int[] mesh(float cx, float cy, float cz, float maxDistance, float lineDistance, float[] tris, float[] lines) {
+        int t = 0, l = 0, full = 0;
         float half = CELL_M * 0.55f; // slight overlap closes seams between tiles
-        float max2 = maxDistance * maxDistance;
+        float max2 = maxDistance * maxDistance, line2 = lineDistance * lineDistance;
         float[] a = new float[3], b = new float[3], corner = new float[12];
         for (Cell c : cells.values()) {
             if (c.frames < MIN_HITS) continue;
-            if (t + 6 * VERTEX_FLOATS > tris.length || l + 8 * VERTEX_FLOATS > lines.length) break;
             float px = c.sx / c.hits, py = c.sy / c.hits, pz = c.sz / c.hits;
             float dx = px - cx, dy = py - cy, dz = pz - cz;
-            if (dx * dx + dy * dy + dz * dz > max2) continue;
+            float d2 = dx * dx + dy * dy + dz * dz;
+            if (d2 > max2) continue;
+            if (t + 6 * VERTEX_FLOATS > tris.length) {
+                full = 1;
+                break;
+            }
             float nl = (float) Math.sqrt(c.nx * c.nx + c.ny * c.ny + c.nz * c.nz);
             if (nl < 1e-4f) continue;
             float nx = c.nx / nl, ny = c.ny / nl, nz = c.nz / nl;
@@ -163,15 +173,16 @@ final class SurfaceCoverage {
                 corner[i * 3 + 1] = py + a[1] * su + b[1] * sv;
                 corner[i * 3 + 2] = pz + a[2] * su + b[2] * sv;
             }
-            float[] rgba = colour(c.angles());
+            float[] rgba = COLOURS[Math.min(3, c.angles())];
             // Corners go round the square: 0 (-,-), 1 (+,-), 2 (+,+), 3 (-,+).
-            int[] triOrder = {0, 1, 2, 0, 2, 3};
-            for (int i : triOrder) t = put(tris, t, corner, i, rgba);
-            int[] lineOrder = {0, 1, 1, 2, 2, 3, 3, 0};
-            for (int i : lineOrder) l = put(lines, l, corner, i, EDGE);
+            for (int i : TRI_ORDER) t = put(tris, t, corner, i, rgba);
+            if (d2 <= line2 && l + 8 * VERTEX_FLOATS <= lines.length) {
+                for (int i : LINE_ORDER) l = put(lines, l, corner, i, EDGE);
+            }
         }
-        return new int[] {t / VERTEX_FLOATS, l / VERTEX_FLOATS};
+        return new int[] {t / VERTEX_FLOATS, l / VERTEX_FLOATS, full};
     }
+
 
     private static int put(float[] out, int o, float[] corner, int i, float[] rgba) {
         out[o++] = corner[i * 3];

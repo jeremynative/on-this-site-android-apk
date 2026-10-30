@@ -152,6 +152,10 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private FloatBuffer surfaceLines;
     private int surfaceTriCount;
     private int surfaceLineCount;
+    private static final int MESH_TILES = 25000;
+    private int meshTriBuffer;
+    private int meshLineBuffer;
+    private long meshLoggedAt;
     private int surfaceVersionDrawn = -1;
     private long surfaceRebuiltAt;
     private int coveragePointCount;
@@ -380,6 +384,10 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         GLES20.glClearColor(0f, 0f, 0f, 1f);
         gl.init();
         textureBound = false;
+        // Buffers from the old GL context are gone: rebuild the mesh.
+        meshTriBuffer = 0;
+        meshLineBuffer = 0;
+        surfaceVersionDrawn = -1;
     }
 
     @Override
@@ -528,23 +536,45 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 runOnUiThread(() -> coverageOverlay.setVisibility(View.GONE));
             }
             int surfaceVersion = surfaceCoverage.version();
-            if (surfaceVersion != surfaceVersionDrawn && now - surfaceRebuiltAt > 400) {
-                // Tiles within 6 m of the phone, rebuilt a few times a second.
-                int cells = Math.min(surfaceCoverage.cellCount(), 40000);
-                int tris = cells * 6 * SurfaceCoverage.VERTEX_FLOATS, lines = cells * 8 * SurfaceCoverage.VERTEX_FLOATS;
-                if (meshTris.length < tris) meshTris = new float[tris + 6 * SurfaceCoverage.VERTEX_FLOATS * 4096];
-                if (meshLines.length < lines) meshLines = new float[lines + 8 * SurfaceCoverage.VERTEX_FLOATS * 4096];
+            boolean stale = surfaceVersion != surfaceVersionDrawn || now - surfaceRebuiltAt > 2000;
+            if (stale && now - surfaceRebuiltAt > 400) {
+                // At most MESH_TILES tiles, nearest first: shrink the radius until they fit.
+                if (meshTris.length == 0) {
+                    meshTris = new float[MESH_TILES * 6 * SurfaceCoverage.VERTEX_FLOATS];
+                    meshLines = new float[MESH_TILES * 8 * SurfaceCoverage.VERTEX_FLOATS];
+                    surfaceTris = ByteBuffer.allocateDirect(meshTris.length * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
+                    surfaceLines = ByteBuffer.allocateDirect(meshLines.length * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
+                }
                 Pose at = camera.getPose();
-                int[] counts = surfaceCoverage.mesh(at.tx(), at.ty(), at.tz(), 6f, meshTris, meshLines);
-                surfaceTris = upload(surfaceTris, meshTris, counts[0]);
-                surfaceLines = upload(surfaceLines, meshLines, counts[1]);
+                long started = SystemClock.uptimeMillis();
+                int[] counts = null;
+                for (float radius : new float[] {6f, 4f, 2.5f, 1.5f}) {
+                    counts = surfaceCoverage.mesh(at.tx(), at.ty(), at.tz(), radius, 2.5f, meshTris, meshLines);
+                    if (counts[2] == 0) break;
+                }
+                if (meshTriBuffer == 0) {
+                    meshTriBuffer = gl.newMeshBuffer();
+                    meshLineBuffer = gl.newMeshBuffer();
+                }
+                surfaceTris.clear();
+                surfaceTris.put(meshTris, 0, counts[0] * SurfaceCoverage.VERTEX_FLOATS);
+                surfaceLines.clear();
+                surfaceLines.put(meshLines, 0, counts[1] * SurfaceCoverage.VERTEX_FLOATS);
+                gl.fillMeshBuffer(meshTriBuffer, surfaceTris, counts[0]);
+                gl.fillMeshBuffer(meshLineBuffer, surfaceLines, counts[1]);
                 surfaceTriCount = counts[0];
                 surfaceLineCount = counts[1];
                 surfaceVersionDrawn = surfaceVersion;
                 surfaceRebuiltAt = now;
+                if (now - meshLoggedAt > 5000) {
+                    meshLoggedAt = now;
+                    android.util.Log.i("OnThisSiteScan", "mesh cells=" + surfaceCoverage.cellCount() + " tiles=" + counts[0] / 6
+                        + " lines=" + counts[1] / 8 + " full=" + counts[2] + " built_ms=" + (SystemClock.uptimeMillis() - started)
+                        + " glError=" + GLES20.glGetError());
+                }
             }
-            gl.drawMesh(viewProjection, surfaceTris, surfaceTriCount, GLES20.GL_TRIANGLES, true);
-            gl.drawMesh(viewProjection, surfaceLines, surfaceLineCount, GLES20.GL_LINES, false);
+            gl.drawMesh(viewProjection, meshTriBuffer, surfaceTriCount, GLES20.GL_TRIANGLES, true);
+            gl.drawMesh(viewProjection, meshLineBuffer, surfaceLineCount, GLES20.GL_LINES, false);
         } else {
             gl.drawPoints(viewProjection, coveragePoints, coveragePointCount, 22f * getResources().getDisplayMetrics().density / 2.6f);
         }
@@ -558,16 +588,6 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             String label = String.format(Locale.US, "~%.0f m² covered · %d photos", coverage.coveredAreaM2(), frames);
             runOnUiThread(() -> coverageMap.update(snapshot, x, z, heading, label));
         }
-    }
-
-    private static FloatBuffer upload(FloatBuffer buffer, float[] vertices, int count) {
-        int floats = count * SurfaceCoverage.VERTEX_FLOATS;
-        if (buffer == null || buffer.capacity() < floats) {
-            buffer = ByteBuffer.allocateDirect(Math.max(floats, 7 * 6 * 4096) * 2 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
-        }
-        buffer.clear();
-        buffer.put(vertices, 0, floats);
-        return buffer;
     }
 
     /** Samples ARCore's depth image into the live surface coverage. */
