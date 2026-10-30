@@ -75,7 +75,8 @@ final class ScanUploader {
     }
 
     /** Runs on a background thread. accessToken is only needed the first time (to create the session). */
-    void upload(String accessToken) throws Exception {
+    /** Returns the server's queue estimate (eta_at, note), or null if it was already uploaded. */
+    JSONObject upload(String accessToken) throws Exception {
         JSONObject meta = new JSONObject(read(new File(dir, "meta.json")));
         JSONObject anchors = new JSONObject(read(new File(dir, "anchors.json")));
         File stateFile = new File(dir, "upload.json");
@@ -124,7 +125,7 @@ final class ScanUploader {
             }
         }
         progress.update("Submitting for processing…", 97);
-        request("POST", "/sessions/" + sessionId + "/finish",
+        JSONObject queued = request("POST", "/sessions/" + sessionId + "/finish",
             new JSONObject().put("parts", parts).put("frames", meta.optInt("frames"))
                 .put("area_label", meta.optString("area_label"))
                 .put("alignment", anchors.optJSONObject("alignment"))
@@ -134,6 +135,7 @@ final class ScanUploader {
         deleteTree(new File(dir, "frames"));
         zip.delete();
         progress.update("Uploaded. Thank you!", 100);
+        return queued;
     }
 
     private void pack(File zip) throws Exception {
