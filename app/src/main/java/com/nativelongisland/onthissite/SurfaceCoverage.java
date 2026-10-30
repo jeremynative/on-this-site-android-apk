@@ -22,6 +22,12 @@ final class SurfaceCoverage {
     /** Depth frames that must see a cell before it is drawn (drops one-off noise). */
     static final int MIN_HITS = 2;
     private static final int MAX_CELLS = 120000;
+    /** Detailed cells farther than this from the phone are folded into coarse tiles. */
+    static final float KEEP_DETAIL_M = 5f;
+    /** Depth frames between clean-ups (about 10 s at 4 per second). */
+    static final int CONSOLIDATE_EVERY = 40;
+    /** Single-frame noise older than this many depth frames is dropped. */
+    static final int NOISE_FRAMES = 8;
     private static final int AZIMUTH_BINS = 24; // 15 degrees: ~0.5 m of walking at 2 m
     /** Floats per sample from unproject(): x, y, z, nx, ny, nz. */
     static final int SAMPLE_FLOATS = 6;
@@ -42,6 +48,11 @@ final class SurfaceCoverage {
     }
 
     private final Map<Long, Cell> cells = new HashMap<>();
+    // Parts of the scan the phone has walked away from, kept as COARSE_M tiles
+    // (summed x, y, z, normal x, y, z, cells, angle sum, complete cells) so the
+    // detailed store never fills up and stops taking new areas.
+    private final Map<Long, float[]> coarse = new HashMap<>();
+    private int sinceConsolidate;
     private int version;
     private int frameCount;
 
@@ -102,18 +113,57 @@ final class SurfaceCoverage {
                 }
             }
         }
+        if (++sinceConsolidate >= CONSOLIDATE_EVERY || cells.size() >= MAX_CELLS) {
+            consolidate(cx, cy, cz, cells.size() >= MAX_CELLS ? KEEP_DETAIL_M / 2 : KEEP_DETAIL_M);
+            changed = true;
+        }
         if (changed) version++;
+    }
+
+    /** Drops stale noise and folds detailed cells beyond keepRadius into coarse tiles. */
+    private void consolidate(float cx, float cy, float cz, float keepRadius) {
+        sinceConsolidate = 0;
+        float keep2 = keepRadius * keepRadius;
+        java.util.Iterator<Cell> it = cells.values().iterator();
+        while (it.hasNext()) {
+            Cell c = it.next();
+            if (c.frames < MIN_HITS) {
+                if (frameCount - c.lastFrame > NOISE_FRAMES) it.remove();
+                continue;
+            }
+            float px = c.sx / c.hits, py = c.sy / c.hits, pz = c.sz / c.hits;
+            float dx = px - cx, dy = py - cy, dz = pz - cz;
+            if (dx * dx + dy * dy + dz * dz <= keep2) continue;
+            float nl = (float) Math.sqrt(c.nx * c.nx + c.ny * c.ny + c.nz * c.nz);
+            if (nl >= 1e-4f) {
+                long k = key((int) Math.floor(px / COARSE_M), (int) Math.floor(py / COARSE_M), (int) Math.floor(pz / COARSE_M));
+                float[] f = coarse.get(k);
+                if (f == null) coarse.put(k, f = new float[9]);
+                int angles = Math.min(3, c.angles());
+                f[0] += px; f[1] += py; f[2] += pz;
+                f[3] += c.nx / nl; f[4] += c.ny / nl; f[5] += c.nz / nl;
+                f[6] += 1; f[7] += angles;
+                if (angles >= 3) f[8] += 1;
+            }
+            it.remove();
+        }
     }
 
     synchronized int version() {
         return version;
     }
 
-    /** Cells seen often enough to draw. */
+    /** Cells seen often enough to draw, including ones folded into coarse tiles. */
     synchronized int cellCount() {
         int n = 0;
         for (Cell c : cells.values()) if (c.frames >= MIN_HITS) n++;
+        for (float[] f : coarse.values()) n += (int) f[6];
         return n;
+    }
+
+    /** Detailed cells currently held (for diagnostics). */
+    synchronized int detailedCells() {
+        return cells.size();
     }
 
     /** Share of drawn cells photographed from at least 3 directions. */
@@ -123,6 +173,10 @@ final class SurfaceCoverage {
             if (c.frames < MIN_HITS) continue;
             drawn++;
             if (c.angles() >= 3) captured++;
+        }
+        for (float[] f : coarse.values()) {
+            drawn += (int) f[6];
+            captured += (int) f[8];
         }
         return drawn == 0 ? 0f : captured / (float) drawn;
     }
@@ -182,6 +236,11 @@ final class SurfaceCoverage {
             }
             t = tile(tris, t, px, py, pz, nx, ny, nz, CELL_M * 0.55f, COLOURS[angles], a, b, corner);
             if (d2 <= line2 && l + 8 * VERTEX_FLOATS <= lines.length) l = outline(lines, l, corner);
+        }
+        for (Map.Entry<Long, float[]> e : coarse.entrySet()) {
+            float[] f = far.get(e.getKey());
+            if (f == null) far.put(e.getKey(), f = new float[8]);
+            for (int i = 0; i < 8; i++) f[i] += e.getValue()[i];
         }
         for (float[] f : far.values()) {
             if (t + 6 * VERTEX_FLOATS > tris.length) {
@@ -259,6 +318,32 @@ final class SurfaceCoverage {
      */
     static int unproject(short[] depthMm, int width, int height, float fx, float fy, float cx, float cy,
                          float[] poseMatrix, int cols, int rows, float[] out) {
+        return unproject(depthMm, width, height, fx, fy, cx, cy, poseMatrix, cols, rows, out, null, null);
+    }
+
+    /** Raw-depth confidence (0-255) a measurement needs to support a smoothed depth sample. */
+    static final int MIN_RAW_CONFIDENCE = 100;
+
+    /**
+     * True when ARCore actually measured something near this pixel at about this
+     * depth. The smoothed depth image fills gaps by interpolation, which turned
+     * objects on the floor into mounds; tiles are only kept where raw depth
+     * (same size as the depth image) backs them up.
+     */
+    static boolean measured(short[] rawMm, byte[] rawConfidence, int width, int height, int u, int v, float d) {
+        for (int y = Math.max(0, v - 2); y <= Math.min(height - 1, v + 2); y++) {
+            for (int x = Math.max(0, u - 2); x <= Math.min(width - 1, u + 2); x++) {
+                int i = y * width + x;
+                int raw = rawMm[i] & 0xffff;
+                if (raw == 0 || (rawConfidence[i] & 0xff) < MIN_RAW_CONFIDENCE) continue;
+                if (Math.abs(raw / 1000f - d) <= 0.08f * d) return true;
+            }
+        }
+        return false;
+    }
+
+    static int unproject(short[] depthMm, int width, int height, float fx, float fy, float cx, float cy,
+                         float[] poseMatrix, int cols, int rows, float[] out, short[] rawMm, byte[] rawConfidence) {
         float[] grid = new float[cols * rows * 3];
         float[] depth = new float[cols * rows];
         for (int j = 0; j < rows; j++) {
@@ -269,6 +354,10 @@ final class SurfaceCoverage {
                 float d = mm / 1000f;
                 int g = j * cols + i;
                 if (mm == 0 || d > MAX_DEPTH_M) {
+                    depth[g] = 0;
+                    continue;
+                }
+                if (rawMm != null && !measured(rawMm, rawConfidence, width, height, u, v, d)) {
                     depth[g] = 0;
                     continue;
                 }

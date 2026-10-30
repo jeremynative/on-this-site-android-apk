@@ -38,6 +38,27 @@ final class ScanUploader {
         this.progress = progress;
     }
 
+    /** "m:ss" (or "h:mm:ss") for elapsed and remaining times. */
+    static String clock(long ms) {
+        long seconds = Math.max(0, ms / 1000);
+        long h = seconds / 3600, m = (seconds % 3600) / 60, sec = seconds % 60;
+        return h > 0 ? String.format(java.util.Locale.US, "%d:%02d:%02d", h, m, sec) : String.format(java.util.Locale.US, "%d:%02d", m, sec);
+    }
+
+    /**
+     * Upload status line: percent of the scan sent, time so far, and time left
+     * from the speed of this run (null until a few seconds of data).
+     */
+    static String uploadLine(long sentTotal, long total, long sentThisRun, long elapsedMs) {
+        int percent = total <= 0 ? 0 : (int) Math.min(100, sentTotal * 100 / total);
+        StringBuilder line = new StringBuilder("Uploading ").append(percent).append("% \u00b7 ").append(clock(elapsedMs)).append(" so far");
+        if (sentThisRun > 0 && elapsedMs >= 3000) {
+            long left = (long) ((total - sentTotal) / (sentThisRun / (double) elapsedMs));
+            line.append(" \u00b7 about ").append(clock(left)).append(" left");
+        }
+        return line.toString();
+    }
+
     /** Scans in app storage that were finished but not fully uploaded. */
     static File[] pending(File root) {
         File[] dirs = root.listFiles(f -> f.isDirectory() && new File(f, "meta.json").isFile() && !new File(f, "uploaded").exists());
@@ -114,14 +135,28 @@ final class ScanUploader {
             if (idx < parts) done[idx] = true;
         }
         byte[] buffer = new byte[PART_BYTES];
+        long total = zip.length();
+        long resumedBytes = 0;
+        for (int idx = 0; idx < parts; idx++) if (done[idx]) resumedBytes += Math.min(PART_BYTES, total - (long) idx * PART_BYTES);
+        final long already = resumedBytes;
+        long startedAt = android.os.SystemClock.uptimeMillis();
+        long[] sentThisRun = {0};
+        long[] lastReport = {0};
         try (java.io.RandomAccessFile file = new java.io.RandomAccessFile(zip, "r")) {
             for (int idx = 0; idx < parts; idx++) {
                 if (done[idx]) continue;
-                progress.update("Uploading part " + (idx + 1) + " of " + parts, 5 + 90 * idx / parts);
                 file.seek((long) idx * PART_BYTES);
-                int length = (int) Math.min(PART_BYTES, zip.length() - (long) idx * PART_BYTES);
+                int length = (int) Math.min(PART_BYTES, total - (long) idx * PART_BYTES);
                 file.readFully(buffer, 0, length);
-                putPart(sessionId, key, idx, buffer, length);
+                final long before = already + sentThisRun[0];
+                putPart(sessionId, key, idx, buffer, length, written -> {
+                    long now = android.os.SystemClock.uptimeMillis();
+                    if (now - lastReport[0] < 700 && written < length) return;
+                    lastReport[0] = now;
+                    long sent = before + written;
+                    progress.update(uploadLine(sent, total, sent - already, now - startedAt), 5 + (int) (90 * sent / total));
+                });
+                sentThisRun[0] += length;
             }
         }
         progress.update("Submitting for processing…", 97);
@@ -161,7 +196,11 @@ final class ScanUploader {
         out.closeEntry();
     }
 
-    private void putPart(String sessionId, String key, int idx, byte[] data, int length) throws Exception {
+    interface Written {
+        void bytes(long written);
+    }
+
+    private void putPart(String sessionId, String key, int idx, byte[] data, int length, Written written) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         digest.update(data, 0, length);
         String sha = hex(digest.digest());
@@ -174,7 +213,12 @@ final class ScanUploader {
                 connection.setFixedLengthStreamingMode(length);
                 connection.setDoOutput(true);
                 try (OutputStream out = connection.getOutputStream()) {
-                    out.write(data, 0, length);
+                    // In 256 KB pieces so the progress and time left move smoothly.
+                    for (int offset = 0; offset < length; offset += 256 * 1024) {
+                        int n = Math.min(256 * 1024, length - offset);
+                        out.write(data, offset, n);
+                        written.bytes(offset + n);
+                    }
                 }
                 readResponse(connection);
                 return;
