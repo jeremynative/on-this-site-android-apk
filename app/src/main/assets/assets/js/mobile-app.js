@@ -16209,6 +16209,10 @@
     }
 
     function fitAllLongIslandMapView(reason = "long-island-overview") {
+      if (isOfflineTextMode() && !state.map && androidBridgeToken() && window.AndroidApp?.syncNativeMapCamera) {
+        window.AndroidApp.syncNativeMapCamera(androidBridgeToken(), -72.82, 40.86, 7.35);
+        return;
+      }
       if (!state.map?.fitBounds) {
         fitLongIslandMapView(reason);
         return;
@@ -16631,7 +16635,32 @@
       return requestUserLocation({ centerMap: true, silent: false, mapZoom: NEAR_ME_ZOOM, restrictToLongIslandScope: true });
     }
 
+    // Offline the WebView draws no map of its own, so drive the native map
+    // directly. GPS needs no data connection.
+    function locateOfflineNativeMap() {
+      const token = androidBridgeToken();
+      const app = window.AndroidApp;
+      if (!token || !app?.syncNativeMapCamera || !app?.syncNativeMapTransientState || !navigator.geolocation) return false;
+      setLocationControlsBusy(true);
+      navigator.geolocation.getCurrentPosition(position => {
+        setLocationControlsBusy(false);
+        state.userLocation = [position.coords.longitude, position.coords.latitude];
+        app.syncNativeMapTransientState(token, JSON.stringify({
+          signature: `offline-location:${state.userLocation.join(",")}`,
+          userLocation: nativeMapFeatureCollection(nativeUserLocationFeatures())
+        }));
+        app.syncNativeMapCamera(token, state.userLocation[0], state.userLocation[1], 13);
+      }, error => {
+        setLocationControlsBusy(false);
+        showBanner(error?.code === 1
+          ? "Location permission is off for On This Site."
+          : "Could not get a GPS fix yet. Try near a window or outside.", { centered: true });
+      }, { enableHighAccuracy: true, timeout: 60000, maximumAge: 60000 });
+      return true;
+    }
+
     async function locateMapUser() {
+      if (isOfflineTextMode() && !state.map && locateOfflineNativeMap()) return true;
       if (centerMapOnKnownUserLocation({ zoomIfAlreadyCentered: isNativeAndroidApp() })) return true;
       const cachedPosition = nativeCachedUserPosition();
       if (cachedPosition) {
@@ -21185,7 +21214,7 @@
       mapEl.querySelectorAll("[data-offline-region]").forEach(button => {
         button.addEventListener("click", () => selectOfflineRegion(button.dataset.offlineRegion || "all"));
       });
-      [loginOpenBtn, feedbackOpenBtn, feedbackOpenMenuBtn, locateBtn, mobileMapLocateBtn, suggestSiteOpenBtn].forEach(button => {
+      [loginOpenBtn, feedbackOpenBtn, feedbackOpenMenuBtn, locateBtn, suggestSiteOpenBtn].forEach(button => {
         if (!button) return;
         button.disabled = true;
         button.title = "Available when the app is online";
