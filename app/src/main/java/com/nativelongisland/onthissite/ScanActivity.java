@@ -161,6 +161,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private int meshTriBuffer;
     private int meshLineBuffer;
     private long meshLoggedAt;
+    private long recordingStartedAt;
     private int surfaceVersionDrawn = -1;
     private long surfaceRebuiltAt;
     private int coveragePointCount;
@@ -318,6 +319,8 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        // The upload carries on in its service; just stop updating this screen.
+        ScanUploadService.listener = null;
         if (session != null) session.close();
         if (localizer != null) localizer.close();
         if (live != null) live.close();
@@ -381,6 +384,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         }
         synchronized (lock) {
             recording = true;
+            recordingStartedAt = SystemClock.uptimeMillis();
             frames = 0;
             distance = 0f;
             lastKeyPose = null;
@@ -498,7 +502,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             if (archivePointCount > 0 && localizer != null && localizer.locked()) {
                 legend += "\nBlue dots = already in the archive · violet = thin, worth rescanning";
             }
-            postStatus(null, String.format(Locale.US, "%d photos%s\n%s%s", frames,
+            postStatus(null, String.format(Locale.US, "Recording %s \u00b7 %d photos%s\n%s%s", ScanUploader.clock(now - recordingStartedAt), frames,
                 distance > 0.5f ? String.format(Locale.US, " · %.0f m walked", distance) : "", placement, legend));
         }
     }
@@ -599,7 +603,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 surfaceRebuiltAt = now;
                 if (now - meshLoggedAt > 5000) {
                     meshLoggedAt = now;
-                    android.util.Log.i("OnThisSiteScan", "mesh cells=" + surfaceCoverage.cellCount() + " tiles=" + counts[0] / 6
+                    android.util.Log.i("OnThisSiteScan", "mesh cells=" + surfaceCoverage.cellCount() + " detailed=" + surfaceCoverage.detailedCells() + " tiles=" + counts[0] / 6
                         + " lines=" + counts[1] / 8 + " full=" + counts[2] + " built_ms=" + (SystemClock.uptimeMillis() - started)
                         + " glError=" + GLES20.glGetError());
                 }
@@ -656,6 +660,38 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         }
     }
 
+    private short[] rawDepthMm = new short[0];
+    private byte[] rawConfidence = new byte[0];
+
+    /**
+     * ARCore's measured (unsmoothed) depth and its confidence, used to drop
+     * surfaces the smoothed depth only guessed. False if unavailable or a
+     * different size, in which case the smoothed depth is used alone.
+     */
+    private boolean readRawDepth(Frame frame, int width, int height) {
+        try (Image raw = frame.acquireRawDepthImage16Bits(); Image confidence = frame.acquireRawDepthConfidenceImage()) {
+            if (raw.getWidth() != width || raw.getHeight() != height
+                || confidence.getWidth() != width || confidence.getHeight() != height) return false;
+            if (rawDepthMm.length != width * height) {
+                rawDepthMm = new short[width * height];
+                rawConfidence = new byte[width * height];
+            }
+            Image.Plane depthPlane = raw.getPlanes()[0];
+            ByteBuffer depthBuffer = depthPlane.getBuffer().order(ByteOrder.nativeOrder());
+            Image.Plane confidencePlane = confidence.getPlanes()[0];
+            ByteBuffer confidenceBuffer = confidencePlane.getBuffer();
+            for (int v = 0; v < height; v++) {
+                for (int u = 0; u < width; u++) {
+                    rawDepthMm[v * width + u] = depthBuffer.getShort(v * depthPlane.getRowStride() + u * depthPlane.getPixelStride());
+                    rawConfidence[v * width + u] = confidenceBuffer.get(v * confidencePlane.getRowStride() + u * confidencePlane.getPixelStride());
+                }
+            }
+            return true;
+        } catch (Exception error) {
+            return false;
+        }
+    }
+
     /** Samples ARCore's depth image into the live surface coverage. */
     private void addDepth(Frame frame, Camera camera, boolean photographed) {
         try (Image depth = frame.acquireDepthImage16Bits()) {
@@ -667,6 +703,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             for (int v = 0; v < height; v++) {
                 for (int u = 0; u < width; u++) depthMm[v * width + u] = buffer.getShort(v * rowStride + u * pixelStride);
             }
+            boolean raw = readRawDepth(frame, width, height);
             // Depth is aligned with the GPU texture, so scale its intrinsics.
             CameraIntrinsics k = camera.getTextureIntrinsics();
             int[] dims = k.getImageDimensions();
@@ -675,7 +712,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             Pose pose = camera.getPose();
             pose.toMatrix(depthPose, 0);
             int n = SurfaceCoverage.unproject(depthMm, width, height, f[0] * sx, f[1] * sy, c[0] * sx, c[1] * sy,
-                depthPose, 64, 48, depthSamples);
+                depthPose, 64, 48, depthSamples, raw ? rawDepthMm : null, raw ? rawConfidence : null);
             surfaceCoverage.add(depthSamples, n, pose.tx(), pose.ty(), pose.tz(), photographed);
         } catch (Exception error) {
             // Depth isn't ready for the first frames after tracking starts.
@@ -911,26 +948,38 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
 
     private void upload(File dir) {
         progressBar.setVisibility(View.VISIBLE);
-        new Thread(() -> {
-            try {
-                org.json.JSONObject queued = new ScanUploader(dir, (message, percent) -> runOnUiThread(() -> {
-                    detail.setText(message);
+        status.setText("Uploading your scan");
+        detail.setText("You can leave this screen; the upload continues with a notification.");
+        // The upload runs in a foreground service so it survives leaving the app.
+        ScanUploadService.listener = new ScanUploadService.Listener() {
+            @Override
+            public void progress(String path, String message, int percent) {
+                runOnUiThread(() -> {
+                    detail.setText(message + "\nYou can leave this screen; the upload continues with a notification.");
                     progressBar.setProgress(percent);
-                })).upload(accessToken);
+                });
+            }
+
+            @Override
+            public void finished(String path, org.json.JSONObject queued) {
                 String when = goLiveText(queued);
-                ScanStatusJob.schedule(getApplicationContext());
                 runOnUiThread(() -> {
                     status.setText("Scan uploaded");
                     detail.setText("Thank you! " + when + "\nYou'll get a notification when it's live.");
+                    progressBar.setProgress(100);
                     finishButton.setVisibility(View.GONE);
                 });
-            } catch (Exception error) {
+            }
+
+            @Override
+            public void failed(String path, String message) {
                 runOnUiThread(() -> {
                     status.setText("Upload paused");
-                    detail.setText(error.getMessage() + "\nYour scan is saved on this phone; it will offer to resume next time.");
+                    detail.setText(message + "\nYour scan is saved on this phone; it will offer to resume next time.");
                 });
             }
-        }).start();
+        };
+        ScanUploadService.start(getApplicationContext(), dir, accessToken);
     }
 
     private void offerPendingUploads(File[] pending) {
