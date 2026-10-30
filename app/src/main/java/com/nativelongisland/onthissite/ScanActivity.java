@@ -80,6 +80,8 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     // as the last (phone held still) unless this long has passed.
     private static final long STILL_PHOTO_MS = 4000;
     private static final float STILL_LUMA_DIFF = 5f;
+    // 3D needs each spot seen from several places; below this, warn before upload.
+    private static final int FEW_PHOTOS = 25;
 
     private final ArGl gl = new ArGl();
     private final ExecutorService encoder = Executors.newSingleThreadExecutor();
@@ -419,6 +421,9 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 ? (localizer == null ? (spaceHasModel ? "Will be fitted to the space when processed" : "First scan of this place")
                     : localizer.locked() ? "Lined up with earlier scans ✓ " + localizer.status() : localizer.status())
                 : (lastFix == null ? "Recording photos · waiting for GPS" : String.format(Locale.US, "Recording photos · GPS ±%.0f m", lastFix.getAccuracy()));
+            if (!tracked && recording && frames > 0 && now - lastKeyAt > 2500) {
+                placement = "The view hasn't changed. Take a step to the side, then keep walking slowly.";
+            }
             String legend = live != null ? "\nRed = not captured yet · green = covered" : "";
             postStatus(null, String.format(Locale.US, "%d photos%s\n%s%s", frames,
                 distance > 0.5f ? String.format(Locale.US, " · %.0f m walked", distance) : "", placement, legend));
@@ -595,6 +600,20 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
 
     // ---- Finish ----
 
+    /** Too few distinct photos rarely become 3D (the S25 desk test failed that way): say so first. */
+    private void confirmFinish() {
+        if (frames >= FEW_PHOTOS) {
+            finishScan();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Only " + frames + " different view" + (frames == 1 ? "" : "s"))
+            .setMessage("A 3D space usually needs " + FEW_PHOTOS + "+ photos taken while walking, so each spot is seen from a few places. Keep scanning a little longer?")
+            .setPositiveButton("Keep scanning", null)
+            .setNegativeButton("Upload anyway", (d, w) -> finishScan())
+            .show();
+    }
+
     private void finishScan() {
         finishButton.setEnabled(false);
         detail.setText("Saving the last photos…");
@@ -768,7 +787,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         finishButton = new Button(this);
         finishButton.setText("Finish & upload");
         finishButton.setVisibility(View.GONE);
-        finishButton.setOnClickListener(v -> finishScan());
+        finishButton.setOnClickListener(v -> confirmFinish());
         Button close = new Button(this);
         close.setText("Close");
         close.setOnClickListener(v -> finish());
