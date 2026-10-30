@@ -14,6 +14,16 @@
     .offline-map-index{position:relative;display:block;min-height:0;padding:0;overflow:hidden;background:var(--water);color:var(--ink);text-align:left}.offline-map-head{position:absolute;top:10px;left:10px;right:10px;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:10px;pointer-events:none}.offline-map-head strong,.offline-map-head .status{padding:6px 8px;border:1px solid rgba(23,33,25,.16);border-radius:7px;background:rgba(251,252,250,.94);box-shadow:0 2px 7px rgba(24,39,30,.16)}#map{position:absolute;inset:0;min-height:0;background:var(--water)}#offline-map{display:block;width:100%;height:100%;touch-action:manipulation}.map-help{position:absolute;left:10px;bottom:10px;max-width:calc(100% - 20px);margin:0;padding:6px 8px;border:1px solid rgba(23,33,25,.18);border-radius:7px;background:rgba(251,252,250,.94);color:#475248;font-size:12px;pointer-events:none}
     .offline-shell .mobile-view-tabs{position:relative}.offline-shell .list-panel{display:block;min-height:0;overflow:hidden}.offline-shell .site-list{height:calc(100% - 49px);padding-bottom:max(24px,var(--app-bottom-safe))}.offline-shell .learning-card{display:block}.offline-shell .learning-card-body{gap:7px}.offline-shell .learning-card h2 button{touch-action:manipulation}.offline-shell .learning-card-actions{grid-template-columns:1fr}.offline-shell .learning-card-actions button{min-height:42px}.offline-shell #load-more{width:calc(100% - 20px);min-height:44px;margin:0 10px 18px;border:1px solid #bdc9bf;border-radius:8px;background:#fff;color:var(--accent-strong);font-weight:850}.offline-shell #load-more[hidden]{display:none}.offline-shell .site-list:has(+ #load-more:not([hidden])){height:calc(100% - 103px)}
     .detail{position:fixed;inset:var(--app-top-safe) var(--app-right-safe) var(--app-bottom-safe) var(--app-left-safe);z-index:2000;display:grid;align-items:end;background:rgba(13,22,17,.38);transform:none;opacity:1;pointer-events:auto}.detail[hidden]{display:none}.detail-card{width:100%;max-height:100%;overflow:auto;padding:20px 20px 26px;border-radius:16px 16px 0 0;background:#fff;box-shadow:0 -10px 30px rgba(13,22,17,.18)}.detail-head{display:grid;grid-template-columns:minmax(0,1fr) 48px;gap:12px;align-items:start;margin-bottom:18px}.detail h2{margin:0;font-size:24px;line-height:1.14}.detail-close{width:48px;height:48px;border:1px solid #bdc9bf;border-radius:8px;background:#fff;color:var(--ink);font-size:18px}.detail-meta{margin:5px 0 0;color:var(--muted);font-size:14px}.detail-body{display:grid;gap:15px;font-size:16px;line-height:1.55}.detail-body h3,.detail-body p{margin:0}.offline-only{padding:10px 12px;border-left:4px solid var(--accent);background:var(--soft);color:#35473d;font-size:14px}
+    /* Colour like the live map: water, coastline, territory colours, typed pins. */
+    .offline-shell header{background:linear-gradient(180deg,#f7f2e6,#fbfcfa)}.offline-pill{background:#fff4e0;border-color:#b5683f;color:#8a4b2b}
+    .offline-map-index,#map{background:linear-gradient(180deg,#a7d3e3,#d3ebf2)}
+    .map-help{max-width:42%}
+    .offline-legend{position:absolute;right:10px;bottom:10px;z-index:3;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:3px 9px;max-width:56%;margin:0;padding:5px 8px;border:1px solid rgba(23,33,25,.16);border-radius:7px;background:rgba(251,252,250,.93);color:#38463c;font-size:11px;font-weight:750;line-height:1.3;pointer-events:none}
+    .offline-legend span{white-space:nowrap}.offline-legend i{display:inline-block;width:9px;height:9px;margin-right:4px;border-radius:50%;background:var(--tone);box-shadow:0 0 0 1.5px #fff;vertical-align:-1px}
+    .offline-card{border-left:5px solid var(--tone,#2f6f57)}.offline-card .learning-card-meta span{display:inline-flex;align-items:center;gap:7px;color:var(--tone,#2f6f57);font-weight:850}
+    .offline-thumb{display:inline-block;flex:0 0 22px;width:22px;height:22px;border-radius:50%;background:var(--tone,#2f6f57) center/contain no-repeat;box-shadow:0 0 0 2px #fff,0 1px 3px rgba(0,0,0,.25)}.offline-thumb.has-icon{border-radius:5px;background-color:#fff}
+    .offline-territory{display:inline-block;padding:2px 9px;border-radius:999px;background:var(--territory);color:#2d2a2b;font-weight:750}
+    .detail-card{border-top:6px solid var(--tone,#2f6f57)}.detail-kind{display:flex;align-items:center;gap:9px;margin:0;color:var(--tone,#2f6f57);font-size:13px;font-weight:850;letter-spacing:.04em;text-transform:uppercase}
     @media(max-height:700px){.offline-shell{--map-height:34vh}.offline-shell .mobile-layer-panel,.offline-shell .mobile-more-grid{top:calc(var(--app-top-safe) + 177px)}}
   </style>
 </head>
@@ -53,7 +63,7 @@
     </header>
     <section class="mobile-map-shell offline-map-index" id="offline-map-section" aria-label="Offline place map">
       <div class="offline-map-head"><strong>Saved map</strong><span class="status" id="status" role="status">Loading saved places...</span></div>
-      <div id="map" aria-label="Simplified offline map of saved places"><canvas id="offline-map"></canvas><p class="map-help">Tap a dot to open its saved article.</p></div>
+      <div id="map" aria-label="Simplified offline map of saved places"><canvas id="offline-map"></canvas><p class="map-help">Tap a dot to open it. Pinch or double-tap to zoom.</p><p class="offline-legend" id="offline-legend" aria-hidden="true"></p></div>
     </section>
     <div class="mobile-view-tabs" role="group" aria-label="Offline section">
       <button class="mobile-view-tab" id="offline-tab-map" type="button" data-offline-jump="map" aria-pressed="false">Map</button>
@@ -78,7 +88,7 @@
     const syncNativeInsets=()=>{const insets={top:bridgeInset("getSafeInsetTop"),right:bridgeInset("getSafeInsetRight"),bottom:bridgeInset("getSafeInsetBottom"),left:bridgeInset("getSafeInsetLeft")};for(const [side,value] of Object.entries(insets)){document.documentElement.style.setProperty(`--native-${side}-safe`,`${Math.ceil(value)}px`)}};
     syncNativeInsets();addEventListener("nli-native-insets-changed",syncNativeInsets);
     const PATHS=["assets/data/mobile-site-index.json","assets/data/mobile-site-centers.json","assets/data/mobile-wiki-index.json"];
-    const LIMIT=40, OFFLINE_QUERY_CACHE_LIMIT=24, B={west:-74.28,east:-71.82,south:40.48,north:41.34}, S={west:-73.42,east:-72.72}, SEARCH=window.NLI_SEARCH_UTILS, OFFLINE=window.NLI_OFFLINE_ARCHIVE_UTILS;
+    const LIMIT=40, OFFLINE_QUERY_CACHE_LIMIT=24, B={west:-74.28,east:-71.82,south:40.48,north:41.34}, M={west:-74.08,east:-71.84,south:40.54,north:41.2}, S={west:-73.42,east:-72.72}, SEARCH=window.NLI_SEARCH_UTILS, OFFLINE=window.NLI_OFFLINE_ARCHIVE_UTILS;
     if(!SEARCH||!OFFLINE)throw Error("Saved search tools could not be opened.");
     const state={sites:[],wikis:[],entries:[],filtered:[],visible:LIMIT,region:"all",query:"",queryCache:new Map(),points:[]};
     const $=id=>document.getElementById(id), app=document.querySelector(".offline-shell"), search=$("search"), suggestions=$("search-suggestions"), list=$("site-list"), status=$("status"), count=$("result-count"), summary=$("offline-summary"), more=$("load-more"), canvas=$("offline-map"), detail=$("detail"), title=$("detail-title"), meta=$("detail-meta"), body=$("detail-body"), mapTab=$("offline-tab-map"), savedTab=$("offline-tab-saved"), collapse=$("offline-collapse"), full=$("offline-full");
@@ -86,14 +96,46 @@
     const text=v=>{const d=document.createElement("div");d.innerHTML=String(v||"");return String(d.textContent||"").replace(/\s+/g," ").trim()};
     const typeLabel=v=>String(v||"Mapped place").replace(/[_-]+/g," ").replace(/\b\w/g,letter=>letter.toUpperCase());
     const rows=OFFLINE.rows;
+    // Kinds of places, coloured like the live map's pins.
+    const TONES={placename:["Place names","#2f78c4"],landmark:["Landmarks","#c0392b"],deed:["Records","#8a5a2b"],burial:["Sacred","#6b3fa0"],activism:["Activism","#d35400"],water:["Waterways","#1f9ac9"],midden:["Shell middens","#9c7a3c"],territory:["Ancestral lands","#a65873"],other:["Other places","#2f6f57"],wiki:["Knowledgebase","#3d6b57"]};
+    const toneKey=item=>{if(item.kind==="wiki")return"wiki";const t=String(item.site_type||"").toLowerCase();return t.includes("placename")||t.includes("place_name")?"placename":t.includes("territor")?"territory":t.includes("burial")||t.includes("sacred")?"burial":t.includes("activism")||t.includes("protest")?"activism":t.includes("deed")||t.includes("record")?"deed":t.includes("water")?"water":t.includes("midden")?"midden":t.includes("landmark")?"landmark":"other"};
+    // Coastline, territory colours and pin icons that ship with the app (loaded after the list).
+    const decor={land:null,territories:[],labels:[],territoryById:new Map(),iconFiles:{},images:new Map()};
+    const iconUrl=item=>{const f=decor.iconFiles[item.map_icon];return f&&!/dot-placeholder/.test(f)?`assets/map-icons/${f}`:""};
+    const territoryOf=item=>decor.territoryById.get(Number(item.ancestral_territory));
+    const shortTerritory=name=>String(name||"").replace(/\s+(Ancestral|Traditional)\s+Lands?$/i,"");
+    function thumbHtml(item){const icon=item.kind==="site"?iconUrl(item):"";return `<i class="offline-thumb${icon?" has-icon":""}"${icon?` style="background-image:url('${esc(icon)}')"`:""} aria-hidden="true"></i>`}
+    async function loadDecor(){
+      const [land,territories,keys]=await Promise.allSettled(["long-island-land-mask-lite.json","map/ancestral-territory-fallback.json","map/site-icon-keys.json"].map(load));
+      if(land.status==="fulfilled")decor.land=land.value.geometry||land.value;
+      if(territories.status==="fulfilled"){decor.territories=territories.value.territories?.features||[];decor.labels=territories.value.labels?.features||[];decor.territories.forEach(f=>decor.territoryById.set(Number(f.properties.id),f.properties))}
+      if(keys.status==="fulfilled")decor.iconFiles=keys.value.icon_asset_by_map_icon_id||{};
+      new Set(Object.values(decor.iconFiles)).forEach(file=>{if(/dot-placeholder/.test(file))return;const img=new Image();img.onload=()=>requestAnimationFrame(draw);img.src=`assets/map-icons/${file}`;decor.images.set(file,img)});
+      render();
+    }
+    const shade=(hex,f)=>{const n=parseInt(String(hex).slice(1),16);if(!Number.isFinite(n))return hex;const r=Math.round(((n>>16)&255)*f),g=Math.round(((n>>8)&255)*f),b=Math.round((n&255)*f);return `rgb(${r},${g},${b})`};
     const load=async path=>{const r=await fetch(path,{cache:"no-store"});if(!r.ok)throw Error("Saved archive file could not be opened.");return r.json()};
-    const pos=(lon,lat,w,h)=>[((lon-B.west)/(B.east-B.west))*w,h-((lat-B.south)/(B.north-B.south))*h];
+    // True proportions (a degree of longitude is shorter than one of latitude here), centred.
+    // Pinch, drag, wheel or double-tap to zoom the saved map (scale 1-10).
+    const view={scale:1,x:0,y:0};
+    const pos=(lon,lat,w,h)=>{const k=Math.cos(40.9*Math.PI/180),spanX=(M.east-M.west)*k,spanY=M.north-M.south,s=Math.min(w/spanX,h/spanY);return[((w-spanX*s)/2+(lon-M.west)*k*s)*view.scale+view.x,((h-spanY*s)/2+(M.north-lat)*s)*view.scale+view.y]};
+    function zoomAt(px,py,factor){const next=Math.max(1,Math.min(10,view.scale*factor)),f=next/view.scale;view.x=px-(px-view.x)*f;view.y=py-(py-view.y)*f;view.scale=next;if(next===1){view.x=0;view.y=0}requestAnimationFrame(draw)}
     function draw(){
       const ratio=Math.min(2,devicePixelRatio||1),w=Math.max(300,canvas.clientWidth),h=Math.max(220,canvas.clientHeight);
       canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio);const c=canvas.getContext("2d");c.setTransform(ratio,0,0,ratio,0,0);c.clearRect(0,0,w,h);
+      const ring=coords=>coords.forEach(([lon,lat],i)=>{const [x,y]=pos(lon,lat,w,h);i?c.lineTo(x,y):c.moveTo(x,y)});
+      const shape=geometry=>{const polys=geometry.type==="MultiPolygon"?geometry.coordinates:geometry.type==="Polygon"?[geometry.coordinates]:[];c.beginPath();polys.forEach(p=>p.forEach(r=>{ring(r);c.closePath()}))};
+      if(decor.land){shape(decor.land);c.fillStyle="#f4efd9";c.fill("evenodd");c.strokeStyle="#7d9a85";c.lineWidth=.8;c.stroke()}else{
       const outline=[[-74.08,40.58],[-73.9,40.62],[-73.68,40.66],[-73.48,40.72],[-73.22,40.74],[-72.98,40.77],[-72.75,40.82],[-72.5,40.86],[-72.31,40.91],[-72.12,41.01],[-71.88,41.06],[-71.86,41.01],[-72.05,40.96],[-72.22,40.88],[-72.47,40.76],[-72.73,40.68],[-73,40.61],[-73.28,40.59],[-73.55,40.57],[-73.8,40.55]];
-      c.beginPath();outline.forEach(([lon,lat],i)=>{const [x,y]=pos(lon,lat,w,h);i?c.lineTo(x,y):c.moveTo(x,y)});c.closePath();c.fillStyle="#ecf0d8";c.strokeStyle="#557260";c.lineWidth=1.4;c.fill();c.stroke();
-      state.points=state.filtered.filter(x=>x.kind==="site"&&Number.isFinite(x.longitude)&&Number.isFinite(x.latitude)).map(item=>{const [x,y]=pos(item.longitude,item.latitude,w,h);c.beginPath();c.arc(x,y,2.6,0,Math.PI*2);c.fillStyle="#2f6f57";c.fill();return{item,x,y}});
+      c.beginPath();outline.forEach(([lon,lat],i)=>{const [x,y]=pos(lon,lat,w,h);i?c.lineTo(x,y):c.moveTo(x,y)});c.closePath();c.fillStyle="#ecf0d8";c.strokeStyle="#557260";c.lineWidth=1.4;c.fill();c.stroke()}
+      // Ancestral lands in their own colours, as on the live map.
+      decor.territories.forEach(f=>{const color=f.properties.fillcolor||"#d9c4b2";shape(f.geometry);c.globalAlpha=.5;c.fillStyle=color;c.fill("evenodd");c.globalAlpha=.9;c.strokeStyle=shade(color,.62);c.lineWidth=.9;c.stroke();c.globalAlpha=1});
+      if(w>=320){c.font=`700 ${Math.min(14,10+view.scale)}px system-ui,sans-serif`;c.textAlign="center";c.lineJoin="round";decor.labels.forEach(f=>{const [x,y]=pos(f.geometry.coordinates[0],f.geometry.coordinates[1],w,h),label=shortTerritory(f.properties.title);c.lineWidth=3;c.strokeStyle="rgba(255,255,255,.9)";c.strokeText(label,x,y);c.fillStyle=shade(f.properties.fillcolor||"#8a6f76",.45);c.fillText(label,x,y)})}
+      const placed=state.filtered.filter(x=>x.kind==="site"&&Number.isFinite(x.longitude)&&Number.isFinite(x.latitude)).map(item=>{const [x,y]=pos(item.longitude,item.latitude,w,h);return{item,x,y,img:decor.images.get(decor.iconFiles[item.map_icon]),tone:toneKey(item)}});
+      // Coloured dots first, real pin icons on top.
+      placed.filter(p=>!(p.img&&p.img.complete&&p.img.naturalWidth)&&p.tone!=="territory").forEach(p=>{c.beginPath();c.arc(p.x,p.y,3.4,0,Math.PI*2);c.fillStyle=TONES[p.tone][1];c.fill();c.lineWidth=1.2;c.strokeStyle="#fff";c.stroke()});
+      placed.filter(p=>p.img&&p.img.complete&&p.img.naturalWidth).forEach(p=>c.drawImage(p.img,p.x-9,p.y-9,18,18));
+      state.points=placed;
     }
     function filter(){
       state.filtered=OFFLINE.filterArchive(state.entries,{query:state.query,region:state.region,cache:state.queryCache,cacheLimit:OFFLINE_QUERY_CACHE_LIMIT,searchUtils:SEARCH});
@@ -108,13 +150,14 @@
       filter();const visible=state.filtered.slice(0,state.visible);
       list.innerHTML=visible.length?visible.map((x,i)=>{
         const source=x.kind==="wiki"?"Knowledgebase article":typeLabel(x.site_type),location=x.kind==="wiki"?"Saved history":(x.address_label||"Saved map entry"),excerpt=text(x.summary||"").slice(0,260);
-        return `<article class="site-card learning-card nearby-feed-card" ${x.kind==="wiki"?`data-wiki-slug="${esc(x.slug||"")}"`:`data-slug="${esc(x.slug||"")}"`} data-result-index="${i}"><div class="learning-card-body"><div class="learning-card-meta"><span>${esc(source)}</span><strong>Offline</strong></div><h2><button type="button" data-result-open="${i}">${esc(x.title||"Untitled")}</button></h2><div class="learning-card-tags"><span>${esc(location)}</span></div>${excerpt?`<p class="learning-card-excerpt">${esc(excerpt)}</p>`:""}<div class="learning-card-actions"><button class="primary" type="button" data-result-open="${i}">Open saved article</button></div></div></article>`
+        const tone=TONES[toneKey(x)],territory=x.kind==="site"?territoryOf(x):null;
+        return `<article class="site-card learning-card nearby-feed-card offline-card" style="--tone:${tone[1]}" ${x.kind==="wiki"?`data-wiki-slug="${esc(x.slug||"")}"`:`data-slug="${esc(x.slug||"")}"`} data-result-index="${i}"><div class="learning-card-body"><div class="learning-card-meta"><span>${thumbHtml(x)}${esc(source)}</span><strong>Offline</strong></div><h2><button type="button" data-result-open="${i}">${esc(x.title||"Untitled")}</button></h2><div class="learning-card-tags">${territory?`<span class="offline-territory" style="--territory:${esc(territory.fillcolor||"#e5efe9")}">${esc(shortTerritory(territory.title))}</span>`:""}<span>${esc(location)}</span></div>${excerpt?`<p class="learning-card-excerpt">${esc(excerpt)}</p>`:""}<div class="learning-card-actions"><button class="primary" type="button" data-result-open="${i}">Open saved article</button></div></div></article>`
       }).join(""):`<article class="site-card empty-state" role="status"><span class="site-copy"><h2>No saved result found</h2><p>Try a different word or area.</p></span></article>`;
       count.textContent=`${state.filtered.length} saved`;status.textContent=state.region==="all"?`${state.sites.length} mapped places`:`${state.filtered.filter(x=>x.kind==="site").length} in this area`;more.hidden=visible.length>=state.filtered.length;more.textContent=`Show more (${state.filtered.length-visible.length} remaining)`;draw();renderSuggestions();
     }
-    function openDetail(detailTitle,detailMeta,detailHtml){title.textContent=detailTitle;meta.textContent=detailMeta;body.innerHTML=detailHtml;detail.hidden=false;detail.classList.add("open");detail.querySelector(".detail-card").scrollTop=0}
+    function openDetail(detailTitle,detailMeta,detailHtml,tone="#2f6f57"){detail.querySelector(".detail-card").style.setProperty("--tone",tone);title.textContent=detailTitle;meta.textContent=detailMeta;body.innerHTML=detailHtml;detail.hidden=false;detail.classList.add("open");detail.querySelector(".detail-card").scrollTop=0}
     function open(item){
-      if(!item)return;const intro=text(item.summary||""),why=text(item.why_this_matters||"");openDetail(item.title||"Saved article",item.kind==="wiki"?"Knowledgebase article":(item.address_label||item.site_type||"Mapped place"),`${intro?`<p>${esc(intro)}</p>`:"<p>No summary was saved for this entry.</p>"}${why?`<h3>Why this matters</h3><p>${esc(why)}</p>`:""}<p class="offline-only">This saved version remains available without a connection. Images, comments, accounts, submissions, and current updates return when the app reconnects.</p>`);
+      if(!item)return;const intro=text(item.summary||""),why=text(item.why_this_matters||""),tone=TONES[toneKey(item)],territory=item.kind==="site"?territoryOf(item):null;openDetail(item.title||"Saved article",item.kind==="wiki"?"Knowledgebase article":(item.address_label||item.site_type||"Mapped place"),`<p class="detail-kind">${thumbHtml(item)}${esc(tone[0])}${territory?` <span class="offline-territory" style="--territory:${esc(territory.fillcolor||"#e5efe9")}">${esc(shortTerritory(territory.title))}</span>`:""}</p>${intro?`<p>${esc(intro)}</p>`:"<p>No summary was saved for this entry.</p>"}${why?`<h3>Why this matters</h3><p>${esc(why)}</p>`:""}<p class="offline-only">This saved version remains available without a connection. Images, comments, accounts, submissions, and current updates return when the app reconnects.</p>`,tone[1]);
     }
     function showMap(){app.classList.remove("panel-maximized");app.classList.add("panel-collapsed");mapTab.setAttribute("aria-pressed","true");savedTab.setAttribute("aria-pressed","false");collapse.textContent="Open";full.textContent="Full";full.setAttribute("aria-expanded","false");setTimeout(draw,60)}
     function showArchive({maximize=false,focusSearch=false}={}){app.classList.remove("panel-collapsed");app.classList.toggle("panel-maximized",maximize);mapTab.setAttribute("aria-pressed","false");savedTab.setAttribute("aria-pressed","true");collapse.textContent="Collapse";full.textContent=maximize?"Restore":"Full";full.setAttribute("aria-expanded",maximize?"true":"false");if(focusSearch)setTimeout(()=>search.focus({preventScroll:true}),80);setTimeout(draw,60)}
@@ -133,14 +176,27 @@
     document.querySelectorAll("[data-offline-region]").forEach(b=>b.addEventListener("click",()=>{state.region=b.dataset.offlineRegion||"all";state.visible=LIMIT;document.querySelectorAll("[data-offline-region]").forEach(x=>x.setAttribute("aria-pressed",x===b?"true":"false"));$("offline-region-menu").removeAttribute("open");showArchive();render()}));
     list.addEventListener("click",e=>{const b=e.target.closest("[data-result-index]");if(b)open(state.filtered[Number(b.dataset.resultIndex)])});
     more.addEventListener("click",()=>{state.visible+=LIMIT;render()});
-    canvas.addEventListener("click",e=>{const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,n=state.points.map(p=>({...p,d:Math.hypot(p.x-x,p.y-y)})).sort((a,b)=>a.d-b.d)[0];if(n&&n.d<=22)open(n.item)});
+    const pointers=new Map();let moved=false,pinch=0,lastTap=0;
+    const local=e=>{const r=canvas.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]};
+    canvas.style.touchAction="none";
+    canvas.addEventListener("pointerdown",e=>{canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,local(e));moved=false;if(pointers.size===2){const [a,b]=[...pointers.values()];pinch=Math.hypot(a[0]-b[0],a[1]-b[1])}});
+    canvas.addEventListener("pointermove",e=>{if(!pointers.has(e.pointerId))return;const prev=pointers.get(e.pointerId),now=local(e);pointers.set(e.pointerId,now);
+      if(pointers.size===2){const [a,b]=[...pointers.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1]);if(pinch)zoomAt((a[0]+b[0])/2,(a[1]+b[1])/2,d/pinch);pinch=d;moved=true;return}
+      if(view.scale>1&&Math.hypot(now[0]-prev[0],now[1]-prev[1])>0.5){view.x+=now[0]-prev[0];view.y+=now[1]-prev[1];moved=true;requestAnimationFrame(draw)}});
+    const release=e=>{pointers.delete(e.pointerId);if(pointers.size<2)pinch=0};
+    canvas.addEventListener("pointerup",e=>{const [x,y]=local(e),wasPinch=pointers.size>1;release(e);if(moved||wasPinch)return;
+      const t=Date.now();if(t-lastTap<300){lastTap=0;zoomAt(x,y,2);return}lastTap=t;
+      const n=state.points.map(p=>({...p,d:Math.hypot(p.x-x,p.y-y)})).sort((a,b)=>a.d-b.d)[0];if(n&&n.d<=22)setTimeout(()=>{if(lastTap===t)open(n.item)},260)});
+    canvas.addEventListener("pointercancel",release);
+    canvas.addEventListener("wheel",e=>{e.preventDefault();const [x,y]=local(e);zoomAt(x,y,e.deltaY<0?1.25:0.8)},{passive:false});
     collapse.addEventListener("click",()=>app.classList.contains("panel-collapsed")?showArchive():showMap());full.addEventListener("click",()=>showArchive({maximize:!app.classList.contains("panel-maximized")}));
     $("offline-about").addEventListener("click",()=>openDetail("About On This Site","Native Long Island",'<p>On This Site is a map-based archive for learning about Native Long Island places, histories, and continuing community presence.</p><p class="offline-only">You are viewing the saved offline archive.</p>'));$("offline-menu-about").addEventListener("click",()=>{$("offline-menu").removeAttribute("open");$("offline-about").click()});
     $("offline-feedback").addEventListener("click",()=>openDetail("Feedback","Connection required",'<p>Feedback, comments, site suggestions, and contributions will be available after the app reconnects.</p><p class="offline-only">Your saved map and articles remain available now.</p>'));$("offline-menu-help").addEventListener("click",()=>{$("offline-menu").removeAttribute("open");$("offline-feedback").click()});
     document.querySelectorAll(".quick-actions details").forEach(menu=>menu.addEventListener("toggle",()=>{if(menu.open)document.querySelectorAll(".quick-actions details").forEach(other=>{if(other!==menu)other.removeAttribute("open")})}));
     const closeDetail=()=>{detail.classList.remove("open");detail.hidden=true};detail.querySelector(".detail-close").addEventListener("click",closeDetail);detail.addEventListener("click",e=>{if(e.target===detail)closeDetail()});addEventListener("resize",draw,{passive:true});
     window.onAndroidBackPressed=()=>{if(!suggestions.hidden){hideSuggestions();return true}const menu=document.querySelector(".mobile-more-menu[open]");if(menu){menu.removeAttribute("open");return true}const areas=document.querySelector(".mobile-layer-menu[open]");if(areas){areas.removeAttribute("open");return true}if(!detail.hidden){closeDetail();return true}if(!app.classList.contains("panel-collapsed")){showMap();return true}return false};
-    window.NLI_APK_OFFLINE_TEXT_MODE=true;start();
+    $("offline-legend").innerHTML=["placename","landmark","deed","burial","activism","water"].map(k=>`<span><i style="--tone:${TONES[k][1]}"></i>${TONES[k][0]}</span>`).join("");
+    window.NLI_APK_OFFLINE_TEXT_MODE=true;start().then(loadDecor);
   })();
   </script>
 </body>
