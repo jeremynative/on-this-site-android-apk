@@ -1124,7 +1124,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(20), dp(8), dp(20), 0);
         EditText area = new EditText(this);
-        area.setHint("What are you scanning? (e.g. Kitchen, Front porch)");
+        area.setHint("Which room or outdoor area? (e.g. Kitchen, Front porch)");
         area.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
         EditText credit = new EditText(this);
         credit.setHint("Your name for the credits");
@@ -1133,17 +1133,29 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         show.setText("Show my name in the credits");
         show.setChecked(true);
         TextView tips = new TextView(this);
-        tips.setText("Walk slowly, keep the phone at chest height, and point at walls and objects from a few angles. Skip private rooms.");
+        // Each named room or area becomes its own 3D model, so one per scan.
+        tips.setText("Scan one room or outdoor area at a time. Walk slowly around its edges with the phone "
+            + "facing into the room, then once through the middle. About 1 to 2 minutes per room. Skip private rooms.");
         form.addView(area);
         form.addView(credit);
         form.addView(show);
         form.addView(tips);
-        new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Start a scan")
             .setView(form)
             .setPositiveButton("Start", (d, w) -> startScan(area.getText().toString().trim(), credit.getText().toString().trim(), show.isChecked()))
             .setNegativeButton("Cancel", null)
             .show();
+        // The room name is required: it decides which model the photos build.
+        android.widget.Button start = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        start.setEnabled(false);
+        area.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence text, int a, int b, int c) { }
+            @Override public void onTextChanged(CharSequence text, int a, int b, int c) { }
+            @Override public void afterTextChanged(android.text.Editable text) {
+                start.setEnabled(text.toString().trim().length() > 0);
+            }
+        });
     }
 
     private String trackingHelp(com.google.ar.core.TrackingFailureReason reason) {
