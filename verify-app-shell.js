@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20261030-twelve-hour-r283";
+const expectedBuild = "20261030-geo-archive-r284";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";

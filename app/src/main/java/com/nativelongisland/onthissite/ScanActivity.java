@@ -158,6 +158,11 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private int archivePointCount;
     private final float[] archiveModel = new float[16];
     private final float[] archiveMvp = new float[16];
+    // Rough placement of earlier scans from GPS + compass, before the camera recognises the spot.
+    private volatile GeoAlign.Placement placeGeo;
+    private volatile GeoAlign.Estimator geoEstimator;
+    private long geoSampledAt;
+    private float[] archiveCentroid;
     private int meshTriBuffer;
     private int meshLineBuffer;
     private long meshLoggedAt;
@@ -207,6 +212,14 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             }
             JSONObject space = ScanUploader.get("/spaces/" + spaceId, accessToken).getJSONObject("data");
             spaceHasModel = space.optInt("model_version") > 0;
+            JSONObject stats = space.optJSONObject("model_stats");
+            JSONObject geo = stats == null ? null : stats.optJSONObject("geo");
+            if (geo != null && geo.has("lat0") && geo.optJSONArray("t") != null) {
+                JSONArray t = geo.getJSONArray("t");
+                placeGeo = new GeoAlign.Placement(Math.toRadians(geo.getDouble("yaw_deg")),
+                    new double[] {t.getDouble(0), t.getDouble(1), t.getDouble(2)});
+                geoEstimator = new GeoAlign.Estimator(geo.getDouble("lat0"), geo.getDouble("lng0"));
+            }
             spaceTitle = space.optString("title");
             // Line up with earlier scans and show them while still in the preview.
             if (spaceHasModel && accessToken != null) {
@@ -365,7 +378,8 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 .put("credit_name", credit).put("credit_public", creditPublic)
                 .put("device", Build.MANUFACTURER + " " + Build.MODEL).put("arcore", "1.56.0")
                 .put("started_at", System.currentTimeMillis())
-                .put("sensor_orientation", cameraSensorOrientation());
+                .put("sensor_orientation", cameraSensorOrientation())
+                .put("declination_deg", declinationDeg());
             ScanUploader.write(new File(sessionDir, "meta.json"), meta.toString());
             File dir = sessionDir;
             if (accessToken != null && spaceId != null) new Thread(() -> {
@@ -453,12 +467,15 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 if (tracked && localizer != null) {
                     // Preview: find this place's earlier scans and show them before recording.
                     localizer.onFrame(frame, camera);
+                    sampleGeo(camera, now);
                     camera.getViewMatrix(viewMatrix, 0);
                     camera.getProjectionMatrix(projectionMatrix, 0, 0.05f, 100f);
                     android.opengl.Matrix.multiplyMM(viewProjection, 0, projectionMatrix, 0, viewMatrix, 0);
                     drawArchive();
+                    String where = archiveDirection(camera);
                     archive = localizer.locked() && archivePointCount > 0
                         ? "Earlier scans of this place are shown as dots: blue = well captured, violet = thin. Start where you want to add or redo detail."
+                        : where != null ? where
                         : "Point the camera at part of the place that was scanned before to see the earlier scans.";
                 }
                 postStatus(ready, archive);
@@ -475,6 +492,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 coverage.addPathPoint(xz[0], xz[1]);
             }
             maybeKeyframe(frame, camera, pose);
+            if (tracked) sampleGeo(camera, now);
             checkLiveView(frame, now);
             if (tracked && depthEnabled && now - lastDepthAt >= 250) {
                 lastDepthAt = now;
@@ -501,6 +519,8 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 : live != null ? "\nRed = not captured yet · green = covered" : "";
             if (archivePointCount > 0 && localizer != null && localizer.locked()) {
                 legend += "\nBlue dots = already in the archive · violet = thin, worth rescanning";
+            } else if (archivePointCount > 0 && roughArchiveTransform() != null) {
+                legend += "\nBlue dots = earlier scans, placed roughly by GPS until the camera recognises the spot";
             }
             postStatus(null, String.format(Locale.US, "Recording %s \u00b7 %d photos%s\n%s%s", ScanUploader.clock(now - recordingStartedAt), frames,
                 distance > 0.5f ? String.format(Locale.US, " · %.0f m walked", distance) : "", placement, legend));
@@ -628,13 +648,63 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
 
     /** Earlier scans of this place, in place, once the localizer has lined this session up with them. */
     private void drawArchive() {
-        if (archivePoints == null || localizer == null || !localizer.locked()) return;
-        // The localizer's transform maps this session into the space; points come in space coordinates.
-        float[] origin = ArPlacement.inverse(localizer.transform());
+        if (archivePoints == null) return;
+        // Session -> place: exact once the camera has recognised the spot, else rough from GPS + compass.
+        float[] transform = localizer != null && localizer.locked() ? localizer.transform() : roughArchiveTransform();
+        if (transform == null) return;
+        // The transform maps this session into the space; points come in space coordinates.
+        float[] origin = ArPlacement.inverse(transform);
         new Pose(new float[] {origin[0], origin[1], origin[2]}, new float[] {origin[3], origin[4], origin[5], origin[6]})
             .toMatrix(archiveModel, 0);
         android.opengl.Matrix.multiplyMM(archiveMvp, 0, viewProjection, 0, archiveModel, 0);
         gl.drawPoints(archiveMvp, archivePoints, archivePointCount, 28f * getResources().getDisplayMetrics().density / 2.6f);
+    }
+
+    /** Session -> place from GPS + compass, or null until there are enough readings. */
+    private float[] roughArchiveTransform() {
+        GeoAlign.Estimator estimator = geoEstimator;
+        GeoAlign.Placement place = placeGeo;
+        GeoAlign.Placement session = estimator == null ? null : estimator.placement();
+        return place == null || session == null ? null : GeoAlign.sessionToPlace(session, place);
+    }
+
+    /** Twice a second while tracking: where the phone is (GPS) and which way the camera faces (compass). */
+    private void sampleGeo(Camera camera, long now) {
+        GeoAlign.Estimator estimator = geoEstimator;
+        android.location.Location fix = lastFix;
+        float[] att = attitude;
+        if (estimator == null || fix == null || att == null || now - geoSampledAt < 500) return;
+        geoSampledAt = now;
+        Pose pose = camera.getPose();
+        float[] z = pose.getZAxis();
+        estimator.add(new double[] {pose.tx(), pose.ty(), pose.tz()}, new double[] {-z[0], -z[1], -z[2]},
+            new double[] {att[0], att[1], att[2], att[3]}, declinationDeg(), fix.getLatitude(), fix.getLongitude(), fix.getAccuracy());
+    }
+
+    /** Magnetic declination here (degrees, east positive): compass bearings + this = true bearings. */
+    private float declinationDeg() {
+        android.location.Location fix = lastFix;
+        if (fix == null) return 0f;
+        return new android.hardware.GeomagneticField((float) fix.getLatitude(), (float) fix.getLongitude(),
+            (float) fix.getAltitude(), System.currentTimeMillis()).getDeclination();
+    }
+
+    /** "Earlier scans are about 35 m north-east of you" while they're too far away to see. */
+    private String archiveDirection(Camera camera) {
+        GeoAlign.Estimator estimator = geoEstimator;
+        GeoAlign.Placement place = placeGeo, session = estimator == null ? null : estimator.placement();
+        float[] centroid = archiveCentroid;
+        if (place == null || session == null || centroid == null) return null;
+        Pose pose = camera.getPose();
+        double[] me = session.toGeo(new double[] {pose.tx(), pose.ty(), pose.tz()});
+        double[] them = place.toGeo(new double[] {centroid[0], centroid[1], centroid[2]});
+        double east = them[0] - me[0], north = -(them[2] - me[2]);
+        double distance = Math.hypot(east, north);
+        if (distance < 8) return "Earlier scans are around you (placed roughly by GPS). They snap into place when the camera recognises the spot.";
+        String[] names = {"north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"};
+        double bearing = (Math.toDegrees(Math.atan2(east, north)) + 360) % 360;
+        return String.format(Locale.US, "Earlier scans of this place are about %.0f m %s of you. Walk there to continue them.",
+            distance, names[(int) Math.round(bearing / 45) % 8]);
     }
 
     /**
@@ -648,6 +718,9 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             float[] xyz = new float[values.length() / 3 * 3];
             for (int i = 0; i < xyz.length; i++) xyz[i] = (float) values.getDouble(i);
             float[] vertices = ArchiveDensity.colour(xyz);
+            float[] centroid = new float[3];
+            for (int i = 0; i < xyz.length; i++) centroid[i % 3] += xyz[i] / Math.max(1, xyz.length / 3);
+            archiveCentroid = centroid;
             FloatBuffer buffer = ByteBuffer.allocateDirect(vertices.length * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
             buffer.put(vertices).position(0);
             synchronized (lock) {
