@@ -119,6 +119,9 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private volatile float[] gravity;
     private volatile android.location.Location lastFix;
     private double[] gpsOrigin;
+    // Turn speed and walking, for photos and coaching while ARCore isn't tracking.
+    private final ScanMotion motion = new ScanMotion();
+    private float[] lastKeyAttitude;
     private static final long TIMED_PHOTO_MS = 600;
     private int trackedPhotos;
     private int updateErrors;
@@ -256,7 +259,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         Sensor accelerometer = sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         if (accelerometer != null) sensors.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
         Sensor rotation = sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
-        if (rotation != null) sensors.registerListener(this, rotation, SensorManager.SENSOR_DELAY_UI);
+        if (rotation != null) sensors.registerListener(this, rotation, SensorManager.SENSOR_DELAY_GAME);
         startLocationUpdates();
     }
 
@@ -421,7 +424,10 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 ? (localizer == null ? (spaceHasModel ? "Will be fitted to the space when processed" : "First scan of this place")
                     : localizer.locked() ? "Lined up with earlier scans ✓ " + localizer.status() : localizer.status())
                 : (lastFix == null ? "Recording photos · waiting for GPS" : String.format(Locale.US, "Recording photos · GPS ±%.0f m", lastFix.getAccuracy()));
-            if (!tracked && recording && frames > 0 && now - lastKeyAt > 2500) {
+            String motionHint = tracked ? null : motion.hint(now);
+            if (motionHint != null) {
+                placement = motionHint;
+            } else if (!tracked && recording && frames > 0 && now - lastKeyAt > 2500) {
                 placement = "The view hasn't changed. Take a step to the side, then keep walking slowly.";
             }
             String legend = live != null ? "\nRed = not captured yet · green = covered" : "";
@@ -521,13 +527,20 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private void maybeKeyframe(Frame frame, Camera camera, Pose pose) {
         long now = SystemClock.uptimeMillis();
         float[] p = pose == null ? null : poseArray(pose);
+        float[] att = attitude;
+        String trigger = p != null ? "pose" : "timer";
         if (p != null && lastKeyPose != null) {
             boolean moved = dist(p, lastKeyPose) >= KEYFRAME_MOVE_M;
             boolean turned = angleDeg(p, lastKeyPose) >= KEYFRAME_TURN_DEG;
             boolean timed = now - lastKeyAt >= TIMED_PHOTO_MS * 3;
             if ((!moved && !turned && !timed) || now - lastKeyAt < KEYFRAME_MIN_MS) return;
         } else if (p == null && now - lastKeyAt < TIMED_PHOTO_MS) {
-            return;
+            // Untracked photos are timed, but a turn between ticks would leave
+            // a gap the reconstruction can't bridge: keep one per ~8 degrees.
+            boolean turned = att != null && lastKeyAttitude != null
+                && ScanMotion.angleDeg(att, lastKeyAttitude) >= ScanMotion.PHOTO_TURN_DEG;
+            if (!turned || now - lastKeyAt < KEYFRAME_MIN_MS) return;
+            trigger = "turn";
         }
         if (encodeQueue.get() > 3) return; // phone is busy encoding; skip rather than lag
         Image image;
@@ -543,7 +556,8 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         image.close();
         if (p == null) {
             byte[] thumb = lumaThumb(nv21, width, height);
-            if (lastKeyThumb != null && now - lastKeyAt < STILL_PHOTO_MS && lumaDiff(thumb, lastKeyThumb) < STILL_LUMA_DIFF) return;
+            if (!"turn".equals(trigger) && lastKeyThumb != null && now - lastKeyAt < STILL_PHOTO_MS
+                && lumaDiff(thumb, lastKeyThumb) < STILL_LUMA_DIFF) return;
             lastKeyThumb = thumb;
         }
         CameraIntrinsics intrinsics = camera.getImageIntrinsics();
@@ -563,9 +577,12 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         }
         if (p != null) lastKeyPose = p;
         lastKeyAt = now;
+        lastKeyAttitude = att;
         float compass = compassDeg;
-        float[] att = attitude;
         float[] up = gravity;
+        String photoTrigger = trigger;
+        float turnRate = motion.turnRate(now);
+        boolean walking = motion.walking();
         android.location.Location fix = lastFix;
         encodeQueue.incrementAndGet();
         encoder.execute(() -> {
@@ -586,6 +603,8 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                     .put("alt", fix.hasAltitude() ? fix.getAltitude() : JSONObject.NULL).put("acc", fix.getAccuracy())
                     .put("age_ms", Math.max(0, System.currentTimeMillis() - fix.getTime())));
                 if (!Float.isNaN(compass)) line.put("compass_deg", compass);
+                // Why this photo was kept and how the phone was moving, for diagnosing scans.
+                line.put("trigger", photoTrigger).put("turn_dps", Math.round(turnRate)).put("walking", walking);
                 synchronized (framesOut) {
                     framesOut.write(line.toString());
                     framesOut.write('\n');
@@ -874,6 +893,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     @Override
     public void onSensorChanged(SensorEvent event) {
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            motion.onAccel(event.values[0], event.values[1], event.values[2]);
             float[] g = gravity;
             float k = 0.9f; // low-pass: keep gravity, drop hand shake
             gravity = g == null ? event.values.clone()
@@ -886,6 +906,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         float[] q = new float[4];
         SensorManager.getQuaternionFromVector(q, event.values); // w,x,y,z
         attitude = new float[] {q[1], q[2], q[3], q[0]};
+        motion.onAttitude(attitude, SystemClock.uptimeMillis());
         SensorManager.getOrientation(rotation, orientation);
         compassDeg = (float) ((Math.toDegrees(orientation[0]) + 360) % 360);
     }
