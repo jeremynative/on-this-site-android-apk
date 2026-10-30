@@ -324,22 +324,30 @@ final class SurfaceCoverage {
     /** Raw-depth confidence (0-255) a measurement needs to support a smoothed depth sample. */
     static final int MIN_RAW_CONFIDENCE = 100;
 
+    /** Within this distance a surface must be backed by measured depth (where the mounds came from). */
+    static final float MUST_MEASURE_WITHIN_M = 1.5f;
+
     /**
-     * True when ARCore actually measured something near this pixel at about this
-     * depth. The smoothed depth image fills gaps by interpolation, which turned
-     * objects on the floor into mounds; tiles are only kept where raw depth
-     * (same size as the depth image) backs them up.
+     * Whether a smoothed depth sample should be kept, judged against ARCore's
+     * measured (raw) depth nearby. The smoothed image fills gaps by
+     * interpolation, which turned objects on the floor into mounds, so up close
+     * a sample needs a confident measurement within 8% of it. Measured depth is
+     * sparse and low-confidence past about 2 m, so farther samples are kept
+     * unless confident measurements nearby contradict them (requiring support
+     * there made surfaces more than ~6 ft away vanish).
      */
     static boolean measured(short[] rawMm, byte[] rawConfidence, int width, int height, int u, int v, float d) {
+        boolean contradicted = false;
         for (int y = Math.max(0, v - 2); y <= Math.min(height - 1, v + 2); y++) {
             for (int x = Math.max(0, u - 2); x <= Math.min(width - 1, u + 2); x++) {
                 int i = y * width + x;
                 int raw = rawMm[i] & 0xffff;
                 if (raw == 0 || (rawConfidence[i] & 0xff) < MIN_RAW_CONFIDENCE) continue;
                 if (Math.abs(raw / 1000f - d) <= 0.08f * d) return true;
+                contradicted = true;
             }
         }
-        return false;
+        return !contradicted && d > MUST_MEASURE_WITHIN_M;
     }
 
     static int unproject(short[] depthMm, int width, int height, float fx, float fy, float cx, float cy,
