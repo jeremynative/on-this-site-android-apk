@@ -903,7 +903,9 @@ final class NativeMapController {
                 ? EMPTY_FEATURE_COLLECTION
                 : bundledTerritoryGeoJson(true);
             addSource(style, TERRITORY_SOURCE_ID, initialTerritories);
-            addSource(style, SITE_POLYGON_SOURCE_ID, EMPTY_FEATURE_COLLECTION);
+            addSource(style, SITE_POLYGON_SOURCE_ID, usingOnlineArchive
+                ? EMPTY_FEATURE_COLLECTION
+                : bundledSitePolygonGeoJson());
             addSource(style, SITE_POINT_SOURCE_ID, initialSitePoints);
             addSource(style, LABEL_SOURCE_ID, initialLabels);
             addSource(style, WATER_LABEL_SOURCE_ID, bundledWaterLabelGeoJson());
@@ -1363,6 +1365,16 @@ final class NativeMapController {
                     circleStrokeColor("#ffffff"), circleStrokeWidth(1.6f),
                     circleTranslate(new Float[] { 14f, -5f })
                 ));
+            if (!usingOnlineArchive) {
+                // Offline the beige bundled basemap washes the land colours
+                // out; match the live map's stronger territory and area fills.
+                for (String id : new String[] { TERRITORY_FILL_LAYER_ID, TERRITORY_SATELLITE_FILL_LAYER_ID }) {
+                    if (style.getLayer(id) != null) style.getLayer(id).setProperties(fillOpacity(0.34f));
+                }
+                for (String id : new String[] { SITE_LAND_FILL_LAYER_ID, SITE_LAND_SATELLITE_FILL_LAYER_ID, SITE_NON_LAND_FILL_LAYER_ID }) {
+                    if (style.getLayer(id) != null) style.getLayer(id).setProperties(fillOpacity(0.36f));
+                }
+            }
             styleReady = true;
             if (!usingOnlineArchive) startupStateReady = true;
             markStartupVisualChange();
@@ -2482,6 +2494,17 @@ final class NativeMapController {
         String text = (site.optString("title", "") + " "
             + site.optString("summary", "") + " " + type).toLowerCase(Locale.ROOT);
         return text.matches(".*\\b(museum|gallery|exhibit|exhibition|public art|art center|cultural center|heritage center|house museum|ma s house|mas house|preservation long island)\\b.*");
+    }
+
+    // Offline the WebView draws no map, so supply the coloured place-name
+    // areas and site shapes the live map shows (built by build-offline-areas.js).
+    private String bundledSitePolygonGeoJson() {
+        try {
+            return readAsset("map/offline-areas.json");
+        } catch (Exception error) {
+            Log.w(LOG_TAG, "Could not read bundled offline area colours.", error);
+            return EMPTY_FEATURE_COLLECTION;
+        }
     }
 
     private String bundledTerritoryGeoJson(boolean labelsOnly) throws Exception {

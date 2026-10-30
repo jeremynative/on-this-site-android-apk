@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20261030-offline-locate-r287";
+    static final String APP_VERSION = "20261030-offline-ready-r288";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -319,7 +319,7 @@ public class MainActivity extends Activity {
                 + "var body=document.body;"
                 + "var offline=body&&body.classList.contains('offline-text-mode');"
                 + "var status=(document.getElementById('status')||{}).textContent||'';"
-                + "var archiveReady=offline&&!!document.querySelector('.offline-map-index')&&!!document.querySelector('[data-offline-region]')&&/\\d+\\s+(?:saved|mapped) places/i.test(status);"
+                + "var archiveReady=offline&&!!document.querySelector('.offline-map-index')&&!!document.querySelector('[data-offline-region]')&&(/\\d+\\s+(?:saved|mapped) places/i.test(status)||!!document.querySelector('#site-list .site-card:not(.empty-state)'));"
                 + "return app&&archiveReady?'painted':'waiting';"
                 + "}catch(error){return 'waiting';}})();",
             value -> {
@@ -1430,7 +1430,7 @@ public class MainActivity extends Activity {
                 + "var loaderHidden=!loader||loader.hidden||loader.classList.contains('hidden');"
                 + "var offline=document.body&&document.body.classList.contains('offline-text-mode');"
                 + "var offlineStatus=(document.getElementById('status')||{}).textContent||'';"
-                + "var offlineReady=offline&&!!document.querySelector('.offline-map-index')&&!!document.querySelector('[data-offline-region]')&&/\\d+\\s+(?:saved|mapped) places/i.test(offlineStatus);"
+                + "var offlineReady=offline&&!!document.querySelector('.offline-map-index')&&!!document.querySelector('[data-offline-region]')&&(/\\d+\\s+(?:saved|mapped) places/i.test(offlineStatus)||!!document.querySelector('#site-list .site-card:not(.empty-state)'));"
                 // Once archive content is present, the page's own map
                 // initialization shield can safely replace the native cover.
                 + "var liveStatus=((document.querySelector('.mobile-header-instruction')||{}).textContent||'').trim();"
