@@ -198,6 +198,10 @@ final class ScanUploader {
         return readResponse(connection);
     }
 
+    static JSONObject post(String path, String accessToken) throws Exception {
+        return request("POST", path, null, accessToken == null ? null : "Bearer " + accessToken, null);
+    }
+
     static JSONObject get(String path, String accessToken) throws Exception {
         return request("GET", path, null, accessToken == null ? null : "Bearer " + accessToken, null);
     }

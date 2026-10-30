@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20261030-photo-mode-dots-r270";
+const expectedBuild = "20261030-ar-visit-pass-r271";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
