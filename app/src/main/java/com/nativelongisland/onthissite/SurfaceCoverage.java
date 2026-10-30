@@ -139,48 +139,83 @@ final class SurfaceCoverage {
     private static final int[] LINE_ORDER = {0, 1, 1, 2, 2, 3, 3, 0};
     private static final float[][] COLOURS = {colour(0), colour(1), colour(2), colour(3)};
 
+    /** Far away, tiles are merged into cells this size so the whole scan stays on screen. */
+    static final float COARSE_M = CELL_M * 4;
+
     /**
-     * Writes the tiles within maxDistance of (cx,cy,cz) as triangles (6
-     * vertices per tile) into tris, and outlines (8 vertices per tile) for the
-     * tiles within lineDistance into lines, VERTEX_FLOATS each. Returns
-     * {triangleVertices, lineVertices, full} where full is 1 when tris ran out
-     * of room (the caller can retry with a shorter distance so the nearest
-     * tiles win).
+     * Writes the whole scanned surface as triangles (6 vertices per tile) into
+     * tris and tile outlines (8 vertices per tile) into lines, VERTEX_FLOATS
+     * each. Tiles within nearRadius of (cx,cy,cz) are drawn at full detail;
+     * farther ones are merged into COARSE_M tiles (averaged position, surface
+     * direction and coverage), so walking away doesn't make earlier parts of
+     * the scan disappear. Outlines only for tiles within lineDistance. Returns
+     * {triangleVertices, lineVertices, full} where full is 1 when the detailed
+     * tiles didn't fit (the caller retries with a smaller nearRadius).
      */
-    synchronized int[] mesh(float cx, float cy, float cz, float maxDistance, float lineDistance, float[] tris, float[] lines) {
+    synchronized int[] mesh(float cx, float cy, float cz, float nearRadius, float lineDistance, float[] tris, float[] lines) {
         int t = 0, l = 0, full = 0;
-        float half = CELL_M * 0.55f; // slight overlap closes seams between tiles
-        float max2 = maxDistance * maxDistance, line2 = lineDistance * lineDistance;
+        float near2 = nearRadius * nearRadius, line2 = lineDistance * lineDistance;
         float[] a = new float[3], b = new float[3], corner = new float[12];
+        // Merged far cells: sum x, y, z, nx, ny, nz, weight, angle sum.
+        Map<Long, float[]> far = new HashMap<>();
         for (Cell c : cells.values()) {
             if (c.frames < MIN_HITS) continue;
             float px = c.sx / c.hits, py = c.sy / c.hits, pz = c.sz / c.hits;
             float dx = px - cx, dy = py - cy, dz = pz - cz;
             float d2 = dx * dx + dy * dy + dz * dz;
-            if (d2 > max2) continue;
+            float nl = (float) Math.sqrt(c.nx * c.nx + c.ny * c.ny + c.nz * c.nz);
+            if (nl < 1e-4f) continue;
+            float nx = c.nx / nl, ny = c.ny / nl, nz = c.nz / nl;
+            int angles = Math.min(3, c.angles());
+            if (d2 > near2) {
+                long k = key((int) Math.floor(px / COARSE_M), (int) Math.floor(py / COARSE_M), (int) Math.floor(pz / COARSE_M));
+                float[] f = far.get(k);
+                if (f == null) far.put(k, f = new float[8]);
+                f[0] += px; f[1] += py; f[2] += pz;
+                f[3] += nx; f[4] += ny; f[5] += nz;
+                f[6] += 1; f[7] += angles;
+                continue;
+            }
+            if (t + 6 * VERTEX_FLOATS > tris.length) {
+                full = 1;
+                continue;
+            }
+            t = tile(tris, t, px, py, pz, nx, ny, nz, CELL_M * 0.55f, COLOURS[angles], a, b, corner);
+            if (d2 <= line2 && l + 8 * VERTEX_FLOATS <= lines.length) l = outline(lines, l, corner);
+        }
+        for (float[] f : far.values()) {
             if (t + 6 * VERTEX_FLOATS > tris.length) {
                 full = 1;
                 break;
             }
-            float nl = (float) Math.sqrt(c.nx * c.nx + c.ny * c.ny + c.nz * c.nz);
+            float nl = (float) Math.sqrt(f[3] * f[3] + f[4] * f[4] + f[5] * f[5]);
             if (nl < 1e-4f) continue;
-            float nx = c.nx / nl, ny = c.ny / nl, nz = c.nz / nl;
-            tangents(nx, ny, nz, a, b);
-            for (int i = 0; i < 4; i++) {
-                float su = (i == 0 || i == 3) ? -half : half;
-                float sv = (i < 2) ? -half : half;
-                corner[i * 3] = px + a[0] * su + b[0] * sv;
-                corner[i * 3 + 1] = py + a[1] * su + b[1] * sv;
-                corner[i * 3 + 2] = pz + a[2] * su + b[2] * sv;
-            }
-            float[] rgba = COLOURS[Math.min(3, c.angles())];
-            // Corners go round the square: 0 (-,-), 1 (+,-), 2 (+,+), 3 (-,+).
-            for (int i : TRI_ORDER) t = put(tris, t, corner, i, rgba);
-            if (d2 <= line2 && l + 8 * VERTEX_FLOATS <= lines.length) {
-                for (int i : LINE_ORDER) l = put(lines, l, corner, i, EDGE);
-            }
+            int angles = Math.round(f[7] / f[6]);
+            t = tile(tris, t, f[0] / f[6], f[1] / f[6], f[2] / f[6], f[3] / nl, f[4] / nl, f[5] / nl,
+                COARSE_M * 0.55f, COLOURS[angles], a, b, corner);
         }
         return new int[] {t / VERTEX_FLOATS, l / VERTEX_FLOATS, full};
+    }
+
+    /** One square tile lying on the surface; leaves its corners in corner for outline(). */
+    private static int tile(float[] out, int o, float px, float py, float pz, float nx, float ny, float nz,
+                            float half, float[] rgba, float[] a, float[] b, float[] corner) {
+        tangents(nx, ny, nz, a, b);
+        for (int i = 0; i < 4; i++) {
+            float su = (i == 0 || i == 3) ? -half : half;
+            float sv = (i < 2) ? -half : half;
+            corner[i * 3] = px + a[0] * su + b[0] * sv;
+            corner[i * 3 + 1] = py + a[1] * su + b[1] * sv;
+            corner[i * 3 + 2] = pz + a[2] * su + b[2] * sv;
+        }
+        // Corners go round the square: 0 (-,-), 1 (+,-), 2 (+,+), 3 (-,+).
+        for (int i : TRI_ORDER) o = put(out, o, corner, i, rgba);
+        return o;
+    }
+
+    private static int outline(float[] out, int o, float[] corner) {
+        for (int i : LINE_ORDER) o = put(out, o, corner, i, EDGE);
+        return o;
     }
 
 

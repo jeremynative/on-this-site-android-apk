@@ -207,6 +207,13 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             JSONObject space = ScanUploader.get("/spaces/" + spaceId, accessToken).getJSONObject("data");
             spaceHasModel = space.optInt("model_version") > 0;
             spaceTitle = space.optString("title");
+            // Line up with earlier scans and show them while still in the preview.
+            if (spaceHasModel && accessToken != null) {
+                synchronized (lock) {
+                    if (localizer == null) localizer = new SpaceLocalizer(spaceId, accessToken);
+                }
+                new Thread(this::loadArchivePoints, "scan-archive").start();
+            }
             StringBuilder areas = new StringBuilder();
             JSONArray credits = space.optJSONArray("credits");
             for (int i = 0; credits != null && i < credits.length(); i++) {
@@ -379,7 +386,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             lastKeyPose = null;
             lastPosition = null;
         }
-        if (spaceHasModel && accessToken != null) {
+        if (spaceHasModel && accessToken != null && localizer == null) {
             localizer = new SpaceLocalizer(spaceId, accessToken);
             new Thread(this::loadArchivePoints, "scan-archive").start();
         }
@@ -437,7 +444,20 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         synchronized (lock) {
             if (!recording) {
                 // Scanning never waits for ARCore: photos + GPS are enough.
-                postStatus(lastFix == null ? "Ready · finding GPS…" : String.format(Locale.US, "Ready · GPS ±%.0f m", lastFix.getAccuracy()), null);
+                String ready = lastFix == null ? "Ready · finding GPS…" : String.format(Locale.US, "Ready · GPS ±%.0f m", lastFix.getAccuracy());
+                String archive = null;
+                if (tracked && localizer != null) {
+                    // Preview: find this place's earlier scans and show them before recording.
+                    localizer.onFrame(frame, camera);
+                    camera.getViewMatrix(viewMatrix, 0);
+                    camera.getProjectionMatrix(projectionMatrix, 0, 0.05f, 100f);
+                    android.opengl.Matrix.multiplyMM(viewProjection, 0, projectionMatrix, 0, viewMatrix, 0);
+                    drawArchive();
+                    archive = localizer.locked() && archivePointCount > 0
+                        ? "Earlier scans of this place are shown as dots: blue = well captured, violet = thin. Start where you want to add or redo detail."
+                        : "Point the camera at part of the place that was scanned before to see the earlier scans.";
+                }
+                postStatus(ready, archive);
                 return;
             }
             Pose pose = tracked ? camera.getPose() : null;
@@ -549,7 +569,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             int surfaceVersion = surfaceCoverage.version();
             boolean stale = surfaceVersion != surfaceVersionDrawn || now - surfaceRebuiltAt > 2000;
             if (stale && now - surfaceRebuiltAt > 400) {
-                // At most MESH_TILES tiles, nearest first: shrink the radius until they fit.
+                // Detailed tiles near the phone, merged ones farther out; shrink the detailed radius until it fits.
                 if (meshTris.length == 0) {
                     meshTris = new float[MESH_TILES * 6 * SurfaceCoverage.VERTEX_FLOATS];
                     meshLines = new float[MESH_TILES * 8 * SurfaceCoverage.VERTEX_FLOATS];
@@ -559,7 +579,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 Pose at = camera.getPose();
                 long started = SystemClock.uptimeMillis();
                 int[] counts = null;
-                for (float radius : new float[] {6f, 4f, 2.5f, 1.5f}) {
+                for (float radius : new float[] {4f, 3f, 2f, 1.2f}) {
                     counts = surfaceCoverage.mesh(at.tx(), at.ty(), at.tz(), radius, 2.5f, meshTris, meshLines);
                     if (counts[2] == 0) break;
                 }
@@ -589,14 +609,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         } else {
             gl.drawPoints(viewProjection, coveragePoints, coveragePointCount, 22f * getResources().getDisplayMetrics().density / 2.6f);
         }
-        if (archivePoints != null && localizer != null && localizer.locked()) {
-            // The localizer's transform maps this session into the space; points come in space coordinates.
-            float[] origin = ArPlacement.inverse(localizer.transform());
-            new Pose(new float[] {origin[0], origin[1], origin[2]}, new float[] {origin[3], origin[4], origin[5], origin[6]})
-                .toMatrix(archiveModel, 0);
-            android.opengl.Matrix.multiplyMM(archiveMvp, 0, viewProjection, 0, archiveModel, 0);
-            gl.drawPoints(archiveMvp, archivePoints, archivePointCount, 28f * getResources().getDisplayMetrics().density / 2.6f);
-        }
+        drawArchive();
         if (now - coverageMapAt > 330 && coverageMap != null) {
             coverageMapAt = now;
             Pose display = camera.getDisplayOrientedPose();
@@ -607,6 +620,17 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             String label = String.format(Locale.US, "~%.0f m² covered · %d photos", coverage.coveredAreaM2(), frames);
             runOnUiThread(() -> coverageMap.update(snapshot, x, z, heading, label));
         }
+    }
+
+    /** Earlier scans of this place, in place, once the localizer has lined this session up with them. */
+    private void drawArchive() {
+        if (archivePoints == null || localizer == null || !localizer.locked()) return;
+        // The localizer's transform maps this session into the space; points come in space coordinates.
+        float[] origin = ArPlacement.inverse(localizer.transform());
+        new Pose(new float[] {origin[0], origin[1], origin[2]}, new float[] {origin[3], origin[4], origin[5], origin[6]})
+            .toMatrix(archiveModel, 0);
+        android.opengl.Matrix.multiplyMM(archiveMvp, 0, viewProjection, 0, archiveModel, 0);
+        gl.drawPoints(archiveMvp, archivePoints, archivePointCount, 28f * getResources().getDisplayMetrics().density / 2.6f);
     }
 
     /**
