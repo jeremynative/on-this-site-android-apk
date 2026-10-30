@@ -39,6 +39,9 @@ final class SpaceLocalizer {
 
     private final String spaceId;
     private final String accessToken;
+    // Sign-in tokens expire after 15 minutes; a visit pass (from the token,
+    // on the first request) keeps positioning working for hours.
+    private String visitPass;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final List<float[]> sessionPoses = new ArrayList<>();
     private final List<float[]> spacePoses = new ArrayList<>();
@@ -168,12 +171,20 @@ final class SpaceLocalizer {
     }
 
     private JSONObject post(byte[] jpeg, float fx, float fy, float cx, float cy) throws Exception {
+        if (visitPass == null) {
+            try {
+                visitPass = ScanUploader.post("/spaces/" + spaceId + "/visit", accessToken).getJSONObject("data").getString("pass");
+            } catch (Exception error) {
+                visitPass = "";  // older server: keep using the sign-in token
+            }
+        }
         String query = String.format(Locale.US, "?fx=%.3f&fy=%.3f&cx=%.3f&cy=%.3f", fx, fy, cx, cy);
         HttpURLConnection connection = (HttpURLConnection) new URL(ScanUploader.QUEUE + "/spaces/" + spaceId + "/localize" + query).openConnection();
         connection.setRequestMethod("POST");
         connection.setConnectTimeout(10000);
         connection.setReadTimeout(25000);
-        connection.setRequestProperty("Authorization", "Bearer " + accessToken);
+        if (visitPass.isEmpty()) connection.setRequestProperty("Authorization", "Bearer " + accessToken);
+        else connection.setRequestProperty("X-AR-Visit", visitPass);
         connection.setRequestProperty("Content-Type", "image/jpeg");
         connection.setFixedLengthStreamingMode(jpeg.length);
         connection.setDoOutput(true);
