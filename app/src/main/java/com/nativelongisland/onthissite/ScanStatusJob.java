@@ -81,7 +81,10 @@ public class ScanStatusJob extends JobService {
             try {
                 session = ScanUploader.getWithKey("/sessions/" + sessionId, key).getJSONObject("data");
             } catch (Exception error) {
-                waiting = true;
+                // The server no longer knows this session (e.g. removed by an
+                // administrator): stop checking it. Anything else: try later.
+                if (String.valueOf(error.getMessage()).contains("Unknown scan session")) claim(context, sessionId);
+                else waiting = true;
                 continue;
             }
             String status = session.optString("status");
@@ -91,8 +94,9 @@ public class ScanStatusJob extends JobService {
             if ("processed".equals(status)) {
                 if (claim(context, sessionId)) notify(context, sessionId.hashCode(), "Your scan is live", what + " is now in 3D. Thank you!");
             } else if ("failed".equals(status)) {
+                String why = session.optString("note", "An administrator will look at it.");
                 if (claim(context, sessionId)) notify(context, sessionId.hashCode(), "Your scan couldn't be processed",
-                    what + " couldn't be turned into 3D. An administrator will look at it; scanning again with slow, steady movement usually helps.");
+                    what + " couldn't be turned into 3D. " + why);
             } else {
                 waiting = true;
             }
