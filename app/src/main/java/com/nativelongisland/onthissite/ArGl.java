@@ -207,8 +207,27 @@ final class ArGl {
      * vertex) as GL_TRIANGLES or GL_LINES. Nearer surfaces hide farther ones
      * so the scan mesh reads as a shell around objects, not a pile of layers.
      */
-    void drawMesh(float[] viewProjection, FloatBuffer vertices, int count, int mode, boolean writeDepth) {
-        if (count <= 0) return;
+    /** A GPU vertex buffer for drawMesh; ids die with the GL context (see init()). */
+    int newMeshBuffer() {
+        int[] ids = new int[1];
+        GLES20.glGenBuffers(1, ids, 0);
+        return ids[0];
+    }
+
+    /**
+     * Uploads count xyzrgba vertices into a mesh buffer. Done only when the
+     * mesh changes: re-sending tens of MB of client-side vertices every frame
+     * made the scan mesh vanish after about a minute on the S25.
+     */
+    void fillMeshBuffer(int buffer, FloatBuffer vertices, int count) {
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, buffer);
+        vertices.position(0);
+        GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, count * 28, vertices, GLES20.GL_DYNAMIC_DRAW);
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+    }
+
+    void drawMesh(float[] viewProjection, int buffer, int count, int mode, boolean writeDepth) {
+        if (count <= 0 || buffer == 0) return;
         GLES20.glEnable(GLES20.GL_BLEND);
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
         GLES20.glEnable(GLES20.GL_DEPTH_TEST);
@@ -218,16 +237,16 @@ final class ArGl {
         GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_Mvp"), 1, false, viewProjection, 0);
         int position = GLES20.glGetAttribLocation(meshProgram, "a_Position");
         int color = GLES20.glGetAttribLocation(meshProgram, "a_Color");
-        vertices.position(0);
-        GLES20.glVertexAttribPointer(position, 3, GLES20.GL_FLOAT, false, 28, vertices);
-        vertices.position(3);
-        GLES20.glVertexAttribPointer(color, 4, GLES20.GL_FLOAT, false, 28, vertices);
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, buffer);
+        GLES20.glVertexAttribPointer(position, 3, GLES20.GL_FLOAT, false, 28, 0);
+        GLES20.glVertexAttribPointer(color, 4, GLES20.GL_FLOAT, false, 28, 12);
         GLES20.glEnableVertexAttribArray(position);
         GLES20.glEnableVertexAttribArray(color);
         if (mode == GLES20.GL_LINES) GLES20.glLineWidth(1.5f);
         GLES20.glDrawArrays(mode, 0, count);
         GLES20.glDisableVertexAttribArray(position);
         GLES20.glDisableVertexAttribArray(color);
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
         GLES20.glDepthMask(true);
         GLES20.glDisable(GLES20.GL_DEPTH_TEST);
         GLES20.glDisable(GLES20.GL_BLEND);
