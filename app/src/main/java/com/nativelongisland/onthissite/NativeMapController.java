@@ -1369,10 +1369,10 @@ final class NativeMapController {
                 // Offline the beige bundled basemap washes the land colours
                 // out; match the live map's stronger territory and area fills.
                 for (String id : new String[] { TERRITORY_FILL_LAYER_ID, TERRITORY_SATELLITE_FILL_LAYER_ID }) {
-                    if (style.getLayer(id) != null) style.getLayer(id).setProperties(fillOpacity(0.5f));
+                    if (style.getLayer(id) != null) style.getLayer(id).setProperties(fillOpacity(0.3f));
                 }
                 for (String id : new String[] { SITE_LAND_FILL_LAYER_ID, SITE_LAND_SATELLITE_FILL_LAYER_ID, SITE_NON_LAND_FILL_LAYER_ID }) {
-                    if (style.getLayer(id) != null) style.getLayer(id).setProperties(fillOpacity(0.55f));
+                    if (style.getLayer(id) != null) style.getLayer(id).setProperties(fillOpacity(0.4f));
                 }
             }
             styleReady = true;
