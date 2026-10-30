@@ -1005,8 +1005,22 @@ final class NativeMapController {
             // style/source refresh.
             style.addLayer(new CircleLayer("nli-site-point-circles", SITE_POINT_SOURCE_ID)
                 .withProperties(
-                    circleRadius(4.4f), circleColor("#315c48"), circleOpacity(0.9f),
-                    circleStrokeColor("#f8fbf5"), circleStrokeWidth(1.1f)
+                    // Small at island scale, growing as you zoom in; offline these
+                    // dots are the only marker for text-only sites.
+                    circleRadius(Expression.interpolate(
+                        Expression.linear(), Expression.zoom(),
+                        Expression.stop(6, 1.6f),
+                        Expression.stop(9, 2.2f),
+                        Expression.stop(12, 3.2f),
+                        Expression.stop(15, 4.2f)
+                    )),
+                    circleColor("#315c48"), circleOpacity(0.9f),
+                    circleStrokeColor("#f8fbf5"),
+                    circleStrokeWidth(Expression.interpolate(
+                        Expression.linear(), Expression.zoom(),
+                        Expression.stop(6, 0.5f),
+                        Expression.stop(12, 1f)
+                    ))
                 ));
             SymbolLayer siteIconLayer = new SymbolLayer("nli-site-point-icons", SITE_POINT_SOURCE_ID)
                 .withFilter(Expression.neq(
