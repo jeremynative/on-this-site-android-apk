@@ -1,5 +1,6 @@
-// Builds app/src/main/assets/map/offline-areas.json: the coloured place-name
-// areas and site shapes the live map draws, for the native map to show when
+// Builds app/src/main/assets/map/offline-areas.json (the coloured place-name
+// areas and site shapes the live map draws) and map/offline-area-labels.json
+// (the names those site shapes show instead of a pin), for the native map when
 // the app starts offline. Run after refreshing the bundled site data.
 //   node build-offline-areas.js          write the file
 //   node build-offline-areas.js --check  fail if it is out of date
@@ -15,7 +16,9 @@ function build() {
   const areas = JSON.parse(overlays.slice(overlays.indexOf("{"), overlays.lastIndexOf("}") + 1)).features || [];
   const territoryIds = new Set(JSON.parse(read("map/ancestral-territory-fallback.json")).territories.features.map(f => f.properties.id));
   const sites = new Map(JSON.parse(read("assets/data/mobile-site-index.json")).rows.map(row => [row.id, row]));
+  const centers = new Map(JSON.parse(read("assets/data/mobile-site-centers.json")).rows.map(row => [row.id, row.center]));
   const features = [];
+  const labels = [];
   for (const area of areas) {
     if (!area.geometry) continue;
     features.push({
@@ -41,19 +44,34 @@ function build() {
         geometry_surface: String(site.geometry_surface || "").trim() || "land"
       }
     });
+    const center = centers.get(row.id);
+    if (Array.isArray(center) && site.title) {
+      labels.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: round(center) },
+        properties: { id: row.id, slug: row.slug || "", title: site.title, label_kind: "detail" }
+      });
+    }
   }
-  return JSON.stringify({ type: "FeatureCollection", features });
+  return {
+    "map/offline-areas.json": JSON.stringify({ type: "FeatureCollection", features }),
+    "map/offline-area-labels.json": JSON.stringify({ type: "FeatureCollection", features: labels })
+  };
 }
 
-const target = path.join(assets, "map/offline-areas.json");
-const next = build();
+const files = build();
 if (process.argv.includes("--check")) {
-  if (!fs.existsSync(target) || fs.readFileSync(target, "utf8") !== next) {
-    console.error("map/offline-areas.json is out of date. Run: node build-offline-areas.js");
-    process.exit(1);
+  for (const [file, next] of Object.entries(files)) {
+    const target = path.join(assets, file);
+    if (!fs.existsSync(target) || fs.readFileSync(target, "utf8") !== next) {
+      console.error(`${file} is out of date. Run: node build-offline-areas.js`);
+      process.exit(1);
+    }
   }
   console.log("Offline area colours are current.");
 } else {
-  fs.writeFileSync(target, next);
-  console.log(`Wrote map/offline-areas.json: ${JSON.parse(next).features.length} shapes, ${next.length} bytes.`);
+  for (const [file, next] of Object.entries(files)) {
+    fs.writeFileSync(path.join(assets, file), next);
+    console.log(`Wrote ${file}: ${JSON.parse(next).features.length} features, ${next.length} bytes.`);
+  }
 }
