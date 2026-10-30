@@ -925,7 +925,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 int today = day.get(java.util.Calendar.DAY_OF_YEAR);
                 day.setTime(at);
                 int diff = day.get(java.util.Calendar.DAY_OF_YEAR) - today;
-                String time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(at);
+                String time = new java.text.SimpleDateFormat("h:mm a", Locale.US).format(at); // 12-hour with AM/PM everywhere
                 return "Expected live around " + time + (diff == 0 ? " today." : diff == 1 ? " tomorrow." : " on "
                     + new java.text.SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(at) + ".");
             } catch (Exception ignored) {
