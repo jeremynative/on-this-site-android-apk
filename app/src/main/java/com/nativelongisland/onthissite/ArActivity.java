@@ -815,11 +815,11 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private String trackingProblem(Camera camera) {
         TrackingFailureReason reason = camera.getTrackingFailureReason();
         switch (reason) {
-            case INSUFFICIENT_LIGHT: return "Too dark to track. Turn on a light.";
-            case EXCESSIVE_MOTION: return "Moving too fast. Slow down.";
-            case INSUFFICIENT_FEATURES: return "Point at something with more detail.";
+            case INSUFFICIENT_LIGHT: return "Low light: the camera tracks better with a light on.";
+            case EXCESSIVE_MOTION: return "The camera is catching up.";
+            case INSUFFICIENT_FEATURES: return "Plain surfaces are hard to track; include something detailed in view.";
             case CAMERA_UNAVAILABLE: return "The camera is unavailable.";
-            default: return "Move your phone slowly to look around.";
+            default: return "Finding its place: sweep the phone gently across the view.";
         }
     }
 

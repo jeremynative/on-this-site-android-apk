@@ -166,6 +166,33 @@ final class SurfaceCoverage {
         return cells.size();
     }
 
+    /**
+     * Cells within radius of (x,y,z) photographed from at least 3 directions,
+     * counting walked-away coarse tiles by their complete cells. Used to tick
+     * off an earlier scan's "needs more angles" spot once this scan covers it.
+     */
+    synchronized int completeNear(float x, float y, float z, float radius) {
+        int r = (int) Math.ceil(radius / CELL_M);
+        int ix = (int) Math.floor(x / CELL_M), iy = (int) Math.floor(y / CELL_M), iz = (int) Math.floor(z / CELL_M);
+        float r2 = radius * radius;
+        int complete = 0;
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    if ((dx * dx + dy * dy + dz * dz) * CELL_M * CELL_M > r2) continue;
+                    Cell c = cells.get(key(ix + dx, iy + dy, iz + dz));
+                    if (c != null && c.frames >= MIN_HITS && c.angles() >= 3) complete++;
+                }
+            }
+        }
+        for (float[] f : coarse.values()) {
+            if (f[6] <= 0) continue;
+            float cx = f[0] / f[6] - x, cy = f[1] / f[6] - y, cz = f[2] / f[6] - z;
+            if (cx * cx + cy * cy + cz * cz <= r2) complete += (int) f[8];
+        }
+        return complete;
+    }
+
     /** Share of drawn cells photographed from at least 3 directions. */
     synchronized float capturedFraction() {
         int drawn = 0, captured = 0;
