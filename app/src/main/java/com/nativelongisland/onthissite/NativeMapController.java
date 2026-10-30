@@ -901,7 +901,7 @@ final class NativeMapController {
                 : buildBundledSiteGeoJson();
             String initialLabels = usingOnlineArchive
                 ? EMPTY_FEATURE_COLLECTION
-                : bundledTerritoryGeoJson(true);
+                : bundledOfflineLabelGeoJson();
             addSource(style, TERRITORY_SOURCE_ID, initialTerritories);
             addSource(style, SITE_POLYGON_SOURCE_ID, usingOnlineArchive
                 ? EMPTY_FEATURE_COLLECTION
@@ -2428,6 +2428,9 @@ final class NativeMapController {
                 JSONObject row = rows.optJSONObject(index);
                 JSONArray center = row == null ? null : row.optJSONArray("center");
                 if (center == null || center.length() < 2) continue;
+                // Like the live map, a site drawn as a shape (or a territory)
+                // shows its outline and name, not a pin and dot on top.
+                if (row.optString("geometry_type", "").contains("Polygon")) continue;
                 int id = row.optInt("id", -1);
                 String slug = row.optString("slug", "").trim();
                 JSONObject properties = new JSONObject();
@@ -2505,6 +2508,21 @@ final class NativeMapController {
             Log.w(LOG_TAG, "Could not read bundled offline area colours.", error);
             return EMPTY_FEATURE_COLLECTION;
         }
+    }
+
+    // Territory names plus the names of site shapes (built by build-offline-areas.js).
+    private String bundledOfflineLabelGeoJson() throws Exception {
+        JSONObject labels = new JSONObject(bundledTerritoryGeoJson(true));
+        try {
+            JSONArray detail = new JSONObject(readAsset("map/offline-area-labels.json")).optJSONArray("features");
+            JSONArray features = labels.optJSONArray("features");
+            for (int index = 0; detail != null && features != null && index < detail.length(); index++) {
+                features.put(detail.get(index));
+            }
+        } catch (Exception error) {
+            Log.w(LOG_TAG, "Could not read bundled offline area labels.", error);
+        }
+        return labels.toString();
     }
 
     private String bundledTerritoryGeoJson(boolean labelsOnly) throws Exception {
