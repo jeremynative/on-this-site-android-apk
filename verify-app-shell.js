@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20261030-offline-locate-r287";
+const expectedBuild = "20261030-offline-ready-r288";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -2896,3 +2896,9 @@ require('./verify-native-menu-touch.js');
 require('./verify-native-panel-gestures.js');
 
 if (!nativeMapController.includes("siteIconLayer.setMinZoom(0f)")) throw new Error("Site icons must remain visible below the title zoom threshold.");
+
+// Offline launches: the native map draws the live map's coloured areas, and
+// readiness accepts rendered place cards once the list replaces the status line.
+if (!nativeMapController.includes('readAsset("map/offline-areas.json")')) throw new Error("Offline native map must draw the bundled coloured place-name areas and site shapes.");
+require("child_process").execFileSync(process.execPath, [require("path").join(__dirname, "build-offline-areas.js"), "--check"], { stdio: "inherit" });
+requireText("document.querySelector('#site-list .site-card:not(.empty-state)')", "Offline readiness must not depend only on the replaceable status line.");
