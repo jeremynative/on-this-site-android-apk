@@ -704,6 +704,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                     progressBar.setProgress(percent);
                 })).upload(accessToken);
                 String when = goLiveText(queued);
+                ScanStatusJob.schedule(getApplicationContext());
                 runOnUiThread(() -> {
                     status.setText("Scan uploaded");
                     detail.setText("Thank you! " + when + "\nYou'll get a notification when it's live.");

@@ -198,6 +198,13 @@ class AppBridge {
         return activity.safeInsetLeftCss();
     }
 
+    /** True the first time it's asked about a session's go-live notice (shared with ScanStatusJob). */
+    @JavascriptInterface
+    public boolean claimScanNotification(String token, String sessionId) {
+        if (!activity.validBridgeToken(token) || sessionId == null || !sessionId.matches("[0-9a-f-]{36}")) return false;
+        return ScanStatusJob.claim(activity, sessionId);
+    }
+
     @JavascriptInterface
     public void refreshNow(String token) {
         if (!activity.validBridgeToken(token)) return;

@@ -200,6 +200,10 @@ final class ScanUploader {
         return readResponse(connection);
     }
 
+    static JSONObject getWithKey(String path, String uploadKey) throws Exception {
+        return request("GET", path, null, null, uploadKey);
+    }
+
     static JSONObject post(String path, String accessToken) throws Exception {
         return request("POST", path, null, accessToken == null ? null : "Bearer " + accessToken, null);
     }
