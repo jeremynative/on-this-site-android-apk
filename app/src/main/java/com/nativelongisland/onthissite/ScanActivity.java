@@ -75,6 +75,9 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
 
     private static final float KEYFRAME_MOVE_M = 0.12f;
     private static final float KEYFRAME_TURN_DEG = 8f;
+    // An earlier build's gap counts as filled once this many 6 cm tiles within
+    // half a metre are photographed from 3+ directions (about 0.1 m² of surface).
+    private static final int GAP_COMPLETE_CELLS = 25;
     private static final long KEYFRAME_MIN_MS = 300;
     // Without motion tracking, photos are timed; skip ones that look the same
     // as the last (phone held still) unless this long has passed.
@@ -163,6 +166,14 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private volatile GeoAlign.Estimator geoEstimator;
     private long geoSampledAt;
     private float[] archiveCentroid;
+    // Earlier builds' "needs more angles" spots (space frame), with whether
+    // this scan has covered each one yet.
+    private float[] gapXyz;
+    private boolean[] gapDone;
+    private int gapsDone;
+    private long gapsCheckedAt;
+    private final float[] gapProbe = new float[4];
+    private final float[] gapSession = new float[4];
     private int meshTriBuffer;
     private int meshLineBuffer;
     private long meshLoggedAt;
@@ -512,11 +523,18 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             if (motionHint != null) {
                 placement = motionHint;
             } else if (!tracked && recording && frames > 0 && now - lastKeyAt > 2500) {
-                placement = "The view hasn't changed. Take a step to the side, then keep walking slowly.";
+                placement = "Same view as the last photo. A step to one side adds depth.";
             }
             String legend = tracked && depthEnabled && surfaceCoverage.cellCount() > 0
                 ? String.format(Locale.US, "\nRed = needs photos from more angles · green = complete (%.0f%%)", surfaceCoverage.capturedFraction() * 100)
                 : live != null ? "\nRed = not captured yet · green = covered" : "";
+            float[] gaps = gapXyz;
+            if (gaps != null && gaps.length > 0 && (localizer != null && localizer.locked() || roughArchiveTransform() != null)) {
+                int total = gaps.length / 3;
+                legend += gapsDone >= total
+                    ? "\nEvery orange spot is filled in. Thank you!"
+                    : String.format(Locale.US, "\nOrange = spots earlier scans need from more angles (%d of %d filled)", gapsDone, total);
+            }
             if (archivePointCount > 0 && localizer != null && localizer.locked()) {
                 legend += "\nBlue dots = already in the archive · violet = thin, worth rescanning";
             } else if (archivePointCount > 0 && roughArchiveTransform() != null) {
@@ -658,6 +676,47 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             .toMatrix(archiveModel, 0);
         android.opengl.Matrix.multiplyMM(archiveMvp, 0, viewProjection, 0, archiveModel, 0);
         gl.drawPoints(archiveMvp, archivePoints, archivePointCount, 28f * getResources().getDisplayMetrics().density / 2.6f);
+        drawGaps();
+    }
+
+    /**
+     * The spots earlier scans photographed from too few directions: pulsing
+     * orange targets that turn green once this scan covers them from more
+     * angles, so whoever continues a place knows exactly where to point.
+     */
+    private void drawGaps() {
+        float[] xyz = gapXyz;
+        if (xyz == null || xyz.length == 0) return;
+        long now = SystemClock.uptimeMillis();
+        if (now - gapsCheckedAt > 1000) {
+            gapsCheckedAt = now;
+            int done = 0;
+            for (int i = 0; i < gapDone.length; i++) {
+                if (!gapDone[i]) {
+                    gapProbe[0] = xyz[i * 3];
+                    gapProbe[1] = xyz[i * 3 + 1];
+                    gapProbe[2] = xyz[i * 3 + 2];
+                    gapProbe[3] = 1f;
+                    // archiveModel maps the space frame into this session's frame.
+                    android.opengl.Matrix.multiplyMV(gapSession, 0, archiveModel, 0, gapProbe, 0);
+                    gapDone[i] = surfaceCoverage.completeNear(gapSession[0], gapSession[1], gapSession[2], 0.5f) >= GAP_COMPLETE_CELLS;
+                }
+                if (gapDone[i]) done++;
+            }
+            gapsDone = done;
+        }
+        float[] vertices = new float[gapDone.length * 7];
+        float pulse = 0.75f + 0.25f * (float) Math.sin(now / 280.0);
+        for (int i = 0; i < gapDone.length; i++) {
+            System.arraycopy(xyz, i * 3, vertices, i * 7, 3);
+            vertices[i * 7 + 3] = gapDone[i] ? 0.25f : 1f;
+            vertices[i * 7 + 4] = gapDone[i] ? 0.85f : 0.55f;
+            vertices[i * 7 + 5] = gapDone[i] ? 0.35f : 0.12f;
+            vertices[i * 7 + 6] = gapDone[i] ? 0.9f : pulse;
+        }
+        FloatBuffer buffer = ByteBuffer.allocateDirect(vertices.length * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
+        buffer.put(vertices).position(0);
+        gl.drawPoints(archiveMvp, buffer, gapDone.length, 150f * getResources().getDisplayMetrics().density / 2.6f);
     }
 
     /** Session -> place from GPS + compass, or null until there are enough readings. */
@@ -714,7 +773,18 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
      */
     private void loadArchivePoints() {
         try {
-            JSONArray values = ScanUploader.get("/spaces/" + spaceId + "/points", accessToken).getJSONArray("points");
+            JSONObject body = ScanUploader.get("/spaces/" + spaceId + "/points", accessToken);
+            JSONArray values = body.getJSONArray("points");
+            JSONArray gaps = body.optJSONArray("gaps");
+            if (gaps != null && gaps.length() > 0) {
+                float[] spots = new float[gaps.length() * 3];
+                for (int i = 0; i < gaps.length(); i++) {
+                    JSONArray p = gaps.getJSONObject(i).getJSONArray("p");
+                    for (int k = 0; k < 3; k++) spots[i * 3 + k] = (float) p.getDouble(k);
+                }
+                gapDone = new boolean[gaps.length()];
+                gapXyz = spots;
+            }
             float[] xyz = new float[values.length() / 3 * 3];
             for (int i = 0; i < xyz.length; i++) xyz[i] = (float) values.getDouble(i);
             float[] vertices = ArchiveDensity.colour(xyz);
@@ -944,7 +1014,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                     ScanUploader.deleteTree(sessionDir);
                     runOnUiThread(() -> {
                         status.setText("No photos were recorded");
-                        detail.setText("The camera never locked on (" + lastTrackingHelp + "). Try again in good light, moving slowly while pointing at walls and objects.");
+                        detail.setText("The camera couldn't get a usable picture here (" + lastTrackingHelp + "). Brighter light or a view with more detail usually helps.");
                         finishButton.setVisibility(View.GONE);
                     });
                     return;
@@ -1161,11 +1231,13 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private String trackingHelp(com.google.ar.core.TrackingFailureReason reason) {
         String help;
         switch (reason) {
-            case INSUFFICIENT_LIGHT: help = "Too dark: turn on lights or move to a brighter spot."; break;
-            case EXCESSIVE_MOTION: help = "Moving too fast: slow down."; break;
-            case INSUFFICIENT_FEATURES: help = "Point at something with more detail (not a blank wall or sky)."; break;
+            // Tracking pauses are the camera's limits, not the scanner's fault,
+            // and photos keep being saved (the worker places them by matching).
+            case INSUFFICIENT_LIGHT: help = "Low light: the camera tracks better with lights on. Photos are still being saved."; break;
+            case EXCESSIVE_MOTION: help = "The camera is catching up. Photos are still being saved."; break;
+            case INSUFFICIENT_FEATURES: help = "Plain surfaces are hard to track; include something detailed in view. Photos are still being saved."; break;
             case CAMERA_UNAVAILABLE: help = "The camera is busy in another app."; break;
-            default: help = "Move the phone slowly side to side so it can see the space.";
+            default: help = "Finding its place: sweep the phone gently across the space. Photos are still being saved.";
         }
         lastTrackingHelp = help;
         return help;
@@ -1177,7 +1249,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         lastStatusAt = now;
         runOnUiThread(() -> {
             if (statusText != null) status.setText(statusText);
-            else if (recording) status.setText("Scanning — move slowly");
+            else if (recording) status.setText("Scanning");
             if (detailText != null) detail.setText(detailText);
         });
     }

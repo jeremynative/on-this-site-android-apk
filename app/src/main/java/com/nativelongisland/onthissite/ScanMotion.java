@@ -112,10 +112,10 @@ final class ScanMotion {
     /** One-line coaching for the status text, or null when the motion looks fine. */
     String hint(long nowMs) {
         if (turnRate(nowMs) >= FAST_TURN_DEG_PER_S) {
-            return "Turning too fast. Turn slowly so each photo overlaps the last.";
+            return "Quick turn: a slower turn lets each photo overlap the last.";
         }
         if (spinningInPlace(nowMs)) {
-            return "You're turning in place. Walk around the place instead, keeping it in front of you.";
+            return "Turning in one spot gives one viewpoint. Walking around adds depth.";
         }
         return null;
     }

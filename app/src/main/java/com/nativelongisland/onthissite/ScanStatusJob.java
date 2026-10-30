@@ -94,9 +94,9 @@ public class ScanStatusJob extends JobService {
             if ("processed".equals(status)) {
                 if (claim(context, sessionId)) notify(context, sessionId.hashCode(), "Your scan is live", what + " is now in 3D. Thank you!");
             } else if ("failed".equals(status)) {
-                String why = session.optString("note", "An administrator will look at it.");
-                if (claim(context, sessionId)) notify(context, sessionId.hashCode(), "Your scan couldn't be processed",
-                    what + " couldn't be turned into 3D. " + why);
+                String why = session.optString("note", "The photos are saved and an administrator will look at it.");
+                if (claim(context, sessionId)) notify(context, sessionId.hashCode(), "Your scan isn't in 3D yet",
+                    what + " isn't in 3D yet. " + why);
             } else {
                 waiting = true;
             }
