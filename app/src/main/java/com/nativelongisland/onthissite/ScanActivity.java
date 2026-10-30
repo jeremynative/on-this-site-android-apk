@@ -137,6 +137,17 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private CoverageOverlayView coverageOverlay;
     private long lastViewCheckAt;
     private FloatBuffer coveragePoints;
+    // Depth-based surface coverage (red = needs more angles, white = captured).
+    private final SurfaceCoverage surfaceCoverage = new SurfaceCoverage();
+    private boolean depthEnabled;
+    private long lastDepthAt;
+    private short[] depthMm = new short[0];
+    private final float[] depthPoints = new float[3 * 2400];
+    private final float[] depthPose = new float[16];
+    private FloatBuffer surfacePoints;
+    private int surfacePointCount;
+    private int surfaceVersionDrawn = -1;
+    private long surfaceRebuiltAt;
     private int coveragePointCount;
     private int coverageVersionDrawn = -1;
     private long coverageRebuiltAt;
@@ -311,6 +322,9 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         config.setFocusMode(Config.FocusMode.AUTO);
         config.setUpdateMode(Config.UpdateMode.LATEST_CAMERA_IMAGE);
         config.setLightEstimationMode(Config.LightEstimationMode.DISABLED);
+        depthEnabled = session.isDepthModeSupported(Config.DepthMode.AUTOMATIC);
+        if (depthEnabled) config.setDepthMode(Config.DepthMode.AUTOMATIC);
+        android.util.Log.i("OnThisSiteScan", "depth " + (depthEnabled ? "on" : "unsupported"));
         session.configure(config);
     }
 
@@ -414,6 +428,10 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             }
             maybeKeyframe(frame, camera, pose);
             checkLiveView(frame, now);
+            if (tracked && depthEnabled && now - lastDepthAt >= 250) {
+                lastDepthAt = now;
+                addDepth(frame, camera, false);
+            }
             if (tracked) {
                 drawCoverage(camera, now);
                 if (localizer != null) localizer.onFrame(frame, camera);
@@ -430,7 +448,9 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             } else if (!tracked && recording && frames > 0 && now - lastKeyAt > 2500) {
                 placement = "The view hasn't changed. Take a step to the side, then keep walking slowly.";
             }
-            String legend = live != null ? "\nRed = not captured yet · green = covered" : "";
+            String legend = tracked && depthEnabled && surfaceCoverage.cellCount() > 0
+                ? String.format(Locale.US, "\nRed = photograph from more angles · white = captured (%.0f%%)", surfaceCoverage.capturedFraction() * 100)
+                : live != null ? "\nRed = not captured yet · green = covered" : "";
             postStatus(null, String.format(Locale.US, "%d photos%s\n%s%s", frames,
                 distance > 0.5f ? String.format(Locale.US, " · %.0f m walked", distance) : "", placement, legend));
         }
@@ -494,7 +514,25 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         camera.getViewMatrix(viewMatrix, 0);
         camera.getProjectionMatrix(projectionMatrix, 0, 0.05f, 100f);
         android.opengl.Matrix.multiplyMM(viewProjection, 0, projectionMatrix, 0, viewMatrix, 0);
-        gl.drawPoints(viewProjection, coveragePoints, coveragePointCount, 22f * getResources().getDisplayMetrics().density / 2.6f);
+        if (depthEnabled && surfaceCoverage.cellCount() > 0) {
+            int surfaceVersion = surfaceCoverage.version();
+            if (surfaceVersion != surfaceVersionDrawn && now - surfaceRebuiltAt > 300) {
+                float[] vertices = surfaceCoverage.pointVertices();
+                if (surfacePoints == null || surfacePoints.capacity() < vertices.length) {
+                    surfacePoints = ByteBuffer.allocateDirect(Math.max(vertices.length, 7 * 16384) * 2 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
+                }
+                surfacePoints.clear();
+                surfacePoints.put(vertices);
+                surfacePointCount = vertices.length / 7;
+                surfaceVersionDrawn = surfaceVersion;
+                surfaceRebuiltAt = now;
+            }
+            // Size each dot to cover its 8 cm cell on screen so the cells read as a surface.
+            float focalPx = projectionMatrix[5] * viewportHeight / 2f;
+            gl.drawPoints(viewProjection, surfacePoints, surfacePointCount, SurfaceCoverage.CELL_M * focalPx * 1.5f);
+        } else {
+            gl.drawPoints(viewProjection, coveragePoints, coveragePointCount, 22f * getResources().getDisplayMetrics().density / 2.6f);
+        }
         if (now - coverageMapAt > 330 && coverageMap != null) {
             coverageMapAt = now;
             Pose display = camera.getDisplayOrientedPose();
@@ -504,6 +542,32 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             ScanCoverage.Snapshot snapshot = coverage.snapshot();
             String label = String.format(Locale.US, "~%.0f m² covered · %d photos", coverage.coveredAreaM2(), frames);
             runOnUiThread(() -> coverageMap.update(snapshot, x, z, heading, label));
+        }
+    }
+
+    /** Samples ARCore's depth image into the live surface coverage. */
+    private void addDepth(Frame frame, Camera camera, boolean photographed) {
+        try (Image depth = frame.acquireDepthImage16Bits()) {
+            int width = depth.getWidth(), height = depth.getHeight();
+            Image.Plane plane = depth.getPlanes()[0];
+            ByteBuffer buffer = plane.getBuffer().order(ByteOrder.nativeOrder());
+            int rowStride = plane.getRowStride(), pixelStride = plane.getPixelStride();
+            if (depthMm.length != width * height) depthMm = new short[width * height];
+            for (int v = 0; v < height; v++) {
+                for (int u = 0; u < width; u++) depthMm[v * width + u] = buffer.getShort(v * rowStride + u * pixelStride);
+            }
+            // Depth is aligned with the GPU texture, so scale its intrinsics.
+            CameraIntrinsics k = camera.getTextureIntrinsics();
+            int[] dims = k.getImageDimensions();
+            float sx = width / (float) dims[0], sy = height / (float) dims[1];
+            float[] f = k.getFocalLength(), c = k.getPrincipalPoint();
+            Pose pose = camera.getPose();
+            pose.toMatrix(depthPose, 0);
+            int n = SurfaceCoverage.unproject(depthMm, width, height, f[0] * sx, f[1] * sy, c[0] * sx, c[1] * sy,
+                depthPose, 48, 36, depthPoints);
+            surfaceCoverage.add(depthPoints, n, pose.tx(), pose.ty(), pose.tz(), photographed);
+        } catch (Exception error) {
+            // Depth isn't ready for the first frames after tracking starts.
         }
     }
 
@@ -576,6 +640,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             android.util.Log.w("OnThisSiteScan", "Point cloud unavailable", error);
         }
         if (p != null) lastKeyPose = p;
+        if (p != null && depthEnabled) addDepth(frame, camera, true);
         lastKeyAt = now;
         lastKeyAttitude = att;
         float compass = compassDeg;
