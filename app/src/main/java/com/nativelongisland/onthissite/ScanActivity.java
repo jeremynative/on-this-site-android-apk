@@ -194,6 +194,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private Button finishButton;
     private ProgressBar progressBar;
     private long lastStatusAt;
+    private volatile boolean showKey;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -540,8 +541,12 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             } else if (archivePointCount > 0 && roughArchiveTransform() != null) {
                 legend += "\nBlue dots = earlier scans, placed roughly by GPS until the camera recognises the spot";
             }
-            postStatus(null, String.format(Locale.US, "Recording %s \u00b7 %d photos%s\n%s%s", ScanUploader.clock(now - recordingStartedAt), frames,
-                distance > 0.5f ? String.format(Locale.US, " · %.0f m walked", distance) : "", placement, legend));
+            // Phone-sized: one status line, the one tip that matters now, and
+            // the colour key folded away until the panel is tapped.
+            String key = legend.trim();
+            postStatus(String.format(Locale.US, "Recording %s · %d photos%s", ScanUploader.clock(now - recordingStartedAt), frames,
+                distance > 0.5f ? String.format(Locale.US, " · %.0f m", distance) : ""),
+                placement + (key.isEmpty() ? "" : showKey ? "\n" + key : "\nTap here for the colour key"));
         }
     }
 
@@ -1162,6 +1167,10 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         panel.addView(status);
         panel.addView(detail);
         panel.addView(progressBar);
+        panel.setOnClickListener(v -> {
+            showKey = !showKey;
+            lastStatusAt = 0;
+        });
         root.addView(panel, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
 
         LinearLayout bottom = new LinearLayout(this);
@@ -1178,6 +1187,14 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         Button close = new Button(this);
         close.setText("Close");
         close.setOnClickListener(v -> finish());
+        // Big enough to hit while walking with the phone held up.
+        for (Button button : new Button[] {close, startButton, finishButton}) {
+            button.setMinHeight(dp(56));
+            button.setTextSize(16);
+            button.setAllCaps(false);
+        }
+        startButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(107, 197, 138)));
+        finishButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.rgb(107, 197, 138)));
         bottom.addView(close);
         bottom.addView(startButton);
         bottom.addView(finishButton);
