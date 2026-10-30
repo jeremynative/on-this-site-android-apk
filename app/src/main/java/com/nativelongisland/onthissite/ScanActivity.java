@@ -76,6 +76,10 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private static final float KEYFRAME_MOVE_M = 0.12f;
     private static final float KEYFRAME_TURN_DEG = 8f;
     private static final long KEYFRAME_MIN_MS = 300;
+    // Without motion tracking, photos are timed; skip ones that look the same
+    // as the last (phone held still) unless this long has passed.
+    private static final long STILL_PHOTO_MS = 4000;
+    private static final float STILL_LUMA_DIFF = 5f;
 
     private final ArGl gl = new ArGl();
     private final ExecutorService encoder = Executors.newSingleThreadExecutor();
@@ -492,6 +496,23 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         }
     }
 
+    private byte[] lastKeyThumb;
+
+    /** 16x12 grid of brightness samples, to tell whether the view changed. */
+    private static byte[] lumaThumb(byte[] nv21, int width, int height) {
+        byte[] out = new byte[16 * 12];
+        for (int y = 0; y < 12; y++) {
+            for (int x = 0; x < 16; x++) out[y * 16 + x] = nv21[(height * (2 * y + 1) / 24) * width + width * (2 * x + 1) / 32];
+        }
+        return out;
+    }
+
+    private static float lumaDiff(byte[] a, byte[] b) {
+        long sum = 0;
+        for (int i = 0; i < a.length; i++) sum += Math.abs((a[i] & 0xff) - (b[i] & 0xff));
+        return sum / (float) a.length;
+    }
+
     private void maybeKeyframe(Frame frame, Camera camera, Pose pose) {
         long now = SystemClock.uptimeMillis();
         float[] p = pose == null ? null : poseArray(pose);
@@ -515,6 +536,11 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         int height = image.getHeight();
         byte[] nv21 = SpaceLocalizer.toNv21(image);
         image.close();
+        if (p == null) {
+            byte[] thumb = lumaThumb(nv21, width, height);
+            if (lastKeyThumb != null && now - lastKeyAt < STILL_PHOTO_MS && lumaDiff(thumb, lastKeyThumb) < STILL_LUMA_DIFF) return;
+            lastKeyThumb = thumb;
+        }
         CameraIntrinsics intrinsics = camera.getImageIntrinsics();
         float[] focal = intrinsics.getFocalLength();
         float[] principal = intrinsics.getPrincipalPoint();
@@ -636,17 +662,51 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             .put("transform", new JSONArray(transform));
     }
 
+    /** "Expected live around 3:40 AM tomorrow." from the server's estimate. */
+    static String goLiveText(org.json.JSONObject queued) {
+        String eta = queued == null ? "" : queued.optString("eta_at", "");
+        if (!eta.isEmpty() && !"null".equals(eta)) {
+            try {
+                java.text.SimpleDateFormat iso = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US);
+                iso.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                java.util.Date at = iso.parse(eta.substring(0, 19));
+                java.util.Calendar day = java.util.Calendar.getInstance();
+                int today = day.get(java.util.Calendar.DAY_OF_YEAR);
+                day.setTime(at);
+                int diff = day.get(java.util.Calendar.DAY_OF_YEAR) - today;
+                String time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(at);
+                return "Expected live around " + time + (diff == 0 ? " today." : diff == 1 ? " tomorrow." : " on "
+                    + new java.text.SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(at) + ".");
+            } catch (Exception ignored) {
+                // fall through to the queue note
+            }
+        }
+        String note = queued == null ? "" : queued.optString("note", "");
+        return note.isEmpty() ? "It will be added to the 3D space the next time the processing computer runs." : note;
+    }
+
+    /** Keeps a bottom bar's buttons above the navigation bar (the app draws edge to edge). */
+    static void keepAboveNavigationBar(View view) {
+        int left = view.getPaddingLeft(), top = view.getPaddingTop(), right = view.getPaddingRight(), bottom = view.getPaddingBottom();
+        view.setOnApplyWindowInsetsListener((v, insets) -> {
+            v.setPadding(left, top, right, bottom + insets.getSystemWindowInsetBottom());
+            return insets;
+        });
+        view.requestApplyInsets();
+    }
+
     private void upload(File dir) {
         progressBar.setVisibility(View.VISIBLE);
         new Thread(() -> {
             try {
-                new ScanUploader(dir, (message, percent) -> runOnUiThread(() -> {
+                org.json.JSONObject queued = new ScanUploader(dir, (message, percent) -> runOnUiThread(() -> {
                     detail.setText(message);
                     progressBar.setProgress(percent);
                 })).upload(accessToken);
+                String when = goLiveText(queued);
                 runOnUiThread(() -> {
                     status.setText("Scan uploaded");
-                    detail.setText("Thank you! It will be added to the 3D space the next time the processing computer runs.");
+                    detail.setText("Thank you! " + when + "\nYou'll get a notification when it's live.");
                     finishButton.setVisibility(View.GONE);
                 });
             } catch (Exception error) {
@@ -715,6 +775,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         bottom.addView(startButton);
         bottom.addView(finishButton);
         root.addView(bottom, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+        keepAboveNavigationBar(bottom);
         // The coverage tint sits directly over the camera, under the panels.
         coverageOverlay = new CoverageOverlayView(this);
         root.addView(coverageOverlay, 1, new FrameLayout.LayoutParams(-1, -1));

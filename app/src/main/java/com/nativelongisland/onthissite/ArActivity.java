@@ -456,7 +456,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         camera.getProjectionMatrix(projection, 0, 0.05f, 100f);
         float[] viewProjection = new float[16];
         Matrix.multiplyMM(viewProjection, 0, projection, 0, view, 0);
-        if (scanPoints != null) gl.drawPoints(viewProjection, scanPoints, scanPointCount, 30f * getResources().getDisplayMetrics().density / 2.6f);
+        if (scanPoints != null) gl.drawPoints(viewProjection, scanPoints, scanPointCount, 70f * getResources().getDisplayMetrics().density / 2.6f);
         // Placed photos and cards live in the space frame (the "space" room).
         ArScene.Room room = scene.roomForMarker(SPACE_MARKER);
         int shown = 0;
@@ -976,6 +976,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         bottom.addView(authorScroll);
 
         root.addView(bottom, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+        ScanActivity.keepAboveNavigationBar(bottom);
         setContentView(root);
         status.setText("Starting camera…");
     }
