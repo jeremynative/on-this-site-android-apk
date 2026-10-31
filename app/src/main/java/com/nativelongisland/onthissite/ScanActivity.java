@@ -481,7 +481,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                     camera.getViewMatrix(viewMatrix, 0);
                     camera.getProjectionMatrix(projectionMatrix, 0, 0.05f, 100f);
                     android.opengl.Matrix.multiplyMM(viewProjection, 0, projectionMatrix, 0, viewMatrix, 0);
-                    drawArchive();
+                    drawArchive(camera.getPose().getTranslation());
                     String where = archiveDirection(camera);
                     archive = localizer.locked() && archivePointCount > 0
                         ? "Earlier scans of this place are shown as dots: blue = well captured, violet = thin. Start where you want to add or redo detail."
@@ -528,8 +528,8 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 ? String.format(Locale.US, "\nRed = needs photos from more angles · green = complete (%.0f%%)", surfaceCoverage.capturedFraction() * 100)
                 : live != null ? "\nRed = not captured yet · green = covered" : "";
             GapTargets gaps = gapTargets;
-            if (gaps != null && gaps.count() > 0 && (localizer != null && localizer.locked() || roughArchiveTransform() != null)) {
-                int total = gaps.count();
+            if (gaps != null && gaps.nearbyCount() > 0 && (localizer != null && localizer.locked() || roughArchiveTransform() != null)) {
+                int total = gaps.nearbyCount();
                 legend += gapsDone >= total
                     ? "\nEvery orange spot is filled in. Thank you!"
                     : String.format(Locale.US, "\nOrange = spots earlier scans need from more angles (%d of %d filled)", gapsDone, total);
@@ -654,7 +654,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
         } else {
             gl.drawPoints(viewProjection, coveragePoints, coveragePointCount, 22f * getResources().getDisplayMetrics().density / 2.6f);
         }
-        drawArchive();
+        drawArchive(camera.getPose().getTranslation());
         if (now - coverageMapAt > 330 && coverageMap != null) {
             coverageMapAt = now;
             Pose display = camera.getDisplayOrientedPose();
@@ -668,7 +668,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     }
 
     /** Earlier scans of this place, in place, once the localizer has lined this session up with them. */
-    private void drawArchive() {
+    private void drawArchive(float[] cameraAt) {
         if (archivePoints == null) return;
         // Session -> place: exact once the camera has recognised the spot, else rough from GPS + compass.
         boolean lined = localizer != null && localizer.locked();
@@ -684,7 +684,7 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             .toMatrix(archiveModel, 0);
         android.opengl.Matrix.multiplyMM(archiveMvp, 0, viewProjection, 0, archiveModel, 0);
         gl.drawPoints(archiveMvp, archivePoints, archivePointCount, 28f * getResources().getDisplayMetrics().density / 2.6f);
-        drawGaps();
+        drawGaps(cameraAt);
     }
 
     /**
@@ -692,19 +692,20 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
      * orange targets that turn green once this scan covers them from more
      * angles, so whoever continues a place knows exactly where to point.
      */
-    private void drawGaps() {
+    private void drawGaps(float[] cameraAt) {
         GapTargets targets = gapTargets;
         if (targets == null || targets.count() == 0) return;
         long now = SystemClock.uptimeMillis();
         if (now - gapsCheckedAt > 1000) {
             gapsCheckedAt = now;
             // archiveModel maps the space frame into this session's frame.
-            gapsDone = targets.update(archiveModel, surfaceCoverage);
+            gapsDone = targets.update(archiveModel, surfaceCoverage, cameraAt);
         }
         float[] vertices = targets.vertices(0.75f + 0.25f * (float) Math.sin(now / 280.0));
+        if (vertices.length == 0) return;
         FloatBuffer buffer = ByteBuffer.allocateDirect(vertices.length * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
         buffer.put(vertices).position(0);
-        gl.drawPoints(archiveMvp, buffer, targets.count(), 150f * getResources().getDisplayMetrics().density / 2.6f);
+        gl.drawPoints(archiveMvp, buffer, vertices.length / 7, 150f * getResources().getDisplayMetrics().density / 2.6f);
     }
 
     /** Session -> place from GPS + compass, or null until there are enough readings. */
@@ -1037,7 +1038,8 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             .put("placed_by", archivePlacedBy)
             .put("shown_s", secondsIntoRecording(archiveShownAt))
             .put("lined_up_s", secondsIntoRecording(linedUpAt))
-            .put("gaps", targets == null ? 0 : targets.count())
+            .put("gaps", targets == null ? 0 : targets.nearbyCount())
+            .put("gaps_total", targets == null ? 0 : targets.count())
             .put("gaps_filled", targets == null ? 0 : gapsDone);
     }
 
