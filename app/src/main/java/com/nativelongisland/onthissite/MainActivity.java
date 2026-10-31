@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20261031-scan-gaps-nearby-r303";
+    static final String APP_VERSION = "20261031-ar-bubbles-r304";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -468,6 +468,15 @@ public class MainActivity extends Activity {
             String space = getIntent().getStringExtra(ScanActivity.EXTRA_SPACE_ID);
             if (space == null) openArExperience(site, author);
             else withSavedSignIn(0, (token, name) -> openArExperience(site, author, space, token));
+        }
+        if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("qa_open_ar_nearby")) {
+            // QA: nearby bubbles from a file pushed to the app's external files folder.
+            try {
+                java.io.File file = new java.io.File(getExternalFilesDir(null), "ar-nearby.json");
+                openArNearby(new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8));
+            } catch (Exception error) {
+                android.util.Log.w("OnThisSiteAR", "QA nearby bubbles unavailable: " + error);
+            }
         }
         if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("qa_open_scan")) {
             openScanWithSavedSignIn(getIntent().getStringExtra("qa_open_scan"), 0);
@@ -2646,6 +2655,12 @@ public class MainActivity extends Activity {
             .putExtra(ArActivity.EXTRA_AUTHOR, author)
             .putExtra(ScanActivity.EXTRA_SPACE_ID, spaceId)
             .putExtra(ScanActivity.EXTRA_ACCESS_TOKEN, accessToken));
+    }
+
+    void openArNearby(String bubblesJson) {
+        startActivity(new Intent(this, ArActivity.class)
+            .putExtra(ArActivity.EXTRA_SITE_ID, "nearby")
+            .putExtra(ArActivity.EXTRA_NEARBY, bubblesJson));
     }
 
     void openScanSpace(String spaceId, String accessToken, String creditName) {

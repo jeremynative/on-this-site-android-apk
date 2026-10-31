@@ -54,6 +54,13 @@ class AppBridge {
         activity.runOnUiThread(() -> activity.openArExperience(siteId, false));
     }
 
+    /** Opens AR with bubbles from places near the visitor (an ArScene JSON built by the web app). */
+    @JavascriptInterface
+    public void openArNearby(String token, String bubblesJson) {
+        if (!activity.validBridgeToken(token) || bubblesJson == null || bubblesJson.isEmpty() || bubblesJson.length() > 200_000) return;
+        activity.runOnUiThread(() -> activity.openArNearby(bubblesJson));
+    }
+
     @JavascriptInterface
     public boolean isDebugBuild() {
         return BuildConfig.DEBUG;

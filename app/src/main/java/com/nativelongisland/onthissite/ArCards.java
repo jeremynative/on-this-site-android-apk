@@ -65,6 +65,9 @@ final class ArCards {
         return card;
     }
 
+    /** Characters of a long caption shown on a floating card; the rest is read by tapping. */
+    static final int CARD_PREVIEW_CHARS = 170;
+
     /** Language prompt or audio clip card, revealed once the visitor walks up to an orb. */
     static Bitmap promptCard(ArScene.Item item) {
         int width = 900;
@@ -79,15 +82,24 @@ final class ArCards {
         TextPaint hintPaint = textPaint(28, accent, true);
 
         boolean phrase = ArScene.KIND_PHRASE.equals(item.kind);
-        String tag = phrase ? "LANGUAGE" : "LISTEN";
+        String tag = phrase ? "LANGUAGE" : ArScene.KIND_AUDIO.equals(item.kind) ? "LISTEN" : "ON THIS SITE";
         String headline = phrase && !item.word.isEmpty() ? item.word : (item.title.isEmpty() ? "Audio clip" : item.title);
+        // A question waits for an answer; long text is a preview, read in full by tapping.
+        boolean quiz = phrase && item.choices.length >= 2 && !item.answered;
+        boolean longText = item.caption.length() > CARD_PREVIEW_CHARS;
+        String preview = longText ? item.caption.substring(0, item.caption.lastIndexOf(' ', CARD_PREVIEW_CHARS) > 0
+            ? item.caption.lastIndexOf(' ', CARD_PREVIEW_CHARS) : CARD_PREVIEW_CHARS) + "\u2026" : item.caption;
+        String hint = quiz ? "Tap to answer: what does it mean?"
+            : longText ? "Tap to read more"
+            : !item.audio.isEmpty() ? "Tap to hear it again" : null;
         StaticLayout[] lines = {
             layout(tag + (item.sample ? " · TEST CARD" : ""), tagPaint, inner),
             layout(headline, wordPaint, inner),
             phrase && !item.pronunciation.isEmpty() ? layout("say: " + item.pronunciation, sayPaint, inner) : null,
-            phrase && !item.meaning.isEmpty() ? layout(item.meaning, bodyPaint, inner) : null,
-            !item.caption.isEmpty() ? layout(item.caption, bodyPaint, inner) : null,
-            !item.audio.isEmpty() ? layout("Tap to hear it again", hintPaint, inner) : null,
+            phrase && !quiz && !item.meaning.isEmpty() ? layout(item.meaning, bodyPaint, inner) : null,
+            !quiz && !preview.isEmpty() ? layout(preview, bodyPaint, inner) : null,
+            hint != null ? layout(hint, hintPaint, inner) : null,
+            !quiz && !item.credit.isEmpty() ? layout(item.credit, textPaint(24, Color.rgb(170, 178, 174), false), inner) : null,
         };
         int height = pad;
         for (StaticLayout line : lines) if (line != null) height += line.getHeight() + 14;
@@ -109,6 +121,39 @@ final class ArCards {
             canvas.translate(0, line.getHeight() + 14);
         }
         return card;
+    }
+
+    /**
+     * A glowing bubble with a picture inside (a guide animal, or a place's
+     * photo), shown before a nearby bubble has been opened.
+     */
+    static Bitmap bubble(Bitmap inner, int color) {
+        int size = 256;
+        Bitmap bitmap = orb(color);
+        Canvas canvas = new Canvas(bitmap);
+        float c = size / 2f;
+        float r = c * 0.5f;
+        Paint clear = new Paint(Paint.ANTI_ALIAS_FLAG);
+        clear.setColor(Color.argb(235, 250, 250, 246));
+        canvas.drawCircle(c, c, r, clear);
+        // Figures (transparent PNGs) sit whole inside the bubble; photos fill it.
+        float scale = inner.hasAlpha()
+            ? Math.min(1.7f * r / inner.getWidth(), 1.7f * r / inner.getHeight())
+            : Math.max(2 * r / inner.getWidth(), 2 * r / inner.getHeight());
+        float w = inner.getWidth() * scale;
+        float h = inner.getHeight() * scale;
+        android.graphics.Path clip = new android.graphics.Path();
+        clip.addCircle(c, c, r, android.graphics.Path.Direction.CW);
+        canvas.save();
+        canvas.clipPath(clip);
+        canvas.drawBitmap(inner, null, new RectF(c - w / 2, c - h / 2, c + w / 2, c + h / 2), new Paint(Paint.FILTER_BITMAP_FLAG));
+        canvas.restore();
+        Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
+        ring.setStyle(Paint.Style.STROKE);
+        ring.setStrokeWidth(7);
+        ring.setColor(Color.WHITE);
+        canvas.drawCircle(c, c, r, ring);
+        return bitmap;
     }
 
     /** Soft glowing orb shown before a discoverable prompt has been found. */

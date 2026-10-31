@@ -80,6 +80,12 @@ import javax.microedition.khronos.opengles.GL10;
 public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     static final String EXTRA_SITE_ID = "site_id";
     static final String EXTRA_AUTHOR = "author";
+    /**
+     * Bubbles from places near the visitor (an ArScene JSON with discover
+     * items), passed by the web app. They float on open floors and tables
+     * wherever the visitor is: no scan, marker card or placing needed.
+     */
+    static final String EXTRA_NEARBY = "nearby_bubbles";
 
     private static final int REQUEST_CAMERA = 41;
     private static final int PICK_PHOTO = 42;
@@ -94,6 +100,18 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private static final int MODE_ZONE = 3;
 
     private static final float STAND_HERE_RADIUS = 0.75f;
+    private boolean freeRoam;
+    // Free roam reveals bubbles gradually as the visitor explores: at most two
+    // unopened at once, spread out, a new one after opening one, walking a
+    // little, or a short wait.
+    private static final int FREE_WAITING_MAX = 2;
+    private static final float FREE_SPACING_M = 2f;
+    private static final float FREE_STEP_M = 1.5f;
+    private static final long FREE_GAP_MS = 8000;
+    private static final double FREE_APART_DEG = 40;
+    private long lastFreeSpawnAt;
+    private float[] lastFreeSpawnFrom;
+    private final Set<String> answered = new HashSet<>();
     private static final float DISCOVER_DISTANCE = 1.6f;
 
     private final Object lock = new Object();
@@ -153,6 +171,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private LinearLayout placementBar;
     private LinearLayout infoPanel;
     private TextView infoText;
+    private ImageView infoImage;
+    private LinearLayout infoChoices;
+    private ScrollView infoScroll;
     private LinearLayout infoActions;
     private LinearLayout compareBar;
     private ImageView alignOverlay;
@@ -176,8 +197,15 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             loader.execute(() -> loadScanPoints(token));
         }
         store = new ArScene.Store(this, siteId);
+        String nearby = getIntent().getStringExtra(EXTRA_NEARBY);
         try {
-            scene = store.load();
+            if (nearby != null) {
+                scene = ArScene.fromJson(nearby);
+                freeRoam = true;
+                authorMode = false;
+            } else {
+                scene = store.load();
+            }
         } catch (Exception error) {
             Toast.makeText(this, "This site has no AR scene yet.", Toast.LENGTH_LONG).show();
             finish();
@@ -531,6 +559,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     /** Adds this room's quads; returns true when the visitor stands on a before/after viewpoint. */
     private boolean collectDraws(List<Draw> draws, Pose cameraPose, ArScene.Room room, Anchor roomAnchor) {
+        if (freeRoam) {
+            collectFreeDraws(draws, cameraPose);
+            return false;
+        }
         if (room == null || roomAnchor == null || roomAnchor.getTrackingState() != TrackingState.TRACKING) return false;
         float[] cameraPoint = cameraPose.getTranslation();
         Pose roomPose = roomAnchor.getPose();
@@ -605,6 +637,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 Bitmap bitmap;
                 if (key.startsWith("card:")) {
                     bitmap = ArCards.promptCard(item);
+                } else if (key.startsWith("bubble:")) {
+                    Bitmap inner = decodeImage(item.figure.isEmpty() ? item.image : item.figure, 512);
+                    int color = ArCards.layerColor(item.layer);
+                    bitmap = inner == null ? ArCards.orb(color) : ArCards.bubble(inner, color);
                 } else {
                     Bitmap photo = decodeImage(item.image, 1600);
                     if (photo == null) return;
@@ -644,6 +680,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
      * inside a public room's zone, away from private rooms, and spaced out.
      */
     private void spawnDiscoverables(Frame frame, float[] cameraPoint, ArScene.Room room) {
+        if (freeRoam) {
+            spawnAnywhere(frame, cameraPoint);
+            return;
+        }
         long now = SystemClock.uptimeMillis();
         if (now - lastSpawnAttempt < 400 || room == null || !room.publicAccess) return;
         lastSpawnAttempt = now;
@@ -678,6 +718,109 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 discoverLift.put(next.id, ArPlacement.floatHeight(cameraPoint, point));
                 discoverRoom.put(next.id, room.id);
                 return;
+            }
+        }
+    }
+
+    /**
+     * Free roam: like Pokémon GO, bubbles appear in the air at eye level,
+     * 2-3.5 m away within 60 degrees of where the visitor looks. No surface
+     * is needed. They are revealed gradually as the visitor explores: at most
+     * two unopened at once, the next after one is opened, after walking about
+     * 1.5 m, or after a short wait, each at least 2 m from the others and in
+     * a different direction from the unopened ones.
+     */
+    private void spawnAnywhere(Frame frame, float[] cameraPoint) {
+        long now = SystemClock.uptimeMillis();
+        if (now - lastSpawnAttempt < 500) return;
+        lastSpawnAttempt = now;
+        ArScene.Item next = null;
+        int waiting = 0;
+        for (ArScene.Item item : scene.items) {
+            if (!visible(item)) continue;
+            if (!discoverAnchors.containsKey(item.id)) {
+                if (next == null) next = item;
+            } else if (!discovered.contains(item.id)) {
+                waiting++;
+            }
+        }
+        if (next == null || waiting >= FREE_WAITING_MAX) return;
+        boolean walked = lastFreeSpawnFrom == null
+            || Math.hypot(cameraPoint[0] - lastFreeSpawnFrom[0], cameraPoint[2] - lastFreeSpawnFrom[2]) > FREE_STEP_M;
+        if (waiting > 0 && !walked && now - lastFreeSpawnAt < FREE_GAP_MS) return;
+        float[] back = frame.getCamera().getDisplayOrientedPose().getZAxis();
+        float fx = -back[0], fz = -back[2];
+        float length = (float) Math.hypot(fx, fz);
+        if (length < 0.3f) return;  // looking straight up or down
+        fx /= length;
+        fz /= length;
+        List<float[]> taken = new ArrayList<>();
+        List<Double> waitingBearings = new ArrayList<>();
+        for (Map.Entry<String, Anchor> entry : discoverAnchors.entrySet()) {
+            float[] at = entry.getValue().getPose().getTranslation();
+            taken.add(at);
+            if (!discovered.contains(entry.getKey())) waitingBearings.add(Math.atan2(at[0] - cameraPoint[0], at[2] - cameraPoint[2]));
+        }
+        for (int attempt = 0; attempt < 12; attempt++) {
+            double yaw = Math.toRadians(-60 + 120 * random.nextFloat());
+            float dx = (float) (fx * Math.cos(yaw) - fz * Math.sin(yaw));
+            float dz = (float) (fx * Math.sin(yaw) + fz * Math.cos(yaw));
+            float distance = 2f + 1.5f * random.nextFloat();
+            float[] point = {cameraPoint[0] + dx * distance, cameraPoint[1] - 0.05f + 0.2f * (random.nextFloat() - 0.5f), cameraPoint[2] + dz * distance};
+            boolean spaced = true;
+            for (float[] other : taken) {
+                if (Math.hypot(point[0] - other[0], point[2] - other[2]) < FREE_SPACING_M) spaced = false;
+            }
+            double bearing = Math.atan2(point[0] - cameraPoint[0], point[2] - cameraPoint[2]);
+            for (double other : waitingBearings) {
+                double apart = Math.abs(Math.toDegrees(Math.atan2(Math.sin(bearing - other), Math.cos(bearing - other))));
+                if (apart < FREE_APART_DEG) spaced = false;
+            }
+            if (!spaced) continue;
+            discoverAnchors.put(next.id, session.createAnchor(Pose.makeTranslation(point[0], point[1], point[2])));
+            discoverLift.put(next.id, 0f);
+            discoverRoom.put(next.id, "");
+            lastFreeSpawnAt = now;
+            lastFreeSpawnFrom = cameraPoint.clone();
+            return;
+        }
+    }
+
+    /** Free roam: bubbles bob gently, open when walked up to, and grow with nearness. */
+    private void collectFreeDraws(List<Draw> draws, Pose cameraPose) {
+        float[] cameraPoint = cameraPose.getTranslation();
+        long now = SystemClock.uptimeMillis();
+        for (ArScene.Item item : scene.items) {
+            if (!visible(item)) continue;
+            Anchor anchor = discoverAnchors.get(item.id);
+            if (anchor == null || anchor.getTrackingState() != TrackingState.TRACKING) continue;
+            Pose base = anchor.getPose();
+            // A slow drift (about 8 s a cycle) while closed; opened cards hold still to be read.
+            float bob = discovered.contains(item.id) ? 0f : 0.02f * (float) Math.sin(now / 1300.0 + (item.id.hashCode() & 0xff));
+            float[] point = {base.tx(), base.ty() + discoverLift.get(item.id) + bob, base.tz()};
+            float distance = distance(point, cameraPoint);
+            if (!discovered.contains(item.id) && distance < DISCOVER_DISTANCE) {
+                discovered.add(item.id);
+                runOnUiThread(() -> onDiscovered(item));
+            }
+            if (discovered.contains(item.id)) {
+                if (ArScene.KIND_PHOTO.equals(item.kind) && !item.image.isEmpty()) {
+                    String key = "framed:" + item.id;
+                    ensureTexture(item, key);
+                    float aspect = gl.aspect(key);
+                    if (aspect > 0f) {
+                        float yaw = ArPlacement.yawTowards(point[0], point[2], cameraPoint[0], cameraPoint[2]);
+                        draws.add(Draw.posed(item.id, new Pose(point, ArPlacement.yawQuaternion(yaw)), key, 0.45f, 0.45f * aspect, 0.97f, distance));
+                        continue;
+                    }
+                }
+                addCard(draws, item, point, cameraPoint, 0.5f);
+            } else {
+                String key = "bubble:" + item.id;
+                ensureTexture(item, key);
+                if (gl.aspect(key) <= 0f) key = "orb:" + item.layer;
+                float pulse = 0.85f + 0.15f * (float) Math.sin(now / 300.0);
+                draws.add(Draw.billboard(item.id, point, cameraPose, key, 0.26f, 0.26f, pulse, distance));
             }
         }
     }
@@ -744,6 +887,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         for (ArScene.Item item : scene.items) {
             if (item.id.equals(picked.itemId)) {
+                // Like walking up to it: a tapped bubble counts as found.
+                if (freeRoam && discovered.add(item.id)) runOnUiThread(() -> onDiscovered(item));
                 runOnUiThread(() -> showItem(item));
                 return;
             }
@@ -824,6 +969,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     }
 
     private String statusText(ArScene.Room room) {
+        if (freeRoam) {
+            int found = discovered.size();
+            int total = 0;
+            for (ArScene.Item item : scene.items) if (visible(item)) total++;
+            return found >= total && total > 0
+                ? "You found every bubble here. Thank you for learning with us!"
+                : scene.title + ": turn around to find stories, people and words floating nearby · " + found + " of " + total + " found";
+        }
         if (room == null) {
             if (lastMarkerId != null) return authorMode ? "New marker: name this room to start." : "This marker isn't set up yet.";
             if (spaceLocalizer != null) return spaceLocalizer.status();
@@ -846,6 +999,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (mode == MODE_ZONE) return "Tap the floor at each corner of the open, walkable area. Prompts only appear inside it.";
         if (mode == MODE_REPHOTO) return "Stand where the photo was taken and line it up with the scene, then tap Anchor.";
         if (nearViewpoint) return "You're standing where this photo was taken. Slide to compare then and now.";
+        if (freeRoam) return "Walk up to a bubble or tap it to open it.";
         return "";
     }
 
@@ -952,10 +1106,21 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         infoPanel.setVisibility(View.GONE);
         infoPanel.setBackground(rounded(Color.argb(225, 18, 24, 22)));
         infoPanel.setPadding(dp(16), dp(12), dp(16), dp(12));
-        infoText = text(15, false);
-        ScrollView infoScroll = new ScrollView(this);
-        infoScroll.addView(infoText);
-        infoPanel.addView(infoScroll, new LinearLayout.LayoutParams(-1, dp(140)));
+        infoText = text(16, false);
+        infoText.setLineSpacing(0f, 1.15f);
+        infoImage = new ImageView(this);
+        infoImage.setAdjustViewBounds(true);
+        infoImage.setMaxHeight(dp(220));
+        infoImage.setVisibility(View.GONE);
+        infoChoices = column();
+        LinearLayout infoBody = column();
+        infoBody.addView(infoImage, matchWrap());
+        infoBody.addView(infoText, matchWrap());
+        infoBody.addView(infoChoices, matchWrap());
+        infoScroll = new ScrollView(this);
+        infoScroll.addView(infoBody);
+        // About half the screen: room to read a full story and scroll the rest.
+        infoPanel.addView(infoScroll, new LinearLayout.LayoutParams(-1, Math.round(getResources().getDisplayMetrics().heightPixels * 0.45f)));
         infoActions = row();
         infoPanel.addView(infoActions);
         bottom.addView(infoPanel, matchWrap());
@@ -1006,6 +1171,13 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     }
 
     private void showItem(ArScene.Item item) {
+        showInfoImage(item);
+        infoChoices.removeAllViews();
+        infoScroll.scrollTo(0, 0);
+        if (ArScene.KIND_PHRASE.equals(item.kind) && item.choices.length >= 2 && !answered.contains(item.id)) {
+            askMeaning(item, "");
+            return;
+        }
         StringBuilder body = new StringBuilder();
         body.append(item.title.isEmpty() ? (item.word.isEmpty() ? "Untitled" : item.word) : item.title);
         if (!item.word.isEmpty() && !item.word.equals(item.title)) body.append("\n").append(item.word);
@@ -1045,6 +1217,54 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         infoActions.addView(button("Close", v -> infoPanel.setVisibility(View.GONE)));
         infoPanel.setVisibility(View.VISIBLE);
         if (!item.audio.isEmpty() && !ArScene.PLACEMENT_DISCOVER.equals(item.placement)) playAudio(item);
+    }
+
+    /** The item's photo (or its guide figure) above the text, loaded in the background. */
+    private void showInfoImage(ArScene.Item item) {
+        infoImage.setVisibility(View.GONE);
+        infoImage.setImageDrawable(null);
+        String source = item.image.isEmpty() ? item.figure : item.image;
+        if (source.isEmpty()) return;
+        infoImage.setTag(item.id);
+        loader.execute(() -> {
+            Bitmap bitmap = decodeImage(source, 1200);
+            if (bitmap == null) return;
+            runOnUiThread(() -> {
+                if (!item.id.equals(infoImage.getTag())) return;
+                infoImage.setImageBitmap(bitmap);
+                infoImage.setVisibility(View.VISIBLE);
+            });
+        });
+    }
+
+    /** A guide's question: what does this word mean? Wrong answers can be tried again. */
+    private void askMeaning(ArScene.Item item, String feedback) {
+        String speaker = item.title.isEmpty() ? "" : item.title + " says: ";
+        infoText.setText((feedback.isEmpty() ? "" : feedback + "\n\n") + speaker + "\u201c" + item.word + "\u201d"
+            + (item.pronunciation.isEmpty() ? "" : "\nsay: " + item.pronunciation)
+            + "\n\nWhat does it mean?");
+        infoActions.removeAllViews();
+        infoChoices.removeAllViews();
+        for (String choice : item.choices) {
+            infoChoices.addView(button(choice, v -> {
+                if (choice.equalsIgnoreCase(item.meaning)) {
+                    answered.add(item.id);
+                    item.answered = true;
+                    invalidateTextures(item);
+                    vibrateConfirm();
+                    infoText.setText("Yes! \u201c" + item.word + "\u201d means " + item.meaning + "."
+                        + (item.caption.isEmpty() ? "" : "\n\n" + item.caption)
+                        + (item.credit.isEmpty() ? "" : "\n\nSource: " + item.credit));
+                    infoChoices.removeAllViews();
+                    infoActions.removeAllViews();
+                    infoActions.addView(button("Close", w -> infoPanel.setVisibility(View.GONE)));
+                } else {
+                    askMeaning(item, "Not quite. Try another answer.");
+                }
+            }));
+        }
+        infoActions.addView(button("Close", v -> infoPanel.setVisibility(View.GONE)));
+        infoPanel.setVisibility(View.VISIBLE);
     }
 
     private void onDiscovered(ArScene.Item item) {
@@ -1359,7 +1579,34 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     private InputStream openMedia(String name) throws Exception {
         if (name.startsWith("asset:")) return getAssets().open(name.substring(6));
+        if (name.startsWith("https://")) return new java.io.FileInputStream(cachedDownload(name));
         return new java.io.FileInputStream(store.mediaFile(name));
+    }
+
+    /** A web image (a place photo, a guide figure), downloaded once into the app's cache. */
+    private java.io.File cachedDownload(String url) throws Exception {
+        java.io.File dir = new java.io.File(getCacheDir(), "ar-media");
+        if (!dir.exists() && !dir.mkdirs()) throw new java.io.IOException("No cache directory");
+        java.io.File file = new java.io.File(dir, Integer.toHexString(url.hashCode()) + "-" + url.length());
+        if (file.length() > 0) return file;
+        java.net.HttpURLConnection connection = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+        connection.setConnectTimeout(10000);
+        connection.setReadTimeout(15000);
+        java.io.File partial = new java.io.File(dir, file.getName() + ".part");
+        try (InputStream in = connection.getInputStream(); java.io.FileOutputStream out = new java.io.FileOutputStream(partial)) {
+            byte[] buffer = new byte[16384];
+            int read;
+            long total = 0;
+            while ((read = in.read(buffer)) > 0) {
+                total += read;
+                if (total > 8_000_000) throw new java.io.IOException("Image too large");
+                out.write(buffer, 0, read);
+            }
+        } finally {
+            connection.disconnect();
+        }
+        if (!partial.renameTo(file)) throw new java.io.IOException("Couldn't cache " + url);
+        return file;
     }
 
     private static int sampleSize(BitmapFactory.Options bounds, int maxSide) {
@@ -1369,6 +1616,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     }
 
     private void saveScene() {
+        if (freeRoam) return;  // nearby bubbles come fresh from the web app each time
         try {
             synchronized (lock) {
                 store.save(scene);
@@ -1401,6 +1649,13 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         stopAudio();
         try {
             player = new MediaPlayer();
+            if (item.audio.startsWith("https://")) {
+                player.setDataSource(item.audio);
+                player.setOnPreparedListener(MediaPlayer::start);
+                player.setOnCompletionListener(MediaPlayer::release);
+                player.prepareAsync();
+                return;
+            }
             if (item.audio.startsWith("asset:")) {
                 try (AssetFileDescriptor fd = getAssets().openFd(item.audio.substring(6))) {
                     player.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
