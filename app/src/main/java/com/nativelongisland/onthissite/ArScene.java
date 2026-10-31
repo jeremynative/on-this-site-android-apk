@@ -73,6 +73,12 @@ final class ArScene {
         float widthMeters = 0.6f;
         float[] pose;       // tx,ty,tz,qx,qy,qz,qw in the room frame
         float[] viewpoint;  // camera pose the before/after photo lines up from
+        // Nearby bubbles: the figure drawn inside the bubble (a map animal for
+        // language guides) and the answers offered for a language question.
+        String figure = "";
+        String[] choices = new String[0];
+        // Set once the visitor answers a language question correctly.
+        boolean answered;
         boolean sample;
     }
 
@@ -155,6 +161,10 @@ final class ArScene {
             item.pose = floats(o.optJSONArray("pose"));
             item.viewpoint = floats(o.optJSONArray("viewpoint"));
             item.sample = o.optBoolean("sample", false);
+            item.figure = o.optString("figure", "");
+            JSONArray choices = o.optJSONArray("choices");
+            item.choices = new String[choices == null ? 0 : choices.length()];
+            for (int c = 0; c < item.choices.length; c++) item.choices[c] = choices.getString(c);
             scene.items.add(item);
         }
         return scene;
