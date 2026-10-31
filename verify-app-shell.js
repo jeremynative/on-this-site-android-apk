@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20261030-upload-fresh-session-r297";
+const expectedBuild = "20261030-upload-interrupted-r298";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";

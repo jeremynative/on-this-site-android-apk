@@ -99,11 +99,17 @@ final class ScanUploader {
     /** Returns the server's queue estimate (eta_at, note), or null if it was already uploaded. */
     JSONObject upload(String accessToken) throws Exception {
         JSONObject meta = new JSONObject(read(new File(dir, "meta.json")));
+        File zip = new File(dir, "session.zip");
+        if (!new File(dir, "anchors.json").isFile() && !zip.isFile()) recoverInterrupted(meta);
+        if (meta.optInt("frames", 0) == 0) {
+            // Nothing was photographed before it stopped: nothing to send.
+            markUploaded(zip, "empty");
+            return new JSONObject().put("note", "That scan stopped before any photos were saved, so there was nothing to upload.");
+        }
         JSONObject anchors = new JSONObject(read(new File(dir, "anchors.json")));
         File stateFile = new File(dir, "upload.json");
         JSONObject state = stateFile.isFile() ? new JSONObject(read(stateFile)) : new JSONObject();
 
-        File zip = new File(dir, "session.zip");
         if (!zip.isFile()) {
             progress.update("Packing photos…", 0);
             pack(zip);
@@ -167,14 +173,52 @@ final class ScanUploader {
             }
         }
         progress.update("Submitting for processing…", 97);
-        JSONObject queued = request("POST", "/sessions/" + sessionId + "/finish",
-            new JSONObject().put("parts", parts).put("frames", meta.optInt("frames"))
-                .put("area_label", meta.optString("area_label"))
-                .put("alignment", anchors.optJSONObject("alignment"))
-                .put("transform", anchors.optJSONArray("transform")), null, key);
+        JSONObject queued;
+        try {
+            queued = request("POST", "/sessions/" + sessionId + "/finish",
+                new JSONObject().put("parts", parts).put("frames", meta.optInt("frames"))
+                    .put("area_label", meta.optString("area_label"))
+                    .put("alignment", anchors.optJSONObject("alignment"))
+                    .put("transform", anchors.optJSONArray("transform")), null, key);
+        } catch (HttpStatusException error) {
+            if (error.status != 422) throw error;
+            // Too few photos to build anything: say so once instead of
+            // offering the same upload on every visit.
+            markUploaded(zip, sessionId);
+            return new JSONObject().put("note", error.getMessage());
+        }
         markUploaded(zip, sessionId);
         progress.update("Uploaded. Thank you!", 100);
         return queued;
+    }
+
+    /**
+     * A scan interrupted mid-recording (app closed, phone restarted) has its
+     * photos but no anchors.json, no final photo count, and maybe a cut-off
+     * last line. Keeps every photo that was fully written so it can still be used.
+     */
+    private void recoverInterrupted(JSONObject meta) throws Exception {
+        File lines = new File(dir, "frames.jsonl");
+        StringBuilder kept = new StringBuilder();
+        int count = 0;
+        if (lines.isFile()) {
+            for (String line : read(lines).split("\n")) {
+                if (line.trim().isEmpty()) continue;
+                try {
+                    JSONObject frame = new JSONObject(line);
+                    if (new File(dir, frame.optString("file", "-")).length() > 0) {
+                        kept.append(line).append('\n');
+                        count++;
+                    }
+                } catch (Exception cutOff) {
+                    // The line being written when it stopped.
+                }
+            }
+        }
+        write(lines, kept.toString());
+        write(new File(dir, "anchors.json"), "{}");
+        meta.put("frames", count).put("interrupted", true);
+        write(new File(dir, "meta.json"), meta.toString());
     }
 
     /** Creates the server session for this scan and saves its id and upload key. */
