@@ -61,6 +61,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -111,6 +112,18 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private static final double FREE_APART_DEG = 40;
     private long lastFreeSpawnAt;
     private float[] lastFreeSpawnFrom;
+    // Real places float in their real direction once the compass is lined
+    // up with the AR world; bubbles stay in front of walls and furniture.
+    private static final double FREE_VIEW_DEG = 25;
+    private static final float FREE_WALL_GAP_M = 0.4f;
+    private static final float FREE_MIN_M = 0.9f;
+    private static final float FREE_PLACE_MIN_M = 0.7f;
+    private static final float FREE_UNKNOWN_M = 2.2f;
+    private static final long FREE_COMPASS_WAIT_MS = 15000;
+    private final ArCompass compass = new ArCompass();
+    private android.hardware.SensorManager sensors;
+    private long freeStartedAt;
+    private float[] lastForward;
     private final Set<String> answered = new HashSet<>();
     private static final float DISCOVER_DISTANCE = 1.6f;
 
@@ -212,6 +225,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             return;
         }
         Collections.addAll(enabledLayers, ArScene.LAYERS);
+        if (freeRoam) {
+            sensors = (android.hardware.SensorManager) getSystemService(SENSOR_SERVICE);
+            if (!Double.isNaN(scene.hereLat)) compass.setLocation(scene.hereLat, scene.hereLng);
+        }
         buildUi();
     }
 
@@ -221,6 +238,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     protected void onResume() {
         super.onResume();
         resumed = true;
+        if (freeRoam) compass.start(sensors);
         startAr();
     }
 
@@ -270,6 +288,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     protected void onPause() {
         super.onPause();
         resumed = false;
+        if (freeRoam) compass.stop(sensors);
         if (session != null) {
             surface.onPause();
             session.pause();
@@ -723,67 +742,151 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     }
 
     /**
-     * Free roam: like Pokémon GO, bubbles appear in the air at eye level,
-     * 2-3.5 m away within 60 degrees of where the visitor looks. No surface
-     * is needed. They are revealed gradually as the visitor explores: at most
-     * two unopened at once, the next after one is opened, after walking about
-     * 1.5 m, or after a short wait, each at least 2 m from the others and in
-     * a different direction from the unopened ones.
+     * Free roam: like Pokémon GO, bubbles appear in the air at eye level.
+     * A real place's bubble appears in that place's real direction once the
+     * visitor faces it (the compass lines up north first). Others appear
+     * within view, revealed gradually as the visitor explores: at most two
+     * unopened at once, the next after opening one, walking about 1.5 m or a
+     * short wait, spaced from the others. Every bubble stays in front of the
+     * nearest wall or object in its direction, so none is out of reach.
      */
     private void spawnAnywhere(Frame frame, float[] cameraPoint) {
+        Camera camera = frame.getCamera();
+        float[] back = camera.getDisplayOrientedPose().getZAxis();
+        float[] forward = {-back[0], -back[1], -back[2]};
+        compass.sample(forward);
+        lastForward = forward;
         long now = SystemClock.uptimeMillis();
         if (now - lastSpawnAttempt < 500) return;
         lastSpawnAttempt = now;
-        ArScene.Item next = null;
+        if (freeStartedAt == 0) freeStartedAt = now;
+        double facing = ArCompass.arHeading(forward);
+        if (Double.isNaN(facing)) return;  // looking straight up or down
+        // Without a compass after a while, places are placed like the rest.
+        boolean compassReady = compass.ready();
+        boolean ignoreDirections = !compassReady && now - freeStartedAt > FREE_COMPASS_WAIT_MS;
         int waiting = 0;
+        ArScene.Item ambient = null;
+        ArScene.Item ahead = null;
+        double aheadHeading = 0;
         for (ArScene.Item item : scene.items) {
             if (!visible(item)) continue;
-            if (!discoverAnchors.containsKey(item.id)) {
-                if (next == null) next = item;
-            } else if (!discovered.contains(item.id)) {
-                waiting++;
+            if (discoverAnchors.containsKey(item.id)) {
+                if (!discovered.contains(item.id)) waiting++;
+                continue;
+            }
+            if (!Double.isNaN(item.bearing) && !ignoreDirections) {
+                if (!compassReady || ahead != null) continue;
+                double heading = compass.arHeadingFor(item.bearing);
+                if (Math.abs(angleBetween(heading, facing)) <= Math.toRadians(FREE_VIEW_DEG)) {
+                    ahead = item;
+                    aheadHeading = heading;
+                }
+            } else if (ambient == null) {
+                ambient = item;
             }
         }
-        if (next == null || waiting >= FREE_WAITING_MAX) return;
-        boolean walked = lastFreeSpawnFrom == null
-            || Math.hypot(cameraPoint[0] - lastFreeSpawnFrom[0], cameraPoint[2] - lastFreeSpawnFrom[2]) > FREE_STEP_M;
-        if (waiting > 0 && !walked && now - lastFreeSpawnAt < FREE_GAP_MS) return;
-        float[] back = frame.getCamera().getDisplayOrientedPose().getZAxis();
-        float fx = -back[0], fz = -back[2];
-        float length = (float) Math.hypot(fx, fz);
-        if (length < 0.3f) return;  // looking straight up or down
-        fx /= length;
-        fz /= length;
+        ArScene.Item next;
+        boolean directional = ahead != null && waiting <= FREE_WAITING_MAX;
+        if (directional) {
+            next = ahead;
+        } else {
+            if (ambient == null || waiting >= FREE_WAITING_MAX) return;
+            boolean walked = lastFreeSpawnFrom == null
+                || Math.hypot(cameraPoint[0] - lastFreeSpawnFrom[0], cameraPoint[2] - lastFreeSpawnFrom[2]) > FREE_STEP_M;
+            if (waiting > 0 && !walked && now - lastFreeSpawnAt < FREE_GAP_MS) return;
+            next = ambient;
+        }
+        float[] view = new float[16];
+        float[] projection = new float[16];
+        float[] viewProjection = new float[16];
+        camera.getViewMatrix(view, 0);
+        camera.getProjectionMatrix(projection, 0, 0.05f, 100f);
+        Matrix.multiplyMM(viewProjection, 0, projection, 0, view, 0);
         List<float[]> taken = new ArrayList<>();
-        List<Double> waitingBearings = new ArrayList<>();
+        List<Double> waitingHeadings = new ArrayList<>();
         for (Map.Entry<String, Anchor> entry : discoverAnchors.entrySet()) {
             float[] at = entry.getValue().getPose().getTranslation();
             taken.add(at);
-            if (!discovered.contains(entry.getKey())) waitingBearings.add(Math.atan2(at[0] - cameraPoint[0], at[2] - cameraPoint[2]));
+            if (!discovered.contains(entry.getKey())) {
+                waitingHeadings.add(ArCompass.arHeading(new float[] {at[0] - cameraPoint[0], 0f, at[2] - cameraPoint[2]}));
+            }
         }
-        for (int attempt = 0; attempt < 12; attempt++) {
-            double yaw = Math.toRadians(-60 + 120 * random.nextFloat());
-            float dx = (float) (fx * Math.cos(yaw) - fz * Math.sin(yaw));
-            float dz = (float) (fx * Math.sin(yaw) + fz * Math.cos(yaw));
-            float distance = 2f + 1.5f * random.nextFloat();
+        for (int attempt = 0; attempt < (directional ? 5 : 12); attempt++) {
+            // Places sharing a direction fan out a little and sit at different distances.
+            double fan = 6 + 4 * attempt;
+            double heading = directional
+                ? aheadHeading + Math.toRadians(-fan + 2 * fan * random.nextFloat())
+                : facing + Math.toRadians(-FREE_VIEW_DEG + 2 * FREE_VIEW_DEG * random.nextFloat());
+            float dx = (float) Math.sin(heading);
+            float dz = (float) -Math.cos(heading);
+            float want = directional ? 2.2f + 1.2f * random.nextFloat() : 2f + 1.5f * random.nextFloat();
+            float distance = freeDistance(frame, viewProjection, cameraPoint, dx, dz, want, directional ? FREE_PLACE_MIN_M : FREE_MIN_M);
+            if (distance < 0) continue;
             float[] point = {cameraPoint[0] + dx * distance, cameraPoint[1] - 0.05f + 0.2f * (random.nextFloat() - 0.5f), cameraPoint[2] + dz * distance};
             boolean spaced = true;
             for (float[] other : taken) {
-                if (Math.hypot(point[0] - other[0], point[2] - other[2]) < FREE_SPACING_M) spaced = false;
+                if (Math.hypot(point[0] - other[0], point[2] - other[2]) < (directional ? 1f : FREE_SPACING_M)) spaced = false;
             }
-            double bearing = Math.atan2(point[0] - cameraPoint[0], point[2] - cameraPoint[2]);
-            for (double other : waitingBearings) {
-                double apart = Math.abs(Math.toDegrees(Math.atan2(Math.sin(bearing - other), Math.cos(bearing - other))));
-                if (apart < FREE_APART_DEG) spaced = false;
+            if (!directional) {
+                for (double other : waitingHeadings) {
+                    if (Math.abs(Math.toDegrees(angleBetween(heading, other))) < FREE_APART_DEG) spaced = false;
+                }
             }
             if (!spaced) continue;
             discoverAnchors.put(next.id, session.createAnchor(Pose.makeTranslation(point[0], point[1], point[2])));
             discoverLift.put(next.id, 0f);
             discoverRoom.put(next.id, "");
-            lastFreeSpawnAt = now;
-            lastFreeSpawnFrom = cameraPoint.clone();
+            if (!directional) {
+                lastFreeSpawnAt = now;
+                lastFreeSpawnFrom = cameraPoint.clone();
+            }
             return;
         }
+    }
+
+    /**
+     * How far a bubble can go in a direction: short of the nearest wall or
+     * object the depth sensor finds there, or a cautious distance when
+     * nothing is found. -1 when that spot is off screen (it can't be
+     * checked) or too close to reach comfortably.
+     */
+    private float freeDistance(Frame frame, float[] viewProjection, float[] cameraPoint, float dx, float dz, float want, float minimum) {
+        float[] world = {cameraPoint[0] + dx * want, cameraPoint[1], cameraPoint[2] + dz * want, 1f};
+        float[] clip = new float[4];
+        Matrix.multiplyMV(clip, 0, viewProjection, 0, world, 0);
+        if (clip[3] <= 0) return -1;
+        float x = (clip[0] / clip[3] + 1) / 2 * viewportWidth;
+        float y = (1 - clip[1] / clip[3]) / 2 * viewportHeight;
+        if (x < viewportWidth * 0.08f || x > viewportWidth * 0.92f || y < viewportHeight * 0.15f || y > viewportHeight * 0.85f) return -1;
+        float nearest = Float.MAX_VALUE;
+        for (HitResult hit : frame.hitTest(x, y)) nearest = Math.min(nearest, hit.getDistance());
+        float room = nearest == Float.MAX_VALUE ? Math.min(want, FREE_UNKNOWN_M) : Math.min(want, nearest - FREE_WALL_GAP_M);
+        return room < minimum ? -1 : room;
+    }
+
+    /** Signed difference a - b of two headings, in radians within (-pi, pi]. */
+    private static double angleBetween(double a, double b) {
+        return Math.atan2(Math.sin(a - b), Math.cos(a - b));
+    }
+
+    /** "The Point is to your left · 397 m": the next real place to turn toward. */
+    private String directionHint() {
+        float[] forward = lastForward;
+        if (forward == null || !compass.ready()) return null;
+        double facing = compass.facingDeg(forward);
+        if (Double.isNaN(facing)) return null;
+        for (ArScene.Item item : scene.items) {
+            if (!visible(item) || Double.isNaN(item.bearing) || discoverAnchors.containsKey(item.id)) continue;
+            double turn = Math.toDegrees(angleBetween(Math.toRadians(item.bearing), Math.toRadians(facing)));
+            String side = Math.abs(turn) <= FREE_VIEW_DEG ? "ahead of you" : Math.abs(turn) > 135 ? "behind you" : turn > 0 ? "to your right" : "to your left";
+            String name = item.title.replaceFirst("^(Nearby|Meet): ", "").replaceFirst("^Meet ", "");
+            String far = Double.isNaN(item.distanceM) ? "" : item.distanceM < 1000
+                ? String.format(Locale.US, " · %d m away", Math.round(item.distanceM))
+                : String.format(Locale.US, " · %.1f km away", item.distanceM / 1000);
+            return name + " is " + side + far + ".";
+        }
+        return null;
     }
 
     /** Free roam: bubbles bob gently, open when walked up to, and grow with nearness. */
@@ -1003,7 +1106,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (mode == MODE_ZONE) return "Tap the floor at each corner of the open, walkable area. Prompts only appear inside it.";
         if (mode == MODE_REPHOTO) return "Stand where the photo was taken and line it up with the scene, then tap Anchor.";
         if (nearViewpoint) return "You're standing where this photo was taken. Slide to compare then and now.";
-        if (freeRoam) return "Walk up to a bubble or tap it to open it.";
+        if (freeRoam) {
+            String turn = directionHint();
+            return turn != null ? turn + " Walk up to a bubble or tap it to open it." : "Walk up to a bubble or tap it to open it.";
+        }
         return "";
     }
 
