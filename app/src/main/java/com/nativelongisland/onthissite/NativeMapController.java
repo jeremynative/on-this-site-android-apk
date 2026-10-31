@@ -1274,17 +1274,20 @@ final class NativeMapController {
             ));
             style.addLayer(new CircleLayer("nli-profile-point-circles", PROFILE_POINT_SOURCE_ID).withProperties(
                 circleRadius(Expression.interpolate(Expression.linear(), Expression.zoom(),
-                    Expression.stop(7, 5.5f), Expression.stop(10, 8f), Expression.stop(13, 11f))),
+                    Expression.stop(7, 3.5f), Expression.stop(10, 6f), Expression.stop(13, 8.5f))),
                 circleColor(Expression.coalesce(Expression.toColor(Expression.get("color")), Expression.color(0xff315c48))),
-                circleOpacity(0.96f), circleStrokeColor("#ffffff"), circleStrokeWidth(2.5f)
+                circleOpacity(0.96f), circleStrokeColor("#ffffff"), circleStrokeWidth(1.5f)
             ));
-            style.addLayer(new SymbolLayer("nli-profile-point-numbers", PROFILE_POINT_SOURCE_ID).withProperties(
+            // Far out the stops are plain dots; numbers appear closer in.
+            SymbolLayer profileNumberLayer = new SymbolLayer("nli-profile-point-numbers", PROFILE_POINT_SOURCE_ID).withProperties(
                 textField(Expression.get("label")), textFont(new String[] { "Noto Sans Regular" }),
                 textSize(Expression.interpolate(Expression.linear(), Expression.zoom(),
-                    Expression.stop(7, 8f), Expression.stop(13, 12.5f))),
+                    Expression.stop(9.6, 7.5f), Expression.stop(13, 10.5f))),
                 textColor("#ffffff"), textHaloColor("rgba(42,47,44,0.7)"), textHaloWidth(0.6f),
                 textAllowOverlap(true), textIgnorePlacement(true)
-            ));
+            );
+            profileNumberLayer.setMinZoom(9.6f);
+            style.addLayer(profileNumberLayer);
             SymbolLayer profileLabelLayer = new SymbolLayer("nli-profile-point-labels", PROFILE_POINT_SOURCE_ID).withProperties(
                 textField(Expression.step(Expression.zoom(), Expression.get("title"),
                     Expression.stop(10, Expression.concat(Expression.get("title"), Expression.literal("\n"),
@@ -1293,7 +1296,7 @@ final class NativeMapController {
                 textSize(Expression.interpolate(Expression.linear(), Expression.zoom(),
                     Expression.stop(8.5, 9.5f), Expression.stop(13, 13f))),
                 textColor("#173528"), textHaloColor("rgba(255,255,255,0.95)"), textHaloWidth(1.6f),
-                textAnchor(Property.TEXT_ANCHOR_LEFT), textOffset(new Float[] { 1.3f, 0f }),
+                textAnchor(Property.TEXT_ANCHOR_LEFT), textOffset(new Float[] { 1f, 0f }),
                 textOptional(true), textAllowOverlap(false), textIgnorePlacement(false)
             );
             profileLabelLayer.setMinZoom(8.5f);
