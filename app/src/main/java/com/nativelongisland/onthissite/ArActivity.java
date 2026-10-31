@@ -790,10 +790,18 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private void collectFreeDraws(List<Draw> draws, Pose cameraPose) {
         float[] cameraPoint = cameraPose.getTranslation();
         long now = SystemClock.uptimeMillis();
+        List<String> stopped = new ArrayList<>();
         for (ArScene.Item item : scene.items) {
             if (!visible(item)) continue;
             Anchor anchor = discoverAnchors.get(item.id);
-            if (anchor == null || anchor.getTrackingState() != TrackingState.TRACKING) continue;
+            if (anchor == null) continue;
+            // ARCore stops every anchor when it has to restart tracking (fast
+            // movement, a covered camera); those bubbles are placed again.
+            if (anchor.getTrackingState() == TrackingState.STOPPED) {
+                stopped.add(item.id);
+                continue;
+            }
+            if (anchor.getTrackingState() != TrackingState.TRACKING) continue;
             Pose base = anchor.getPose();
             // A slow drift (about 8 s a cycle) while closed; opened cards hold still to be read.
             float bob = discovered.contains(item.id) ? 0f : 0.02f * (float) Math.sin(now / 1300.0 + (item.id.hashCode() & 0xff));
@@ -822,6 +830,12 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 float pulse = 0.85f + 0.15f * (float) Math.sin(now / 300.0);
                 draws.add(Draw.billboard(item.id, point, cameraPose, key, 0.26f, 0.26f, pulse, distance));
             }
+        }
+        for (String id : stopped) {
+            Anchor anchor = discoverAnchors.remove(id);
+            if (anchor != null) anchor.detach();
+            discoverLift.remove(id);
+            discoverRoom.remove(id);
         }
     }
 
