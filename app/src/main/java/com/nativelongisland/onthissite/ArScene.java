@@ -79,11 +79,18 @@ final class ArScene {
         String[] choices = new String[0];
         // Set once the visitor answers a language question correctly.
         boolean answered;
+        // A real place's compass bearing (degrees from true north) and
+        // distance from the visitor, so its bubble floats that way.
+        double bearing = Double.NaN;
+        double distanceM = Double.NaN;
         boolean sample;
     }
 
     String siteId = "mas-house";
     String title = "Ma's House";
+    // Where the visitor stood when nearby bubbles were built (for the compass).
+    double hereLat = Double.NaN;
+    double hereLng = Double.NaN;
     final List<Marker> markers = new ArrayList<>();
     final List<Room> rooms = new ArrayList<>();
     final List<Item> items = new ArrayList<>();
@@ -114,6 +121,11 @@ final class ArScene {
         ArScene scene = new ArScene();
         scene.siteId = root.optString("site_id", scene.siteId);
         scene.title = root.optString("title", scene.title);
+        JSONObject here = root.optJSONObject("here");
+        if (here != null) {
+            scene.hereLat = here.optDouble("lat", Double.NaN);
+            scene.hereLng = here.optDouble("lng", Double.NaN);
+        }
         JSONArray markers = root.optJSONArray("markers");
         for (int i = 0; markers != null && i < markers.length(); i++) {
             JSONObject m = markers.getJSONObject(i);
@@ -162,6 +174,8 @@ final class ArScene {
             item.viewpoint = floats(o.optJSONArray("viewpoint"));
             item.sample = o.optBoolean("sample", false);
             item.figure = o.optString("figure", "");
+            item.bearing = o.optDouble("bearing_deg", Double.NaN);
+            item.distanceM = o.optDouble("distance_m", Double.NaN);
             JSONArray choices = o.optJSONArray("choices");
             item.choices = new String[choices == null ? 0 : choices.length()];
             for (int c = 0; c < item.choices.length; c++) item.choices[c] = choices.getString(c);
