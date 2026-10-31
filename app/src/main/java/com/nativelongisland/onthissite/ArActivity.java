@@ -182,7 +182,13 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private TextView hint;
     private LinearLayout authorBar;
     private LinearLayout placementBar;
-    private LinearLayout infoPanel;
+    // A dimmed full-screen layer holding the centred card; tapping the dim closes it.
+    private FrameLayout infoPanel;
+    private FrameLayout infoImageFrame;
+    private String infoImageSource = "";
+    private FrameLayout photoViewer;
+    private ZoomImageView photoZoom;
+    private TextView photoCaption;
     private TextView infoText;
     private TextView infoKicker;
     private TextView infoTitle;
@@ -1279,27 +1285,37 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }));
         bottom.addView(distanceSlider, matchWrap());
 
-        // The card a bubble opens into: handle, coloured kicker, title,
-        // photo, readable text and source, and one clear Done button.
-        infoPanel = column();
+        // The card a bubble opens into, centred over the dimmed camera view:
+        // coloured kicker, title, the whole photo (tap to zoom), readable
+        // text and source, and one clear Done button.
+        infoPanel = new FrameLayout(this);
         infoPanel.setVisibility(View.GONE);
-        infoPanel.setBackground(rounded(Color.argb(245, 20, 26, 23), 26));
-        infoPanel.setPadding(dp(20), dp(10), dp(20), dp(14));
-        View handle = new View(this);
-        handle.setBackground(rounded(Color.argb(90, 255, 255, 255), 3));
-        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(40), dp(5));
-        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
-        handleParams.bottomMargin = dp(10);
-        infoPanel.addView(handle, handleParams);
+        infoPanel.setBackgroundColor(Color.argb(120, 0, 0, 0));
+        infoPanel.setClickable(true);
+        infoPanel.setOnClickListener(v -> infoPanel.setVisibility(View.GONE));
+        LinearLayout infoCard = column();
+        infoCard.setClickable(true);
+        infoCard.setBackground(rounded(Color.argb(248, 20, 26, 23), 26));
+        infoCard.setPadding(dp(20), dp(18), dp(20), dp(14));
         infoKicker = text(12, true);
         infoKicker.setLetterSpacing(0.08f);
         infoTitle = text(22, true);
         infoTitle.setPadding(0, dp(2), 0, dp(10));
         infoImage = new ImageView(this);
-        infoImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        infoImage.setClipToOutline(true);
-        infoImage.setBackground(rounded(Color.argb(60, 255, 255, 255), 16));
-        infoImage.setVisibility(View.GONE);
+        infoImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        infoImage.setOnClickListener(v -> openPhotoViewer());
+        infoImage.setContentDescription("Photo. Tap to zoom.");
+        infoImageFrame = new FrameLayout(this);
+        infoImageFrame.setBackground(rounded(Color.argb(255, 10, 14, 12), 16));
+        infoImageFrame.setClipToOutline(true);
+        infoImageFrame.setVisibility(View.GONE);
+        infoImageFrame.addView(infoImage, new FrameLayout.LayoutParams(-1, -1));
+        TextView zoomTag = text(12, true, "\u2922  Tap to zoom");
+        zoomTag.setBackground(rounded(Color.argb(170, 0, 0, 0), 12));
+        zoomTag.setPadding(dp(10), dp(5), dp(10), dp(5));
+        FrameLayout.LayoutParams zoomTagParams = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.END);
+        zoomTagParams.setMargins(0, 0, dp(8), dp(8));
+        infoImageFrame.addView(zoomTag, zoomTagParams);
         infoText = text(16, false);
         infoText.setTextColor(Color.rgb(232, 238, 233));
         infoText.setLineSpacing(0f, 1.25f);
@@ -1312,20 +1328,45 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         LinearLayout infoBody = column();
         infoBody.addView(infoKicker, matchWrap());
         infoBody.addView(infoTitle, matchWrap());
-        infoBody.addView(infoImage, new LinearLayout.LayoutParams(-1, dp(190)));
+        infoBody.addView(infoImageFrame, new LinearLayout.LayoutParams(-1, dp(260)));
         infoBody.addView(infoText, matchWrap());
         infoBody.addView(infoChoices, matchWrap());
         infoBody.addView(infoCredit, matchWrap());
         infoScroll = new ScrollView(this);
         infoScroll.setVerticalScrollBarEnabled(true);
         infoScroll.addView(infoBody);
-        // About half the screen: room to read a full story and scroll the rest.
-        infoPanel.addView(infoScroll, new LinearLayout.LayoutParams(-1, Math.round(getResources().getDisplayMetrics().heightPixels * 0.48f)));
+        infoCard.addView(infoScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
         infoActions = row();
         infoActions.setGravity(Gravity.END);
         infoActions.setPadding(0, dp(10), 0, 0);
-        infoPanel.addView(infoActions, matchWrap());
-        bottom.addView(infoPanel, matchWrap());
+        infoCard.addView(infoActions, matchWrap());
+        FrameLayout.LayoutParams cardParams = new FrameLayout.LayoutParams(-1,
+            Math.round(getResources().getDisplayMetrics().heightPixels * 0.74f), Gravity.CENTER);
+        cardParams.setMargins(dp(14), 0, dp(14), 0);
+        infoPanel.addView(infoCard, cardParams);
+
+        // Full-screen photo: pinch to zoom, drag, double-tap.
+        photoViewer = new FrameLayout(this);
+        photoViewer.setVisibility(View.GONE);
+        photoViewer.setBackgroundColor(Color.argb(250, 0, 0, 0));
+        photoViewer.setClickable(true);
+        photoZoom = new ZoomImageView(this);
+        photoViewer.addView(photoZoom, new FrameLayout.LayoutParams(-1, -1));
+        TextView closePhoto = text(20, true, "\u2715");
+        closePhoto.setGravity(Gravity.CENTER);
+        closePhoto.setBackground(oval(Color.argb(170, 40, 52, 46)));
+        closePhoto.setContentDescription("Close photo");
+        closePhoto.setOnClickListener(v -> photoViewer.setVisibility(View.GONE));
+        FrameLayout.LayoutParams closePhotoParams = new FrameLayout.LayoutParams(dp(46), dp(46), Gravity.TOP | Gravity.END);
+        closePhotoParams.setMargins(0, dp(40), dp(14), 0);
+        photoViewer.addView(closePhoto, closePhotoParams);
+        photoCaption = text(14, false);
+        photoCaption.setTextColor(Color.rgb(220, 228, 222));
+        photoCaption.setBackground(rounded(Color.argb(160, 0, 0, 0), 14));
+        photoCaption.setPadding(dp(14), dp(8), dp(14), dp(8));
+        FrameLayout.LayoutParams captionParams = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+        captionParams.setMargins(dp(14), 0, dp(14), dp(56));
+        photoViewer.addView(photoCaption, captionParams);
 
         placementBar = row();
         placementBar.setVisibility(View.GONE);
@@ -1344,6 +1385,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
         root.addView(bottom, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
         ScanActivity.keepAboveNavigationBar(bottom);
+        root.addView(infoPanel, new FrameLayout.LayoutParams(-1, -1));
+        root.addView(photoViewer, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
         status.setText("Starting camera…");
     }
@@ -1483,20 +1526,48 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
      * person figures are small map icons, so cards without a photo show none.
      */
     private void showInfoImage(ArScene.Item item) {
-        infoImage.setVisibility(View.GONE);
+        infoImageFrame.setVisibility(View.GONE);
         infoImage.setImageDrawable(null);
         String source = freeRoam ? item.image : (item.image.isEmpty() ? item.figure : item.image);
+        infoImageSource = source;
         if (source.isEmpty()) return;
         infoImage.setTag(item.id);
+        photoCaption.setText(item.title);
         loader.execute(() -> {
             Bitmap bitmap = decodeImage(source, 1200);
             if (bitmap == null) return;
             runOnUiThread(() -> {
                 if (!item.id.equals(infoImage.getTag())) return;
                 infoImage.setImageBitmap(bitmap);
-                infoImage.setVisibility(View.VISIBLE);
+                infoImageFrame.setVisibility(View.VISIBLE);
             });
         });
+    }
+
+    /** The card's photo full screen, sharp enough to zoom into. */
+    private void openPhotoViewer() {
+        String source = infoImageSource;
+        if (source.isEmpty()) return;
+        photoZoom.setImageDrawable(infoImage.getDrawable());
+        photoCaption.setVisibility(photoCaption.getText().length() > 0 ? View.VISIBLE : View.GONE);
+        photoViewer.setVisibility(View.VISIBLE);
+        loader.execute(() -> {
+            Bitmap sharp = decodeImage(source, 2600);
+            if (sharp != null) runOnUiThread(() -> {
+                if (source.equals(infoImageSource) && photoViewer.getVisibility() == View.VISIBLE) photoZoom.setImageBitmap(sharp);
+            });
+        });
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (photoViewer != null && photoViewer.getVisibility() == View.VISIBLE) {
+            photoViewer.setVisibility(View.GONE);
+        } else if (infoPanel != null && infoPanel.getVisibility() == View.VISIBLE) {
+            infoPanel.setVisibility(View.GONE);
+        } else {
+            super.onBackPressed();
+        }
     }
 
     /** A guide's question: what does this word mean? Wrong answers can be tried again. */
