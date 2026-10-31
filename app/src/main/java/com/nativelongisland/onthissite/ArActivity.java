@@ -15,6 +15,7 @@ import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.text.InputType;
@@ -237,6 +238,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             return;
         }
         Collections.addAll(enabledLayers, ArScene.LAYERS);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            backCallback = this::handleBack;
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback);
+        }
         if (freeRoam) {
             sensors = (android.hardware.SensorManager) getSystemService(SENSOR_SERVICE);
             if (!Double.isNaN(scene.hereLat)) compass.setLocation(scene.hereLat, scene.hereLng);
@@ -311,6 +316,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (backCallback != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backCallback);
+        }
         if (session != null) session.close();
         session = null;
         if (spaceLocalizer != null) spaceLocalizer.close();
@@ -1559,15 +1567,23 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         });
     }
 
-    @Override
-    public void onBackPressed() {
+    /** Back closes the zoomed photo first, then the card, and only then leaves AR. */
+    private void handleBack() {
         if (photoViewer != null && photoViewer.getVisibility() == View.VISIBLE) {
             photoViewer.setVisibility(View.GONE);
         } else if (infoPanel != null && infoPanel.getVisibility() == View.VISIBLE) {
             infoPanel.setVisibility(View.GONE);
         } else {
-            super.onBackPressed();
+            finish();
         }
+    }
+
+    // Android 13+ delivers Back here; apps targeting Android 16 no longer get onBackPressed().
+    private android.window.OnBackInvokedCallback backCallback;
+
+    @Override
+    public void onBackPressed() {
+        handleBack();
     }
 
     /** A guide's question: what does this word mean? Wrong answers can be tried again. */
