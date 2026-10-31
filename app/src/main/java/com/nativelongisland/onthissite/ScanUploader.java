@@ -110,25 +110,32 @@ final class ScanUploader {
         }
         int parts = (int) ((zip.length() + PART_BYTES - 1) / PART_BYTES);
 
-        if (!state.has("session_id")) {
-            if (accessToken == null || accessToken.isEmpty()) throw new IllegalStateException("Sign in to the app to upload this scan.");
-            JSONObject body = new JSONObject()
-                .put("area_label", meta.optString("area_label"))
-                .put("credit_name", meta.optString("credit_name"))
-                .put("credit_public", meta.optBoolean("credit_public", true))
-                .put("device", meta.optString("device"))
-                .put("parts_expected", parts)
-                .put("alignment", anchors.optJSONObject("alignment"))
-                .put("transform", anchors.optJSONArray("transform"));
-            JSONObject created = request("POST", "/spaces/" + meta.getString("space_id") + "/sessions", body, "Bearer " + accessToken, null);
-            JSONObject data = created.getJSONObject("data");
-            state.put("session_id", data.getString("id")).put("upload_key", data.getString("upload_key"));
-            write(stateFile, state.toString());
-        }
+        if (!state.has("session_id")) openSession(meta, anchors, parts, accessToken, stateFile, state);
         String sessionId = state.getString("session_id");
         String key = state.getString("upload_key");
-
-        JSONArray received = request("GET", "/sessions/" + sessionId, null, null, key).getJSONObject("data").optJSONArray("parts");
+        JSONObject remote = null;
+        try {
+            remote = request("GET", "/sessions/" + sessionId, null, null, key).getJSONObject("data");
+        } catch (HttpStatusException error) {
+            if (error.status != 404) throw error;
+        }
+        String remoteStatus = remote == null ? "missing" : remote.optString("status");
+        if (!"uploading".equals(remoteStatus)) {
+            if (remote != null && !"removed".equals(remoteStatus)) {
+                // Already submitted from here before (queued, built or being
+                // retried): nothing left to send.
+                markUploaded(zip, sessionId);
+                return null;
+            }
+            // The server no longer takes this session (removed in a clean-up,
+            // or never created there). The photos are still on the phone, so
+            // give them a fresh session instead of failing on every retry.
+            openSession(meta, anchors, parts, accessToken, stateFile, state);
+            sessionId = state.getString("session_id");
+            key = state.getString("upload_key");
+            remote = new JSONObject();
+        }
+        JSONArray received = remote.optJSONArray("parts");
         boolean[] done = new boolean[parts];
         for (int i = 0; received != null && i < received.length(); i++) {
             int idx = received.getJSONObject(i).getInt("idx");
@@ -165,12 +172,43 @@ final class ScanUploader {
                 .put("area_label", meta.optString("area_label"))
                 .put("alignment", anchors.optJSONObject("alignment"))
                 .put("transform", anchors.optJSONArray("transform")), null, key);
-        write(new File(dir, "uploaded"), sessionId);
-        // Keep meta/anchors as a receipt; the photos are now safely queued.
-        deleteTree(new File(dir, "frames"));
-        zip.delete();
+        markUploaded(zip, sessionId);
         progress.update("Uploaded. Thank you!", 100);
         return queued;
+    }
+
+    /** Creates the server session for this scan and saves its id and upload key. */
+    private void openSession(JSONObject meta, JSONObject anchors, int parts, String accessToken, File stateFile, JSONObject state) throws Exception {
+        if (accessToken == null || accessToken.isEmpty()) throw new IllegalStateException("Sign in to the app to upload this scan.");
+        JSONObject body = new JSONObject()
+            .put("area_label", meta.optString("area_label"))
+            .put("credit_name", meta.optString("credit_name"))
+            .put("credit_public", meta.optBoolean("credit_public", true))
+            .put("device", meta.optString("device"))
+            .put("parts_expected", parts)
+            .put("alignment", anchors.optJSONObject("alignment"))
+            .put("transform", anchors.optJSONArray("transform"));
+        JSONObject created = request("POST", "/spaces/" + meta.getString("space_id") + "/sessions", body, "Bearer " + accessToken, null);
+        JSONObject data = created.getJSONObject("data");
+        state.put("session_id", data.getString("id")).put("upload_key", data.getString("upload_key"));
+        write(stateFile, state.toString());
+    }
+
+    /** Keeps meta/anchors as a receipt; the photos are now safely queued. */
+    private void markUploaded(File zip, String sessionId) throws Exception {
+        write(new File(dir, "uploaded"), sessionId);
+        deleteTree(new File(dir, "frames"));
+        zip.delete();
+    }
+
+    /** An HTTP error from the scan server, with its status code. */
+    static final class HttpStatusException extends IllegalStateException {
+        final int status;
+
+        HttpStatusException(int status, String message) {
+            super(message);
+            this.status = status;
+        }
     }
 
     private void pack(File zip) throws Exception {
@@ -278,7 +316,7 @@ final class ScanUploader {
                 // Not JSON; show the raw text.
             }
             if (status == 401) message = "Your sign-in expired. Open the map, sign in again, then retry the upload.";
-            throw new IllegalStateException(message);
+            throw new HttpStatusException(status, message);
         }
         return text.isEmpty() ? new JSONObject() : new JSONObject(text);
     }
