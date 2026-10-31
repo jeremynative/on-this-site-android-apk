@@ -636,7 +636,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             try {
                 Bitmap bitmap;
                 if (key.startsWith("card:")) {
-                    bitmap = ArCards.promptCard(item);
+                    bitmap = ArCards.promptCard(item, freeRoam ? decodeImage(item.image, 900) : null);
                 } else if (key.startsWith("bubble:")) {
                     Bitmap inner = decodeImage(item.figure.isEmpty() ? item.image : item.figure, 512);
                     int color = ArCards.layerColor(item.layer);
@@ -663,7 +663,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         loader.execute(() -> {
             try {
                 if (ArScene.KIND_PHRASE.equals(item.kind) || ArScene.KIND_AUDIO.equals(item.kind)) {
-                    gl.queueTexture("card:" + item.id, ArCards.promptCard(item));
+                    gl.queueTexture("card:" + item.id, ArCards.promptCard(item, freeRoam ? decodeImage(item.image, 900) : null));
                 } else {
                     Bitmap photo = decodeImage(item.image, 1600);
                     if (photo != null) gl.queueTexture(textureKey(item), ArCards.photoCard(photo, item, !ArScene.KIND_REPHOTO.equals(item.kind)));
@@ -812,16 +812,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 runOnUiThread(() -> onDiscovered(item));
             }
             if (discovered.contains(item.id)) {
-                if (ArScene.KIND_PHOTO.equals(item.kind) && !item.image.isEmpty()) {
-                    String key = "framed:" + item.id;
-                    ensureTexture(item, key);
-                    float aspect = gl.aspect(key);
-                    if (aspect > 0f) {
-                        float yaw = ArPlacement.yawTowards(point[0], point[2], cameraPoint[0], cameraPoint[2]);
-                        draws.add(Draw.posed(item.id, new Pose(point, ArPlacement.yawQuaternion(yaw)), key, 0.45f, 0.45f * aspect, 0.97f, distance));
-                        continue;
-                    }
-                }
                 addCard(draws, item, point, cameraPoint, 0.5f);
             } else {
                 String key = "bubble:" + item.id;

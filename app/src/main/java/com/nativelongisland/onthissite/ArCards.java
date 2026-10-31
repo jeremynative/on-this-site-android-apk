@@ -70,12 +70,18 @@ final class ArCards {
 
     /** Language prompt or audio clip card, revealed once the visitor walks up to an orb. */
     static Bitmap promptCard(ArScene.Item item) {
+        return promptCard(item, null);
+    }
+
+    /** The same card with the item's photo across the top. */
+    static Bitmap promptCard(ArScene.Item item, Bitmap photo) {
         int width = 900;
         int pad = 44;
         int inner = width - pad * 2;
         int accent = layerColor(item.layer);
         TextPaint tagPaint = textPaint(28, accent, true);
-        TextPaint wordPaint = textPaint(76, Color.WHITE, true);
+        // A word is the headline of a language card; stories get a smaller title.
+        TextPaint wordPaint = textPaint(ArScene.KIND_PHRASE.equals(item.kind) ? 76 : 54, Color.WHITE, true);
         TextPaint sayPaint = textPaint(36, Color.rgb(220, 220, 220), false);
         sayPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.ITALIC));
         TextPaint bodyPaint = textPaint(36, Color.rgb(235, 235, 235), false);
@@ -101,7 +107,8 @@ final class ArCards {
             hint != null ? layout(hint, hintPaint, inner) : null,
             !quiz && !item.credit.isEmpty() ? layout(item.credit, textPaint(24, Color.rgb(170, 178, 174), false), inner) : null,
         };
-        int height = pad;
+        int photoHeight = photo == null ? 0 : Math.min(Math.round(inner * 0.62f), Math.round(inner * photo.getHeight() / (float) photo.getWidth()));
+        int height = pad + (photoHeight > 0 ? photoHeight + 22 : 0);
         for (StaticLayout line : lines) if (line != null) height += line.getHeight() + 14;
         height += pad - 14;
         Bitmap card = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
@@ -115,6 +122,19 @@ final class ArCards {
         edge.setColor(accent);
         canvas.drawRoundRect(new RectF(3, 3, width - 3, height - 3), 46, 46, edge);
         canvas.translate(pad, pad);
+        if (photoHeight > 0) {
+            // Centre-crop the photo into a rounded frame.
+            float scale = Math.max(inner / (float) photo.getWidth(), photoHeight / (float) photo.getHeight());
+            float w = photo.getWidth() * scale;
+            float h = photo.getHeight() * scale;
+            canvas.save();
+            android.graphics.Path frame = new android.graphics.Path();
+            frame.addRoundRect(new RectF(0, 0, inner, photoHeight), 24, 24, android.graphics.Path.Direction.CW);
+            canvas.clipPath(frame);
+            canvas.drawBitmap(photo, null, new RectF((inner - w) / 2, (photoHeight - h) / 2, (inner + w) / 2, (photoHeight + h) / 2), new Paint(Paint.FILTER_BITMAP_FLAG));
+            canvas.restore();
+            canvas.translate(0, photoHeight + 22);
+        }
         for (StaticLayout line : lines) {
             if (line == null) continue;
             line.draw(canvas);
