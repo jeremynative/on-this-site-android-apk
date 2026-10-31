@@ -167,6 +167,11 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private volatile GapTargets gapTargets;
     private int gapsDone;
     private long gapsCheckedAt;
+    // For the upload's "continue" diagnostics: when the earlier scans first
+    // appeared (and how they were placed), and when the camera recognised the spot.
+    private long archiveShownAt = -1;
+    private String archivePlacedBy = "none";
+    private long linedUpAt = -1;
     private int meshTriBuffer;
     private int meshLineBuffer;
     private long meshLoggedAt;
@@ -666,8 +671,13 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
     private void drawArchive() {
         if (archivePoints == null) return;
         // Session -> place: exact once the camera has recognised the spot, else rough from GPS + compass.
-        float[] transform = localizer != null && localizer.locked() ? localizer.transform() : roughArchiveTransform();
+        boolean lined = localizer != null && localizer.locked();
+        float[] transform = lined ? localizer.transform() : roughArchiveTransform();
         if (transform == null) return;
+        long now = SystemClock.uptimeMillis();
+        if (lined && linedUpAt < 0) linedUpAt = now;
+        if (archiveShownAt < 0) archiveShownAt = now;
+        if (lined || "none".equals(archivePlacedBy)) archivePlacedBy = lined ? "camera" : "gps-compass";
         // The transform maps this session into the space; points come in space coordinates.
         float[] origin = ArPlacement.inverse(transform);
         new Pose(new float[] {origin[0], origin[1], origin[2]}, new float[] {origin[3], origin[4], origin[5], origin[6]})
@@ -766,7 +776,14 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
             for (int i = 0; i < xyz.length; i++) xyz[i] = (float) values.getDouble(i);
             float[] vertices = ArchiveDensity.colour(xyz);
             float[] centroid = new float[3];
-            for (int i = 0; i < xyz.length; i++) centroid[i % 3] += xyz[i] / Math.max(1, xyz.length / 3);
+            JSONArray centre = body.optJSONArray("centre");
+            if (centre != null && centre.length() == 3) {
+                // Rooms built separately sit far away in the model; the server
+                // gives the centre of the ones placed on the map.
+                for (int k = 0; k < 3; k++) centroid[k] = (float) centre.getDouble(k);
+            } else {
+                for (int i = 0; i < xyz.length; i++) centroid[i % 3] += xyz[i] / Math.max(1, xyz.length / 3);
+            }
             archiveCentroid = centroid;
             FloatBuffer buffer = ByteBuffer.allocateDirect(vertices.length * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
             buffer.put(vertices).position(0);
@@ -999,12 +1016,34 @@ public class ScanActivity extends Activity implements GLSurfaceView.Renderer, Se
                 ScanUploader.write(new File(sessionDir, "anchors.json"), anchors.toString());
                 JSONObject meta = new JSONObject(ScanUploader.read(new File(sessionDir, "meta.json")));
                 meta.put("frames", frames).put("distance_m", distance).put("finished_at", System.currentTimeMillis());
+                if (archivePointCount > 0) meta.put("continue", continueDiagnostics());
                 ScanUploader.write(new File(sessionDir, "meta.json"), meta.toString());
                 runOnUiThread(() -> upload(sessionDir));
             } catch (Exception error) {
                 runOnUiThread(() -> detail.setText("Couldn't save the scan: " + error.getMessage()));
             }
         }).start();
+    }
+
+    /**
+     * How continuing earlier scans went, readable from the server afterwards:
+     * whether the earlier scans and their orange spots appeared, how they were
+     * placed, when the camera recognised the spot, and how many spots were filled.
+     */
+    private JSONObject continueDiagnostics() throws Exception {
+        GapTargets targets = gapTargets;
+        return new JSONObject()
+            .put("archive_points", archivePointCount)
+            .put("placed_by", archivePlacedBy)
+            .put("shown_s", secondsIntoRecording(archiveShownAt))
+            .put("lined_up_s", secondsIntoRecording(linedUpAt))
+            .put("gaps", targets == null ? 0 : targets.count())
+            .put("gaps_filled", targets == null ? 0 : gapsDone);
+    }
+
+    /** Seconds after recording started (0 if before), or -1 if it never happened. */
+    private double secondsIntoRecording(long at) {
+        return at < 0 ? -1 : Math.round(Math.max(0, at - recordingStartedAt) / 100.0) / 10.0;
     }
 
     /** Session -> space transform from our positioning fixes, if any. */
