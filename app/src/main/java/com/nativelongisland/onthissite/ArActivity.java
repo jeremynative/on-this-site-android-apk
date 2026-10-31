@@ -184,6 +184,12 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private LinearLayout placementBar;
     private LinearLayout infoPanel;
     private TextView infoText;
+    private TextView infoKicker;
+    private TextView infoTitle;
+    private TextView infoCredit;
+    private TextView foundPill;
+    private View progressFill;
+    private View progressTrack;
     private ImageView infoImage;
     private LinearLayout infoChoices;
     private ScrollView infoScroll;
@@ -879,12 +885,15 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         for (ArScene.Item item : scene.items) {
             if (!visible(item) || Double.isNaN(item.bearing) || discoverAnchors.containsKey(item.id)) continue;
             double turn = Math.toDegrees(angleBetween(Math.toRadians(item.bearing), Math.toRadians(facing)));
-            String side = Math.abs(turn) <= FREE_VIEW_DEG ? "ahead of you" : Math.abs(turn) > 135 ? "behind you" : turn > 0 ? "to your right" : "to your left";
+            String arrow = Math.abs(turn) <= FREE_VIEW_DEG ? "↑" : Math.abs(turn) > 135 ? "↓" : turn > 0 ? "→" : "←";
             String name = item.title.replaceFirst("^(Nearby|Meet): ", "").replaceFirst("^Meet ", "");
             String far = Double.isNaN(item.distanceM) ? "" : item.distanceM < 1000
-                ? String.format(Locale.US, " · %d m away", Math.round(item.distanceM))
-                : String.format(Locale.US, " · %.1f km away", item.distanceM / 1000);
-            return name + " is " + side + far + ".";
+                ? String.format(Locale.US, " · %d m", Math.round(item.distanceM))
+                : String.format(Locale.US, " · %.1f km", item.distanceM / 1000);
+            return Math.abs(turn) > 135 ? arrow + "  Turn around: " + name + far
+                : turn > FREE_VIEW_DEG ? name + far + "  " + arrow
+                : turn < -FREE_VIEW_DEG ? arrow + "  " + name + far
+                : arrow + "  " + name + far + " ahead";
         }
         return null;
     }
@@ -1081,8 +1090,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             int total = 0;
             for (ArScene.Item item : scene.items) if (visible(item)) total++;
             return found >= total && total > 0
-                ? "You found every bubble here. Thank you for learning with us!"
-                : scene.title + ": turn around to find stories, people and words floating nearby · " + found + " of " + total + " found";
+                ? "You found all " + total + ". Thank you for learning with us!"
+                : found + " of " + total + " found · turn around to find more";
         }
         if (room == null) {
             if (lastMarkerId != null) return authorMode ? "New marker: name this room to start." : "This marker isn't set up yet.";
@@ -1108,7 +1117,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (nearViewpoint) return "You're standing where this photo was taken. Slide to compare then and now.";
         if (freeRoam) {
             String turn = directionHint();
-            return turn != null ? turn + " Walk up to a bubble or tap it to open it." : "Walk up to a bubble or tap it to open it.";
+            if (turn != null) return turn;
+            return discovered.isEmpty() ? "Walk up to a bubble or tap it" : "";
         }
         return "";
     }
@@ -1123,6 +1133,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             status.setText(text);
             hint.setText(hintValue);
             hint.setVisibility(hintValue.isEmpty() ? View.GONE : View.VISIBLE);
+            if (freeRoam && progressFill != null) {
+                int total = 0;
+                for (ArScene.Item item : scene.items) if (visible(item)) total++;
+                float share = total == 0 ? 0f : Math.min(1f, discovered.size() / (float) total);
+                ViewGroup.LayoutParams params = progressFill.getLayoutParams();
+                params.width = Math.round(progressTrack.getWidth() * share);
+                progressFill.setLayoutParams(params);
+            }
         });
     }
 
@@ -1163,27 +1181,76 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         alignOverlay.setVisibility(View.GONE);
         root.addView(alignOverlay, new FrameLayout.LayoutParams(-1, -1));
 
+        // Top: a round close button and a translucent capsule with the
+        // place's name, how many bubbles are found and a thin progress bar;
+        // below it, a pill pointing to the next real place. The camera view
+        // stays clear.
         LinearLayout top = column();
-        top.setPadding(dp(12), dp(36), dp(12), dp(8));
-        top.setBackgroundColor(Color.argb(150, 0, 0, 0));
+        top.setPadding(dp(14), dp(40), dp(14), dp(8));
+        top.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[] {Color.argb(150, 0, 0, 0), Color.argb(0, 0, 0, 0)}));
         LinearLayout titleRow = row();
-        Button close = button("Close", v -> finish());
-        titleRow.addView(close);
-        status = text(15, true);
-        status.setPadding(dp(10), 0, 0, 0);
-        titleRow.addView(status, new LinearLayout.LayoutParams(0, -2, 1f));
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView close = text(20, true, "✕");
+        close.setGravity(Gravity.CENTER);
+        close.setBackground(oval(Color.argb(150, 20, 26, 23)));
+        close.setContentDescription("Close AR");
+        close.setOnClickListener(v -> finish());
+        titleRow.addView(close, new LinearLayout.LayoutParams(dp(46), dp(46)));
+        LinearLayout capsule = column();
+        capsule.setBackground(rounded(Color.argb(150, 20, 26, 23), 23));
+        capsule.setPadding(dp(16), dp(7), dp(16), dp(9));
+        TextView heading = text(16, true, scene.title);
+        heading.setSingleLine(true);
+        heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        capsule.addView(heading);
+        status = text(13, false);
+        status.setTextColor(Color.rgb(200, 214, 205));
+        capsule.addView(status);
+        FrameLayout bar = new FrameLayout(this);
+        progressTrack = new View(this);
+        progressTrack.setBackground(rounded(Color.argb(70, 255, 255, 255), 2));
+        bar.addView(progressTrack, new FrameLayout.LayoutParams(-1, dp(4)));
+        progressFill = new View(this);
+        progressFill.setBackground(rounded(Color.rgb(126, 211, 158), 2));
+        bar.addView(progressFill, new FrameLayout.LayoutParams(0, dp(4)));
+        LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(-1, dp(4));
+        barParams.topMargin = dp(6);
+        bar.setVisibility(freeRoam ? View.VISIBLE : View.GONE);
+        capsule.addView(bar, barParams);
+        LinearLayout.LayoutParams capsuleParams = new LinearLayout.LayoutParams(0, -2, 1f);
+        capsuleParams.leftMargin = dp(10);
+        titleRow.addView(capsule, capsuleParams);
         top.addView(titleRow);
-        LinearLayout chips = row();
-        chips.setPadding(0, 0, 0, dp(6));
-        for (String layer : ArScene.LAYERS) chips.addView(layerChip(layer));
-        HorizontalScrollView chipScroll = new HorizontalScrollView(this);
-        chipScroll.setHorizontalScrollBarEnabled(false);
-        chipScroll.addView(chips);
-        top.addView(chipScroll);
-        hint = text(14, false);
+        // Layer filters belong to the walk-through; free roam doesn't need them.
+        if (!freeRoam) {
+            LinearLayout chips = row();
+            chips.setPadding(0, 0, 0, dp(6));
+            for (String layer : ArScene.LAYERS) chips.addView(layerChip(layer));
+            HorizontalScrollView chipScroll = new HorizontalScrollView(this);
+            chipScroll.setHorizontalScrollBarEnabled(false);
+            chipScroll.addView(chips);
+            top.addView(chipScroll);
+        }
+        hint = text(14, true);
+        hint.setSingleLine(true);
+        hint.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
         hint.setVisibility(View.GONE);
-        top.addView(hint);
+        hint.setBackground(rounded(Color.argb(170, 20, 26, 23), 18));
+        hint.setPadding(dp(14), dp(8), dp(14), dp(8));
+        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-2, -2);
+        hintParams.gravity = Gravity.CENTER_HORIZONTAL;
+        hintParams.topMargin = dp(10);
+        top.addView(hint, hintParams);
         root.addView(top, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
+
+        foundPill = text(14, true);
+        foundPill.setVisibility(View.GONE);
+        foundPill.setBackground(rounded(Color.rgb(46, 125, 84), 20));
+        foundPill.setPadding(dp(16), dp(9), dp(16), dp(9));
+        FrameLayout.LayoutParams foundParams = new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_HORIZONTAL | Gravity.CENTER_VERTICAL);
+        foundParams.topMargin = dp(120);
+        root.addView(foundPill, foundParams);
 
         LinearLayout bottom = column();
         bottom.setPadding(dp(12), dp(8), dp(12), dp(28));
@@ -1212,27 +1279,52 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }));
         bottom.addView(distanceSlider, matchWrap());
 
+        // The card a bubble opens into: handle, coloured kicker, title,
+        // photo, readable text and source, and one clear Done button.
         infoPanel = column();
         infoPanel.setVisibility(View.GONE);
-        infoPanel.setBackground(rounded(Color.argb(225, 18, 24, 22)));
-        infoPanel.setPadding(dp(16), dp(12), dp(16), dp(12));
-        infoText = text(16, false);
-        infoText.setLineSpacing(0f, 1.15f);
+        infoPanel.setBackground(rounded(Color.argb(245, 20, 26, 23), 26));
+        infoPanel.setPadding(dp(20), dp(10), dp(20), dp(14));
+        View handle = new View(this);
+        handle.setBackground(rounded(Color.argb(90, 255, 255, 255), 3));
+        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(dp(40), dp(5));
+        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
+        handleParams.bottomMargin = dp(10);
+        infoPanel.addView(handle, handleParams);
+        infoKicker = text(12, true);
+        infoKicker.setLetterSpacing(0.08f);
+        infoTitle = text(22, true);
+        infoTitle.setPadding(0, dp(2), 0, dp(10));
         infoImage = new ImageView(this);
-        infoImage.setAdjustViewBounds(true);
-        infoImage.setMaxHeight(dp(220));
+        infoImage.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        infoImage.setClipToOutline(true);
+        infoImage.setBackground(rounded(Color.argb(60, 255, 255, 255), 16));
         infoImage.setVisibility(View.GONE);
+        infoText = text(16, false);
+        infoText.setTextColor(Color.rgb(232, 238, 233));
+        infoText.setLineSpacing(0f, 1.25f);
+        infoText.setPadding(0, dp(12), 0, 0);
         infoChoices = column();
+        infoChoices.setPadding(0, dp(6), 0, 0);
+        infoCredit = text(13, false);
+        infoCredit.setTextColor(Color.rgb(159, 176, 166));
+        infoCredit.setPadding(0, dp(12), 0, dp(4));
         LinearLayout infoBody = column();
-        infoBody.addView(infoImage, matchWrap());
+        infoBody.addView(infoKicker, matchWrap());
+        infoBody.addView(infoTitle, matchWrap());
+        infoBody.addView(infoImage, new LinearLayout.LayoutParams(-1, dp(190)));
         infoBody.addView(infoText, matchWrap());
         infoBody.addView(infoChoices, matchWrap());
+        infoBody.addView(infoCredit, matchWrap());
         infoScroll = new ScrollView(this);
+        infoScroll.setVerticalScrollBarEnabled(true);
         infoScroll.addView(infoBody);
         // About half the screen: room to read a full story and scroll the rest.
-        infoPanel.addView(infoScroll, new LinearLayout.LayoutParams(-1, Math.round(getResources().getDisplayMetrics().heightPixels * 0.45f)));
+        infoPanel.addView(infoScroll, new LinearLayout.LayoutParams(-1, Math.round(getResources().getDisplayMetrics().heightPixels * 0.48f)));
         infoActions = row();
-        infoPanel.addView(infoActions);
+        infoActions.setGravity(Gravity.END);
+        infoActions.setPadding(0, dp(10), 0, 0);
+        infoPanel.addView(infoActions, matchWrap());
         bottom.addView(infoPanel, matchWrap());
 
         placementBar = row();
@@ -1288,17 +1380,19 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             askMeaning(item, "");
             return;
         }
+        String heading = item.title.isEmpty() ? (item.word.isEmpty() ? "Untitled" : item.word) : item.title;
+        setCardHeader(item, heading);
         StringBuilder body = new StringBuilder();
-        body.append(item.title.isEmpty() ? (item.word.isEmpty() ? "Untitled" : item.word) : item.title);
-        if (!item.word.isEmpty() && !item.word.equals(item.title)) body.append("\n").append(item.word);
-        if (!item.pronunciation.isEmpty()) body.append("\nsay: ").append(item.pronunciation);
-        if (!item.meaning.isEmpty()) body.append("\n").append(item.meaning);
-        if (!item.caption.isEmpty()) body.append("\n\n").append(item.caption);
-        if (!item.credit.isEmpty()) body.append("\n\nCredit: ").append(item.credit);
+        if (!item.word.isEmpty() && !item.word.equals(item.title)) body.append(item.word);
+        if (!item.pronunciation.isEmpty()) body.append(body.length() > 0 ? "\n" : "").append("say: ").append(item.pronunciation);
+        if (!item.meaning.isEmpty()) body.append(body.length() > 0 ? "\n" : "").append(item.meaning);
+        if (!item.caption.isEmpty()) body.append(body.length() > 0 ? "\n\n" : "").append(item.caption);
         ArScene.Room room = scene.room(item.roomId);
         if (authorMode) body.append("\n\n[").append(ArCards.layerLabel(item.layer)).append(" · ")
             .append(item.placement).append(room == null ? "" : " · " + room.name).append("]");
         infoText.setText(body);
+        infoText.setVisibility(body.length() > 0 ? View.VISIBLE : View.GONE);
+        setCredit(item);
         infoActions.removeAllViews();
         if (!item.audio.isEmpty()) infoActions.addView(button("Play", v -> playAudio(item)));
         if (authorMode) {
@@ -1311,7 +1405,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 }));
             }
             infoActions.addView(button("Delete", v -> new AlertDialog.Builder(this)
-                .setMessage("Remove \"" + body.toString().split("\n")[0] + "\" from the AR scene?")
+                .setMessage("Remove \"" + heading + "\" from the AR scene?")
                 .setPositiveButton("Remove", (d, w) -> {
                     synchronized (lock) {
                         scene.items.remove(item);
@@ -1324,16 +1418,74 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 .setNegativeButton("Cancel", null)
                 .show()));
         }
-        infoActions.addView(button("Close", v -> infoPanel.setVisibility(View.GONE)));
+        infoActions.addView(doneButton());
         infoPanel.setVisibility(View.VISIBLE);
         if (!item.audio.isEmpty() && !ArScene.PLACEMENT_DISCOVER.equals(item.placement)) playAudio(item);
     }
 
-    /** The item's photo (or its guide figure) above the text, loaded in the background. */
+    /** "MEET SOMEONE", "LANGUAGE", "ON THIS SITE"…: what kind of bubble this is, in its colour. */
+    private void setCardHeader(ArScene.Item item, String heading) {
+        String kind = ArScene.KIND_PHRASE.equals(item.kind) ? "LANGUAGE"
+            : ArScene.KIND_AUDIO.equals(item.kind) ? "LISTEN"
+            : item.id.startsWith("person-") ? "MEET SOMEONE"
+            : item.id.startsWith("story-") || item.id.startsWith("note-") || item.id.startsWith("plant-") ? "FROM THE COMMUNITY"
+            : "ON THIS SITE";
+        String far = Double.isNaN(item.distanceM) ? "" : item.distanceM < 1000
+            ? String.format(Locale.US, " · %d M AWAY", Math.round(item.distanceM))
+            : String.format(Locale.US, " · %.1f KM AWAY", item.distanceM / 1000);
+        infoKicker.setText(kind + far);
+        infoKicker.setTextColor(ArCards.layerColor(item.layer));
+        infoTitle.setText(heading);
+    }
+
+    private void setCredit(ArScene.Item item) {
+        infoCredit.setText(item.credit.isEmpty() ? "" : "Source: " + item.credit);
+        infoCredit.setVisibility(item.credit.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    /** The card's one clear way out. */
+    private TextView doneButton() {
+        TextView done = text(16, true, "Done");
+        done.setGravity(Gravity.CENTER);
+        done.setBackground(rounded(Color.rgb(46, 125, 84), 24));
+        done.setPadding(dp(28), dp(12), dp(28), dp(12));
+        done.setOnClickListener(v -> infoPanel.setVisibility(View.GONE));
+        return done;
+    }
+
+    /** A full-width answer button for a language question. */
+    private TextView choiceButton(String label, View.OnClickListener listener) {
+        TextView choice = text(17, true, label);
+        choice.setGravity(Gravity.CENTER);
+        GradientDrawable outline = rounded(Color.argb(40, 255, 255, 255), 14);
+        outline.setStroke(dp(1), Color.argb(110, 255, 255, 255));
+        choice.setBackground(outline);
+        choice.setPadding(dp(16), dp(13), dp(16), dp(13));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.topMargin = dp(8);
+        choice.setLayoutParams(params);
+        choice.setOnClickListener(listener);
+        return choice;
+    }
+
+    /** "You found …": a short-lived pill in the middle of the view. */
+    private void showFound(String message) {
+        foundPill.setText(message);
+        foundPill.setAlpha(0f);
+        foundPill.setVisibility(View.VISIBLE);
+        foundPill.animate().alpha(1f).setDuration(180).withEndAction(() ->
+            foundPill.animate().alpha(0f).setStartDelay(1800).setDuration(400)
+                .withEndAction(() -> foundPill.setVisibility(View.GONE)).start()).start();
+    }
+
+    /**
+     * The item's photo above the text, loaded in the background. Guide and
+     * person figures are small map icons, so cards without a photo show none.
+     */
     private void showInfoImage(ArScene.Item item) {
         infoImage.setVisibility(View.GONE);
         infoImage.setImageDrawable(null);
-        String source = item.image.isEmpty() ? item.figure : item.image;
+        String source = freeRoam ? item.image : (item.image.isEmpty() ? item.figure : item.image);
         if (source.isEmpty()) return;
         infoImage.setTag(item.id);
         loader.execute(() -> {
@@ -1349,37 +1501,47 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     /** A guide's question: what does this word mean? Wrong answers can be tried again. */
     private void askMeaning(ArScene.Item item, String feedback) {
-        String speaker = item.title.isEmpty() ? "" : item.title + " says: ";
-        infoText.setText((feedback.isEmpty() ? "" : feedback + "\n\n") + speaker + "\u201c" + item.word + "\u201d"
-            + (item.pronunciation.isEmpty() ? "" : "\nsay: " + item.pronunciation)
-            + "\n\nWhat does it mean?");
+        setCardHeader(item, "“" + item.word + "”");
+        infoText.setVisibility(View.VISIBLE);
+        infoText.setText((item.title.isEmpty() ? "" : item.title + " asks you:\n")
+            + (item.pronunciation.isEmpty() ? "" : "say: " + item.pronunciation + "\n")
+            + "What does this word mean?" + (feedback.isEmpty() ? "" : "\n\n" + feedback));
+        infoCredit.setVisibility(View.GONE);
         infoActions.removeAllViews();
         infoChoices.removeAllViews();
         for (String choice : item.choices) {
-            infoChoices.addView(button(choice, v -> {
+            infoChoices.addView(choiceButton(choice, v -> {
                 if (choice.equalsIgnoreCase(item.meaning)) {
                     answered.add(item.id);
                     item.answered = true;
                     invalidateTextures(item);
                     vibrateConfirm();
-                    infoText.setText("Yes! \u201c" + item.word + "\u201d means " + item.meaning + "."
-                        + (item.caption.isEmpty() ? "" : "\n\n" + item.caption)
-                        + (item.credit.isEmpty() ? "" : "\n\nSource: " + item.credit));
-                    infoChoices.removeAllViews();
-                    infoActions.removeAllViews();
-                    infoActions.addView(button("Close", w -> infoPanel.setVisibility(View.GONE)));
+                    v.setBackground(rounded(Color.rgb(46, 125, 84), 14));
+                    infoText.setText("Yes! “" + item.word + "” means " + item.meaning + "."
+                        + (item.caption.isEmpty() ? "" : "\n\n" + item.caption));
+                    setCredit(item);
+                    for (int i = 0; i < infoChoices.getChildCount(); i++) {
+                        View other = infoChoices.getChildAt(i);
+                        other.setEnabled(false);
+                        if (other != v) other.setAlpha(0.35f);
+                    }
                 } else {
-                    askMeaning(item, "Not quite. Try another answer.");
+                    v.setBackground(rounded(Color.argb(150, 160, 50, 40), 14));
+                    v.setEnabled(false);
+                    infoText.setText((item.title.isEmpty() ? "" : item.title + " asks you:\n")
+                        + "What does this word mean?\n\nNot quite. Try another answer.");
                 }
             }));
         }
-        infoActions.addView(button("Close", v -> infoPanel.setVisibility(View.GONE)));
+        infoActions.addView(doneButton());
         infoPanel.setVisibility(View.VISIBLE);
     }
 
     private void onDiscovered(ArScene.Item item) {
         vibrateConfirm();
-        toast("You found " + (item.word.isEmpty() ? (item.title.isEmpty() ? "a story" : item.title) : item.word) + ".");
+        String name = item.word.isEmpty() ? (item.title.isEmpty() ? "a story" : item.title) : item.word;
+        if (freeRoam) showFound("✨ You found " + name.replaceFirst("^(Nearby: |Meet )", ""));
+        else toast("You found " + name + ".");
         if (!item.audio.isEmpty()) playAudio(item);
     }
 
@@ -1862,14 +2024,28 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         button.setText(label);
         button.setAllCaps(false);
         button.setMinHeight(dp(48));
+        button.setTextColor(Color.WHITE);
+        button.setBackground(rounded(Color.argb(170, 40, 52, 46), 22));
+        button.setPadding(dp(18), 0, dp(18), 0);
         button.setOnClickListener(listener);
         return button;
     }
 
     private GradientDrawable rounded(int color) {
+        return rounded(color, 16);
+    }
+
+    private GradientDrawable rounded(int color, int radiusDp) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(color);
-        drawable.setCornerRadius(dp(16));
+        drawable.setCornerRadius(dp(radiusDp));
+        return drawable;
+    }
+
+    private GradientDrawable oval(int color) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setShape(GradientDrawable.OVAL);
+        drawable.setColor(color);
         return drawable;
     }
 
