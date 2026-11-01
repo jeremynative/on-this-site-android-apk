@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20261101-screensaver-r322";
+    static final String APP_VERSION = "20261101-screensaver-r323";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -135,6 +135,9 @@ public class MainActivity extends Activity {
     private NativeMapController nativeMapController;
     private boolean nativeMapEnabled;
     private boolean nativeMapBundleQaEnabled;
+    // Debug builds only: behave as if there were no network, to test the
+    // offline app on a device without turning its Wi-Fi off.
+    private boolean qaForceOffline;
     private AlertDialog exitConfirmationDialog;
     private boolean backNavigationPending;
     private OnBackInvokedCallback backInvokedCallback;
@@ -495,6 +498,8 @@ public class MainActivity extends Activity {
             .getBoolean(PREF_RENDERER_RECOVERY_ATTEMPTED, false);
         nativeMapBundleQaEnabled = BuildConfig.DEBUG
             && getIntent().getBooleanExtra("native_map_bundle_qa", false);
+        qaForceOffline = BuildConfig.DEBUG
+            && getIntent().getBooleanExtra("qa_force_offline", false);
 
         FrameLayout root = new FrameLayout(this);
         webView = new SearchAwareWebView(this);
@@ -1577,6 +1582,7 @@ public class MainActivity extends Activity {
     }
 
     private boolean hasUsableNetwork() {
+        if (qaForceOffline) return false;
         ConnectivityManager manager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         if (manager == null) return false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

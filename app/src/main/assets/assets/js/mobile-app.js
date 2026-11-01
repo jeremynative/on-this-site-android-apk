@@ -22029,8 +22029,9 @@
         places: path?.places || [],
         open: () => void openWikiArticle(slug, { focus: false })
       })),
-      // This copy always draws the animal relatives (it has no animals switch).
-      animals: () => (MAP_UTILS.nativeAnimals || []).map(animal => ({
+      // The animal relatives are drawn only alongside the web map (offline, with
+      // no web map, they aren't on the map), so only then are they stops.
+      animals: () => !state.map ? [] : (MAP_UTILS.nativeAnimals || []).map(animal => ({
         slug: animal.slug,
         title: animal.title,
         article: idleWikiArticle(animal.slug),
