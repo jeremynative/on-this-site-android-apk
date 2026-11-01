@@ -33,6 +33,11 @@ public class CaptureFileProvider extends ContentProvider {
         return createCaptureUri(context, "web-photo-");
     }
 
+    /** An AR photo kept for sharing when the phone won't let it into Photos. */
+    static Uri createArPhotoUri(Context context) throws Exception {
+        return createCaptureUri(context, "ar-photo-");
+    }
+
     private static Uri createCaptureUri(Context context, String prefix) throws Exception {
         File directory = new File(context.getCacheDir(), CAPTURE_DIRECTORY);
         if (!directory.exists() && !directory.mkdirs()) {
@@ -53,7 +58,7 @@ public class CaptureFileProvider extends ContentProvider {
         List<String> segments = uri.getPathSegments();
         if (segments.size() != 1) throw new FileNotFoundException("Invalid capture path.");
         String name = segments.get(0);
-        if (!name.matches("(?:comment|plant|web)-photo-[A-Za-z0-9._-]+\\.jpg")) {
+        if (!name.matches("(?:comment|plant|web|ar)-photo-[A-Za-z0-9._-]+\\.jpg")) {
             throw new FileNotFoundException("Invalid capture filename.");
         }
         File directory = new File(getContext().getCacheDir(), CAPTURE_DIRECTORY);

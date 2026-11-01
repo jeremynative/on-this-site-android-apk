@@ -8,6 +8,8 @@ import android.content.pm.PackageManager;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
@@ -57,6 +59,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -170,6 +173,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private final Object lock = new Object();
     private final ArGl gl = new ArGl();
     private final ExecutorService loader = Executors.newSingleThreadExecutor();
+    // AR photos: the camera view with its bubbles, saved to Photos and shareable.
+    private volatile boolean captureWanted;
+    private View flash;
+    private FrameLayout photoSaved;
+    private ImageView photoSavedImage;
+    private TextView photoSavedText;
+    private TextView photoShare;
+    private Uri photoSavedUri;
     private final ConcurrentLinkedQueue<float[]> taps = new ConcurrentLinkedQueue<>();
     private final Random random = new Random();
 
@@ -432,6 +443,11 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     @Override
     public void onDrawFrame(GL10 unused) {
+        drawFrame();
+        if (captureWanted) capturePixels();
+    }
+
+    private void drawFrame() {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
         Session current = session;
         if (current == null) return;
@@ -1405,7 +1421,20 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
         LinearLayout bottom = column();
         bottom.setPadding(dp(12), dp(8), dp(12), dp(28));
-        if (freeRoam) bottom.addView(hint, hintParams);
+        if (freeRoam) {
+            bottom.addView(hint, hintParams);
+            // The shutter: saves what the camera sees, bubbles and all, to Photos.
+            View shutter = new View(this);
+            GradientDrawable ring = oval(Color.argb(90, 255, 255, 255));
+            ring.setStroke(dp(4), Color.WHITE);
+            shutter.setBackground(ring);
+            shutter.setContentDescription("Take a photo");
+            shutter.setOnClickListener(v -> takeArPhoto());
+            LinearLayout.LayoutParams shutterParams = new LinearLayout.LayoutParams(dp(68), dp(68));
+            shutterParams.gravity = Gravity.CENTER_HORIZONTAL;
+            shutterParams.topMargin = dp(12);
+            bottom.addView(shutter, shutterParams);
+        }
 
         compareBar = row();
         compareBar.setVisibility(View.GONE);
@@ -1533,6 +1562,48 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         ScanActivity.keepAboveNavigationBar(bottom);
         root.addView(infoPanel, new FrameLayout.LayoutParams(-1, -1));
         root.addView(photoViewer, new FrameLayout.LayoutParams(-1, -1));
+
+        flash = new View(this);
+        flash.setBackgroundColor(Color.WHITE);
+        flash.setVisibility(View.GONE);
+        root.addView(flash, new FrameLayout.LayoutParams(-1, -1));
+
+        // After a photo: the picture, where it was saved, Share and Done.
+        photoSaved = new FrameLayout(this);
+        photoSaved.setVisibility(View.GONE);
+        photoSaved.setBackgroundColor(Color.argb(150, 0, 0, 0));
+        photoSaved.setClickable(true);
+        photoSaved.setOnClickListener(v -> photoSaved.setVisibility(View.GONE));
+        LinearLayout savedCard = column();
+        savedCard.setClickable(true);
+        savedCard.setBackground(rounded(Color.argb(248, 20, 26, 23), 26));
+        savedCard.setPadding(dp(16), dp(16), dp(16), dp(14));
+        photoSavedImage = new ImageView(this);
+        photoSavedImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        photoSavedImage.setContentDescription("Your AR photo");
+        savedCard.addView(photoSavedImage, new LinearLayout.LayoutParams(-1, Math.round(getResources().getDisplayMetrics().heightPixels * 0.5f)));
+        photoSavedText = text(15, false);
+        photoSavedText.setTextColor(Color.rgb(220, 228, 222));
+        photoSavedText.setPadding(dp(4), dp(12), dp(4), dp(4));
+        savedCard.addView(photoSavedText, matchWrap());
+        LinearLayout savedActions = row();
+        savedActions.setGravity(Gravity.END);
+        TextView savedDone = text(16, true, "Done");
+        savedDone.setGravity(Gravity.CENTER);
+        savedDone.setPadding(dp(22), dp(12), dp(22), dp(12));
+        savedDone.setOnClickListener(v -> photoSaved.setVisibility(View.GONE));
+        savedActions.addView(savedDone);
+        photoShare = text(16, true, "Share");
+        photoShare.setGravity(Gravity.CENTER);
+        photoShare.setBackground(rounded(Color.rgb(46, 125, 84), 24));
+        photoShare.setPadding(dp(28), dp(12), dp(28), dp(12));
+        photoShare.setOnClickListener(v -> shareArPhoto());
+        savedActions.addView(photoShare);
+        savedCard.addView(savedActions, matchWrap());
+        FrameLayout.LayoutParams savedParams = new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER);
+        savedParams.setMargins(dp(18), 0, dp(18), 0);
+        photoSaved.addView(savedCard, savedParams);
+        root.addView(photoSaved, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
         status.setText("Starting camera…");
     }
@@ -1632,6 +1703,144 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         infoCredit.setVisibility(item.credit.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
+    // ---- AR photos ----
+
+    private void takeArPhoto() {
+        if (captureWanted) return;
+        captureWanted = true;
+        flash.animate().cancel();
+        flash.setAlpha(0.85f);
+        flash.setVisibility(View.VISIBLE);
+        flash.animate().alpha(0f).setDuration(350).withEndAction(() -> flash.setVisibility(View.GONE)).start();
+        vibrateConfirm();
+    }
+
+    /** Reads the finished frame (the camera and the bubbles, not the buttons) on the GL thread. */
+    private void capturePixels() {
+        captureWanted = false;
+        int width = viewportWidth;
+        int height = viewportHeight;
+        ByteBuffer pixels = ByteBuffer.allocateDirect(width * height * 4);
+        GLES20.glReadPixels(0, 0, width, height, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels);
+        loader.execute(() -> saveArPhoto(pixels, width, height));
+    }
+
+    private void saveArPhoto(ByteBuffer pixels, int width, int height) {
+        // GL rows run bottom-up and may carry no alpha; every pixel is made opaque.
+        for (int i = 3; i < width * height * 4; i += 4) pixels.put(i, (byte) 0xff);
+        pixels.rewind();
+        Bitmap upsideDown = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        upsideDown.copyPixelsFromBuffer(pixels);
+        Bitmap photo = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(photo);
+        android.graphics.Matrix flip = new android.graphics.Matrix();
+        flip.setScale(1f, -1f, 0f, height / 2f);
+        canvas.drawBitmap(upsideDown, flip, null);
+        upsideDown.recycle();
+        stampCredit(canvas, width, height);
+        java.io.ByteArrayOutputStream jpeg = new java.io.ByteArrayOutputStream();
+        photo.compress(Bitmap.CompressFormat.JPEG, 92, jpeg);
+        String name = "on-this-site-ar-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new java.util.Date()) + ".jpg";
+        Uri saved = savePhotoToGallery(jpeg.toByteArray(), name);
+        Uri shareable = saved != null ? saved : savePhotoForSharing(jpeg.toByteArray());
+        runOnUiThread(() -> showPhotoSaved(photo, shareable, saved != null));
+    }
+
+    /** A small credit in the corner: the place, and On This Site. */
+    private void stampCredit(Canvas canvas, int width, int height) {
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(Color.WHITE);
+        paint.setShadowLayer(width * 0.006f, 0f, width * 0.002f, Color.argb(160, 0, 0, 0));
+        float margin = width * 0.045f;
+        float y = height - margin;
+        paint.setTextSize(width * 0.03f);
+        canvas.drawText("On This Site \u00b7 nativelongisland.com", margin, y, paint);
+        if (!scene.title.isEmpty() && !"Around you".equals(scene.title)) {
+            paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            paint.setTextSize(width * 0.04f);
+            canvas.drawText(scene.title, margin, y - width * 0.05f, paint);
+        }
+    }
+
+    /** Saves a JPEG to Photos in an "On This Site" album; null when this phone won't allow it. */
+    private Uri savePhotoToGallery(byte[] jpeg, String name) {
+        android.content.ContentResolver resolver = getContentResolver();
+        android.content.ContentValues values = new android.content.ContentValues();
+        values.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name);
+        values.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+        values.put(android.provider.MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            values.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/On This Site");
+            values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 1);
+        }
+        Uri uri = null;
+        try {
+            uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+            if (uri == null) return null;
+            try (OutputStream output = resolver.openOutputStream(uri)) {
+                if (output == null) throw new java.io.IOException("no output stream");
+                output.write(jpeg);
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                android.content.ContentValues ready = new android.content.ContentValues();
+                ready.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0);
+                resolver.update(uri, ready, null, null);
+            }
+            return uri;
+        } catch (Exception error) {
+            // Before Android 10 saving to Photos needs a storage permission this app doesn't ask for.
+            android.util.Log.w("OnThisSiteAR", "AR photo not saved to Photos: " + error.getMessage());
+            if (uri != null) {
+                try {
+                    resolver.delete(uri, null, null);
+                } catch (RuntimeException ignored) {
+                }
+            }
+            return null;
+        }
+    }
+
+    /** A private copy that can still be shared when Photos is off limits. */
+    private Uri savePhotoForSharing(byte[] jpeg) {
+        try {
+            Uri uri = CaptureFileProvider.createArPhotoUri(this);
+            try (OutputStream output = getContentResolver().openOutputStream(uri)) {
+                if (output == null) throw new java.io.IOException("no output stream");
+                output.write(jpeg);
+            }
+            return uri;
+        } catch (Exception error) {
+            android.util.Log.w("OnThisSiteAR", "AR photo not kept for sharing: " + error.getMessage());
+            return null;
+        }
+    }
+
+    private void showPhotoSaved(Bitmap photo, Uri shareable, boolean inPhotos) {
+        if (isFinishing()) return;
+        photoSavedUri = shareable;
+        photoSavedImage.setImageBitmap(photo);
+        photoSavedText.setText(inPhotos ? "Saved to your photos, in the On This Site album."
+            : shareable != null ? "This phone didn't let it into your photos, but you can still share it."
+            : "The photo couldn't be saved.");
+        photoShare.setVisibility(shareable != null ? View.VISIBLE : View.GONE);
+        photoSaved.setVisibility(View.VISIBLE);
+    }
+
+    /** The phone's share sheet: Instagram, Facebook, Messages, email; the visitor picks and posts. */
+    private void shareArPhoto() {
+        if (photoSavedUri == null) return;
+        Intent send = new Intent(Intent.ACTION_SEND);
+        send.setType("image/jpeg");
+        send.putExtra(Intent.EXTRA_STREAM, photoSavedUri);
+        send.setClipData(android.content.ClipData.newRawUri("", photoSavedUri));
+        send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try {
+            startActivity(Intent.createChooser(send, "Share your AR photo"));
+        } catch (android.content.ActivityNotFoundException error) {
+            toast("No app on this phone can share photos.");
+        }
+    }
+
     /** The card's one clear way out. */
     private TextView doneButton() {
         TextView done = text(16, true, "Done");
@@ -1707,7 +1916,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     /** Back closes the zoomed photo first, then the card, and only then leaves AR. */
     private void handleBack() {
-        if (photoViewer != null && photoViewer.getVisibility() == View.VISIBLE) {
+        if (photoSaved != null && photoSaved.getVisibility() == View.VISIBLE) {
+            photoSaved.setVisibility(View.GONE);
+        } else if (photoViewer != null && photoViewer.getVisibility() == View.VISIBLE) {
             photoViewer.setVisibility(View.GONE);
         } else if (infoPanel != null && infoPanel.getVisibility() == View.VISIBLE) {
             infoPanel.setVisibility(View.GONE);
