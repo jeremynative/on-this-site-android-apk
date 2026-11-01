@@ -8593,3 +8593,116 @@ body.mobile-profile-map-mode .native-animal-map-icon { visibility:hidden!importa
 .offline-text-mode .mobile-ar-button {
   top: var(--mobile-map-actions-top, calc(var(--app-top-safe) + 190px));
 }
+
+/* Tablet landscape (copied from the web app's mobile-app.css, PRs 518-520,
+   plus offline-only parts): AR in the map's button row, search from a
+   magnifier over the header, Learn as its large centred window; offline,
+   Learn beside Menu and Labels and an Offline pill by the title. */
+body.android-device.tablet-landscape .mobile-ar-button {
+  top: var(--mobile-map-actions-top, calc(var(--app-top-safe) + 90px));
+  left: max(122px, calc(var(--app-left-safe) + 122px));
+  right: auto;
+}
+
+body.android-device.tablet-landscape.offline-text-mode .mobile-ar-button {
+  left: max(18px, calc(var(--app-left-safe) + 18px));
+}
+
+.landscape-search-button {
+  display: none;
+}
+
+body.android-device.tablet-landscape .landscape-search-button {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  min-width: 40px;
+  min-height: 32px;
+  padding: 0;
+}
+
+.landscape-search-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+body.android-device.tablet-landscape.landscape-search-open .search-autocomplete {
+  display: block;
+  position: fixed;
+  z-index: 1400;
+  top: calc(max(5px, var(--app-top-safe)) + 2px);
+  left: calc(var(--app-left-safe, 0px) + 8px);
+  right: calc(var(--app-right-safe, 0px) + 8px);
+}
+
+body.android-device.tablet-landscape.landscape-search-open header .search-autocomplete .search {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  height: 40px;
+  min-height: 40px;
+  font-size: 15px;
+  box-shadow: 0 6px 18px rgba(20, 31, 23, 0.18);
+}
+
+body.android-device.tablet-landscape.landscape-search-open .search-suggestions {
+  max-height: min(300px, 60dvh);
+}
+
+/* Learn and a learning path open as the large centred reading window
+   they are designed as, not squeezed into the side panel (whose dock
+   position combined with their centring shifted them off screen). */
+body.android-device.tablet-landscape .detail.open:has(:is(.learning-hub, .mobile-learning-path-stops)) {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: min(1480px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  height: calc(100dvh - 24px);
+  max-height: calc(100dvh - 24px);
+  translate: -50% -50%;
+  border-radius: 18px;
+}
+
+body.android-device.tablet-landscape:has(.detail.open :is(.learning-hub, .mobile-learning-path-stops)) .landscape-panel-resizer {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body.android-device.tablet-landscape.offline-text-mode .app.panel-collapsed .quick-actions {
+  grid-template-columns: 96px 96px 96px;
+}
+
+body.android-device.tablet-landscape.offline-text-mode .app.panel-collapsed .quick-actions > #mobile-learn-quick:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+body.android-device.tablet-landscape.offline-text-mode .app.panel-collapsed .mobile-more-menu {
+  grid-column: 2;
+}
+
+body.android-device.tablet-landscape.offline-text-mode .app.panel-collapsed .mobile-layer-menu {
+  grid-column: 3;
+}
+
+body.android-device.tablet-landscape.offline-text-mode h1::after {
+  content: "Offline";
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #b45309;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  vertical-align: 2px;
+}

@@ -57,8 +57,10 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
 
     private static final int MAX_PLACED = 3;
     private static final long REVEAL_GAP_MS = 1400;
-    // Below this (degrees) the camera is looking at the floor.
+    // Below this (degrees) the camera is looking at the floor; above the
+    // other, at the ceiling or sky.
     private static final double LOOKING_DOWN = -45;
+    private static final double LOOKING_UP = 55;
     // The camera image sampled to measure turning, and how often.
     private static final int FLOW_WIDTH = 96;
     private static final int FLOW_HEIGHT = 160;
@@ -299,22 +301,47 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         return best != null ? best : sizes.length > 0 ? sizes[0] : new Size(1280, 720);
     }
 
-    /** Fills the screen with the (rotated) preview without stretching it. */
+    /**
+     * Fills the screen with the camera preview, upright and without
+     * stretching, in portrait or landscape, and works out how much of the
+     * lens's view the cropped preview shows across and up the screen.
+     */
     private void fitPreview() {
         if (previewSize == null || getWidth() == 0 || getHeight() == 0) return;
-        // The camera's long side runs up the portrait screen.
-        float contentWide = Math.min(previewSize.getWidth(), previewSize.getHeight());
-        float contentTall = Math.max(previewSize.getWidth(), previewSize.getHeight());
-        float viewShape = getWidth() / (float) getHeight();
-        float contentShape = contentWide / contentTall;
-        float scaleX = contentShape > viewShape ? contentShape / viewShape : 1f;
-        float scaleY = contentShape > viewShape ? 1f : viewShape / contentShape;
+        float viewWidth = getWidth();
+        float viewHeight = getHeight();
+        float longSide = Math.max(previewSize.getWidth(), previewSize.getHeight());
+        float shortSide = Math.min(previewSize.getWidth(), previewSize.getHeight());
+        int rotation = getDisplay() == null ? Surface.ROTATION_0 : getDisplay().getRotation();
+        boolean sideways = rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270;
+        float centerX = viewWidth / 2f;
+        float centerY = viewHeight / 2f;
         android.graphics.Matrix matrix = new android.graphics.Matrix();
-        matrix.setScale(scaleX, scaleY, getWidth() / 2f, getHeight() / 2f);
+        // The preview's shape on screen, and how much of it each side keeps.
+        float contentShape = sideways ? longSide / shortSide : shortSide / longSide;
+        float viewShape = viewWidth / viewHeight;
+        float cropAcross = contentShape > viewShape ? contentShape / viewShape : 1f;
+        float cropUp = contentShape > viewShape ? 1f : viewShape / contentShape;
+        if (sideways) {
+            // The camera delivers frames for the portrait screen; map the view
+            // onto that frame, fill it, and turn it to the screen's rotation.
+            android.graphics.RectF viewRect = new android.graphics.RectF(0, 0, viewWidth, viewHeight);
+            android.graphics.RectF bufferRect = new android.graphics.RectF(0, 0, shortSide, longSide);
+            bufferRect.offset(centerX - bufferRect.centerX(), centerY - bufferRect.centerY());
+            matrix.setRectToRect(viewRect, bufferRect, android.graphics.Matrix.ScaleToFit.FILL);
+            float scale = Math.max(viewHeight / shortSide, viewWidth / longSide);
+            matrix.postScale(scale, scale, centerX, centerY);
+            matrix.postRotate(90 * (rotation - 2), centerX, centerY);
+            // Landscape: the lens's long side runs across the screen.
+            fovAcross = lensUp / cropAcross;
+            fovUp = lensAcross / cropUp;
+        } else {
+            matrix.setScale(cropAcross, cropUp, centerX, centerY);
+            if (rotation == Surface.ROTATION_180) matrix.postRotate(180, centerX, centerY);
+            fovAcross = lensAcross / cropAcross;
+            fovUp = lensUp / cropUp;
+        }
         preview.setTransform(matrix);
-        // Cropping narrows the view the screen shows.
-        fovAcross = lensAcross / scaleX;
-        fovUp = lensUp / scaleY;
     }
 
     private void readFieldOfView(CameraCharacteristics characteristics) {
@@ -437,7 +464,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             if (bubble.placed) placed++;
             else if (next == null) next = bubble;
         }
-        if (next == null || placed >= MAX_PLACED || now - lastReveal < REVEAL_GAP_MS || pitch < LOOKING_DOWN) return;
+        if (next == null || placed >= MAX_PLACED || now - lastReveal < REVEAL_GAP_MS || pitch < LOOKING_DOWN || pitch > LOOKING_UP) return;
         // A spot in view, clear of the others, above the shutter.
         double bestBearing = heading;
         double bestElevation = pitch;
@@ -580,6 +607,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     String turnHint() {
         if (Double.isNaN(heading)) return "";
         if (pitch < LOOKING_DOWN) return "Raise the device to look around";
+        if (pitch > LOOKING_UP) return "Lower the device to look around";
         double nearest = Double.NaN;
         for (Bubble bubble : bubbles) {
             if (!host.visible(bubble.item) || host.discovered(bubble.item)) continue;
