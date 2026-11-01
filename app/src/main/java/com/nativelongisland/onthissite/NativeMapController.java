@@ -2188,6 +2188,27 @@ final class NativeMapController {
         map.moveCamera(CameraUpdateFactory.newCameraPosition(desired));
     }
 
+    /** A slow eased camera move (the idle screensaver while offline); a touch cancels it. */
+    void easeCamera(double longitude, double latitude, double zoom, int durationMs) {
+        if (map == null || nativeGestureInProgress()
+            || !Double.isFinite(longitude) || !Double.isFinite(latitude) || !Double.isFinite(zoom)) return;
+        CameraPosition desired = new CameraPosition.Builder()
+            .target(new LatLng(latitude, longitude))
+            .padding(new double[] { 0, 0, viewportRightOcclusion, viewportBottomOcclusion })
+            .zoom(Math.max(6.0, Math.min(18.0, zoom)))
+            .bearing(0.0)
+            .tilt(0.0)
+            .build();
+        stableCamera = desired;
+        cameraIntentRevision += 1;
+        cameraGestureAwaitingIdle = false;
+        map.easeCamera(CameraUpdateFactory.newCameraPosition(desired), Math.max(0, Math.min(60000, durationMs)));
+    }
+
+    void stopCamera() {
+        if (map != null) map.cancelTransitions();
+    }
+
     void focusSearchResult(double longitude, double latitude, double zoom, int durationMs) {
         updateCamera(longitude, latitude, zoom);
         if (map == null || !Double.isFinite(longitude) || !Double.isFinite(latitude)) return;

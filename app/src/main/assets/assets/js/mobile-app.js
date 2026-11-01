@@ -7869,6 +7869,7 @@
           const nextZoom = Number(zoom);
           const nextBearing = Number(bearing);
           const nextPitch = Number(pitch);
+          if (center.every(Number.isFinite)) state.nativeCameraCenter = center;
           if (!state.map || !center.every(Number.isFinite) || !Number.isFinite(nextZoom)) return false;
           state.nativeMapCameraEcho = {
             longitude: center[0],
@@ -7887,6 +7888,7 @@
           return true;
         },
         gestureChanged(active) {
+          if (active) window.__nliMapIdle?.wake();
           if (active) markAndroidMapGestureActive();
           else markAndroidMapGestureSettled();
           return true;
@@ -21930,6 +21932,29 @@
       iconBase: isOfflineTextMode() ? "asset:assets/map-icons/" : undefined,
       siteDetail: site => fetchSiteDetail(site)
     });
+
+    // Idle screensaver on the main map (shared-map-idle.js): left open and
+    // untouched, the map drifts along Long Island with "Did you know" cards.
+    // Offline there's no web map, so the native map is eased directly.
+    const mapIdle = window.NLI_MAP_IDLE?.create({
+      getMap: () => state.map,
+      getSites: () => state.sites,
+      mainMapIdle: () => !document.body.classList.contains("mobile-content-open")
+        && !document.body.classList.contains("mobile-profile-map-mode")
+        && !appEl?.classList.contains("mobile-search-results")
+        && !document.querySelector(".search-suggestions:not([hidden]), .mobile-layer-menu[open]")
+        && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || ""),
+      openSite: slug => void openSite(slug, { focus: true }),
+      escapeHtml,
+      showPhotos: () => !isOfflineTextMode(),
+      camera: {
+        ready: () => Boolean(window.AndroidApp?.easeNativeMapCamera && androidBridgeToken()),
+        move: view => window.AndroidApp.easeNativeMapCamera(androidBridgeToken(), view.center[0], view.center[1], view.zoom, view.duration),
+        stop: () => window.AndroidApp?.stopNativeMapCamera?.(androidBridgeToken()),
+        center: () => state.nativeCameraCenter
+      }
+    });
+    window.__nliMapIdle = mapIdle;
     const mobileArOpenBtn = document.getElementById("mobile-ar-open");
     if (mobileArOpenBtn && scanSpaces?.available()) {
       mobileArOpenBtn.hidden = false;

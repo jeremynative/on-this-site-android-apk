@@ -129,6 +129,19 @@ class AppBridge {
         activity.runOnUiThread(() -> activity.syncNativeMapMovingFeatures(featuresJson));
     }
 
+    /** A slow eased move of the native map: the idle screensaver while offline. */
+    @JavascriptInterface
+    public void easeNativeMapCamera(String token, double longitude, double latitude, double zoom, int durationMs) {
+        if (!activity.validBridgeToken(token)) return;
+        activity.runOnUiThread(() -> activity.easeNativeMapCamera(longitude, latitude, zoom, durationMs));
+    }
+
+    @JavascriptInterface
+    public void stopNativeMapCamera(String token) {
+        if (!activity.validBridgeToken(token)) return;
+        activity.runOnUiThread(activity::stopNativeMapCamera);
+    }
+
     @JavascriptInterface
     public void syncNativeMapCamera(String token, double longitude, double latitude, double zoom) {
         if (!activity.validBridgeToken(token)) return;
