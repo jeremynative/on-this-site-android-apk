@@ -442,7 +442,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
                 placeholderPaint.setAlpha(200);
                 canvas.drawCircle(x, y, size * 0.8f, placeholderPaint);
             }
-            String label = label(bubble.item);
+            String label = label(bubble.item, width);
             if (!label.isEmpty() && grow >= 1f) {
                 // Keep the whole name on screen.
                 float half = labelPaint.measureText(label) / 2 + dp(8);
@@ -594,10 +594,18 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         return bubble.bitmap;
     }
 
-    private static String label(ArScene.Item item) {
+    /**
+     * A bubble's name, short enough to sit under it: what tells bubbles of
+     * one place apart ("the history", "the people") goes first, so a cut
+     * never leaves two identical names. Wider screens show more of it.
+     */
+    private String label(ArScene.Item item, int screenWidth) {
         String text = item.title.isEmpty() ? item.word : item.title;
         text = text.replaceFirst("^Nearby: ", "");
-        return text.length() > 28 ? text.substring(0, 26).trim() + "…" : text;
+        java.util.regex.Matcher part = java.util.regex.Pattern.compile("^(.+): the ([A-Za-z]+)$").matcher(text);
+        if (part.matches()) text = Character.toUpperCase(part.group(2).charAt(0)) + part.group(2).substring(1) + " of " + part.group(1);
+        int limit = screenWidth > getHeight() ? 40 : 28;
+        return text.length() > limit ? text.substring(0, limit - 2).trim() + "…" : text;
     }
 
     /**
