@@ -16490,6 +16490,36 @@
 
     const NATIVE_LOCATION_CACHE_MAX_AGE_MS = 300000;
 
+    // Tablet landscape keeps the header to one row and hides the search box,
+    // so a magnifier there opens it over the header while in use; it closes
+    // when focus leaves it (after a suggestion is chosen or the map tapped).
+    function installLandscapeSearchButton() {
+      const actions = document.querySelector(".title-actions");
+      const input = document.getElementById("search");
+      if (!actions || !input || document.getElementById("landscape-search-open")) return;
+      const button = document.createElement("button");
+      button.id = "landscape-search-open";
+      button.type = "button";
+      button.className = "ghost-button landscape-search-button";
+      button.setAttribute("aria-label", "Search sites, towns, histories");
+      button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4.5 4.5"></path></svg>';
+      button.addEventListener("click", () => {
+        document.body.classList.add("landscape-search-open");
+        input.focus();
+      });
+      actions.prepend(button);
+      const close = () => document.body.classList.remove("landscape-search-open");
+      input.addEventListener("blur", () => window.setTimeout(() => {
+        if (!input.closest(".search-autocomplete")?.contains(document.activeElement)) close();
+      }, 250));
+      input.addEventListener("keydown", event => {
+        if (event.key === "Escape") {
+          close();
+          input.blur();
+        }
+      });
+    }
+
     function nativeCachedUserPosition() {
       try {
         const position = JSON.parse(window.AndroidApp.getCachedLocation(
@@ -21936,6 +21966,7 @@
       mobileArOpenBtn.addEventListener("click", () => void scanSpaces.openAr());
       scanSpaces.watch();
     }
+    installLandscapeSearchButton();
     mobileNotificationsListEl?.addEventListener("click", event => {
       const actionButton = event.target.closest("[data-mobile-notification-action]");
       const item = event.target.closest("[data-mobile-notification-type]");

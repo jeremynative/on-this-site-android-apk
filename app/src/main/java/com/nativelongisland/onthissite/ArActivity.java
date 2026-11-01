@@ -215,6 +215,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         Collections.addAll(enabledLayers, ArScene.LAYERS);
         cameraOnly = getIntent().getBooleanExtra(EXTRA_CAMERA_ONLY, false);
+        // Camera-only AR turns with the device (a tablet is often held
+        // sideways); full AR keeps the portrait screen it was built for.
+        if (cameraOnly) setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             backCallback = this::handleBack;
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback);
