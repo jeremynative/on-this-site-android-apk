@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20261101-ar-back-r310";
+const expectedBuild = "20261101-zoom-lint-r311";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";

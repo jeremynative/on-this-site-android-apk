@@ -1,5 +1,6 @@
 package com.nativelongisland.onthissite;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Matrix;
@@ -15,6 +16,7 @@ import android.widget.ImageView;
  * tapped spot. Used to look closely at AR card photos (a seal, a map, a
  * document).
  */
+@SuppressLint("AppCompatCustomView") // The app has no AppCompat dependency; AR uses platform views.
 final class ZoomImageView extends ImageView {
     private static final float MAX_ZOOM = 6f;
     private static final float DOUBLE_TAP_ZOOM = 2.5f;
