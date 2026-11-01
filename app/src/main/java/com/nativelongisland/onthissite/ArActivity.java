@@ -1255,7 +1255,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-2, -2);
         hintParams.gravity = Gravity.CENTER_HORIZONTAL;
         hintParams.topMargin = dp(10);
-        top.addView(hint, hintParams);
+        // Free-roam bubbles float at eye level, near the top of the view, so
+        // there the hint sits at the bottom instead of over them.
+        if (!freeRoam) top.addView(hint, hintParams);
         root.addView(top, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
 
         foundPill = text(14, true);
@@ -1268,6 +1270,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
         LinearLayout bottom = column();
         bottom.setPadding(dp(12), dp(8), dp(12), dp(28));
+        if (freeRoam) bottom.addView(hint, hintParams);
 
         compareBar = row();
         compareBar.setVisibility(View.GONE);
