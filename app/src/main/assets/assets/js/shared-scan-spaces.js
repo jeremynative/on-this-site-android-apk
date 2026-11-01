@@ -5,8 +5,9 @@
 (function () {
   function create(ctx) {
     const { state, DIRECTUS, openSheet, androidBridgeToken, requestUserLocation, nativeCachedUserPosition, sheetEl, listEl } = ctx;
-    // APK copy: the offline shell passes iconBase (bundled "asset:" icons the
-    // AR screen opens without a network) and siteDetail (the bundled page).
+    // The APK's offline shell passes iconBase (bundled "asset:" icons the AR
+    // screen opens without a network) and siteDetail (the bundled page). The
+    // APK keeps an identical copy of this file for offline use.
 
     // The AR button shows in any version of the app; one too old for AR
     // bubbles is asked to update.
@@ -447,8 +448,11 @@
       return arScene(title, items, random, arUserLocation());
     }
 
+    // Phones that can't run full AR get the camera with the bubbles over it,
+    // in apps that have that mode.
     function arSupported() {
-      return Boolean(window.AndroidApp?.openArNearby) && (!window.AndroidApp.isArSupported || window.AndroidApp.isArSupported());
+      const app = window.AndroidApp;
+      return Boolean(app?.openArNearby) && (!app.isArSupported || app.isArSupported() || Boolean(app.hasArCameraMode?.()));
     }
 
     function openArBubbles(scene) {

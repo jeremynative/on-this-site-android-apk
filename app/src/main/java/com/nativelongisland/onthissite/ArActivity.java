@@ -72,6 +72,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
      * wherever the visitor is: no scan, marker card or placing needed.
      */
     static final String EXTRA_NEARBY = "nearby_bubbles";
+    // Devices ARCore can't run on get the camera with the bubbles over it.
+    static final String EXTRA_CAMERA_ONLY = "camera_only";
 
     private static final int REQUEST_CAMERA = 41;
 
@@ -165,6 +167,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private long lastSpawnAttempt;
 
     private GLSurfaceView surface;
+    private boolean cameraOnly;
+    private ArCameraField cameraField;
     private Session session;
     private boolean installRequested;
     private boolean resumed;
@@ -210,6 +214,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             return;
         }
         Collections.addAll(enabledLayers, ArScene.LAYERS);
+        cameraOnly = getIntent().getBooleanExtra(EXTRA_CAMERA_ONLY, false);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             backCallback = this::handleBack;
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback);
@@ -233,6 +238,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     private void startAr() {
         if (scene == null || !resumed) return;
+        if (cameraOnly) {
+            if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[] {Manifest.permission.CAMERA}, REQUEST_CAMERA);
+                return;
+            }
+            cameraField.start();
+            return;
+        }
         if (session == null) {
             if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[] {Manifest.permission.CAMERA}, REQUEST_CAMERA);
@@ -247,7 +260,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 return;
             }
             if (!availability.isSupported()) {
-                showFatal("This device doesn't support AR. The photos and prompts are still in the site's article.");
+                // The bubbles still float over the plain camera.
+                startActivity(new Intent(getIntent()).putExtra(EXTRA_CAMERA_ONLY, true));
+                finish();
                 return;
             }
             try {
@@ -279,6 +294,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         resumed = false;
         compass.stop(sensors);
         if (locations != null) locations.removeUpdates(fixListener);
+        if (cameraField != null) cameraField.stop();
         if (session != null) {
             surface.onPause();
             session.pause();
@@ -770,10 +786,16 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         for (ArScene.Item item : scene.items) if (visible(item)) total++;
         return found >= total && total > 0
             ? "You found all " + total + ". Thank you for learning with us!"
-            : found + " of " + total + " found · turn around to find more";
+            : found + " of " + total + " found · "
+                + (cameraOnly && !cameraField.hasCompass() ? "more appear as you open them" : "turn around to find more");
     }
 
     private String hintText() {
+        if (cameraOnly) {
+            String turn = cameraField.turnHint();
+            if (!turn.isEmpty()) return turn;
+            return discovered.isEmpty() ? "Tap a bubble to open it" : "";
+        }
         String turn = directionHint();
         if (turn != null) return turn;
         return discovered.isEmpty() ? "Walk up to a bubble or tap it" : "";
@@ -804,6 +826,16 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     private void buildUi() {
         FrameLayout root = new FrameLayout(this);
+        if (cameraOnly) {
+            cameraField = new ArCameraField(this, scene, cameraHost(), loader);
+            root.addView(cameraField, new FrameLayout.LayoutParams(-1, -1));
+        } else {
+            addArSurface(root);
+        }
+        buildOverlay(root);
+    }
+
+    private void addArSurface(FrameLayout root) {
         surface = new GLSurfaceView(this);
         surface.setPreserveEGLContextOnPause(true);
         surface.setEGLContextClientVersion(2);
@@ -824,7 +856,40 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             return true;
         });
         root.addView(surface, new FrameLayout.LayoutParams(-1, -1));
+    }
 
+    /** Camera-only mode: the field asks about and reports on bubbles here. */
+    private ArCameraField.Host cameraHost() {
+        return new ArCameraField.Host() {
+            @Override public boolean visible(ArScene.Item item) {
+                return ArActivity.this.visible(item);
+            }
+            @Override public boolean discovered(ArScene.Item item) {
+                return discovered.contains(item.id);
+            }
+            @Override public Bitmap bubbleBitmap(ArScene.Item item) {
+                Bitmap inner = decodeImage(item.figure.isEmpty() ? item.image : item.figure, 512);
+                int color = ArCards.layerColor(item.layer);
+                return inner == null ? ArCards.orb(color) : ArCards.bubble(inner, color);
+            }
+            @Override public void tapped(ArScene.Item item) {
+                if (item == null) {
+                    infoPanel.setVisibility(View.GONE);
+                    return;
+                }
+                if (discovered.add(item.id)) onDiscovered(item);
+                showItem(item);
+            }
+            @Override public void changed() {
+                postStatus(statusText(), hintText());
+            }
+            @Override public void failed(String message) {
+                showFatal(message);
+            }
+        };
+    }
+
+    private void buildOverlay(FrameLayout root) {
         // Top: a round close button and a translucent capsule with the
         // place's name, how many bubbles are found and a thin progress bar;
         // below it, a pill pointing to the next real place. The camera view
@@ -1093,12 +1158,16 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     private void takeArPhoto() {
         if (captureWanted) return;
-        captureWanted = true;
+        captureWanted = !cameraOnly;
         flash.animate().cancel();
         flash.setAlpha(0.85f);
         flash.setVisibility(View.VISIBLE);
         flash.animate().alpha(0f).setDuration(350).withEndAction(() -> flash.setVisibility(View.GONE)).start();
         vibrateConfirm();
+        if (cameraOnly) {
+            Bitmap photo = cameraField.capture();
+            if (photo != null) loader.execute(() -> savePhoto(photo));
+        }
     }
 
     /** Reads the finished frame (the camera and the bubbles, not the buttons) on the GL thread. */
@@ -1123,6 +1192,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         flip.setScale(1f, -1f, 0f, height / 2f);
         canvas.drawBitmap(upsideDown, flip, null);
         upsideDown.recycle();
+        savePhoto(photo);
+    }
+
+    /** Stamps the credit on an AR photo and saves it to Photos (or for sharing). */
+    private void savePhoto(Bitmap photo) {
+        int width = photo.getWidth();
+        int height = photo.getHeight();
+        Canvas canvas = new Canvas(photo);
         stampCredit(canvas, width, height);
         java.io.ByteArrayOutputStream jpeg = new java.io.ByteArrayOutputStream();
         photo.compress(Bitmap.CompressFormat.JPEG, 92, jpeg);
@@ -1495,7 +1572,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     }
 
     private void vibrateConfirm() {
-        surface.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+        (cameraOnly ? cameraField : surface).performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
     }
 
     private static Pose toPose(float[] p) {
