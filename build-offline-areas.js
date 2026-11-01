@@ -1,6 +1,7 @@
 // Builds app/src/main/assets/map/offline-areas.json (the coloured place-name
 // areas and site shapes the live map draws) and map/offline-area-labels.json
-// (the names those site shapes show instead of a pin), for the native map when
+// (the names those site shapes show instead of a pin), plus map/offline-site-titles.json
+// (the names beside the pinned sites' dots, by site id), for the native map when
 // the app starts offline. Run after refreshing the bundled site data.
 //   node build-offline-areas.js          write the file
 //   node build-offline-areas.js --check  fail if it is out of date
@@ -53,9 +54,17 @@ function build() {
       });
     }
   }
+  // The site index is too large for the native map to parse at startup, so
+  // the pinned sites' titles get their own small file.
+  const titles = {};
+  for (const row of JSON.parse(read("assets/data/mobile-site-centers.json")).rows) {
+    const title = String(sites.get(row.id)?.title || "").trim();
+    if (title && !/Polygon/.test(row.geometry_type || "")) titles[row.id] = title;
+  }
   return {
     "map/offline-areas.json": JSON.stringify({ type: "FeatureCollection", features }),
-    "map/offline-area-labels.json": JSON.stringify({ type: "FeatureCollection", features: labels })
+    "map/offline-area-labels.json": JSON.stringify({ type: "FeatureCollection", features: labels }),
+    "map/offline-site-titles.json": JSON.stringify(titles)
   };
 }
 
@@ -72,6 +81,7 @@ if (process.argv.includes("--check")) {
 } else {
   for (const [file, next] of Object.entries(files)) {
     fs.writeFileSync(path.join(assets, file), next);
-    console.log(`Wrote ${file}: ${JSON.parse(next).features.length} features, ${next.length} bytes.`);
+    const parsed = JSON.parse(next);
+    console.log(`Wrote ${file}: ${parsed.features ? `${parsed.features.length} features` : `${Object.keys(parsed).length} titles`}, ${next.length} bytes.`);
   }
 }

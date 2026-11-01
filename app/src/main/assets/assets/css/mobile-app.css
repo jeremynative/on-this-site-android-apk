@@ -8467,3 +8467,129 @@ body.mobile-profile-map-mode .native-animal-map-icon { visibility:hidden!importa
 .mobile-moving-biography-shell { scale: var(--biography-icon-scale, 1); transform-origin: center; }
 .mobile-calendar-event-marker { z-index: 30; }
 #map :is(.mapboxgl-popup, .maplibregl-popup) { z-index: 40; }
+
+/* AR (copied from the web app's mobile-app.css, PRs 501-511): the map's AR
+   button and the AR button on a site panel's title line. */
+    .mobile-ar-button {
+      position: fixed;
+      top: calc(var(--mobile-map-actions-top, calc(var(--app-top-safe) + 190px)) + 104px);
+      left: max(12px, var(--app-left-safe));
+      z-index: 18;
+      display: inline-grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border: 1px solid #c9d3c8;
+      border-radius: 8px;
+      background: rgba(251, 252, 250, 0.96);
+      color: var(--accent-strong);
+      box-shadow: 0 8px 20px rgba(20, 31, 23, 0.16);
+    }
+
+    .mobile-ar-button[hidden] { display: none; }
+    .mobile-ar-button svg, .site-ar-button svg { width: 20px; height: 20px; margin-top: -6px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+    .mobile-ar-label { position: absolute; bottom: 3px; font-size: 9px; font-weight: 900; letter-spacing: 0.06em; }
+
+    .app.panel-maximized .mobile-ar-button,
+    .app.mobile-map-actions-hidden .mobile-ar-button,
+    .app.mobile-search-results .mobile-ar-button,
+    body:has(.search-suggestions:not([hidden])) .mobile-ar-button,
+    body:has(.mobile-more-menu[open]) .mobile-ar-button,
+    body:has(.mobile-layer-menu[open]) .mobile-ar-button,
+    body.mobile-content-open .mobile-ar-button {
+      display: none;
+    }
+
+    /* A site panel's buttons (AR at the site, the app's navigate arrow,
+       close) sit together on the title's line, about its height; the
+       address and details below wrap onto their own lines across the
+       panel, so nothing overlaps and no row is spent on the buttons. */
+    .detail .detail-head:has(> .detail-head-actions) {
+      grid-template-columns: minmax(0, 1fr) auto;
+      row-gap: 0;
+    }
+
+    article.detail.hero-docked .detail-head:has(> .detail-head-actions) {
+      grid-template-columns: minmax(0, 1fr) 54px auto;
+    }
+
+    .detail-head:has(> .detail-head-actions) .detail-drawer-handle {
+      grid-row: 1;
+    }
+
+    .detail-head:has(> .detail-head-actions) #detail-title {
+      display: contents;
+    }
+
+    .detail-head:has(> .detail-head-actions) #detail-title > * {
+      grid-column: 1 / -1;
+    }
+
+    .detail-head:has(> .detail-head-actions) #detail-title > h2 {
+      grid-column: 1;
+      grid-row: 2;
+      align-self: center;
+      margin: 6px 0 4px;
+    }
+
+    .detail-head-actions {
+      grid-column: -2 / -1;
+      grid-row: 2;
+      align-self: center;
+      justify-self: end;
+      display: flex;
+      gap: 5px;
+      margin: 6px 0 4px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .detail-head .detail-head-actions > .close,
+    .detail-head .detail-head-actions > .site-ar-button,
+    .detail-head .detail-head-actions > .nli-listing-top-navigation {
+      width: 34px;
+      height: 34px;
+      min-height: 34px;
+      font-size: 15px;
+    }
+
+    /* The same tile, cube and label as the map's AR button. */
+    .site-ar-button {
+      position: relative;
+      display: inline-grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border: 1px solid #c9d3c8;
+      border-radius: 8px;
+      background: rgba(251, 252, 250, 0.96);
+      color: var(--accent-strong);
+      touch-action: manipulation;
+      pointer-events: auto;
+    }
+
+    .site-ar-button svg {
+      width: 16px;
+      height: 16px;
+      margin-top: -6px;
+    }
+
+    .site-ar-button .mobile-ar-label {
+      bottom: 1px;
+      font-size: 7.5px;
+    }
+
+    .site-ar-button:disabled {
+      opacity: 0.6;
+    }
+
+    .site-ar-button[hidden] {
+      display: none;
+    }
+
+/* Offline the activity and notification buttons are hidden, so AR takes the
+   first slot of the map's button column. */
+.offline-text-mode .mobile-ar-button {
+  top: var(--mobile-map-actions-top, calc(var(--app-top-safe) + 190px));
+}
