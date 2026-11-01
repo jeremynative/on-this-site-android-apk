@@ -7782,6 +7782,11 @@
       state.nativeMapBridgeInstalled = true;
       window.NLI_NATIVE_MAP_BRIDGE = Object.freeze({
         openFeature(kind, key, mapCenter = null) {
+          // The tap that wakes the idle screensaver only wakes it.
+          if (globalThis.__nliMapIdle?.running()) {
+            globalThis.__nliMapIdle.wake();
+            return true;
+          }
           const selectedMapCenter = Array.isArray(mapCenter) && mapCenter.length >= 2 && mapCenter.map(Number).every(Number.isFinite)
             ? mapCenter.map(Number)
             : null;
@@ -7888,7 +7893,7 @@
           return true;
         },
         gestureChanged(active) {
-          if (active) window.__nliMapIdle?.wake();
+          if (active) globalThis.__nliMapIdle?.wake();
           if (active) markAndroidMapGestureActive();
           else markAndroidMapGestureSettled();
           return true;
@@ -21940,16 +21945,49 @@
       getMap: () => state.map,
       getSites: () => state.sites,
       mainMapIdle: () => !document.body.classList.contains("mobile-content-open")
+        && !detailEl?.classList.contains("open")
         && !document.body.classList.contains("mobile-profile-map-mode")
         && !appEl?.classList.contains("mobile-search-results")
         && !document.querySelector(".search-suggestions:not([hidden]), .mobile-layer-menu[open]")
         && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || ""),
       openSite: slug => void openSite(slug, { focus: true }),
       escapeHtml,
+      // The card's "Present day: town · ancestral land" line, as on the site page.
+      placeOf: site => ({
+        presentDay: SITE_UTILS.presentDayLocation?.(site) || "",
+        land: window.NLI_LAND_HISTORY_DATA?.entries?.find(entry => entry.slug === site.slug)?.homelandLabel || territoryForSite(site)?.title || ""
+      }),
+      // A few stops are people from the biography paths and the map's
+      // animal relatives; now and then a fact about the project itself.
+      people: () => Object.entries(BIOGRAPHY_PLACE_PATHS).map(([slug, path]) => ({
+        slug,
+        name: mobileBiographyPathPersonName(state.wikiBySlug.get(slug), slug),
+        article: state.wikiBySlug.get(slug),
+        places: path?.places || [],
+        open: () => void openWikiArticle(slug, { focus: false })
+      })),
+      animals: () => mobileMovingAnimalsEnabled() ? (MAP_UTILS.nativeAnimals || []).map(animal => ({
+        slug: animal.slug,
+        title: animal.title,
+        article: state.wikiBySlug.get(animal.slug),
+        image: MAP_UTILS.nativeAnimalIcon(animal),
+        centerAt: ms => MAP_UTILS.nativeAnimalMotion(animal, (state.mobileNativeAnimalClock.elapsed || 0) + ms,
+          window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches).coordinates,
+        open: () => void openWikiArticle(animal.slug, { focus: false })
+      })) : [],
+      project: {
+        openAbout: () => openAboutPanel(),
+        openSupport: () => openSupportPanel(),
+        betaInviteUrl: ""
+      },
       showPhotos: () => !isOfflineTextMode(),
       camera: {
         ready: () => Boolean(window.AndroidApp?.easeNativeMapCamera && androidBridgeToken()),
-        move: view => window.AndroidApp.easeNativeMapCamera(androidBridgeToken(), view.center[0], view.center[1], view.zoom, view.duration),
+        // A fly also says where on screen the site should land (padding).
+        move: view => view.fly && window.AndroidApp.flyNativeMapCamera
+          ? window.AndroidApp.flyNativeMapCamera(androidBridgeToken(), view.center[0], view.center[1], view.zoom, view.duration,
+            Number.isFinite(view.padTop) ? view.padTop : -1, Number.isFinite(view.padBottom) ? view.padBottom : -1)
+          : window.AndroidApp.easeNativeMapCamera(androidBridgeToken(), view.center[0], view.center[1], view.zoom, view.duration),
         stop: () => window.AndroidApp?.stopNativeMapCamera?.(androidBridgeToken()),
         center: () => state.nativeCameraCenter
       }
