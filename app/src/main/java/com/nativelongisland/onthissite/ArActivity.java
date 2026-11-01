@@ -128,7 +128,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private static final float FREE_LEFT_BEHIND_M = 6f;
     private static final long FREE_LOST_MS = 2500;
     private final Map<String, Long> discoverLostSince = new HashMap<>();
-    private boolean wasTracking = true;
+    private boolean wasTracking;
     // Finds with a GPS point (plant IDs, photo stories) float over the spot
     // where they were photographed once the visitor is this close.
     private static final double SPOT_NEAR_M = 40;
@@ -469,7 +469,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             camera.getViewMatrix(view, 0);
             camera.getProjectionMatrix(projection, 0, 0.05f, 100f);
             Matrix.multiplyMM(viewProjection, 0, projection, 0, view, 0);
-            if (!wasTracking) android.util.Log.i("OnThisSiteAR", "Tracking back");
+            if (!wasTracking) android.util.Log.i("OnThisSiteAR", "Tracking");
             wasTracking = true;
             Pose cameraPose = camera.getDisplayOrientedPose();
             float[] cameraPoint = cameraPose.getTranslation();
