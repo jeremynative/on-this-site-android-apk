@@ -108,6 +108,9 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     private final Sensor accelerometer;
     private final float[] rotation = new float[9];
     private final float[] down = new float[2];
+    // An AR video while it records, and the camera image copied for it.
+    private ArVideo video;
+    private Bitmap videoFrame;
     private boolean dragging;
     private Bubble dragged;
     private float dragFromY;
@@ -200,6 +203,30 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         frame.recycle();
         drawBubbles(new Canvas(photo));
         return photo;
+    }
+
+    /** Each drawn frame also goes into the video while one records (null to stop). */
+    void setVideo(ArVideo next) {
+        video = next;
+        if (next == null && videoFrame != null) {
+            videoFrame.recycle();
+            videoFrame = null;
+        }
+    }
+
+    /** The camera image, the bubbles over it and the credit along the bottom. */
+    private void recordFrame(ArVideo recording) {
+        recording.drawCanvas(canvas -> {
+            if (videoFrame == null) videoFrame = Bitmap.createBitmap(recording.width, recording.height, Bitmap.Config.ARGB_8888);
+            Bitmap frame = preview.getBitmap(videoFrame);
+            canvas.drawColor(Color.BLACK);
+            if (frame != null) canvas.drawBitmap(frame, 0f, 0f, null);
+            canvas.save();
+            canvas.scale(recording.width / (float) getWidth(), recording.height / (float) getHeight());
+            drawBubbles(canvas);
+            canvas.restore();
+            canvas.drawBitmap(recording.credit, 0f, recording.height - recording.credit.getHeight(), null);
+        });
     }
 
     // ---- Camera ----
@@ -415,14 +442,16 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         if (!started) return;
         trackTurning();
         drawBubbles(canvas);
+        if (video != null) recordFrame(video);
         host.changed();
         postInvalidateOnAnimation();
     }
 
     private void drawBubbles(Canvas canvas) {
         long now = SystemClock.uptimeMillis();
-        int width = canvas.getWidth();
-        int height = canvas.getHeight();
+        // In view coordinates, also on a photo or a video frame scaled to them.
+        int width = getWidth();
+        int height = getHeight();
         float radius = dp(56);
         if (Double.isNaN(heading)) return;
         boolean compass = hasCompass();

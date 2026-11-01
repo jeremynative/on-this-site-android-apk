@@ -76,6 +76,13 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     static final String EXTRA_CAMERA_ONLY = "camera_only";
 
     private static final int REQUEST_CAMERA = 41;
+    private static final int REQUEST_MICROPHONE = 42;
+    private static final String PREF_ASKED_MICROPHONE = "asked_microphone";
+    private static final float[] IDENTITY = new float[16];
+
+    static {
+        Matrix.setIdentityM(IDENTITY, 0);
+    }
 
 
     // Free roam reveals bubbles gradually as the visitor explores: at most two
@@ -162,6 +169,18 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private TextView photoSavedText;
     private TextView photoShare;
     private Uri photoSavedUri;
+    private String photoSavedType = "image/jpeg";
+    // AR video (hold the shutter): the recording while it runs, and in full AR
+    // the frame it draws again (GL thread only).
+    private volatile ArVideo video;
+    private boolean recordedVideo;
+    private ImageView shutter;
+    private TextView recordPill;
+    private final android.os.Handler videoTicker = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable videoTick = this::tickVideo;
+    private Frame videoFrameSource;
+    private List<Draw> videoDraws = Collections.emptyList();
+    private float[] videoViewProjection;
     private final ConcurrentLinkedQueue<float[]> taps = new ConcurrentLinkedQueue<>();
     private final ConcurrentLinkedQueue<float[]> drags = new ConcurrentLinkedQueue<>();
     private final Random random = new Random();
@@ -312,6 +331,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     @Override
     protected void onPause() {
         super.onPause();
+        stopArVideo();
         resumed = false;
         compass.stop(sensors);
         if (locations != null) locations.removeUpdates(fixListener);
@@ -340,6 +360,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_CAMERA && (grantResults.length == 0 || grantResults[0] != PackageManager.PERMISSION_GRANTED)) {
             showFatal("AR needs the camera. You can allow it in Settings → Apps → On This Site.");
+        }
+        if (requestCode == REQUEST_MICROPHONE) {
+            boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            toast(granted ? "Now hold the camera button to record a video." : "Hold the camera button to record a video (without sound).");
         }
     }
 
@@ -384,6 +408,31 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     public void onDrawFrame(GL10 unused) {
         drawFrame();
         if (captureWanted) capturePixels();
+        ArVideo recording = video;
+        if (recording != null && !cameraOnly) recording.drawGl(this::drawVideoFrame, viewportWidth, viewportHeight);
+    }
+
+    /** Full AR: this frame again for the video, with the credit along the bottom. */
+    private void drawVideoFrame() {
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
+        if (videoFrameSource == null) return;
+        gl.drawBackground(videoFrameSource);
+        gl.beginQuads();
+        if (videoViewProjection != null) {
+            for (Draw draw : videoDraws) gl.drawQuad(videoViewProjection, draw.model, gl.texture(draw.texture), draw.alpha);
+        }
+        ArVideo recording = video;
+        float aspect = gl.aspect("video-credit");
+        if (recording != null && aspect > 0f) {
+            // The whole width, at the bottom, in screen coordinates (-1 to 1).
+            float high = 2f * aspect * recording.width / recording.height;
+            float[] model = new float[16];
+            Matrix.setIdentityM(model, 0);
+            Matrix.translateM(model, 0, 0f, -1f + high / 2f, 0f);
+            Matrix.scaleM(model, 0, 2f, high, 1f);
+            gl.drawQuad(IDENTITY, model, gl.texture("video-credit"), 1f);
+        }
+        gl.endQuads();
     }
 
     private void drawFrame() {
@@ -404,6 +453,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         Camera camera = frame.getCamera();
         gl.drawBackground(frame);
+        videoFrameSource = frame;
+        videoDraws = Collections.emptyList();
+        videoViewProjection = null;
         synchronized (lock) {
             if (camera.getTrackingState() != TrackingState.TRACKING) {
                 if (wasTracking) android.util.Log.i("OnThisSiteAR", "Tracking lost: " + camera.getTrackingFailureReason());
@@ -435,6 +487,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             while ((drag = drags.poll()) != null) handleDrag(drag, draws, viewProjection);
 
             Collections.sort(draws, (a, b) -> Float.compare(b.distance, a.distance));
+            videoDraws = draws;
+            videoViewProjection = viewProjection;
             gl.beginQuads();
             for (Draw draw : draws) gl.drawQuad(viewProjection, draw.model, gl.texture(draw.texture), draw.alpha);
             gl.endQuads();
@@ -906,11 +960,46 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         buildOverlay(root);
     }
 
+    /** RGBA 8-bit with a depth buffer; one a video encoder can record when the phone has one. */
+    private static EGLConfig chooseConfig(javax.microedition.khronos.egl.EGL10 egl, javax.microedition.khronos.egl.EGLDisplay display) {
+        int[] base = {
+            javax.microedition.khronos.egl.EGL10.EGL_RED_SIZE, 8,
+            javax.microedition.khronos.egl.EGL10.EGL_GREEN_SIZE, 8,
+            javax.microedition.khronos.egl.EGL10.EGL_BLUE_SIZE, 8,
+            javax.microedition.khronos.egl.EGL10.EGL_ALPHA_SIZE, 8,
+            javax.microedition.khronos.egl.EGL10.EGL_DEPTH_SIZE, 16,
+            javax.microedition.khronos.egl.EGL10.EGL_RENDERABLE_TYPE, 4, // OpenGL ES 2
+        };
+        for (boolean recordable : new boolean[] {true, false}) {
+            int[] attributes = java.util.Arrays.copyOf(base, base.length + (recordable ? 3 : 1));
+            if (recordable) {
+                attributes[base.length] = ArVideo.EGL_RECORDABLE_ANDROID;
+                attributes[base.length + 1] = 1;
+            }
+            attributes[attributes.length - 1] = javax.microedition.khronos.egl.EGL10.EGL_NONE;
+            int[] count = new int[1];
+            if (!egl.eglChooseConfig(display, attributes, null, 0, count) || count[0] < 1) continue;
+            EGLConfig[] configs = new EGLConfig[count[0]];
+            if (!egl.eglChooseConfig(display, attributes, configs, configs.length, count)) continue;
+            // Exactly 8 bits a channel (the list can start with deeper colour).
+            int[] value = new int[1];
+            for (int i = 0; i < count[0]; i++) {
+                boolean exact = true;
+                for (int channel : new int[] {javax.microedition.khronos.egl.EGL10.EGL_RED_SIZE, javax.microedition.khronos.egl.EGL10.EGL_GREEN_SIZE,
+                    javax.microedition.khronos.egl.EGL10.EGL_BLUE_SIZE, javax.microedition.khronos.egl.EGL10.EGL_ALPHA_SIZE}) {
+                    if (!egl.eglGetConfigAttrib(display, configs[i], channel, value) || value[0] != 8) exact = false;
+                }
+                if (exact) return configs[i];
+            }
+        }
+        throw new IllegalArgumentException("No OpenGL configuration for AR.");
+    }
+
     private void addArSurface(FrameLayout root) {
         surface = new GLSurfaceView(this);
         surface.setPreserveEGLContextOnPause(true);
         surface.setEGLContextClientVersion(2);
-        surface.setEGLConfigChooser(8, 8, 8, 8, 16, 0);
+        surface.setEGLConfigChooser(ArActivity::chooseConfig);
         surface.setRenderer(this);
         surface.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
         surface.setWillNotDraw(false);
@@ -1050,16 +1139,30 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         // sits at the bottom instead of over them.
         {
             bottom.addView(hint, hintParams);
-            // The shutter: saves what the camera sees, bubbles and all, to Photos.
-            ImageView shutter = new ImageView(this);
-            GradientDrawable ring = oval(Color.argb(120, 20, 26, 23));
-            ring.setStroke(dp(4), Color.WHITE);
-            shutter.setBackground(ring);
+            // While a video records: a red dot and the time.
+            recordPill = text(14, true, "");
+            recordPill.setVisibility(View.GONE);
+            recordPill.setBackground(rounded(Color.rgb(196, 40, 40), 16));
+            recordPill.setPadding(dp(12), dp(6), dp(12), dp(6));
+            LinearLayout.LayoutParams pillParams = new LinearLayout.LayoutParams(-2, -2);
+            pillParams.gravity = Gravity.CENTER_HORIZONTAL;
+            pillParams.topMargin = dp(10);
+            bottom.addView(recordPill, pillParams);
+            // The shutter: saves what the camera sees, bubbles and all, to
+            // Photos. Holding it records a video until it is let go.
+            shutter = new ImageView(this);
+            setShutterRing(false);
             shutter.setImageResource(R.drawable.ic_ar_camera);
             shutter.setScaleType(ImageView.ScaleType.FIT_CENTER);
             shutter.setPadding(dp(19), dp(19), dp(19), dp(19));
-            shutter.setContentDescription("Take a photo");
+            shutter.setContentDescription("Take a photo. Hold to record a video.");
             shutter.setOnClickListener(v -> takeArPhoto());
+            shutter.setOnLongClickListener(v -> startArVideo());
+            shutter.setOnTouchListener((v, event) -> {
+                int action = event.getActionMasked();
+                if ((action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) && video != null) stopArVideo();
+                return false;
+            });
             LinearLayout.LayoutParams shutterParams = new LinearLayout.LayoutParams(dp(68), dp(68));
             shutterParams.gravity = Gravity.CENTER_HORIZONTAL;
             shutterParams.topMargin = dp(12);
@@ -1376,10 +1479,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private void showPhotoSaved(Bitmap photo, Uri shareable, boolean inPhotos) {
         if (isFinishing()) return;
         photoSavedUri = shareable;
+        photoSavedType = "image/jpeg";
         photoSavedImage.setImageBitmap(photo);
-        photoSavedText.setText(inPhotos ? "Saved to your photos, in the On This Site album."
+        photoSavedImage.setContentDescription("Your AR photo");
+        photoSavedImage.setOnClickListener(null);
+        photoSavedText.setText((inPhotos ? "Saved to your photos, in the On This Site album."
             : shareable != null ? "This phone didn't let it into your photos, but you can still share it."
-            : "The photo couldn't be saved.");
+            : "The photo couldn't be saved.")
+            + (recordedVideo ? "" : "\nHold the camera button to record a video."));
         photoShare.setVisibility(shareable != null ? View.VISIBLE : View.GONE);
         photoSaved.setVisibility(View.VISIBLE);
     }
@@ -1403,15 +1510,228 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     /** The phone's share sheet: Instagram, Facebook, Messages, email; the visitor picks and posts. */
     private void shareArPhoto() {
         if (photoSavedUri == null) return;
+        boolean isVideo = "video/mp4".equals(photoSavedType);
         Intent send = new Intent(Intent.ACTION_SEND);
-        send.setType("image/jpeg");
+        send.setType(photoSavedType);
         send.putExtra(Intent.EXTRA_STREAM, photoSavedUri);
         send.setClipData(android.content.ClipData.newRawUri("", photoSavedUri));
         send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         try {
-            startActivity(Intent.createChooser(send, "Share your AR photo"));
+            startActivity(Intent.createChooser(send, isVideo ? "Share your AR video" : "Share your AR photo"));
         } catch (android.content.ActivityNotFoundException error) {
             toast("No app on this phone can share photos.");
+        }
+    }
+
+    // ---- AR videos ----
+
+    private void setShutterRing(boolean recording) {
+        GradientDrawable ring = oval(recording ? Color.argb(170, 196, 40, 40) : Color.argb(120, 20, 26, 23));
+        ring.setStroke(dp(4), Color.WHITE);
+        shutter.setBackground(ring);
+    }
+
+    /** Holding the shutter: records a video until it is let go, up to a minute. */
+    private boolean startArVideo() {
+        if (video != null || captureWanted || (!cameraOnly && session == null)) return false;
+        boolean microphone = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+        android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
+        if (!microphone && !prefs.getBoolean(PREF_ASKED_MICROPHONE, false)) {
+            // Asked once, for sound; the visitor holds the button again after answering.
+            prefs.edit().putBoolean(PREF_ASKED_MICROPHONE, true).apply();
+            requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, REQUEST_MICROPHONE);
+            return true;
+        }
+        int width = cameraOnly ? cameraField.getWidth() : viewportWidth;
+        int height = cameraOnly ? cameraField.getHeight() : viewportHeight;
+        if (width <= 0 || height <= 0) return false;
+        ArVideo started;
+        try {
+            started = ArVideo.start(this, CaptureFileProvider.createArVideoFile(this), width, height, microphone, this::creditStrip);
+        } catch (Exception error) {
+            android.util.Log.w("OnThisSiteAR", "AR video did not start: " + error.getMessage());
+            toast("This phone couldn't start a video.");
+            return true;
+        }
+        android.util.Log.i("OnThisSiteAR", String.format(Locale.US, "AR video started: %dx%d, %s",
+            started.width, started.height, microphone ? "with sound" : "no sound"));
+        video = started;
+        recordedVideo = true;
+        if (cameraOnly) cameraField.setVideo(started);
+        else gl.queueTexture("video-credit", started.credit);
+        vibrateConfirm();
+        setShutterRing(true);
+        recordPill.setText("\u25CF 0:00");
+        recordPill.setVisibility(View.VISIBLE);
+        videoTicker.postDelayed(videoTick, 250);
+        return true;
+    }
+
+    private void tickVideo() {
+        ArVideo recording = video;
+        if (recording == null) return;
+        long seconds = (SystemClock.elapsedRealtime() - recording.startedAt) / 1000;
+        if (recording.failed() || seconds >= ArVideo.MAX_SECONDS) {
+            stopArVideo();
+            return;
+        }
+        recordPill.setText(String.format(Locale.US, "\u25CF %d:%02d", seconds / 60, seconds % 60));
+        videoTicker.postDelayed(videoTick, 250);
+    }
+
+    /** Letting go of the shutter (or a minute up, or leaving AR): stops, saves and shows the video. */
+    private void stopArVideo() {
+        ArVideo recording = video;
+        if (recording == null) return;
+        video = null;
+        videoTicker.removeCallbacks(videoTick);
+        recordPill.setVisibility(View.GONE);
+        setShutterRing(false);
+        vibrateConfirm();
+        if (cameraOnly) {
+            cameraField.setVideo(null);
+            loader.execute(() -> saveArVideo(recording));
+        } else {
+            // The GL thread lets go of the video's surface before it is closed.
+            surface.queueEvent(() -> {
+                recording.releaseGl();
+                loader.execute(() -> saveArVideo(recording));
+            });
+        }
+    }
+
+    /** The credit for a video, as a strip as wide as the video: the place, and On This Site. */
+    private Bitmap creditStrip(int width) {
+        Bitmap strip = Bitmap.createBitmap(width, Math.round(width * 0.16f), Bitmap.Config.ARGB_8888);
+        stampCredit(new Canvas(strip), width, strip.getHeight());
+        return strip;
+    }
+
+    private void saveArVideo(ArVideo recording) {
+        if (!recording.finish()) {
+            toast(recording.failed() ? "This phone couldn't record the AR view." : "Hold the button a little longer to record a video.");
+            return;
+        }
+        Bitmap still = videoStill(recording);
+        String name = "on-this-site-ar-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new java.util.Date()) + ".mp4";
+        Uri saved = saveVideoToGallery(recording.file, name);
+        Uri shareable = saved != null ? saved : CaptureFileProvider.uriFor(recording.file);
+        if (saved != null && !recording.file.delete()) recording.file.deleteOnExit();
+        runOnUiThread(() -> showVideoSaved(still, shareable, saved != null, recording.withSound));
+    }
+
+    /** The video's first frame with a play button, for the saved card. */
+    private Bitmap videoStill(ArVideo recording) {
+        Bitmap frame = null;
+        android.media.MediaMetadataRetriever retriever = new android.media.MediaMetadataRetriever();
+        try {
+            retriever.setDataSource(recording.file.getAbsolutePath());
+            frame = retriever.getFrameAtTime(0, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+        } catch (RuntimeException error) {
+            android.util.Log.w("OnThisSiteAR", "No still from the AR video: " + error.getMessage());
+        } finally {
+            try {
+                retriever.release();
+            } catch (Exception ignored) {
+                // Nothing left to free.
+            }
+        }
+        Bitmap still = frame != null ? frame.copy(Bitmap.Config.ARGB_8888, true)
+            : Bitmap.createBitmap(recording.width / 4, recording.height / 4, Bitmap.Config.ARGB_8888);
+        if (frame != null) frame.recycle();
+        Canvas canvas = new Canvas(still);
+        if (frame == null) canvas.drawColor(Color.rgb(20, 26, 23));
+        float radius = Math.min(still.getWidth(), still.getHeight()) * 0.12f;
+        float cx = still.getWidth() / 2f;
+        float cy = still.getHeight() / 2f;
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(Color.argb(150, 0, 0, 0));
+        canvas.drawCircle(cx, cy, radius, paint);
+        paint.setColor(Color.WHITE);
+        android.graphics.Path play = new android.graphics.Path();
+        play.moveTo(cx - radius * 0.35f, cy - radius * 0.5f);
+        play.lineTo(cx + radius * 0.55f, cy);
+        play.lineTo(cx - radius * 0.35f, cy + radius * 0.5f);
+        play.close();
+        canvas.drawPath(play, paint);
+        return still;
+    }
+
+    /** Copies the video to Photos, in the On This Site album; null when this phone won't allow it. */
+    private Uri saveVideoToGallery(java.io.File file, String name) {
+        android.content.ContentResolver resolver = getContentResolver();
+        // Pictures keeps photos and videos in one album; some Android 10 phones take videos only in Movies.
+        for (String folder : new String[] {"Pictures/On This Site", "Movies/On This Site"}) {
+            android.content.ContentValues values = new android.content.ContentValues();
+            values.put(android.provider.MediaStore.Video.Media.DISPLAY_NAME, name);
+            values.put(android.provider.MediaStore.Video.Media.MIME_TYPE, "video/mp4");
+            values.put(android.provider.MediaStore.Video.Media.DATE_TAKEN, System.currentTimeMillis());
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                values.put(android.provider.MediaStore.Video.Media.RELATIVE_PATH, folder);
+                values.put(android.provider.MediaStore.Video.Media.IS_PENDING, 1);
+            }
+            Uri uri = null;
+            try {
+                uri = resolver.insert(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
+                if (uri == null) return null;
+                try (OutputStream output = resolver.openOutputStream(uri);
+                     InputStream input = new java.io.FileInputStream(file)) {
+                    if (output == null) throw new java.io.IOException("no output stream");
+                    byte[] buffer = new byte[64 * 1024];
+                    int read;
+                    while ((read = input.read(buffer)) > 0) output.write(buffer, 0, read);
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    android.content.ContentValues ready = new android.content.ContentValues();
+                    ready.put(android.provider.MediaStore.Video.Media.IS_PENDING, 0);
+                    resolver.update(uri, ready, null, null);
+                }
+                return uri;
+            } catch (IllegalArgumentException wrongFolder) {
+                removeQuietly(resolver, uri);
+            } catch (Exception error) {
+                // Before Android 10 saving to Photos needs a storage permission this app doesn't ask for.
+                android.util.Log.w("OnThisSiteAR", "AR video not saved to Photos: " + error.getMessage());
+                removeQuietly(resolver, uri);
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static void removeQuietly(android.content.ContentResolver resolver, Uri uri) {
+        if (uri == null) return;
+        try {
+            resolver.delete(uri, null, null);
+        } catch (RuntimeException ignored) {
+            // Already gone.
+        }
+    }
+
+    private void showVideoSaved(Bitmap still, Uri shareable, boolean inPhotos, boolean withSound) {
+        if (isFinishing()) return;
+        photoSavedUri = shareable;
+        photoSavedType = "video/mp4";
+        photoSavedImage.setImageBitmap(still);
+        photoSavedImage.setContentDescription("Your AR video. Tap to play it.");
+        photoSavedImage.setOnClickListener(shareable == null ? null : v -> playArVideo());
+        photoSavedText.setText((inPhotos ? "Video saved to your photos, in the On This Site album."
+            : shareable != null ? "This phone didn't let it into your photos, but you can still share it."
+            : "The video couldn't be saved.")
+            + (withSound ? "" : "\nNo sound: allow the microphone for On This Site in Settings to record sound."));
+        photoShare.setVisibility(shareable != null ? View.VISIBLE : View.GONE);
+        photoSaved.setVisibility(View.VISIBLE);
+    }
+
+    private void playArVideo() {
+        if (photoSavedUri == null) return;
+        Intent play = new Intent(Intent.ACTION_VIEW);
+        play.setDataAndType(photoSavedUri, "video/mp4");
+        play.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try {
+            startActivity(play);
+        } catch (android.content.ActivityNotFoundException error) {
+            toast("No app on this phone can play the video.");
         }
     }
 
