@@ -2657,8 +2657,33 @@ public class MainActivity extends Activity {
     }
 
     void openArNearby(String bubblesJson) {
+        openArNearbyWhenKnown(bubblesJson, 0);
+    }
+
+    /**
+     * Full AR where ARCore can run; elsewhere (no gyroscope, an uncertified
+     * device, or ARCore missing while offline) the camera with the bubbles
+     * over it. The first check on a device without ARCore asks Google Play,
+     * so give that a moment.
+     */
+    private void openArNearbyWhenKnown(String bubblesJson, int checks) {
+        com.google.ar.core.ArCoreApk.Availability availability;
+        try {
+            availability = com.google.ar.core.ArCoreApk.getInstance().checkAvailability(this);
+        } catch (Exception error) {
+            availability = com.google.ar.core.ArCoreApk.Availability.UNKNOWN_ERROR;
+        }
+        if (availability.isTransient() && checks < 15) {
+            startupHandler.postDelayed(() -> openArNearbyWhenKnown(bubblesJson, checks + 1), 200);
+            return;
+        }
         startActivity(new Intent(this, ArActivity.class)
-            .putExtra(ArActivity.EXTRA_NEARBY, bubblesJson));
+            .putExtra(ArActivity.EXTRA_NEARBY, bubblesJson)
+            .putExtra(ArActivity.EXTRA_CAMERA_ONLY, !availability.isSupported()));
+    }
+
+    boolean hasArCameraMode() {
+        return getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY);
     }
 
     boolean validBridgeToken(String token) {

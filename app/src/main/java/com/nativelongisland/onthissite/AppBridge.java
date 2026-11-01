@@ -34,6 +34,12 @@ class AppBridge {
         return activity.isArSupported();
     }
 
+    /** The camera-only bubbles, for devices that can't run full AR. */
+    @JavascriptInterface
+    public boolean hasArCameraMode() {
+        return activity.hasArCameraMode();
+    }
+
     /** Opens AR with bubbles from places near the visitor (an ArScene JSON built by the web app). */
     @JavascriptInterface
     public void openArNearby(String token, String bubblesJson) {
