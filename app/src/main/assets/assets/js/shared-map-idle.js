@@ -189,6 +189,17 @@
         && center[0] >= LONG_ISLAND.west && center[0] <= LONG_ISLAND.east && center[1] >= LONG_ISLAND.south && center[1] <= LONG_ISLAND.north;
     }
 
+    // A page hook that fails (in an older offline copy, say) only loses its
+    // own stops; the tour carries on.
+    function fromPage(hook) {
+      try {
+        return hook?.() || [];
+      } catch (error) {
+        console.warn("Map tour: a stop source failed.", error);
+        return [];
+      }
+    }
+
     // Every stop of a kind: { key, kicker, title, line, text, image, icon, center, zoom, open }.
     function siteStops() {
       return (getSites() || []).filter(site => Array.isArray(site.center) && site.slug && site.title && !sensitive(site))
@@ -206,12 +217,13 @@
 
     // People from the biography paths, at the places in their records.
     function personStops() {
-      return (ctx.people?.() || []).flatMap(person => (person.places || [])
+      return fromPage(ctx.people).flatMap(person => (person.places || [])
         .filter(place => onLongIsland(place.coordinates) && !/burial|grave|cemetery|private/i.test(`${place.place} ${place.label}`))
         .map(place => ({
           key: `person:${person.slug}`,
           kicker: "People of Long Island",
-          title: plain(person.name),
+          // A path title such as "Momoweta — life and connections" names the person.
+          title: plain(person.name).replace(/\s*[—–-]\s*life and connections$/i, ""),
           line: [plain(place.dateLabel || place.label), plain(place.place)].filter(Boolean).join(" · "),
           texts: [place.reason, person.article?.summary, person.article?.why_this_matters],
           image: person.image || PERSON_ICON,
@@ -223,7 +235,7 @@
 
     // The animal relatives that wander the map, met where they are.
     function animalStops() {
-      return (ctx.animals?.() || []).map(animal => ({
+      return fromPage(ctx.animals).map(animal => ({
         key: `animal:${animal.slug}`,
         kicker: "Animal relatives",
         title: plain(animal.title),
@@ -492,7 +504,15 @@
     function later(step, ms) {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
-        if (running) step();
+        if (!running) return;
+        // Anything unexpected ends the tour cleanly rather than leaving the
+        // map stuck mid-flight with a card half shown.
+        try {
+          step();
+        } catch (error) {
+          console.warn("Map tour stopped.", error);
+          wake();
+        }
       }, ms);
     }
 

@@ -21982,6 +21982,21 @@
     // Idle screensaver on the main map (shared-map-idle.js): left open and
     // untouched, the map drifts along Long Island with "Did you know" cards.
     // Offline there's no web map, so the native map is eased directly.
+    // Offline the page doesn't load the wiki index; the screensaver's people
+    // and animal cards read their summaries from the bundled copy instead.
+    let idleWikiRows = null;
+    function idleWikiArticle(slug) {
+      const article = state.wikiBySlug.get(slug);
+      if (article) return article;
+      if (!idleWikiRows) {
+        idleWikiRows = new Map();
+        fetch(`${WIKI_INDEX_URL}?v=${WIKI_INDEX_VERSION}`).then(response => response.json())
+          .then(json => (json?.rows || []).forEach(row => idleWikiRows.set(row.slug, row)))
+          .catch(() => {});
+      }
+      return idleWikiRows.get(slug);
+    }
+
     const mapIdle = window.NLI_MAP_IDLE?.create({
       getMap: () => state.map,
       getSites: () => state.sites,
@@ -22002,20 +22017,21 @@
       // animal relatives; now and then a fact about the project itself.
       people: () => Object.entries(BIOGRAPHY_PLACE_PATHS).map(([slug, path]) => ({
         slug,
-        name: mobileBiographyPathPersonName(state.wikiBySlug.get(slug), slug),
-        article: state.wikiBySlug.get(slug),
+        name: mobileBiographyPathPersonName(idleWikiArticle(slug), slug),
+        article: idleWikiArticle(slug),
         places: path?.places || [],
         open: () => void openWikiArticle(slug, { focus: false })
       })),
-      animals: () => mobileMovingAnimalsEnabled() ? (MAP_UTILS.nativeAnimals || []).map(animal => ({
+      // This copy always draws the animal relatives (it has no animals switch).
+      animals: () => (MAP_UTILS.nativeAnimals || []).map(animal => ({
         slug: animal.slug,
         title: animal.title,
-        article: state.wikiBySlug.get(animal.slug),
+        article: idleWikiArticle(animal.slug),
         image: MAP_UTILS.nativeAnimalIcon(animal),
         centerAt: ms => MAP_UTILS.nativeAnimalMotion(animal, (state.mobileNativeAnimalClock.elapsed || 0) + ms,
           window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches).coordinates,
         open: () => void openWikiArticle(animal.slug, { focus: false })
-      })) : [],
+      })),
       project: {
         openAbout: () => openAboutPanel(),
         openSupport: () => openSupportPanel(),
