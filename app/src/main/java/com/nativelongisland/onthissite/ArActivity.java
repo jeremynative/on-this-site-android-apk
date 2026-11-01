@@ -141,6 +141,15 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private float[] lastForward;
     private final Set<String> answered = new HashSet<>();
     private static final float DISCOVER_DISTANCE = 1.6f;
+    // Pressing on a bubble or card and dragging down brings it closer, up
+    // pushes it away: a third of the screen doubles or halves the distance,
+    // within these limits (metres).
+    private static final float DRAG_NEAREST_BUBBLE_M = 0.5f;
+    private static final float DRAG_NEAREST_CARD_M = 0.6f;
+    private static final float DRAG_FARTHEST_M = 5f;
+    private static final float DRAG_START = 0f;
+    private static final float DRAG_MOVE = 1f;
+    private static final float DRAG_END = 2f;
 
     private final Object lock = new Object();
     private final ArGl gl = new ArGl();
@@ -154,12 +163,21 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private TextView photoShare;
     private Uri photoSavedUri;
     private final ConcurrentLinkedQueue<float[]> taps = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<float[]> drags = new ConcurrentLinkedQueue<>();
     private final Random random = new Random();
 
     // Scene state (guarded by lock).
     private ArScene scene;
     private final Map<String, Anchor> discoverAnchors = new HashMap<>();  // itemId -> anchor
     private final Map<String, Float> discoverLift = new HashMap<>();
+    // Bubbles the visitor moved by hand: how far from their anchor (metres).
+    // These open only with a tap, not by coming near.
+    private final Map<String, float[]> discoverNudge = new HashMap<>();
+    private String dragId;
+    private float dragFromY;
+    private float dragFromDistance;
+    private float dragTo = Float.NaN;
+    private boolean draggedOnce;
     private final Set<String> discovered = new HashSet<>();
     private final Set<String> loading = new HashSet<>();
     private final Set<String> enabledLayers = new HashSet<>();
@@ -391,6 +409,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 if (wasTracking) android.util.Log.i("OnThisSiteAR", "Tracking lost: " + camera.getTrackingFailureReason());
                 wasTracking = false;
                 taps.clear();
+                drags.clear();
+                dragId = null;
                 postStatus(trackingProblem(camera), "");
                 return;
             }
@@ -411,6 +431,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
             float[] tap;
             while ((tap = taps.poll()) != null) handleTap(tap[0], tap[1], draws, viewProjection);
+            float[] drag;
+            while ((drag = drags.poll()) != null) handleDrag(drag, draws, viewProjection);
 
             Collections.sort(draws, (a, b) -> Float.compare(b.distance, a.distance));
             gl.beginQuads();
@@ -715,15 +737,30 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             Pose base = anchor.getPose();
             // A slow drift (about 8 s a cycle) while closed; opened cards hold still to be read.
             float bob = discovered.contains(item.id) ? 0f : 0.02f * (float) Math.sin(now / 1300.0 + (item.id.hashCode() & 0xff));
+            float[] nudge = discoverNudge.get(item.id);
             float[] point = {base.tx(), base.ty() + discoverLift.get(item.id) + bob, base.tz()};
+            if (nudge != null) {
+                for (int i = 0; i < 3; i++) point[i] += nudge[i];
+            }
             float distance = distance(point, cameraPoint);
+            // Held by the visitor: along the line from the camera to the
+            // distance the drag asks for.
+            if (item.id.equals(dragId) && !Float.isNaN(dragTo) && nudge != null && distance > 0.01f) {
+                float stretch = dragTo / distance - 1f;
+                for (int i = 0; i < 3; i++) {
+                    float step = (point[i] - cameraPoint[i]) * stretch;
+                    nudge[i] += step;
+                    point[i] += step;
+                }
+                distance = dragTo;
+            }
             // An unopened bubble left behind in another room makes way for new ones.
             if (!discovered.contains(item.id) && !item.hasSpot()
                 && Math.hypot(point[0] - cameraPoint[0], point[2] - cameraPoint[2]) > FREE_LEFT_BEHIND_M) {
                 stopped.add(item.id);
                 continue;
             }
-            if (!discovered.contains(item.id) && distance < DISCOVER_DISTANCE) {
+            if (!discovered.contains(item.id) && nudge == null && distance < DISCOVER_DISTANCE) {
                 discovered.add(item.id);
                 runOnUiThread(() -> onDiscovered(item));
             }
@@ -745,17 +782,24 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             Anchor anchor = discoverAnchors.remove(id);
             if (anchor != null) anchor.detach();
             discoverLift.remove(id);
+            discoverNudge.remove(id);
         }
     }
 
     // ---- Taps ----
 
-    private void handleTap(float x, float y, List<Draw> draws, float[] viewProjection) {
+    /** The nearest bubble or card under a point on the screen, or null. */
+    private Draw pick(float x, float y, List<Draw> draws, float[] viewProjection) {
         Draw picked = null;
         for (Draw draw : draws) {
             if (draw.itemId == null || !draw.contains(x, y, viewProjection, viewportWidth, viewportHeight)) continue;
             if (picked == null || draw.distance < picked.distance) picked = draw;
         }
+        return picked;
+    }
+
+    private void handleTap(float x, float y, List<Draw> draws, float[] viewProjection) {
+        Draw picked = pick(x, y, draws, viewProjection);
         if (picked == null) {
             runOnUiThread(() -> infoPanel.setVisibility(View.GONE));
             return;
@@ -767,6 +811,28 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 runOnUiThread(() -> showItem(item));
                 return;
             }
+        }
+    }
+
+    /** A press on a bubble or card dragged down brings it closer; up pushes it away. */
+    private void handleDrag(float[] drag, List<Draw> draws, float[] viewProjection) {
+        if (drag[0] == DRAG_START) {
+            Draw picked = pick(drag[1], drag[2], draws, viewProjection);
+            dragId = picked == null || !discoverAnchors.containsKey(picked.itemId) ? null : picked.itemId;
+            dragFromY = drag[3];
+            dragFromDistance = picked == null ? 0f : picked.distance;
+            dragTo = Float.NaN;
+            if (dragId == null) return;
+            if (!discoverNudge.containsKey(dragId)) discoverNudge.put(dragId, new float[3]);
+            draggedOnce = true;
+        } else if (drag[0] == DRAG_MOVE && dragId != null) {
+            float nearest = discovered.contains(dragId) ? DRAG_NEAREST_CARD_M : DRAG_NEAREST_BUBBLE_M;
+            // A find over a spot farther than this can still be pushed back to it.
+            float farthest = Math.max(DRAG_FARTHEST_M, dragFromDistance);
+            float want = dragFromDistance * (float) Math.pow(2, (dragFromY - drag[2]) / (viewportHeight / 3f));
+            dragTo = Math.max(nearest, Math.min(farthest, want));
+        } else if (drag[0] == DRAG_END) {
+            dragId = null;
         }
     }
 
@@ -797,11 +863,13 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (cameraOnly) {
             String turn = cameraField.turnHint();
             if (!turn.isEmpty()) return turn;
-            return discovered.isEmpty() ? "Tap a bubble to open it" : "";
+            if (discovered.isEmpty()) return "Tap a bubble to open it";
+            return cameraField.draggedOnce() ? "" : "Drag a bubble down or up to move it";
         }
         String turn = directionHint();
         if (turn != null) return turn;
-        return discovered.isEmpty() ? "Walk up to a bubble or tap it" : "";
+        if (discovered.isEmpty()) return "Walk up to a bubble or tap it";
+        return draggedOnce ? "" : "Drag a bubble down or up to move it";
     }
 
     private void postStatus(String text, String hintValue) {
@@ -847,14 +915,38 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         surface.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
         surface.setWillNotDraw(false);
         final float[] down = new float[2];
+        final boolean[] dragging = new boolean[1];
         surface.setOnTouchListener((view, event) -> {
-            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                down[0] = event.getX();
-                down[1] = event.getY();
-            } else if (event.getActionMasked() == MotionEvent.ACTION_UP
-                && Math.hypot(event.getX() - down[0], event.getY() - down[1]) < dp(16)) {
-                taps.add(new float[] {event.getX(), event.getY()});
-                view.performClick();
+            float dx = event.getX() - down[0];
+            float dy = event.getY() - down[1];
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    down[0] = event.getX();
+                    down[1] = event.getY();
+                    dragging[0] = false;
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    // A mostly up-or-down move past a small slop is a drag; the
+                    // render loop finds what was pressed.
+                    if (!dragging[0] && Math.abs(dy) >= dp(16) && Math.abs(dy) > Math.abs(dx)) {
+                        dragging[0] = true;
+                        drags.add(new float[] {DRAG_START, down[0], down[1], event.getY()});
+                    }
+                    if (dragging[0]) drags.add(new float[] {DRAG_MOVE, event.getX(), event.getY()});
+                    break;
+                case MotionEvent.ACTION_UP:
+                    if (dragging[0]) {
+                        drags.add(new float[] {DRAG_END});
+                    } else if (Math.hypot(dx, dy) < dp(16)) {
+                        taps.add(new float[] {event.getX(), event.getY()});
+                        view.performClick();
+                    }
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                    if (dragging[0]) drags.add(new float[] {DRAG_END});
+                    break;
+                default:
+                    break;
             }
             return true;
         });

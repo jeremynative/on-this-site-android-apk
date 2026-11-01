@@ -41,7 +41,8 @@ import java.util.concurrent.ExecutorService;
  * its own. Without one (tablets with only an accelerometer) the tilt comes
  * from gravity and the turn from how the camera image slides, and a few
  * bubbles at a time appear in front of the visitor at eye level.
- * Tapping a bubble opens its card, as in full AR.
+ * Tapping a bubble opens its card, as in full AR; pressing one and dragging
+ * down brings it closer (larger), up pushes it away.
  */
 final class ArCameraField extends FrameLayout implements SensorEventListener {
     interface Host {
@@ -66,6 +67,9 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     private static final int FLOW_HEIGHT = 160;
     private static final long FLOW_EVERY_MS = 40;
     private static final int FLOW_SEARCH = 12;
+    // How near or far a dragged bubble can look, as a share of its size.
+    private static final float NEAREST = 2f;
+    private static final float FARTHEST = 0.5f;
 
     private static final class Bubble {
         final ArScene.Item item;
@@ -77,6 +81,8 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         // Without a compass: placed in front of the visitor when revealed.
         boolean placed;
         long shownAt;
+        // Brought closer (above 1) or pushed away (below) by a drag.
+        float near = 1f;
         final float phase;
         float drawX;
         float drawY;
@@ -102,6 +108,11 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     private final Sensor accelerometer;
     private final float[] rotation = new float[9];
     private final float[] down = new float[2];
+    private boolean dragging;
+    private Bubble dragged;
+    private float dragFromY;
+    private float dragFromNear;
+    private boolean draggedOnce;
 
     private boolean started;
     private CameraDevice camera;
@@ -428,7 +439,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             float y = height / 2f - (float) ((bubble.elevation - pitch) / fovUp) * height + bob;
             // A fresh bubble grows in; all of them pulse gently.
             float grow = compass ? 1f : Math.min(1f, (now - bubble.shownAt) / 450f);
-            float size = radius * grow * (0.94f + 0.06f * (float) Math.sin(now / 300.0 + bubble.phase));
+            float size = radius * grow * bubble.near * (0.94f + 0.06f * (float) Math.sin(now / 300.0 + bubble.phase));
             bubble.drawX = x;
             bubble.drawY = y;
             bubble.drawRadius = size;
@@ -629,29 +640,66 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         return nearest < 0 ? "← Turn left to find a bubble" : "Turn right to find a bubble →";
     }
 
+    /** Whether the visitor has moved a bubble yet (to stop teaching it). */
+    boolean draggedOnce() {
+        return draggedOnce;
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-            down[0] = event.getX();
-            down[1] = event.getY();
-            return true;
+        float dx = event.getX() - down[0];
+        float dy = event.getY() - down[1];
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                down[0] = event.getX();
+                down[1] = event.getY();
+                dragging = false;
+                dragged = null;
+                break;
+            case MotionEvent.ACTION_MOVE:
+                // A mostly up-or-down move past a small slop drags the bubble pressed.
+                if (!dragging && Math.abs(dy) >= dp(16) && Math.abs(dy) > Math.abs(dx)) {
+                    dragging = true;
+                    dragged = bubbleAt(down[0], down[1]);
+                    dragFromY = event.getY();
+                    dragFromNear = dragged == null ? 1f : dragged.near;
+                    if (dragged != null) draggedOnce = true;
+                }
+                if (dragged != null) {
+                    float want = dragFromNear * (float) Math.pow(2, (event.getY() - dragFromY) / (getHeight() / 3f));
+                    dragged.near = Math.max(FARTHEST, Math.min(NEAREST, want));
+                }
+                break;
+            case MotionEvent.ACTION_UP:
+                if (!dragging && Math.hypot(dx, dy) < dp(16)) {
+                    Bubble picked = bubbleAt(event.getX(), event.getY());
+                    host.tapped(picked == null ? null : picked.item);
+                    performClick();
+                }
+                dragged = null;
+                break;
+            case MotionEvent.ACTION_CANCEL:
+                dragged = null;
+                break;
+            default:
+                break;
         }
-        if (event.getActionMasked() != MotionEvent.ACTION_UP
-            || Math.hypot(event.getX() - down[0], event.getY() - down[1]) >= dp(16)) return true;
+        return true;
+    }
+
+    private Bubble bubbleAt(float x, float y) {
         Bubble picked = null;
         double pickedDistance = Double.MAX_VALUE;
         for (Bubble bubble : bubbles) {
             if (!bubble.onScreen || host.discovered(bubble.item)) continue;
-            double distance = Math.hypot(event.getX() - bubble.drawX, event.getY() - bubble.drawY);
+            double distance = Math.hypot(x - bubble.drawX, y - bubble.drawY);
             if (distance <= bubble.drawRadius * 1.15 && distance < pickedDistance) {
                 picked = bubble;
                 pickedDistance = distance;
             }
         }
-        host.tapped(picked == null ? null : picked.item);
-        performClick();
-        return true;
+        return picked;
     }
 
     @Override
