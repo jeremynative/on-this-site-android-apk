@@ -122,6 +122,45 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private static final float FREE_UNKNOWN_M = 2.2f;
     private static final long FREE_COMPASS_WAIT_MS = 15000;
     private final ArCompass compass = new ArCompass();
+    // Unopened bubbles left in another room, or lost with tracking (a dark
+    // hallway makes ARCore start a new map), are let go so new ones keep
+    // appearing near the visitor.
+    private static final float FREE_LEFT_BEHIND_M = 6f;
+    private static final long FREE_LOST_MS = 2500;
+    private final Map<String, Long> discoverLostSince = new HashMap<>();
+    private boolean wasTracking = true;
+    // Finds with a GPS point (plant IDs, photo stories) float over the spot
+    // where they were photographed once the visitor is this close.
+    private static final double SPOT_NEAR_M = 40;
+    private static final float SPOT_MIN_M = 1.2f;
+    private static final float SPOT_BELOW_EYE_M = 0.4f;
+    private android.location.LocationManager locations;
+    // Latest live fix: lat, lng, accuracy (m), when (elapsed ms).
+    private volatile double[] fix;
+    // A full listener: before Android 11 the provider callbacks have no defaults.
+    private final android.location.LocationListener fixListener = new android.location.LocationListener() {
+        @Override
+        public void onLocationChanged(android.location.Location location) {
+            double[] current = fix;
+            long now = SystemClock.elapsedRealtime();
+            double accuracy = location.hasAccuracy() ? location.getAccuracy() : 50;
+            // A coarser fix only replaces a finer one once that has aged a few seconds.
+            if (current != null && accuracy > current[2] && now - current[3] < 5000) return;
+            fix = new double[] {location.getLatitude(), location.getLongitude(), accuracy, now};
+        }
+
+        @Override
+        public void onStatusChanged(String provider, int status, android.os.Bundle extras) {
+        }
+
+        @Override
+        public void onProviderEnabled(String provider) {
+        }
+
+        @Override
+        public void onProviderDisabled(String provider) {
+        }
+    };
     private android.hardware.SensorManager sensors;
     private long freeStartedAt;
     private float[] lastForward;
@@ -245,6 +284,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (freeRoam) {
             sensors = (android.hardware.SensorManager) getSystemService(SENSOR_SERVICE);
             if (!Double.isNaN(scene.hereLat)) compass.setLocation(scene.hereLat, scene.hereLng);
+            locations = (android.location.LocationManager) getSystemService(LOCATION_SERVICE);
         }
         buildUi();
     }
@@ -255,7 +295,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     protected void onResume() {
         super.onResume();
         resumed = true;
-        if (freeRoam) compass.start(sensors);
+        if (freeRoam) {
+            compass.start(sensors);
+            startFixes();
+        }
         startAr();
     }
 
@@ -305,7 +348,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     protected void onPause() {
         super.onPause();
         resumed = false;
-        if (freeRoam) compass.stop(sensors);
+        if (freeRoam) {
+            compass.stop(sensors);
+            if (locations != null) locations.removeUpdates(fixListener);
+        }
         if (session != null) {
             surface.onPause();
             session.pause();
@@ -407,6 +453,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             trackMarkers(frame);
             localizeInSpace(frame, camera);
             if (camera.getTrackingState() != TrackingState.TRACKING) {
+                if (wasTracking) android.util.Log.i("OnThisSiteAR", "Tracking lost: " + camera.getTrackingFailureReason());
+                wasTracking = false;
                 taps.clear();
                 if (spaceLocalizer != null) {
                     drawPhotoMode(frame, camera);
@@ -421,6 +469,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             camera.getViewMatrix(view, 0);
             camera.getProjectionMatrix(projection, 0, 0.05f, 100f);
             Matrix.multiplyMM(viewProjection, 0, projection, 0, view, 0);
+            if (!wasTracking) android.util.Log.i("OnThisSiteAR", "Tracking back");
+            wasTracking = true;
             Pose cameraPose = camera.getDisplayOrientedPose();
             float[] cameraPoint = cameraPose.getTranslation();
             ArScene.Room room = currentRoom(cameraPoint);
@@ -788,11 +838,25 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         int waiting = 0;
         ArScene.Item ambient = null;
         ArScene.Item ahead = null;
+        ArScene.Item spot = null;
         double aheadHeading = 0;
+        double[] visitor = whereNow();
         for (ArScene.Item item : scene.items) {
             if (!visible(item)) continue;
+            if (item.hasSpot() && visitor != null) {
+                // Keeps the direction pill true as the visitor walks.
+                double[] offset = metresTo(visitor, item);
+                item.distanceM = Math.hypot(offset[0], offset[1]);
+                item.bearing = (Math.toDegrees(Math.atan2(offset[0], offset[1])) + 360) % 360;
+            }
             if (discoverAnchors.containsKey(item.id)) {
-                if (!discovered.contains(item.id)) waiting++;
+                // Finds stay at their spots, so they don't hold up new bubbles.
+                if (!discovered.contains(item.id) && !item.hasSpot()) waiting++;
+                continue;
+            }
+            if (item.hasSpot()) {
+                // Never anywhere else: only over its spot, once close enough.
+                if (spot == null && compassReady && visitor != null && item.distanceM <= SPOT_NEAR_M) spot = item;
                 continue;
             }
             if (!Double.isNaN(item.bearing) && !ignoreDirections) {
@@ -802,9 +866,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                     ahead = item;
                     aheadHeading = heading;
                 }
-            } else if (ambient == null) {
+            } else if (ambient == null || (discovered.contains(ambient.id) && !discovered.contains(item.id))) {
+                // New bubbles before found ones coming back after a tracking reset.
                 ambient = item;
             }
+        }
+        if (spot != null) {
+            placeAtSpot(spot, cameraPoint, facing);
+            return;
         }
         ArScene.Item next;
         boolean directional = ahead != null && waiting <= FREE_WAITING_MAX;
@@ -862,6 +931,54 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 lastFreeSpawnFrom = cameraPoint.clone();
             }
             return;
+        }
+    }
+
+    /** A find floats over the spot where it was photographed, a little below eye level. */
+    private void placeAtSpot(ArScene.Item item, float[] cameraPoint, double facing) {
+        // Standing on the spot, the direction means nothing: it floats ahead.
+        double heading = item.distanceM < SPOT_MIN_M ? facing : compass.arHeadingFor(item.bearing);
+        float distance = (float) Math.max(item.distanceM, SPOT_MIN_M);
+        float[] point = {cameraPoint[0] + (float) Math.sin(heading) * distance, cameraPoint[1] - SPOT_BELOW_EYE_M,
+            cameraPoint[2] - (float) Math.cos(heading) * distance};
+        discoverAnchors.put(item.id, session.createAnchor(Pose.makeTranslation(point[0], point[1], point[2])));
+        discoverLift.put(item.id, 0f);
+        discoverRoom.put(item.id, "");
+        android.util.Log.i("OnThisSiteAR", String.format(Locale.US, "Placed %s at its spot, %.0f m at %.0f deg",
+            item.id, item.distanceM, item.bearing));
+    }
+
+    /** Where the visitor is: the live GPS fix, else where the scene was built. */
+    private double[] whereNow() {
+        double[] live = fix;
+        if (live != null) return live;
+        return Double.isNaN(scene.hereLat) || Double.isNaN(scene.hereLng) ? null : new double[] {scene.hereLat, scene.hereLng};
+    }
+
+    /** Metres east and north from a GPS point to a find's spot. */
+    private static double[] metresTo(double[] from, ArScene.Item item) {
+        double north = (item.spotLat - from[0]) * 111320.0;
+        double east = (item.spotLng - from[1]) * 111320.0 * Math.cos(Math.toRadians(from[0]));
+        return new double[] {east, north};
+    }
+
+    private boolean hasSpots() {
+        for (ArScene.Item item : scene.items) if (item.hasSpot()) return true;
+        return false;
+    }
+
+    /** Live GPS while the scene has finds with a spot, to float them where they were photographed. */
+    @android.annotation.SuppressLint("MissingPermission") // Checked just above; a revoked permission throws, caught below.
+    private void startFixes() {
+        if (locations == null || !hasSpots()) return;
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+            && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) return;
+        try {
+            for (String provider : new String[] {android.location.LocationManager.GPS_PROVIDER, android.location.LocationManager.NETWORK_PROVIDER}) {
+                if (locations.isProviderEnabled(provider)) locations.requestLocationUpdates(provider, 1000L, 0f, fixListener);
+            }
+        } catch (RuntimeException error) {
+            android.util.Log.w("OnThisSiteAR", "No live location for finds: " + error.getMessage());
         }
     }
 
@@ -927,12 +1044,26 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 stopped.add(item.id);
                 continue;
             }
-            if (anchor.getTrackingState() != TrackingState.TRACKING) continue;
+            // After a tracking loss ARCore can start a new map and leave the
+            // old anchors paused for good; those are placed again too.
+            if (anchor.getTrackingState() != TrackingState.TRACKING) {
+                Long since = discoverLostSince.get(item.id);
+                if (since == null) discoverLostSince.put(item.id, now);
+                else if (now - since > FREE_LOST_MS) stopped.add(item.id);
+                continue;
+            }
+            discoverLostSince.remove(item.id);
             Pose base = anchor.getPose();
             // A slow drift (about 8 s a cycle) while closed; opened cards hold still to be read.
             float bob = discovered.contains(item.id) ? 0f : 0.02f * (float) Math.sin(now / 1300.0 + (item.id.hashCode() & 0xff));
             float[] point = {base.tx(), base.ty() + discoverLift.get(item.id) + bob, base.tz()};
             float distance = distance(point, cameraPoint);
+            // An unopened bubble left behind in another room makes way for new ones.
+            if (!discovered.contains(item.id) && !item.hasSpot()
+                && Math.hypot(point[0] - cameraPoint[0], point[2] - cameraPoint[2]) > FREE_LEFT_BEHIND_M) {
+                stopped.add(item.id);
+                continue;
+            }
             if (!discovered.contains(item.id) && distance < DISCOVER_DISTANCE) {
                 discovered.add(item.id);
                 runOnUiThread(() -> onDiscovered(item));
@@ -944,10 +1075,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 ensureTexture(item, key);
                 if (gl.aspect(key) <= 0f) key = "orb:" + item.layer;
                 float pulse = 0.85f + 0.15f * (float) Math.sin(now / 300.0);
-                draws.add(Draw.billboard(item.id, point, cameraPose, key, 0.26f, 0.26f, pulse, distance));
+                // A find over a spot across the yard stays big enough to see.
+                float size = item.hasSpot() ? Math.max(0.26f, distance * 0.05f) : 0.26f;
+                draws.add(Draw.billboard(item.id, point, cameraPose, key, size, size, pulse, distance));
             }
         }
         for (String id : stopped) {
+            android.util.Log.i("OnThisSiteAR", "Let go of " + id + (discoverLostSince.containsKey(id) ? " (lost with tracking)" : " (stopped or left behind)"));
+            discoverLostSince.remove(id);
             Anchor anchor = discoverAnchors.remove(id);
             if (anchor != null) anchor.detach();
             discoverLift.remove(id);
