@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20261101-no-scans-r317";
+    static final String APP_VERSION = "20261101-ar-bubbles-only-r318";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -461,11 +461,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        publishArPilotShortcuts();
-        if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("qa_open_ar")) {
-            boolean author = getIntent().getBooleanExtra(ArActivity.EXTRA_AUTHOR, false);
-            openArExperience(getIntent().getStringExtra("qa_open_ar"), author);
-        }
         if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("qa_open_ar_nearby")) {
             // QA: nearby bubbles from a file pushed to the app's external files folder.
             try {
@@ -2636,12 +2631,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    void openArExperience(String siteId, boolean author) {
-        startActivity(new Intent(this, ArActivity.class)
-            .putExtra(ArActivity.EXTRA_SITE_ID, siteId)
-            .putExtra(ArActivity.EXTRA_AUTHOR, author));
-    }
-
     /**
      * Photogrammetry scanning was removed (2026-11-01). Installs that had it
      * keep a persisted background scan-status job; cancel it so the system
@@ -2654,31 +2643,7 @@ public class MainActivity extends Activity {
 
     void openArNearby(String bubblesJson) {
         startActivity(new Intent(this, ArActivity.class)
-            .putExtra(ArActivity.EXTRA_SITE_ID, "nearby")
             .putExtra(ArActivity.EXTRA_NEARBY, bubblesJson));
-    }
-
-    /** QA builds get launcher shortcuts into the Ma's House AR pilot until the web panel links to it. */
-    private void publishArPilotShortcuts() {
-        if (!BuildConfig.DEBUG || Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return;
-        try {
-            android.content.pm.ShortcutManager shortcuts = getSystemService(android.content.pm.ShortcutManager.class);
-            if (shortcuts == null) return;
-            java.util.List<android.content.pm.ShortcutInfo> list = new java.util.ArrayList<>();
-            list.add(new android.content.pm.ShortcutInfo.Builder(this, "ar-mas-house")
-                .setShortLabel("Ma's House AR")
-                .setIntent(new Intent(this, MainActivity.class).setAction(Intent.ACTION_VIEW)
-                    .putExtra("qa_open_ar", "mas-house"))
-                .build());
-            list.add(new android.content.pm.ShortcutInfo.Builder(this, "ar-mas-house-author")
-                .setShortLabel("AR author mode")
-                .setIntent(new Intent(this, MainActivity.class).setAction(Intent.ACTION_VIEW)
-                    .putExtra("qa_open_ar", "mas-house").putExtra(ArActivity.EXTRA_AUTHOR, true))
-                .build());
-            shortcuts.setDynamicShortcuts(list);
-        } catch (Exception error) {
-            Log.w(LOG_TAG, "AR shortcuts unavailable", error);
-        }
     }
 
     boolean validBridgeToken(String token) {
