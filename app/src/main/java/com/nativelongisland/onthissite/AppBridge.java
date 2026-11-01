@@ -34,20 +34,6 @@ class AppBridge {
         return activity.isArSupported();
     }
 
-    /** The web app passes a freshly refreshed access token; the scanner then uses a per-upload key. */
-    @JavascriptInterface
-    public void openScanSpace(String token, String spaceId, String accessToken, String creditName) {
-        if (!activity.validBridgeToken(token) || spaceId == null || !spaceId.matches("[0-9a-f-]{36}")) return;
-        activity.runOnUiThread(() -> activity.openScanSpace(spaceId, accessToken, creditName == null ? "" : creditName));
-    }
-
-    @JavascriptInterface
-    public void openArSpace(String token, String siteSlug, String spaceId, String accessToken) {
-        if (!activity.validBridgeToken(token) || siteSlug == null || !siteSlug.matches("[a-z0-9-]{1,64}")
-            || spaceId == null || !spaceId.matches("[0-9a-f-]{36}")) return;
-        activity.runOnUiThread(() -> activity.openArExperience(siteSlug, false, spaceId, accessToken));
-    }
-
     @JavascriptInterface
     public void openArExperience(String token, String siteId) {
         if (!activity.validBridgeToken(token) || siteId == null || !siteId.matches("[a-z0-9-]{1,64}")) return;
@@ -203,13 +189,6 @@ class AppBridge {
     @JavascriptInterface
     public float getSafeInsetLeft() {
         return activity.safeInsetLeftCss();
-    }
-
-    /** True the first time it's asked about a session's go-live notice (shared with ScanStatusJob). */
-    @JavascriptInterface
-    public boolean claimScanNotification(String token, String sessionId) {
-        if (!activity.validBridgeToken(token) || sessionId == null || !sessionId.matches("[0-9a-f-]{36}")) return false;
-        return ScanStatusJob.claim(activity, sessionId);
     }
 
     @JavascriptInterface

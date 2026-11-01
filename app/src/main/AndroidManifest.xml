@@ -7,10 +7,8 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Google Navigation declares unrestricted background location for optional
          SDK use. On This Site starts navigation while visible and continues it
          only through the user-visible location foreground service. -->
@@ -76,23 +74,9 @@
         <receiver
             android:name=".NavigationActionReceiver"
             android:exported="false" />
-        <service
-            android:name=".ScanUploadService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-        <service
-            android:name=".ScanStatusJob"
-            android:exported="false"
-            android:permission="android.permission.BIND_JOB_SERVICE" />
         <meta-data android:name="com.google.ar.core" android:value="optional" />
         <activity
             android:name=".ArActivity"
-            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:theme="@style/ArTheme" />
-        <activity
-            android:name=".ScanActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize"
             android:exported="false"
             android:screenOrientation="portrait"

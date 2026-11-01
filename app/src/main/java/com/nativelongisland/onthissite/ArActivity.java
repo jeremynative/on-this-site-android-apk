@@ -197,18 +197,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private final Set<String> promptedMarkers = new HashSet<>();
     private String lastMarkerId;
 
-    // Scanned-space localization: our own positioning service finds the phone
-    // in the space's 3D scan, giving the session -> space transform; the space
-    // frame then acts as a "room" keyed SPACE_MARKER, so content is placed
-    // without printed cards or any third-party anchor service.
-    static final String SPACE_MARKER = "space";
-    private String spaceId;
-    private SpaceLocalizer spaceLocalizer;
-    private int spaceFixesApplied;
-    // The scan's 3D points (from the server), drawn as faint dots over the real
-    // place so the visitor can see the AR lining up even before content exists.
-    private java.nio.FloatBuffer scanPoints;
-    private int scanPointCount;
     private int mode = MODE_NONE;
     private ArScene.Item pendingItem;
     private boolean anchorRephotoRequested;
@@ -265,13 +253,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         String siteId = getIntent().getStringExtra(EXTRA_SITE_ID);
         if (siteId == null || siteId.isEmpty()) siteId = "mas-house";
         authorMode = BuildConfig.DEBUG && getIntent().getBooleanExtra(EXTRA_AUTHOR, false);
-        spaceId = getIntent().getStringExtra(ScanActivity.EXTRA_SPACE_ID);
-        String spaceToken = getIntent().getStringExtra(ScanActivity.EXTRA_ACCESS_TOKEN);
-        if (spaceId != null && spaceToken != null) {
-            spaceLocalizer = new SpaceLocalizer(spaceId, spaceToken);
-            String token = spaceToken;
-            loader.execute(() -> loadScanPoints(token));
-        }
         store = new ArScene.Store(this, siteId);
         String nearby = getIntent().getStringExtra(EXTRA_NEARBY);
         try {
@@ -378,7 +359,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         if (session != null) session.close();
         session = null;
-        if (spaceLocalizer != null) spaceLocalizer.close();
         loader.shutdownNow();
         stopAudio();
     }
@@ -467,16 +447,11 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         gl.drawBackground(frame);
         synchronized (lock) {
             trackMarkers(frame);
-            localizeInSpace(frame, camera);
             if (camera.getTrackingState() != TrackingState.TRACKING) {
                 if (wasTracking) android.util.Log.i("OnThisSiteAR", "Tracking lost: " + camera.getTrackingFailureReason());
                 wasTracking = false;
                 taps.clear();
-                if (spaceLocalizer != null) {
-                    drawPhotoMode(frame, camera);
-                } else {
-                    postStatus(trackingProblem(camera), "");
-                }
+                postStatus(trackingProblem(camera), "");
                 return;
             }
             float[] view = new float[16];
@@ -543,106 +518,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 runOnUiThread(() -> showRoomDialog(markerId, null));
             }
         }
-    }
-
-    private void loadScanPoints(String token) {
-        try {
-            org.json.JSONArray values = ScanUploader.get("/spaces/" + spaceId + "/points", token).getJSONArray("points");
-            int count = values.length() / 3;
-            java.nio.FloatBuffer buffer = java.nio.ByteBuffer.allocateDirect(count * 7 * 4).order(java.nio.ByteOrder.nativeOrder()).asFloatBuffer();
-            for (int i = 0; i < count; i++) {
-                buffer.put((float) values.getDouble(i * 3)).put((float) values.getDouble(i * 3 + 1)).put((float) values.getDouble(i * 3 + 2));
-                buffer.put(0.35f).put(0.85f).put(1f).put(0.75f);
-            }
-            buffer.position(0);
-            synchronized (lock) {
-                scanPoints = buffer;
-                scanPointCount = count;
-            }
-        } catch (Exception error) {
-            android.util.Log.w("OnThisSiteAR", "Scan points unavailable: " + error.getMessage());
-        }
-    }
-
-    /**
-     * Photo mode, for phones whose AR tracking can't start (e.g. no gyroscope):
-     * our positioning service re-locates the camera in the scanned space about
-     * once a second, and the scan's points and placed photos are drawn from
-     * that pose. Coarser than tracked AR, but works on any camera phone.
-     */
-    private void drawPhotoMode(Frame frame, Camera camera) {
-        spaceLocalizer.onFrame(frame, camera, false);
-        float[] pose = spaceLocalizer.recentSpacePose(4000);
-        if (pose == null) {
-            postStatus("Photo mode · point at the scanned place", spaceLocalizer.status()
-                + "\nThis phone can't track motion for live AR, so the view updates about once a second.");
-            return;
-        }
-        // The server pose uses the camera sensor's (landscape) axes; the projection
-        // is for the display, so turn the pose the same way ARCore does.
-        Pose sensorToDisplay = camera.getPose().inverse().compose(camera.getDisplayOrientedPose());
-        float[] cameraWorld = new float[16];
-        toPose(pose).compose(sensorToDisplay).toMatrix(cameraWorld, 0);
-        float[] view = new float[16];
-        Matrix.invertM(view, 0, cameraWorld, 0);
-        float[] projection = new float[16];
-        camera.getProjectionMatrix(projection, 0, 0.05f, 100f);
-        float[] viewProjection = new float[16];
-        Matrix.multiplyMM(viewProjection, 0, projection, 0, view, 0);
-        if (scanPoints != null) gl.drawPoints(viewProjection, scanPoints, scanPointCount, 70f * getResources().getDisplayMetrics().density / 2.6f);
-        // Placed photos and cards live in the space frame (the "space" room).
-        ArScene.Room room = scene.roomForMarker(SPACE_MARKER);
-        int shown = 0;
-        List<Draw> draws = new ArrayList<>();
-        if (room != null) {
-            float[] cameraPoint = {pose[0], pose[1], pose[2]};
-            for (ArScene.Item item : scene.items) {
-                if (!visible(item) || !room.id.equals(item.roomId) || item.pose == null) continue;
-                Pose world = toPose(item.pose);
-                float distance = distance(world.getTranslation(), cameraPoint);
-                if (ArScene.KIND_PHRASE.equals(item.kind) || ArScene.KIND_AUDIO.equals(item.kind)) {
-                    addCard(draws, item, world.getTranslation(), cameraPoint, 0.5f);
-                } else {
-                    String key = textureKey(item);
-                    ensureTexture(item, key);
-                    float aspect = gl.aspect(key);
-                    if (aspect > 0f) draws.add(Draw.posed(item.id, world, key, item.widthMeters, item.widthMeters * aspect, 0.95f, distance));
-                }
-                shown++;
-            }
-        }
-        Collections.sort(draws, (a, b) -> Float.compare(b.distance, a.distance));
-        gl.beginQuads();
-        for (Draw draw : draws) gl.drawQuad(viewProjection, draw.model, gl.texture(draw.texture), draw.alpha);
-        gl.endQuads();
-        postStatus(scene.title + " · photo mode", shown == 0
-            ? "Found your place in the scan (blue dots). Nothing has been placed here yet: photos and prompts added to this space will appear here."
-            : "Showing " + shown + " placed item" + (shown == 1 ? "" : "s") + ". This phone can't track motion, so the view updates about once a second.");
-    }
-
-    /** Feeds frames to the positioning service and re-anchors the space frame on each new fix. */
-    private void localizeInSpace(Frame frame, Camera camera) {
-        if (spaceLocalizer == null || camera.getTrackingState() != TrackingState.TRACKING) return;
-        spaceLocalizer.onFrame(frame, camera);
-        int fixes = spaceLocalizer.fixes();
-        float[] transform = spaceLocalizer.transform();
-        if (transform == null || fixes == spaceFixesApplied) return;
-        spaceFixesApplied = fixes;
-        // The space frame's origin, expressed in this session, becomes the room anchor.
-        float[] origin = ArPlacement.inverse(transform);
-        Anchor previous = roomAnchors.put(SPACE_MARKER, session.createAnchor(toPose(origin)));
-        if (previous != null) previous.detach();
-        if (scene.roomForMarker(SPACE_MARKER) == null) {
-            ArScene.Room room = new ArScene.Room();
-            room.id = ArScene.newId("room");
-            room.markerId = SPACE_MARKER;
-            room.name = scene.title;
-            room.publicAccess = false; // an author opens it to discoverable prompts
-            scene.rooms.add(room);
-            runOnUiThread(this::saveScene);
-        }
-        if (lastMarkerId == null) lastMarkerId = SPACE_MARKER;
-        if (fixes == 1) runOnUiThread(this::vibrateConfirm);
     }
 
     /** The room whose drawn zone holds the visitor, else the room of the last marker scanned. */
@@ -1260,7 +1135,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         if (room == null) {
             if (lastMarkerId != null) return authorMode ? "New marker: name this room to start." : "This marker isn't set up yet.";
-            if (spaceLocalizer != null) return spaceLocalizer.status();
             return "Point the camera at a " + scene.title + " marker card.";
         }
         int found = 0;
@@ -1562,7 +1436,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         bottom.addView(authorScroll);
 
         root.addView(bottom, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
-        ScanActivity.keepAboveNavigationBar(bottom);
+        keepAboveNavigationBar(bottom);
         root.addView(infoPanel, new FrameLayout.LayoutParams(-1, -1));
         root.addView(photoViewer, new FrameLayout.LayoutParams(-1, -1));
 
@@ -2419,6 +2293,16 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private void showFatal(String message) {
         status.setText(message);
         hint.setVisibility(View.GONE);
+    }
+
+    /** Keeps a bottom bar's buttons above the system navigation bar. */
+    private static void keepAboveNavigationBar(View view) {
+        int left = view.getPaddingLeft(), top = view.getPaddingTop(), right = view.getPaddingRight(), bottom = view.getPaddingBottom();
+        view.setOnApplyWindowInsetsListener((v, insets) -> {
+            v.setPadding(left, top, right, bottom + insets.getSystemWindowInsetBottom());
+            return insets;
+        });
+        view.requestApplyInsets();
     }
 
     private void toast(String message) {
