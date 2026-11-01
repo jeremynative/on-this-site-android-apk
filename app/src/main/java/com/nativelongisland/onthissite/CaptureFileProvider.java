@@ -33,6 +33,23 @@ public class CaptureFileProvider extends ContentProvider {
         return createCaptureUri(context, "web-photo-");
     }
 
+    /** Where an AR video records; kept for sharing if the phone won't let it into Photos. */
+    static File createArVideoFile(Context context) throws Exception {
+        File directory = new File(context.getCacheDir(), CAPTURE_DIRECTORY);
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw new Exception("Could not create the private camera directory.");
+        }
+        return File.createTempFile("ar-video-", ".mp4", directory);
+    }
+
+    static Uri uriFor(File file) {
+        return new Uri.Builder()
+            .scheme("content")
+            .authority(AUTHORITY)
+            .appendPath(file.getName())
+            .build();
+    }
+
     /** An AR photo kept for sharing when the phone won't let it into Photos. */
     static Uri createArPhotoUri(Context context) throws Exception {
         return createCaptureUri(context, "ar-photo-");
@@ -58,7 +75,7 @@ public class CaptureFileProvider extends ContentProvider {
         List<String> segments = uri.getPathSegments();
         if (segments.size() != 1) throw new FileNotFoundException("Invalid capture path.");
         String name = segments.get(0);
-        if (!name.matches("(?:comment|plant|web|ar)-photo-[A-Za-z0-9._-]+\\.jpg")) {
+        if (!name.matches("(?:comment|plant|web|ar)-photo-[A-Za-z0-9._-]+\\.jpg|ar-video-[A-Za-z0-9._-]+\\.mp4")) {
             throw new FileNotFoundException("Invalid capture filename.");
         }
         File directory = new File(getContext().getCacheDir(), CAPTURE_DIRECTORY);
@@ -80,7 +97,8 @@ public class CaptureFileProvider extends ContentProvider {
 
     @Override
     public String getType(Uri uri) {
-        return "image/jpeg";
+        String path = uri == null ? null : uri.getLastPathSegment();
+        return path != null && path.endsWith(".mp4") ? "video/mp4" : "image/jpeg";
     }
 
     @Override
