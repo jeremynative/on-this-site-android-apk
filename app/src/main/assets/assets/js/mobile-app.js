@@ -9882,7 +9882,18 @@
     }
 
     function focusSite(site, options = {}) {
-      if (!state.map || !site?.center) return;
+      if (!state.map) {
+        // The offline shell has no web map: move the native map instead (its
+        // padding keeps the site clear of an open panel).
+        const center = options.center || site?.center;
+        if (isOfflineTextMode() && Array.isArray(center) && androidBridgeToken() && window.AndroidApp?.syncNativeMapCamera) {
+          const point = siteDisplayGeometry(site)?.type !== "Polygon" && siteDisplayGeometry(site)?.type !== "MultiPolygon";
+          window.AndroidApp.syncNativeMapCamera(androidBridgeToken(), Number(center[0]), Number(center[1]),
+            options.preserveZoom ? 12 : options.zoom || (point ? 13 : 11));
+        }
+        return;
+      }
+      if (!site?.center) return;
       const geometry = siteDisplayGeometry(site);
       const duration = options.duration || 600;
       const motion = options.timeline ? smoothTimelineMapOptions() : { duration, essential: true };

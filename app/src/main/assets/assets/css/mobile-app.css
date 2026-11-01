@@ -8706,3 +8706,9 @@ body.android-device.tablet-landscape.offline-text-mode h1::after {
   letter-spacing: 0.04em;
   vertical-align: 2px;
 }
+
+/* With a site open the bottom tabs hide but kept their row, leaving a blank
+   band under the map; the map takes it (web PR 524). */
+body.android-device.tablet-landscape.mobile-detail-open .app:not(.panel-maximized) .mobile-map-shell {
+  grid-row: 2 / -1;
+}
