@@ -7677,7 +7677,9 @@
     }
 
     function syncNativeMapState(reason = "state") {
-      if (!nativeMapBridgeAvailable() || !state.map) return false;
+      // Offline there is no web map, but the native map still needs the
+      // Labels choices (which places and shapes to show).
+      if (!nativeMapBridgeAvailable() || (!state.map && !isOfflineTextMode())) return false;
       const sourceData = cachedMobileMapSourceData();
       const profileModel = state.profileMapMode?.model || null;
       const profileJourney = profileModel ? mobileProfileJourneyMapData(profileModel) : null;
@@ -7699,7 +7701,7 @@
       const pointSignature = staticParts.pointSignature;
       const transientSignature = `user:${userLocationSignature}|community:${communitySignature}|temporary:${temporarySignature}|events:${eventSignature}|pick:${!!state.suggestionMapPickMode}`;
       const signature = `${baseSignature}|points:${pointSignature}|${transientSignature}`;
-      const center = state.map.getCenter?.();
+      const center = state.map?.getCenter?.();
       const camera = center ? { center: [Number(center.lng), Number(center.lat)], zoom: Number(state.map.getZoom?.()) } : null;
       const transientPayload = {
         signature,
@@ -21083,6 +21085,8 @@
       if (isOfflineTextMode()) {
         renderOfflineMapIndex();
         statusEl.textContent = `${state.filtered.length || state.sites.length} saved places`;
+        // Saved Labels choices apply to the native map offline too.
+        scheduleNativeMapStateSync("map-load");
         return false;
       }
       const ready = await waitForMobileMapRuntime();
@@ -21393,6 +21397,8 @@
       syncMarkers();
       ensureMobileMovingBiographyMarkers();
       if (kind === "era") renderMobileTimelineIfOpen();
+      // Offline the web map isn't there to pass the change on.
+      if (!state.map) scheduleNativeMapStateSync("layers");
     }
 
     function setAllMobileLayerVisibility(visible) {
@@ -21421,6 +21427,7 @@
       syncMobileLayerButtons();
       syncMobileBiographyPathLayers();
       syncMarkers();
+      if (!state.map) scheduleNativeMapStateSync("layers");
       ensureMobileMovingBiographyMarkers();
       renderMobileTimelineIfOpen();
     }
