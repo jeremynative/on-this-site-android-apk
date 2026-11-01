@@ -11099,13 +11099,12 @@
 
     const isProfileBanned = PROFILE_UTILS.isProfileBanned;
 
+    // The signed-in visitor's own names (display name, email, username) count
+    // only for their own profile. On anyone else's they made that person
+    // claim every comment the visitor wrote under those names.
     function profileIdentityNames(profile = currentContributorProfile()) {
-      return PROFILE_UTILS.profileIdentityNames(profile, [
-        state.profile?.display_name,
-        state.profile?.displayName,
-        state.profile?.email,
-        state.profile?.username
-      ]);
+      const own = state.profile && (!profile || PROFILE_UTILS.profilesShareIdentity(profile, state.profile, { relationId }));
+      return PROFILE_UTILS.profileIdentityNames(profile, own ? [state.profile.display_name, state.profile.displayName, state.profile.email, state.profile.username] : []);
     }
 
     function profileIdentityIds(profile = currentContributorProfile()) {
