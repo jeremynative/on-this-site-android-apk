@@ -2188,6 +2188,45 @@ final class NativeMapController {
         map.moveCamera(CameraUpdateFactory.newCameraPosition(desired));
     }
 
+    /**
+     * The idle screensaver's camera moves: an ease, or a fly that zooms out
+     * while it pans and back in on arrival. A touch cancels either.
+     */
+    void easeCamera(double longitude, double latitude, double zoom, int durationMs) {
+        moveCameraSlowly(longitude, latitude, zoom, durationMs, false, -1, -1);
+    }
+
+    /** padTop/padBottom (pixels, or -1): the target lands mid-way between them, clear of the top bar and the card. */
+    void flyCamera(double longitude, double latitude, double zoom, int durationMs, int padTop, int padBottom) {
+        moveCameraSlowly(longitude, latitude, zoom, durationMs, true, padTop, padBottom);
+    }
+
+    private void moveCameraSlowly(double longitude, double latitude, double zoom, int durationMs, boolean fly, int padTop, int padBottom) {
+        if (map == null || nativeGestureInProgress()
+            || !Double.isFinite(longitude) || !Double.isFinite(latitude) || !Double.isFinite(zoom)) return;
+        boolean framed = padTop >= 0 && padBottom >= 0;
+        CameraPosition desired = new CameraPosition.Builder()
+            .target(new LatLng(latitude, longitude))
+            .padding(framed
+                ? new double[] { 0, padTop, viewportRightOcclusion, padBottom }
+                : new double[] { 0, 0, viewportRightOcclusion, viewportBottomOcclusion })
+            .zoom(Math.max(6.0, Math.min(18.0, zoom)))
+            .bearing(0.0)
+            .tilt(0.0)
+            .build();
+        stableCamera = desired;
+        cameraIntentRevision += 1;
+        cameraGestureAwaitingIdle = false;
+        int duration = Math.max(0, Math.min(60000, durationMs));
+        if (duration == 0) map.moveCamera(CameraUpdateFactory.newCameraPosition(desired));
+        else if (fly) map.animateCamera(CameraUpdateFactory.newCameraPosition(desired), duration);
+        else map.easeCamera(CameraUpdateFactory.newCameraPosition(desired), duration);
+    }
+
+    void stopCamera() {
+        if (map != null) map.cancelTransitions();
+    }
+
     void focusSearchResult(double longitude, double latitude, double zoom, int durationMs) {
         updateCamera(longitude, latitude, zoom);
         if (map == null || !Double.isFinite(longitude) || !Double.isFinite(latitude)) return;
