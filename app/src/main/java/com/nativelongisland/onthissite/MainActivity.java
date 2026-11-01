@@ -313,6 +313,11 @@ public class MainActivity extends Activity {
     };
     private void probeBundledFallbackPaint() {
         if (webView == null || !loadingBundledFallback || appShellLoaded) return;
+        // A probe sent before the bundled page commits never gets a callback,
+        // which used to strand the cover until the deadline. Keep a re-probe
+        // queued; a callback that does arrive replaces it.
+        startupHandler.removeCallbacks(revealBundledFallback);
+        startupHandler.postDelayed(revealBundledFallback, OFFLINE_COVER_REVEAL_DELAY_MS);
         webView.evaluateJavascript(
             "(function(){try{"
                 + "var app=document.querySelector('.app');"
@@ -323,6 +328,7 @@ public class MainActivity extends Activity {
                 + "return app&&archiveReady?'painted':'waiting';"
                 + "}catch(error){return 'waiting';}})();",
             value -> {
+                startupHandler.removeCallbacks(revealBundledFallback);
                 if (webView == null || !loadingBundledFallback || appShellLoaded) return;
                 if (value != null && value.contains("painted")) {
                     requestNativeMapViewportSync(0L);
@@ -1070,9 +1076,18 @@ public class MainActivity extends Activity {
         startupHandler.removeCallbacks(revealBundledFallback);
         startupHandler.removeCallbacks(offlineRenderDeadline);
         stopLoadingOutlineReveal();
-        if (loadingCoverLabel != null) loadingCoverLabel.setText("This map needs a browser on this device");
+        // A page stuck at the start of navigation means Android never started
+        // the WebView renderer. Some tablets refuse to restart it after the
+        // app is force stopped until the device restarts; a browser won't help.
+        boolean rendererNeverStarted = webView != null && webView.getProgress() <= 10;
+        if (rendererNeverStarted) Log.w(LOG_TAG, "WebView renderer never started; asking for a device restart.");
+        if (loadingCoverLabel != null) loadingCoverLabel.setText(rendererNeverStarted
+            ? "Restart this device to open the map"
+            : "This map needs a browser on this device");
         if (loadingCoverDetail != null) {
-            loadingCoverDetail.setText("Open the same On This Site map in your browser. You can return here and try again after your device updates its web display service.");
+            loadingCoverDetail.setText(rendererNeverStarted
+                ? "Android could not start the map's web display after the app was force stopped. Restart the device, then open On This Site again."
+                : "Open the same On This Site map in your browser. You can return here and try again after your device updates its web display service.");
             loadingCoverDetail.setVisibility(View.VISIBLE);
         }
         if (loadingCoverActions != null) loadingCoverActions.setVisibility(View.VISIBLE);

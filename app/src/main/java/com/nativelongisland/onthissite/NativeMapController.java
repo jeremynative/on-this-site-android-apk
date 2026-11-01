@@ -2457,6 +2457,10 @@ final class NativeMapController {
         JSONArray rows = source.optJSONArray("rows");
         JSONObject iconManifest = new JSONObject(readAsset("map/site-icon-keys.json"));
         JSONObject nativeIconKeyBySlug = iconManifest.optJSONObject("native_icon_key_by_site_slug");
+        // The centers file carries no titles, and the offline shell never sends
+        // the live site state, so read the names from their own small file
+        // (build-offline-areas.js) or the offline dots stay unlabelled.
+        JSONObject titleById = new JSONObject(readAsset("map/offline-site-titles.json"));
         JSONArray features = new JSONArray();
         int customIconCount = 0;
         if (rows != null) {
@@ -2472,6 +2476,11 @@ final class NativeMapController {
                 JSONObject properties = new JSONObject();
                 properties.put("id", id);
                 properties.put("slug", slug);
+                String title = titleById.optString(String.valueOf(id), "").trim();
+                if (!title.isEmpty()) {
+                    properties.put("title", title);
+                    properties.put("short_title", shortSiteTitle(title));
+                }
                 String nativeIconKey = nativeIconKeyBySlug == null
                     ? ""
                     : nativeIconKeyBySlug.optString(slug, "").trim();

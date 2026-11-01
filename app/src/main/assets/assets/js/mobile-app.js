@@ -1241,6 +1241,7 @@
     const mobileRefreshAppBtn = document.getElementById("mobile-refresh-app");
     const suggestSiteOpenBtn = document.getElementById("suggest-site-open");
     const mobileLearnOpenBtn = document.getElementById("mobile-learn-open");
+    const mobileLearnQuickBtn = document.getElementById("mobile-learn-quick");
     const mobileDonateButton = document.getElementById("mobile-donate-button");
     const mobileAdminMenu = document.getElementById("mobile-admin-menu");
     const mobileBasemapSelect = document.getElementById("mobile-basemap");
@@ -1535,7 +1536,8 @@
     function scheduleContributorInvite(delay = 8000) {
       window.clearTimeout(contributorInvitationTimer);
       contributorInvitationTimer = null;
-      if (!contributorInvitationEl || state.profile || state.passwordResetToken || contributorInviteDismissed()) return;
+      // Accounts can't be made or opened offline, so don't invite then.
+      if (!contributorInvitationEl || isOfflineTextMode() || state.profile || state.passwordResetToken || contributorInviteDismissed()) return;
       contributorInvitationTimer = window.setTimeout(() => {
         contributorInvitationTimer = null;
         if (state.profile || state.passwordResetToken || contributorInviteDismissed() || contributorInvitationEl.open) return;
@@ -14915,7 +14917,9 @@
       if (state.learningPathsLoaded && !options.fresh) return state.learningPaths;
       let pathRows = Array.isArray(state.learningPathRows) ? state.learningPathRows : [];
       let stopRows = Array.isArray(state.learningPathSiteRows) ? state.learningPathSiteRows : [];
-      if (!pathRows.length || options.fresh) {
+      // Offline, skip the CMS and use the bundled guided paths that
+      // mergePathRows() adds below.
+      if ((!pathRows.length || options.fresh) && !isOfflineTextMode()) {
         try {
           const [pathResponse, stopResponse] = await Promise.all([
             fetchJson("/items/learning_paths?limit=-1&filter[is_public][_eq]=true&sort=sort_order,title&fields=id,title,slug,short_description,long_intro,theme,estimated_time_minutes,recommended_grades,cover_image,icon,badge_name,key_questions,sensitivity_level,is_public,sort_order", { cacheKey: "mobile-learning-paths", ttl: 300000, fresh: Boolean(options.fresh) }),
@@ -14926,7 +14930,7 @@
           state.learningPathRows = pathRows;
           state.learningPathSiteRows = stopRows;
         } catch (error) {
-          if (!pathRows.length) throw error;
+          if (!window.NLI_GUIDED_LEARNING_PATH_SEEDS?.length && !pathRows.length) throw error;
         }
       }
       [pathRows, stopRows] = window.NLILearningHub.mergePathRows(pathRows, stopRows, state.sites);
@@ -16641,17 +16645,25 @@
       const token = androidBridgeToken();
       const app = window.AndroidApp;
       if (!token || !app?.syncNativeMapCamera || !app?.syncNativeMapTransientState || !navigator.geolocation) return false;
-      setLocationControlsBusy(true);
-      navigator.geolocation.getCurrentPosition(position => {
-        setLocationControlsBusy(false);
-        state.userLocation = [position.coords.longitude, position.coords.latitude];
+      const showOfflineLocation = (longitude, latitude) => {
+        state.userLocation = [longitude, latitude];
         app.syncNativeMapTransientState(token, JSON.stringify({
           signature: `offline-location:${state.userLocation.join(",")}`,
           userLocation: nativeMapFeatureCollection(nativeUserLocationFeatures())
         }));
-        app.syncNativeMapCamera(token, state.userLocation[0], state.userLocation[1], 13);
+        app.syncNativeMapCamera(token, longitude, latitude, 13);
+      };
+      // A fresh GPS fix can take a minute indoors, so centre on the device's
+      // last fix (up to five minutes old) at once and refine when one arrives.
+      const cached = nativeCachedUserPosition();
+      if (cached) showOfflineLocation(cached.longitude, cached.latitude);
+      setLocationControlsBusy(!cached);
+      navigator.geolocation.getCurrentPosition(position => {
+        setLocationControlsBusy(false);
+        showOfflineLocation(position.coords.longitude, position.coords.latitude);
       }, error => {
         setLocationControlsBusy(false);
+        if (cached) return;
         showBanner(error?.code === 1
           ? "Location permission is off for On This Site."
           : "Could not get a GPS fix yet. Try near a window or outside.", { centered: true });
@@ -21221,6 +21233,9 @@
         button.setAttribute("aria-disabled", "true");
         button.dataset.requiresOnline = "true";
       });
+      // The guided learning paths are bundled, so Learn takes Feedback's
+      // place beside About and Labels while offline.
+      if (mobileLearnQuickBtn) mobileLearnQuickBtn.hidden = false;
       updateMobileHeaderInstruction();
     }
 
@@ -21905,6 +21920,22 @@
       }
     });
     mobileNotificationsOpenBtn?.addEventListener("click", openMobileNotificationsSheet);
+    // AR needs only the camera, GPS and compass, so it works offline: the
+    // bubbles come from the bundled places, people, words and land history,
+    // with the guide figures and site pages read from the APK.
+    const scanSpaces = window.NLI_SCAN_SPACES?.create({
+      state, DIRECTUS, openSheet, androidBridgeToken, requestUserLocation, nativeCachedUserPosition,
+      sheetEl: document.getElementById("ar-scans-sheet"),
+      listEl: document.getElementById("mobile-ar-scans-list"),
+      iconBase: isOfflineTextMode() ? "asset:assets/map-icons/" : undefined,
+      siteDetail: site => fetchSiteDetail(site)
+    });
+    const mobileArOpenBtn = document.getElementById("mobile-ar-open");
+    if (mobileArOpenBtn && scanSpaces?.available()) {
+      mobileArOpenBtn.hidden = false;
+      mobileArOpenBtn.addEventListener("click", () => void scanSpaces.openAr());
+      scanSpaces.watch();
+    }
     mobileNotificationsListEl?.addEventListener("click", event => {
       const actionButton = event.target.closest("[data-mobile-notification-action]");
       const item = event.target.closest("[data-mobile-notification-type]");
@@ -22703,11 +22734,11 @@
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
       await refreshMobileAppDataFromDirectus();
     });
-    mobileLearnOpenBtn?.addEventListener("click", () => {
+    [mobileLearnOpenBtn, mobileLearnQuickBtn].forEach(button => button?.addEventListener("click", () => {
       localStorage.removeItem("nli-kid-mode");
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
       openAppPage("learn");
-    });
+    }));
     suggestSiteOpenBtn.addEventListener("click", () => {
       if (!requireRegisteredContributor()) return;
       openSheet(suggestSiteSheetEl);

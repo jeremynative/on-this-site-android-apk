@@ -49,6 +49,7 @@
       <button class="territory-subtitle" id="territory-subtitle" type="button" hidden></button>
       <div class="quick-actions" aria-label="App actions">
         <button class="ghost-button mobile-priority-action" data-app-page="about" type="button">About</button>
+        <button class="ghost-button mobile-priority-action" id="mobile-learn-quick" type="button" hidden>Learn</button>
         <button class="ghost-button mobile-priority-action" id="feedback-open" type="button">Feedback</button>
         <details class="mobile-layer-menu" id="mobile-layer-menu">
           <summary>Labels</summary>
@@ -223,6 +224,10 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
       <span class="mobile-activity-unread-badge" data-mobile-notification-unread-badge hidden></span>
     </button>
+    <button class="mobile-ar-button" id="mobile-ar-open" type="button" aria-label="AR: stories around you" title="AR" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3Z"></path><path d="M4 7.5 12 12l8-4.5"></path><path d="M12 12v9"></path></svg>
+      <span class="mobile-ar-label" aria-hidden="true">AR</span>
+    </button>
     <button class="landscape-panel-resizer" id="landscape-panel-resizer" type="button" role="separator" aria-orientation="vertical" aria-label="Resize map and content panels" aria-valuemin="0" aria-valuemax="100" aria-valuenow="42" title="Drag to resize the map and content panels"></button>
     <div class="mobile-view-tabs" role="group" aria-label="Mobile section">
       <button class="mobile-view-tab" id="mobile-tab-timeline" type="button" aria-pressed="false">Timeline</button>
@@ -290,6 +295,16 @@
       </div>
     </div>
   </dialog>
+  <section class="sheet account-sheet ar-scans-sheet" id="ar-scans-sheet" aria-live="polite">
+    <div class="sheet-head">
+      <h2>AR</h2>
+      <button class="close" data-close-sheet type="button" aria-label="Close AR">x</button>
+    </div>
+    <div class="sheet-body">
+      <div class="ar-scans" id="mobile-ar-scans-list"></div>
+    </div>
+  </section>
+
   <section class="sheet account-sheet" id="login-sheet" aria-live="polite">
     <div class="sheet-head">
       <h2 id="account-sheet-title">Login</h2>
@@ -700,6 +715,8 @@
   <script src="assets/js/shared-research-question-utils.js?v=bc939b15024b" defer></script>
   <script src="assets/js/language-quiz-words.js?v=9395720dbb1d" defer></script>
   <script src="assets/js/userviews-tracker.js?v=c3326553d1b0" defer></script>
+  <script src="assets/js/land-history-data.js" defer></script>
+  <script src="assets/js/shared-scan-spaces.js" defer></script>
   <script src="assets/js/mobile-app.js?v=28507c1d85d3" defer></script>
 <script src="assets/js/shared-plant-camera.js" defer></script>
 </body>
