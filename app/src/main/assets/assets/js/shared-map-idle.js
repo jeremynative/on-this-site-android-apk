@@ -37,8 +37,12 @@
   const NEXT_MAX_KM = 30;
   const EXTRA_MAX_KM = 40;
   const MAX_RUN_MS = 15 * 60 * 1000;
-  // The phone card sits this far above the bottom of the screen (CSS pixels).
-  const CARD_BOTTOM_PX = 190;
+  // On phones and tablets the card sits inside the map, this far above its
+  // round buttons (or its bottom edge); in landscape it runs down the right
+  // side, clear of the locate button (CSS pixels). The height is a first
+  // guess until the card has content.
+  const CARD_GAP_PX = 10;
+  const LOCATE_CLEARANCE_PX = 72;
   const CARD_GUESS_PX = 132;
   const WIDE_MIN_PX = 900;
   // Long Island: its ends (for turning the tour around) and the whole-island view.
@@ -347,8 +351,8 @@
       const style = document.createElement("style");
       style.id = "map-idle-styles";
       style.textContent = `
-        .map-idle-card { position: fixed; left: 12px; right: 12px; bottom: calc(${CARD_BOTTOM_PX}px + env(safe-area-inset-bottom, 0px)); z-index: 40;
-          display: flex; gap: 12px; align-items: center; max-width: 520px; margin: 0 auto; padding: 12px; border-radius: 14px; overflow: hidden;
+        .map-idle-card { position: fixed; left: 12px; right: 12px; bottom: calc(190px + env(safe-area-inset-bottom, 0px)); z-index: 40;
+          box-sizing: border-box; display: flex; gap: 12px; align-items: center; max-width: 520px; margin: 0; padding: 12px; border-radius: 14px; overflow: hidden;
           background: rgba(20, 31, 23, 0.92); color: #fff; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
           opacity: 0; transform: translateY(10px); transition: opacity 0.9s ease, transform 0.9s ease; pointer-events: none; cursor: pointer; }
         .map-idle-card.show { opacity: 1; transform: none; pointer-events: auto; }
@@ -358,7 +362,9 @@
         .map-idle-card span { display: block; color: #9fd4b0; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
         .map-idle-card strong { display: block; margin: 2px 0 1px; font-size: 16px; line-height: 1.2; }
         .map-idle-card small { display: block; margin-bottom: 4px; color: #b9cdbf; font-size: 12px; line-height: 1.3; }
-        .map-idle-card p { margin: 0; color: #dfe8e1; font-size: 13px; line-height: 1.35; }
+        .map-idle-card p { margin: 0; color: #dfe8e1; font-size: 13px; line-height: 1.35;
+          display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+        .map-idle-card.wide p { display: block; }
         .map-idle-card em { display: block; margin-top: 4px; color: #9fd4b0; font-size: 12px; font-style: normal; }
         .map-idle-card i { display: none; }
         .map-idle-card.wide { left: var(--map-idle-left, 24px); right: auto; bottom: var(--map-idle-bottom, 24px); width: clamp(320px, 30vw, 460px);
@@ -380,6 +386,37 @@
       document.head.appendChild(style);
     }
 
+    // Where the card goes on phones and tablets, inside the map. Tall maps:
+    // centred at the foot, above the round buttons (or the bottom edge).
+    // Wide, short maps (landscape): down the right side, clear of the locate
+    // button, so the stop has the open map to its left.
+    function placeCard() {
+      if (!card || card.classList.contains("wide")) return;
+      const rect = document.getElementById("map")?.getBoundingClientRect?.();
+      if (!rect?.width || !rect?.height) return;
+      const floor = Math.min(rect.bottom, window.innerHeight - (ctx.insets?.()?.bottom || 0));
+      const landscape = rect.width > rect.height * 1.4;
+      let left = 0;
+      let width = 0;
+      let bottom = floor - CARD_GAP_PX;
+      if (landscape) {
+        width = Math.min(380, Math.round(rect.width * 0.46));
+        left = rect.right - LOCATE_CLEARANCE_PX - width;
+      } else {
+        const dock = document.getElementById("mobile-promo-dock")?.getBoundingClientRect?.();
+        if (dock?.height && dock.top > rect.top && dock.top < floor) bottom = dock.top - CARD_GAP_PX;
+        width = Math.min(520, rect.width - 24);
+        left = rect.left + (rect.width - width) / 2;
+      }
+      card.dataset.side = landscape ? "right" : "bottom";
+      Object.assign(card.style, {
+        left: `${Math.round(left)}px`,
+        right: "auto",
+        width: `${Math.round(width)}px`,
+        bottom: `${Math.round(Math.max(8, window.innerHeight - bottom))}px`
+      });
+    }
+
     // Fills the card for the next stop while it is still invisible, so the
     // flight can frame the stop beside it.
     function prepareCard(stop, kicker) {
@@ -395,16 +432,19 @@
           open?.();
         });
         document.body.appendChild(card);
+        window.addEventListener("resize", placeCard);
       }
       window.clearTimeout(hideTimer);
       card.classList.remove("show");
       card.classList.toggle("wide", wide());
       if (wide()) {
         const inset = ctx.insets?.() || {};
+        Object.assign(card.style, { left: "", right: "", width: "", bottom: "" });
         card.style.setProperty("--map-idle-left", `${Math.max(16, inset.left || 24)}px`);
         card.style.setProperty("--map-idle-bottom", `${Math.max(16, inset.bottom || 24)}px`);
         card.style.setProperty("--map-idle-top", `${Math.max(16, inset.top || 96)}px`);
-      }
+        card.dataset.side = "left";
+      } else placeCard();
       cardOpen = stop.open || null;
       const photo = hasPhoto(stop) ? stop.image : "";
       card.innerHTML = `${photo ? `<img${stop.icon ? " class=\"icon\"" : ""} src="${escapeHtml(photo)}" alt="" onerror="this.remove()">` : ""}
@@ -456,8 +496,10 @@
         bottom: Math.min(box.bottom, window.innerHeight - (inset.bottom || 0))
       };
       const cardRect = card && !card.hidden ? card.getBoundingClientRect() : null;
-      if (cardRect?.width && card.classList.contains("wide")) free.left = Math.max(free.left, cardRect.right + 16);
-      else free.bottom = Math.min(free.bottom, (cardRect?.height ? cardRect.top : window.innerHeight - CARD_BOTTOM_PX - CARD_GUESS_PX) - 8);
+      const side = cardRect?.width ? card.dataset.side : "";
+      if (side === "left") free.left = Math.max(free.left, cardRect.right + 16);
+      else if (side === "right") free.right = Math.min(free.right, cardRect.left - 16);
+      else free.bottom = Math.min(free.bottom, (cardRect?.height ? cardRect.top : free.bottom - CARD_GUESS_PX) - 8);
       free.bottom = Math.max(free.bottom, Math.min(box.bottom, free.top + 120));
       free.right = Math.max(free.right, Math.min(box.right, free.left + 160));
       const dpr = window.devicePixelRatio || 1;
@@ -487,7 +529,13 @@
     // fly: zoom out while panning and back in on arrival (one continuous move).
     // frame (optional): where on screen the target should land.
     function moveTo(view, fly, frame = null) {
-      if (nativeCamera()) return ctx.camera.move({ ...view, fly, padTop: frame?.padTop, padBottom: frame?.padBottom, offset: frame?.offset });
+      if (nativeCamera()) {
+        // The app's native map takes top and bottom padding; a sideways
+        // offset moves the target instead. (The desktop map takes offsets.)
+        const shift = frame && !ctx.camera.offsets ? frame.offset[0] : 0;
+        const center = shift ? [view.center[0] - shift * 156543.03 / 2 ** view.zoom / 111320, view.center[1]] : view.center;
+        return ctx.camera.move({ ...view, center, fly, padTop: frame?.padTop, padBottom: frame?.padBottom, offset: frame?.offset });
+      }
       const map = getMap();
       if (!map) return;
       const placed = frame ? { ...view, offset: frame.offset } : view;
