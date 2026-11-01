@@ -7714,6 +7714,8 @@
       outline-offset: 3px;
       background: rgba(45, 91, 71, 0.1);
       box-shadow: inset 4px 0 0 rgba(45, 91, 71, 0.82);
+      /* Room inside the bar and rounded corners, so the date isn't cut off. */
+      padding-inline: 12px 8px;
       animation: timeline-reading-focus-pulse 1.25s ease-in-out 2;
     }
 
