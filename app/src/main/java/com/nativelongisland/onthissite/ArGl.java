@@ -44,30 +44,6 @@ final class ArGl {
             + "uniform float u_Alpha;\n"
             + "void main() { vec4 c = texture2D(u_Texture, v_TexCoord); gl_FragColor = vec4(c.rgb, c.a * u_Alpha); }\n";
 
-    private static final String POINT_VERTEX =
-        "uniform mat4 u_Mvp;\n"
-            + "uniform float u_Size;\n"
-            + "attribute vec4 a_Position;\n"
-            + "attribute vec4 a_Color;\n"
-            + "varying vec4 v_Color;\n"
-            + "void main() { gl_Position = u_Mvp * vec4(a_Position.xyz, 1.0); gl_PointSize = u_Size / max(gl_Position.w, 0.4); v_Color = a_Color; }\n";
-    private static final String POINT_FRAGMENT =
-        "precision mediump float;\n"
-            + "varying vec4 v_Color;\n"
-            + "void main() { vec2 c = gl_PointCoord - 0.5; if (dot(c, c) > 0.25) discard; gl_FragColor = v_Color; }\n";
-
-    private static final String MESH_VERTEX =
-        "uniform mat4 u_Mvp;\n"
-            + "attribute vec4 a_Position;\n"
-            + "attribute vec4 a_Color;\n"
-            + "varying vec4 v_Color;\n"
-            + "void main() { gl_Position = u_Mvp * vec4(a_Position.xyz, 1.0); v_Color = a_Color; }\n";
-
-    private static final String MESH_FRAGMENT =
-        "precision mediump float;\n"
-            + "varying vec4 v_Color;\n"
-            + "void main() { gl_FragColor = v_Color; }\n";
-
     private static final float[] NDC_QUAD = {-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f};
     // Unit quad in the XY plane facing +Z; texture v grows downwards.
     private static final float[] UNIT_QUAD = {
@@ -80,8 +56,6 @@ final class ArGl {
     int cameraTexture;
     private int backgroundProgram;
     private int quadProgram;
-    private int pointProgram;
-    private int meshProgram;
     private FloatBuffer ndcCoords;
     private FloatBuffer cameraTexCoords;
     private FloatBuffer unitQuad;
@@ -102,8 +76,6 @@ final class ArGl {
 
         backgroundProgram = program(BACKGROUND_VERTEX, BACKGROUND_FRAGMENT);
         quadProgram = program(QUAD_VERTEX, QUAD_FRAGMENT);
-        pointProgram = program(POINT_VERTEX, POINT_FRAGMENT);
-        meshProgram = program(MESH_VERTEX, MESH_FRAGMENT);
         ndcCoords = buffer(NDC_QUAD);
         cameraTexCoords = buffer(new float[8]);
         unitQuad = buffer(UNIT_QUAD);
@@ -175,81 +147,6 @@ final class ArGl {
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         GLES20.glDisableVertexAttribArray(position);
         GLES20.glDisableVertexAttribArray(texCoord);
-    }
-
-    /**
-     * Draws round points in world space: xyzrgba floats (7 per point). Size is
-     * in pixels at 1 m and shrinks with distance. Used for scan coverage.
-     */
-    void drawPoints(float[] viewProjection, FloatBuffer points, int count, float sizeAtOneMetre) {
-        if (count <= 0) return;
-        GLES20.glEnable(GLES20.GL_BLEND);
-        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-        GLES20.glUseProgram(pointProgram);
-        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(pointProgram, "u_Mvp"), 1, false, viewProjection, 0);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(pointProgram, "u_Size"), sizeAtOneMetre);
-        int position = GLES20.glGetAttribLocation(pointProgram, "a_Position");
-        int color = GLES20.glGetAttribLocation(pointProgram, "a_Color");
-        points.position(0);
-        GLES20.glVertexAttribPointer(position, 3, GLES20.GL_FLOAT, false, 28, points);
-        points.position(3);
-        GLES20.glVertexAttribPointer(color, 4, GLES20.GL_FLOAT, false, 28, points);
-        GLES20.glEnableVertexAttribArray(position);
-        GLES20.glEnableVertexAttribArray(color);
-        GLES20.glDrawArrays(GLES20.GL_POINTS, 0, count);
-        GLES20.glDisableVertexAttribArray(position);
-        GLES20.glDisableVertexAttribArray(color);
-        GLES20.glDisable(GLES20.GL_BLEND);
-    }
-
-    /**
-     * Draws translucent coloured geometry in world space (xyzrgba, 7 floats per
-     * vertex) as GL_TRIANGLES or GL_LINES. Nearer surfaces hide farther ones
-     * so the scan mesh reads as a shell around objects, not a pile of layers.
-     */
-    /** A GPU vertex buffer for drawMesh; ids die with the GL context (see init()). */
-    int newMeshBuffer() {
-        int[] ids = new int[1];
-        GLES20.glGenBuffers(1, ids, 0);
-        return ids[0];
-    }
-
-    /**
-     * Uploads count xyzrgba vertices into a mesh buffer. Done only when the
-     * mesh changes: re-sending tens of MB of client-side vertices every frame
-     * made the scan mesh vanish after about a minute on the S25.
-     */
-    void fillMeshBuffer(int buffer, FloatBuffer vertices, int count) {
-        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, buffer);
-        vertices.position(0);
-        GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, count * 28, vertices, GLES20.GL_DYNAMIC_DRAW);
-        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
-    }
-
-    void drawMesh(float[] viewProjection, int buffer, int count, int mode, boolean writeDepth) {
-        if (count <= 0 || buffer == 0) return;
-        GLES20.glEnable(GLES20.GL_BLEND);
-        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-        GLES20.glEnable(GLES20.GL_DEPTH_TEST);
-        GLES20.glDepthFunc(GLES20.GL_LEQUAL);
-        GLES20.glDepthMask(writeDepth);
-        GLES20.glUseProgram(meshProgram);
-        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_Mvp"), 1, false, viewProjection, 0);
-        int position = GLES20.glGetAttribLocation(meshProgram, "a_Position");
-        int color = GLES20.glGetAttribLocation(meshProgram, "a_Color");
-        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, buffer);
-        GLES20.glVertexAttribPointer(position, 3, GLES20.GL_FLOAT, false, 28, 0);
-        GLES20.glVertexAttribPointer(color, 4, GLES20.GL_FLOAT, false, 28, 12);
-        GLES20.glEnableVertexAttribArray(position);
-        GLES20.glEnableVertexAttribArray(color);
-        if (mode == GLES20.GL_LINES) GLES20.glLineWidth(1.5f);
-        GLES20.glDrawArrays(mode, 0, count);
-        GLES20.glDisableVertexAttribArray(position);
-        GLES20.glDisableVertexAttribArray(color);
-        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
-        GLES20.glDepthMask(true);
-        GLES20.glDisable(GLES20.GL_DEPTH_TEST);
-        GLES20.glDisable(GLES20.GL_BLEND);
     }
 
     /** Thread-safe: queue a bitmap; it is uploaded at the next frame. */

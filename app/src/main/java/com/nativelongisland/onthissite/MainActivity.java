@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20261101-ar-retake-r316";
+    static final String APP_VERSION = "20261101-no-scans-r317";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -464,10 +464,7 @@ public class MainActivity extends Activity {
         publishArPilotShortcuts();
         if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("qa_open_ar")) {
             boolean author = getIntent().getBooleanExtra(ArActivity.EXTRA_AUTHOR, false);
-            String site = getIntent().getStringExtra("qa_open_ar");
-            String space = getIntent().getStringExtra(ScanActivity.EXTRA_SPACE_ID);
-            if (space == null) openArExperience(site, author);
-            else withSavedSignIn(0, (token, name) -> openArExperience(site, author, space, token));
+            openArExperience(getIntent().getStringExtra("qa_open_ar"), author);
         }
         if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("qa_open_ar_nearby")) {
             // QA: nearby bubbles from a file pushed to the app's external files folder.
@@ -477,9 +474,6 @@ public class MainActivity extends Activity {
             } catch (Exception error) {
                 android.util.Log.w("OnThisSiteAR", "QA nearby bubbles unavailable: " + error);
             }
-        }
-        if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("qa_open_scan")) {
-            openScanWithSavedSignIn(getIntent().getStringExtra("qa_open_scan"), 0);
         }
 
         // Android 16 no longer dispatches Activity.onBackPressed() to apps that
@@ -548,8 +542,7 @@ public class MainActivity extends Activity {
         showLoadingCover("Loading On This Site");
         webView.post(webView::requestApplyInsets);
         createNotificationChannel();
-        // Picks up scans uploaded before the background go-live check existed; it stops itself when none are waiting.
-        ScanStatusJob.schedule(getApplicationContext());
+        cancelRetiredScanStatusJob();
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -2199,8 +2192,6 @@ public class MainActivity extends Activity {
             syncTabletLandscapeClass(webView);
             settleNativeMapViewport();
             scheduleNetworkStateEvaluation("resume");
-            // Lets the AR & 3D scans panel reload after the scanner or AR view closes.
-            webView.evaluateJavascript("window.onAndroidResumed && window.onAndroidResumed()", null);
         }
         if (billingManager != null) billingManager.restorePurchases();
     }
@@ -2646,57 +2637,25 @@ public class MainActivity extends Activity {
     }
 
     void openArExperience(String siteId, boolean author) {
-        openArExperience(siteId, author, null, null);
-    }
-
-    void openArExperience(String siteId, boolean author, String spaceId, String accessToken) {
         startActivity(new Intent(this, ArActivity.class)
             .putExtra(ArActivity.EXTRA_SITE_ID, siteId)
-            .putExtra(ArActivity.EXTRA_AUTHOR, author)
-            .putExtra(ScanActivity.EXTRA_SPACE_ID, spaceId)
-            .putExtra(ScanActivity.EXTRA_ACCESS_TOKEN, accessToken));
+            .putExtra(ArActivity.EXTRA_AUTHOR, author));
+    }
+
+    /**
+     * Photogrammetry scanning was removed (2026-11-01). Installs that had it
+     * keep a persisted background scan-status job; cancel it so the system
+     * stops trying to run a class that no longer exists.
+     */
+    private void cancelRetiredScanStatusJob() {
+        android.app.job.JobScheduler scheduler = (android.app.job.JobScheduler) getSystemService(JOB_SCHEDULER_SERVICE);
+        if (scheduler != null) scheduler.cancel(74_201);
     }
 
     void openArNearby(String bubblesJson) {
         startActivity(new Intent(this, ArActivity.class)
             .putExtra(ArActivity.EXTRA_SITE_ID, "nearby")
             .putExtra(ArActivity.EXTRA_NEARBY, bubblesJson));
-    }
-
-    void openScanSpace(String spaceId, String accessToken, String creditName) {
-        startActivity(new Intent(this, ScanActivity.class)
-            .putExtra(ScanActivity.EXTRA_SPACE_ID, spaceId)
-            .putExtra(ScanActivity.EXTRA_ACCESS_TOKEN, accessToken)
-            .putExtra(ScanActivity.EXTRA_CREDIT_NAME, creditName));
-    }
-
-    private void openScanWithSavedSignIn(String spaceId, int attempt) {
-        withSavedSignIn(attempt, (token, name) -> openScanSpace(spaceId, token, name));
-    }
-
-    private interface SignedIn {
-        void run(String token, String name);
-    }
-
-    /** QA entry: reads the map's saved sign-in once the page has loaded. */
-    private void withSavedSignIn(int attempt, SignedIn then) {
-        if (webView == null || attempt > 10) return;
-        webView.postDelayed(() -> webView.evaluateJavascript(
-            "(function(){try{var p=JSON.parse(localStorage.getItem('nli-contributor-profile')||'null');"
-                + "return p&&p.token?JSON.stringify({t:p.token,n:p.name||p.displayName||''}):'';}catch(e){return '';}})()",
-            value -> {
-                try {
-                    String json = new org.json.JSONTokener(value).nextValue().toString();
-                    if (json.isEmpty()) {
-                        withSavedSignIn(attempt + 1, then);
-                        return;
-                    }
-                    org.json.JSONObject profile = new org.json.JSONObject(json);
-                    then.run(profile.getString("t"), profile.optString("n"));
-                } catch (Exception error) {
-                    withSavedSignIn(attempt + 1, then);
-                }
-            }), attempt == 0 ? 4000 : 2000);
     }
 
     /** QA builds get launcher shortcuts into the Ma's House AR pilot until the web panel links to it. */
@@ -2709,19 +2668,12 @@ public class MainActivity extends Activity {
             list.add(new android.content.pm.ShortcutInfo.Builder(this, "ar-mas-house")
                 .setShortLabel("Ma's House AR")
                 .setIntent(new Intent(this, MainActivity.class).setAction(Intent.ACTION_VIEW)
-                    .putExtra("qa_open_ar", "mas-house")
-                    .putExtra(ScanActivity.EXTRA_SPACE_ID, "7e4ed2eb-7677-4cdc-a231-f973cb7c5aaa"))
+                    .putExtra("qa_open_ar", "mas-house"))
                 .build());
             list.add(new android.content.pm.ShortcutInfo.Builder(this, "ar-mas-house-author")
                 .setShortLabel("AR author mode")
                 .setIntent(new Intent(this, MainActivity.class).setAction(Intent.ACTION_VIEW)
-                    .putExtra("qa_open_ar", "mas-house").putExtra(ArActivity.EXTRA_AUTHOR, true)
-                    .putExtra(ScanActivity.EXTRA_SPACE_ID, "7e4ed2eb-7677-4cdc-a231-f973cb7c5aaa"))
-                .build());
-            list.add(new android.content.pm.ShortcutInfo.Builder(this, "scan-mas-house")
-                .setShortLabel("Scan Ma's House")
-                .setIntent(new Intent(this, MainActivity.class).setAction(Intent.ACTION_VIEW)
-                    .putExtra("qa_open_scan", "7e4ed2eb-7677-4cdc-a231-f973cb7c5aaa"))
+                    .putExtra("qa_open_ar", "mas-house").putExtra(ArActivity.EXTRA_AUTHOR, true))
                 .build());
             shortcuts.setDynamicShortcuts(list);
         } catch (Exception error) {
