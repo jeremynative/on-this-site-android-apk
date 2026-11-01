@@ -83,7 +83,15 @@ final class ArScene {
         // distance from the visitor, so its bubble floats that way.
         double bearing = Double.NaN;
         double distanceM = Double.NaN;
+        // Where a find (a plant ID, a photo story) was photographed; it
+        // floats over that spot.
+        double spotLat = Double.NaN;
+        double spotLng = Double.NaN;
         boolean sample;
+
+        boolean hasSpot() {
+            return !Double.isNaN(spotLat) && !Double.isNaN(spotLng);
+        }
     }
 
     String siteId = "mas-house";
@@ -176,6 +184,11 @@ final class ArScene {
             item.figure = o.optString("figure", "");
             item.bearing = o.optDouble("bearing_deg", Double.NaN);
             item.distanceM = o.optDouble("distance_m", Double.NaN);
+            JSONObject spot = o.optJSONObject("spot");
+            if (spot != null) {
+                item.spotLat = spot.optDouble("lat", Double.NaN);
+                item.spotLng = spot.optDouble("lng", Double.NaN);
+            }
             JSONArray choices = o.optJSONArray("choices");
             item.choices = new String[choices == null ? 0 : choices.length()];
             for (int c = 0; c < item.choices.length; c++) item.choices[c] = choices.getString(c);
