@@ -8720,3 +8720,47 @@ body.android-device.tablet-landscape.mobile-detail-open .app:not(.panel-maximize
 .story-overlay:not(.recording) .story-video {
   visibility: hidden;
 }
+
+/* A site opened from the full-width Timeline or list: show the map and
+   header beside its panel (they were hidden, leaving a blank area);
+   closing the site returns to the full-width list. */
+body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > header,
+body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > .mobile-map-shell {
+  grid-column: 1;
+  height: auto;
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > header {
+  display: grid;
+  grid-row: 1;
+  padding: max(5px, var(--app-top-safe)) 8px 5px;
+  border-bottom: 1px solid var(--line);
+}
+
+body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > .mobile-map-shell {
+  display: block;
+  grid-row: 2;
+}
+
+body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > .mobile-view-tabs,
+body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > .mobile-timeline,
+body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > .list-panel {
+  display: none;
+}
+
+body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized .quick-actions {
+  grid-template-columns: 96px 96px;
+  grid-template-rows: 32px;
+}
+
+body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized .mobile-layer-menu {
+  grid-column: 2;
+  grid-row: 1;
+}
