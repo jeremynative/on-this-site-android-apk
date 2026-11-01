@@ -407,8 +407,26 @@
         if (dock?.height && dock.top > rect.top && dock.top < floor) bottom = dock.top - CARD_GAP_PX;
         width = Math.min(520, rect.width - 24);
         left = rect.left + (rect.width - width) / 2;
+        // The app's locate button sits at the map's bottom right: a wide map
+        // narrows the card to stop short of it; a phone lifts the card above it.
+        const locate = document.querySelector(".mobile-map-locate")?.getBoundingClientRect?.();
+        if (locate?.width) {
+          place(left, width, bottom);
+          const top = bottom - (card.offsetHeight || CARD_GUESS_PX);
+          if (locate.top < bottom && locate.bottom > top && locate.left < left + width) {
+            if (rect.width >= 560) {
+              const room = locate.left - CARD_GAP_PX - (rect.left + 12);
+              width = Math.min(width, room);
+              left = rect.left + 12 + (room - width) / 2;
+            } else bottom = Math.min(bottom, locate.top - CARD_GAP_PX);
+          }
+        }
       }
       card.dataset.side = landscape ? "right" : "bottom";
+      place(left, width, bottom);
+    }
+
+    function place(left, width, bottom) {
       Object.assign(card.style, {
         left: `${Math.round(left)}px`,
         right: "auto",
@@ -444,7 +462,7 @@
         card.style.setProperty("--map-idle-bottom", `${Math.max(16, inset.bottom || 24)}px`);
         card.style.setProperty("--map-idle-top", `${Math.max(16, inset.top || 96)}px`);
         card.dataset.side = "left";
-      } else placeCard();
+      }
       cardOpen = stop.open || null;
       const photo = hasPhoto(stop) ? stop.image : "";
       card.innerHTML = `${photo ? `<img${stop.icon ? " class=\"icon\"" : ""} src="${escapeHtml(photo)}" alt="" onerror="this.remove()">` : ""}
@@ -453,6 +471,7 @@
         <p>${escapeHtml(stop.text)}</p>${cardOpen ? `<em>${escapeHtml(stop.action || (wide() ? "Click to read more" : "Tap to read more"))}</em>` : ""}</div><i></i>`;
       card.setAttribute("aria-hidden", "true");
       card.hidden = false;
+      placeCard();
     }
 
     function showCard() {
