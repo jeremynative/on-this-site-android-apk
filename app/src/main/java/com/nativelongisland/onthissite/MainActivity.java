@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     private static final int COMMENT_BRIDGE_PICKER_REQUEST = 50;
     private static final long MAP_TAP_BRIDGE_DELAY_MS = 90;
     private static final String NEARBY_NOTIFICATION_CHANNEL_ID = "nearby_sites";
-    static final String APP_VERSION = "20261101-ar-drag-r326";
+    static final String APP_VERSION = "20261101-social-signin-r327";
     // Cold first loads can spend more than eight seconds preparing the land mask and map.
     // Let the page-readiness probe finish before treating a validated connection as failed.
     private static final long LIVE_STARTUP_FALLBACK_DELAY_MS = 22000;
@@ -115,7 +115,13 @@ public class MainActivity extends Activity {
     private static final long OFFLINE_RENDER_DEADLINE_MS = 12000;
     private static final int COMMENT_PHOTO_READ_MAX_ATTEMPTS = 3;
     private static final long COMMENT_PHOTO_READ_RETRY_DELAY_MS = 350;
-    private static final String PREFS_NAME = "on_this_site_native_state";
+    static final String PREFS_NAME = "on_this_site_native_state";
+    // A browser sign-in in progress (Google or Facebook): the random state the
+    // return must carry, the provider and when it started.
+    static final String PREF_SIGN_IN_STATE = "sign_in_state";
+    static final String PREF_SIGN_IN_PROVIDER = "sign_in_provider";
+    static final String PREF_SIGN_IN_STARTED_AT = "sign_in_started_at";
+    static final String EXTRA_SIGN_IN_RESULT = "sign_in_result";
     private static final String PREF_PENDING_PLANT_URI = "pending_plant_camera_uri";
     private static final String PREF_PENDING_PLANT_READY = "pending_plant_camera_ready";
     private static final String PREF_RENDERER_RECOVERY_ATTEMPTED = "webview_renderer_recovery_attempted";
@@ -239,6 +245,10 @@ public class MainActivity extends Activity {
     private boolean webTouchStartedOnLocationControl;
     private boolean loadingBundledFallback;
     private boolean appShellLoaded;
+    // A browser sign-in's result (JSON) waiting for the page to take it.
+    private String pendingSignInResult;
+    private int signInDeliveryAttempts;
+    private final Runnable retrySignInDelivery = this::deliverSignInResult;
     private boolean rendererRecoveryAttempted;
     private boolean runtimePermissionPromptActive;
     private boolean locationPermissionDeniedForSession;
@@ -762,6 +772,7 @@ public class MainActivity extends Activity {
         });
 
         registerConnectivityMonitoring();
+        takeSignInResult(getIntent());
         if (nativeMapBundleQaEnabled) {
             restorePendingPlantCameraUri();
             restorePendingCommentCameraUri();
@@ -1520,6 +1531,7 @@ public class MainActivity extends Activity {
                     startupHandler.removeCallbacks(revealBundledFallback);
                     startupHandler.removeCallbacks(offlineRenderDeadline);
                     dispatchPendingPlantPhoto();
+                    deliverSignInResult();
                     // Early document measurements can still reflect the
                     // temporary full-screen startup map. Re-measure at the
                     // exact archive-ready handoff before revealing native map
@@ -2301,6 +2313,69 @@ public class MainActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        takeSignInResult(intent);
+    }
+
+    /** Opens the browser to sign in with Google or Facebook; see sso-app-return.html. */
+    void openSignIn(String provider) {
+        if (!"google".equals(provider) && !"facebook".equals(provider)) return;
+        byte[] random = new byte[24];
+        new java.security.SecureRandom().nextBytes(random);
+        String state = Base64.encodeToString(random, Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putString(PREF_SIGN_IN_STATE, state)
+            .putString(PREF_SIGN_IN_PROVIDER, provider)
+            .putLong(PREF_SIGN_IN_STARTED_AT, System.currentTimeMillis())
+            .apply();
+        String back = Uri.parse("https://nativelongisland.com/sso-app-return.html").buildUpon()
+            .appendQueryParameter("provider", provider)
+            .appendQueryParameter("state", state)
+            .appendQueryParameter("app", getPackageName())
+            .build()
+            .toString();
+        Uri start = Uri.parse("https://directus.nativelongisland.com/auth/login/" + provider).buildUpon()
+            .appendQueryParameter("redirect", back)
+            .build();
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, start));
+        } catch (ActivityNotFoundException error) {
+            try {
+                takeSignInResult(new Intent().putExtra(EXTRA_SIGN_IN_RESULT,
+                    new JSONObject().put("provider", provider).put("error", "NO_BROWSER").toString()));
+            } catch (org.json.JSONException ignored) {
+                // A fixed object; never thrown.
+            }
+        }
+    }
+
+    private void takeSignInResult(Intent intent) {
+        String result = intent == null ? null : intent.getStringExtra(EXTRA_SIGN_IN_RESULT);
+        if (result == null || result.isEmpty()) return;
+        intent.removeExtra(EXTRA_SIGN_IN_RESULT);
+        pendingSignInResult = result;
+        signInDeliveryAttempts = 0;
+        deliverSignInResult();
+    }
+
+    /** Hands a browser sign-in to the page (window.NLI_SSO_APP_RETURN), once it is ready for it. */
+    private void deliverSignInResult() {
+        startupHandler.removeCallbacks(retrySignInDelivery);
+        if (pendingSignInResult == null || webView == null || isDestroyed() || !appShellLoaded) return;
+        String pageUrl = webView.getUrl();
+        if (pageUrl == null || !isTrustedAppOrigin(Uri.parse(pageUrl))) return;
+        final String result = pendingSignInResult;
+        webView.evaluateJavascript(
+            "(function(){return typeof window.NLI_SSO_APP_RETURN==='function'"
+                + "?String(window.NLI_SSO_APP_RETURN(" + result + ")):'waiting';})()",
+            value -> {
+                if (value != null && value.contains("true")) {
+                    if (result.equals(pendingSignInResult)) pendingSignInResult = null;
+                    return;
+                }
+                // The page's sign-in module can start a moment after the shell.
+                if (++signInDeliveryAttempts < 20) startupHandler.postDelayed(retrySignInDelivery, 1000);
+            });
     }
 
     void launchPlantBridgeCamera() {

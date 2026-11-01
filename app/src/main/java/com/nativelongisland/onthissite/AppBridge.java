@@ -40,6 +40,16 @@ class AppBridge {
         return activity.hasArCameraMode();
     }
 
+    /**
+     * Google or Facebook sign-in, in the browser: both refuse app web views.
+     * The browser hands the result back through SignInReturnActivity.
+     */
+    @JavascriptInterface
+    public void openSignIn(String token, String provider) {
+        if (!activity.validBridgeToken(token)) return;
+        activity.runOnUiThread(() -> activity.openSignIn(provider));
+    }
+
     /** Opens AR with bubbles from places near the visitor (an ArScene JSON built by the web app). */
     @JavascriptInterface
     public void openArNearby(String token, String bubblesJson) {
