@@ -412,9 +412,11 @@
       z-index: 5;
     }
 
+    /* The header is a grid item, so its z-index makes a layer of its own:
+       an open Menu or Labels list must sit above an open site panel. */
     header:has(.mobile-more-menu[open]),
     header:has(.mobile-layer-menu[open]) {
-      z-index: 40;
+      z-index: 1300;
     }
 
     .title-row,
@@ -8711,4 +8713,10 @@ body.android-device.tablet-landscape.offline-text-mode h1::after {
    band under the map; the map takes it (web PR 524). */
 body.android-device.tablet-landscape.mobile-detail-open .app:not(.panel-maximized) .mobile-map-shell {
   grid-row: 2 / -1;
+}
+
+/* The story camera starts with the recording; until then the empty video
+   would show the browser's large grey play-button poster (web PR 527). */
+.story-overlay:not(.recording) .story-video {
+  visibility: hidden;
 }
