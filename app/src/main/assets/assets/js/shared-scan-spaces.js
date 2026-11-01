@@ -41,6 +41,16 @@
     const AR_PEOPLE = 4;
     const AR_PEOPLE_KM = 20;
     const AR_LAND_KM = 8;
+    // Around you, the ancestral land comes first: its own page (readings and
+    // captioned photos), the Native place names nearby, and the neighbouring
+    // homelands. Between mapped lands, the nearest land within reach.
+    const AR_LAND_READINGS = 4;
+    const AR_LAND_PHOTOS = 2;
+    const AR_PLACE_NAMES = 3;
+    const AR_PLACE_NAME_KM = 8;
+    const AR_NEIGHBOURS = 2;
+    const AR_NEIGHBOUR_KM = 10;
+    const AR_ISLAND_SLUG = "mattanwake-long-island";
     // Photo stories and plant IDs this close float where they were photographed.
     const AR_FIND_KM = 0.5;
     const AR_FINDS = 4;
@@ -330,55 +340,169 @@
       return site?.listing_image_url || site?.listing_image_thumb_url || "";
     }
 
-    function arScene(title, items, random, here = null) {
-      return { schema: 1, site_id: "nearby", title, here: here ? { lat: here.lat, lng: here.lng } : undefined, items: arShuffled(items, random) };
+    function arScene(title, items, random, here = null, ordered = false) {
+      return { schema: 1, site_id: "nearby", title, here: here ? { lat: here.lat, lng: here.lng } : undefined, items: ordered ? items : arShuffled(items, random) };
     }
 
-    // Anywhere: the ancestral land you are on, other land history close by,
-    // the area's biography people, and two words.
-    function regionArScene(here, random = Math.random) {
+    // The app shows bubbles in list order: the land's own stories first, with
+    // one of everything else after every two of them.
+    function arInterleave(first, rest, every = 2) {
+      const out = [];
+      let next = 0;
+      first.forEach((item, index) => {
+        out.push(item);
+        if ((index + 1) % every === 0 && next < rest.length) out.push(rest[next++]);
+      });
+      return out.concat(rest.slice(next));
+    }
+
+    // The point of a shape nearest to you, and how far away it is.
+    function arNearestPoint(here, geometry) {
+      const pairs = JSON.stringify(geometry?.coordinates || []).match(/-?\d+(\.\d+)?,-?\d+(\.\d+)?/g) || [];
+      let best = null;
+      pairs.forEach(pair => {
+        const [lng, lat] = pair.split(",").map(Number);
+        const km = arDistanceKm(here, { lng, lat });
+        if (!best || km < best.km) best = { lng, lat, km };
+      });
+      return best;
+    }
+
+    // The ancestral land you are on; between mapped lands, the nearest one
+    // within reach (with how far it is).
+    function arHomelands(here, entries) {
+      const lands = entries.filter(entry => entry.isAncestralLand);
+      const inside = lands.filter(entry => arInsideGeometry(here, arEntryGeometry(entry)));
+      if (inside.length) return inside.map(entry => ({ entry, near: null }));
+      const nearest = lands.map(entry => ({ entry, near: arNearestPoint(here, arEntryGeometry(entry)) }))
+        .filter(item => item.near && item.near.km <= AR_NEIGHBOUR_KM)
+        .sort((a, b) => a.near.km - b.near.km)[0];
+      return nearest ? [nearest] : [];
+    }
+
+    // An ancestral land's own page, read for AR: its sections and captioned photos.
+    function arLandPageItems(entry, page) {
+      if (!page) return [];
+      const title = arText(entry.title);
+      const items = AR_SECTIONS
+        // The land's own history card already tells its history.
+        .filter(([field]) => !(field === "history_content" && entry.historicalContext))
+        .map(([field, label]) => ({ label, text: arReading(page[field]) }))
+        .filter(reading => reading.text.length >= 120)
+        .slice(0, AR_LAND_READINGS)
+        .map(reading => ({
+          id: `land-reading-${entry.slug}-${reading.label.toLowerCase().replace(/[^a-z]+/g, "-")}`, layer: "archival", kind: "note", placement: "discover",
+          title: `${title}: ${reading.label}`, caption: reading.text, credit: `From the On This Site page on ${title}`
+        }));
+      AR_SECTIONS.flatMap(([field, label]) => arPhotos(page[field], label))
+        .filter(photo => photo.caption)
+        .slice(0, AR_LAND_PHOTOS)
+        .forEach((photo, index) => items.push({
+          id: `land-photo-${entry.slug}-${index}`, layer: "archival", kind: "note", placement: "discover",
+          title: arCaptionTitle(photo.caption), caption: [photo.caption, photo.context].filter(Boolean).join("\n\n"),
+          credit: `From "${photo.section}" on the On This Site page for ${title}`, image: photo.src
+        }));
+      return items;
+    }
+
+    // Native place names around you, each pointing its way. They are the
+    // land's own names, so they need no visit to a site.
+    function arPlaceNames(here, skip) {
+      return (state.sites || [])
+        .filter(site => site.site_type === "placename" && site.slug !== AR_ISLAND_SLUG && !skip.has(site.slug)
+          && Array.isArray(site.center) && site.summary && !arSensitiveSite(site))
+        .map(site => ({ site, centre: { lng: Number(site.center[0]), lat: Number(site.center[1]) } }))
+        .map(item => ({ ...item, km: arDistanceKm(here, item.centre) }))
+        .filter(item => item.km <= AR_PLACE_NAME_KM)
+        .sort((a, b) => a.km - b.km)
+        .slice(0, AR_PLACE_NAMES)
+        .map(({ site, centre, km }) => arToward({
+          id: `placename-${site.slug}`, layer: "archival", kind: "note", placement: "discover",
+          title: `Native place name: ${arText(site.title)}`,
+          caption: `${km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`} from you, in the direction of this bubble. ${arText(site.summary)}`,
+          credit: "On This Site", image: site.listing_image_url || site.listing_image_thumb_url || undefined
+        }, here, centre));
+    }
+
+    // The homelands beside the one you are on, pointing toward their nearest edge.
+    function arNeighbours(here, homelands, entries) {
+      const own = new Set(homelands.map(({ entry }) => entry.slug));
+      return entries
+        .filter(entry => entry.isAncestralLand && !own.has(entry.slug))
+        .map(entry => ({ entry, near: arNearestPoint(here, arEntryGeometry(entry)) }))
+        .filter(item => item.near && item.near.km <= AR_NEIGHBOUR_KM)
+        .sort((a, b) => a.near.km - b.near.km)
+        .slice(0, AR_NEIGHBOURS)
+        .map(({ entry, near }) => arToward({
+          ...arLandClips(entry, "neighbour-")[0],
+          title: `Neighbouring homeland: ${arText(entry.title)}`,
+          image: arSiteImage(entry.siteId) || undefined
+        }, here, near));
+    }
+
+    // Anywhere: the ancestral land you are on (or the nearest one) with its
+    // page, the Native place names and neighbouring homelands around you,
+    // other land history close by, then the area's people, nearby places,
+    // finds and a word. landPages: the land pages, fetched by openRegionAr.
+    function regionArScene(here, random = Math.random, landPages = {}) {
       const entries = arLandEntries();
-      const items = [];
+      const land = [];
+      const other = [];
       if (here) {
-        const homeland = entries.filter(entry => entry.isAncestralLand && arInsideGeometry(here, arEntryGeometry(entry)));
-        homeland.forEach(entry => {
+        const homelands = arHomelands(here, entries);
+        homelands.forEach(({ entry, near }) => {
           const [welcome, ...more] = arLandClips(entry);
-          items.push({ ...welcome, title: `You are on ${arText(entry.title)}`, image: arSiteImage(entry.siteId) }, ...more);
+          land.push(near
+            ? arToward({ ...welcome, title: `Near ${arText(entry.title)}`, caption: `About ${near.km.toFixed(1)} km away, in the direction of this bubble. ${welcome.caption}`, image: arSiteImage(entry.siteId) }, here, near)
+            : { ...welcome, title: `You are on ${arText(entry.title)}`, image: arSiteImage(entry.siteId) });
+          land.push(...arShuffled([...more, ...arLandPageItems(entry, landPages[entry.slug])], random));
         });
-        (state.sites || [])
+        const homelandSites = new Set(homelands.map(({ entry }) => Number(entry.siteId)));
+        const nearby = (state.sites || [])
           .filter(site => Array.isArray(site.center) && site.summary && (site.listing_image_url || site.listing_image_thumb_url) && !arSensitiveSite(site)
-            && !homeland.some(entry => Number(entry.siteId) === Number(site.id)))
+            && !homelandSites.has(Number(site.id)))
           .map(site => ({ site, km: arDistanceKm(here, { lng: Number(site.center[0]), lat: Number(site.center[1]) }) }))
           .filter(item => item.km <= AR_NEARBY_KM)
           .sort((a, b) => a.km - b.km)
-          .slice(0, AR_NEARBY_PLACES)
-          .forEach(({ site, km }) => items.push(arToward({
-            id: `place-${site.slug}`, layer: "archival", kind: "note", placement: "discover",
-            title: `Nearby: ${arText(site.title)}`,
-            caption: `${km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`} from you, in the direction of this bubble. ${arText(site.summary)}`,
-            credit: "On This Site", image: site.listing_image_url || site.listing_image_thumb_url
-          }, here, { lng: Number(site.center[0]), lat: Number(site.center[1]) })));
+          .slice(0, AR_NEARBY_PLACES);
+        const placeNames = arPlaceNames(here, new Set(nearby.map(({ site }) => site.slug)));
+        const island = (state.sites || []).find(site => site.slug === AR_ISLAND_SLUG && site.summary);
+        const stories = [...placeNames, ...arNeighbours(here, homelands, entries)];
         entries
           .filter(entry => !entry.isAncestralLand)
           .map(entry => ({ entry, centre: arGeometryCentre(arEntryGeometry(entry)) }))
           .filter(item => item.centre && arDistanceKm(here, item.centre) <= AR_LAND_KM)
           .sort((a, b) => arDistanceKm(here, a.centre) - arDistanceKm(here, b.centre))
           .slice(0, 3)
-          .forEach(({ entry, centre }) => items.push(arToward(arLandClips(entry)[0], here, centre)));
-        items.push(...arPeople(here, AR_PEOPLE_KM, AR_PEOPLE));
+          .forEach(({ entry, centre }) => stories.push(arToward(arLandClips(entry)[0], here, centre)));
+        if (island) stories.push({
+          id: `island-${island.slug}`, layer: "archival", kind: "note", placement: "discover",
+          title: `${arText(island.title)}: a name for this island`, caption: arText(island.summary), credit: "On This Site"
+        });
+        land.push(...arShuffled(stories, random));
+        nearby.forEach(({ site, km }) => other.push(arToward({
+          id: `place-${site.slug}`, layer: "archival", kind: "note", placement: "discover",
+          title: `Nearby: ${arText(site.title)}`,
+          caption: `${km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`} from you, in the direction of this bubble. ${arText(site.summary)}`,
+          credit: "On This Site", image: site.listing_image_url || site.listing_image_thumb_url
+        }, here, { lng: Number(site.center[0]), lat: Number(site.center[1]) })));
+        // With the land's own stories to tell, fewer people and words.
+        const rich = land.length >= 4;
+        other.push(...arPeople(here, AR_PEOPLE_KM, rich ? 2 : AR_PEOPLE));
         // Photo stories and plant IDs found close by, at their spots.
         const close = (lat, lng) => lat != null && lng != null && arDistanceKm(here, { lat: Number(lat), lng: Number(lng) }) <= AR_FIND_KM;
-        items.push(...arFinds(
+        other.push(...arFinds(
           (state.mapStories || []).filter(story => story.photo && arShared(story) && close(story.latitude, story.longitude)),
           (state.plantObservations || []).filter(plant => arShared(plant) && close(plant.observation_latitude, plant.observation_longitude)),
           here
         ).sort((a, b) => a.distance_m - b.distance_m).slice(0, AR_FINDS));
+        other.push(...arWords(rich ? 1 : AR_WORDS, random));
       } else {
         // Without a location: a few ancestral lands to learn about.
-        arShuffled(entries.filter(entry => entry.isAncestralLand), random).slice(0, 3).forEach(entry => items.push(arLandClips(entry)[0]));
+        arShuffled(entries.filter(entry => entry.isAncestralLand), random).slice(0, 3).forEach(entry => land.push(arLandClips(entry)[0]));
+        other.push(...arWords(AR_WORDS, random));
       }
-      items.push(...arWords(AR_WORDS, random));
-      return arScene("Around you", items, random, here);
+      return arScene("Around you", arInterleave(land, arShuffled(other, random)), random, here, true);
     }
 
     function arAsset(id) {
@@ -461,7 +585,20 @@
 
     async function openRegionAr() {
       if (!arUserLocation()) await requestUserLocation({ silent: true }).catch(() => null);
-      openArBubbles(regionArScene(arUserLocation()));
+      const here = arUserLocation();
+      openArBubbles(regionArScene(here, Math.random, here ? await arLandPages(here) : {}));
+    }
+
+    // The pages of the ancestral land around you (from the bundle when
+    // offline). AR waits for them only briefly.
+    async function arLandPages(here) {
+      const pages = {};
+      await Promise.all(arHomelands(here, arLandEntries()).map(async ({ entry }) => {
+        const site = (state.sites || []).find(item => Number(item.id) === Number(entry.siteId) || item.slug === entry.slug) || { id: entry.siteId, slug: entry.slug };
+        const load = Promise.resolve().then(() => ctx.siteDetail ? ctx.siteDetail(site) : arSiteDetail(site.slug)).catch(() => null);
+        pages[entry.slug] = await Promise.race([load, new Promise(resolve => window.setTimeout(() => resolve(null), 2500))]);
+      }));
+      return pages;
     }
 
     // Burial grounds and sensitive places never become bubbles, here or as
