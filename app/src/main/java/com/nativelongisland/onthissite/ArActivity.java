@@ -2,7 +2,6 @@ package com.nativelongisland.onthissite;
 
 import android.Manifest;
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.AssetFileDescriptor;
@@ -20,43 +19,28 @@ import android.opengl.Matrix;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
-import android.text.InputType;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.CheckBox;
-import android.widget.EditText;
 import android.widget.FrameLayout;
-import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.RadioButton;
-import android.widget.RadioGroup;
 import android.widget.ScrollView;
-import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import com.google.ar.core.Anchor;
 import com.google.ar.core.ArCoreApk;
-import com.google.ar.core.AugmentedImage;
-import com.google.ar.core.AugmentedImageDatabase;
 import com.google.ar.core.Camera;
 import com.google.ar.core.Config;
-import com.google.ar.core.DepthPoint;
 import com.google.ar.core.Frame;
 import com.google.ar.core.HitResult;
-import com.google.ar.core.Plane;
-import com.google.ar.core.Point;
 import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
-import com.google.ar.core.Trackable;
 import com.google.ar.core.TrackingFailureReason;
 import com.google.ar.core.TrackingState;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -76,15 +60,12 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 /**
- * Walk-through AR for a site such as Ma's House. Each room has a printed
- * marker card; scanning it sets the room's frame and shows that room's
- * layers (family photos, archival photos with before/after viewpoints,
- * language prompts, audio). Discoverable prompts are dropped at runtime on
- * surfaces the camera can see inside public rooms only.
+ * AR bubbles like Pokemon GO: the web app passes a scene of stories, people,
+ * words and finds near the visitor, and they float around the camera view
+ * to walk up to or tap, open as cards, and can be photographed and shared.
+ * (The marker walk-through and photogrammetry were removed on 2026-11-01.)
  */
 public class ArActivity extends Activity implements GLSurfaceView.Renderer {
-    static final String EXTRA_SITE_ID = "site_id";
-    static final String EXTRA_AUTHOR = "author";
     /**
      * Bubbles from places near the visitor (an ArScene JSON with discover
      * items), passed by the web app. They float on open floors and tables
@@ -93,19 +74,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     static final String EXTRA_NEARBY = "nearby_bubbles";
 
     private static final int REQUEST_CAMERA = 41;
-    private static final int PICK_PHOTO = 42;
-    private static final int PICK_REPHOTO = 43;
-    private static final int PICK_AUDIO = 44;
-    private static final int EXPORT_SCENE = 45;
-    private static final int IMPORT_SCENE = 46;
 
-    private static final int MODE_NONE = 0;
-    private static final int MODE_SURFACE = 1;
-    private static final int MODE_REPHOTO = 2;
-    private static final int MODE_ZONE = 3;
 
-    private static final float STAND_HERE_RADIUS = 0.75f;
-    private boolean freeRoam;
     // Free roam reveals bubbles gradually as the visitor explores: at most two
     // unopened at once, spread out, a new one after opening one, walking a
     // little, or a short wait.
@@ -186,22 +156,12 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     // Scene state (guarded by lock).
     private ArScene scene;
-    private ArScene.Store store;
-    private final Map<String, Anchor> roomAnchors = new HashMap<>();      // markerId -> anchor
     private final Map<String, Anchor> discoverAnchors = new HashMap<>();  // itemId -> anchor
     private final Map<String, Float> discoverLift = new HashMap<>();
-    private final Map<String, String> discoverRoom = new HashMap<>();
     private final Set<String> discovered = new HashSet<>();
     private final Set<String> loading = new HashSet<>();
     private final Set<String> enabledLayers = new HashSet<>();
-    private final Set<String> promptedMarkers = new HashSet<>();
-    private String lastMarkerId;
 
-    private int mode = MODE_NONE;
-    private ArScene.Item pendingItem;
-    private boolean anchorRephotoRequested;
-    private float rephotoDistance = 3f;
-    private float rephotoAspect = 0.75f;
     private long lastSpawnAttempt;
 
     private GLSurfaceView surface;
@@ -210,17 +170,12 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private boolean resumed;
     private int availabilityChecks;
     private boolean textureBound;
-    private boolean authorMode;
     private int viewportWidth = 1;
     private int viewportHeight = 1;
-    private volatile float beforeAfter = 0.85f;
     private MediaPlayer player;
-    private ArScene.Item awaitingAudioFor;
 
     private TextView status;
     private TextView hint;
-    private LinearLayout authorBar;
-    private LinearLayout placementBar;
     // A dimmed full-screen layer holding the centred card; tapping the dim closes it.
     private FrameLayout infoPanel;
     private FrameLayout infoImageFrame;
@@ -239,32 +194,18 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private LinearLayout infoChoices;
     private ScrollView infoScroll;
     private LinearLayout infoActions;
-    private LinearLayout compareBar;
-    private ImageView alignOverlay;
-    private SeekBar distanceSlider;
     private long lastStatusPost;
     private String lastStatusText = "";
-    private boolean compareVisible;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        String siteId = getIntent().getStringExtra(EXTRA_SITE_ID);
-        if (siteId == null || siteId.isEmpty()) siteId = "mas-house";
-        authorMode = BuildConfig.DEBUG && getIntent().getBooleanExtra(EXTRA_AUTHOR, false);
-        store = new ArScene.Store(this, siteId);
         String nearby = getIntent().getStringExtra(EXTRA_NEARBY);
         try {
-            if (nearby != null) {
-                scene = ArScene.fromJson(nearby);
-                freeRoam = true;
-                authorMode = false;
-            } else {
-                scene = store.load();
-            }
+            scene = ArScene.fromJson(nearby);
         } catch (Exception error) {
-            Toast.makeText(this, "This site has no AR scene yet.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Nothing to show in AR here yet.", Toast.LENGTH_LONG).show();
             finish();
             return;
         }
@@ -273,11 +214,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             backCallback = this::handleBack;
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback);
         }
-        if (freeRoam) {
-            sensors = (android.hardware.SensorManager) getSystemService(SENSOR_SERVICE);
-            if (!Double.isNaN(scene.hereLat)) compass.setLocation(scene.hereLat, scene.hereLng);
-            locations = (android.location.LocationManager) getSystemService(LOCATION_SERVICE);
-        }
+        sensors = (android.hardware.SensorManager) getSystemService(SENSOR_SERVICE);
+        if (!Double.isNaN(scene.hereLat)) compass.setLocation(scene.hereLat, scene.hereLng);
+        locations = (android.location.LocationManager) getSystemService(LOCATION_SERVICE);
         buildUi();
     }
 
@@ -287,10 +226,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     protected void onResume() {
         super.onResume();
         resumed = true;
-        if (freeRoam) {
-            compass.start(sensors);
-            startFixes();
-        }
+        compass.start(sensors);
+        startFixes();
         startAr();
     }
 
@@ -340,10 +277,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     protected void onPause() {
         super.onPause();
         resumed = false;
-        if (freeRoam) {
-            compass.stop(sensors);
-            if (locations != null) locations.removeUpdates(fixListener);
-        }
+        compass.stop(sensors);
+        if (locations != null) locations.removeUpdates(fixListener);
         if (session != null) {
             surface.onPause();
             session.pause();
@@ -373,23 +308,13 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     private void configureSession() {
         Config config = new Config(session);
-        AugmentedImageDatabase database = new AugmentedImageDatabase(session);
-        for (ArScene.Marker marker : scene.markers) {
-            try (InputStream in = getAssets().open(marker.asset.replaceFirst("^asset:", ""))) {
-                Bitmap bitmap = BitmapFactory.decodeStream(in);
-                database.addImage(marker.id, bitmap, marker.widthMeters);
-            } catch (Exception error) {
-                android.util.Log.w("OnThisSiteAR", "Marker " + marker.id + " skipped: " + error);
-            }
-        }
-        config.setAugmentedImageDatabase(database);
         config.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL);
         config.setFocusMode(Config.FocusMode.AUTO);
         config.setUpdateMode(Config.UpdateMode.LATEST_CAMERA_IMAGE);
         config.setLightEstimationMode(Config.LightEstimationMode.DISABLED);
         if (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
-            // Depth lets authors place photos on plain walls ARCore has not
-            // yet detected as planes.
+            // Depth keeps bubbles in front of plain walls ARCore hasn't
+            // detected as planes yet.
             config.setDepthMode(Config.DepthMode.AUTOMATIC);
         }
         session.configure(config);
@@ -405,9 +330,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         synchronized (lock) {
             loading.clear();
         }
-        gl.queueTexture("ring:reticle", ArCards.floorRing(Color.WHITE, null));
-        gl.queueTexture("ring:stand", ArCards.floorRing(0xFFE8A33D, "STAND HERE"));
-        gl.queueTexture("ring:zone", ArCards.floorRing(0xFF6BC58A, null));
         for (String layer : ArScene.LAYERS) gl.queueTexture("orb:" + layer, ArCards.orb(ArCards.layerColor(layer)));
     }
 
@@ -446,7 +368,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         Camera camera = frame.getCamera();
         gl.drawBackground(frame);
         synchronized (lock) {
-            trackMarkers(frame);
             if (camera.getTrackingState() != TrackingState.TRACKING) {
                 if (wasTracking) android.util.Log.i("OnThisSiteAR", "Tracking lost: " + camera.getTrackingFailureReason());
                 wasTracking = false;
@@ -464,136 +385,29 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             wasTracking = true;
             Pose cameraPose = camera.getDisplayOrientedPose();
             float[] cameraPoint = cameraPose.getTranslation();
-            ArScene.Room room = currentRoom(cameraPoint);
-            Anchor roomAnchor = room == null ? null : roomAnchors.get(room.markerId);
-
-            if (anchorRephotoRequested) {
-                anchorRephotoRequested = false;
-                finishRephoto(cameraPose, projection[0], room, roomAnchor);
-            }
-            spawnDiscoverables(frame, cameraPoint, room);
+            spawnAnywhere(frame, cameraPoint);
 
             List<Draw> draws = new ArrayList<>();
-            boolean nearViewpoint = collectDraws(draws, cameraPose, room, roomAnchor);
-            if (mode == MODE_SURFACE || mode == MODE_ZONE) {
-                HitResult center = surfaceHit(frame, viewportWidth / 2f, viewportHeight / 2f, mode == MODE_ZONE);
-                if (center != null) draws.add(Draw.flat(center.getHitPose(), "ring:reticle", 0.25f, 0.9f, distance(center.getHitPose().getTranslation(), cameraPoint)));
-            }
-            if (mode == MODE_ZONE && room != null && roomAnchor != null) {
-                for (float[] p : room.zone) {
-                    float[] corner = roomAnchor.getPose().transformPoint(new float[] {p[0], 0f, p[1]});
-                    Pose world = Pose.makeTranslation(corner[0], cameraPoint[1] - 1.4f, corner[2]);
-                    draws.add(Draw.flat(world, "ring:zone", 0.18f, 0.9f, distance(world.getTranslation(), cameraPoint)));
-                }
-            }
+            collectFreeDraws(draws, cameraPose);
 
             float[] tap;
-            while ((tap = taps.poll()) != null) handleTap(frame, tap[0], tap[1], draws, viewProjection, cameraPoint, room, roomAnchor);
+            while ((tap = taps.poll()) != null) handleTap(tap[0], tap[1], draws, viewProjection);
 
             Collections.sort(draws, (a, b) -> Float.compare(b.distance, a.distance));
             gl.beginQuads();
             for (Draw draw : draws) gl.drawQuad(viewProjection, draw.model, gl.texture(draw.texture), draw.alpha);
             gl.endQuads();
 
-            setCompareVisible(nearViewpoint);
-            postStatus(statusText(room), hintText(room, nearViewpoint));
+            postStatus(statusText(), hintText());
         }
     }
 
     // ---- Markers and rooms ----
 
-    private void trackMarkers(Frame frame) {
-        for (AugmentedImage image : frame.getUpdatedTrackables(AugmentedImage.class)) {
-            if (image.getTrackingState() != TrackingState.TRACKING
-                || image.getTrackingMethod() != AugmentedImage.TrackingMethod.FULL_TRACKING) continue;
-            String markerId = image.getName();
-            lastMarkerId = markerId;
-            if (!roomAnchors.containsKey(markerId)) {
-                Pose center = image.getCenterPose();
-                float[] room = ArPlacement.roomPoseFromMarker(center.getTranslation(), center.getYAxis(), center.getZAxis());
-                roomAnchors.put(markerId, image.createAnchor(toPose(room)));
-                runOnUiThread(() -> vibrateConfirm());
-            }
-            if (scene.roomForMarker(markerId) == null && authorMode && promptedMarkers.add(markerId)) {
-                runOnUiThread(() -> showRoomDialog(markerId, null));
-            }
-        }
-    }
-
-    /** The room whose drawn zone holds the visitor, else the room of the last marker scanned. */
-    private ArScene.Room currentRoom(float[] cameraPoint) {
-        for (ArScene.Room room : scene.rooms) {
-            Anchor anchor = roomAnchors.get(room.markerId);
-            if (anchor == null || anchor.getTrackingState() != TrackingState.TRACKING || room.zone.size() < 3) continue;
-            float[] local = ArPlacement.toRoom(poseArray(anchor.getPose()), cameraPoint);
-            if (ArPlacement.pointInPolygon(local[0], local[2], room.zone)) return room;
-        }
-        return lastMarkerId == null ? null : scene.roomForMarker(lastMarkerId);
-    }
-
     // ---- Content ----
 
     private boolean visible(ArScene.Item item) {
         return enabledLayers.contains(item.layer) && (!item.sample || BuildConfig.DEBUG);
-    }
-
-    /** Adds this room's quads; returns true when the visitor stands on a before/after viewpoint. */
-    private boolean collectDraws(List<Draw> draws, Pose cameraPose, ArScene.Room room, Anchor roomAnchor) {
-        if (freeRoam) {
-            collectFreeDraws(draws, cameraPose);
-            return false;
-        }
-        if (room == null || roomAnchor == null || roomAnchor.getTrackingState() != TrackingState.TRACKING) return false;
-        float[] cameraPoint = cameraPose.getTranslation();
-        Pose roomPose = roomAnchor.getPose();
-        boolean nearViewpoint = false;
-        for (ArScene.Item item : scene.items) {
-            if (!visible(item)) continue;
-            if (ArScene.PLACEMENT_DISCOVER.equals(item.placement)) {
-                Anchor anchor = discoverAnchors.get(item.id);
-                if (anchor == null || anchor.getTrackingState() != TrackingState.TRACKING || !room.id.equals(discoverRoom.get(item.id))) continue;
-                Pose base = anchor.getPose();
-                float[] point = {base.tx(), base.ty() + discoverLift.get(item.id), base.tz()};
-                float distance = distance(point, cameraPoint);
-                if (!discovered.contains(item.id) && distance < DISCOVER_DISTANCE) {
-                    discovered.add(item.id);
-                    runOnUiThread(() -> onDiscovered(item));
-                }
-                if (discovered.contains(item.id)) {
-                    addCard(draws, item, point, cameraPoint, 0.5f);
-                } else {
-                    float pulse = 0.75f + 0.25f * (float) Math.sin(SystemClock.uptimeMillis() / 300.0);
-                    draws.add(Draw.billboard(item.id, point, cameraPose, "orb:" + item.layer, 0.22f, 0.22f, pulse, distance));
-                }
-                continue;
-            }
-            if (!room.id.equals(item.roomId) || item.pose == null) continue;
-            Pose world = roomPose.compose(toPose(item.pose));
-            float distance = distance(world.getTranslation(), cameraPoint);
-            if (ArScene.KIND_PHRASE.equals(item.kind) || ArScene.KIND_AUDIO.equals(item.kind)) {
-                addCard(draws, item, world.getTranslation(), cameraPoint, 0.5f);
-                continue;
-            }
-            boolean rephoto = ArScene.KIND_REPHOTO.equals(item.kind);
-            String key = textureKey(item);
-            ensureTexture(item, key);
-            float aspect = gl.aspect(key);
-            if (aspect <= 0f) continue;
-            float alpha = 0.95f;
-            if (rephoto && item.viewpoint != null) {
-                Pose viewpoint = roomPose.compose(toPose(item.viewpoint));
-                float apart = (float) Math.hypot(viewpoint.tx() - cameraPoint[0], viewpoint.tz() - cameraPoint[2]);
-                if (apart < STAND_HERE_RADIUS) {
-                    nearViewpoint = true;
-                    alpha = beforeAfter;
-                } else if (apart < 8f) {
-                    Pose floor = new Pose(new float[] {viewpoint.tx(), viewpoint.ty() - 1.35f, viewpoint.tz()}, new float[] {0, 0, 0, 1});
-                    draws.add(Draw.flat(floor, "ring:stand", 0.6f, 0.9f, distance(floor.getTranslation(), cameraPoint)));
-                }
-            }
-            draws.add(Draw.posed(item.id, world, key, item.widthMeters, item.widthMeters * aspect, alpha, distance));
-        }
-        return nearViewpoint;
     }
 
     private void addCard(List<Draw> draws, ArScene.Item item, float[] point, float[] cameraPoint, float width) {
@@ -606,25 +420,17 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         draws.add(Draw.posed(item.id, pose, key, width, width * aspect, 0.97f, distance(point, cameraPoint)));
     }
 
-    private static String textureKey(ArScene.Item item) {
-        return ArScene.KIND_REPHOTO.equals(item.kind) ? "photo:" + item.id : "framed:" + item.id;
-    }
-
     private void ensureTexture(ArScene.Item item, String key) {
         if (gl.hasTexture(key) || !loading.add(key)) return;
         loader.execute(() -> {
             try {
                 Bitmap bitmap;
                 if (key.startsWith("card:")) {
-                    bitmap = ArCards.promptCard(item, freeRoam ? decodeImage(item.image, 900) : null);
-                } else if (key.startsWith("bubble:")) {
+                    bitmap = ArCards.promptCard(item, decodeImage(item.image, 900));
+                } else {
                     Bitmap inner = decodeImage(item.figure.isEmpty() ? item.image : item.figure, 512);
                     int color = ArCards.layerColor(item.layer);
                     bitmap = inner == null ? ArCards.orb(color) : ArCards.bubble(inner, color);
-                } else {
-                    Bitmap photo = decodeImage(item.image, 1600);
-                    if (photo == null) return;
-                    bitmap = ArCards.photoCard(photo, item, key.startsWith("framed:"));
                 }
                 gl.queueTexture(key, bitmap);
             } catch (Exception error) {
@@ -633,73 +439,18 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         });
     }
 
+    /** Re-renders an item's floating card after it changes (a word answered). */
     private void invalidateTextures(ArScene.Item item) {
         synchronized (lock) {
             loading.remove("card:" + item.id);
-            loading.remove("framed:" + item.id);
-            loading.remove("photo:" + item.id);
         }
-        // Re-render on next use; the old texture is replaced on upload.
         loader.execute(() -> {
             try {
-                if (ArScene.KIND_PHRASE.equals(item.kind) || ArScene.KIND_AUDIO.equals(item.kind)) {
-                    gl.queueTexture("card:" + item.id, ArCards.promptCard(item, freeRoam ? decodeImage(item.image, 900) : null));
-                } else {
-                    Bitmap photo = decodeImage(item.image, 1600);
-                    if (photo != null) gl.queueTexture(textureKey(item), ArCards.photoCard(photo, item, !ArScene.KIND_REPHOTO.equals(item.kind)));
-                }
+                gl.queueTexture("card:" + item.id, ArCards.promptCard(item, decodeImage(item.image, 900)));
             } catch (Exception ignored) {
                 // The next frame retries through ensureTexture.
             }
         });
-    }
-
-    /**
-     * Drops discoverable prompts onto real, visible surfaces: an upward
-     * plane the camera is looking at right now (so never inside a wall),
-     * inside a public room's zone, away from private rooms, and spaced out.
-     */
-    private void spawnDiscoverables(Frame frame, float[] cameraPoint, ArScene.Room room) {
-        if (freeRoam) {
-            spawnAnywhere(frame, cameraPoint);
-            return;
-        }
-        long now = SystemClock.uptimeMillis();
-        if (now - lastSpawnAttempt < 400 || room == null || !room.publicAccess) return;
-        lastSpawnAttempt = now;
-        Anchor roomAnchor = roomAnchors.get(room.markerId);
-        if (roomAnchor == null || roomAnchor.getTrackingState() != TrackingState.TRACKING) return;
-        ArScene.Item next = null;
-        for (ArScene.Item item : scene.items) {
-            if (!ArScene.PLACEMENT_DISCOVER.equals(item.placement) || !visible(item) || discoverAnchors.containsKey(item.id)) continue;
-            if (!item.roomId.isEmpty() && !item.roomId.equals(room.id)) continue;
-            next = item;
-            break;
-        }
-        if (next == null) return;
-        List<float[]> taken = new ArrayList<>();
-        for (Anchor anchor : discoverAnchors.values()) taken.add(anchor.getPose().getTranslation());
-        Pose roomPose = roomAnchor.getPose();
-        for (ArScene.Item item : scene.items) {
-            if (room.id.equals(item.roomId) && item.pose != null) taken.add(roomPose.compose(toPose(item.pose)).getTranslation());
-        }
-        for (int attempt = 0; attempt < 6; attempt++) {
-            float x = viewportWidth * (0.2f + 0.6f * random.nextFloat());
-            float y = viewportHeight * (0.55f + 0.35f * random.nextFloat());
-            for (HitResult hit : frame.hitTest(x, y)) {
-                Trackable trackable = hit.getTrackable();
-                if (!(trackable instanceof Plane)) continue;
-                Plane plane = (Plane) trackable;
-                if (plane.getType() != Plane.Type.HORIZONTAL_UPWARD_FACING || !plane.isPoseInPolygon(hit.getHitPose())) continue;
-                float[] point = hit.getHitPose().getTranslation();
-                if (ArPlacement.dropSpotProblem(cameraPoint, point) != null || !ArPlacement.wellSpaced(point, taken)) break;
-                if (!allowedForDiscovery(point, room, roomPose)) break;
-                discoverAnchors.put(next.id, hit.createAnchor());
-                discoverLift.put(next.id, ArPlacement.floatHeight(cameraPoint, point));
-                discoverRoom.put(next.id, room.id);
-                return;
-            }
-        }
     }
 
     /**
@@ -816,7 +567,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             if (!spaced) continue;
             discoverAnchors.put(next.id, session.createAnchor(Pose.makeTranslation(point[0], point[1], point[2])));
             discoverLift.put(next.id, 0f);
-            discoverRoom.put(next.id, "");
             if (!directional) {
                 lastFreeSpawnAt = now;
                 lastFreeSpawnFrom = cameraPoint.clone();
@@ -834,7 +584,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             cameraPoint[2] - (float) Math.cos(heading) * distance};
         discoverAnchors.put(item.id, session.createAnchor(Pose.makeTranslation(point[0], point[1], point[2])));
         discoverLift.put(item.id, 0f);
-        discoverRoom.put(item.id, "");
         android.util.Log.i("OnThisSiteAR", String.format(Locale.US, "Placed %s at its spot, %.0f m at %.0f deg",
             item.id, item.distanceM, item.bearing));
     }
@@ -977,61 +726,12 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             Anchor anchor = discoverAnchors.remove(id);
             if (anchor != null) anchor.detach();
             discoverLift.remove(id);
-            discoverRoom.remove(id);
         }
-    }
-
-    private boolean allowedForDiscovery(float[] point, ArScene.Room room, Pose roomPose) {
-        float[] local = ArPlacement.toRoom(poseArray(roomPose), point);
-        if (!ArPlacement.insideRoomArea(local[0], local[2], room.zone, room.discoverRadius)) return false;
-        float ownDistance = (float) Math.hypot(local[0], local[2]);
-        for (ArScene.Room other : scene.rooms) {
-            if (other.publicAccess || other == room) continue;
-            Anchor anchor = roomAnchors.get(other.markerId);
-            if (anchor == null) continue;
-            float[] otherLocal = ArPlacement.toRoom(poseArray(anchor.getPose()), point);
-            if (other.zone.size() >= 3 && ArPlacement.pointInPolygon(otherLocal[0], otherLocal[2], other.zone)) return false;
-            // Without a drawn zone, stay nearer this room's marker than any private room's.
-            if (other.zone.size() < 3 && Math.hypot(otherLocal[0], otherLocal[2]) < ownDistance) return false;
-        }
-        return true;
     }
 
     // ---- Taps ----
 
-    private void handleTap(Frame frame, float x, float y, List<Draw> draws, float[] viewProjection,
-                           float[] cameraPoint, ArScene.Room room, Anchor roomAnchor) {
-        if (mode == MODE_SURFACE || mode == MODE_ZONE) {
-            if (room == null || roomAnchor == null) {
-                toast("Scan this room's marker card first.");
-                return;
-            }
-            HitResult hit = surfaceHit(frame, x, y, mode == MODE_ZONE);
-            if (hit == null) {
-                toast(mode == MODE_ZONE ? "Point at the floor until a ring appears." : "Point at a wall, table or floor until a ring appears.");
-                return;
-            }
-            float[] roomPose = poseArray(roomAnchor.getPose());
-            if (mode == MODE_ZONE) {
-                float[] local = ArPlacement.toRoom(roomPose, hit.getHitPose().getTranslation());
-                room.zone.add(new float[] {local[0], local[2]});
-                runOnUiThread(this::saveScene);
-                return;
-            }
-            Pose world = placementPose(hit, cameraPoint);
-            ArScene.Item item = pendingItem;
-            item.roomId = room.id;
-            item.pose = ArPlacement.compose(ArPlacement.inverse(roomPose), poseArray(world));
-            if (!scene.items.contains(item)) scene.items.add(item);
-            pendingItem = null;
-            mode = MODE_NONE;
-            runOnUiThread(() -> {
-                setPlacementBar(false, null);
-                saveScene();
-                toast("Placed in " + room.name + ".");
-            });
-            return;
-        }
+    private void handleTap(float x, float y, List<Draw> draws, float[] viewProjection) {
         Draw picked = null;
         for (Draw draw : draws) {
             if (draw.itemId == null || !draw.contains(x, y, viewProjection, viewportWidth, viewportHeight)) continue;
@@ -1044,71 +744,11 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         for (ArScene.Item item : scene.items) {
             if (item.id.equals(picked.itemId)) {
                 // Like walking up to it: a tapped bubble counts as found.
-                if (freeRoam && discovered.add(item.id)) runOnUiThread(() -> onDiscovered(item));
+                if (discovered.add(item.id)) runOnUiThread(() -> onDiscovered(item));
                 runOnUiThread(() -> showItem(item));
                 return;
             }
         }
-    }
-
-    /** A surface hit for placement: a real plane, or a depth/feature point on an undetected wall. */
-    private HitResult surfaceHit(Frame frame, float x, float y, boolean floorOnly) {
-        for (HitResult hit : frame.hitTest(x, y)) {
-            Trackable trackable = hit.getTrackable();
-            if (trackable instanceof Plane) {
-                Plane plane = (Plane) trackable;
-                if (!plane.isPoseInPolygon(hit.getHitPose())) continue;
-                if (floorOnly && plane.getType() != Plane.Type.HORIZONTAL_UPWARD_FACING) continue;
-                return hit;
-            }
-            if (!floorOnly && (trackable instanceof DepthPoint || trackable instanceof Point)) return hit;
-        }
-        return null;
-    }
-
-    /** Photos sit flat on walls; on a floor or table they stand upright, facing the author. */
-    private Pose placementPose(HitResult hit, float[] cameraPoint) {
-        Pose hitPose = hit.getHitPose();
-        float[] p = hitPose.getTranslation();
-        Trackable trackable = hit.getTrackable();
-        if (trackable instanceof Plane && ((Plane) trackable).getType() == Plane.Type.VERTICAL) {
-            float[] normal = hitPose.getYAxis();
-            float yaw = (float) Math.atan2(normal[0], normal[2]);
-            return new Pose(new float[] {p[0] + normal[0] * 0.02f, p[1], p[2] + normal[2] * 0.02f}, ArPlacement.yawQuaternion(yaw));
-        }
-        float yaw = ArPlacement.yawTowards(p[0], p[2], cameraPoint[0], cameraPoint[2]);
-        if (trackable instanceof Plane) {
-            float lift = cameraPoint[1] - p[1] > ArPlacement.FLOOR_DROP ? 1.4f : 0.35f;
-            return new Pose(new float[] {p[0], p[1] + lift, p[2]}, ArPlacement.yawQuaternion(yaw));
-        }
-        return new Pose(p, ArPlacement.yawQuaternion(yaw));
-    }
-
-    /** Freezes the aligned before/after photo where the author is standing and looking. */
-    private void finishRephoto(Pose cameraPose, float projectionXScale, ArScene.Room room, Anchor roomAnchor) {
-        ArScene.Item item = pendingItem;
-        if (item == null) return;
-        if (room == null || roomAnchor == null) {
-            toast("Scan this room's marker card first.");
-            return;
-        }
-        float fraction = ArPlacement.fitCenterWidthFraction(viewportWidth, viewportHeight, rephotoAspect);
-        Pose photo = cameraPose.compose(Pose.makeTranslation(0f, 0f, -rephotoDistance));
-        float[] inverseRoom = ArPlacement.inverse(poseArray(roomAnchor.getPose()));
-        item.roomId = room.id;
-        item.widthMeters = ArPlacement.rephotoWidth(rephotoDistance, projectionXScale, fraction);
-        item.pose = ArPlacement.compose(inverseRoom, poseArray(photo));
-        item.viewpoint = ArPlacement.compose(inverseRoom, poseArray(cameraPose));
-        if (!scene.items.contains(item)) scene.items.add(item);
-        pendingItem = null;
-        mode = MODE_NONE;
-        runOnUiThread(() -> {
-            alignOverlay.setVisibility(View.GONE);
-            distanceSlider.setVisibility(View.GONE);
-            setPlacementBar(false, null);
-            saveScene();
-            toast("Before/after photo anchored in " + room.name + ".");
-        });
     }
 
     // ---- Status ----
@@ -1124,42 +764,19 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
     }
 
-    private String statusText(ArScene.Room room) {
-        if (freeRoam) {
-            int found = discovered.size();
-            int total = 0;
-            for (ArScene.Item item : scene.items) if (visible(item)) total++;
-            return found >= total && total > 0
-                ? "You found all " + total + ". Thank you for learning with us!"
-                : found + " of " + total + " found · turn around to find more";
-        }
-        if (room == null) {
-            if (lastMarkerId != null) return authorMode ? "New marker: name this room to start." : "This marker isn't set up yet.";
-            return "Point the camera at a " + scene.title + " marker card.";
-        }
-        int found = 0;
-        int hidden = 0;
-        for (ArScene.Item item : scene.items) {
-            if (!visible(item) || !ArScene.PLACEMENT_DISCOVER.equals(item.placement)) continue;
-            if (!item.roomId.isEmpty() && !item.roomId.equals(room.id)) continue;
-            if (discovered.contains(item.id)) found++;
-            else hidden++;
-        }
-        String counts = room.publicAccess && found + hidden > 0 ? " · " + found + " found, " + hidden + " to discover" : "";
-        return room.name + (room.outdoor ? " (outside)" : "") + (room.publicAccess ? "" : " · private") + counts;
+    private String statusText() {
+        int found = discovered.size();
+        int total = 0;
+        for (ArScene.Item item : scene.items) if (visible(item)) total++;
+        return found >= total && total > 0
+            ? "You found all " + total + ". Thank you for learning with us!"
+            : found + " of " + total + " found · turn around to find more";
     }
 
-    private String hintText(ArScene.Room room, boolean nearViewpoint) {
-        if (mode == MODE_SURFACE) return "Aim the ring at a wall, table or floor, then tap to place.";
-        if (mode == MODE_ZONE) return "Tap the floor at each corner of the open, walkable area. Prompts only appear inside it.";
-        if (mode == MODE_REPHOTO) return "Stand where the photo was taken and line it up with the scene, then tap Anchor.";
-        if (nearViewpoint) return "You're standing where this photo was taken. Slide to compare then and now.";
-        if (freeRoam) {
-            String turn = directionHint();
-            if (turn != null) return turn;
-            return discovered.isEmpty() ? "Walk up to a bubble or tap it" : "";
-        }
-        return "";
+    private String hintText() {
+        String turn = directionHint();
+        if (turn != null) return turn;
+        return discovered.isEmpty() ? "Walk up to a bubble or tap it" : "";
     }
 
     private void postStatus(String text, String hintValue) {
@@ -1172,7 +789,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             status.setText(text);
             hint.setText(hintValue);
             hint.setVisibility(hintValue.isEmpty() ? View.GONE : View.VISIBLE);
-            if (freeRoam && progressFill != null) {
+            if (progressFill != null) {
                 int total = 0;
                 for (ArScene.Item item : scene.items) if (visible(item)) total++;
                 float share = total == 0 ? 0f : Math.min(1f, discovered.size() / (float) total);
@@ -1181,12 +798,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 progressFill.setLayoutParams(params);
             }
         });
-    }
-
-    private void setCompareVisible(boolean visible) {
-        if (visible == compareVisible) return;
-        compareVisible = visible;
-        runOnUiThread(() -> compareBar.setVisibility(visible ? View.VISIBLE : View.GONE));
     }
 
     // ---- UI ----
@@ -1213,12 +824,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             return true;
         });
         root.addView(surface, new FrameLayout.LayoutParams(-1, -1));
-
-        alignOverlay = new ImageView(this);
-        alignOverlay.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        alignOverlay.setAlpha(0.5f);
-        alignOverlay.setVisibility(View.GONE);
-        root.addView(alignOverlay, new FrameLayout.LayoutParams(-1, -1));
 
         // Top: a round close button and a translucent capsule with the
         // place's name, how many bubbles are found and a thin progress bar;
@@ -1255,22 +860,11 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         bar.addView(progressFill, new FrameLayout.LayoutParams(0, dp(4)));
         LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(-1, dp(4));
         barParams.topMargin = dp(6);
-        bar.setVisibility(freeRoam ? View.VISIBLE : View.GONE);
         capsule.addView(bar, barParams);
         LinearLayout.LayoutParams capsuleParams = new LinearLayout.LayoutParams(0, -2, 1f);
         capsuleParams.leftMargin = dp(10);
         titleRow.addView(capsule, capsuleParams);
         top.addView(titleRow);
-        // Layer filters belong to the walk-through; free roam doesn't need them.
-        if (!freeRoam) {
-            LinearLayout chips = row();
-            chips.setPadding(0, 0, 0, dp(6));
-            for (String layer : ArScene.LAYERS) chips.addView(layerChip(layer));
-            HorizontalScrollView chipScroll = new HorizontalScrollView(this);
-            chipScroll.setHorizontalScrollBarEnabled(false);
-            chipScroll.addView(chips);
-            top.addView(chipScroll);
-        }
         hint = text(14, true);
         hint.setSingleLine(true);
         hint.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
@@ -1280,9 +874,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-2, -2);
         hintParams.gravity = Gravity.CENTER_HORIZONTAL;
         hintParams.topMargin = dp(10);
-        // Free-roam bubbles float at eye level, near the top of the view, so
-        // there the hint sits at the bottom instead of over them.
-        if (!freeRoam) top.addView(hint, hintParams);
         root.addView(top, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
 
         foundPill = text(14, true);
@@ -1295,7 +886,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
         LinearLayout bottom = column();
         bottom.setPadding(dp(12), dp(8), dp(12), dp(28));
-        if (freeRoam) {
+        // Bubbles float at eye level, near the top of the view, so the hint
+        // sits at the bottom instead of over them.
+        {
             bottom.addView(hint, hintParams);
             // The shutter: saves what the camera sees, bubbles and all, to Photos.
             ImageView shutter = new ImageView(this);
@@ -1312,30 +905,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             shutterParams.topMargin = dp(12);
             bottom.addView(shutter, shutterParams);
         }
-
-        compareBar = row();
-        compareBar.setVisibility(View.GONE);
-        compareBar.setBackground(rounded(Color.argb(190, 0, 0, 0)));
-        compareBar.setPadding(dp(12), dp(8), dp(12), dp(8));
-        compareBar.addView(text(14, true, "Now"));
-        SeekBar compare = new SeekBar(this);
-        compare.setMax(100);
-        compare.setProgress(85);
-        compare.setOnSeekBarChangeListener(seek(value -> beforeAfter = value / 100f));
-        compareBar.addView(compare, new LinearLayout.LayoutParams(0, -2, 1f));
-        compareBar.addView(text(14, true, "Then"));
-        bottom.addView(compareBar, matchWrap());
-
-        distanceSlider = new SeekBar(this);
-        distanceSlider.setMax(70);
-        distanceSlider.setProgress(20);
-        distanceSlider.setVisibility(View.GONE);
-        distanceSlider.setOnSeekBarChangeListener(seek(value -> {
-            synchronized (lock) {
-                rephotoDistance = 1f + value / 10f;
-            }
-        }));
-        bottom.addView(distanceSlider, matchWrap());
 
         // The card a bubble opens into, centred over the dimmed camera view:
         // coloured kicker, title, the whole photo (tap to zoom), readable
@@ -1420,21 +989,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         captionParams.setMargins(dp(14), 0, dp(14), dp(56));
         photoViewer.addView(photoCaption, captionParams);
 
-        placementBar = row();
-        placementBar.setVisibility(View.GONE);
-        bottom.addView(placementBar);
-
-        authorBar = row();
-        authorBar.setVisibility(authorMode ? View.VISIBLE : View.GONE);
-        authorBar.addView(button("Photo", v -> pick(PICK_PHOTO, "image/*")));
-        authorBar.addView(button("Before/after", v -> pick(PICK_REPHOTO, "image/*")));
-        authorBar.addView(button("Prompt", v -> showPromptDialog()));
-        authorBar.addView(button("Zone", v -> startZone()));
-        authorBar.addView(button("More", v -> showMoreMenu()));
-        HorizontalScrollView authorScroll = new HorizontalScrollView(this);
-        authorScroll.addView(authorBar);
-        bottom.addView(authorScroll);
-
         root.addView(bottom, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
         keepAboveNavigationBar(bottom);
         root.addView(infoPanel, new FrameLayout.LayoutParams(-1, -1));
@@ -1491,30 +1045,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         status.setText("Starting camera…");
     }
 
-    private View layerChip(String layer) {
-        TextView chip = text(13, true, ArCards.layerLabel(layer));
-        chip.setPadding(dp(12), dp(6), dp(12), dp(6));
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, -2);
-        params.setMargins(0, dp(8), dp(8), 0);
-        chip.setLayoutParams(params);
-        int color = ArCards.layerColor(layer);
-        Runnable paint = () -> {
-            boolean on = enabledLayers.contains(layer);
-            GradientDrawable background = rounded(on ? color : Color.argb(120, 60, 60, 60));
-            chip.setBackground(background);
-            chip.setTextColor(on ? Color.BLACK : Color.LTGRAY);
-            chip.setContentDescription(ArCards.layerLabel(layer) + (on ? ", shown" : ", hidden"));
-        };
-        paint.run();
-        chip.setOnClickListener(v -> {
-            synchronized (lock) {
-                if (!enabledLayers.remove(layer)) enabledLayers.add(layer);
-            }
-            paint.run();
-        });
-        return chip;
-    }
-
     private void showItem(ArScene.Item item) {
         showInfoImage(item);
         infoChoices.removeAllViews();
@@ -1530,40 +1060,13 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (!item.pronunciation.isEmpty()) body.append(body.length() > 0 ? "\n" : "").append("say: ").append(item.pronunciation);
         if (!item.meaning.isEmpty()) body.append(body.length() > 0 ? "\n" : "").append(item.meaning);
         if (!item.caption.isEmpty()) body.append(body.length() > 0 ? "\n\n" : "").append(item.caption);
-        ArScene.Room room = scene.room(item.roomId);
-        if (authorMode) body.append("\n\n[").append(ArCards.layerLabel(item.layer)).append(" · ")
-            .append(item.placement).append(room == null ? "" : " · " + room.name).append("]");
         infoText.setText(body);
         infoText.setVisibility(body.length() > 0 ? View.VISIBLE : View.GONE);
         setCredit(item);
         infoActions.removeAllViews();
         if (!item.audio.isEmpty()) infoActions.addView(button("Play", v -> playAudio(item)));
-        if (authorMode) {
-            infoActions.addView(button("Edit", v -> showItemDialog(item, false, null)));
-            if (!ArScene.PLACEMENT_DISCOVER.equals(item.placement)) {
-                infoActions.addView(button("Move", v -> {
-                    infoPanel.setVisibility(View.GONE);
-                    if (ArScene.KIND_REPHOTO.equals(item.kind)) startRephoto(item);
-                    else startSurfacePlacement(item);
-                }));
-            }
-            infoActions.addView(button("Delete", v -> new AlertDialog.Builder(this)
-                .setMessage("Remove \"" + heading + "\" from the AR scene?")
-                .setPositiveButton("Remove", (d, w) -> {
-                    synchronized (lock) {
-                        scene.items.remove(item);
-                        Anchor anchor = discoverAnchors.remove(item.id);
-                        if (anchor != null) anchor.detach();
-                    }
-                    infoPanel.setVisibility(View.GONE);
-                    saveScene();
-                })
-                .setNegativeButton("Cancel", null)
-                .show()));
-        }
         infoActions.addView(doneButton());
         infoPanel.setVisibility(View.VISIBLE);
-        if (!item.audio.isEmpty() && !ArScene.PLACEMENT_DISCOVER.equals(item.placement)) playAudio(item);
     }
 
     /** "MEET SOMEONE", "LANGUAGE", "ON THIS SITE"…: what kind of bubble this is, in its colour. */
@@ -1782,7 +1285,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private void showInfoImage(ArScene.Item item) {
         infoImageFrame.setVisibility(View.GONE);
         infoImage.setImageDrawable(null);
-        String source = freeRoam ? item.image : (item.image.isEmpty() ? item.figure : item.image);
+        String source = item.image;
         infoImageSource = source;
         if (source.isEmpty()) return;
         infoImage.setTag(item.id);
@@ -1875,296 +1378,11 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private void onDiscovered(ArScene.Item item) {
         vibrateConfirm();
         String name = item.word.isEmpty() ? (item.title.isEmpty() ? "a story" : item.title) : item.word;
-        if (freeRoam) showFound("✨ You found " + name.replaceFirst("^(Nearby: |Meet )", ""));
-        else toast("You found " + name + ".");
+        showFound("✨ You found " + name.replaceFirst("^(Nearby: |Meet )", ""));
         if (!item.audio.isEmpty()) playAudio(item);
     }
 
-    // ---- Authoring ----
-
-    private void showRoomDialog(String markerId, ArScene.Room existing) {
-        LinearLayout form = formLayout();
-        EditText name = field(form, "Room name (e.g. Kitchen, Front porch)", existing == null ? "" : existing.name);
-        CheckBox open = check(form, "Open to visitors (prompts can be discovered here)", existing == null || existing.publicAccess);
-        CheckBox outdoor = check(form, "Outdoors", existing != null && existing.outdoor);
-        new AlertDialog.Builder(this)
-            .setTitle(existing == null ? "Marker " + markerId.replace("marker-", "#") + " found" : "Edit room")
-            .setView(form)
-            .setPositiveButton("Save", (d, w) -> {
-                synchronized (lock) {
-                    ArScene.Room room = existing;
-                    if (room == null) {
-                        room = new ArScene.Room();
-                        room.id = ArScene.newId("room");
-                        room.markerId = markerId;
-                        scene.rooms.add(room);
-                    }
-                    room.name = name.getText().toString().trim().isEmpty() ? "Room " + markerId.replace("marker-", "") : name.getText().toString().trim();
-                    room.publicAccess = open.isChecked();
-                    room.outdoor = outdoor.isChecked();
-                }
-                saveScene();
-            })
-            .setNegativeButton("Later", null)
-            .show();
-    }
-
-    private void showItemDialog(ArScene.Item item, boolean isNew, Runnable afterSave) {
-        LinearLayout form = formLayout();
-        boolean prompt = ArScene.KIND_PHRASE.equals(item.kind) || ArScene.KIND_AUDIO.equals(item.kind);
-        RadioGroup layers = new RadioGroup(this);
-        layers.setOrientation(RadioGroup.HORIZONTAL);
-        String[] choices = prompt
-            ? new String[] {ArScene.LAYER_LANGUAGE, ArScene.LAYER_AUDIO}
-            : new String[] {ArScene.LAYER_FAMILY, ArScene.LAYER_ARCHIVAL};
-        for (String layer : choices) {
-            RadioButton radio = new RadioButton(this);
-            radio.setText(ArCards.layerLabel(layer));
-            radio.setTag(layer);
-            radio.setId(View.generateViewId());
-            layers.addView(radio);
-            if (layer.equals(item.layer)) layers.check(radio.getId());
-        }
-        if (layers.getCheckedRadioButtonId() == -1) layers.check(layers.getChildAt(0).getId());
-        form.addView(layers);
-        EditText title = field(form, prompt ? "Title (shown in lists)" : "Title", item.title);
-        EditText word = prompt ? field(form, "Word or phrase (community-approved)", item.word) : null;
-        EditText say = prompt ? field(form, "Pronunciation guide", item.pronunciation) : null;
-        EditText meaning = prompt ? field(form, "Meaning in English", item.meaning) : null;
-        EditText caption = field(form, "Caption or story", item.caption);
-        caption.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        caption.setMinLines(2);
-        EditText credit = field(form, "Credit / source", item.credit);
-        CheckBox discover = prompt ? check(form, "Discoverable: auto-place on open surfaces in public rooms", ArScene.PLACEMENT_DISCOVER.equals(item.placement)) : null;
-        CheckBox thisRoomOnly = prompt ? check(form, "Only in the room I'm in now", !item.roomId.isEmpty()) : null;
-        CheckBox addAudio = prompt && isNew ? check(form, "Attach an audio file next", false) : null;
-        new AlertDialog.Builder(this)
-            .setTitle(isNew ? (prompt ? "New prompt" : "New photo") : "Edit")
-            .setView(form)
-            .setPositiveButton(isNew ? "Next" : "Save", (d, w) -> {
-                synchronized (lock) {
-                    View checked = layers.findViewById(layers.getCheckedRadioButtonId());
-                    item.layer = (String) checked.getTag();
-                    item.title = title.getText().toString().trim();
-                    item.caption = caption.getText().toString().trim();
-                    item.credit = credit.getText().toString().trim();
-                    if (prompt) {
-                        item.word = word.getText().toString().trim();
-                        item.pronunciation = say.getText().toString().trim();
-                        item.meaning = meaning.getText().toString().trim();
-                        item.placement = discover.isChecked() ? ArScene.PLACEMENT_DISCOVER : ArScene.PLACEMENT_ANCHORED;
-                        if (discover.isChecked()) {
-                            ArScene.Room room = lastMarkerId == null ? null : scene.roomForMarker(lastMarkerId);
-                            item.roomId = thisRoomOnly.isChecked() && room != null ? room.id : "";
-                            item.pose = null;
-                        }
-                    }
-                }
-                invalidateTextures(item);
-                if (afterSave != null) afterSave.run();
-                else if (ArScene.PLACEMENT_ANCHORED.equals(item.placement) && item.pose == null) startSurfacePlacement(item);
-                else saveScene();
-                if (addAudio != null && addAudio.isChecked()) {
-                    awaitingAudioFor = item;
-                    pick(PICK_AUDIO, "audio/*");
-                }
-            })
-            .setNegativeButton("Cancel", null)
-            .show();
-    }
-
-    private void showPromptDialog() {
-        new AlertDialog.Builder(this)
-            .setTitle("Add a prompt")
-            .setItems(new CharSequence[] {"Language word or phrase", "Audio clip"}, (d, which) -> {
-                ArScene.Item item = new ArScene.Item();
-                item.id = ArScene.newId("item");
-                item.kind = which == 0 ? ArScene.KIND_PHRASE : ArScene.KIND_AUDIO;
-                item.layer = which == 0 ? ArScene.LAYER_LANGUAGE : ArScene.LAYER_AUDIO;
-                item.placement = ArScene.PLACEMENT_DISCOVER;
-                showItemDialog(item, true, () -> {
-                    if (ArScene.PLACEMENT_DISCOVER.equals(item.placement)) {
-                        synchronized (lock) {
-                            scene.items.add(item);
-                        }
-                        saveScene();
-                        toast("Saved. It will appear on an open surface in a public room.");
-                    } else {
-                        startSurfacePlacement(item);
-                    }
-                });
-            })
-            .show();
-    }
-
-    private void startSurfacePlacement(ArScene.Item item) {
-        synchronized (lock) {
-            pendingItem = item;
-            mode = MODE_SURFACE;
-        }
-        setPlacementBar(true, null);
-    }
-
-    private void startRephoto(ArScene.Item item) {
-        Bitmap photo = decodeImage(item.image, 1600);
-        if (photo == null) {
-            toast("Couldn't open that photo.");
-            return;
-        }
-        synchronized (lock) {
-            pendingItem = item;
-            mode = MODE_REPHOTO;
-            rephotoAspect = photo.getHeight() / (float) photo.getWidth();
-        }
-        alignOverlay.setImageBitmap(photo);
-        alignOverlay.setVisibility(View.VISIBLE);
-        distanceSlider.setVisibility(View.VISIBLE);
-        setPlacementBar(true, button("Anchor", v -> {
-            synchronized (lock) {
-                anchorRephotoRequested = true;
-            }
-        }));
-        toast("Slider sets how far away the scene is (1–8 m).");
-    }
-
-    private void startZone() {
-        synchronized (lock) {
-            ArScene.Room room = lastMarkerId == null ? null : scene.roomForMarker(lastMarkerId);
-            if (room == null) {
-                toast("Scan and name this room's marker first.");
-                return;
-            }
-            mode = MODE_ZONE;
-        }
-        setPlacementBar(true, button("Clear", v -> {
-            synchronized (lock) {
-                ArScene.Room room = scene.roomForMarker(lastMarkerId);
-                if (room != null) room.zone.clear();
-            }
-            saveScene();
-        }));
-    }
-
-    private void setPlacementBar(boolean show, Button extra) {
-        placementBar.removeAllViews();
-        if (show) {
-            if (extra != null) placementBar.addView(extra);
-            placementBar.addView(button("Done", v -> {
-                synchronized (lock) {
-                    mode = MODE_NONE;
-                    pendingItem = null;
-                }
-                alignOverlay.setVisibility(View.GONE);
-                distanceSlider.setVisibility(View.GONE);
-                setPlacementBar(false, null);
-            }));
-        }
-        placementBar.setVisibility(show ? View.VISIBLE : View.GONE);
-        authorBar.setVisibility(!show && authorMode ? View.VISIBLE : View.GONE);
-    }
-
-    private void showMoreMenu() {
-        new AlertDialog.Builder(this)
-            .setItems(new CharSequence[] {"Edit this room", "Export scene (.zip)", "Import scene (.zip)", "Reset to the bundled scene"}, (d, which) -> {
-                if (which == 0) {
-                    ArScene.Room room = lastMarkerId == null ? null : scene.roomForMarker(lastMarkerId);
-                    if (room == null) toast("Scan a room's marker first.");
-                    else showRoomDialog(room.markerId, room);
-                } else if (which == 1) {
-                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
-                        .setType("application/zip").putExtra(Intent.EXTRA_TITLE, scene.siteId + "-ar-scene.zip");
-                    startActivityForResult(intent, EXPORT_SCENE);
-                } else if (which == 2) {
-                    pick(IMPORT_SCENE, "application/zip");
-                } else {
-                    new AlertDialog.Builder(this)
-                        .setMessage("Discard every room, photo and prompt authored on this phone?")
-                        .setPositiveButton("Discard", (d2, w2) -> {
-                            store.resetToBundled();
-                            reloadScene();
-                        })
-                        .setNegativeButton("Cancel", null)
-                        .show();
-                }
-            })
-            .show();
-    }
-
-    private void pick(int request, String mime) {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime);
-        startActivityForResult(intent, request);
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
-        Uri uri = data.getData();
-        try {
-            if (requestCode == PICK_PHOTO || requestCode == PICK_REPHOTO) {
-                ArScene.Item item = new ArScene.Item();
-                item.id = ArScene.newId("item");
-                item.kind = requestCode == PICK_REPHOTO ? ArScene.KIND_REPHOTO : ArScene.KIND_PHOTO;
-                item.layer = ArScene.LAYER_FAMILY;
-                item.image = importPhoto(uri, item.id);
-                showItemDialog(item, true, () -> {
-                    if (requestCode == PICK_REPHOTO) startRephoto(item);
-                    else startSurfacePlacement(item);
-                });
-            } else if (requestCode == PICK_AUDIO && awaitingAudioFor != null) {
-                ArScene.Item item = awaitingAudioFor;
-                awaitingAudioFor = null;
-                String name = item.id + ".audio";
-                try (InputStream in = getContentResolver().openInputStream(uri);
-                     OutputStream out = new FileOutputStream(store.mediaFile(name))) {
-                    ArScene.copy(in, out);
-                }
-                synchronized (lock) {
-                    item.audio = name;
-                }
-                invalidateTextures(item);
-                saveScene();
-                toast("Audio attached.");
-            } else if (requestCode == EXPORT_SCENE) {
-                try (OutputStream out = getContentResolver().openOutputStream(uri)) {
-                    synchronized (lock) {
-                        store.exportZip(scene, out);
-                    }
-                }
-                toast("Scene exported.");
-            } else if (requestCode == IMPORT_SCENE) {
-                try (InputStream in = getContentResolver().openInputStream(uri)) {
-                    store.importZip(in);
-                }
-                reloadScene();
-                toast("Scene imported.");
-            }
-        } catch (Exception error) {
-            toast("That didn't work: " + error.getMessage());
-        }
-    }
-
-    /** Copies a picked photo into app storage as a JPEG no larger than 2048 px. */
-    private String importPhoto(Uri uri, String id) throws Exception {
-        BitmapFactory.Options bounds = new BitmapFactory.Options();
-        bounds.inJustDecodeBounds = true;
-        try (InputStream in = getContentResolver().openInputStream(uri)) {
-            BitmapFactory.decodeStream(in, null, bounds);
-        }
-        BitmapFactory.Options options = new BitmapFactory.Options();
-        options.inSampleSize = sampleSize(bounds, 2048);
-        Bitmap bitmap;
-        try (InputStream in = getContentResolver().openInputStream(uri)) {
-            bitmap = BitmapFactory.decodeStream(in, null, options);
-        }
-        if (bitmap == null) throw new IllegalArgumentException("not an image");
-        String name = id + ".jpg";
-        File file = store.mediaFile(name);
-        try (OutputStream out = new FileOutputStream(file)) {
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 88, out);
-        }
-        return name;
-    }
+    // ---- Media ----
 
     private Bitmap decodeImage(String image, int maxSide) {
         if (image == null || image.isEmpty()) return null;
@@ -2186,8 +1404,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     private InputStream openMedia(String name) throws Exception {
         if (name.startsWith("asset:")) return getAssets().open(name.substring(6));
-        if (name.startsWith("https://")) return new java.io.FileInputStream(cachedDownload(name));
-        return new java.io.FileInputStream(store.mediaFile(name));
+        return new java.io.FileInputStream(cachedDownload(name));
     }
 
     /** A web image (a place photo, a guide figure), downloaded once into the app's cache. */
@@ -2222,34 +1439,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         return sample;
     }
 
-    private void saveScene() {
-        if (freeRoam) return;  // nearby bubbles come fresh from the web app each time
-        try {
-            synchronized (lock) {
-                store.save(scene);
-            }
-        } catch (Exception error) {
-            toast("Couldn't save: " + error.getMessage());
-        }
-    }
-
-    private void reloadScene() {
-        try {
-            ArScene fresh = store.load();
-            synchronized (lock) {
-                scene = fresh;
-                for (Anchor anchor : discoverAnchors.values()) anchor.detach();
-                discoverAnchors.clear();
-                discoverLift.clear();
-                discoverRoom.clear();
-                discovered.clear();
-                loading.clear();
-            }
-        } catch (Exception error) {
-            toast("Couldn't load the scene: " + error.getMessage());
-        }
-    }
-
     // ---- Audio ----
 
     private void playAudio(ArScene.Item item) {
@@ -2263,12 +1452,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 player.prepareAsync();
                 return;
             }
-            if (item.audio.startsWith("asset:")) {
-                try (AssetFileDescriptor fd = getAssets().openFd(item.audio.substring(6))) {
-                    player.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
-                }
-            } else {
-                player.setDataSource(store.mediaFile(item.audio).getAbsolutePath());
+            try (AssetFileDescriptor fd = getAssets().openFd(item.audio.replaceFirst("^asset:", ""))) {
+                player.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
             }
             player.setOnCompletionListener(MediaPlayer::release);
             player.prepare();
@@ -2394,41 +1579,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         return drawable;
     }
 
-    private LinearLayout formLayout() {
-        LinearLayout form = column();
-        form.setPadding(dp(20), dp(8), dp(20), 0);
-        return form;
-    }
-
-    private EditText field(LinearLayout form, String label, String value) {
-        EditText field = new EditText(this);
-        field.setHint(label);
-        field.setText(value);
-        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        form.addView(field, new ViewGroup.LayoutParams(-1, -2));
-        return field;
-    }
-
-    private CheckBox check(LinearLayout form, String label, boolean checked) {
-        CheckBox box = new CheckBox(this);
-        box.setText(label);
-        box.setChecked(checked);
-        form.addView(box);
-        return box;
-    }
-
-    private interface IntListener {
-        void onValue(int value);
-    }
-
-    private static SeekBar.OnSeekBarChangeListener seek(IntListener listener) {
-        return new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar bar, int value, boolean fromUser) { listener.onValue(value); }
-            @Override public void onStartTrackingTouch(SeekBar bar) {}
-            @Override public void onStopTrackingTouch(SeekBar bar) {}
-        };
-    }
-
     /** One textured quad to draw this frame. */
     private static final class Draw {
         String itemId;
@@ -2452,14 +1602,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         static Draw billboard(String itemId, float[] point, Pose cameraPose, String texture, float width, float height, float alpha, float distance) {
             Pose pose = new Pose(point, cameraPose.getRotationQuaternion());
             return posed(itemId, pose, texture, width, height, alpha, distance);
-        }
-
-        /** Lies flat on the floor (the unit quad's +Z turned to world up). */
-        static Draw flat(Pose pose, String texture, float size, float alpha, float distance) {
-            Pose flat = new Pose(pose.getTranslation(), new float[] {0, 0, 0, 1})
-                .compose(Pose.makeRotation((float) -Math.sin(Math.PI / 4), 0f, 0f, (float) Math.cos(Math.PI / 4)));
-            Draw draw = posed(null, flat, texture, size, size, alpha, distance);
-            return draw;
         }
 
         boolean contains(float x, float y, float[] viewProjection, int width, int height) {
