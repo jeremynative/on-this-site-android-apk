@@ -1424,10 +1424,13 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (freeRoam) {
             bottom.addView(hint, hintParams);
             // The shutter: saves what the camera sees, bubbles and all, to Photos.
-            View shutter = new View(this);
-            GradientDrawable ring = oval(Color.argb(90, 255, 255, 255));
+            ImageView shutter = new ImageView(this);
+            GradientDrawable ring = oval(Color.argb(120, 20, 26, 23));
             ring.setStroke(dp(4), Color.WHITE);
             shutter.setBackground(ring);
+            shutter.setImageResource(R.drawable.ic_ar_camera);
+            shutter.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            shutter.setPadding(dp(19), dp(19), dp(19), dp(19));
             shutter.setContentDescription("Take a photo");
             shutter.setOnClickListener(v -> takeArPhoto());
             LinearLayout.LayoutParams shutterParams = new LinearLayout.LayoutParams(dp(68), dp(68));
@@ -1587,10 +1590,16 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         photoSavedText.setPadding(dp(4), dp(12), dp(4), dp(4));
         savedCard.addView(photoSavedText, matchWrap());
         LinearLayout savedActions = row();
-        savedActions.setGravity(Gravity.END);
+        // Retake throws this photo away (out of Photos too) and goes back to the camera.
+        TextView retake = text(16, true, "Retake");
+        retake.setGravity(Gravity.CENTER);
+        retake.setPadding(dp(14), dp(12), dp(14), dp(12));
+        retake.setOnClickListener(v -> retakeArPhoto());
+        savedActions.addView(retake);
+        savedActions.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
         TextView savedDone = text(16, true, "Done");
         savedDone.setGravity(Gravity.CENTER);
-        savedDone.setPadding(dp(22), dp(12), dp(22), dp(12));
+        savedDone.setPadding(dp(16), dp(12), dp(16), dp(12));
         savedDone.setOnClickListener(v -> photoSaved.setVisibility(View.GONE));
         savedActions.addView(savedDone);
         photoShare = text(16, true, "Share");
@@ -1824,6 +1833,22 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             : "The photo couldn't be saved.");
         photoShare.setVisibility(shareable != null ? View.VISIBLE : View.GONE);
         photoSaved.setVisibility(View.VISIBLE);
+    }
+
+    /** Discards the photo just taken, from Photos too, and goes back to the camera. */
+    private void retakeArPhoto() {
+        Uri discard = photoSavedUri;
+        photoSavedUri = null;
+        photoSaved.setVisibility(View.GONE);
+        photoSavedImage.setImageDrawable(null);
+        if (discard == null) return;
+        loader.execute(() -> {
+            try {
+                getContentResolver().delete(discard, null, null);
+            } catch (RuntimeException error) {
+                android.util.Log.w("OnThisSiteAR", "Retaken photo not removed: " + error.getMessage());
+            }
+        });
     }
 
     /** The phone's share sheet: Instagram, Facebook, Messages, email; the visitor picks and posts. */
