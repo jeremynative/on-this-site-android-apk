@@ -110,7 +110,10 @@ jobs:
           if [[ -z "${MAPBOX_TOKEN:-}" ]]; then
             previous_dir="$RUNNER_TEMP/previous-apk"
             mkdir -p "$previous_dir"
-            gh release download --pattern 'on-this-site-latest.apk' --dir "$previous_dir" --clobber || true
+            # A cancelled run can leave the newest release without its APK; use the newest one that has it.
+            for tag in $(gh release list --limit 20 --json tagName --jq '.[].tagName | select(test("^apk-[0-9]+$"))'); do
+              gh release download "$tag" --pattern 'on-this-site-latest.apk' --dir "$previous_dir" --clobber && break || true
+            done
             previous_apk="$(find "$previous_dir" -name 'on-this-site-latest.apk' -print -quit)"
             if [[ -n "$previous_apk" && -f "$previous_apk" ]]; then
               MAPBOX_TOKEN="$(APK_PATH="$previous_apk" python3 -c 'import os,re,zipfile; p=os.environ.get("APK_PATH",""); pat=re.compile(rb"pk\.ey[A-Za-z0-9._-]+"); out=""; z=zipfile.ZipFile(p); [print(m.group(0).decode("ascii")) or exit(0) for n in z.namelist() if (n.endswith(".dex") or n.endswith(".html") or n.endswith(".js")) for m in [pat.search(z.read(n))] if m]')"
