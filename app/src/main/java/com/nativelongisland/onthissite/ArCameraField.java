@@ -157,6 +157,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             bubble.elevation = -4 + random.nextDouble() * 14;
             bubbles.add(bubble);
         }
+        spreadOut();
         preview = new TextureView(context);
         addView(preview, new LayoutParams(-1, -1));
         setWillNotDraw(false);
@@ -165,6 +166,50 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         labelPaint.setFakeBoldText(true);
         labelPaint.setTextSize(15 * getResources().getDisplayMetrics().scaledDensity);
         labelPaint.setShadowLayer(dp(4), 0, dp(1), Color.argb(220, 0, 0, 0));
+    }
+
+    // Bubbles closer than this (degrees across and up) would overlap.
+    private static final double MIN_APART = 15;
+
+    /**
+     * Places that lie the same way (several sites to the northwest) would
+     * pile into one unreadable cluster: each bubble keeps its direction but
+     * takes the nearest free height, moving at most 8 degrees sideways.
+     */
+    private void spreadOut() {
+        List<Bubble> placed = new ArrayList<>();
+        double[] heights = {0, 14, -12, 28, 42};
+        double[] nudges = {0, 8, -8};
+        for (Bubble bubble : bubbles) {
+            double baseBearing = bubble.bearing;
+            double bestBearing = baseBearing;
+            double bestElevation = bubble.elevation;
+            double bestGap = -1;
+            search:
+            for (double height : heights) {
+                for (double nudge : nudges) {
+                    double bearing = (baseBearing + nudge + 360) % 360;
+                    double elevation = bubble.elevation + height;
+                    double gap = Double.MAX_VALUE;
+                    for (Bubble other : placed) {
+                        gap = Math.min(gap, Math.hypot(angleBetween(other.bearing, bearing), other.elevation - elevation));
+                    }
+                    if (gap >= MIN_APART) {
+                        bestBearing = bearing;
+                        bestElevation = elevation;
+                        break search;
+                    }
+                    if (gap > bestGap) {
+                        bestGap = gap;
+                        bestBearing = bearing;
+                        bestElevation = elevation;
+                    }
+                }
+            }
+            bubble.bearing = bestBearing;
+            bubble.elevation = bestElevation;
+            placed.add(bubble);
+        }
     }
 
     /** True when bubbles sit in real directions (the device has a compass). */
