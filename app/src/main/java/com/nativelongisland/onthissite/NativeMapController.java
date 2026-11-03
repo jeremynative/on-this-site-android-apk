@@ -1689,7 +1689,7 @@ final class NativeMapController {
             }
             setSource(style, USER_LOCATION_SOURCE_ID, payload.optJSONObject("userLocation"));
             setSource(style, COMMUNITY_SOURCE_ID, payload.optJSONObject("communityContributions"));
-            setSource(style, TEMPORARY_SOURCE_ID, payload.optJSONObject("temporaryMarkers"));
+            setTemporarySource(style, payload.optJSONObject("temporaryMarkers"));
             if (!baseStateChanged) {
                 Log.d(LOG_TAG, "Applied transient native map state"
                     + ": userLocation=" + featureCount(payload.optJSONObject("userLocation"))
@@ -1727,7 +1727,7 @@ final class NativeMapController {
             }
             setSource(style, USER_LOCATION_SOURCE_ID, payload.optJSONObject("userLocation"));
             setSource(style, COMMUNITY_SOURCE_ID, payload.optJSONObject("communityContributions"));
-            setSource(style, TEMPORARY_SOURCE_ID, payload.optJSONObject("temporaryMarkers"));
+            setTemporarySource(style, payload.optJSONObject("temporaryMarkers"));
             boolean eventsUpdated = payload.has("events");
             if (eventsUpdated) {
                 setSource(style, EVENT_SOURCE_ID, payload.optJSONObject("events"));
@@ -1942,6 +1942,36 @@ final class NativeMapController {
             source.setGeoJson(FeatureCollection.fromJson(collection.toString()));
         } else {
             source.setGeoJson(FeatureCollection.fromJson(bundledTerritoryGeoJson(false)));
+        }
+    }
+
+    private String selectedLabelSlug = "";
+
+    /**
+     * Temporary markers, and while a site is selected its highlighted name:
+     * that site's ordinary label is hidden so the name doesn't show twice.
+     */
+    private void setTemporarySource(Style style, JSONObject collection) throws Exception {
+        setSource(style, TEMPORARY_SOURCE_ID, collection);
+        String slug = "";
+        JSONArray features = collection == null ? null : collection.optJSONArray("features");
+        for (int i = 0; features != null && i < features.length(); i++) {
+            JSONObject properties = features.optJSONObject(i) == null ? null : features.optJSONObject(i).optJSONObject("properties");
+            if (properties != null && "selected-site".equals(properties.optString("temporary_kind"))) {
+                slug = properties.optString("native_key", "");
+            }
+        }
+        if (slug.equals(selectedLabelSlug)) return;
+        selectedLabelSlug = slug;
+        Expression notSelected = Expression.neq(Expression.coalesce(Expression.get("slug"), Expression.literal("")), Expression.literal(slug));
+        Layer pointLabels = style.getLayer("nli-site-point-labels");
+        if (pointLabels instanceof SymbolLayer) {
+            ((SymbolLayer) pointLabels).setFilter(slug.isEmpty() ? Expression.literal(true) : notSelected);
+        }
+        Layer shapeLabels = style.getLayer("nli-map-labels");
+        if (shapeLabels instanceof SymbolLayer) {
+            Expression notTerritory = Expression.neq(Expression.get("label_kind"), Expression.literal("territory"));
+            ((SymbolLayer) shapeLabels).setFilter(slug.isEmpty() ? notTerritory : Expression.all(notTerritory, notSelected));
         }
     }
 
