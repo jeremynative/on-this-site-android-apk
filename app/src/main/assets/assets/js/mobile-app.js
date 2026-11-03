@@ -15376,7 +15376,7 @@
                 </span>
               </button>
             `;
-          }).join("") || `<p class="summary">Recent posts could not be loaded right now.</p>`}
+          }).join("") || `<p class="summary">${isOfflineTextMode() ? "Blog posts load when you're back online." : "Recent posts could not be loaded right now."}</p>`}
         </section>
       `;
     }
@@ -19318,7 +19318,7 @@
               <span class="distance">Open</span>
             </button>
           `;
-        }).join("") || `<p class="summary">No published events or exhibits yet.</p>`}
+        }).join("") || `<p class="summary">${isOfflineTextMode() ? "Events and exhibits load when you're back online." : "No published events or exhibits yet."}</p>`}
         ${isAdminContributor() ? `<a class="action secondary" href="${DIRECTUS}/admin/content/calendar_events/+" target="_blank" rel="noreferrer">Add event</a>` : ""}
       `;
     }
