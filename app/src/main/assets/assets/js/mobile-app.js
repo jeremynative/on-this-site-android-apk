@@ -11159,6 +11159,7 @@
     }
 
     function contributorWritePrompt() {
+      if (isOfflineTextMode()) return "Commenting and logging in work when you're back online.";
       if (state.profile?.pending) return "Your account is waiting for review. Commenting unlocks after approval.";
       if (state.profile && !hasContributorWriteSession()) return "Log in again to comment or reply. Approved comments appear on contributor profiles.";
       return "Login to comment or reply. Approved comments appear on contributor profiles.";
@@ -11519,7 +11520,7 @@
             <div class="native-plant-sites">
               ${siteLinks.map(([slug, title]) => `<button type="button" data-slug="${escapeHtml(slug)}">${escapeHtml(title)}</button>`).join("")}
             </div>
-          ` : `<p class="summary">No approved site observations yet.</p>`}
+          ` : `<p class="summary">${isOfflineTextMode() ? "Observations load when you're back online." : "No approved site observations yet."}</p>`}
         </section>
       `;
     }
@@ -12390,7 +12391,7 @@
               ${canContribute ? `
                 <p class="plant-safety-warning plant-submit-limit-note">${escapeHtml(contributorDailyLimitMessage("plants", profile))} The first goal is 100 profile points.<span data-plant-limit-status></span></p>
                 <button class="action" type="button" data-submit-plant-report disabled>Take a plant photo first</button>
-              ` : `<p class="summary">Login as an approved contributor to submit plant observations.</p>`}
+              ` : `<p class="summary">${isOfflineTextMode() ? "Plant observations can be added when you're back online." : "Login as an approved contributor to submit plant observations."}</p>`}
             </details>
           ` : ""}
         </section>
@@ -19153,7 +19154,7 @@
               <button class="action secondary" type="button" data-profile-site="${escapeHtml(comment.site_slug || comment.source_slug || "")}">View on ${escapeHtml(comment.site_title || comment.source_title || "article")}</button>
               <p>${escapeHtml(comment.comment || "")}</p>
             </article>
-          `).join("") : `<p class="detail-meta">No approved comments yet.</p>`}
+          `).join("") : `<p class="detail-meta">${isOfflineTextMode() ? "Comments load when you're back online." : "No approved comments yet."}</p>`}
         </section>
       `;
     }
@@ -20503,7 +20504,7 @@
             </div>
           </article>
         `;
-      }).join("") : `<p class="summary">No public contributor profiles are published yet.</p>`;
+      }).join("") : `<p class="summary">${isOfflineTextMode() ? "Contributor profiles load when you're back online." : "No public contributor profiles are published yet."}</p>`;
     }
 
     function openMobileContributorProfile(profileKey) {
