@@ -22011,6 +22011,7 @@
         && !detailEl?.classList.contains("open")
         && !document.body.classList.contains("mobile-profile-map-mode")
         && !appEl?.classList.contains("mobile-search-results")
+        && !appEl?.classList.contains("panel-maximized")
         && !document.querySelector(".search-suggestions:not([hidden]), .mobile-layer-menu[open]")
         && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || ""),
       openSite: slug => void openSite(slug, { focus: true }),
