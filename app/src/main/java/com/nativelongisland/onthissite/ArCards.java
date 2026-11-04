@@ -78,7 +78,7 @@ final class ArCards {
         // community find keeps its line (who shared it) on the floating card.
         boolean community = item.id.startsWith("story-") || item.id.startsWith("plant-") || item.id.startsWith("note-");
         String hint = quiz ? "Tap to answer: what does it mean?"
-            : longText ? "Tap to read more"
+            : longText || !item.more.isEmpty() ? "Tap to read more"
             : !item.audio.isEmpty() ? "Tap to hear it again" : null;
         StaticLayout[] lines = {
             layout(tag + (item.sample ? " · TEST CARD" : ""), tagPaint, inner),
@@ -161,9 +161,9 @@ final class ArCards {
     static final int HERE_RED = 0xFFE0352B;
 
     /**
-     * "You are here": the bubbles' glowing orb in red, as a lit glass sphere, floating on a
-     * beam of light over a glowing ring at the visitor's spot (a landmark, not a flat icon),
-     * with "You are here" and the land's name beneath. Opening it reads the land in full.
+     * "You are here": the bubbles' glowing orb in red, as a lit glass sphere, over a shaded
+     * triangle pointing down at the visitor's spot like a map pin, with "You are here" and
+     * the land's name beneath. Walked up to or tapped, it opens into the land's card.
      */
     static Bitmap hereMarker(ArScene.Item item) {
         int width = 420;
@@ -171,53 +171,40 @@ final class ArCards {
         float cy = 140f;
         float glowRadius = 140f;
         float ring = glowRadius * 0.42f;
-        float groundY = 392f;
+        float tipY = cy + ring + 92f;
         TextPaint youPaint = textPaint(34, Color.WHITE, true);
         TextPaint landPaint = textPaint(30, Color.WHITE, false);
         for (TextPaint paint : new TextPaint[] {youPaint, landPaint}) paint.setShadowLayer(8, 0, 2, Color.argb(230, 0, 0, 0));
         String land = item.land.isEmpty() ? "Long Island" : item.land.replaceFirst("^On ", "");
         StaticLayout you = centred("You are here", youPaint, width - 20, 1);
         StaticLayout where = centred(land, landPaint, width - 20, 2);
-        int labelTop = Math.round(groundY) + 36;
+        int labelTop = Math.round(tipY) + 18;
         Bitmap bitmap = Bitmap.createBitmap(width, labelTop + you.getHeight() + 4 + where.getHeight() + 12, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
-        // On the ground: a soft red pool and a ring seen in perspective.
-        canvas.save();
-        canvas.translate(c, groundY);
-        canvas.scale(1f, 0.28f);
-        Paint pool = new Paint(Paint.ANTI_ALIAS_FLAG);
-        pool.setShader(new RadialGradient(0f, 0f, 120f,
-            new int[] {withAlpha(HERE_RED, 170), withAlpha(HERE_RED, 90), withAlpha(HERE_RED, 0)},
-            new float[] {0f, 0.55f, 1f}, Shader.TileMode.CLAMP));
-        canvas.drawCircle(0f, 0f, 120f, pool);
-        Paint groundRing = new Paint(Paint.ANTI_ALIAS_FLAG);
-        groundRing.setStyle(Paint.Style.STROKE);
-        groundRing.setStrokeWidth(18);
-        groundRing.setColor(Color.argb(235, 255, 255, 255));
-        canvas.drawCircle(0f, 0f, 78f, groundRing);
-        groundRing.setStrokeWidth(10);
-        groundRing.setColor(withAlpha(HERE_RED, 230));
-        canvas.drawCircle(0f, 0f, 46f, groundRing);
-        canvas.restore();
-        // A tapered beam of light from the orb down to the ring.
-        Paint beam = new Paint(Paint.ANTI_ALIAS_FLAG);
-        beam.setShader(new LinearGradient(0f, cy + ring, 0f, groundY,
-            new int[] {Color.argb(242, 255, 255, 255), withAlpha(HERE_RED, 220), withAlpha(HERE_RED, 60)},
-            new float[] {0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
-        android.graphics.Path shaft = new android.graphics.Path();
-        shaft.moveTo(c - 9, cy + ring - 4);
-        shaft.lineTo(c + 9, cy + ring - 4);
-        shaft.lineTo(c + 3, groundY);
-        shaft.lineTo(c - 3, groundY);
-        shaft.close();
-        canvas.drawPath(shaft, beam);
-        // The same glow as every orb, in red.
+        // The same glow as every orb, in red, reaching down around the point.
         Paint glow = new Paint(Paint.ANTI_ALIAS_FLAG);
         glow.setShader(new RadialGradient(c, cy, glowRadius,
             new int[] {Color.argb(255, 255, 255, 255), withAlpha(HERE_RED, 220), withAlpha(HERE_RED, 0)},
             new float[] {0f, 0.35f, 1f}, Shader.TileMode.CLAMP));
         canvas.drawCircle(c, cy, glowRadius, glow);
-        // Inside the ring, a lit sphere: light from the upper left, deeper red at the lower right.
+        // The point: a triangle under the orb, lit from the left like the sphere, rimmed in white.
+        android.graphics.Path point = new android.graphics.Path();
+        point.moveTo(c - ring * 0.8f, cy + ring * 0.55f);
+        point.lineTo(c + ring * 0.8f, cy + ring * 0.55f);
+        point.lineTo(c, tipY);
+        point.close();
+        Paint cone = new Paint(Paint.ANTI_ALIAS_FLAG);
+        cone.setShader(new LinearGradient(c - ring * 0.8f, 0f, c + ring * 0.8f, 0f,
+            new int[] {Color.rgb(255, 150, 140), HERE_RED, Color.rgb(140, 22, 18)},
+            new float[] {0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
+        canvas.drawPath(point, cone);
+        Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
+        edge.setStyle(Paint.Style.STROKE);
+        edge.setStrokeWidth(5);
+        edge.setStrokeJoin(Paint.Join.ROUND);
+        edge.setColor(Color.WHITE);
+        canvas.drawPath(point, edge);
+        // The orb over it: a lit sphere, light from the upper left, deeper red at the lower right.
         Paint sphere = new Paint(Paint.ANTI_ALIAS_FLAG);
         sphere.setShader(new RadialGradient(c - ring * 0.35f, cy - ring * 0.4f, ring * 1.4f,
             new int[] {Color.WHITE, Color.rgb(255, 170, 160), HERE_RED, Color.rgb(150, 24, 20)},
