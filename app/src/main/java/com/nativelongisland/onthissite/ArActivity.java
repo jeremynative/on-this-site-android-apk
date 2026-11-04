@@ -103,6 +103,26 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private static final float FREE_PLACE_MIN_M = 0.7f;
     private static final float FREE_UNKNOWN_M = 2.2f;
     private static final long FREE_COMPASS_WAIT_MS = 15000;
+    // "You are here" opens just ahead, below eye level, before anything else. Nearby
+    // sites rise into the sky in their real directions, one after another, far enough
+    // to read as the landscape; signs that lie the same way stack up.
+    private static final float HERE_AHEAD_M = 1.5f;
+    private static final float HERE_BELOW_EYE_M = 0.3f;
+    private static final float HERE_WIDTH_M = 0.42f;
+    private static final float SKY_DISTANCE_M = 9f;
+    private static final float SKY_HEIGHT_M = 3.2f;
+    private static final float SKY_STACK_M = 1.7f;
+    private static final float SKY_WIDTH_M = 2.1f;
+    private static final double SKY_APART_DEG = 14;
+    private static final long SKY_RISE_MS = 1300;
+    private static final long SKY_STAGGER_MS = 280;
+    private static final float SKY_RISE_FROM_M = 2.4f;
+    // Walking this far from where the signs were set out places them again around you.
+    private static final float SKY_REPLACE_M = 6f;
+    private final Map<String, Long> skyShownAt = new HashMap<>();
+    private final Map<String, float[]> skyFrom = new HashMap<>();
+    private final Map<String, Double> skyHeading = new HashMap<>();
+    private final Map<String, Integer> skyTier = new HashMap<>();
     private final ArCompass compass = new ArCompass();
     // Unopened bubbles left in another room, or lost with tracking (a dark
     // hallway makes ARCore start a new map), are let go so new ones keep
@@ -522,6 +542,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 Bitmap bitmap;
                 if (key.startsWith("card:")) {
                     bitmap = ArCards.promptCard(item, decodeImage(item.image, 900));
+                } else if (key.startsWith("here:")) {
+                    bitmap = ArCards.hereMarker(item);
+                } else if (key.startsWith("sky:")) {
+                    bitmap = ArCards.skySign(item, decodeImage(item.image, 256));
                 } else {
                     Bitmap inner = decodeImage(item.figure.isEmpty() ? item.image : item.figure, 512);
                     int color = ArCards.layerColor(item.layer);
@@ -569,9 +593,20 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (freeStartedAt == 0) freeStartedAt = now;
         double facing = ArCompass.arHeading(forward);
         if (Double.isNaN(facing)) return;  // looking straight up or down
+        // First of all, the "You are here" arrow, just ahead and below eye level.
+        ArScene.Item here = hereItem();
+        if (here != null && visible(here) && !discoverAnchors.containsKey(here.id)) {
+            discoverAnchors.put(here.id, session.createAnchor(Pose.makeTranslation(
+                cameraPoint[0] + (float) Math.sin(facing) * HERE_AHEAD_M, cameraPoint[1] - HERE_BELOW_EYE_M,
+                cameraPoint[2] - (float) Math.cos(facing) * HERE_AHEAD_M)));
+            discoverLift.put(here.id, 0f);
+            return;
+        }
         // Without a compass after a while, places are placed like the rest.
         boolean compassReady = compass.ready();
         boolean ignoreDirections = !compassReady && now - freeStartedAt > FREE_COMPASS_WAIT_MS;
+        // The signs rise once the visitor looks out (not at the floor), so the rise is seen.
+        if ((compassReady || ignoreDirections) && forward[1] > -0.6f) placeSkySigns(cameraPoint, facing, !compassReady, now);
         int waiting = 0;
         ArScene.Item ambient = null;
         ArScene.Item ahead = null;
@@ -580,6 +615,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         double[] visitor = whereNow();
         for (ArScene.Item item : scene.items) {
             if (!visible(item)) continue;
+            if (item.isHere() || item.isSky()) continue;
             if (item.hasSpot() && visitor != null) {
                 // Keeps the direction pill true as the visitor walks.
                 double[] offset = metresTo(visitor, item);
@@ -632,6 +668,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         List<float[]> taken = new ArrayList<>();
         List<Double> waitingHeadings = new ArrayList<>();
         for (Map.Entry<String, Anchor> entry : discoverAnchors.entrySet()) {
+            // The marker and the sky signs sit apart from the bubbles; they don't crowd them.
+            if (skyHeading.containsKey(entry.getKey()) || (here != null && here.id.equals(entry.getKey()))) continue;
             float[] at = entry.getValue().getPose().getTranslation();
             taken.add(at);
             if (!discovered.contains(entry.getKey())) {
@@ -668,6 +706,82 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             }
             return;
         }
+    }
+
+    private ArScene.Item hereItem() {
+        for (ArScene.Item item : scene.items) if (item.isHere()) return item;
+        return null;
+    }
+
+    /**
+     * Every nearby site at once, high up in its real direction (or, without a compass,
+     * spread across the view): each rises in turn, and signs that lie the same way stack.
+     */
+    private void placeSkySigns(float[] cameraPoint, double facing, boolean noCompass, long now) {
+        List<ArScene.Item> waiting = new ArrayList<>();
+        for (ArScene.Item item : scene.items) {
+            if (item.isSky() && visible(item) && !discoverAnchors.containsKey(item.id)) waiting.add(item);
+        }
+        for (int index = 0; index < waiting.size(); index++) {
+            ArScene.Item item = waiting.get(index);
+            double heading = noCompass
+                ? facing + Math.toRadians(waiting.size() == 1 ? 0 : -40 + 80.0 * index / (waiting.size() - 1))
+                : compass.arHeadingFor(item.bearing);
+            int tier = 0;
+            while (tier < 4 && skyTierTaken(heading, tier)) tier++;
+            float[] point = {
+                cameraPoint[0] + (float) Math.sin(heading) * SKY_DISTANCE_M,
+                cameraPoint[1] + SKY_HEIGHT_M + tier * SKY_STACK_M,
+                cameraPoint[2] - (float) Math.cos(heading) * SKY_DISTANCE_M};
+            discoverAnchors.put(item.id, session.createAnchor(Pose.makeTranslation(point[0], point[1], point[2])));
+            discoverLift.put(item.id, 0f);
+            skyShownAt.put(item.id, now + index * SKY_STAGGER_MS);
+            skyFrom.put(item.id, cameraPoint.clone());
+            skyHeading.put(item.id, heading);
+            skyTier.put(item.id, tier);
+        }
+    }
+
+    private boolean skyTierTaken(double heading, int tier) {
+        for (Map.Entry<String, Double> other : skyHeading.entrySet()) {
+            Integer otherTier = skyTier.get(other.getKey());
+            if (otherTier != null && otherTier == tier
+                && Math.abs(Math.toDegrees(angleBetween(heading, other.getValue()))) < SKY_APART_DEG) return true;
+        }
+        return false;
+    }
+
+    /**
+     * The marker bounces gently over the visitor's spot; a sky sign rises and fades in
+     * from the horizon, then drifts. Both keep their look once opened (the card opens below).
+     */
+    private void addMarker(List<Draw> draws, ArScene.Item item, float[] point, Pose cameraPose, float[] cameraPoint, long now, List<String> stopped) {
+        float alpha = 1f;
+        if (item.isSky()) {
+            float[] from = skyFrom.get(item.id);
+            if (from != null && Math.hypot(cameraPoint[0] - from[0], cameraPoint[2] - from[2]) > SKY_REPLACE_M) {
+                stopped.add(item.id);
+                return;
+            }
+            Long shownAt = skyShownAt.get(item.id);
+            if (shownAt == null || now < shownAt) return;
+            float t = Math.min(1f, (now - shownAt) / (float) SKY_RISE_MS);
+            float ease = 1f - (1f - t) * (1f - t) * (1f - t);
+            point[1] += -(1f - ease) * SKY_RISE_FROM_M + 0.06f * (float) Math.sin(now / 1600.0 + (item.id.hashCode() & 0xff));
+            alpha = ease;
+        } else {
+            if (Math.hypot(point[0] - cameraPoint[0], point[2] - cameraPoint[2]) > FREE_LEFT_BEHIND_M) {
+                stopped.add(item.id);
+                return;
+            }
+            point[1] += 0.04f * (float) Math.abs(Math.sin(now / 420.0));
+        }
+        String key = (item.isHere() ? "here:" : "sky:") + item.id;
+        ensureTexture(item, key);
+        float aspect = gl.aspect(key);
+        if (aspect <= 0f) return;
+        float width = item.isHere() ? HERE_WIDTH_M : SKY_WIDTH_M;
+        draws.add(Draw.billboard(item.id, point, cameraPose, key, width, width * aspect, alpha, distance(point, cameraPoint)));
     }
 
     /** A find floats over the spot where it was photographed, a little below eye level. */
@@ -749,8 +863,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         double facing = compass.facingDeg(forward);
         if (Double.isNaN(facing)) return null;
         for (ArScene.Item item : scene.items) {
-            if (!visible(item) || Double.isNaN(item.bearing) || discoverAnchors.containsKey(item.id)) continue;
+            if (!visible(item) || Double.isNaN(item.bearing)) continue;
             double turn = Math.toDegrees(angleBetween(Math.toRadians(item.bearing), Math.toRadians(facing)));
+            // A sky sign is already up there: point to it only while it is out of view.
+            if (discoverAnchors.containsKey(item.id) && !(item.isSky() && Math.abs(turn) > FREE_VIEW_DEG)) continue;
             String arrow = Math.abs(turn) <= FREE_VIEW_DEG ? "↑" : Math.abs(turn) > 135 ? "↓" : turn > 0 ? "→" : "←";
             String name = item.title.replaceFirst("^(Nearby|Meet): ", "").replaceFirst("^Meet ", "");
             String far = Double.isNaN(item.distanceM) ? "" : item.distanceM < 1000
@@ -796,6 +912,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             if (nudge != null) {
                 for (int i = 0; i < 3; i++) point[i] += nudge[i];
             }
+            if (item.isHere() || item.isSky()) {
+                addMarker(draws, item, point, cameraPose, cameraPoint, now, stopped);
+                continue;
+            }
             float distance = distance(point, cameraPoint);
             // Held by the visitor: along the line from the camera to the
             // distance the drag asks for.
@@ -837,6 +957,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             if (anchor != null) anchor.detach();
             discoverLift.remove(id);
             discoverNudge.remove(id);
+            skyShownAt.remove(id);
+            skyFrom.remove(id);
+            skyHeading.remove(id);
+            skyTier.remove(id);
         }
     }
 
@@ -1050,6 +1174,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             }
             @Override public boolean discovered(ArScene.Item item) {
                 return discovered.contains(item.id);
+            }
+            @Override public Bitmap markerBitmap(ArScene.Item item) {
+                return item.isHere() ? ArCards.hereMarker(item) : ArCards.skySign(item, decodeImage(item.image, 256));
             }
             @Override public Bitmap bubbleBitmap(ArScene.Item item) {
                 Bitmap inner = decodeImage(item.figure.isEmpty() ? item.image : item.figure, 512);
