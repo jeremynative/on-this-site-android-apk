@@ -710,7 +710,8 @@
     // open before the signs rise. landPages and sitePages: the pages of the lands
     // and of the place names and nearby sites, fetched by openRegionAr; an opened
     // card reads more from them than the floating card shows.
-    function regionArScene(here, random = Math.random, landPages = {}, sitePages = {}) {
+    // preferLand: the slug of the ancestral land chosen to lead the scene, when several overlap.
+    function regionArScene(here, random = Math.random, landPages = {}, sitePages = {}, preferLand = "") {
       const entries = arLandEntries();
       const essentials = AR_LEARNINGS.essentials.map(learning => arLearning(learning, "all"));
       if (!here) {
@@ -720,7 +721,8 @@
           .map(learning => arLearning(learning, entry.slug)));
         return arScene("Around you", [...essentials, ...learned, ...arWords(AR_WORDS, random)], random, null, true);
       }
-      const homelands = arHomelands(here, entries);
+      const homelands = arHomelands(here, entries)
+        .sort((a, b) => (b.entry.slug === preferLand) - (a.entry.slug === preferLand));
       const own = [];
       const around = [];
       homelands.forEach(({ entry, near }, index) => {
@@ -877,16 +879,16 @@
       window.AndroidApp.openArNearby(androidBridgeToken(), JSON.stringify(scene));
     }
 
-    async function openRegionAr() {
+    async function openRegionAr(preferLand = "") {
       if (!arUserLocation()) await requestUserLocation({ silent: true }).catch(() => null);
       const here = arUserLocation();
       if (!here) return openArBubbles(regionArScene(null));
       // The place names, nearby sites and island name the scene will show, whose pages
       // give their opened cards more to read; fetched alongside the land pages.
-      const slugs = regionArScene(here).items
+      const slugs = regionArScene(here, Math.random, {}, {}, preferLand).items
         .map(item => (item.id.match(/^(?:placename|place|island)-(.+)$/) || [])[1]).filter(Boolean);
       const [landPages, sitePages] = await Promise.all([arLandPages(here), arSitePages(slugs)]);
-      openArBubbles(regionArScene(here, Math.random, landPages, sitePages));
+      openArBubbles(regionArScene(here, Math.random, landPages, sitePages, preferLand));
     }
 
     // Pages of the given sites (from the bundle when offline; else in one request),
@@ -978,10 +980,79 @@
       siteArButton.hidden = !(open && site?.slug && !arSensitiveSite(site) && nearSite(site));
     }
 
-    // The AR button opens the camera with stories around you. An app too old
-    // for AR bubbles (or a phone without AR) gets a short explanation instead.
+    // Near a site (within a mile, or inside its shape) its own AR is offered beside
+    // the AR of each ancestral land you are standing on.
+    const AR_CHOICE_SITE_KM = 1.609;
+    const AR_CHOICE_SITES = 3;
+
+    function arSiteGeometry(site) {
+      const shape = site?.displayGeometry || site?.geojson || null;
+      if (typeof shape !== "string") return shape;
+      try {
+        return JSON.parse(shape);
+      } catch {
+        return null;
+      }
+    }
+
+    // The places AR can open for here: the nearby sites (nearest first; place
+    // names are left to the land's own AR), then each ancestral land you are on,
+    // or the land around you when you are on none.
+    function arPlaceChoices(here) {
+      const entries = arLandEntries();
+      const lands = entries.filter(entry => entry.isAncestralLand && arInsideGeometry(here, arEntryGeometry(entry)));
+      // Ancestral lands are offered as lands; town-wide land-claim histories are not places to stand.
+      const skip = new Set(entries.filter(entry => entry.isAncestralLand || entry.modeOnly).map(entry => Number(entry.siteId)));
+      const sites = (state.sites || [])
+        .filter(site => site.slug && Array.isArray(site.center) && site.summary && site.site_type !== "placename"
+          && site.slug !== AR_ISLAND_SLUG && !arSensitiveSite(site) && !skip.has(Number(site.id)))
+        .map(site => ({ site, inside: arInsideGeometry(here, arSiteGeometry(site)),
+          km: arDistanceKm(here, { lng: Number(site.center[0]), lat: Number(site.center[1]) }) }))
+        .filter(choice => choice.inside || choice.km <= AR_CHOICE_SITE_KM)
+        .sort((a, b) => a.km - b.km);
+      // The nearest places first, then every area you are inside (a reservation, a park).
+      const chosen = [...sites.filter(choice => !choice.inside).slice(0, AR_CHOICE_SITES), ...sites.filter(choice => choice.inside)]
+        .map(({ site, inside, km }) => ({ kind: "site", site, title: arText(site.title),
+          note: inside ? "You are inside this place · its own stories" : `${arKm(km)} away · the stories of this place` }));
+      const homes = lands.length
+        ? lands.map(entry => ({ kind: "land", land: entry.slug, title: arText(entry.title), note: "The ancestral land you are on · its history around you" }))
+        : [{ kind: "land", land: "", title: "Around you", note: "The ancestral land, people and places near you" }];
+      return [...chosen, ...homes];
+    }
+
+    async function openArChoice(choice) {
+      if (choice.kind === "site") {
+        const site = choice.site;
+        return openArBubbles(siteArScene(site, ctx.siteDetail ? await ctx.siteDetail(site).catch(() => null) : await arSiteDetail(site.slug)));
+      }
+      return openRegionAr(choice.land);
+    }
+
+    // At Ma's House, say, AR asks whether to show Ma's House or Shinnecock
+    // Ancestral Land; with only one place to show, it opens straight away.
+    function askArPlace(choices) {
+      openSheet(sheetEl);
+      if (!listEl) return openArChoice(choices[choices.length - 1]);
+      const escape = value => String(value).replace(/[&<>"']/g, character => `&#${character.charCodeAt(0)};`);
+      listEl.innerHTML = `<p class="summary">You are near more than one place. Which should AR show?</p>
+        <div class="ar-choices">${choices.map((choice, index) => `<button class="ar-choice" type="button" data-ar-choice="${index}">
+          <strong>${escape(choice.title)}</strong><span>${escape(choice.note)}</span></button>`).join("")}</div>`;
+      listEl.querySelectorAll("[data-ar-choice]").forEach(button => button.addEventListener("click", () => {
+        sheetEl?.querySelector("[data-close-sheet]")?.click();
+        openArChoice(choices[Number(button.dataset.arChoice)]);
+      }, { once: true }));
+    }
+
+    // The AR button opens the camera with stories around you, first asking which
+    // place when you are near more than one. An app too old for AR bubbles (or a
+    // phone without AR) gets a short explanation instead.
     async function openAr() {
-      if (arSupported()) return openRegionAr();
+      if (arSupported()) {
+        if (!arUserLocation()) await requestUserLocation({ silent: true }).catch(() => null);
+        const here = arUserLocation();
+        const choices = here ? arPlaceChoices(here) : [];
+        return choices.length > 1 ? askArPlace(choices) : openRegionAr();
+      }
       openSheet(sheetEl);
       const tooOld = window.AndroidApp && !window.AndroidApp.openArNearby;
       if (listEl) listEl.innerHTML = `<p class="summary">${tooOld
