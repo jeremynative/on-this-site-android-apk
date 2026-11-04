@@ -35,10 +35,13 @@ final class ArScene {
         String word = "";
         String pronunciation = "";
         String meaning = "";
+        // A language question as it is asked: who asks it (a person of the past,
+        // who they were) and the question itself.
+        String prompt = "";
         String image = "";
         String audio = "";
-        // The figure drawn inside the bubble (a map animal for language
-        // guides) and the answers offered for a language question.
+        // The figure drawn inside the bubble (a person's icon, for a person
+        // who asks a word) and the answers offered for a language question.
         String figure = "";
         String[] choices = new String[0];
         // Set once the visitor answers a language question correctly.
@@ -107,6 +110,7 @@ final class ArScene {
             item.word = o.optString("word", "");
             item.pronunciation = o.optString("pronunciation", "");
             item.meaning = o.optString("meaning", "");
+            item.prompt = o.optString("prompt", "");
             item.image = o.optString("image", "");
             item.audio = o.optString("audio", "");
             item.sample = o.optBoolean("sample", false);

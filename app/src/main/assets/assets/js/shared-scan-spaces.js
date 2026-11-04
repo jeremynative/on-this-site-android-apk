@@ -25,16 +25,9 @@
     // AR like Pokémon GO: the camera opens straight away and bubbles float
     // around you at eye level, with no scan, marker card or placing needed.
     // Anywhere: teachings about the ancestral land you are standing on, the
-    // biography people of the area, animal relatives who teach a word, and
+    // biography people of the area (people of the past who ask you a word), and
     // nearby sites to visit. At a site (standing near it): what is unique to that
     // place. Burial grounds and sensitive places never become bubbles.
-    const AR_GUIDES = [
-      ["Black duck", "animal-american-black-duck.png"],
-      ["Eel", "animal-american-eel.png"],
-      ["Box turtle", "animal-eastern-box-turtle.png"],
-      ["Deer", "animal-white-tailed-deer.png"],
-      ["Turkey", "animal-wild-turkey.png"]
-    ];
     const AR_ICON_BASE = ctx.iconBase || "https://nativelongisland.com/assets/map-icons/";
     const AR_PERSON_ICON = AR_ICON_BASE + "person-biography-marker.png";
     const AR_WORDS = 3;
@@ -104,7 +97,7 @@
         "corchaug-ancestral-land": [
           { id: "homeland", title: "The Corchaug lived on the North Fork long before Southold was founded", text: "Corchaug families farmed, fished and made wampum across the North Fork, roughly from Wading River toward Orient Point, long before English settlers founded Southold in 1640. Their name lives on in Cutchogue.", more: "That territory is an approximate description from nineteenth-century histories, not a rigid political boundary. Corchaug land use and kinship did not fit later town lines.", source: "John A. Strong, The Algonquian Peoples of Long Island from Earliest Times to 1700; On This Site, Corchaug Ancestral Land" },
           { id: "fort-corchaug", title: "Fort Corchaug in Cutchogue is a National Historic Landmark", text: "On Downs Creek in Cutchogue, the Corchaug built a palisaded fort in the 1600s. Archaeologists found shell, stone tools and finished wampum beads there, and it became a National Historic Landmark in 1999.", more: "The North Fork was one of the most important wampum-making regions in seventeenth-century America, and the beads and whelk shell suggest wampum was made in and around the fort’s walls. The site is protected within Downs Farm Preserve.", source: "National Park Service, National Register of Historic Places (1974) and National Historic Landmark (1999); Ralph Solecki, Archeological Position of Historic Fort Corchaug (1950); Cutchogue-New Suffolk Historical Council" },
-          { id: "saugust", title: "English settlers took over Corchaug fields at Saugust", text: "After English settlement, newcomers took over cleared Corchaug fields at Saugust, while deeds, fences and grazing livestock narrowed Native access to land and the shore.", more: "Corchaug people did not simply disappear: individuals and families remained, moved among related Native communities and asserted their land rights.", source: "On This Site, Corchaug Ancestral Land" },
+          { id: "saugust", title: "After 1640 English settlers took over Corchaug fields at Saugust", text: "After English settlers founded Southold in 1640, newcomers took over cleared Corchaug fields at Saugust, a neck of land in the east of the town, while deeds, fences and grazing livestock narrowed Native access to land and the shore.", more: "Corchaug people did not simply disappear: individuals and families remained, moved among related Native communities and asserted their land rights.", source: "John A. Strong, The Algonquian Peoples of Long Island from Earliest Times to 1700; On This Site, Corchaug Ancestral Land and Saugust Neck" },
           { id: "robins-island", title: "A 1600s agreement kept Native fishing rights at Robins Island", text: "When Robins Island in Peconic Bay, known as Anchannock, passed to colonists between 1651 and 1665, the agreement still spelled out Native rights to fish and gather shells there.", more: "Rights written into colonial agreements show that land changing hands did not end Native use of the water, and that Corchaug and neighboring people negotiated to keep what mattered.", source: "On This Site, Anchannock / Robins Island" },
           { id: "1763", title: "In 1763 Corchaug people petitioned to defend their land at Indian Neck", text: "More than a century after Southold was founded, Corchaug people were still asserting their rights: a 1763 petition concerned land at Indian Neck and South Harbor.", more: "Reading colonial deeds alongside archaeology, family history and the 1763 petition keeps dispossession visible while recognizing Corchaug continuity, adaptation and legal resistance across generations.", source: "On This Site, Corchaug Ancestral Land" },
           { id: "descendants", title: "No Corchaug reservation remains, but that doesn’t mean no descendants", text: "There is no reservation bearing the Corchaug name today. That absence is not proof that Corchaug people left no descendants; families moved, married and found refuge among related Native communities.", more: "Particular family connections require family and community evidence; the map does not appoint another nation as a substitute for Corchaug identity.", source: "On This Site, Corchaug Ancestral Land" },
@@ -116,7 +109,7 @@
           { id: "montauk", title: "The Manhansett had close political and cultural ties with the Montaukett", text: "Researchers at the University of Massachusetts Boston describe the Manhansett as affiliated with the Montaukett, linked by political and cultural relationships across the East End.", more: "Historical affiliation does not by itself establish the descent of every present-day family, but it challenges the idea that each named community was isolated or vanished when its land passed into colonial hands.", source: "Fiske Center for Archaeological Research, University of Massachusetts Boston" },
           { id: "plantation", title: "In 1651 an English plantation took over Shelter Island", text: "In 1651 a provisioning plantation was established on Shelter Island, Manhansett land. Sylvester Manor’s own history says it was tied to Barbados sugar trade and depended on slavery and forced labor.", more: "The plantation transformed an inhabited homeland; it did not replace an empty landscape. Later, in 1829, two Montaukett boys were indentured there.", source: "Sylvester Manor; On This Site, Sylvester Manor" },
           { id: "wampum", title: "Manhansett workers made wampum at Sylvester Manor", text: "Archaeologists from the Fiske Center at UMass Boston found evidence of Native labor and wampum-making at Sylvester Manor: Manhansett people working on the plantation built on their own land.", more: "Wampum, diplomacy and labor appear together in the early records of Shelter Island, alongside the land negotiations that turned an Indigenous homeland into written boundaries.", source: "Fiske Center for Archaeological Research, University of Massachusetts Boston" },
-          { id: "respect", title: "Shelter Island’s burial places are kept off public maps", text: "Shelter Island holds Manhansett burial places and family histories. They are left out of public maps and directions so they stay protected, with Native voices central to how this history is told.", more: "Remembering Manhansett ancestry calls for respect for descendant knowledge and care for cultural places.", source: "On This Site, Manhansett Ancestral Land" }
+          { id: "checkanoe", title: "Checkanoe said Shelter Island’s people never agreed to give up their homes", text: "After four Barbados sugar merchants bought a claim to all of Shelter Island in 1651, Checkanoe told colonial commissioners that the first English claimant had received only an area marked by trees, and that his people had never agreed to lose their homes.", more: "That first claimant was James Farrett, agent of the Earl of Stirling. A later declaration, dated March 1653 in today’s calendar, describes the sachem Yokee handing over turf and a twig in an English possession ceremony and claims the Native inhabitants left. It records a colonial claim, not proof that everyone departed. Manhansett burial places are still kept off public maps so they stay protected.", source: "Jacob E. Mallmann, Historical Papers on Shelter Island and Its Presbyterian Church (1899); On This Site, Shelter Island Plantation Claim (1651–1652) and Manhansett Ancestral Land" }
         ],
         "setauket-ancestral-land": [
           { id: "nation", title: "Setauket is the homeland of the Setalcott Nation", text: "The town of Setauket carries the name of the Setalcott Nation, whose homeland around Setauket, Stony Brook and Port Jefferson reaches back thousands of years and continues through descendant families.", more: "Setauket and Setalcott homelands are remembered along North Shore necks, harbors, streams and inland routes as far as Wading River.", source: "Three Village Historical Society, Land Acknowledgment (October 2025), written in collaboration with the Setalcott Nation; William Stieglitz, “Conscience Bay watershed site opens with Setalcott Nation as stewards,” TBR News Media, May 2, 2025" },
@@ -142,8 +135,8 @@
           { id: "living-coast", title: "Unkechaug and Shinnecock neighbors show the South Shore never emptied", text: "The Unkechaug community at Poospatuck and the Shinnecock Nation keep Native life visible along this coast, so the story of a vanished Native South Shore does not hold.", more: "Their presence does not establish that every Secatogue family became part of either nation; it does show Native continuance across the wider coastal region.", source: "National Park Service; Shinnecock Indian Nation" }
         ],
         "massapequa-ancestral-lands": [
-          { id: "homeland", title: "Massapequa is named for the Native homeland around South Oyster Bay", text: "Today’s Massapequa takes its name from a Native homeland around South Oyster Bay and Fort Neck, with its ponds, brook, meadows and waterways.", more: "Massapequa and Massapeague homelands center South Oyster Bay, Fort Neck and related South Shore waters, including the Fort Massapeag site. The name belongs to both a place and a people.", source: "On This Site, Massapequa Ancestral Lands" },
-          { id: "tackapousha", title: "Sachem Tackapousha defended Massapequa land against colonists", text: "In the mid-1600s the Massapequa sachem Tackapousha defended Native interests as Dutch and English settlement pressed into fields, meadows and waterways, signing treaties and challenging claims.", more: "Massapequa history includes agreements, deeds, diplomacy, fortification and disputed colonial authority around South Oyster Bay and Fort Neck. These records show land loss as a contested process involving Native leadership.", source: "John A. Strong, The Algonquian Peoples of Long Island from Earliest Times to 1700" },
+          { id: "fort-massapeag", title: "Fort Massapeag in Massapequa is a National Historic Landmark", text: "At Fort Neck on South Oyster Bay, a deed of July 13, 1696 already referred to an old fort. Archaeologists later read Fort Massapeag as a place of Native–Dutch trade, possibly of wampum-making, and in 1993 it became a National Historic Landmark.", more: "An older story ties the fort to a 1653 attack led by John Underhill, but the Town of Oyster Bay notes that this tradition is disputed. In April 2026 the town unveiled a new interpretive sign on Fairfax Road. The Massapequa name belongs to both this South Shore place and its people.", source: "Atlas of Mutual Heritage, Massapeage, fort (Oyster Bay); Town of Oyster Bay, A Guide to Historic Places (2025); On This Site, Fort Massapeag" },
+          { id: "tackapousha", title: "In 1656 Sachem Tackapousha made peace with the Dutch for the Massapequa", text: "In March 1656 Tackapousha, sachem of the Massapequa, represented his people in a peace agreement with Peter Stuyvesant, director-general of New Netherland, as Dutch and English settlers pressed into South Shore fields, meadows and waterways.", more: "Massapequa history includes agreements, deeds, diplomacy, fortification and disputed colonial authority around South Oyster Bay and Fort Neck. These records show land loss as a contested process involving Native leadership.", source: "Atlas of Mutual Heritage, Massapeage, fort (Oyster Bay); John A. Strong, The Algonquian Peoples of Long Island from Earliest Times to 1700" },
           { id: "1639", title: "A 1639 deed preserves the names of Massapequa people", text: "The 1639 Marossepinck deed names Mechowodt, Piscamoc and others, and a 1656 treaty names Tackapousha with allied western Long Island leaders: real people behind the place names.", more: "The 1639 deed also names Wattewochkeouw, Kachpoher and Ketchquawars, and the 1658 Massapeoque Meadows record preserves Massapequa, Rockaway and Secatogue names together.", source: "Documents Relative to the Colonial History of the State of New York, vol. XIV; John A. Strong" },
           { id: "name", title: "“Massapequa” is read as “great water land”", text: "Massapeague is interpreted as “great water land” or “land on the great cove,” fitting a homeland centered on South Oyster Bay. Colonial records spell it dozens of ways.", more: "Related forms include Marsapeague, Masepeage, Marossepinck and Massepinc. Necochawodt is a personal name rather than a confirmed place name.", source: "William Wallace Tooker, Indian Place-Names on Long Island (1911)" },
           { id: "meadows", title: "Massapequa’s tidal meadows were both a home and a contested resource", text: "The salt meadows and tidal waters of South Oyster Bay fed Native life around Massapequa. Colonists later claimed those same meadows, and the records of their disputes preserve the names of the Native people involved.", more: "The 1658 Massapeoque Meadows record names Massapequa, Rockaway and Secatogue people together, a sign of how wetlands could be both a home landscape and a resource fought over.", source: "On This Site, Massapeoque Meadows / South Oyster Bay; An Illustrated History of Massapequa" },
@@ -178,8 +171,8 @@
           { id: "gowanus-1636", title: "Gowanus in Brooklyn was Canarsee farmland before a 1636 purchase", text: "In 1636 colonists made a purchase at Gowanus, a Brooklyn landscape already cultivated by Canarsee people. Dutch records wrote the creek and bay as Gowanus, Gowanes and Gouwanes.", more: "The fields colonists wanted were already planted: purchases like this one took over working Native farmland, not empty ground.", source: "Alyssa Loorya, Eileen Kao and Elissa Rutigliano, Phase IA Documentary Study (2021, revised 2024); On This Site, Gowanus" },
           { id: "bushwick-1638", title: "In 1638 the Dutch claimed Native land along Brooklyn’s East River shore", text: "A 1638 agreement with named Native leaders gave the Dutch West India Company a claim along the East River. Company grants and later towns took over a homeland now within Greenpoint and Williamsburg.", more: "Brooklyn’s Native fields and shorelines became colonial claims through separate agreements, expanding settlement and war, one place at a time.", source: "Documents Relative to the Colonial History of the State of New York, vol. XIV; On This Site, East River Company Claim / Early Bushwick (1638)" },
           { id: "nayack-1652", title: "A 1652 agreement required Native families to leave Nayack in Brooklyn", text: "In 1652 an agreement for Nayack, in today’s southern Brooklyn, explicitly required its Native residents and their descendants to leave: one of the clearest records of removal on western Long Island.", more: "Removal did not end Lenape life: Lenape people continue in their homeland and beyond it, and cultural return to New York continues today.", source: "Documents Relative to the Colonial History of the State of New York, vol. XIV; On This Site, Brooklyn: Native Fields, Colonial Claims and Forced Removal" },
-          { id: "lenape-center", title: "Lenape Center speaks for Lenape history in New York today", text: "Today Lenape people speak for their own history through institutions such as Lenape Center, connecting present-day nations with New York through art, education, language and public history.", more: "That broader continuance should not be confused with a documented genealogy for every Canarsie family.", source: "Lenape Center" },
-          { id: "not-gone", title: "The Canarsie were displaced, not erased", text: "Later histories sometimes turned Canarsie into folklore or a disappearance story. Displacement and changed community names do not amount to disappearance.", more: "An acknowledgment can be honest about the limits of the surviving records while recognizing that Lenape people continue in their homeland and beyond it.", source: "On This Site, Canarsie Traditional Land" }
+          { id: "lenape-center", title: "Lenape people run Lenape Center in Manhattan to tell their own history", text: "Lenape Center in Manhattan was founded by Lenape people, among them Joe Baker and Curtis Zunigha, enrolled members of the Delaware Tribe of Indians. Through art, language and public history it connects today’s Lenape nations with their homeland in New York.", more: "That shared continuance is not the same as a documented family line for every Canarsie family; the surviving records are too thin to trace each one.", source: "Lenape Center, About Us; On This Site, Canarsie Traditional Land" },
+          { id: "mohawk-story", title: "Historians doubt the old story that the Mohawk destroyed the Canarsie", text: "Later writers repeated a dramatic story that the Canarsie of Flatlands, in Brooklyn, were conquered or wiped out by the Mohawk. Modern scholarship treats it as a tradition that slipped into popular history, not proof that Canarsie community life ended.", more: "Seventeenth-century Dutch and English grants, petitions and patents still name Canarsie people on the land as it became colonial property. Displacement and changed community names do not amount to disappearance; Lenape people continue in their homeland and beyond it.", source: "John A. Strong, Long Island Historical Journal 14, nos. 1–2 (2001); On This Site, Canarsie" }
         ]
       }
     };
@@ -342,7 +335,9 @@
     }
 
     // Biography people with a documented place within reach, at their nearest place.
-    function arPeople(point, withinKm, limit, here = point) {
+    // Each person of the past (before 1900) takes the next of `words` and asks it;
+    // the words left over are the caller's to show on their own.
+    function arPeople(point, withinKm, limit, here = point, words = [], random = Math.random) {
       const people = window.NLI_BIOGRAPHY_PATH_DATA || {};
       return Object.entries(people)
         .map(([slug, person]) => {
@@ -362,6 +357,24 @@
           // The title is what happened near here and when (a whole idea, not just a name);
           // the card says who they were, and opening it adds why the moment mattered.
           const why = `${arText(place.reason)} This happened at ${arText(place.place)}${when ? `, ${when}` : ""}.`;
+          const historical = (person.places || []).some(stop => stop.sort_key > 0 && stop.sort_key < 19000000);
+          const word = historical ? words.shift() : null;
+          if (word) {
+            // Who they were and what happened here, then the word, as if you met.
+            const moment = `${arText(place.eventTitle)}${when ? ` (${when})` : ""}.`;
+            const ask = `If you met ${name} here, you might hear “${word.algonquian}.” What does it mean?`;
+            // Who they were comes first: the floating card shows it, and opening it adds the rest.
+            const first = intro ? (intro.match(/^.*?[.!?](?=\s|$)/) || [intro])[0] : "";
+            return arToward({
+              ...arWordCard(word, random),
+              id: `person-${slug}`, title: name, name,
+              prompt: `${[first, moment].filter(Boolean).join(" ")}\n\n${ask}`,
+              caption: `“${word.algonquian}” is ${arWordLanguage(word)}.\n\n${why}`,
+              more: intro,
+              credit: `From the On This Site biography "${arText(person.title)}"; the word from ${word.source}`,
+              figure: AR_PERSON_ICON
+            }, here, { lng: Number(place.coordinates[0]), lat: Number(place.coordinates[1]) });
+          }
           return arToward({
             id: `person-${slug}`, layer: "archival", kind: "note", placement: "discover",
             title: `${arText(place.eventTitle)}${when ? ` (${when})` : ""}`, name,
@@ -372,22 +385,35 @@
         });
     }
 
-    function arWords(count, random) {
+    // Words for the language questions: greetings first, since they are what
+    // people say on meeting.
+    function arPickWords(count, random) {
       const words = window.NLI_LANGUAGE_QUIZ_WORDS || [];
-      // Greetings first: they are what a guide says on meeting you.
       const greetings = words.filter(word => /greeting|thank you/.test(word.english));
-      const picked = [...arShuffled(greetings, random), ...arShuffled(words.filter(word => !greetings.includes(word)), random)].slice(0, count);
-      const first = Math.floor(random() * AR_GUIDES.length);
-      return picked.map((word, index) => {
-        const [name, icon] = AR_GUIDES[(first + index) % AR_GUIDES.length];
-        const others = arShuffled(words.filter(other => other.english !== word.english), random).slice(0, 2).map(other => other.english);
-        return {
-          id: `word-${word.id}`, layer: "language", kind: "phrase", placement: "discover",
-          title: `The ${name.toLowerCase()} teaches you a word in an Algonquian language`, name, word: word.algonquian, meaning: word.english,
-          choices: arShuffled([word.english, ...others], random),
-          credit: word.source, figure: AR_ICON_BASE + icon
-        };
-      });
+      return [...arShuffled(greetings, random), ...arShuffled(words.filter(word => !greetings.includes(word)), random)].slice(0, count);
+    }
+
+    // Which recorded language a word comes from.
+    function arWordLanguage(word) {
+      const source = String(word.source || "");
+      return /jefferson/i.test(source) ? "an Unkechaug word, written down by Thomas Jefferson in 1791"
+        : /harrington/i.test(source) ? "a Shinnecock word, written down by M. R. Harrington in 1903"
+          : "a word in one of Long Island’s Algonquian languages";
+    }
+
+    // A word to learn, with three answers to choose from. Only people speak:
+    // arPeople gives a word to a person of the past; on its own it is just a word.
+    function arWordCard(word, random) {
+      const words = window.NLI_LANGUAGE_QUIZ_WORDS || [];
+      const others = arShuffled(words.filter(other => other.english !== word.english), random).slice(0, 2).map(other => other.english);
+      return {
+        id: `word-${word.id}`, layer: "language", kind: "phrase", placement: "discover",
+        title: "", word: word.algonquian, meaning: word.english,
+        choices: arShuffled([word.english, ...others], random),
+        prompt: `“${word.algonquian}” is ${arWordLanguage(word)}. What does it mean?`,
+        caption: `“${word.algonquian}” is ${arWordLanguage(word)}.`,
+        credit: word.source
+      };
     }
 
     // A site page's article sections, read for AR in this order.
@@ -719,7 +745,7 @@
         const lands = arShuffled(entries.filter(entry => entry.isAncestralLand && AR_LEARNINGS.lands[entry.slug]), random).slice(0, 3);
         const learned = lands.flatMap(entry => AR_LEARNINGS.lands[entry.slug].slice(0, 2)
           .map(learning => arLearning(learning, entry.slug)));
-        return arScene("Around you", [...essentials, ...learned, ...arWords(AR_WORDS, random)], random, null, true);
+        return arScene("Around you", [...essentials, ...learned, ...arPickWords(AR_WORDS, random).map(word => arWordCard(word, random))], random, null, true);
       }
       const homelands = arHomelands(here, entries)
         .sort((a, b) => (b.entry.slug === preferLand) - (a.entry.slug === preferLand));
@@ -757,14 +783,15 @@
       }
       // Photo stories and plant IDs found close by, at their spots.
       const close = (lat, lng) => lat != null && lng != null && arDistanceKm(here, { lat: Number(lat), lng: Number(lng) }) <= AR_FIND_KM;
+      const words = arPickWords(AR_WORDS, random);
       const others = [
-        ...arPeople(here, AR_PEOPLE_KM, AR_PEOPLE),
+        ...arPeople(here, AR_PEOPLE_KM, AR_PEOPLE, here, words, random),
         ...arFinds(
           (state.mapStories || []).filter(story => story.photo && arShared(story) && close(story.latitude, story.longitude)),
           (state.plantObservations || []).filter(plant => arShared(plant) && close(plant.observation_latitude, plant.observation_longitude)),
           here
         ).sort((a, b) => a.distance_m - b.distance_m).slice(0, AR_FINDS),
-        ...arWords(AR_WORDS, random)
+        ...words.map(word => arWordCard(word, random))
       ];
       // Signs in the sky, each in its site's real direction: name, distance and one line
       // (sky, brief); opening one reads the full summary. Older apps show bubbles.
@@ -814,15 +841,16 @@
       const title = arText(page.title);
       const centre = Array.isArray(site.center) ? { lng: Number(site.center[0]), lat: Number(site.center[1]) } : null;
       const featured = page.listing_image_url || page.listing_image_thumb_url || "";
-      const items = [{
-        id: `site-${slug}`, layer: "archival", kind: "note", placement: "discover",
-        title: `Welcome to ${title}`, caption: arReading(page.introduction_content) || arText(page.summary), credit: "On This Site",
-        image: featured
-      }];
-      if (page.why_this_matters) items.push({
-        id: `site-why-${slug}`, layer: "archival", kind: "note", placement: "discover",
-        title: "Why this place matters", caption: arText(page.why_this_matters), credit: title
-      });
+      // First of all, the place's welcome: the red pin just ahead, like the land's
+      // on the home AR, opened by walking up to it (or tapping it).
+      const welcome = {
+        id: `site-${slug}`, layer: "archival", kind: "here", placement: "discover",
+        title: `Welcome to ${title}`, land: title, nearby: [],
+        caption: arReading(page.introduction_content) || arText(page.summary),
+        more: page.why_this_matters ? `Why this place matters: ${arText(page.why_this_matters)}` : "",
+        credit: "On This Site", image: featured
+      };
+      const items = [];
       // Photos from the page with their captions, captioned ones first.
       const paragraphs = AR_SECTIONS.flatMap(([field]) => arReading(page[field], 100000).split("\n\n")).filter(text => text.length >= 80);
       const seen = new Set([featured]);
@@ -848,10 +876,11 @@
           title: reading.label, caption: reading.text, credit: `From the On This Site page on ${title}`
         }));
       const land = arLandEntries().find(entry => entry.slug === slug);
-      if (land) items.push(...arLandClips(land, "site-"));
+      const extras = land ? arLandClips(land, "site-") : [];
       const here = arUserLocation();
-      if (centre) items.push(...arPeople(centre, 2, 3, here));
-      items.push(...arFinds(
+      const words = arPickWords(AR_WORDS, random);
+      const people = centre ? arPeople(centre, 2, 3, here, words, random) : [];
+      extras.push(...arFinds(
         (state.mapStories || []).filter(story => story.attached_site_slug === slug && story.photo && arShared(story)).slice(-4),
         (state.plantObservations || []).filter(plant => plant.site_slug === slug && arShared(plant)),
         here
@@ -859,13 +888,15 @@
       (state.publicComments || [])
         .filter(comment => comment.site_slug === slug && String(comment.source_type || "site") === "site" && comment.comment)
         .slice(-2)
-        .forEach(comment => items.push({
+        .forEach(comment => extras.push({
           id: `note-${comment.id}`, layer: "archival", kind: "note", placement: "discover",
           title: comment.author_name ? `${arText(comment.author_name)} says` : "A community note",
           caption: arText(comment.comment), credit: "Community note on On This Site"
         }));
-      items.push(...arWords(AR_WORDS, random));
-      return arScene(title, items, random, arUserLocation());
+      // In order: the welcome, the people tied to the place, the page's photos and
+      // readings with one of the rest after every two, then words to learn.
+      return arScene(title, [welcome, ...people, ...arInterleave(items, arShuffled(extras, random)),
+        ...words.map(word => arWordCard(word, random))], random, here, true);
     }
 
     // Phones that can't run full AR get the camera with the bubbles over it,

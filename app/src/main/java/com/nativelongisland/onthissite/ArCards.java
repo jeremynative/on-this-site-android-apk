@@ -85,6 +85,8 @@ final class ArCards {
             layout(headline, wordPaint, inner),
             phrase && !item.pronunciation.isEmpty() ? layout("say: " + item.pronunciation, sayPaint, inner) : null,
             phrase && !quiz && !item.meaning.isEmpty() ? layout(item.meaning, bodyPaint, inner) : null,
+            // While unanswered, a question shows who asks it (the opening of its prompt).
+            quiz && !item.prompt.isEmpty() ? layout(preview(item.prompt), bodyPaint, inner) : null,
             !quiz && !preview.isEmpty() ? layout(preview, bodyPaint, inner) : null,
             hint != null ? layout(hint, hintPaint, inner) : null,
             !quiz && community && !item.credit.isEmpty() ? layout(item.credit, textPaint(24, Color.rgb(170, 178, 174), false), inner) : null,

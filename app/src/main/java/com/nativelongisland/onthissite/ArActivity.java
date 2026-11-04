@@ -2045,13 +2045,18 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         handleBack();
     }
 
-    /** A guide's question: what does this word mean? Wrong answers can be tried again. */
+    /** The question as it is asked: its prompt (who asks, and the question), or the plain one. */
+    private static String question(ArScene.Item item) {
+        if (!item.prompt.isEmpty()) return item.prompt;
+        return (item.title.isEmpty() ? "" : item.title + " asks you:\n") + "What does this word mean?";
+    }
+
+    /** A language question: what does this word mean? Wrong answers can be tried again. */
     private void askMeaning(ArScene.Item item, String feedback) {
         setCardHeader(item, "“" + item.word + "”");
         infoText.setVisibility(View.VISIBLE);
-        infoText.setText((item.title.isEmpty() ? "" : item.title + " asks you:\n")
-            + (item.pronunciation.isEmpty() ? "" : "say: " + item.pronunciation + "\n")
-            + "What does this word mean?" + (feedback.isEmpty() ? "" : "\n\n" + feedback));
+        infoText.setText((item.pronunciation.isEmpty() ? "" : "say: " + item.pronunciation + "\n\n")
+            + question(item) + (feedback.isEmpty() ? "" : "\n\n" + feedback));
         infoCredit.setVisibility(View.GONE);
         infoActions.removeAllViews();
         infoChoices.removeAllViews();
@@ -2074,8 +2079,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 } else {
                     v.setBackground(rounded(Color.argb(150, 160, 50, 40), 14));
                     v.setEnabled(false);
-                    infoText.setText((item.title.isEmpty() ? "" : item.title + " asks you:\n")
-                        + "What does this word mean?\n\nNot quite. Try another answer.");
+                    infoText.setText(question(item) + "\n\nNot quite. Try another answer.");
                 }
             }));
         }
