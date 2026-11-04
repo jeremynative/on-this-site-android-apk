@@ -24,9 +24,9 @@
 
     // AR like Pokémon GO: the camera opens straight away and bubbles float
     // around you at eye level, with no scan, marker card or placing needed.
-    // Anywhere: clips about the ancestral land you are standing on and its
-    // history, the biography people of the area, and animal relatives who
-    // teach a word. At a site (standing near it): what is unique to that
+    // Anywhere: teachings about the ancestral land you are standing on, the
+    // biography people of the area, animal relatives who teach a word, and
+    // nearby sites to visit. At a site (standing near it): what is unique to that
     // place. Burial grounds and sensitive places never become bubbles.
     const AR_GUIDES = [
       ["Black duck", "animal-american-black-duck.png"],
@@ -37,16 +37,16 @@
     ];
     const AR_ICON_BASE = ctx.iconBase || "https://nativelongisland.com/assets/map-icons/";
     const AR_PERSON_ICON = AR_ICON_BASE + "person-biography-marker.png";
-    const AR_WORDS = 2;
-    const AR_PEOPLE = 4;
+    const AR_WORDS = 3;
+    const AR_PEOPLE = 3;
     const AR_PEOPLE_KM = 20;
-    const AR_LAND_KM = 8;
-    // Around you, the ancestral land comes first: its own page (readings and
-    // captioned photos), the Native place names nearby, and the neighbouring
-    // homelands. Between mapped lands, the nearest land within reach.
+    // Around you, the ancestral land comes first: its own teachings (or, for a
+    // land without them, its page's readings) and captioned photos, then the
+    // Native place names nearby and the neighbouring homelands. Between mapped
+    // lands, the nearest land within reach.
     const AR_LAND_READINGS = 4;
     const AR_LAND_PHOTOS = 2;
-    const AR_PLACE_NAMES = 3;
+    const AR_PLACE_NAMES = 6;
     const AR_PLACE_NAME_KM = 8;
     const AR_NEIGHBOURS = 2;
     const AR_NEIGHBOUR_KM = 10;
@@ -56,6 +56,157 @@
     const AR_FINDS = 4;
     // Standing this close to a site (or inside its land) opens its own AR.
     const SITE_AR_KM = 0.5;
+
+    // Short, complete teachings for the AR bubbles, written from each ancestral land's
+    // reviewed page: three everyone sees first, then each territory's own. A bubble
+    // shows the teaching; its source is small print at the bottom of the opened card.
+    // Drafts and sources: research-workflow/ar-learnings-20261104/.
+    const AR_LEARNINGS = {
+      // Everyone sees these first, wherever they stand on Long Island.
+      essentials: [
+        {
+          id: "homeland",
+          title: "Whose homeland is this?",
+          text: "Every town on Long Island sits within Native homelands. Colonial deeds and later development changed who held title and access to land; they did not end Native belonging.",
+          source: "On This Site land history, ancestral land entries"
+        },
+        {
+          id: "still-here",
+          title: "Still here",
+          text: "Native nations continue on Long Island today. The Shinnecock and Unkechaug nations keep their own governments and reservation communities, and Montaukett, Matinecock and Setalcott people carry their communities forward.",
+          source: "Shinnecock Indian Nation; National Park Service; Montauk Tribe of Indians; Flushing Town Hall (2018); Three Village Historical Society and Setalcott Nation (2025)"
+        },
+        {
+          id: "memory",
+          title: "Honoring memory",
+          text: "Acknowledging land means more than naming it: learn whose homeland you stand in, listen to Native leadership, and respect the places and knowledge communities choose to protect.",
+          source: "On This Site land history, ancestral land entries"
+        }
+      ],
+      lands: {
+        "shinnecock-ancestral-land": [
+          { id: "living-nation", title: "A living nation", text: "Shinnecock people have belonged to this Southampton homeland since time immemorial. Today the Shinnecock Indian Nation sustains self-government, family and cultural life, on and beyond the reservation.", source: "Shinnecock Indian Nation, official website" },
+          { id: "wider-homeland", title: "More than the reservation", text: "The reservation is a living community within a wider homeland, not the beginning or the outer limit of Shinnecock history. Shinnecock Bay, the Hills and Canoe Place are all part of it.", source: "On This Site, Shinnecock Ancestral Land" },
+          { id: "recognition", title: "2010 was not a beginning", text: "The Shinnecock Indian Nation became federally recognized in 2010. That date marks a United States legal decision, not the origin of a nation that has belonged here since time immemorial.", source: "Shinnecock Indian Nation, official website" },
+          { id: "name", title: "What the name may mean", text: "Shinnecock has been read as “at the level land or country” and, more recently, as “at the big neck.” Both are attributed readings, not a settled translation.", source: "William Wallace Tooker, Indian Place-Names on Long Island (1911), pp. 81–82; Ives Goddard, “A Note on Shinnecock in Munsee” (2017)" },
+          { id: "bluefish", title: "Knowledge of the bays", text: "A 2014 catalogue of Shinnecock elders’ knowledge follows bluefish from spring into late fall and describes the bays as their feeding and breeding waters.", source: "Shinnecock Environmental Department, Natural Resources Identified by Shinnecock Elders (2014), p. 2" },
+          { id: "mussels", title: "Caring for the shore", text: "Elders distinguished gathering from caring: blue mussels were preferred for eating, while ribbed “bank” mussels were often left because they held the shore together.", source: "Shinnecock Environmental Department, Natural Resources Identified by Shinnecock Elders (2014), p. 4" },
+          { id: "oysters", title: "Oysters and the hatchery", text: "Oysters fed people and their crushed shells were used in planting. The Shinnecock shellfish hatchery, established in 1980, continues the work of growing bivalves.", source: "Shinnecock Environmental Department, Natural Resources Identified by Shinnecock Elders (2014), p. 4" },
+          { id: "wampum", title: "Wampum is not money", text: "White and purple wampum beads made from hard clams held meaning in relationships of exchange, unlike the monetary value imposed in colonial trade.", source: "Shinnecock Environmental Department, Natural Resources Identified by Shinnecock Elders (2014), pp. 6–7" },
+          { id: "language", title: "Language returning", text: "Shinnecock people are renewing their Algonquian language alongside Unkechaug and Montaukett collaborators, through the Algonquian Language Revitalization Project.", source: "Stony Brook University Department of Linguistics, Algonquian Language Revitalization Project" },
+          { id: "not-only-loss", title: "Loss is not the whole story", text: "Dispossession and development changed access to Shinnecock places. Acknowledging those losses should not reduce Shinnecock life to loss alone.", source: "On This Site, Shinnecock Ancestral Land" },
+          { id: "respect", title: "Respect here", text: "Respect here includes listening to Shinnecock leadership and supporting the protection of ancestral land, waters and cultural places.", source: "On This Site, Shinnecock Ancestral Land" }
+        ],
+        "unkechaug-ancestral-land": [
+          { id: "poospatuck", title: "A living South Shore nation", text: "Unkechaug people continue to live in their ancestral homeland at Poospatuck, where the creek leads toward the Forge River and Moriches Bay.", source: "National Park Service, Native American Heritage at Fire Island National Seashore" },
+          { id: "government", title: "Still governing", text: "Despite colonial dispossession and continuing pressure on their land, the Unkechaug Indian Nation sustains its government, community and work to renew its language.", source: "National Park Service; Stony Brook University Department of Linguistics" },
+          { id: "wider-homeland", title: "More than the reservation", text: "The small area kept as the Poospatuck reservation should not be mistaken for the full extent of Unkechaug belonging, which reaches across Mastic, Moriches and Brookhaven’s waters.", source: "John A. Strong, The Unkechaug Indians of Eastern Long Island: A History" },
+          { id: "waters", title: "Waters and generations", text: "Generations of fishing, family life and care for the waters connect the Poospatuck community to a much wider South Shore homeland.", source: "National Park Service, Native American Heritage at Fire Island National Seashore" },
+          { id: "language", title: "Language returning", text: "Unkechaug people take part in the Algonquian Language Revitalization Project with Shinnecock and Montaukett collaborators, connecting language, education and responsibility to future generations.", source: "Stony Brook University Department of Linguistics, Algonquian Language Revitalization Project" },
+          { id: "tobacus", title: "Leaders in the records", text: "Seventeenth-century records name Unkechaug leaders such as Tobacus in land transactions and boundary descriptions.", source: "John A. Strong, The Unkechaug Indians of Eastern Long Island: A History" },
+          { id: "own-voice", title: "A nation’s own voice", text: "Learning the names and history of this South Shore should lead to recognition of a living nation and its authority to speak for itself.", source: "On This Site, Unkechaug Ancestral Land" },
+          { id: "respect", title: "Respect here", text: "Respect for Unkechaug land and waters includes respecting community decisions about access, cultural knowledge and the protection of ancestral places.", source: "On This Site, Unkechaug Ancestral Land" }
+        ],
+        "montaukett-ancestral-land": [
+          { id: "homeland", title: "A living homeland", text: "Montauk is a living Montaukett homeland, with deep ancestral ties to its waters, Indian Fields and places beyond the East End.", source: "Montauk Tribe of Indians" },
+          { id: "1910", title: "Declared extinct, still here", text: "In 1910 a New York court wrongly claimed the Montaukett Nation no longer existed, while Montaukett people were present and contesting the loss of their lands. The ruling did not end them.", source: "John A. Strong, The Montaukett Indians of Eastern Long Island" },
+          { id: "recognition", title: "Recognition is not existence", text: "Legal acknowledgment and a people’s existence are different things. Montaukett families continue community and cultural work and the campaign to restore state recognition.", source: "Montauk Tribe of Indians; New York State Legislature" },
+          { id: "brothertown", title: "Kin in Wisconsin", text: "Montaukett ancestors were among the founding peoples of the Brothertown Indian Nation, which continues today in Wisconsin.", source: "Brothertown Indian Nation" },
+          { id: "indian-fields", title: "Families who remained", text: "Indian Fields, Freetown and Eastville connect the history of Montaukett land loss with the lives of families who remained on the East End.", source: "On This Site, Montaukett Ancestral Land" },
+          { id: "name", title: "What the name may mean", text: "Montauk has been read as “the fort country,” and Dutch records wrote the homeland as Mirrachtauhacky. Colonial records kept many spellings, from Meantaucutt to Montaukett.", source: "William Wallace Tooker, Indian Place-Names on Long Island (1911); Documents Relative to the Colonial History of the State of New York, vol. XIV" },
+          { id: "pharoah-1798", title: "Words kept in 1798", text: "In 1798, Sachem George Pharoah, then 66, shared Montaukett words with John Lyon Gardiner, who wrote them down. The vocabulary was later published for readers today.", source: "Gaynell Stone, ed., Languages and Lore of the Long Island Indians, vol. IV" },
+          { id: "2024", title: "Honored today", text: "In November 2024, East Hampton Town honored Chief Robert Pharaoh and Sandi Brewster-Walker with a proclamation recognizing the Montaukett Indian Nation.", source: "Christopher Walsh, “Town Recognizes the Montaukett Indian Nation,” East Hampton Star, November 14, 2024" },
+          { id: "respect", title: "Respect here", text: "Supporting Montaukett-led education and listening to descendant accounts connects a place name with a living people.", source: "On This Site, Montaukett Ancestral Land" }
+        ],
+        "corchaug-ancestral-land": [
+          { id: "homeland", title: "A North Fork homeland", text: "Corchaug homelands on the North Fork hold generations of farming, fishing and wampum-making, remembered in names such as Cutchogue.", source: "John A. Strong, The Algonquian Peoples of Long Island from Earliest Times to 1700" },
+          { id: "older-than-southold", title: "Older than Southold", text: "Cutchogue and the North Fork’s older place names carry a Native geography that predates Southold’s establishment in 1640.", source: "On This Site, Corchaug Ancestral Land" },
+          { id: "saugust", title: "Fields taken", text: "After English settlement, settlers took over cleared fields at Saugust, while deeds, fencing and livestock narrowed Native access to land and the shore.", source: "On This Site, Corchaug Ancestral Land" },
+          { id: "1763", title: "The 1763 petition", text: "Corchaug people kept asserting land rights long after colonial settlement began, including in a 1763 petition concerning Indian Neck and South Harbor.", source: "On This Site, Corchaug Ancestral Land" },
+          { id: "descendants", title: "No reservation, not no people", text: "The absence of a reservation bearing the Corchaug name should not be mistaken for proof that its people left no descendants.", source: "On This Site, Corchaug Ancestral Land" },
+          { id: "across-lines", title: "Relationships across lines", text: "Native families moved, married and found refuge across places later drawn as separate tribal territories; a colored map cannot hold all of those relationships.", source: "On This Site, Corchaug Ancestral Land" },
+          { id: "diplomacy", title: "Diplomacy and wampum", text: "Records involving Southold, Paucamp and Momoweta show Native diplomacy, trade and wampum across this coastal homeland.", source: "On This Site, Corchaug Ancestral Land" },
+          { id: "voices", title: "Voices left out", text: "Learning this history means attending both to the land that was taken and to the living Native communities whose voices colonial accounts often left out.", source: "On This Site, Corchaug Ancestral Land" }
+        ],
+        "manhansett-ancestral-land": [
+          { id: "island", title: "Shelter Island’s Native name", text: "Shelter Island is Manhansett ancestral land, recorded as Manhansack-Ahaquatuwamock. Its waters connected Native communities long before a colonial plantation occupied the island.", source: "On This Site, Manhansett Ancestral Land" },
+          { id: "name", title: "What the name may mean", text: "Manhansett is read as “island land” or “neighborhood”; an older reading as a river mouth is rejected.", source: "William Wallace Tooker, Indian Place-Names on Long Island (1911)" },
+          { id: "montauk", title: "Ties to Montauk", text: "Manhansett history includes documented political and cultural relationships with Montauk people.", source: "Fiske Center for Archaeological Research, University of Massachusetts Boston" },
+          { id: "plantation", title: "A plantation on Native land", text: "Sylvester Manor’s own history acknowledges that its plantation was established on Manhansett ancestral land in 1651 and depended on an Atlantic economy of slavery and labor.", source: "Sylvester Manor" },
+          { id: "wampum", title: "Native labor and wampum", text: "Researchers describe evidence of Native labor and wampum production at Sylvester Manor.", source: "Fiske Center for Archaeological Research, University of Massachusetts Boston" },
+          { id: "inhabited", title: "Inhabited, not empty", text: "The plantation transformed an inhabited homeland; it did not replace an empty landscape.", source: "On This Site, Manhansett Ancestral Land" },
+          { id: "respect", title: "Respect here", text: "Remembering Manhansett ancestry calls for respect for descendant knowledge and care for cultural places, with Native voices central to how this history is told.", source: "On This Site, Manhansett Ancestral Land" }
+        ],
+        "setauket-ancestral-land": [
+          { id: "nation", title: "The Setalcott Nation", text: "Setauket carries a Native place name within the living homeland of the Setalcott Nation, whose history here reaches back thousands of years.", source: "Three Village Historical Society and Setalcott Nation (2025)" },
+          { id: "christian-avenue", title: "Christian Avenue", text: "Setalcott ties continue through descendant families, including the Black and Indigenous community around Christian Avenue.", source: "Three Village Historical Society and Setalcott Nation (2025)" },
+          { id: "last-member", title: "No “last member”", text: "The Setalcott Nation’s 2025 acknowledgment rejects the old habit of declaring a people gone when an outsider named a supposed last member.", source: "Three Village Historical Society and Setalcott Nation (2025)" },
+          { id: "waters", title: "Caring for ancestral waters", text: "The Nation’s 2025 restoration grant links native planting and an oyster-hatchery study at Conscience Bay with planned kelp farming at Poquott.", source: "Three Village Historical Society and Setalcott Nation (2025)" },
+          { id: "council", title: "Leading today", text: "Helen Sells and Robert “Silver Wolf” Thompson co-chair the council named in the 2025 statement, which also honors Gail “Chief Running Water” Revis and historian Theodore Green.", source: "Three Village Historical Society and Setalcott Nation (2025)" },
+          { id: "name", title: "What the name may mean", text: "Setauket has been read as “land at the mouth of a river or creek,” an early twentieth-century interpretation rather than a final community translation.", source: "William Wallace Tooker, Indian Place-Names on Long Island (1911)" },
+          { id: "warawakmy", title: "Warawakmy", text: "The April 14, 1655 Setauket deed names Warawakmy as a Setauket sachem. Deeds like it leave out much of Native law, kinship and understanding of the land.", source: "Brookhaven Town Records" },
+          { id: "respect", title: "Respect here", text: "Acknowledgment here means recognizing the continuing Setalcott community, listening to its members and supporting their role in caring for ancestral places.", source: "On This Site, Setauket Ancestral Land" }
+        ],
+        "nissaquogues": [
+          { id: "river", title: "A river’s name", text: "The Nissequogue River preserves a Native name within an ancestral homeland shaped by generations of life along its waters.", source: "On This Site, Nissequogue Ancestral Land" },
+          { id: "deeds", title: "What deeds leave out", text: "Colonial deeds and the growth of Smithtown narrowed Native control, but those papers did not record every family’s movements, relationships or belonging.", source: "On This Site, Nissequogue Ancestral Land" },
+          { id: "neighbours", title: "Neighbors still here", text: "Matinecock and Setalcott communities remain present on this North Shore; their histories show family relationships reaching beyond the separate territories on a map.", source: "Flushing Town Hall (2018); Three Village Historical Society and Setalcott Nation (2025)" },
+          { id: "extinct", title: "A missing label is not extinction", text: "A missing tribal label in later records is not a sound basis for declaring a people extinct.", source: "On This Site, Nissequogue Ancestral Land" },
+          { id: "between", title: "Between neighbors", text: "Earlier sources place Nissequogue lands between Matinecock lands to the west and Setauket lands to the east, along the river, shore and inland routes.", source: "On This Site, Nissequogue Ancestral Land" },
+          { id: "respect", title: "Respect here", text: "Acknowledgment here leaves room for descendant knowledge and recognizes the obligations that come with living beside this ancestral river.", source: "On This Site, Nissequogue Ancestral Land" }
+        ],
+        "secatogue-ancestral-land": [
+          { id: "bay", title: "A Great South Bay homeland", text: "Secatogue ancestry belongs to the creeks, meadows and shores of Great South Bay, where Native life long preceded colonial towns.", source: "National Park Service, Native American Heritage at Fire Island National Seashore" },
+          { id: "visible", title: "Less visible, not vanished", text: "Land transactions changed how Secatogue people appeared in written records. A less visible name is not evidence that a people vanished.", source: "On This Site, Secatogue Ancestral Land" },
+          { id: "name", title: "Land of the Secatogues", text: "Sichetanyhacky, a name in Dutch-period records, is interpreted as the country or land of the Secatogues.", source: "William Wallace Tooker, Indian Place-Names on Long Island (1911); Documents Relative to the Colonial History of the State of New York, vol. XIV" },
+          { id: "fire-island", title: "Fire Island", text: "The National Park Service identifies Secatogue people among the ancestral communities of the Great South Bay and Fire Island region.", source: "National Park Service, Native American Heritage at Fire Island National Seashore" },
+          { id: "living-coast", title: "A living coast", text: "The Unkechaug community at Poospatuck and the Shinnecock Nation make Native continuance visible on this coast; the story of a vanished Native South Shore does not hold.", source: "National Park Service; Shinnecock Indian Nation" },
+          { id: "respect", title: "Respect here", text: "Honoring Secatogue ancestry includes protecting the bay and cultural places, and making room for family histories that deed archives may not preserve.", source: "On This Site, Secatogue Ancestral Land" }
+        ],
+        "massapequa-ancestral-lands": [
+          { id: "homeland", title: "South Oyster Bay homeland", text: "Massapequa’s name connects today’s community to an older Native homeland around South Oyster Bay and Fort Neck.", source: "On This Site, Massapequa Ancestral Lands" },
+          { id: "tackapousha", title: "Tackapousha", text: "Leaders such as Tackapousha defended Native interests as colonial settlement pressed into fields, meadows and waterways.", source: "John A. Strong, The Algonquian Peoples of Long Island from Earliest Times to 1700" },
+          { id: "negotiating", title: "Negotiating, not surrendering", text: "Treaties and disputes name leaders across Massapequa, Rockaway and Secatogue: people negotiating and resisting under pressure, not simply leaving history.", source: "On This Site, Massapequa Ancestral Lands" },
+          { id: "name", title: "What the name may mean", text: "Massapeague is interpreted as “great water land” or “land on the great cove.”", source: "William Wallace Tooker, Indian Place-Names on Long Island (1911)" },
+          { id: "1639", title: "Names in the records", text: "The 1639 Marossepinck deed preserves Native names such as Mechowodt and Piscamoc, and the 1656 treaty names Tackapousha with allied western Long Island signers.", source: "Documents Relative to the Colonial History of the State of New York, vol. XIV; John A. Strong" },
+          { id: "villages", title: "Villages, not townships", text: "The popular list of Long Island’s “thirteen tribes” makes Native life look like fixed townships; it was organized through villages, kinship, diplomacy, seasonal movement and shared land and water.", source: "John A. Strong, The Thirteen Tribes of Long Island: The History of a Myth" },
+          { id: "respect", title: "Respect here", text: "Acknowledgment here means caring for ancestral places and respecting descendants’ authority to explain their own family connections.", source: "On This Site, Massapequa Ancestral Lands" }
+        ],
+        "matinecock-traditional-land": [
+          { id: "homeland", title: "A North Shore homeland", text: "Matinecock ancestral land reaches across the North Shore from Queens into Long Island, and its people remain present through descendant families and cultural work.", source: "Flushing Town Hall (2018)" },
+          { id: "name", title: "What the name may mean", text: "Matinecock is interpreted as “at the place of observation,” “at the place to look around from,” or “at the hilly land.”", source: "William Wallace Tooker, Indian Place-Names on Long Island (1911)" },
+          { id: "1931", title: "Ancestors disturbed", text: "In 1931 a Matinecock burial ground was removed for the widening of Northern Boulevard, despite descendant opposition.", source: "Queens Public Library, via Urban Archive" },
+          { id: "kin", title: "Kin across nations", text: "Family historian Donna Gentle Spirit Barron and the Ceaser family make Matinecock and Montaukett kinship visible: specific family relationships, not interchangeable identities.", source: "Flushing Town Hall (2018)" },
+          { id: "2018", title: "Sharing their own history", text: "Matinecock descendants publicly shared their history and cultural protocols at Flushing Town Hall’s 2018 gathering.", source: "Flushing Town Hall (2018)" },
+          { id: "no-reservation", title: "No reservation, still a people", text: "Recognition by outsiders, ownership in deeds and Native belonging are different matters; a missing reservation does not mean a missing people.", source: "On This Site, Matinecock Traditional Land" },
+          { id: "places", title: "Places of the homeland", text: "Matinecock history is documented around Oyster Bay, Glen Cove, Cold Spring Harbor, Huntington and neighboring North Shore communities.", source: "On This Site, Matinecock Traditional Land" }
+        ],
+        "merrick-ancestral-land": [
+          { id: "homeland", title: "The Merikoke homeland", text: "Merrick’s name recalls the Merikoke homeland of plains, creeks and South Shore waters.", source: "On This Site, Merrick Ancestral Land" },
+          { id: "name", title: "What the name may mean", text: "Merrick is connected with an Algonquian meaning of bare land or plain, fitting the Hempstead Plains, a large open grassland.", source: "William Wallace Tooker, Indian Place-Names on Long Island (1911)" },
+          { id: "1675", title: "“Not paid for”", text: "In 1675, Tackapousha publicly challenged Hempstead’s use of Mercock land, stating that it had not been paid for.", source: "John A. Strong, The Algonquian Peoples of Long Island from Earliest Times to 1700" },
+          { id: "contested", title: "Deeds were contested", text: "Early land papers here record diplomacy, translation, boundary disputes and Native legal resistance, not simple sales.", source: "On This Site, Merrick Ancestral Land" },
+          { id: "2023", title: "On the water today", text: "A 2023 Native canoe gathering at Jones Beach connects this South Shore with Native people who continue to gather and assert belonging here.", source: "The Long Island Advocate (2023)" },
+          { id: "learning", title: "Places to keep learning", text: "The Lister Park Greenway marker introduces Native histories of the Mill River, and Hempstead Plains Preserve connects prairie conservation with the history of the commons.", source: "On This Site, Merrick Ancestral Land" },
+          { id: "sign", title: "A missing sign", text: "The missing Meroke village sign shows how fragile public acknowledgment can be.", source: "On This Site, Merrick Ancestral Land" }
+        ],
+        "rockaway-traditional-land": [
+          { id: "lenape", title: "A Lenape homeland", text: "Rockaway preserves a Native name on the shores of a much older Lenape homeland, where bays, islands and waterways connected people.", source: "National Park Service" },
+          { id: "continue", title: "Lenape life continues", text: "Displacement did not end Lenape life: communities continue in the homeland and in nations beyond New York.", source: "Lenape Center" },
+          { id: "relationship", title: "Displaced, still related", text: "Displacement can separate a community from land without ending its relationship to that land.", source: "Lenape Center; On This Site, Rockaway Traditional Land" },
+          { id: "1655", title: "Names in the 1655 deed", text: "The 1655 Rockaway Neck deed names Ruckquaheag, Ronnessoke and Adam, also called Achitteronose, among others.", source: "Documents Relative to the Colonial History of the State of New York, vol. XIV; John A. Strong" },
+          { id: "1657", title: "The 1657 conference", text: "At a 1657 Hempstead conference, Mangwobe of Rockaway met with Tackapousha, Wyandanch, Cockenoe and Merrick representatives.", source: "Documents Relative to the Colonial History of the State of New York, vol. XIV" },
+          { id: "respect", title: "Respect here", text: "Acknowledgment here makes room for living Lenape voices and the responsibilities carried by a name that survived the growth of the city.", source: "On This Site, Rockaway Traditional Land" }
+        ],
+        "canarsie-traditional-land": [
+          { id: "homeland", title: "Brooklyn’s Native homeland", text: "Canarsie carries the name of a Native community whose homeland included parts of present-day Brooklyn and Jamaica Bay.", source: "National Park Service" },
+          { id: "shores", title: "Caring for these shores", text: "Generations lived from and cared for these shores before Dutch and English settlement brought dispossession.", source: "On This Site, Canarsie Traditional Land" },
+          { id: "city", title: "Land that became the city", text: "Colonial grants, petitions and patents record a struggle over inhabited land; reading them only as property transfers hides the communities whose land became the city.", source: "On This Site, Canarsie Traditional Land" },
+          { id: "lenape-center", title: "Speaking for themselves", text: "Today Lenape people speak for their own history through institutions such as Lenape Center, connecting present-day nations with New York through art, education, language and public history.", source: "Lenape Center" },
+          { id: "not-gone", title: "Not a disappearance", text: "Later histories sometimes turned Canarsie into folklore or a disappearance story. Displacement and changed community names do not amount to disappearance.", source: "On This Site, Canarsie Traditional Land" }
+        ]
+      }
+    };
 
     function arDistanceKm(a, b) {
       const rad = Math.PI / 180;
@@ -265,11 +416,19 @@
     const AR_SITE_FIELDS = ["title", "slug", "summary", "why_this_matters", "listing_image_url", "listing_image_alt", ...AR_SECTIONS.map(([field]) => field)].join(",");
     const AR_PHOTOS = 6;
     const AR_READINGS = 4;
-    // Nearby sites float up as signs in the sky, each in its real direction (sky: true).
-    const AR_NEARBY_PLACES = 6;
+    // Nearby sites float up as signs in the sky, each in its real direction (sky: true),
+    // last of all: the reason to go and visit. Within 5 km, or up to 15 km to find five.
+    const AR_NEARBY_PLACES = 8;
     const AR_NEARBY_KM = 5;
+    const AR_NEARBY_MIN = 5;
+    const AR_NEARBY_FAR_KM = 15;
+    // At most this many bubbles in all; what is around you gives way first.
+    const AR_MAX_ITEMS = 40;
     // The "You are here" marker lists this many of them.
     const AR_HERE_NEARBY = 3;
+    // Other land history (a reservation, a park…) only when you are inside it, or this
+    // close to a point.
+    const AR_INSIDE_POINT_KM = 0.3;
 
     function arKm(km) {
       return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
@@ -396,11 +555,12 @@
       return nearest ? [nearest] : [];
     }
 
-    // An ancestral land's own page, read for AR: its sections and captioned photos.
-    function arLandPageItems(entry, page) {
+    // An ancestral land's own page, read for AR: its sections (unless the land has
+    // its own teachings) and captioned photos.
+    function arLandPageItems(entry, page, readings = true) {
       if (!page) return [];
       const title = arText(entry.title);
-      const items = AR_SECTIONS
+      const items = !readings ? [] : AR_SECTIONS
         // The land's own history card already tells its history.
         .filter(([field]) => !(field === "history_content" && entry.historicalContext))
         .map(([field, label]) => ({ label, text: arReading(page[field]) }))
@@ -422,25 +582,36 @@
     }
 
     // Native place names around you, each pointing its way. They are the
-    // land's own names, so they need no visit to a site.
+    // land's own names, so they need no visit to a site. A summary that is
+    // about a reference (Tooker's records) rather than the place is left out,
+    // as are sentences about where the map marker sits.
     function arPlaceNames(here, skip) {
       return (state.sites || [])
         .filter(site => site.site_type === "placename" && site.slug !== AR_ISLAND_SLUG && !skip.has(site.slug)
-          && Array.isArray(site.center) && site.summary && !arSensitiveSite(site))
-        .map(site => ({ site, centre: { lng: Number(site.center[0]), lat: Number(site.center[1]) } }))
+          && Array.isArray(site.center) && site.summary && !/tooker/i.test(site.summary) && !arSensitiveSite(site))
+        .map(site => ({ site, centre: { lng: Number(site.center[0]), lat: Number(site.center[1]) },
+          caption: arText(site.summary).split(/(?<=[.!?])\s+/).filter(sentence => !/\bmap (point|marker)|\bmarker\b|\bgeneral location\b/i.test(sentence)).join(" ") }))
         .map(item => ({ ...item, km: arDistanceKm(here, item.centre) }))
-        .filter(item => item.km <= AR_PLACE_NAME_KM)
+        .filter(item => item.km <= AR_PLACE_NAME_KM && item.caption.length >= 40)
         .sort((a, b) => a.km - b.km)
         .slice(0, AR_PLACE_NAMES)
-        .map(({ site, centre, km }) => arToward({
+        .map(({ site, centre, caption }) => arToward({
           id: `placename-${site.slug}`, layer: "archival", kind: "note", placement: "discover",
-          title: `Native place name: ${arText(site.title)}`,
-          caption: `${km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`} from you, in the direction of this bubble. ${arText(site.summary)}`,
+          title: `Native place name: ${arText(site.title)}`, caption,
           credit: "On This Site", image: site.listing_image_url || site.listing_image_thumb_url || undefined
         }, here, centre));
     }
 
-    // The homelands beside the one you are on, pointing toward their nearest edge.
+    // A teaching as a bubble; its source is small print in the opened card.
+    function arLearning(learning, slug, title = learning.title) {
+      return {
+        id: `learn-${slug}-${learning.id}`, layer: "archival", kind: "note", placement: "discover",
+        title, caption: learning.text, credit: learning.source
+      };
+    }
+
+    // The homelands beside the one you are on, pointing toward their nearest edge,
+    // each with its first two teachings.
     function arNeighbours(here, homelands, entries) {
       const own = new Set(homelands.map(({ entry }) => entry.slug));
       return entries
@@ -449,97 +620,129 @@
         .filter(item => item.near && item.near.km <= AR_NEIGHBOUR_KM)
         .sort((a, b) => a.near.km - b.near.km)
         .slice(0, AR_NEIGHBOURS)
-        .map(({ entry, near }) => arToward({
-          ...arLandClips(entry, "neighbour-")[0],
-          title: `Neighbouring homeland: ${arText(entry.title)}`,
-          image: arSiteImage(entry.siteId) || undefined
-        }, here, near));
+        .flatMap(({ entry, near }) => {
+          const title = arText(entry.title);
+          const image = arSiteImage(entry.siteId) || undefined;
+          const learnings = (AR_LEARNINGS.lands[entry.slug] || []).slice(0, 2);
+          const items = learnings.length
+            ? learnings.map((learning, index) => arLearning(learning, `neighbour-${entry.slug}`, index ? `${title}: ${learning.title}` : `Neighbouring homeland: ${title}`))
+            : [{ ...arLandClips(entry, "neighbour-")[0], title: `Neighbouring homeland: ${title}` }];
+          return items.map(item => arToward({ ...item, image }, here, near));
+        });
     }
 
-    // Anywhere: the ancestral land you are on (or the nearest one) with its
-    // page, the Native place names and neighbouring homelands around you,
-    // other land history close by, then the area's people, nearby places,
-    // finds and a word. landPages: the land pages, fetched by openRegionAr.
+    // Other land history (a reservation, a preserve, a court case's place) only
+    // where you stand: inside its shape, or right beside its point.
+    function arLandHere(here, entries) {
+      return entries
+        .filter(entry => !entry.isAncestralLand)
+        .map(entry => ({ entry, geometry: arEntryGeometry(entry) }))
+        .filter(({ geometry }) => geometry?.type === "Point"
+          ? arDistanceKm(here, arGeometryCentre(geometry)) <= AR_INSIDE_POINT_KM
+          : arInsideGeometry(here, geometry))
+        .slice(0, 3)
+        .map(({ entry }) => {
+          const [clip] = arLandClips(entry);
+          const respect = entry.sensitivity ? ` ${arText(entry.sensitivity)}` : "";
+          return { ...clip, caption: `${arText(entry.description)}${respect}`, image: arSiteImage(entry.siteId) || undefined };
+        });
+    }
+
+    // Nearby sites with a photo and a summary, nearest first: within 5 km, or
+    // as far as 15 km to find five.
+    function arNearbySites(here, skipSites) {
+      const all = (state.sites || [])
+        .filter(site => Array.isArray(site.center) && site.summary && (site.listing_image_url || site.listing_image_thumb_url) && !arSensitiveSite(site)
+          && !skipSites.has(Number(site.id)))
+        .map(site => ({ site, km: arDistanceKm(here, { lng: Number(site.center[0]), lat: Number(site.center[1]) }) }))
+        .filter(item => item.km <= AR_NEARBY_FAR_KM)
+        .sort((a, b) => a.km - b.km);
+      const close = all.filter(item => item.km <= AR_NEARBY_KM);
+      return (close.length >= AR_NEARBY_MIN ? close : all.slice(0, AR_NEARBY_MIN)).slice(0, AR_NEARBY_PLACES);
+    }
+
+    // Anywhere, in this order: the "You are here" pin with the ancestral land you
+    // are on (or the nearest one); three teachings for everyone; that land's own
+    // teachings and photos; then what is around you (Native place names,
+    // neighbouring homelands, land history where you stand, people, finds and
+    // words); and last, the nearby sites as signs in the sky, the reason to go and
+    // visit. The app shows bubbles in list order; sky_after tells it how many to
+    // open before the signs rise. landPages: the land pages, fetched by openRegionAr.
     function regionArScene(here, random = Math.random, landPages = {}) {
       const entries = arLandEntries();
-      const land = [];
-      const other = [];
-      let hereItem = null;
-      if (here) {
-        const homelands = arHomelands(here, entries);
-        homelands.forEach(({ entry, near }, index) => {
+      const essentials = AR_LEARNINGS.essentials.map(learning => arLearning(learning, "all"));
+      if (!here) {
+        // Without a location: the essentials, then a few ancestral lands to learn about.
+        const lands = arShuffled(entries.filter(entry => entry.isAncestralLand && AR_LEARNINGS.lands[entry.slug]), random).slice(0, 3);
+        const learned = lands.flatMap(entry => AR_LEARNINGS.lands[entry.slug].slice(0, 2)
+          .map(learning => arLearning(learning, entry.slug, `${arText(entry.title)}: ${learning.title}`)));
+        return arScene("Around you", [...essentials, ...learned, ...arWords(AR_WORDS, random)], random, null, true);
+      }
+      const homelands = arHomelands(here, entries);
+      const own = [];
+      const around = [];
+      homelands.forEach(({ entry, near }, index) => {
+        const learnings = AR_LEARNINGS.lands[entry.slug] || [];
+        const page = landPages[entry.slug];
+        if (!learnings.length) {
+          // A land without its own teachings yet: its land-history cards and page.
           const [welcome, ...more] = arLandClips(entry);
-          // The first land is told by the "You are here" marker (built below, once the
-          // nearby sites are known); any overlapping land keeps its own bubble.
-          if (index === 0) hereItem = { welcome, entry, near };
-          else land.push(near
-            ? arToward({ ...welcome, title: `Near ${arText(entry.title)}`, caption: `About ${near.km.toFixed(1)} km away, in the direction of this bubble. ${welcome.caption}`, image: arSiteImage(entry.siteId) }, here, near)
-            : { ...welcome, title: `You are on ${arText(entry.title)}`, image: arSiteImage(entry.siteId) });
-          land.push(...arShuffled([...more, ...arLandPageItems(entry, landPages[entry.slug])], random));
-        });
-        const homelandSites = new Set(homelands.map(({ entry }) => Number(entry.siteId)));
-        const nearby = (state.sites || [])
-          .filter(site => Array.isArray(site.center) && site.summary && (site.listing_image_url || site.listing_image_thumb_url) && !arSensitiveSite(site)
-            && !homelandSites.has(Number(site.id)))
-          .map(site => ({ site, km: arDistanceKm(here, { lng: Number(site.center[0]), lat: Number(site.center[1]) }) }))
-          .filter(item => item.km <= AR_NEARBY_KM)
-          .sort((a, b) => a.km - b.km)
-          .slice(0, AR_NEARBY_PLACES);
-        const placeNames = arPlaceNames(here, new Set(nearby.map(({ site }) => site.slug)));
-        const island = (state.sites || []).find(site => site.slug === AR_ISLAND_SLUG && site.summary);
-        const stories = [...placeNames, ...arNeighbours(here, homelands, entries)];
-        entries
-          .filter(entry => !entry.isAncestralLand)
-          .map(entry => ({ entry, centre: arGeometryCentre(arEntryGeometry(entry)) }))
-          .filter(item => item.centre && arDistanceKm(here, item.centre) <= AR_LAND_KM)
-          .sort((a, b) => arDistanceKm(here, a.centre) - arDistanceKm(here, b.centre))
-          .slice(0, 3)
-          .forEach(({ entry, centre }) => stories.push(arToward(arLandClips(entry)[0], here, centre)));
-        if (island) stories.push({
-          id: `island-${island.slug}`, layer: "archival", kind: "note", placement: "discover",
-          title: `${arText(island.title)}: a name for this island`, caption: arText(island.summary), credit: "On This Site"
-        });
-        land.push(...arShuffled(stories, random));
-        // Signs in the sky, each in its site's real direction: name, distance and one line
-        // (sky, brief); opening one reads the full summary. Older apps show bubbles.
-        nearby.forEach(({ site, km }) => other.push(arToward({
-          id: `place-${site.slug}`, layer: "archival", kind: "note", placement: "discover",
-          title: `Nearby: ${arText(site.title)}`,
-          caption: `${arKm(km)} from you, in the direction of this sign. ${arText(site.summary)}`,
-          credit: "On This Site", image: site.listing_image_url || site.listing_image_thumb_url,
-          sky: true, name: arText(site.title), brief: arBrief(site.summary)
-        }, here, { lng: Number(site.center[0]), lat: Number(site.center[1]) })));
-        // First of all: a red arrow down at your spot, saying whose land it is and what is near.
-        const nearest = nearby.slice(0, AR_HERE_NEARBY).map(({ site, km }) => `${arText(site.title)} · ${arKm(km)}`);
-        const landTitle = hereItem ? arText(hereItem.entry.title) : "";
-        const landLine = !hereItem ? "Long Island (Paumanok)"
-          : hereItem.near ? `Near ${landTitle} · ${arKm(hereItem.near.km)}` : `On ${landTitle}`;
-        hereItem = {
-          id: "here", layer: "archival", kind: "here", placement: "discover",
-          title: "You are here", land: landLine, nearby: nearest,
-          caption: [hereItem ? `${landLine}. ${hereItem.welcome.caption}` : `${landLine}.`,
-            nearest.length ? `Nearby:\n${nearest.join("\n")}` : ""].filter(Boolean).join("\n\n"),
-          credit: hereItem?.welcome.credit || "On This Site",
-          image: hereItem ? arSiteImage(hereItem.entry.siteId) || undefined : undefined
-        };
-        // With the land's own stories to tell, fewer people and words.
-        const rich = land.length >= 4;
-        other.push(...arPeople(here, AR_PEOPLE_KM, rich ? 2 : AR_PEOPLE));
-        // Photo stories and plant IDs found close by, at their spots.
-        const close = (lat, lng) => lat != null && lng != null && arDistanceKm(here, { lat: Number(lat), lng: Number(lng) }) <= AR_FIND_KM;
-        other.push(...arFinds(
+          (index === 0 ? own : around).push(...(index === 0 ? [] : [{ ...welcome, image: arSiteImage(entry.siteId) || undefined }]), ...more, ...arLandPageItems(entry, page));
+          return;
+        }
+        const photos = arLandPageItems(entry, page, false);
+        // The land you are on is told in full; a second, overlapping land by its first three.
+        if (index === 0) own.push(...arInterleave(learnings.map(learning => arLearning(learning, entry.slug)), photos, 3));
+        else around.push(...learnings.slice(0, 3).map(learning => arLearning(learning, entry.slug, `${arText(entry.title)}: ${learning.title}`)));
+      });
+      const homelandSites = new Set(homelands.map(({ entry }) => Number(entry.siteId)));
+      const nearby = arNearbySites(here, homelandSites);
+      const island = (state.sites || []).find(site => site.slug === AR_ISLAND_SLUG && site.summary);
+      around.push(...arLandHere(here, entries), ...arPlaceNames(here, new Set(nearby.map(({ site }) => site.slug))), ...arNeighbours(here, homelands, entries));
+      if (island) around.push({
+        id: `island-${island.slug}`, layer: "archival", kind: "note", placement: "discover",
+        title: `${arText(island.title)}: a name for this island`, caption: arText(island.summary), credit: "On This Site"
+      });
+      // Photo stories and plant IDs found close by, at their spots.
+      const close = (lat, lng) => lat != null && lng != null && arDistanceKm(here, { lat: Number(lat), lng: Number(lng) }) <= AR_FIND_KM;
+      const others = [
+        ...arPeople(here, AR_PEOPLE_KM, AR_PEOPLE),
+        ...arFinds(
           (state.mapStories || []).filter(story => story.photo && arShared(story) && close(story.latitude, story.longitude)),
           (state.plantObservations || []).filter(plant => arShared(plant) && close(plant.observation_latitude, plant.observation_longitude)),
           here
-        ).sort((a, b) => a.distance_m - b.distance_m).slice(0, AR_FINDS));
-        other.push(...arWords(rich ? 1 : AR_WORDS, random));
-      } else {
-        // Without a location: a few ancestral lands to learn about.
-        arShuffled(entries.filter(entry => entry.isAncestralLand), random).slice(0, 3).forEach(entry => land.push(arLandClips(entry)[0]));
-        other.push(...arWords(AR_WORDS, random));
-      }
-      const items = arInterleave(land, arShuffled(other, random));
-      return arScene("Around you", hereItem ? [hereItem, ...items] : items, random, here, true);
+        ).sort((a, b) => a.distance_m - b.distance_m).slice(0, AR_FINDS),
+        ...arWords(AR_WORDS, random)
+      ];
+      // Signs in the sky, each in its site's real direction: name, distance and one line
+      // (sky, brief); opening one reads the full summary. Older apps show bubbles.
+      const signs = nearby.map(({ site, km }) => arToward({
+        id: `place-${site.slug}`, layer: "archival", kind: "note", placement: "discover",
+        title: `Nearby: ${arText(site.title)}`,
+        caption: `${arText(site.summary)}\n\n${arKm(km)} from you, in the direction of this sign.`,
+        credit: "On This Site", image: site.listing_image_url || site.listing_image_thumb_url,
+        sky: true, name: arText(site.title), brief: arBrief(site.summary)
+      }, here, { lng: Number(site.center[0]), lat: Number(site.center[1]) }));
+      // First of all: a red arrow down at your spot, saying whose land it is and what is near.
+      const first = homelands[0];
+      const nearest = nearby.slice(0, AR_HERE_NEARBY).map(({ site, km }) => `${arText(site.title)} · ${arKm(km)}`);
+      const landTitle = first ? arText(first.entry.title) : "";
+      const landLine = !first ? "Long Island (Paumanok)"
+        : first.near ? `Near ${landTitle} · ${arKm(first.near.km)}` : `On ${landTitle}`;
+      const hereItem = {
+        id: "here", layer: "archival", kind: "here", placement: "discover",
+        title: "You are here", land: landLine, nearby: nearest,
+        caption: [first ? `${landLine}. ${arText(first.entry.description)}` : `${landLine}.`,
+          nearest.length ? `Nearby:\n${nearest.join("\n")}` : ""].filter(Boolean).join("\n\n"),
+        credit: first ? `On This Site, ${landTitle}` : "On This Site",
+        image: first ? arSiteImage(first.entry.siteId) || undefined : undefined
+      };
+      const ordered = [...essentials, ...own, ...arInterleave(arShuffled(around, random), arShuffled(others, random))]
+        .slice(0, AR_MAX_ITEMS - 1 - signs.length);
+      const scene = arScene("Around you", [hereItem, ...ordered, ...signs], random, here, true);
+      // The signs rise once this many bubbles (those that float up anywhere) are open.
+      scene.sky_after = ordered.filter(item => !Number.isFinite(item.bearing_deg) && !item.spot).length;
+      return scene;
     }
 
     function arAsset(id) {

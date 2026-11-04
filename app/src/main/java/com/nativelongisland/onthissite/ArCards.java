@@ -26,7 +26,26 @@ final class ArCards {
     }
 
     /** Characters of a long caption shown on a floating card; the rest is read by tapping. */
-    static final int CARD_PREVIEW_CHARS = 170;
+    static final int CARD_PREVIEW_CHARS = 260;
+
+    /**
+     * The start of a long caption for a floating card: whole sentences where they fit
+     * (a teaching is never cut mid-thought), else up to a word.
+     */
+    static String preview(String caption) {
+        if (caption.length() <= CARD_PREVIEW_CHARS) return caption;
+        String head = caption.substring(0, CARD_PREVIEW_CHARS);
+        for (int i = head.length() - 2; i >= CARD_PREVIEW_CHARS / 3; i--) {
+            char c = head.charAt(i);
+            if (c == '\n') return head.substring(0, i).trim();
+            if (c != '.' && c != '!' && c != '?') continue;
+            int j = i + 1;
+            while (j < head.length() && (head.charAt(j) == '\u201d' || head.charAt(j) == '"' || head.charAt(j) == ')')) j++;
+            if (j < head.length() && Character.isWhitespace(head.charAt(j))) return head.substring(0, j);
+        }
+        int space = head.lastIndexOf(' ');
+        return head.substring(0, space > 0 ? space : CARD_PREVIEW_CHARS) + "\u2026";
+    }
 
     /** Language prompt or audio clip card, revealed once the visitor walks up to an orb. */
     static Bitmap promptCard(ArScene.Item item) {
@@ -53,8 +72,10 @@ final class ArCards {
         // A question waits for an answer; long text is a preview, read in full by tapping.
         boolean quiz = phrase && item.choices.length >= 2 && !item.answered;
         boolean longText = item.caption.length() > CARD_PREVIEW_CHARS;
-        String preview = longText ? item.caption.substring(0, item.caption.lastIndexOf(' ', CARD_PREVIEW_CHARS) > 0
-            ? item.caption.lastIndexOf(' ', CARD_PREVIEW_CHARS) : CARD_PREVIEW_CHARS) + "\u2026" : item.caption;
+        String preview = preview(item.caption);
+        // The teaching comes first: sources are small print in the opened card. Only a
+        // community find keeps its line (who shared it) on the floating card.
+        boolean community = item.id.startsWith("story-") || item.id.startsWith("plant-") || item.id.startsWith("note-");
         String hint = quiz ? "Tap to answer: what does it mean?"
             : longText ? "Tap to read more"
             : !item.audio.isEmpty() ? "Tap to hear it again" : null;
@@ -65,7 +86,7 @@ final class ArCards {
             phrase && !quiz && !item.meaning.isEmpty() ? layout(item.meaning, bodyPaint, inner) : null,
             !quiz && !preview.isEmpty() ? layout(preview, bodyPaint, inner) : null,
             hint != null ? layout(hint, hintPaint, inner) : null,
-            !quiz && !item.credit.isEmpty() ? layout(item.credit, textPaint(24, Color.rgb(170, 178, 174), false), inner) : null,
+            !quiz && community && !item.credit.isEmpty() ? layout(item.credit, textPaint(24, Color.rgb(170, 178, 174), false), inner) : null,
         };
         int photoHeight = photo == null ? 0 : Math.min(Math.round(inner * 0.62f), Math.round(inner * photo.getHeight() / (float) photo.getWidth()));
         int height = pad + (photoHeight > 0 ? photoHeight + 22 : 0);
