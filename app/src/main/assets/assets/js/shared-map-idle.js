@@ -86,6 +86,11 @@
     let cardOpen = null;
     let swallowClickUntil = 0;
     let pointer = null;
+    // The thin white line from the place on the map to its card, the stop it
+    // points at, and where the last stop was framed on screen.
+    let line = null;
+    let lineStop = null;
+    let lastFrame = null;
 
     function sensitive(site) {
       return /sensitive|burial|grave|cemetery/i.test(site?.site_type || "") || /cemetery|burial/i.test(site?.title || "");
@@ -404,6 +409,11 @@
         .map-idle-card.wide i { display: block; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #9fd4b0; transform-origin: left; transform: scaleX(0); }
         .map-idle-card.wide.show i { animation: map-idle-timer ${CARD_MS}ms linear forwards; }
         @keyframes map-idle-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+        .map-idle-line { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 39; pointer-events: none; overflow: visible;
+          opacity: 0; transition: opacity 0.9s ease; filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.55)); }
+        .map-idle-line.show { opacity: 1; }
+        .map-idle-line line { stroke: #fff; stroke-width: 1.5; stroke-linecap: round; }
+        .map-idle-line circle { fill: #fff; }
         @media (max-height: 700px) { .map-idle-card.wide img { height: 120px; } .map-idle-card.wide img.icon { height: 84px; } }
       `;
       document.head.appendChild(style);
@@ -473,7 +483,10 @@
           open?.();
         });
         document.body.appendChild(card);
-        window.addEventListener("resize", placeCard);
+        window.addEventListener("resize", () => {
+          placeCard();
+          if (lineStop) drawLine(lineStop);
+        });
       }
       window.clearTimeout(hideTimer);
       card.classList.remove("show");
@@ -503,7 +516,62 @@
       requestAnimationFrame(() => requestAnimationFrame(() => card?.classList.add("show")));
     }
 
+    // Where the stop's place is on screen (page pixels): from the map when it can
+    // say, else the middle of the framed view, where every stop lands (the app's
+    // native map flies itself, out of the page's reach).
+    function stopScreenPoint(stop) {
+      if (stop.island) return null;
+      const center = stop.centerAt ? here : stop.center;
+      if (!center) return null;
+      const fromCamera = ctx.camera?.toScreen?.(center);
+      if (fromCamera) return fromCamera;
+      const map = !nativeCamera() && getMap();
+      if (map?.project && map.getCanvas && map.getContainer) {
+        const point = map.project(center);
+        const rect = map.getContainer().getBoundingClientRect();
+        return [rect.left + point.x, rect.top + point.y];
+      }
+      return lastFrame?.point || null;
+    }
+
+    // A thin white line from the place to the nearest edge of its card, so the
+    // eye can follow which place the card is about. Hidden with the card.
+    function drawLine(stop) {
+      lineStop = stop;
+      const point = card && !card.hidden && stopScreenPoint(stop);
+      if (!point) return hideLine();
+      const rect = card.getBoundingClientRect();
+      const [x, y] = point;
+      if (!rect.width || (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom)) return hideLine();
+      const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+      const side = card.dataset.side;
+      const end = side === "left" ? [rect.right, clamp(y, rect.top + 24, rect.bottom - 24)]
+        : side === "right" ? [rect.left, clamp(y, rect.top + 24, rect.bottom - 24)]
+          : [clamp(x, rect.left + 24, rect.right - 24), rect.top];
+      if (!line) {
+        line = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        line.setAttribute("class", "map-idle-line");
+        line.setAttribute("aria-hidden", "true");
+        line.innerHTML = '<line></line><circle r="3.5"></circle>';
+        document.body.appendChild(line);
+      }
+      const [segment, dot] = line.children;
+      segment.setAttribute("x1", x);
+      segment.setAttribute("y1", y);
+      segment.setAttribute("x2", end[0]);
+      segment.setAttribute("y2", end[1]);
+      dot.setAttribute("cx", x);
+      dot.setAttribute("cy", y);
+      line.classList.add("show");
+    }
+
+    function hideLine() {
+      lineStop = null;
+      line?.classList.remove("show");
+    }
+
     function hideCard() {
+      hideLine();
       if (!card || card.hidden) return;
       card.classList.remove("show");
       window.clearTimeout(hideTimer);
@@ -557,7 +625,9 @@
         padTop: Math.round((free.top - box.top) * dpr),
         padBottom: Math.round((box.bottom - free.bottom) * dpr),
         offset: [Math.round((free.left + free.right - box.left - box.right) / 2), Math.round((free.top + free.bottom - box.top - box.bottom) / 2)],
-        width: free.right - free.left
+        width: free.right - free.left,
+        // Where a stop lands on screen (page pixels): the middle of the free view.
+        point: [(free.left + free.right) / 2, (free.top + free.bottom) / 2]
       };
     }
 
@@ -636,6 +706,7 @@
       if (!stop) return later(tour, 300);
       prepareCard(stop, kickerFor(stop));
       const frame = framing();
+      lastFrame = frame;
       const camera = currentCenter();
       let flight = flightMs(camera, stop.center);
       // A walking person or wandering animal is met where it will be on
@@ -654,6 +725,9 @@
       shown.add(stop.key);
       visits += 1;
       showCard();
+      // Drawn once the card has settled (it slides up as it fades in).
+      drawLine(stop);
+      window.setTimeout(() => running && lineStop === stop && drawLine(stop), 950);
       if (stop.centerAt) followTimer = window.setInterval(() => follow(stop), FOLLOW_MS);
       later(() => {
         stopFollowing();
@@ -668,6 +742,7 @@
       here = center;
       // A short framed move (the app's native ease can't take the framing).
       moveTo({ center, zoom: stop.zoom || STOP_ZOOM, bearing: 0, pitch: 0, duration: FOLLOW_MS }, nativeCamera(), framing());
+      window.setTimeout(() => running && lineStop === stop && drawLine(stop), FOLLOW_MS + 50);
     }
 
     function stopFollowing() {
