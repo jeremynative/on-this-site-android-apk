@@ -160,60 +160,68 @@ final class ArCards {
     static final int HERE_RED = 0xFFE0352B;
 
     /**
-     * "You are here": a card with the land line and the nearest sites, over a red
-     * arrow pointing down at the visitor's spot.
+     * "You are here": a glowing red orb like the other bubbles, shaped as a map pin
+     * whose point rests on the visitor's spot, with a "you" dot inside and the land's
+     * name beneath. Opening it reads the land (and what is near) in full.
      */
     static Bitmap hereMarker(ArScene.Item item) {
-        int width = 640;
-        int pad = 36;
-        int inner = width - pad * 2;
-        StaticLayout tag = layout("YOU ARE HERE", textPaint(30, HERE_RED, true), inner);
-        StaticLayout land = layout(item.land.isEmpty() ? "Long Island" : item.land, textPaint(46, Color.WHITE, true), inner);
-        StaticLayout near = item.nearby.length == 0 ? null
-            : layout("Nearby\n" + joinLines(item.nearby), textPaint(32, Color.rgb(228, 232, 230), false), inner);
-        int cardHeight = pad + tag.getHeight() + 10 + land.getHeight() + (near == null ? 0 : 18 + near.getHeight()) + pad;
-        int arrowHeight = 190;
-        Bitmap bitmap = Bitmap.createBitmap(width, cardHeight + 18 + arrowHeight, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        Paint background = new Paint(Paint.ANTI_ALIAS_FLAG);
-        background.setColor(Color.argb(228, 18, 24, 22));
-        canvas.drawRoundRect(new RectF(0, 0, width, cardHeight), 40, 40, background);
-        Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
-        edge.setStyle(Paint.Style.STROKE);
-        edge.setStrokeWidth(6);
-        edge.setColor(HERE_RED);
-        canvas.drawRoundRect(new RectF(3, 3, width - 3, cardHeight - 3), 38, 38, edge);
-        canvas.save();
-        canvas.translate(pad, pad);
-        tag.draw(canvas);
-        canvas.translate(0, tag.getHeight() + 10);
-        land.draw(canvas);
-        if (near != null) {
-            canvas.translate(0, land.getHeight() + 18);
-            near.draw(canvas);
-        }
-        canvas.restore();
-        // The arrow: a short shaft and a wide head, pointing at the ground below.
+        int width = 420;
         float c = width / 2f;
-        float top = cardHeight + 18;
-        android.graphics.Path arrow = new android.graphics.Path();
-        arrow.moveTo(c - 34, top);
-        arrow.lineTo(c + 34, top);
-        arrow.lineTo(c + 34, top + arrowHeight * 0.45f);
-        arrow.lineTo(c + 96, top + arrowHeight * 0.45f);
-        arrow.lineTo(c, top + arrowHeight);
-        arrow.lineTo(c - 96, top + arrowHeight * 0.45f);
-        arrow.lineTo(c - 34, top + arrowHeight * 0.45f);
-        arrow.close();
+        float cy = 150f;
+        float head = 84f;
+        float tip = cy + head + 66f;
+        TextPaint youPaint = textPaint(34, Color.WHITE, true);
+        TextPaint landPaint = textPaint(30, Color.WHITE, false);
+        for (TextPaint paint : new TextPaint[] {youPaint, landPaint}) paint.setShadowLayer(8, 0, 2, Color.argb(230, 0, 0, 0));
+        String land = item.land.isEmpty() ? "Long Island" : item.land.replaceFirst("^On ", "");
+        StaticLayout you = centred("You are here", youPaint, width - 20, 1);
+        StaticLayout where = centred(land, landPaint, width - 20, 2);
+        int labelTop = Math.round(tip) + 14;
+        Bitmap bitmap = Bitmap.createBitmap(width, labelTop + you.getHeight() + 4 + where.getHeight() + 12, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        // The same soft glow as every orb, in red.
+        Paint glow = new Paint(Paint.ANTI_ALIAS_FLAG);
+        glow.setShader(new RadialGradient(c, cy, 150f,
+            new int[] {Color.argb(255, 255, 255, 255), withAlpha(HERE_RED, 220), withAlpha(HERE_RED, 0)},
+            new float[] {0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
+        canvas.drawCircle(c, cy, 150f, glow);
+        // The pin: a round head and a point, its sides tangent to the head.
+        double cos = head / (tip - cy);
+        double sin = Math.sqrt(1 - cos * cos);
+        android.graphics.Path pin = new android.graphics.Path();
+        pin.addCircle(c, cy, head, android.graphics.Path.Direction.CW);
+        android.graphics.Path point = new android.graphics.Path();
+        point.moveTo(c - (float) (head * sin), cy + (float) (head * cos));
+        point.lineTo(c, tip);
+        point.lineTo(c + (float) (head * sin), cy + (float) (head * cos));
+        point.lineTo(c, cy);
+        point.close();
+        pin.op(point, android.graphics.Path.Op.UNION);
         Paint red = new Paint(Paint.ANTI_ALIAS_FLAG);
         red.setColor(HERE_RED);
         red.setShadowLayer(10, 0, 4, Color.argb(150, 0, 0, 0));
-        canvas.drawPath(arrow, red);
-        Paint outline = new Paint(Paint.ANTI_ALIAS_FLAG);
-        outline.setStyle(Paint.Style.STROKE);
-        outline.setStrokeWidth(6);
-        outline.setColor(Color.WHITE);
-        canvas.drawPath(arrow, outline);
+        canvas.drawPath(pin, red);
+        Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
+        ring.setStyle(Paint.Style.STROKE);
+        ring.setStrokeWidth(7);
+        ring.setColor(Color.WHITE);
+        canvas.drawPath(pin, ring);
+        // Inside, as in the other bubbles: a pale disc, here holding a "you" dot.
+        Paint disc = new Paint(Paint.ANTI_ALIAS_FLAG);
+        disc.setColor(Color.argb(240, 250, 250, 246));
+        canvas.drawCircle(c, cy, head * 0.66f, disc);
+        Paint halo = new Paint(Paint.ANTI_ALIAS_FLAG);
+        halo.setColor(withAlpha(HERE_RED, 70));
+        canvas.drawCircle(c, cy, head * 0.42f, halo);
+        Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);
+        dot.setColor(HERE_RED);
+        canvas.drawCircle(c, cy, head * 0.24f, dot);
+        canvas.save();
+        canvas.translate(10, labelTop);
+        you.draw(canvas);
+        canvas.translate(0, you.getHeight() + 4);
+        where.draw(canvas);
+        canvas.restore();
         return bitmap;
     }
 
@@ -289,15 +297,6 @@ final class ArCards {
         return bitmap;
     }
 
-    private static String joinLines(String[] lines) {
-        StringBuilder out = new StringBuilder();
-        for (String line : lines) {
-            if (out.length() > 0) out.append('\n');
-            out.append("• ").append(line);
-        }
-        return out.toString();
-    }
-
     /** Soft glowing orb shown before a discoverable prompt has been found. */
     static Bitmap orb(int color) {
         int size = 256;
@@ -332,6 +331,17 @@ final class ArCards {
     @SuppressWarnings("deprecation")
     private static StaticLayout layout(String text, TextPaint paint, int width) {
         return new StaticLayout(text, paint, width, Layout.Alignment.ALIGN_NORMAL, 1.08f, 0f, false);
+    }
+
+    /** Centred lines (at most maxLines), for the labels under a marker. */
+    private static StaticLayout centred(String text, TextPaint paint, int width, int maxLines) {
+        return StaticLayout.Builder.obtain(text, 0, text.length(), paint, width)
+            .setAlignment(Layout.Alignment.ALIGN_CENTER)
+            .setLineSpacing(0f, 1.08f)
+            .setIncludePad(false)
+            .setMaxLines(maxLines)
+            .setEllipsize(android.text.TextUtils.TruncateAt.END)
+            .build();
     }
 
     /** At most maxLines, the last ending in an ellipsis. */
