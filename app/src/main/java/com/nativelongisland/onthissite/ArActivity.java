@@ -284,6 +284,57 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (!Double.isNaN(scene.hereLat)) compass.setLocation(scene.hereLat, scene.hereLng);
         locations = (android.location.LocationManager) getSystemService(LOCATION_SERVICE);
         buildUi();
+        if (BuildConfig.DEBUG) runQaCardHooks();
+    }
+
+    /**
+     * QA builds only: with a file "qa-ar-cards" in the app's files folder, every bubble's card
+     * (its floating card, plus the pin and sky signs as drawn) is rendered to files/qa-cards/
+     * to be pulled and checked, even with the device lying on a desk. The file's text, if any,
+     * names an item whose opened card is shown, as a tap would.
+     */
+    private void runQaCardHooks() {
+        java.io.File flag = new java.io.File(getFilesDir(), "qa-ar-cards");
+        if (!flag.exists()) return;
+        String openId = "";
+        try (java.io.FileInputStream in = new java.io.FileInputStream(flag)) {
+            byte[] bytes = new byte[(int) flag.length()];
+            int read = in.read(bytes);
+            openId = new String(bytes, 0, Math.max(0, read), java.nio.charset.StandardCharsets.UTF_8).trim();
+        } catch (Exception ignored) {
+            // No item to open.
+        }
+        java.io.File out = new java.io.File(getFilesDir(), "qa-cards");
+        java.io.File[] old = out.listFiles();
+        if (old != null) for (java.io.File file : old) file.delete();
+        out.mkdirs();
+        loader.execute(() -> {
+            int index = 0;
+            for (ArScene.Item item : scene.items) {
+                String name = String.format(Locale.US, "%02d-%s", index++, item.id.replaceAll("[^A-Za-z0-9_-]", "_"));
+                try {
+                    Bitmap photo = decodeImage(item.image, 900);
+                    saveQaCard(new java.io.File(out, name + "-card.png"), ArCards.promptCard(item, photo));
+                    if (item.isHere()) saveQaCard(new java.io.File(out, name + "-pin.png"), ArCards.hereMarker(item));
+                    if (item.isSky()) saveQaCard(new java.io.File(out, name + "-sky.png"), ArCards.skySign(item, decodeImage(item.image, 256)));
+                } catch (Exception error) {
+                    android.util.Log.w("OnThisSiteAR", "QA card " + item.id + " failed: " + error);
+                }
+            }
+            android.util.Log.i("OnThisSiteAR", "QA cards rendered: " + index);
+        });
+        for (ArScene.Item item : scene.items) {
+            if (item.id.equals(openId)) {
+                infoPanel.postDelayed(() -> showItem(item), 1500);
+                break;
+            }
+        }
+    }
+
+    private static void saveQaCard(java.io.File file, Bitmap bitmap) throws java.io.IOException {
+        try (java.io.FileOutputStream stream = new java.io.FileOutputStream(file)) {
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
+        }
     }
 
     // ---- Lifecycle ----
