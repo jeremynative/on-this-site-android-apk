@@ -534,17 +534,29 @@
       return lastFrame?.point || null;
     }
 
+    // A site drawn as a shape is found by its name, not the middle of the
+    // shape: when the map can say where the stop's title label shows, the line
+    // ends just short of the label's side facing the card.
+    function labelPoint(stop, side) {
+      const box = stop.site && ctx.camera?.labelBox?.(stop.site);
+      if (!box?.width) return null;
+      const middle = (box.top + box.bottom) / 2;
+      return side === "left" ? [box.left - 4, middle]
+        : side === "right" ? [box.right + 4, middle]
+          : [(box.left + box.right) / 2, box.bottom + 4];
+    }
+
     // A thin white line from the place to the nearest edge of its card, so the
     // eye can follow which place the card is about. Hidden with the card.
     function drawLine(stop) {
       lineStop = stop;
-      const point = card && !card.hidden && stopScreenPoint(stop);
+      const side = card?.dataset.side;
+      const point = card && !card.hidden && (labelPoint(stop, side) || stopScreenPoint(stop));
       if (!point) return hideLine();
       const rect = card.getBoundingClientRect();
       const [x, y] = point;
       if (!rect.width || (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom)) return hideLine();
       const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
-      const side = card.dataset.side;
       const end = side === "left" ? [rect.right, clamp(y, rect.top + 24, rect.bottom - 24)]
         : side === "right" ? [rect.left, clamp(y, rect.top + 24, rect.bottom - 24)]
           : [clamp(x, rect.left + 24, rect.right - 24), rect.top];
