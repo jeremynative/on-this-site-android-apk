@@ -584,11 +584,28 @@
         .filter(item => item.km <= AR_PLACE_NAME_KM && item.caption.length >= 40)
         .sort((a, b) => a.km - b.km)
         .slice(0, AR_PLACE_NAMES)
-        .map(({ site, centre, caption }) => arToward({
-          id: `placename-${site.slug}`, layer: "archival", kind: "note", placement: "discover",
-          title: `Native place name: ${arText(site.title)}`, caption, more: arSiteMore(sitePages[site.slug], site.summary),
-          credit: "On This Site", image: site.listing_image_url || site.listing_image_thumb_url || undefined
-        }, here, centre));
+        .map(({ site, centre, caption }) => {
+          const page = arSiteMore(sitePages[site.slug], site.summary);
+          const card = arFillCard(caption, page);
+          return arToward({
+            id: `placename-${site.slug}`, layer: "archival", kind: "note", placement: "discover",
+            title: `Native place name: ${arText(site.title)}`, caption: card,
+            more: arMoreThan(card, page.split("\n\n")),
+            credit: "On This Site", image: site.listing_image_url || site.listing_image_thumb_url || undefined
+          }, here, centre);
+        });
+    }
+
+    // A one-line summary borrows the next whole sentences of its page (up to what a
+    // floating card shows), so the card itself says what the name means or recalls.
+    function arFillCard(caption, more) {
+      if (caption.length >= 140 || !more) return caption;
+      let card = caption;
+      for (const sentence of more.split(/\n\n|(?<=[.!?])\s+(?=[A-Z“"])/)) {
+        if (!sentence || (card + " " + sentence).length > 240) break;
+        card = `${card} ${sentence}`;
+      }
+      return card;
     }
 
     // A teaching as a bubble: the card shows the teaching, opening it adds more;
