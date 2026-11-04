@@ -22592,6 +22592,12 @@
     window.addEventListener("resize", refreshMobileViewportLayout);
     window.addEventListener("orientationchange", () => window.setTimeout(refreshMobileViewportLayout, 280));
     window.visualViewport?.addEventListener("resize", refreshMobileViewportLayout);
+    // The map has no height while a bottom panel is full screen, so the map
+    // buttons keep their old place; rotating then closing the panel left them
+    // mid-map. Place them again whenever the map's size changes.
+    if (window.ResizeObserver && document.getElementById("map")) {
+      new ResizeObserver(() => positionMobileMapActionButtons()).observe(document.getElementById("map"));
+    }
     locateBtn?.addEventListener("click", locateUser);
     installApkLocationControlLongPress();
     mobileMapLocateBtn?.addEventListener("click", event => {
