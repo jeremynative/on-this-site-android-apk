@@ -161,17 +161,17 @@ final class ArCards {
     static final int HERE_RED = 0xFFE0352B;
 
     /**
-     * "You are here": the bubbles' glowing orb in red, as a lit glass sphere, over a shaded
-     * triangle pointing down at the visitor's spot like a map pin, with "You are here" and
-     * the land's name beneath. Walked up to or tapped, it opens into the land's card.
+     * "You are here": the same orb as every bubble (white core, glow, white ring), in red,
+     * with a cone hanging from the ring and pointing down at the visitor's spot, and "You are
+     * here" and the land's name beneath. Walked up to or tapped, it opens into the land's card.
      */
     static Bitmap hereMarker(ArScene.Item item) {
         int width = 420;
         float c = width / 2f;
-        float cy = 140f;
-        float glowRadius = 140f;
+        float glowRadius = 128f;
+        float cy = glowRadius;
         float ring = glowRadius * 0.42f;
-        float tipY = cy + ring + 92f;
+        float tipY = cy + ring + 86f;
         TextPaint youPaint = textPaint(34, Color.WHITE, true);
         TextPaint landPaint = textPaint(30, Color.WHITE, false);
         for (TextPaint paint : new TextPaint[] {youPaint, landPaint}) paint.setShadowLayer(8, 0, 2, Color.argb(230, 0, 0, 0));
@@ -181,49 +181,39 @@ final class ArCards {
         int labelTop = Math.round(tipY) + 18;
         Bitmap bitmap = Bitmap.createBitmap(width, labelTop + you.getHeight() + 4 + where.getHeight() + 12, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
-        // The same glow as every orb, in red, reaching down around the point.
+        // The orb, as ArCards.orb draws it.
         Paint glow = new Paint(Paint.ANTI_ALIAS_FLAG);
         glow.setShader(new RadialGradient(c, cy, glowRadius,
             new int[] {Color.argb(255, 255, 255, 255), withAlpha(HERE_RED, 220), withAlpha(HERE_RED, 0)},
             new float[] {0f, 0.35f, 1f}, Shader.TileMode.CLAMP));
         canvas.drawCircle(c, cy, glowRadius, glow);
-        // The point: a triangle under the orb, lit from the left like the sphere, rimmed in white.
-        android.graphics.Path point = new android.graphics.Path();
-        point.moveTo(c - ring * 0.8f, cy + ring * 0.55f);
-        point.lineTo(c + ring * 0.8f, cy + ring * 0.55f);
-        point.lineTo(c, tipY);
-        point.close();
-        Paint cone = new Paint(Paint.ANTI_ALIAS_FLAG);
-        cone.setShader(new LinearGradient(c - ring * 0.8f, 0f, c + ring * 0.8f, 0f,
-            new int[] {Color.rgb(255, 150, 140), HERE_RED, Color.rgb(140, 22, 18)},
-            new float[] {0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
-        canvas.drawPath(point, cone);
+        // The cone: from the bottom of the ring down to a point, in the orb's red, edged in white.
+        float half = ring * 0.78f;
+        float top = cy + (float) Math.sqrt(ring * ring - half * half);
+        android.graphics.Path cone = new android.graphics.Path();
+        cone.moveTo(c - half, top);
+        cone.lineTo(c, tipY);
+        cone.lineTo(c + half, top);
+        cone.close();
+        // Only below the ring, so the orb's inside stays as it is on every bubble.
+        android.graphics.Path inside = new android.graphics.Path();
+        inside.addCircle(c, cy, ring, android.graphics.Path.Direction.CW);
+        cone.op(inside, android.graphics.Path.Op.DIFFERENCE);
+        Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        fill.setShader(new LinearGradient(0f, top, 0f, tipY, withAlpha(HERE_RED, 235), withAlpha(HERE_RED, 200), Shader.TileMode.CLAMP));
+        canvas.drawPath(cone, fill);
         Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
         edge.setStyle(Paint.Style.STROKE);
-        edge.setStrokeWidth(5);
+        edge.setStrokeWidth(6);
         edge.setStrokeJoin(Paint.Join.ROUND);
         edge.setColor(Color.WHITE);
-        canvas.drawPath(point, edge);
-        // The orb over it: a lit sphere, light from the upper left, deeper red at the lower right.
-        Paint sphere = new Paint(Paint.ANTI_ALIAS_FLAG);
-        sphere.setShader(new RadialGradient(c - ring * 0.35f, cy - ring * 0.4f, ring * 1.4f,
-            new int[] {Color.WHITE, Color.rgb(255, 170, 160), HERE_RED, Color.rgb(150, 24, 20)},
-            new float[] {0f, 0.25f, 0.6f, 1f}, Shader.TileMode.CLAMP));
-        canvas.drawCircle(c, cy, ring, sphere);
-        // A small glint, and the white rim every orb has.
-        Paint glint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        glint.setColor(Color.argb(215, 255, 255, 255));
-        float gx = c - ring * 0.38f;
-        float gy = cy - ring * 0.45f;
-        canvas.save();
-        canvas.rotate(-34f, gx, gy);
-        canvas.drawOval(new RectF(gx - ring * 0.22f, gy - ring * 0.13f, gx + ring * 0.22f, gy + ring * 0.13f), glint);
-        canvas.restore();
-        Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);
-        rim.setStyle(Paint.Style.STROKE);
-        rim.setStrokeWidth(6);
-        rim.setColor(Color.WHITE);
-        canvas.drawCircle(c, cy, ring, rim);
+        android.graphics.Path sides = new android.graphics.Path();
+        sides.moveTo(c - half, top);
+        sides.lineTo(c, tipY);
+        sides.lineTo(c + half, top);
+        canvas.drawPath(sides, edge);
+        // The white ring every orb has, over the top of the cone.
+        canvas.drawCircle(c, cy, ring, edge);
         canvas.save();
         canvas.translate(10, labelTop);
         you.draw(canvas);
