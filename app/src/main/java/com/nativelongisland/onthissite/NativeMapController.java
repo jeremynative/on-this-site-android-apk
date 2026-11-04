@@ -2952,7 +2952,11 @@ final class NativeMapController {
             BitmapFactory.Options bounds = new BitmapFactory.Options();
             bounds.inJustDecodeBounds = true;
             BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null;
+            // inSampleSize starts at 0 in a new Options; from 0 the halving loop divided
+            // by zero, so every photo failed and the map kept its plain dots.
             BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inSampleSize = 1;
             while (Math.min(bounds.outWidth, bounds.outHeight) / (options.inSampleSize * 2) >= size) options.inSampleSize *= 2;
             Bitmap source = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
             if (source == null) return null;
