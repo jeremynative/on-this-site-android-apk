@@ -77,12 +77,15 @@ final class ArScene {
     // Where the visitor stood when the bubbles were built (for the compass).
     double hereLat = Double.NaN;
     double hereLng = Double.NaN;
+    // The nearby sites' sky signs rise once this many other bubbles are open (they come last).
+    int skyAfter = 0;
     final List<Item> items = new ArrayList<>();
 
     static ArScene fromJson(String json) throws Exception {
         JSONObject root = new JSONObject(json);
         ArScene scene = new ArScene();
         scene.title = root.optString("title", scene.title);
+        scene.skyAfter = Math.max(0, root.optInt("sky_after", 0));
         JSONObject here = root.optJSONObject("here");
         if (here != null) {
             scene.hereLat = here.optDouble("lat", Double.NaN);

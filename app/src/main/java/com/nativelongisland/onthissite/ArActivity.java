@@ -605,9 +605,12 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         // Without a compass after a while, places are placed like the rest.
         boolean compassReady = compass.ready();
         boolean ignoreDirections = !compassReady && now - freeStartedAt > FREE_COMPASS_WAIT_MS;
-        // The signs rise once the visitor looks out (not at the floor), so the rise is seen.
-        if ((compassReady || ignoreDirections) && forward[1] > -0.6f) placeSkySigns(cameraPoint, facing, !compassReady, now);
+        // The signs rise once the visitor looks out (not at the floor), so the rise is seen,
+        // and only after the other bubbles: the nearby sites come last.
+        if ((compassReady || ignoreDirections) && forward[1] > -0.6f && skyReady()) placeSkySigns(cameraPoint, facing, !compassReady, now);
         int waiting = 0;
+        // Bubbles come in list order: one with a direction waits until those before it are up.
+        boolean earlierWaiting = false;
         ArScene.Item ambient = null;
         ArScene.Item ahead = null;
         ArScene.Item spot = null;
@@ -633,15 +636,18 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 continue;
             }
             if (!Double.isNaN(item.bearing) && !ignoreDirections) {
-                if (!compassReady || ahead != null) continue;
+                if (!compassReady || ahead != null || earlierWaiting) continue;
                 double heading = compass.arHeadingFor(item.bearing);
                 if (Math.abs(angleBetween(heading, facing)) <= Math.toRadians(FREE_VIEW_DEG)) {
                     ahead = item;
                     aheadHeading = heading;
                 }
-            } else if (ambient == null || (discovered.contains(ambient.id) && !discovered.contains(item.id))) {
-                // New bubbles before found ones coming back after a tracking reset.
-                ambient = item;
+            } else {
+                if (!discovered.contains(item.id)) earlierWaiting = true;
+                if (ambient == null || (discovered.contains(ambient.id) && !discovered.contains(item.id))) {
+                    // New bubbles before found ones coming back after a tracking reset.
+                    ambient = item;
+                }
             }
         }
         if (spot != null) {
@@ -706,6 +712,16 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             }
             return;
         }
+    }
+
+    /** The nearby sites' signs rise once this many other bubbles are open (scene.skyAfter). */
+    private boolean skyReady() {
+        if (scene.skyAfter <= 0) return true;
+        int opened = 0;
+        for (ArScene.Item item : scene.items) {
+            if (!item.isHere() && !item.isSky() && discovered.contains(item.id)) opened++;
+        }
+        return opened >= scene.skyAfter;
     }
 
     private ArScene.Item hereItem() {
@@ -862,8 +878,15 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (forward == null || !compass.ready()) return null;
         double facing = compass.facingDeg(forward);
         if (Double.isNaN(facing)) return null;
+        boolean earlierWaiting = false;
         for (ArScene.Item item : scene.items) {
-            if (!visible(item) || Double.isNaN(item.bearing)) continue;
+            if (!visible(item) || item.isHere()) continue;
+            if (Double.isNaN(item.bearing)) {
+                if (!discoverAnchors.containsKey(item.id) && !discovered.contains(item.id)) earlierWaiting = true;
+                continue;
+            }
+            // As the bubbles come: places in list order, the nearby sites' signs last.
+            if (item.isSky() ? !skyReady() : earlierWaiting && !item.hasSpot() && !discoverAnchors.containsKey(item.id)) continue;
             double turn = Math.toDegrees(angleBetween(Math.toRadians(item.bearing), Math.toRadians(facing)));
             // A sky sign is already up there: point to it only while it is out of view.
             if (discoverAnchors.containsKey(item.id) && !(item.isSky() && Math.abs(turn) > FREE_VIEW_DEG)) continue;
@@ -1174,6 +1197,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             }
             @Override public boolean discovered(ArScene.Item item) {
                 return discovered.contains(item.id);
+            }
+            @Override public boolean skyReady() {
+                return ArActivity.this.skyReady();
             }
             @Override public Bitmap markerBitmap(ArScene.Item item) {
                 return item.isHere() ? ArCards.hereMarker(item) : ArCards.skySign(item, decodeImage(item.image, 256));

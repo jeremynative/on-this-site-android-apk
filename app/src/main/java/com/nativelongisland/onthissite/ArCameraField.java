@@ -48,6 +48,8 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     interface Host {
         boolean visible(ArScene.Item item);
         boolean discovered(ArScene.Item item);
+        /** Whether the nearby sites' sky signs may rise yet (they come after the other bubbles). */
+        boolean skyReady();
         /** The bubble's picture; called off the UI thread. */
         Bitmap bubbleBitmap(ArScene.Item item);
         /** The "You are here" marker or a sky sign; called off the UI thread. */
@@ -564,8 +566,9 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     private void placeMarkers(long now) {
         if (pitch < LOOKING_DOWN || pitch > LOOKING_UP) return;
         int skyIndex = 0;
+        boolean skyReady = host.skyReady();
         for (Bubble bubble : bubbles) {
-            if (!bubble.marker || bubble.placed) continue;
+            if (!bubble.marker || bubble.placed || (bubble.sky && !skyReady)) continue;
             if (bubble.item.isHere()) {
                 bubble.bearing = heading;
                 bubble.elevation = Math.max(-30, pitch - HERE_BELOW_DEG);
