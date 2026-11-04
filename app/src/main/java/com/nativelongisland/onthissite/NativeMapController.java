@@ -134,7 +134,8 @@ final class NativeMapController {
     // payload's thumb_url) show it as a small round photo, as on the website.
     private static final String SITE_THUMB_LAYER_ID = "nli-site-thumbs";
     private static final String SITE_THUMB_IMAGE_PREFIX = "nli-thumb-";
-    private static final float SITE_THUMB_MIN_ZOOM = 12f;
+    private static final String SITE_DOT_FOOTPRINT_LAYER_ID = "nli-site-dot-footprints";
+    private static final float SITE_THUMB_MIN_ZOOM = 13f;
     private static final int SITE_THUMB_SIZE_DP = 36;
     private static final float SITE_FULL_TITLE_ZOOM = 11.5f;
     private static final int SITE_SHORT_TITLE_MAX_CHARS = 22;
@@ -221,6 +222,8 @@ final class NativeMapController {
     private final java.util.Set<String> siteThumbsLoaded = new java.util.HashSet<>();
     private final java.util.Set<String> siteThumbsPending = new java.util.HashSet<>();
     private final java.util.Set<String> siteThumbsFailed = new java.util.HashSet<>();
+    // The photo sites last let into the photo layer; null until the first check after a style load.
+    private String siteThumbCrowdedSignature;
     private final java.util.concurrent.ExecutorService siteThumbExecutor = java.util.concurrent.Executors.newFixedThreadPool(2);
     private boolean profileMode;
     private boolean suggestionMapPickMode;
@@ -863,6 +866,7 @@ final class NativeMapController {
         if (map == null) return;
         styleReady = false;
         siteThumbsLoaded.clear();
+        siteThumbCrowdedSignature = null;
         markStartupVisualChange();
         usingOnlineArchive = preferOnlineArchive;
         lastStateSignature = "";
@@ -1067,17 +1071,42 @@ final class NativeMapController {
             style.addLayer(siteIconLayer);
             // Each photo is added as an image once it has downloaded; until
             // then the missing-image listener gives it a transparent pixel.
+            // Every symbol layer above is placed first, so a photo only shows
+            // where it covers no title, icon or dot footprint and no other
+            // photo; otherwise the site keeps its dot. It grows gently with zoom,
+            // and fades in over the first 0.4 zoom levels (and out the same way
+            // zooming back out); collision changes fade with MapLibre's own fade.
+            // Its filter lists the photo sites allowed at each camera stop
+            // (see updateSiteThumbCrowding); none until the first check.
             SymbolLayer siteThumbLayer = new SymbolLayer(SITE_THUMB_LAYER_ID, SITE_POINT_SOURCE_ID)
-                .withFilter(Expression.neq(
+                .withFilter(Expression.literal(false))
+                .withProperties(
+                    iconImage(Expression.concat(Expression.literal(SITE_THUMB_IMAGE_PREFIX), Expression.get("slug"))),
+                    iconSize(Expression.interpolate(Expression.linear(), Expression.zoom(),
+                        Expression.stop(SITE_THUMB_MIN_ZOOM, 0.78f), Expression.stop(15, 0.95f), Expression.stop(17, 1.1f))),
+                    iconOpacity(Expression.interpolate(Expression.linear(), Expression.zoom(),
+                        Expression.stop(SITE_THUMB_MIN_ZOOM, 0f), Expression.stop(SITE_THUMB_MIN_ZOOM + 0.4f, 1f))),
+                    org.maplibre.android.style.layers.PropertyFactory.iconPadding(2f),
+                    iconAllowOverlap(false), iconIgnorePlacement(false)
+                );
+            siteThumbLayer.setMinZoom(SITE_THUMB_MIN_ZOOM);
+            style.addLayer(siteThumbLayer);
+            // Invisible footprints of the other sites' dots, placed just before
+            // the photos so a photo never covers a neighbouring site.
+            SymbolLayer siteDotFootprintLayer = new SymbolLayer(SITE_DOT_FOOTPRINT_LAYER_ID, SITE_POINT_SOURCE_ID)
+                .withFilter(Expression.eq(
                     Expression.coalesce(Expression.get("thumb_url"), Expression.literal("")),
                     Expression.literal("")
                 ))
                 .withProperties(
-                    iconImage(Expression.concat(Expression.literal(SITE_THUMB_IMAGE_PREFIX), Expression.get("slug"))),
-                    iconAllowOverlap(true), iconIgnorePlacement(true)
+                    iconImage(SITE_POINT_FOOTPRINT_IMAGE),
+                    iconSize(0.45f),
+                    iconOpacity(0f),
+                    org.maplibre.android.style.layers.PropertyFactory.iconPadding(0f),
+                    iconAllowOverlap(true), iconIgnorePlacement(false)
                 );
-            siteThumbLayer.setMinZoom(SITE_THUMB_MIN_ZOOM);
-            style.addLayer(siteThumbLayer);
+            siteDotFootprintLayer.setMinZoom(SITE_THUMB_MIN_ZOOM);
+            style.addLayer(siteDotFootprintLayer);
             style.addLayer(new CircleLayer("nli-site-unread-badges", SITE_POINT_SOURCE_ID)
                 .withFilter(Expression.gt(
                     Expression.coalesce(
@@ -1163,10 +1192,11 @@ final class NativeMapController {
             // style are placed first, so titles below this layer move to a free side of their
             // pin or hide instead of covering another site's artwork.
             // Only artwork reserves space; plain dots are small enough for a title to cross.
+            // Photo sites are left out so their footprint cannot block their own photo.
             style.addLayer(new SymbolLayer(SITE_POINT_FOOTPRINT_LAYER_ID, SITE_POINT_SOURCE_ID)
-                .withFilter(Expression.neq(
-                    Expression.coalesce(Expression.get("native_icon_key"), Expression.literal("")),
-                    Expression.literal("")
+                .withFilter(Expression.all(
+                    Expression.neq(Expression.coalesce(Expression.get("native_icon_key"), Expression.literal("")), Expression.literal("")),
+                    Expression.eq(Expression.coalesce(Expression.get("thumb_url"), Expression.literal("")), Expression.literal(""))
                 ))
                 .withProperties(
                     iconImage(SITE_POINT_FOOTPRINT_IMAGE),
@@ -2807,10 +2837,12 @@ final class NativeMapController {
     private void requestVisibleSiteThumbs() {
         if (map == null || !styleReady || map.getStyle() == null || profileMode) return;
         CameraPosition position = map.getCameraPosition();
-        if (position == null || position.zoom < SITE_THUMB_MIN_ZOOM - 0.5 || !hasValidatedNetwork()) return;
+        if (position == null || position.zoom < SITE_THUMB_MIN_ZOOM - 0.5) return;
         List<Feature> features = map.queryRenderedFeatures(
             new RectF(0f, 0f, mapView.getWidth(), mapView.getHeight()), "nli-site-point-circles");
         if (features == null) return;
+        updateSiteThumbCrowding(features, (float) position.zoom);
+        if (!hasValidatedNetwork()) return;
         int size = dp(SITE_THUMB_SIZE_DP);
         for (Feature feature : features) {
             if (feature == null || !feature.hasProperty("thumb_url") || !feature.hasProperty("slug")) continue;
@@ -2833,6 +2865,61 @@ final class NativeMapController {
                 });
             });
         }
+    }
+
+    // The collision engine keeps photos off titles, icons, dots and each
+    // other, but two photo sites closer than a photo's width would still have
+    // one photo covering the other's dot, so neither shows its photo there.
+    // A photo also only shows while the map shows its site's title.
+    private void updateSiteThumbCrowding(List<Feature> features, float zoom) {
+        Layer layer = map.getStyle().getLayer(SITE_THUMB_LAYER_ID);
+        if (!(layer instanceof SymbolLayer)) return;
+        float scale = zoom <= 15f
+            ? 0.78f + (Math.max(SITE_THUMB_MIN_ZOOM, zoom) - SITE_THUMB_MIN_ZOOM) / (15f - SITE_THUMB_MIN_ZOOM) * (0.95f - 0.78f)
+            : 0.95f + (Math.min(17f, zoom) - 15f) / 2f * (1.1f - 0.95f);
+        float reach = dp(SITE_THUMB_SIZE_DP) * scale + dp(6);
+        List<String> slugs = new ArrayList<>();
+        List<PointF> points = new ArrayList<>();
+        for (Feature feature : features) {
+            if (feature == null || !(feature.geometry() instanceof Point) || !feature.hasProperty("slug")
+                || !feature.hasProperty("thumb_url") || feature.getStringProperty("thumb_url").isEmpty()) continue;
+            Point point = (Point) feature.geometry();
+            slugs.add(feature.getStringProperty("slug"));
+            points.add(map.getProjection().toScreenLocation(new LatLng(point.latitude(), point.longitude())));
+        }
+        java.util.TreeSet<String> crowded = new java.util.TreeSet<>();
+        for (int first = 0; first < points.size(); first++) {
+            for (int second = first + 1; second < points.size(); second++) {
+                if (slugs.get(first).equals(slugs.get(second))) continue;
+                if (Math.abs(points.get(first).x - points.get(second).x) < reach
+                    && Math.abs(points.get(first).y - points.get(second).y) < reach) {
+                    crowded.add(slugs.get(first));
+                    crowded.add(slugs.get(second));
+                }
+            }
+        }
+        java.util.TreeSet<String> titled = new java.util.TreeSet<>();
+        List<Feature> labels = map.queryRenderedFeatures(
+            new RectF(0f, 0f, mapView.getWidth(), mapView.getHeight()), "nli-site-point-labels");
+        if (labels != null) {
+            for (Feature label : labels) {
+                if (label != null && label.hasProperty("slug")) titled.add(label.getStringProperty("slug"));
+            }
+        }
+        java.util.TreeSet<String> allowed = new java.util.TreeSet<>();
+        for (String slug : slugs) {
+            if (titled.contains(slug) && !crowded.contains(slug)) allowed.add(slug);
+        }
+        String signature = String.join("|", allowed);
+        if (signature.equals(siteThumbCrowdedSignature)) return;
+        siteThumbCrowdedSignature = signature;
+        List<Expression> matches = new ArrayList<>();
+        for (String slug : allowed) matches.add(Expression.eq(Expression.get("slug"), Expression.literal(slug)));
+        ((SymbolLayer) layer).setFilter(matches.isEmpty()
+            ? Expression.literal(false)
+            : Expression.all(
+                Expression.neq(Expression.coalesce(Expression.get("thumb_url"), Expression.literal("")), Expression.literal("")),
+                Expression.any(matches.toArray(new Expression[0]))));
     }
 
     private Bitmap downloadSiteThumb(String url, int size) {
