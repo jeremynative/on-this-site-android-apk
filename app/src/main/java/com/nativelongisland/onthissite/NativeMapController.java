@@ -1072,7 +1072,9 @@ final class NativeMapController {
             // then the missing-image listener gives it a transparent pixel.
             // Every symbol layer above is placed first, so a photo only shows
             // where it covers no title, icon or dot footprint and no other
-            // photo; otherwise the site keeps its dot. It grows gently with zoom.
+            // photo; otherwise the site keeps its dot. It grows gently with zoom,
+            // and fades in over the first 0.4 zoom levels (and out the same way
+            // zooming back out); collision changes fade with MapLibre's own fade.
             SymbolLayer siteThumbLayer = new SymbolLayer(SITE_THUMB_LAYER_ID, SITE_POINT_SOURCE_ID)
                 .withFilter(Expression.neq(
                     Expression.coalesce(Expression.get("thumb_url"), Expression.literal("")),
@@ -1082,6 +1084,8 @@ final class NativeMapController {
                     iconImage(Expression.concat(Expression.literal(SITE_THUMB_IMAGE_PREFIX), Expression.get("slug"))),
                     iconSize(Expression.interpolate(Expression.linear(), Expression.zoom(),
                         Expression.stop(SITE_THUMB_MIN_ZOOM, 0.78f), Expression.stop(15, 0.95f), Expression.stop(17, 1.1f))),
+                    iconOpacity(Expression.interpolate(Expression.linear(), Expression.zoom(),
+                        Expression.stop(SITE_THUMB_MIN_ZOOM, 0f), Expression.stop(SITE_THUMB_MIN_ZOOM + 0.4f, 1f))),
                     org.maplibre.android.style.layers.PropertyFactory.iconPadding(2f),
                     iconAllowOverlap(false), iconIgnorePlacement(false)
                 );
