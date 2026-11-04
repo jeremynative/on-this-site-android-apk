@@ -219,7 +219,9 @@
 
     function arStoryTitle(caption) {
       const first = (caption.match(/^.*?[.!?](?=\s|$)/) || [caption])[0].replace(/[.!?]$/, "");
-      return first && first.length <= 90 ? first : "A photo story shared near here";
+      // A long sentence still gives a whole idea up to its first semicolon or colon.
+      const clause = first.split(/\s*[;:]\s/)[0];
+      return first && first.length <= 90 ? first : clause && clause.length <= 90 ? clause : "A photo story shared near here";
     }
 
     function arStoryItem(story, here) {
