@@ -13568,6 +13568,18 @@
       return motion;
     }
 
+    // Where a person's walking icon will be ms from now, read without moving
+    // its clock; null while it fades out or starts over.
+    function mobileBiographyIconAt(item, ms = 0) {
+      const controller = state.mobileBiographyMotionControllers.get(item?.slug);
+      if (!controller) return null;
+      const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+      const ahead = Math.max(0, Number(ms) || 0) * MOBILE_BIOGRAPHY_BASE_MOTION_SCALE * (reducedMotion ? 0.5 : 1);
+      const motion = mobileMovingBiographyLoop(item.route, Math.max(1000, Number(item.duration) || MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS),
+        0, (Number(controller.elapsedMs) || 0) + ahead, { continuous: item.continuous === true });
+      return motion.phase === "moving" ? motion.coordinates : null;
+    }
+
     function mobileMovingRouteDuration(route = []) {
       const segments = mobileMovingRouteSegments(route);
       if (!segments.length) return MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS;
@@ -22023,13 +22035,26 @@
       }),
       // A few stops are people from the biography paths and the map's
       // animal relatives; now and then a fact about the project itself.
-      people: () => Object.entries(BIOGRAPHY_PLACE_PATHS).map(([slug, path]) => ({
-        slug,
-        name: mobileBiographyPathPersonName(idleWikiArticle(slug), slug),
-        article: idleWikiArticle(slug),
-        places: path?.places || [],
-        open: () => void openWikiArticle(slug, { focus: false })
-      })),
+      // A person whose icon is walking the map is met (and followed) where
+      // the icon is, not at a place in their record. Like the animals, the
+      // icons are drawn only alongside the web map.
+      people: () => {
+        const walking = state.map && mobileBiographyIconsEnabled()
+          ? (state.nativeMovingBiographyItems?.length ? state.nativeMovingBiographyItems : mobileMovingBiographyItems())
+            .filter(item => state.mobileBiographyMotionControllers.has(item.slug))
+          : [];
+        return Object.entries(BIOGRAPHY_PLACE_PATHS).map(([slug, path]) => {
+          const item = walking.find(candidate => candidate.slug === slug);
+          return {
+            slug,
+            name: mobileBiographyPathPersonName(idleWikiArticle(slug), slug),
+            article: idleWikiArticle(slug),
+            places: path?.places || [],
+            ...(item ? { centerAt: ms => mobileBiographyIconAt(item, ms) } : {}),
+            open: () => void openWikiArticle(slug, { focus: false })
+          };
+        });
+      },
       // The animal relatives are drawn only alongside the web map (offline, with
       // no web map, they aren't on the map), so only then are they stops.
       animals: () => !state.map ? [] : (MAP_UTILS.nativeAnimals || []).map(animal => ({
