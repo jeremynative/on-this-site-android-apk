@@ -222,7 +222,8 @@ final class NativeMapController {
     private final java.util.Set<String> siteThumbsLoaded = new java.util.HashSet<>();
     private final java.util.Set<String> siteThumbsPending = new java.util.HashSet<>();
     private final java.util.Set<String> siteThumbsFailed = new java.util.HashSet<>();
-    private String siteThumbCrowdedSignature = "";
+    // The photo sites last let into the photo layer; null until the first check after a style load.
+    private String siteThumbCrowdedSignature;
     private final java.util.concurrent.ExecutorService siteThumbExecutor = java.util.concurrent.Executors.newFixedThreadPool(2);
     private boolean profileMode;
     private boolean suggestionMapPickMode;
@@ -865,7 +866,7 @@ final class NativeMapController {
         if (map == null) return;
         styleReady = false;
         siteThumbsLoaded.clear();
-        siteThumbCrowdedSignature = "";
+        siteThumbCrowdedSignature = null;
         markStartupVisualChange();
         usingOnlineArchive = preferOnlineArchive;
         lastStateSignature = "";
@@ -1075,11 +1076,10 @@ final class NativeMapController {
             // photo; otherwise the site keeps its dot. It grows gently with zoom,
             // and fades in over the first 0.4 zoom levels (and out the same way
             // zooming back out); collision changes fade with MapLibre's own fade.
+            // Its filter lists the photo sites allowed at each camera stop
+            // (see updateSiteThumbCrowding); none until the first check.
             SymbolLayer siteThumbLayer = new SymbolLayer(SITE_THUMB_LAYER_ID, SITE_POINT_SOURCE_ID)
-                .withFilter(Expression.neq(
-                    Expression.coalesce(Expression.get("thumb_url"), Expression.literal("")),
-                    Expression.literal("")
-                ))
+                .withFilter(Expression.literal(false))
                 .withProperties(
                     iconImage(Expression.concat(Expression.literal(SITE_THUMB_IMAGE_PREFIX), Expression.get("slug"))),
                     iconSize(Expression.interpolate(Expression.linear(), Expression.zoom(),
@@ -2870,6 +2870,7 @@ final class NativeMapController {
     // The collision engine keeps photos off titles, icons, dots and each
     // other, but two photo sites closer than a photo's width would still have
     // one photo covering the other's dot, so neither shows its photo there.
+    // A photo also only shows while the map shows its site's title.
     private void updateSiteThumbCrowding(List<Feature> features, float zoom) {
         Layer layer = map.getStyle().getLayer(SITE_THUMB_LAYER_ID);
         if (!(layer instanceof SymbolLayer)) return;
@@ -2897,13 +2898,28 @@ final class NativeMapController {
                 }
             }
         }
-        String signature = String.join("|", crowded);
+        java.util.TreeSet<String> titled = new java.util.TreeSet<>();
+        List<Feature> labels = map.queryRenderedFeatures(
+            new RectF(0f, 0f, mapView.getWidth(), mapView.getHeight()), "nli-site-point-labels");
+        if (labels != null) {
+            for (Feature label : labels) {
+                if (label != null && label.hasProperty("slug")) titled.add(label.getStringProperty("slug"));
+            }
+        }
+        java.util.TreeSet<String> allowed = new java.util.TreeSet<>();
+        for (String slug : slugs) {
+            if (titled.contains(slug) && !crowded.contains(slug)) allowed.add(slug);
+        }
+        String signature = String.join("|", allowed);
         if (signature.equals(siteThumbCrowdedSignature)) return;
         siteThumbCrowdedSignature = signature;
-        List<Expression> filters = new ArrayList<>();
-        filters.add(Expression.neq(Expression.coalesce(Expression.get("thumb_url"), Expression.literal("")), Expression.literal("")));
-        for (String slug : crowded) filters.add(Expression.neq(Expression.get("slug"), Expression.literal(slug)));
-        ((SymbolLayer) layer).setFilter(Expression.all(filters.toArray(new Expression[0])));
+        List<Expression> matches = new ArrayList<>();
+        for (String slug : allowed) matches.add(Expression.eq(Expression.get("slug"), Expression.literal(slug)));
+        ((SymbolLayer) layer).setFilter(matches.isEmpty()
+            ? Expression.literal(false)
+            : Expression.all(
+                Expression.neq(Expression.coalesce(Expression.get("thumb_url"), Expression.literal("")), Expression.literal("")),
+                Expression.any(matches.toArray(new Expression[0]))));
     }
 
     private Bitmap downloadSiteThumb(String url, int size) {
