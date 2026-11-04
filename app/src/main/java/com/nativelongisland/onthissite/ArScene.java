@@ -30,6 +30,8 @@ final class ArScene {
         String title = "";
         String caption = "";
         String credit = "";
+        // Read when the card is opened, beyond what the floating card shows.
+        String more = "";
         String word = "";
         String pronunciation = "";
         String meaning = "";
@@ -101,6 +103,7 @@ final class ArScene {
             item.title = o.optString("title", "");
             item.caption = o.optString("caption", "");
             item.credit = o.optString("credit", "");
+            item.more = o.optString("more", "");
             item.word = o.optString("word", "");
             item.pronunciation = o.optString("pronunciation", "");
             item.meaning = o.optString("meaning", "");

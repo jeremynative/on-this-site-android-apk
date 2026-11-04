@@ -106,7 +106,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     // "You are here" opens just ahead, below eye level, before anything else. Nearby
     // sites rise into the sky in their real directions, one after another, far enough
     // to read as the landscape; signs that lie the same way stack up.
-    private static final float HERE_AHEAD_M = 1.5f;
+    // Far enough that the visitor walks up to it (DISCOVER_DISTANCE) to open it.
+    private static final float HERE_AHEAD_M = 2.4f;
     private static final float HERE_BELOW_EYE_M = 0.3f;
     private static final float HERE_WIDTH_M = 0.42f;
     private static final float SKY_DISTANCE_M = 9f;
@@ -936,8 +937,16 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             if (nudge != null) {
                 for (int i = 0; i < 3; i++) point[i] += nudge[i];
             }
+            if (item.isHere() && discovered.contains(item.id)) {
+                // Walked up to (or tapped), the pin opens into the land's card, like every bubble.
+                addCard(draws, item, point, cameraPoint, 0.5f);
+                continue;
+            }
             if (item.isHere() || item.isSky()) {
                 addMarker(draws, item, point, cameraPose, cameraPoint, now, stopped);
+                if (item.isHere() && distance(point, cameraPoint) < DISCOVER_DISTANCE && discovered.add(item.id)) {
+                    runOnUiThread(() -> onDiscovered(item));
+                }
                 continue;
             }
             float distance = distance(point, cameraPoint);
@@ -1477,6 +1486,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (!item.pronunciation.isEmpty()) body.append(body.length() > 0 ? "\n" : "").append("say: ").append(item.pronunciation);
         if (!item.meaning.isEmpty()) body.append(body.length() > 0 ? "\n" : "").append(item.meaning);
         if (!item.caption.isEmpty()) body.append(body.length() > 0 ? "\n\n" : "").append(item.caption);
+        // Opened, a card tells more than the floating card showed.
+        if (!item.more.isEmpty()) body.append(body.length() > 0 ? "\n\n" : "").append(item.more);
         infoText.setText(body);
         infoText.setVisibility(body.length() > 0 ? View.VISIBLE : View.GONE);
         setCredit(item);
@@ -2024,7 +2035,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private void onDiscovered(ArScene.Item item) {
         vibrateConfirm();
         String name = item.word.isEmpty() ? (item.title.isEmpty() ? "a story" : item.title) : item.word;
-        showFound("✨ You found " + name.replaceFirst("^(Nearby: |Meet )", ""));
+        showFound(item.isHere() ? "📍 " + item.title : "✨ You found " + name.replaceFirst("^(Nearby: |Meet )", ""));
         if (!item.audio.isEmpty()) playAudio(item);
     }
 
