@@ -1192,20 +1192,16 @@ final class NativeMapController {
             // style are placed first, so titles below this layer move to a free side of their
             // pin or hide instead of covering another site's artwork.
             // Only artwork reserves space; plain dots are small enough for a title to cross.
-            // Photo sites are left out so their footprint cannot block their own photo.
-            style.addLayer(new SymbolLayer(SITE_POINT_FOOTPRINT_LAYER_ID, SITE_POINT_SOURCE_ID)
-                .withFilter(Expression.all(
-                    Expression.neq(Expression.coalesce(Expression.get("native_icon_key"), Expression.literal("")), Expression.literal("")),
-                    Expression.eq(Expression.coalesce(Expression.get("thumb_url"), Expression.literal("")), Expression.literal(""))
-                ))
-                .withProperties(
-                    iconImage(SITE_POINT_FOOTPRINT_IMAGE),
-                    iconSize(Expression.interpolate(Expression.linear(), Expression.zoom(),
-                        Expression.stop(6, 0.7f), Expression.stop(14, 1.05f))),
-                    iconOpacity(0f),
-                    org.maplibre.android.style.layers.PropertyFactory.iconPadding(0f),
-                    iconAllowOverlap(true), iconIgnorePlacement(false)
-                ));
+            // From the photo zoom, sites with a featured photo are left out so their
+            // footprint cannot block their own photo (one layer below that zoom, one above).
+            Expression hasIcon = Expression.neq(Expression.coalesce(Expression.get("native_icon_key"), Expression.literal("")), Expression.literal(""));
+            Expression noPhoto = Expression.eq(Expression.coalesce(Expression.get("thumb_url"), Expression.literal("")), Expression.literal(""));
+            SymbolLayer footprintsBelowPhotoZoom = siteFootprintLayer(SITE_POINT_FOOTPRINT_LAYER_ID, hasIcon);
+            footprintsBelowPhotoZoom.setMaxZoom(SITE_THUMB_MIN_ZOOM);
+            style.addLayer(footprintsBelowPhotoZoom);
+            SymbolLayer footprintsFromPhotoZoom = siteFootprintLayer(SITE_POINT_FOOTPRINT_LAYER_ID + "-without-photos", Expression.all(hasIcon, noPhoto));
+            footprintsFromPhotoZoom.setMinZoom(SITE_THUMB_MIN_ZOOM);
+            style.addLayer(footprintsFromPhotoZoom);
             style.addLayer(new LineLayer("nli-biography-path-lines", BIOGRAPHY_PATH_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("kind"), Expression.literal("path")))
                 .withProperties(
@@ -2821,6 +2817,19 @@ final class NativeMapController {
         return capabilities != null
             && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+    }
+
+    private static SymbolLayer siteFootprintLayer(String id, Expression filter) {
+        return new SymbolLayer(id, SITE_POINT_SOURCE_ID)
+            .withFilter(filter)
+            .withProperties(
+                iconImage(SITE_POINT_FOOTPRINT_IMAGE),
+                iconSize(Expression.interpolate(Expression.linear(), Expression.zoom(),
+                    Expression.stop(6, 0.7f), Expression.stop(14, 1.05f))),
+                iconOpacity(0f),
+                org.maplibre.android.style.layers.PropertyFactory.iconPadding(0f),
+                iconAllowOverlap(true), iconIgnorePlacement(false)
+            );
     }
 
     private static Expression sitePinLabelOffset() {
