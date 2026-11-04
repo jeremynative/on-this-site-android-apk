@@ -136,6 +136,147 @@ final class ArCards {
         return bitmap;
     }
 
+    static final int HERE_RED = 0xFFE0352B;
+
+    /**
+     * "You are here": a card with the land line and the nearest sites, over a red
+     * arrow pointing down at the visitor's spot.
+     */
+    static Bitmap hereMarker(ArScene.Item item) {
+        int width = 640;
+        int pad = 36;
+        int inner = width - pad * 2;
+        StaticLayout tag = layout("YOU ARE HERE", textPaint(30, HERE_RED, true), inner);
+        StaticLayout land = layout(item.land.isEmpty() ? "Long Island" : item.land, textPaint(46, Color.WHITE, true), inner);
+        StaticLayout near = item.nearby.length == 0 ? null
+            : layout("Nearby\n" + joinLines(item.nearby), textPaint(32, Color.rgb(228, 232, 230), false), inner);
+        int cardHeight = pad + tag.getHeight() + 10 + land.getHeight() + (near == null ? 0 : 18 + near.getHeight()) + pad;
+        int arrowHeight = 190;
+        Bitmap bitmap = Bitmap.createBitmap(width, cardHeight + 18 + arrowHeight, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Paint background = new Paint(Paint.ANTI_ALIAS_FLAG);
+        background.setColor(Color.argb(228, 18, 24, 22));
+        canvas.drawRoundRect(new RectF(0, 0, width, cardHeight), 40, 40, background);
+        Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
+        edge.setStyle(Paint.Style.STROKE);
+        edge.setStrokeWidth(6);
+        edge.setColor(HERE_RED);
+        canvas.drawRoundRect(new RectF(3, 3, width - 3, cardHeight - 3), 38, 38, edge);
+        canvas.save();
+        canvas.translate(pad, pad);
+        tag.draw(canvas);
+        canvas.translate(0, tag.getHeight() + 10);
+        land.draw(canvas);
+        if (near != null) {
+            canvas.translate(0, land.getHeight() + 18);
+            near.draw(canvas);
+        }
+        canvas.restore();
+        // The arrow: a short shaft and a wide head, pointing at the ground below.
+        float c = width / 2f;
+        float top = cardHeight + 18;
+        android.graphics.Path arrow = new android.graphics.Path();
+        arrow.moveTo(c - 34, top);
+        arrow.lineTo(c + 34, top);
+        arrow.lineTo(c + 34, top + arrowHeight * 0.45f);
+        arrow.lineTo(c + 96, top + arrowHeight * 0.45f);
+        arrow.lineTo(c, top + arrowHeight);
+        arrow.lineTo(c - 96, top + arrowHeight * 0.45f);
+        arrow.lineTo(c - 34, top + arrowHeight * 0.45f);
+        arrow.close();
+        Paint red = new Paint(Paint.ANTI_ALIAS_FLAG);
+        red.setColor(HERE_RED);
+        red.setShadowLayer(10, 0, 4, Color.argb(150, 0, 0, 0));
+        canvas.drawPath(arrow, red);
+        Paint outline = new Paint(Paint.ANTI_ALIAS_FLAG);
+        outline.setStyle(Paint.Style.STROKE);
+        outline.setStrokeWidth(6);
+        outline.setColor(Color.WHITE);
+        canvas.drawPath(arrow, outline);
+        return bitmap;
+    }
+
+    /**
+     * A nearby site's sign in the sky: its photo, name, distance and one line, with a
+     * small pointer down toward the horizon where the site lies.
+     */
+    static Bitmap skySign(ArScene.Item item, Bitmap photo) {
+        int width = 680;
+        int pad = 28;
+        int photoSize = photo == null ? 0 : 136;
+        int text = width - pad * 2 - (photoSize > 0 ? photoSize + 22 : 0);
+        int accent = layerColor(item.layer);
+        String name = !item.name.isEmpty() ? item.name : item.title.replaceFirst("^Nearby: ", "");
+        String far = Double.isNaN(item.distanceM) ? "" : item.distanceM < 1000
+            ? Math.round(item.distanceM) + " m away"
+            : String.format(java.util.Locale.US, "%.1f km away", item.distanceM / 1000);
+        StaticLayout title = layout(name, textPaint(40, Color.WHITE, true), text, 2);
+        StaticLayout distance = far.isEmpty() ? null : layout(far, textPaint(30, accent, true), text, 1);
+        StaticLayout brief = item.brief.isEmpty() ? null : layout(item.brief, textPaint(28, Color.rgb(222, 226, 224), false), text, 3);
+        int textHeight = title.getHeight() + (distance == null ? 0 : 8 + distance.getHeight()) + (brief == null ? 0 : 10 + brief.getHeight());
+        int cardHeight = pad * 2 + Math.max(photoSize, textHeight);
+        int pointer = 34;
+        Bitmap bitmap = Bitmap.createBitmap(width, cardHeight + pointer, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Paint background = new Paint(Paint.ANTI_ALIAS_FLAG);
+        background.setColor(Color.argb(222, 18, 24, 22));
+        canvas.drawRoundRect(new RectF(0, 0, width, cardHeight), 36, 36, background);
+        android.graphics.Path tip = new android.graphics.Path();
+        tip.moveTo(width / 2f - 30, cardHeight - 2);
+        tip.lineTo(width / 2f + 30, cardHeight - 2);
+        tip.lineTo(width / 2f, cardHeight + pointer);
+        tip.close();
+        canvas.drawPath(tip, background);
+        Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
+        edge.setStyle(Paint.Style.STROKE);
+        edge.setStrokeWidth(5);
+        edge.setColor(accent);
+        canvas.drawRoundRect(new RectF(2.5f, 2.5f, width - 2.5f, cardHeight - 2.5f), 34, 34, edge);
+        float x = pad;
+        if (photoSize > 0) {
+            float top = (cardHeight - photoSize) / 2f;
+            float scale = Math.max(photoSize / (float) photo.getWidth(), photoSize / (float) photo.getHeight());
+            float w = photo.getWidth() * scale;
+            float h = photo.getHeight() * scale;
+            android.graphics.Path round = new android.graphics.Path();
+            round.addCircle(x + photoSize / 2f, top + photoSize / 2f, photoSize / 2f, android.graphics.Path.Direction.CW);
+            canvas.save();
+            canvas.clipPath(round);
+            canvas.drawBitmap(photo, null, new RectF(x + (photoSize - w) / 2, top + (photoSize - h) / 2, x + (photoSize + w) / 2, top + (photoSize + h) / 2), new Paint(Paint.FILTER_BITMAP_FLAG));
+            canvas.restore();
+            Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
+            ring.setStyle(Paint.Style.STROKE);
+            ring.setStrokeWidth(5);
+            ring.setColor(Color.WHITE);
+            canvas.drawCircle(x + photoSize / 2f, top + photoSize / 2f, photoSize / 2f, ring);
+            x += photoSize + 22;
+        }
+        canvas.save();
+        canvas.translate(x, (cardHeight - textHeight) / 2f);
+        title.draw(canvas);
+        canvas.translate(0, title.getHeight());
+        if (distance != null) {
+            canvas.translate(0, 8);
+            distance.draw(canvas);
+            canvas.translate(0, distance.getHeight());
+        }
+        if (brief != null) {
+            canvas.translate(0, 10);
+            brief.draw(canvas);
+        }
+        canvas.restore();
+        return bitmap;
+    }
+
+    private static String joinLines(String[] lines) {
+        StringBuilder out = new StringBuilder();
+        for (String line : lines) {
+            if (out.length() > 0) out.append('\n');
+            out.append("• ").append(line);
+        }
+        return out.toString();
+    }
+
     /** Soft glowing orb shown before a discoverable prompt has been found. */
     static Bitmap orb(int color) {
         int size = 256;
@@ -170,5 +311,15 @@ final class ArCards {
     @SuppressWarnings("deprecation")
     private static StaticLayout layout(String text, TextPaint paint, int width) {
         return new StaticLayout(text, paint, width, Layout.Alignment.ALIGN_NORMAL, 1.08f, 0f, false);
+    }
+
+    /** At most maxLines, the last ending in an ellipsis. */
+    private static StaticLayout layout(String text, TextPaint paint, int width, int maxLines) {
+        return StaticLayout.Builder.obtain(text, 0, text.length(), paint, width)
+            .setLineSpacing(0f, 1.08f)
+            .setIncludePad(false)
+            .setMaxLines(maxLines)
+            .setEllipsize(android.text.TextUtils.TruncateAt.END)
+            .build();
     }
 }

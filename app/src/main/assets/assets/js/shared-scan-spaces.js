@@ -265,8 +265,24 @@
     const AR_SITE_FIELDS = ["title", "slug", "summary", "why_this_matters", "listing_image_url", "listing_image_alt", ...AR_SECTIONS.map(([field]) => field)].join(",");
     const AR_PHOTOS = 6;
     const AR_READINGS = 4;
-    const AR_NEARBY_PLACES = 3;
-    const AR_NEARBY_KM = 3;
+    // Nearby sites float up as signs in the sky, each in its real direction (sky: true).
+    const AR_NEARBY_PLACES = 6;
+    const AR_NEARBY_KM = 5;
+    // The "You are here" marker lists this many of them.
+    const AR_HERE_NEARBY = 3;
+
+    function arKm(km) {
+      return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+    }
+
+    // One short line for a sky sign: the summary's first sentence, at most ~90 characters.
+    function arBrief(value) {
+      const text = arText(value);
+      const sentence = (text.match(/^.*?[.!?](?=\s|$)/) || [text])[0];
+      if (sentence.length <= 90) return sentence;
+      const cut = sentence.lastIndexOf(" ", 88);
+      return `${sentence.slice(0, cut > 40 ? cut : 88)}…`;
+    }
 
     // Photos and their captions in an article section's HTML.
     // Each photo also carries the article text around it (the paragraph
@@ -448,11 +464,15 @@
       const entries = arLandEntries();
       const land = [];
       const other = [];
+      let hereItem = null;
       if (here) {
         const homelands = arHomelands(here, entries);
-        homelands.forEach(({ entry, near }) => {
+        homelands.forEach(({ entry, near }, index) => {
           const [welcome, ...more] = arLandClips(entry);
-          land.push(near
+          // The first land is told by the "You are here" marker (built below, once the
+          // nearby sites are known); any overlapping land keeps its own bubble.
+          if (index === 0) hereItem = { welcome, entry, near };
+          else land.push(near
             ? arToward({ ...welcome, title: `Near ${arText(entry.title)}`, caption: `About ${near.km.toFixed(1)} km away, in the direction of this bubble. ${welcome.caption}`, image: arSiteImage(entry.siteId) }, here, near)
             : { ...welcome, title: `You are on ${arText(entry.title)}`, image: arSiteImage(entry.siteId) });
           land.push(...arShuffled([...more, ...arLandPageItems(entry, landPages[entry.slug])], random));
@@ -480,12 +500,28 @@
           title: `${arText(island.title)}: a name for this island`, caption: arText(island.summary), credit: "On This Site"
         });
         land.push(...arShuffled(stories, random));
+        // Signs in the sky, each in its site's real direction: name, distance and one line
+        // (sky, brief); opening one reads the full summary. Older apps show bubbles.
         nearby.forEach(({ site, km }) => other.push(arToward({
           id: `place-${site.slug}`, layer: "archival", kind: "note", placement: "discover",
           title: `Nearby: ${arText(site.title)}`,
-          caption: `${km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`} from you, in the direction of this bubble. ${arText(site.summary)}`,
-          credit: "On This Site", image: site.listing_image_url || site.listing_image_thumb_url
+          caption: `${arKm(km)} from you, in the direction of this sign. ${arText(site.summary)}`,
+          credit: "On This Site", image: site.listing_image_url || site.listing_image_thumb_url,
+          sky: true, name: arText(site.title), brief: arBrief(site.summary)
         }, here, { lng: Number(site.center[0]), lat: Number(site.center[1]) })));
+        // First of all: a red arrow down at your spot, saying whose land it is and what is near.
+        const nearest = nearby.slice(0, AR_HERE_NEARBY).map(({ site, km }) => `${arText(site.title)} · ${arKm(km)}`);
+        const landTitle = hereItem ? arText(hereItem.entry.title) : "";
+        const landLine = !hereItem ? "Long Island (Paumanok)"
+          : hereItem.near ? `Near ${landTitle} · ${arKm(hereItem.near.km)}` : `On ${landTitle}`;
+        hereItem = {
+          id: "here", layer: "archival", kind: "here", placement: "discover",
+          title: "You are here", land: landLine, nearby: nearest,
+          caption: [hereItem ? `${landLine}. ${hereItem.welcome.caption}` : `${landLine}.`,
+            nearest.length ? `Nearby:\n${nearest.join("\n")}` : ""].filter(Boolean).join("\n\n"),
+          credit: hereItem?.welcome.credit || "On This Site",
+          image: hereItem ? arSiteImage(hereItem.entry.siteId) || undefined : undefined
+        };
         // With the land's own stories to tell, fewer people and words.
         const rich = land.length >= 4;
         other.push(...arPeople(here, AR_PEOPLE_KM, rich ? 2 : AR_PEOPLE));
@@ -502,7 +538,8 @@
         arShuffled(entries.filter(entry => entry.isAncestralLand), random).slice(0, 3).forEach(entry => land.push(arLandClips(entry)[0]));
         other.push(...arWords(AR_WORDS, random));
       }
-      return arScene("Around you", arInterleave(land, arShuffled(other, random)), random, here, true);
+      const items = arInterleave(land, arShuffled(other, random));
+      return arScene("Around you", hereItem ? [hereItem, ...items] : items, random, here, true);
     }
 
     function arAsset(id) {

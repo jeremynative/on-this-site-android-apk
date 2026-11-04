@@ -19,6 +19,9 @@ final class ArScene {
     static final String KIND_NOTE = "note";
     static final String KIND_PHRASE = "phrase";
     static final String KIND_AUDIO = "audio";
+    // The first thing in AR: a red arrow down at the visitor's spot, saying whose land
+    // it is and what is near.
+    static final String KIND_HERE = "here";
 
     static final class Item {
         String id;
@@ -47,6 +50,23 @@ final class ArScene {
         double spotLat = Double.NaN;
         double spotLng = Double.NaN;
         boolean sample;
+        // A nearby site shown as a sign in the sky, in its real direction: its name and
+        // one line (the full text opens with a tap).
+        boolean sky;
+        String name = "";
+        String brief = "";
+        // The "You are here" marker: the land line and the nearest sites with distances.
+        String land = "";
+        String[] nearby = new String[0];
+
+        boolean isHere() {
+            return KIND_HERE.equals(kind);
+        }
+
+        /** A sky sign needs a direction; without one it stays an ordinary bubble. */
+        boolean isSky() {
+            return sky && !Double.isNaN(bearing);
+        }
 
         boolean hasSpot() {
             return !Double.isNaN(spotLat) && !Double.isNaN(spotLng);
@@ -85,6 +105,13 @@ final class ArScene {
             item.audio = o.optString("audio", "");
             item.sample = o.optBoolean("sample", false);
             item.figure = o.optString("figure", "");
+            item.sky = o.optBoolean("sky", false);
+            item.name = o.optString("name", "");
+            item.brief = o.optString("brief", "");
+            item.land = o.optString("land", "");
+            JSONArray nearby = o.optJSONArray("nearby");
+            item.nearby = new String[nearby == null ? 0 : nearby.length()];
+            for (int n = 0; n < item.nearby.length; n++) item.nearby[n] = nearby.getString(n);
             item.bearing = o.optDouble("bearing_deg", Double.NaN);
             item.distanceM = o.optDouble("distance_m", Double.NaN);
             JSONObject spot = o.optJSONObject("spot");

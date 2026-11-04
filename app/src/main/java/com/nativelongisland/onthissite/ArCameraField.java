@@ -50,6 +50,8 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         boolean discovered(ArScene.Item item);
         /** The bubble's picture; called off the UI thread. */
         Bitmap bubbleBitmap(ArScene.Item item);
+        /** The "You are here" marker or a sky sign; called off the UI thread. */
+        Bitmap markerBitmap(ArScene.Item item);
         /** A tap on a bubble, or on empty camera view (null). */
         void tapped(ArScene.Item item);
         void changed();
@@ -57,6 +59,13 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     }
 
     private static final int MAX_PLACED = 3;
+    // "You are here" sits ahead, below the middle of the view; with a compass, nearby
+    // sites rise one after another to signs high in their real directions.
+    private static final double HERE_BELOW_DEG = 16;
+    private static final double SKY_ELEVATION = 22;
+    private static final double SKY_RISE_DEG = 12;
+    private static final long SKY_RISE_MS = 1300;
+    private static final long SKY_STAGGER_MS = 280;
     private static final long REVEAL_GAP_MS = 1400;
     // Below this (degrees) the camera is looking at the floor; above the
     // other, at the ceiling or sky.
@@ -83,6 +92,10 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         long shownAt;
         // Brought closer (above 1) or pushed away (below) by a drag.
         float near = 1f;
+        // The marker or a sky sign: drawn as its own picture, kept after it is opened.
+        boolean marker;
+        boolean sky;
+        long riseAt;
         final float phase;
         float drawX;
         float drawY;
@@ -155,6 +168,9 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             // A real place floats its real way; the rest spread all round.
             bubble.bearing = Double.isNaN(item.bearing) ? random.nextDouble() * 360 : item.bearing;
             bubble.elevation = -4 + random.nextDouble() * 14;
+            bubble.sky = item.isSky() && rotationSensor != null;
+            bubble.marker = item.isHere() || bubble.sky;
+            if (bubble.sky) bubble.elevation = SKY_ELEVATION;
             bubbles.add(bubble);
         }
         spreadOut();
@@ -500,10 +516,15 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         float radius = dp(56);
         if (Double.isNaN(heading)) return;
         boolean compass = hasCompass();
+        placeMarkers(now);
         if (!compass) revealInFront(now);
         for (Bubble bubble : bubbles) {
             bubble.onScreen = false;
-            if (!host.visible(bubble.item) || host.discovered(bubble.item)) continue;
+            if (!host.visible(bubble.item) || (host.discovered(bubble.item) && !bubble.marker)) continue;
+            if (bubble.marker) {
+                drawMarker(canvas, bubble, now, width, height);
+                continue;
+            }
             if (!compass && !bubble.placed) continue;
             // Held at its spot in the air: across by its direction, up by its height.
             double across = angleBetween(heading, bubble.bearing);
@@ -536,6 +557,54 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         }
     }
 
+    /** The marker ahead and below the view's middle once the view is known; sky signs rise in turn. */
+    private void placeMarkers(long now) {
+        int skyIndex = 0;
+        for (Bubble bubble : bubbles) {
+            if (!bubble.marker || bubble.placed) continue;
+            if (bubble.item.isHere()) {
+                bubble.bearing = heading;
+                bubble.elevation = Math.max(-40, pitch - HERE_BELOW_DEG);
+            } else {
+                bubble.riseAt = now + skyIndex++ * SKY_STAGGER_MS;
+            }
+            bubble.placed = true;
+            bubble.shownAt = now;
+        }
+    }
+
+    private void drawMarker(Canvas canvas, Bubble bubble, long now, int width, int height) {
+        if (bubble.sky && now < bubble.riseAt) return;
+        double across = angleBetween(heading, bubble.bearing);
+        if (Math.abs(across) > fovAcross / 2 + 25) return;
+        float alpha = 1f;
+        double elevation = bubble.elevation;
+        float bob;
+        if (bubble.sky) {
+            float t = Math.min(1f, (now - bubble.riseAt) / (float) SKY_RISE_MS);
+            float ease = 1f - (1f - t) * (1f - t) * (1f - t);
+            elevation -= (1f - ease) * SKY_RISE_DEG;
+            alpha = ease;
+            bob = dp(4) * (float) Math.sin(now / 1600.0 + bubble.phase);
+        } else {
+            bob = dp(8) * (float) Math.abs(Math.sin(now / 420.0));
+        }
+        Bitmap bitmap = bitmapFor(bubble);
+        if (bitmap == null) return;
+        float w = dp(bubble.sky ? 200 : 170) * bubble.near;
+        float h = w * bitmap.getHeight() / (float) bitmap.getWidth();
+        float x = width / 2f + (float) (across / fovAcross) * width;
+        float y = height / 2f - (float) ((elevation - pitch) / fovUp) * height + bob;
+        bubble.drawX = x;
+        bubble.drawY = y;
+        bubble.drawRadius = Math.max(w, h) * 0.45f;
+        bubble.onScreen = x > -w && x < width + w && y > -h && y < height + h;
+        if (!bubble.onScreen) return;
+        bitmapPaint.setAlpha(Math.round(255 * alpha));
+        canvas.drawBitmap(bitmap, null, new RectF(x - w / 2, y - h / 2, x + w / 2, y + h / 2), bitmapPaint);
+        bitmapPaint.setAlpha(255);
+    }
+
     /**
      * Without a compass: up to three bubbles at a time, each appearing in
      * front of the visitor near eye level, the next shortly after one is
@@ -545,7 +614,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         int placed = 0;
         Bubble next = null;
         for (Bubble bubble : bubbles) {
-            if (!host.visible(bubble.item) || host.discovered(bubble.item)) continue;
+            if (bubble.marker || !host.visible(bubble.item) || host.discovered(bubble.item)) continue;
             if (bubble.placed) placed++;
             else if (next == null) next = bubble;
         }
@@ -672,7 +741,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         if (bubble.bitmap == null && !bubble.loading) {
             bubble.loading = true;
             loader.execute(() -> {
-                Bitmap bitmap = host.bubbleBitmap(bubble.item);
+                Bitmap bitmap = bubble.marker ? host.markerBitmap(bubble.item) : host.bubbleBitmap(bubble.item);
                 post(() -> bubble.bitmap = bitmap);
             });
         }
@@ -766,7 +835,8 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         Bubble picked = null;
         double pickedDistance = Double.MAX_VALUE;
         for (Bubble bubble : bubbles) {
-            if (!bubble.onScreen || host.discovered(bubble.item)) continue;
+            // The marker and sky signs stay up once opened, and open again with a tap.
+            if (!bubble.onScreen || (host.discovered(bubble.item) && !bubble.marker)) continue;
             double distance = Math.hypot(x - bubble.drawX, y - bubble.drawY);
             if (distance <= bubble.drawRadius * 1.15 && distance < pickedDistance) {
                 picked = bubble;
