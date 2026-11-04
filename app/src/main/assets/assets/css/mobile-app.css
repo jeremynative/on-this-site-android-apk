@@ -61,6 +61,15 @@
       }
     }
 
+    /* The app reports its real system-bar insets on tablets, so the phone-sized
+       fallback gutters only left an empty frame around the map. */
+    html.native-android-app.tablet-device {
+      --minimum-top-safe: 0px;
+      --minimum-bottom-safe: 0px;
+      --minimum-left-safe: 0px;
+      --minimum-right-safe: 0px;
+    }
+
     .loading-screen {
       position: fixed;
       inset: 0;
@@ -2540,6 +2549,27 @@
       margin: 9px 9px 0 0;
       aspect-ratio: 1;
       border-radius: 7px;
+    }
+
+    /* Landscape tablets: photo beside the text, so a full-width card doesn't
+       crop its photo to a thin strip of sky. */
+    body.tablet-landscape .app.panel-maximized .site-list > .learning-card.has-thumbnail {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+      align-items: stretch;
+    }
+
+    body.tablet-landscape .app.panel-maximized .site-list > .learning-card.has-thumbnail > .learning-card-media {
+      position: relative;
+      height: auto;
+      min-height: 0;
+      max-height: none;
+      aspect-ratio: auto;
+    }
+
+    body.tablet-landscape .app.panel-maximized .site-list > .learning-card.has-thumbnail > .learning-card-media img {
+      position: absolute;
+      inset: 0;
     }
 
     .app:not(.panel-maximized) .nearby-feed-card .learning-card-meta {
