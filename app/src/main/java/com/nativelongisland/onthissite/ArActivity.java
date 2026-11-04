@@ -605,7 +605,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         // Without a compass after a while, places are placed like the rest.
         boolean compassReady = compass.ready();
         boolean ignoreDirections = !compassReady && now - freeStartedAt > FREE_COMPASS_WAIT_MS;
-        if (compassReady || ignoreDirections) placeSkySigns(cameraPoint, facing, !compassReady, now);
+        // The signs rise once the visitor looks out (not at the floor), so the rise is seen.
+        if ((compassReady || ignoreDirections) && forward[1] > -0.6f) placeSkySigns(cameraPoint, facing, !compassReady, now);
         int waiting = 0;
         ArScene.Item ambient = null;
         ArScene.Item ahead = null;

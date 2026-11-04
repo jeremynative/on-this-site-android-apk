@@ -557,14 +557,18 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         }
     }
 
-    /** The marker ahead and below the view's middle once the view is known; sky signs rise in turn. */
+    /**
+     * The marker ahead and below the view's middle, and sky signs rising in turn, once the
+     * visitor raises the device (not while it faces the floor, or the rise goes unseen).
+     */
     private void placeMarkers(long now) {
+        if (pitch < LOOKING_DOWN || pitch > LOOKING_UP) return;
         int skyIndex = 0;
         for (Bubble bubble : bubbles) {
             if (!bubble.marker || bubble.placed) continue;
             if (bubble.item.isHere()) {
                 bubble.bearing = heading;
-                bubble.elevation = Math.max(-40, pitch - HERE_BELOW_DEG);
+                bubble.elevation = Math.max(-30, pitch - HERE_BELOW_DEG);
             } else {
                 bubble.riseAt = now + skyIndex++ * SKY_STAGGER_MS;
             }
