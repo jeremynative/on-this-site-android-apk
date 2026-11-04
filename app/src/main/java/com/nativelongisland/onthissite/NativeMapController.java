@@ -1867,23 +1867,21 @@ final class NativeMapController {
     }
 
     private void applyMovingFeaturesToStyle() {
+        if (!styleReady || map == null || map.getStyle() == null || movingFeaturesJson == null) return;
+        GeoJsonSource source = map.getStyle().getSourceAs(MOVING_FEATURE_SOURCE_ID);
+        if (source == null) return;
         try {
-            applyMovingFeaturesToStyle(FeatureCollection.fromJson(movingFeaturesJson));
+            // MapLibre parses the string natively, off the UI thread. Building GeoJSON Java
+            // objects first (FeatureCollection.fromJson) cost the UI thread on every update.
+            source.setGeoJson(movingFeaturesJson);
         } catch (Exception error) {
             Log.w(LOG_TAG, "Could not resume native moving features after map interaction.", error);
+            return;
         }
-    }
-
-    private void applyMovingFeaturesToStyle(FeatureCollection collection) {
-        if (!styleReady || map == null || map.getStyle() == null || collection == null) return;
-        GeoJsonSource source = map.getStyle().getSourceAs(MOVING_FEATURE_SOURCE_ID);
-        if (source != null) {
-            source.setGeoJson(collection);
-            mapView.postInvalidateOnAnimation();
-            lastMovingFeatureApplyAt = SystemClock.uptimeMillis();
-            movingFeatureAppliedCount += 1;
-            recordMovingFeatureDebugSample(collection, lastMovingFeatureApplyAt);
-        }
+        mapView.postInvalidateOnAnimation();
+        lastMovingFeatureApplyAt = SystemClock.uptimeMillis();
+        movingFeatureAppliedCount += 1;
+        recordMovingFeatureDebugSample(lastMovingFeatureApplyAt);
     }
 
     String movingFeatureDiagnosticsJson() {
@@ -1958,7 +1956,7 @@ final class NativeMapController {
         return result.toString();
     }
 
-    private void recordMovingFeatureDebugSample(FeatureCollection collection, long now) {
+    private void recordMovingFeatureDebugSample(long now) {
         if (!BuildConfig.DEBUG) return;
         if (movingFeatureDebugWindowStartedAt <= 0L) movingFeatureDebugWindowStartedAt = now;
         if (movingFeatureDebugLastApplyAt > 0L) {
@@ -1971,7 +1969,7 @@ final class NativeMapController {
 
         String sample = "none";
         try {
-            List<Feature> features = collection.features();
+            List<Feature> features = FeatureCollection.fromJson(movingFeaturesJson).features();
             if (features != null) {
                 for (Feature feature : features) {
                     if (!"biography".equals(feature.getStringProperty("moving_kind")) || !(feature.geometry() instanceof Point)) continue;
