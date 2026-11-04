@@ -594,7 +594,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             alpha = ease;
             bob = dp(4) * (float) Math.sin(now / 1600.0 + bubble.phase);
         } else {
-            bob = dp(8) * (float) Math.abs(Math.sin(now / 420.0));
+            bob = dp(3) * (float) Math.sin(now / 900.0);
         }
         Bitmap bitmap = bitmapFor(bubble);
         if (bitmap == null) return;

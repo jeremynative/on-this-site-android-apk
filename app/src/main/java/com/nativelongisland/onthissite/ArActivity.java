@@ -790,7 +790,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 stopped.add(item.id);
                 return;
             }
-            point[1] += 0.04f * (float) Math.abs(Math.sin(now / 420.0));
+            // The landmark floats gently; a bounce would make its ground ring hop.
+            point[1] += 0.015f * (float) Math.sin(now / 900.0);
         }
         String key = (item.isHere() ? "here:" : "sky:") + item.id;
         ensureTexture(item, key);
