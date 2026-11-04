@@ -130,6 +130,12 @@ final class NativeMapController {
     private static final String SITE_POINT_SOURCE_ID = "nli-site-points";
     private static final String SITE_POINT_FOOTPRINT_LAYER_ID = "nli-site-point-footprints";
     private static final String SITE_POINT_FOOTPRINT_IMAGE = "nli-site-point-footprint";
+    // Zoomed in, sites drawn as a plain dot that have a header photo (the web
+    // payload's thumb_url) show it as a small round photo, as on the website.
+    private static final String SITE_THUMB_LAYER_ID = "nli-site-thumbs";
+    private static final String SITE_THUMB_IMAGE_PREFIX = "nli-thumb-";
+    private static final float SITE_THUMB_MIN_ZOOM = 12f;
+    private static final int SITE_THUMB_SIZE_DP = 36;
     private static final float SITE_FULL_TITLE_ZOOM = 11.5f;
     private static final int SITE_SHORT_TITLE_MAX_CHARS = 22;
     private static final String LABEL_SOURCE_ID = "nli-labels";
@@ -211,6 +217,11 @@ final class NativeMapController {
     private final List<RectF> blockedTouchRegions = new ArrayList<>();
     private MapLibreMap map;
     private boolean styleReady;
+    // Photo thumbnails added to the current style, being downloaded, or failed.
+    private final java.util.Set<String> siteThumbsLoaded = new java.util.HashSet<>();
+    private final java.util.Set<String> siteThumbsPending = new java.util.HashSet<>();
+    private final java.util.Set<String> siteThumbsFailed = new java.util.HashSet<>();
+    private final java.util.concurrent.ExecutorService siteThumbExecutor = java.util.concurrent.Executors.newFixedThreadPool(2);
     private boolean profileMode;
     private boolean suggestionMapPickMode;
     private boolean routingGesture;
@@ -838,12 +849,20 @@ final class NativeMapController {
             Log.w(LOG_TAG, "Online native map archive failed; switching to bundled offline detail: " + error);
             loadNativeStyle(false);
         });
+        // A photo thumbnail that has not downloaded yet draws as nothing,
+        // without a missing-image warning on every frame.
+        mapView.addOnStyleImageMissingListener(id -> {
+            Style style = map == null ? null : map.getStyle();
+            if (style == null || id == null || !id.startsWith(SITE_THUMB_IMAGE_PREFIX) || style.getImage(id) != null) return;
+            style.addImage(id, Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888));
+        });
         loadNativeStyle(hasValidatedNetwork());
     }
 
     private void loadNativeStyle(boolean preferOnlineArchive) {
         if (map == null) return;
         styleReady = false;
+        siteThumbsLoaded.clear();
         markStartupVisualChange();
         usingOnlineArchive = preferOnlineArchive;
         lastStateSignature = "";
@@ -1046,6 +1065,19 @@ final class NativeMapController {
             // Only the separate title layer participates in zoom-based decluttering.
             siteIconLayer.setMinZoom(0f);
             style.addLayer(siteIconLayer);
+            // Each photo is added as an image once it has downloaded; until
+            // then the missing-image listener gives it a transparent pixel.
+            SymbolLayer siteThumbLayer = new SymbolLayer(SITE_THUMB_LAYER_ID, SITE_POINT_SOURCE_ID)
+                .withFilter(Expression.neq(
+                    Expression.coalesce(Expression.get("thumb_url"), Expression.literal("")),
+                    Expression.literal("")
+                ))
+                .withProperties(
+                    iconImage(Expression.concat(Expression.literal(SITE_THUMB_IMAGE_PREFIX), Expression.get("slug"))),
+                    iconAllowOverlap(true), iconIgnorePlacement(true)
+                );
+            siteThumbLayer.setMinZoom(SITE_THUMB_MIN_ZOOM);
+            style.addLayer(siteThumbLayer);
             style.addLayer(new CircleLayer("nli-site-unread-badges", SITE_POINT_SOURCE_ID)
                 .withFilter(Expression.gt(
                     Expression.coalesce(
@@ -1112,11 +1144,15 @@ final class NativeMapController {
                     textHaloColor("rgba(255,255,255,0.94)"), textHaloWidth(1.5f),
                     textOffset(new Float[] { 0f, -1.45f }), textAnchor(Property.TEXT_ANCHOR_BOTTOM),
                     org.maplibre.android.style.layers.PropertyFactory.textVariableAnchor(new String[] { "bottom", "top", "left", "right" }),
-                    // Clear the pin's own footprint: artwork is wider than a plain dot.
-                    org.maplibre.android.style.layers.PropertyFactory.textRadialOffset(Expression.switchCase(
-                        Expression.neq(Expression.coalesce(Expression.get("native_icon_key"), Expression.literal("")), Expression.literal("")),
-                        Expression.literal(1.75f),
-                        Expression.literal(1.05f)
+                    // Clear the pin's own footprint: artwork is wider than a plain
+                    // dot, and a zoomed-in photo thumbnail wider still.
+                    org.maplibre.android.style.layers.PropertyFactory.textRadialOffset(Expression.step(Expression.zoom(),
+                        sitePinLabelOffset(),
+                        Expression.stop(SITE_THUMB_MIN_ZOOM, Expression.switchCase(
+                            Expression.neq(Expression.coalesce(Expression.get("thumb_url"), Expression.literal("")), Expression.literal("")),
+                            Expression.literal(1.9f),
+                            sitePinLabelOffset()
+                        ))
                     )),
                     org.maplibre.android.style.layers.PropertyFactory.textPadding(2f),
                     textOptional(true), textAllowOverlap(false), textIgnorePlacement(false)
@@ -1669,6 +1705,7 @@ final class NativeMapController {
                 setTerritorySource(style, payload.optJSONObject("territories"));
                 setSource(style, SITE_POLYGON_SOURCE_ID, payload.optJSONObject("sitePolygons"));
                 setSource(style, SITE_POINT_SOURCE_ID, sitePoints);
+                mapView.postDelayed(this::requestVisibleSiteThumbs, 700L);
                 setSource(style, LABEL_SOURCE_ID, withBundledTerritoryLabels(payload.optJSONObject("labels")));
                 setSource(style, BIOGRAPHY_PATH_SOURCE_ID, payload.optJSONObject("biographyPaths"));
                 setSource(style, EVENT_SOURCE_ID, payload.optJSONObject("events"));
@@ -1737,6 +1774,7 @@ final class NativeMapController {
             boolean unreadUpdated = payload.has("unreadBadges");
             if (pointsUpdated) {
                 setSource(style, SITE_POINT_SOURCE_ID, applyBundledSiteIconKeys(payload.optJSONObject("sitePoints")));
+                mapView.postDelayed(this::requestVisibleSiteThumbs, 700L);
             }
             if (labelsUpdated) {
                 setSource(style, LABEL_SOURCE_ID, withBundledTerritoryLabels(payload.optJSONObject("labels")));
@@ -2294,6 +2332,7 @@ final class NativeMapController {
 
     private void notifyCameraChanged() {
         if (map == null) return;
+        requestVisibleSiteThumbs();
         if (suppressNextCameraCallback) {
             suppressNextCameraCallback = false;
             return;
@@ -2357,7 +2396,7 @@ final class NativeMapController {
                 "nli-moving-feature-labels", "nli-moving-biography-canoes", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons", "nli-moving-ship-icons",
                 "nli-calendar-event-labels", "nli-exhibit-circles",
                 "nli-biography-path-numbers", "nli-biography-path-points", "nli-biography-path-labels",
-                "nli-site-point-labels", "nli-site-point-icons", "nli-site-point-circles");
+                SITE_THUMB_LAYER_ID, "nli-site-point-labels", "nli-site-point-icons", "nli-site-point-circles");
             if (exactPoints == null) exactPoints = Collections.emptyList();
             Feature exactPoint = nearestActionablePointFeature(exactPoints, screenPoint, false);
             if (dispatchActionablePointFeature(exactPoint, false)) return true;
@@ -2401,7 +2440,7 @@ final class NativeMapController {
             "nli-moving-feature-labels", "nli-moving-biography-canoes", "nli-moving-biography-icons", "nli-moving-dog-icons", "nli-moving-whale-icons", "nli-moving-ship-icons",
             "nli-calendar-event-labels", "nli-exhibit-circles",
             "nli-biography-path-numbers", "nli-biography-path-points", "nli-biography-path-labels",
-            "nli-site-point-labels", "nli-site-point-icons", "nli-site-point-circles",
+            SITE_THUMB_LAYER_ID, "nli-site-point-labels", "nli-site-point-icons", "nli-site-point-circles",
             SITE_LAND_FILL_LAYER_ID, SITE_LAND_SATELLITE_FILL_LAYER_ID, SITE_NON_LAND_FILL_LAYER_ID);
         if (features == null) features = Collections.emptyList();
         Feature nearestPoint = nearestActionablePointFeature(features, screenPoint, profileMode);
@@ -2754,6 +2793,112 @@ final class NativeMapController {
             && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
     }
 
+    private static Expression sitePinLabelOffset() {
+        return Expression.switchCase(
+            Expression.neq(Expression.coalesce(Expression.get("native_icon_key"), Expression.literal("")), Expression.literal("")),
+            Expression.literal(1.75f),
+            Expression.literal(1.05f)
+        );
+    }
+
+    // Download the photos of thumbnail sites on screen, two at a time, once
+    // the map is close enough to show them and the phone is online. Offline,
+    // these sites simply keep their dot.
+    private void requestVisibleSiteThumbs() {
+        if (map == null || !styleReady || map.getStyle() == null || profileMode) return;
+        CameraPosition position = map.getCameraPosition();
+        if (position == null || position.zoom < SITE_THUMB_MIN_ZOOM - 0.5 || !hasValidatedNetwork()) return;
+        List<Feature> features = map.queryRenderedFeatures(
+            new RectF(0f, 0f, mapView.getWidth(), mapView.getHeight()), "nli-site-point-circles");
+        if (features == null) return;
+        int size = dp(SITE_THUMB_SIZE_DP);
+        for (Feature feature : features) {
+            if (feature == null || !feature.hasProperty("thumb_url") || !feature.hasProperty("slug")) continue;
+            String url = feature.getStringProperty("thumb_url");
+            String key = SITE_THUMB_IMAGE_PREFIX + feature.getStringProperty("slug");
+            if (url == null || !url.startsWith("https://") || siteThumbsLoaded.contains(key)
+                || siteThumbsFailed.contains(key) || !siteThumbsPending.add(key)) continue;
+            siteThumbExecutor.execute(() -> {
+                Bitmap thumb = downloadSiteThumb(url, size);
+                mapView.post(() -> {
+                    siteThumbsPending.remove(key);
+                    if (thumb == null) {
+                        siteThumbsFailed.add(key);
+                        return;
+                    }
+                    Style style = map == null ? null : map.getStyle();
+                    if (style == null || !styleReady) return;
+                    style.addImage(key, thumb);
+                    siteThumbsLoaded.add(key);
+                });
+            });
+        }
+    }
+
+    private Bitmap downloadSiteThumb(String url, int size) {
+        java.net.HttpURLConnection connection = null;
+        try {
+            connection = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+            connection.setConnectTimeout(8000);
+            connection.setReadTimeout(12000);
+            if (connection.getResponseCode() != java.net.HttpURLConnection.HTTP_OK) return null;
+            byte[] bytes;
+            try (InputStream input = connection.getInputStream();
+                 java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream()) {
+                byte[] buffer = new byte[16384];
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, read);
+                    if (output.size() > 4 * 1024 * 1024) return null;
+                }
+                bytes = output.toByteArray();
+            }
+            // Most thumbnails are 150 px crops, but a few sites only have a
+            // full-size photo: decode those at a fraction of their size.
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            while (Math.min(bounds.outWidth, bounds.outHeight) / (options.inSampleSize * 2) >= size) options.inSampleSize *= 2;
+            Bitmap source = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
+            if (source == null) return null;
+            Bitmap thumb = roundSiteThumb(source, size);
+            source.recycle();
+            return thumb;
+        } catch (Exception error) {
+            Log.w(LOG_TAG, "Could not load site photo thumbnail " + url + ".", error);
+            return null;
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
+    // A centre-cropped circle of the photo in a white ring with a faint dark
+    // edge, matching the website's marker.
+    private static Bitmap roundSiteThumb(Bitmap source, int size) {
+        Bitmap output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(output);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        float radius = size / 2f;
+        float unit = size / (float) SITE_THUMB_SIZE_DP;
+        paint.setColor(Color.argb(80, 24, 32, 25));
+        canvas.drawCircle(radius, radius, radius, paint);
+        paint.setColor(Color.WHITE);
+        canvas.drawCircle(radius, radius, radius - unit, paint);
+        float inner = radius - unit * 3f;
+        int crop = Math.min(source.getWidth(), source.getHeight());
+        android.graphics.Rect cropRect = new android.graphics.Rect(
+            (source.getWidth() - crop) / 2, (source.getHeight() - crop) / 2,
+            (source.getWidth() + crop) / 2, (source.getHeight() + crop) / 2);
+        Path clip = new Path();
+        clip.addCircle(radius, radius, inner, Path.Direction.CW);
+        canvas.save();
+        canvas.clipPath(clip);
+        canvas.drawBitmap(source, cropRect, new RectF(radius - inner, radius - inner, radius + inner, radius + inner), paint);
+        canvas.restore();
+        return output;
+    }
+
     void onStart() { mapView.onStart(); }
     void onResume() { mapView.onResume(); }
     void onPause() { mapView.onPause(); }
@@ -2761,6 +2906,7 @@ final class NativeMapController {
     void onLowMemory() { mapView.onLowMemory(); }
 
     void onDestroy() {
+        siteThumbExecutor.shutdownNow();
         mapView.onDestroy();
         map = null;
         styleReady = false;
