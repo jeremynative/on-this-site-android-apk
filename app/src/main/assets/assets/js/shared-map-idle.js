@@ -29,6 +29,7 @@
   const ANIMAL_ZOOM = 12.6;
   // Long enough to read a card at a relaxed pace.
   const CARD_MS = 16000;
+  const FOLLOW_MS = 2000;
   // Every flight lasts at least this long, so cards never come back to
   // back: there is always a stretch of panning in between.
   const FLY_MIN_MS = 9000;
@@ -74,6 +75,7 @@
     let rested = false;
     let startedAt = 0;
     let timer = 0;
+    let followTimer = 0;
     let hideTimer = 0;
     let direction = 1;
     let visits = 0;
@@ -215,22 +217,31 @@
         }));
     }
 
-    // People from the biography paths, at the places in their records.
+    // People from the biography paths. A person walking the map (their icon
+    // is on) is met where the icon is and followed, with the place on their
+    // path nearest to it; otherwise at the places in their records.
     function personStops() {
-      return fromPage(ctx.people).flatMap(person => (person.places || [])
-        .filter(place => onLongIsland(place.coordinates) && !/burial|grave|cemetery|private/i.test(`${place.place} ${place.label}`))
-        .map(place => ({
+      return fromPage(ctx.people).flatMap(person => {
+        const places = (person.places || [])
+          .filter(place => onLongIsland(place.coordinates) && !/burial|grave|cemetery|private/i.test(`${place.place} ${place.label}`));
+        const stop = place => ({
           key: `person:${person.slug}`,
           kicker: "People of Long Island",
           // A path title such as "Momoweta — life and connections" names the person.
           title: plain(person.name).replace(/\s*[—–-]\s*life and connections$/i, ""),
-          line: [plain(place.dateLabel || place.label), plain(place.place)].filter(Boolean).join(" · "),
-          texts: [place.reason, person.article?.summary, person.article?.why_this_matters],
+          line: place ? [plain(place.dateLabel || place.label), plain(place.place)].filter(Boolean).join(" · ") : "",
+          texts: [place?.reason, person.article?.summary, person.article?.why_this_matters],
           image: person.image || PERSON_ICON,
           icon: !person.image,
-          center: place.coordinates.slice(0, 2).map(Number),
+          center: place?.coordinates.slice(0, 2).map(Number),
           open: person.open
-        })));
+        });
+        if (!person.centerAt) return places.map(stop);
+        const walking = person.centerAt(0);
+        if (!onLongIsland(walking)) return [];
+        const nearest = places.slice().sort((a, b) => distanceKm(walking, a.coordinates) - distanceKm(walking, b.coordinates))[0];
+        return [{ ...stop(nearest), center: walking, centerAt: person.centerAt }];
+      });
     }
 
     // The animal relatives that wander the map, met where they are.
@@ -572,7 +583,8 @@
         // The app's native map takes top and bottom padding; a sideways
         // offset moves the target instead. (The desktop map takes offsets.)
         const shift = frame && !ctx.camera.offsets ? frame.offset[0] : 0;
-        const center = shift ? [view.center[0] - shift * 156543.03 / 2 ** view.zoom / 111320, view.center[1]] : view.center;
+        // Degrees of longitude per pixel on a 512-pixel-tile map (MapLibre).
+        const center = shift ? [view.center[0] - shift * 360 / 512 / 2 ** view.zoom, view.center[1]] : view.center;
         return ctx.camera.move({ ...view, center, fly, padTop: frame?.padTop, padBottom: frame?.padBottom, offset: frame?.offset });
       }
       const map = getMap();
@@ -626,8 +638,9 @@
       const frame = framing();
       const camera = currentCenter();
       let flight = flightMs(camera, stop.center);
-      // A wandering animal is met where it will be halfway through its card.
-      const center = stop.centerAt ? stop.centerAt(flight + 300 + CARD_MS / 2) : stop.center;
+      // A walking person or wandering animal is met where it will be on
+      // arrival, then followed (follow()).
+      const center = stop.centerAt ? stop.centerAt(flight + 300) || stop.center : stop.center;
       flight = stop.island ? FLY_MAX_MS : flight;
       const zoom = stop.island ? islandZoom(frame) : stop.zoom || STOP_ZOOM;
       moveTo({ center, zoom, bearing: 0, pitch: 0, duration: flight }, true, frame);
@@ -635,19 +648,36 @@
       later(() => arrive(stop), flight + 300);
     }
 
-    // At the stop, held still: its card fades in, then out.
+    // At the stop: its card fades in, then out. A place is held still; a
+    // moving person or animal is kept in the same spot on screen.
     function arrive(stop) {
       shown.add(stop.key);
       visits += 1;
       showCard();
+      if (stop.centerAt) followTimer = window.setInterval(() => follow(stop), FOLLOW_MS);
       later(() => {
+        stopFollowing();
         hideCard();
         later(tour, 1000);
       }, CARD_MS);
     }
 
+    function follow(stop) {
+      const center = running && stop.centerAt(0);
+      if (!onLongIsland(center)) return;
+      here = center;
+      // A short framed move (the app's native ease can't take the framing).
+      moveTo({ center, zoom: stop.zoom || STOP_ZOOM, bearing: 0, pitch: 0, duration: FOLLOW_MS }, nativeCamera(), framing());
+    }
+
+    function stopFollowing() {
+      window.clearInterval(followTimer);
+      followTimer = 0;
+    }
+
     // After a long time untouched, settle on the whole island and stay put.
     function rest() {
+      stopFollowing();
       hideCard();
       running = false;
       rested = true;
@@ -668,14 +698,15 @@
       tour();
     }
 
-    // Any touch, key, mouse movement or native map gesture: stop right where
-    // the camera is.
+    // Any touch, click, key, mouse movement off the map or native map
+    // gesture: stop right where the camera is.
     function wake() {
       lastActivity = Date.now();
       rested = false;
       if (!running) return;
       running = false;
       window.clearTimeout(timer);
+      stopFollowing();
       stopCamera();
       hideCard();
     }
@@ -690,11 +721,15 @@
       }, { capture: true, passive: true });
     });
     // A mouse that really moves (browsers also send moves when only the page
-    // under a still pointer changes).
+    // under a still pointer changes). Moving over the map itself doesn't
+    // count: a mouse resting on or drifting across the map leaves the tour
+    // going, and only a click, scroll or key stops it.
     document.addEventListener("mousemove", event => {
       const moved = pointer && Math.hypot(event.screenX - pointer[0], event.screenY - pointer[1]) > 6;
       pointer = [event.screenX, event.screenY];
-      if (moved && !(card && card.contains(event.target))) wake();
+      if (!moved || (card && card.contains(event.target))) return;
+      if ((ctx.mapElement?.() || getMap()?.getContainer?.())?.contains(event.target)) return;
+      wake();
     }, { capture: true, passive: true });
     document.addEventListener("click", event => {
       if (Date.now() > swallowClickUntil || (card && card.contains(event.target))) return;
