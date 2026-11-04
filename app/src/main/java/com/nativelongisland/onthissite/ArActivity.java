@@ -893,7 +893,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             // A sky sign is already up there: point to it only while it is out of view.
             if (discoverAnchors.containsKey(item.id) && !(item.isSky() && Math.abs(turn) > FREE_VIEW_DEG)) continue;
             String arrow = Math.abs(turn) <= FREE_VIEW_DEG ? "↑" : Math.abs(turn) > 135 ? "↓" : turn > 0 ? "→" : "←";
-            String name = item.title.replaceFirst("^(Nearby|Meet): ", "").replaceFirst("^Meet ", "");
+            String name = !item.name.isEmpty() ? item.name : item.title.replaceFirst("^(Nearby|Meet): ", "").replaceFirst("^Meet ", "");
             String far = Double.isNaN(item.distanceM) ? "" : item.distanceM < 1000
                 ? String.format(Locale.US, " · %d m", Math.round(item.distanceM))
                 : String.format(Locale.US, " · %.1f km", item.distanceM / 1000);
@@ -2034,7 +2034,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     private void onDiscovered(ArScene.Item item) {
         vibrateConfirm();
-        String name = item.word.isEmpty() ? (item.title.isEmpty() ? "a story" : item.title) : item.word;
+        String name = !item.word.isEmpty() ? item.word : !item.name.isEmpty() ? item.name : item.title.isEmpty() ? "a story" : item.title;
         showFound(item.isHere() ? "📍 " + item.title : "✨ You found " + name.replaceFirst("^(Nearby: |Meet )", ""));
         if (!item.audio.isEmpty()) playAudio(item);
     }
