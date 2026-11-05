@@ -885,14 +885,34 @@
         (state.plantObservations || []).filter(plant => plant.site_slug === slug && arShared(plant)),
         here
       ).slice(0, 7));
+      // What people shared on the page, newest first. A comment with a photo is
+      // the photo with its words as the caption; one without needs enough words
+      // to say something ("Seen" alone doesn't).
       (state.publicComments || [])
-        .filter(comment => comment.site_slug === slug && String(comment.source_type || "site") === "site" && comment.comment)
-        .slice(-2)
-        .forEach(comment => extras.push({
-          id: `note-${comment.id}`, layer: "archival", kind: "note", placement: "discover",
-          title: comment.author_name ? `${arText(comment.author_name)} says` : "A community note",
-          caption: arText(comment.comment), credit: "Community note on On This Site"
-        }));
+        .filter(comment => comment.site_slug === slug && String(comment.source_type || "site") === "site" && comment.comment
+          && (comment.comment_image || arText(comment.comment).length >= 40))
+        .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+        .slice(0, 3)
+        .forEach(comment => {
+          const text = arText(comment.comment);
+          const author = arText(comment.author_name);
+          if (!comment.comment_image) {
+            extras.push({
+              id: `note-${comment.id}`, layer: "archival", kind: "note", placement: "discover",
+              title: author ? `${author} says` : "A community note", caption: text, credit: "Community note on On This Site"
+            });
+            return;
+          }
+          // A caption of a word or two is the photo's label, not a title on its own.
+          const short = text.split(/\s+/).length < 3;
+          extras.push({
+            id: `note-${comment.id}`, layer: "family", kind: "photo", placement: "discover",
+            title: short ? `“${text}”, a photo ${author || "a visitor"} shared at ${title}` : arStoryTitle(text),
+            caption: short ? `${author || "A visitor"} shared this photo on the On This Site page for ${title}, captioned “${text}”.` : text,
+            credit: [author ? `Shared by ${author}` : "", comment.created_at ? new Date(comment.created_at).toLocaleDateString() : ""].filter(Boolean).join(" · "),
+            image: arAsset(comment.comment_image)
+          });
+        });
       // In order: the welcome, the people tied to the place, the page's photos and
       // readings with one of the rest after every two, then words to learn.
       return arScene(title, [welcome, ...people, ...arInterleave(items, arShuffled(extras, random)),
