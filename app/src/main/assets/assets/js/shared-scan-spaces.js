@@ -1153,7 +1153,20 @@
         ctx.showBanner?.("Scroll down to Community Notes to add yours.");
         return false;
       }
-      section.scrollIntoView({ block: "start", behavior: "smooth" });
+      // The page open in full, scrolled to the notes. The page renders again as its
+      // full details arrive (replacing the notes), so they are found afresh and kept
+      // in view until two checks in a row find them in place. Scrolls are instant:
+      // a smooth one doesn't take in the app's WebView.
+      ctx.setDetailDrawerState?.("expanded");
+      const selector = `.discussion-section[data-discussion-slug="${CSS.escape(slug)}"]`;
+      for (let tries = 0, steady = 0; tries < 16 && steady < 2; tries++) {
+        section = document.querySelector(selector) || section;
+        const scroller = section.closest("#detail-body") || document.scrollingElement;
+        const offset = section.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 12;
+        steady = Math.abs(offset) < 4 ? steady + 1 : 0;
+        if (!steady) scroller.scrollTo({ top: scroller.scrollTop + offset });
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
       const input = section.querySelector("[data-discussion-input]");
       if (!input) {
         ctx.showBanner?.(photo ? "Log in to post. Your AR photo is in your Photos, in the On This Site album." : "Log in to add your note.");
