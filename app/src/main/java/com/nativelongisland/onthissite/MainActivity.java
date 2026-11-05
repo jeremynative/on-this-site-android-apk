@@ -2235,8 +2235,54 @@ public class MainActivity extends Activity {
             syncTabletLandscapeClass(webView);
             settleNativeMapViewport();
             scheduleNetworkStateEvaluation("resume");
+            ArActivity.Join join = ArActivity.takePendingJoin();
+            if (join != null) openArJoin(join);
         }
         if (billingManager != null) billingManager.restorePurchases();
+    }
+
+    /**
+     * Back from AR's "Visitor experiences": the place's Community Notes, ready for a
+     * note, with the AR photo (at most 1600 px, as a JPEG data URL) attached.
+     */
+    private void openArJoin(ArActivity.Join join) {
+        new Thread(() -> {
+            String photo = join.photo == null ? null : arJoinPhoto(join.photo);
+            JSONObject args = new JSONObject();
+            try {
+                args.put("slug", join.slug);
+                if (photo != null) args.put("photo", photo);
+            } catch (org.json.JSONException error) {
+                return;
+            }
+            String script = "window.NLI_AR_JOIN ? window.NLI_AR_JOIN(" + args + ") : false";
+            webView.postDelayed(() -> webView.evaluateJavascript(script, value -> Log.d(LOG_TAG, "AR join: " + value)), 300);
+        }, "ar-join").start();
+    }
+
+    private String arJoinPhoto(Uri uri) {
+        try {
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            try (InputStream in = getContentResolver().openInputStream(uri)) {
+                BitmapFactory.decodeStream(in, null, bounds);
+            }
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null;
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inSampleSize = 1;
+            while (Math.max(bounds.outWidth, bounds.outHeight) / (options.inSampleSize * 2) >= 1600) options.inSampleSize *= 2;
+            Bitmap bitmap;
+            try (InputStream in = getContentResolver().openInputStream(uri)) {
+                bitmap = BitmapFactory.decodeStream(in, null, options);
+            }
+            if (bitmap == null) return null;
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 88, out);
+            return "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);
+        } catch (Exception error) {
+            Log.w(LOG_TAG, "AR photo not attached: " + error.getMessage());
+            return null;
+        }
     }
 
     @Override
