@@ -320,10 +320,15 @@
     // to visit respectfully.
     function arLandClips(entry, prefix = "") {
       const credit = arSource(entry);
-      const respect = entry.sensitivity ? ` ${arText(entry.sensitivity)}` : "";
+      // The entries' sensitivity notes are editors' notes; as on the map, visitors are
+      // told only when a place is private tribal land.
+      const respect = /private tribal land/i.test(entry.sensitivity || "") ? " This is private tribal land: visit only with the Nation's permission." : "";
+      // A date leads the card; a period description ("Colonial land agreements to the
+      // present") doesn't read as a sentence, and the title already sets the scene.
+      const when = /\d/.test(entry.dateLabel || "") ? `${arText(entry.dateLabel)}. ` : "";
       const clips = [{
         id: `${prefix}land-${entry.slug}`, layer: "archival", kind: "note", placement: "discover",
-        title: arText(entry.title), caption: `${entry.dateLabel ? `${arText(entry.dateLabel)}. ` : ""}${arText(entry.description)}${respect}`, credit
+        title: arText(entry.title), caption: `${when}${arText(entry.description)}${respect}`, credit
       }];
       if (entry.historicalContext) clips.push({
         id: `${prefix}land-context-${entry.slug}`, layer: "archival", kind: "note", placement: "discover",
