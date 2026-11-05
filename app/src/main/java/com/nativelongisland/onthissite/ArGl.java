@@ -138,7 +138,13 @@ final class ArGl {
 
         backgroundProgram = program(BACKGROUND_VERTEX, BACKGROUND_FRAGMENT);
         quadProgram = program(QUAD_VERTEX, QUAD_FRAGMENT);
-        meshProgram = program(MESH_VERTEX, MESH_FRAGMENT);
+        try {
+            meshProgram = program(MESH_VERTEX, MESH_FRAGMENT);
+        } catch (IllegalStateException error) {
+            // A GPU that rejects it loses only the 3D flag, not AR.
+            android.util.Log.w("OnThisSiteAR", "3D shader unavailable: " + error.getMessage());
+            meshProgram = 0;
+        }
         ndcCoords = buffer(NDC_QUAD);
         cameraTexCoords = buffer(new float[8]);
         unitQuad = buffer(UNIT_QUAD);
@@ -217,6 +223,7 @@ final class ArGl {
      * behind the flag is hidden by it and one in front still shows.
      */
     void beginMeshes() {
+        if (meshProgram == 0) return;
         GLES20.glEnable(GLES20.GL_DEPTH_TEST);
         GLES20.glDepthMask(true);
         GLES20.glEnable(GLES20.GL_BLEND);
@@ -230,6 +237,7 @@ final class ArGl {
 
     /** texture 0 draws in the colour (r, g, b, a); wave above 0 ripples a unit cloth. */
     void drawMesh(float[] viewProjection, float[] model, Mesh mesh, int texture, float[] color, float wave, float time) {
+        if (meshProgram == 0) return;
         Matrix.multiplyMM(mvp, 0, viewProjection, 0, model, 0);
         GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_Mvp"), 1, false, mvp, 0);
         GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_Model"), 1, false, model, 0);
