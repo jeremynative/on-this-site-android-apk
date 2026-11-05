@@ -495,7 +495,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         for (String layer : ArScene.LAYERS) gl.queueTexture("orb:" + layer, ArCards.orb(ArCards.layerColor(layer)));
         // The Place drawer's artwork.
-        for (ArPlace.Asset asset : ArPlace.ASSETS) if (!asset.model) gl.queueTexture(asset.texture(), ArPlace.sticker(asset.id));
+        for (ArPlace.Asset asset : ArPlace.ASSETS) if (!asset.model) gl.queueTexture(asset.texture(), ArPlace.sticker(asset.id, getResources()));
         gl.queueTexture("place:flag-cloth", ArPlace.flagCloth(getResources()));
         gl.queueTexture("place:ring", ArPlace.ring());
         gl.queueTexture("place:outline", ArPlace.outline());
@@ -1654,7 +1654,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             if (out.isDirectory() || out.mkdirs()) {
                 for (ArPlace.Asset asset : ArPlace.ASSETS) {
                     saveQaCard(new java.io.File(out, "place-" + asset.id + "-tile.png"), ArPlace.tile(asset.id, getResources()));
-                    if (!asset.model) saveQaCard(new java.io.File(out, "place-" + asset.id + ".png"), ArPlace.sticker(asset.id));
+                    if (!asset.model) saveQaCard(new java.io.File(out, "place-" + asset.id + ".png"), ArPlace.sticker(asset.id, getResources()));
                 }
             }
         } catch (Exception error) {

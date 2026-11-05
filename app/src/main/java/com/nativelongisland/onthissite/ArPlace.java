@@ -92,42 +92,153 @@ final class ArPlace {
 
     // ---- Artwork ----
 
-    /** A sticker's face, as placed. */
-    static Bitmap sticker(String id) {
-        return SHINNECOCK_LAND.equals(id)
-            ? badge(new String[] {"SHINNECOCK", "LAND"}, Color.rgb(14, 77, 74))
-            : badge(new String[] {"#LANDBACK"}, Color.rgb(183, 28, 28));
+    private static Typeface graffiti;
+
+    /** Sedgwick Ave Display, a graffiti tag face (SIL Open Font License; assets/licenses). */
+    private static synchronized Typeface graffiti(Resources resources) {
+        if (graffiti == null) graffiti = Typeface.createFromAsset(resources.getAssets(), "fonts/SedgwickAveDisplay-Regular.ttf");
+        return graffiti;
     }
 
-    /** A die-cut sticker: a white border round a coloured badge with heavy white lettering. */
-    private static Bitmap badge(String[] lines, int color) {
-        int width = 1024;
-        float border = 26f;
-        float pad = 54f;
-        Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
-        text.setColor(Color.WHITE);
-        text.setTypeface(Typeface.create("sans-serif-black", Typeface.NORMAL));
-        text.setTextAlign(Paint.Align.CENTER);
-        // One size for every line, the largest that fits the longest.
-        text.setTextSize(200f);
-        float widest = 0f;
-        for (String line : lines) widest = Math.max(widest, text.measureText(line));
-        float size = Math.min(300f, 200f * (width - 2 * border - 2 * pad) / widest);
-        text.setTextSize(size);
-        Paint.FontMetrics metrics = text.getFontMetrics();
-        float lineHeight = (metrics.descent - metrics.ascent) * 0.92f;
-        int height = Math.round(2 * border + 2 * pad * 0.6f + lineHeight * lines.length);
-        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
-        fill.setColor(Color.WHITE);
-        canvas.drawRoundRect(new RectF(0, 0, width, height), 64f, 64f, fill);
-        fill.setColor(color);
-        canvas.drawRoundRect(new RectF(border, border, width - border, height - border), 46f, 46f, fill);
-        float top = (height - lineHeight * lines.length) / 2f;
+    /** A sticker's face, as placed: graffiti lettering, die-cut. */
+    static Bitmap sticker(String id, Resources resources) {
+        Typeface face = graffiti(resources);
+        if (SHINNECOCK_LAND.equals(id)) {
+            return tag(face, -4f,
+                new TagLine("SHINNECOCK", 1f, Color.rgb(77, 208, 196), Color.rgb(0, 105, 92), new int[] {}),
+                new TagLine("LAND", 1.9f, Color.rgb(255, 224, 102), Color.rgb(242, 160, 18), new int[] {0, 2, 3}));
+        }
+        return tag(face, -6f, new TagLine("#LANDBACK", 1f, Color.rgb(255, 82, 82), Color.rgb(160, 0, 0), new int[] {2, 5, 8}));
+    }
+
+    /** One line of a graffiti sticker: its words, size, top and bottom fill colours, and letters that drip. */
+    private static final class TagLine {
+        final String text;
+        final float size;
+        final int top;
+        final int bottom;
+        final int[] drips;
+
+        TagLine(String text, float size, int top, int bottom, int[] drips) {
+            this.text = text;
+            this.size = size;
+            this.top = top;
+            this.bottom = bottom;
+            this.drips = drips;
+        }
+    }
+
+    /**
+     * A die-cut graffiti sticker: each line's letters (with paint drips and
+     * splatter) filled with a gradient and a gloss, a heavy black outline over a
+     * 3D extrusion, all inside a white cut edge with a soft shadow, tilted.
+     */
+    private static Bitmap tag(Typeface face, float tilt, TagLine... lines) {
+        float base = 200f;
+        Paint letters = new Paint(Paint.ANTI_ALIAS_FLAG);
+        letters.setTypeface(face);
+        android.graphics.Path[] paths = new android.graphics.Path[lines.length];
+        android.graphics.Path all = new android.graphics.Path();
+        java.util.Random speckle = new java.util.Random(lines[0].text.hashCode());
+        float baseline = 0f;
         for (int i = 0; i < lines.length; i++) {
-            float baseline = top + lineHeight * i + (lineHeight - (metrics.descent - metrics.ascent)) / 2f - metrics.ascent;
-            canvas.drawText(lines[i], width / 2f, baseline, text);
+            TagLine line = lines[i];
+            float size = base * line.size;
+            letters.setTextSize(size);
+            // Lines sit tight, as tags do.
+            baseline += i == 0 ? size * 0.8f : size * 0.78f;
+            float width = letters.measureText(line.text);
+            android.graphics.Path path = new android.graphics.Path();
+            letters.getTextPath(line.text, 0, line.text.length(), -width / 2f, baseline, path);
+            float[] advances = new float[line.text.length()];
+            letters.getTextWidths(line.text, advances);
+            for (int index : line.drips) {
+                if (index >= advances.length) continue;
+                float x = -width / 2f;
+                for (int k = 0; k < index; k++) x += advances[k];
+                x += advances[index] * (0.35f + 0.3f * speckle.nextFloat());
+                float drip = size * (0.05f + 0.025f * speckle.nextFloat());
+                float length = size * (0.22f + 0.3f * speckle.nextFloat());
+                android.graphics.Path run = new android.graphics.Path();
+                run.addRoundRect(new RectF(x - drip / 2f, baseline - size * 0.2f, x + drip / 2f, baseline + length),
+                    drip / 2f, drip / 2f, android.graphics.Path.Direction.CW);
+                run.addCircle(x, baseline + length, drip * 0.75f, android.graphics.Path.Direction.CW);
+                // A fleck of splatter beside the drip.
+                run.addCircle(x + drip * (speckle.nextBoolean() ? 2.2f : -2.2f), baseline + length * 0.55f,
+                    drip * 0.38f, android.graphics.Path.Direction.CW);
+                path.op(run, android.graphics.Path.Op.UNION);
+            }
+            paths[i] = path;
+            all.op(path, android.graphics.Path.Op.UNION);
+        }
+        android.graphics.Matrix turn = new android.graphics.Matrix();
+        RectF bounds = new RectF();
+        all.computeBounds(bounds, true);
+        turn.setRotate(tilt, bounds.centerX(), bounds.centerY());
+        all.transform(turn);
+        for (android.graphics.Path path : paths) path.transform(turn);
+        all.computeBounds(bounds, true);
+
+        float cut = 22f;
+        float outline = 9f;
+        float extrude = 12f;
+        float margin = cut + outline + extrude + 22f;
+        Bitmap bitmap = Bitmap.createBitmap(Math.round(bounds.width() + 2 * margin), Math.round(bounds.height() + 2 * margin),
+            Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.translate(margin - bounds.left, margin - bounds.top);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setStrokeJoin(Paint.Join.ROUND);
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setStyle(Paint.Style.FILL_AND_STROKE);
+        // A soft shadow under the sticker.
+        paint.setColor(Color.argb(110, 0, 0, 0));
+        paint.setStrokeWidth(2 * cut);
+        paint.setMaskFilter(new android.graphics.BlurMaskFilter(12f, android.graphics.BlurMaskFilter.Blur.NORMAL));
+        canvas.save();
+        canvas.translate(5f, 9f);
+        canvas.drawPath(all, paint);
+        canvas.restore();
+        paint.setMaskFilter(null);
+        // The white cut edge, wide enough to hold the extrusion.
+        paint.setColor(Color.WHITE);
+        paint.setStrokeWidth(2 * (cut + outline));
+        canvas.drawPath(all, paint);
+        canvas.save();
+        canvas.translate(extrude * 0.6f, extrude);
+        canvas.drawPath(all, paint);
+        canvas.restore();
+        // A 3D extrusion down and to the right, then the outline.
+        paint.setColor(Color.rgb(20, 20, 20));
+        paint.setStrokeWidth(2 * outline);
+        for (int i = (int) extrude; i >= 0; i--) {
+            canvas.save();
+            canvas.translate(i * 0.6f, i);
+            canvas.drawPath(all, paint);
+            canvas.restore();
+        }
+        // Each line's fill: a top-to-bottom gradient with a gloss across its upper part.
+        paint.setStyle(Paint.Style.FILL);
+        for (int i = 0; i < lines.length; i++) {
+            RectF line = new RectF();
+            paths[i].computeBounds(line, true);
+            paint.setShader(new android.graphics.LinearGradient(0f, line.top, 0f, line.bottom,
+                lines[i].top, lines[i].bottom, android.graphics.Shader.TileMode.CLAMP));
+            canvas.drawPath(paths[i], paint);
+            paint.setShader(null);
+            canvas.save();
+            canvas.clipPath(paths[i]);
+            Paint gloss = new Paint(Paint.ANTI_ALIAS_FLAG);
+            gloss.setColor(Color.argb(80, 255, 255, 255));
+            android.graphics.Path band = new android.graphics.Path();
+            float glossBottom = line.top + line.height() * 0.42f;
+            band.moveTo(line.left, line.top);
+            band.lineTo(line.right, line.top);
+            band.lineTo(line.right, glossBottom - line.height() * 0.12f);
+            band.lineTo(line.left, glossBottom + line.height() * 0.08f);
+            band.close();
+            canvas.drawPath(band, gloss);
+            canvas.restore();
         }
         return bitmap;
     }
@@ -183,7 +294,7 @@ final class ArPlace {
             canvas.drawBitmap(cloth, null, new RectF(80, 40, 246, 40 + 166f * FLAG_HEIGHT / FLAG_WIDTH), paint);
             cloth.recycle();
         } else {
-            Bitmap face = sticker(id);
+            Bitmap face = sticker(id, resources);
             float height = 236f * face.getHeight() / face.getWidth();
             canvas.drawBitmap(face, null, new RectF(10, (size - height) / 2f, 246, (size + height) / 2f), paint);
             face.recycle();
