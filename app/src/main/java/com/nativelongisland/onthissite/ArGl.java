@@ -10,14 +10,16 @@ import com.google.ar.core.Frame;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
+import java.nio.ShortBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Minimal OpenGL ES 2 drawing for the AR view: the camera feed behind
- * everything, and alpha-blended textured quads (photos, cards, orbs, floor
- * rings) in front. Must only be used on the GL thread.
+ * everything, placed 3D things (the flag), and alpha-blended textured quads
+ * (photos, cards, orbs, floor rings, stickers) in front. Must only be used on
+ * the GL thread.
  */
 final class ArGl {
     private static final String BACKGROUND_VERTEX =
@@ -44,6 +46,65 @@ final class ArGl {
             + "uniform float u_Alpha;\n"
             + "void main() { vec4 c = texture2D(u_Texture, v_TexCoord); gl_FragColor = vec4(c.rgb, c.a * u_Alpha); }\n";
 
+    // Placed 3D things (the flag): lit from above, both sides shaded alike. With
+    // u_Wave above 0 the mesh is a unit cloth that ripples away from its pole
+    // edge (texture u = 0) over time.
+    private static final String MESH_VERTEX =
+        "uniform mat4 u_Mvp;\n"
+            + "uniform mat4 u_Model;\n"
+            + "uniform float u_Wave;\n"
+            + "uniform float u_Time;\n"
+            + "attribute vec3 a_Position;\n"
+            + "attribute vec3 a_Normal;\n"
+            + "attribute vec2 a_TexCoord;\n"
+            + "varying vec2 v_TexCoord;\n"
+            + "varying vec3 v_Normal;\n"
+            + "void main() {\n"
+            + "  vec3 p = a_Position;\n"
+            + "  vec3 n = a_Normal;\n"
+            + "  if (u_Wave > 0.0) {\n"
+            + "    float along = a_TexCoord.x;\n"
+            + "    float phase = 4.0 * along - 2.5 * u_Time + 0.8 * a_TexCoord.y;\n"
+            + "    p.z += u_Wave * along * sin(phase);\n"
+            + "    float slope = u_Wave * (sin(phase) + 4.0 * along * cos(phase));\n"
+            + "    n = normalize(vec3(-slope, 0.0, 1.0));\n"
+            + "  }\n"
+            + "  v_TexCoord = a_TexCoord;\n"
+            + "  v_Normal = (u_Model * vec4(n, 0.0)).xyz;\n"
+            + "  gl_Position = u_Mvp * vec4(p, 1.0);\n"
+            + "}\n";
+    // A flag reads the same from both sides: its back shows the picture
+    // un-mirrored, as a printed two-sided flag does.
+    private static final String MESH_FRAGMENT =
+        "precision mediump float;\n"
+            + "varying vec2 v_TexCoord;\n"
+            + "varying vec3 v_Normal;\n"
+            + "uniform sampler2D u_Texture;\n"
+            + "uniform float u_UseTexture;\n"
+            + "uniform float u_TwoSided;\n"
+            + "uniform vec4 u_Color;\n"
+            + "void main() {\n"
+            + "  float light = abs(dot(normalize(v_Normal), normalize(vec3(0.35, 0.9, 0.25))));\n"
+            + "  vec2 uv = v_TexCoord;\n"
+            + "  if (u_TwoSided > 0.5 && !gl_FrontFacing) uv.x = 1.0 - uv.x;\n"
+            + "  vec4 base = u_UseTexture > 0.5 ? texture2D(u_Texture, uv) : u_Color;\n"
+            + "  gl_FragColor = vec4(base.rgb * (0.5 + 0.5 * light), base.a);\n"
+            + "}\n";
+
+    /** A placed 3D thing's triangles: interleaved position, normal and texture coordinates. */
+    static final class Mesh {
+        final FloatBuffer vertices;
+        final ShortBuffer indices;
+        final int count;
+
+        Mesh(float[] vertexData, short[] indexData) {
+            vertices = buffer(vertexData);
+            indices = ByteBuffer.allocateDirect(indexData.length * 2).order(ByteOrder.nativeOrder()).asShortBuffer();
+            indices.put(indexData).position(0);
+            count = indexData.length;
+        }
+    }
+
     private static final float[] NDC_QUAD = {-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f};
     // Unit quad in the XY plane facing +Z; texture v grows downwards.
     private static final float[] UNIT_QUAD = {
@@ -56,6 +117,7 @@ final class ArGl {
     int cameraTexture;
     private int backgroundProgram;
     private int quadProgram;
+    private int meshProgram;
     private FloatBuffer ndcCoords;
     private FloatBuffer cameraTexCoords;
     private FloatBuffer unitQuad;
@@ -76,6 +138,13 @@ final class ArGl {
 
         backgroundProgram = program(BACKGROUND_VERTEX, BACKGROUND_FRAGMENT);
         quadProgram = program(QUAD_VERTEX, QUAD_FRAGMENT);
+        try {
+            meshProgram = program(MESH_VERTEX, MESH_FRAGMENT);
+        } catch (IllegalStateException error) {
+            // A GPU that rejects it loses only the 3D flag, not AR.
+            android.util.Log.w("OnThisSiteAR", "3D shader unavailable: " + error.getMessage());
+            meshProgram = 0;
+        }
         ndcCoords = buffer(NDC_QUAD);
         cameraTexCoords = buffer(new float[8]);
         unitQuad = buffer(UNIT_QUAD);
@@ -146,6 +215,56 @@ final class ArGl {
         GLES20.glEnableVertexAttribArray(texCoord);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         GLES20.glDisableVertexAttribArray(position);
+        GLES20.glDisableVertexAttribArray(texCoord);
+    }
+
+    /**
+     * Solid 3D things are drawn before the quads, writing depth, so a bubble
+     * behind the flag is hidden by it and one in front still shows.
+     */
+    void beginMeshes() {
+        if (meshProgram == 0) return;
+        GLES20.glEnable(GLES20.GL_DEPTH_TEST);
+        GLES20.glDepthMask(true);
+        GLES20.glEnable(GLES20.GL_BLEND);
+        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
+        GLES20.glUseProgram(meshProgram);
+    }
+
+    void endMeshes() {
+        GLES20.glDisable(GLES20.GL_BLEND);
+    }
+
+    /** texture 0 draws in the colour (r, g, b, a); wave above 0 ripples a unit cloth. */
+    void drawMesh(float[] viewProjection, float[] model, Mesh mesh, int texture, float[] color, float wave, float time) {
+        if (meshProgram == 0) return;
+        Matrix.multiplyMM(mvp, 0, viewProjection, 0, model, 0);
+        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_Mvp"), 1, false, mvp, 0);
+        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_Model"), 1, false, model, 0);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Wave"), wave);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Time"), time);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_UseTexture"), texture != 0 ? 1f : 0f);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_TwoSided"), wave > 0f ? 1f : 0f);
+        GLES20.glUniform4fv(GLES20.glGetUniformLocation(meshProgram, "u_Color"), 1, color, 0);
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture);
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(meshProgram, "u_Texture"), 0);
+        int position = GLES20.glGetAttribLocation(meshProgram, "a_Position");
+        int normal = GLES20.glGetAttribLocation(meshProgram, "a_Normal");
+        int texCoord = GLES20.glGetAttribLocation(meshProgram, "a_TexCoord");
+        mesh.vertices.position(0);
+        GLES20.glVertexAttribPointer(position, 3, GLES20.GL_FLOAT, false, 32, mesh.vertices);
+        mesh.vertices.position(3);
+        GLES20.glVertexAttribPointer(normal, 3, GLES20.GL_FLOAT, false, 32, mesh.vertices);
+        mesh.vertices.position(6);
+        GLES20.glVertexAttribPointer(texCoord, 2, GLES20.GL_FLOAT, false, 32, mesh.vertices);
+        GLES20.glEnableVertexAttribArray(position);
+        GLES20.glEnableVertexAttribArray(normal);
+        GLES20.glEnableVertexAttribArray(texCoord);
+        mesh.indices.position(0);
+        GLES20.glDrawElements(GLES20.GL_TRIANGLES, mesh.count, GLES20.GL_UNSIGNED_SHORT, mesh.indices);
+        GLES20.glDisableVertexAttribArray(position);
+        GLES20.glDisableVertexAttribArray(normal);
         GLES20.glDisableVertexAttribArray(texCoord);
     }
 
