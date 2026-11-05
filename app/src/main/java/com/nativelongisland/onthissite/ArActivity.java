@@ -189,6 +189,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private ImageView photoSavedImage;
     private TextView photoSavedText;
     private TextView photoShare;
+    // Posts the AR photo to this place's Community Notes ("Visitor experiences").
+    private TextView photoPost;
     private Uri photoSavedUri;
     private String photoSavedType = "image/jpeg";
     // AR video (hold the shutter): the recording while it runs, and in full AR
@@ -1507,6 +1509,16 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         savedDone.setPadding(dp(16), dp(12), dp(16), dp(12));
         savedDone.setOnClickListener(v -> photoSaved.setVisibility(View.GONE));
         savedActions.addView(savedDone);
+        photoPost = text(16, true, "Post");
+        photoPost.setGravity(Gravity.CENTER);
+        photoPost.setPadding(dp(16), dp(12), dp(16), dp(12));
+        photoPost.setContentDescription("Post this photo to the place's Community Notes");
+        photoPost.setVisibility(View.GONE);
+        photoPost.setOnClickListener(v -> {
+            ArScene.Item visitors = visitorsItem();
+            if (visitors != null && photoSavedUri != null) joinConversation(visitors, photoSavedUri);
+        });
+        savedActions.addView(photoPost);
         photoShare = text(16, true, "Share");
         photoShare.setGravity(Gravity.CENTER);
         photoShare.setBackground(rounded(Color.rgb(46, 125, 84), 24));
@@ -1528,6 +1540,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         infoScroll.scrollTo(0, 0);
         if (ArScene.KIND_PHRASE.equals(item.kind) && item.choices.length >= 2 && !answered.contains(item.id)) {
             askMeaning(item, "");
+            return;
+        }
+        if (ArScene.KIND_VISITORS.equals(item.kind)) {
+            showVisitors(item);
             return;
         }
         String heading = item.title.isEmpty() ? (item.word.isEmpty() ? "Untitled" : item.word) : item.title;
@@ -1553,7 +1569,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         String kind = ArScene.KIND_PHRASE.equals(item.kind) ? "LANGUAGE"
             : ArScene.KIND_AUDIO.equals(item.kind) ? "LISTEN"
             : item.id.startsWith("person-") ? "MEET SOMEONE"
-            : item.id.startsWith("story-") || item.id.startsWith("note-") || item.id.startsWith("plant-") ? "FROM THE COMMUNITY"
+            : item.id.startsWith("story-") || item.id.startsWith("note-") || item.id.startsWith("plant-")
+                || ArScene.KIND_VISITORS.equals(item.kind) ? "FROM THE COMMUNITY"
             : "ON THIS SITE";
         String far = Double.isNaN(item.distanceM) ? "" : item.distanceM < 1000
             ? String.format(Locale.US, " · %d M AWAY", Math.round(item.distanceM))
@@ -1566,6 +1583,106 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private void setCredit(ArScene.Item item) {
         infoCredit.setText(item.credit.isEmpty() ? "" : "Source: " + item.credit);
         infoCredit.setVisibility(item.credit.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    // ---- Visitor experiences ----
+
+    /** A post AR hands back to the app: the place's slug, and the AR photo to attach (or null). */
+    static final class Join {
+        final String slug;
+        final Uri photo;
+
+        Join(String slug, Uri photo) {
+            this.slug = slug;
+            this.photo = photo;
+        }
+    }
+
+    private static volatile Join pendingJoin;
+
+    /** The post the app opens as it comes back from AR, taken once. */
+    static Join takePendingJoin() {
+        Join join = pendingJoin;
+        pendingJoin = null;
+        return join;
+    }
+
+    /**
+     * "Visitor experiences": what people shared at this place (their words and
+     * photos, newest first) and the ways to add yours. Either closes AR and opens
+     * the place's Community Notes in the app, with the AR photo attached.
+     */
+    private void showVisitors(ArScene.Item item) {
+        // The visits carry their own photos; the card's big photo stays hidden.
+        infoImage.setTag(null);
+        infoImageFrame.setVisibility(View.GONE);
+        setCardHeader(item, item.title);
+        infoText.setText(item.caption);
+        infoText.setVisibility(item.caption.isEmpty() ? View.GONE : View.VISIBLE);
+        if (!item.join.isEmpty()) {
+            if (photoSavedUri != null && "image/jpeg".equals(photoSavedType)) {
+                infoChoices.addView(joinButton("Post my AR photo here", v -> joinConversation(item, photoSavedUri)));
+            }
+            infoChoices.addView(joinButton("Leave a note or photo", v -> joinConversation(item, null)));
+        }
+        for (ArScene.Visit visit : item.visits) infoChoices.addView(visitRow(visit));
+        setCredit(item);
+        infoActions.removeAllViews();
+        infoActions.addView(doneButton());
+        infoPanel.setVisibility(View.VISIBLE);
+    }
+
+    private TextView joinButton(String label, View.OnClickListener listener) {
+        TextView join = choiceButton(label, listener);
+        join.setBackground(rounded(Color.rgb(46, 125, 84), 14));
+        return join;
+    }
+
+    /** One visit: its photo (loaded in the background), its words, and who and when. */
+    private View visitRow(ArScene.Visit visit) {
+        LinearLayout row = column();
+        row.setPadding(0, dp(16), 0, 0);
+        if (!visit.image.isEmpty()) {
+            ImageView photo = new ImageView(this);
+            photo.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            photo.setBackground(rounded(Color.argb(255, 10, 14, 12), 14));
+            photo.setClipToOutline(true);
+            photo.setContentDescription(visit.text.isEmpty() ? "A visitor's photo" : visit.text);
+            row.addView(photo, new LinearLayout.LayoutParams(-1, dp(190)));
+            loader.execute(() -> {
+                Bitmap bitmap = decodeImage(visit.image, 720);
+                if (bitmap != null) runOnUiThread(() -> photo.setImageBitmap(bitmap));
+            });
+        }
+        if (!visit.text.isEmpty()) {
+            TextView words = text(16, false, "“" + visit.text + "”");
+            words.setTextColor(Color.rgb(232, 238, 233));
+            words.setPadding(0, dp(6), 0, 0);
+            row.addView(words, matchWrap());
+        }
+        StringBuilder who = new StringBuilder(visit.author);
+        if (!visit.place.isEmpty()) who.append(", at ").append(visit.place);
+        if (!visit.date.isEmpty()) who.append(" · ").append(visit.date);
+        TextView by = text(13, false, who.toString());
+        by.setTextColor(Color.rgb(159, 176, 166));
+        by.setPadding(0, dp(3), 0, 0);
+        row.addView(by, matchWrap());
+        return row;
+    }
+
+    /** Closes AR; the app then opens the place's Community Notes (MainActivity.onResume). */
+    private void joinConversation(ArScene.Item item, Uri photo) {
+        pendingJoin = new Join(item.join, photo);
+        finish();
+    }
+
+    /** The scene's "Visitor experiences" bubble, where an AR photo can be posted. */
+    private ArScene.Item visitorsItem() {
+        if (scene == null) return null;
+        for (ArScene.Item item : scene.items) {
+            if (ArScene.KIND_VISITORS.equals(item.kind) && !item.join.isEmpty()) return item;
+        }
+        return null;
     }
 
     // ---- AR photos ----
@@ -1704,6 +1821,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             : "The photo couldn't be saved.")
             + (recordedVideo ? "" : "\nHold the camera button to record a video."));
         photoShare.setVisibility(shareable != null ? View.VISIBLE : View.GONE);
+        photoPost.setVisibility(shareable != null && visitorsItem() != null ? View.VISIBLE : View.GONE);
         photoSaved.setVisibility(View.VISIBLE);
     }
 
@@ -1936,6 +2054,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             : "The video couldn't be saved.")
             + (withSound ? "" : "\nNo sound: allow the microphone for On This Site in Settings to record sound."));
         photoShare.setVisibility(shareable != null ? View.VISIBLE : View.GONE);
+        // Community Notes take photos, not videos.
+        photoPost.setVisibility(View.GONE);
         photoSaved.setVisibility(View.VISIBLE);
     }
 

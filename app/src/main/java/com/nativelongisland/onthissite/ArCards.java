@@ -68,7 +68,9 @@ final class ArCards {
         TextPaint hintPaint = textPaint(28, accent, true);
 
         boolean phrase = ArScene.KIND_PHRASE.equals(item.kind);
-        String tag = phrase ? "LANGUAGE" : ArScene.KIND_AUDIO.equals(item.kind) ? "LISTEN" : "ON THIS SITE";
+        boolean visitors = ArScene.KIND_VISITORS.equals(item.kind);
+        String tag = phrase ? "LANGUAGE" : ArScene.KIND_AUDIO.equals(item.kind) ? "LISTEN"
+            : visitors ? "VISITOR EXPERIENCES" : "ON THIS SITE";
         String headline = phrase && !item.word.isEmpty() ? item.word : (item.title.isEmpty() ? "Audio clip" : item.title);
         // A question waits for an answer; long text is a preview, read in full by tapping.
         boolean quiz = phrase && item.choices.length >= 2 && !item.answered;
@@ -78,6 +80,7 @@ final class ArCards {
         // community find keeps its line (who shared it) on the floating card.
         boolean community = item.id.startsWith("story-") || item.id.startsWith("plant-") || item.id.startsWith("note-");
         String hint = quiz ? "Tap to answer: what does it mean?"
+            : visitors ? (item.visits.length > 0 ? "Tap to see them and add yours" : "Tap to add yours")
             : longText || !item.more.isEmpty() ? "Tap to read more"
             : !item.audio.isEmpty() ? "Tap to hear it again" : null;
         StaticLayout[] lines = {

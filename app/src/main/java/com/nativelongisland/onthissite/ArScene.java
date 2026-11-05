@@ -22,6 +22,19 @@ final class ArScene {
     // The first thing in AR: a red arrow down at the visitor's spot, saying whose land
     // it is and what is near.
     static final String KIND_HERE = "here";
+    // "Visitor experiences": what visitors shared at a place (its Community Notes and
+    // photos), and an invitation to add a note or an AR photo there.
+    static final String KIND_VISITORS = "visitors";
+
+    /** One visitor's note or photo on a "Visitor experiences" card. */
+    static final class Visit {
+        String author = "";
+        String text = "";
+        String date = "";
+        // Set when the note was left at a nearby place rather than this one.
+        String place = "";
+        String image = "";
+    }
 
     static final class Item {
         String id;
@@ -63,6 +76,11 @@ final class ArScene {
         // The "You are here" marker: the land line and the nearest sites with distances.
         String land = "";
         String[] nearby = new String[0];
+        // A "Visitor experiences" card: the visits it lists, and the place (slug and
+        // name) where a new note or photo is posted.
+        Visit[] visits = new Visit[0];
+        String join = "";
+        String joinTitle = "";
 
         boolean isHere() {
             return KIND_HERE.equals(kind);
@@ -132,6 +150,22 @@ final class ArScene {
             JSONArray choices = o.optJSONArray("choices");
             item.choices = new String[choices == null ? 0 : choices.length()];
             for (int c = 0; c < item.choices.length; c++) item.choices[c] = choices.getString(c);
+            item.join = o.optString("join", "");
+            item.joinTitle = o.optString("join_title", "");
+            JSONArray visits = o.optJSONArray("visits");
+            item.visits = new Visit[visits == null ? 0 : visits.length()];
+            for (int v = 0; v < item.visits.length; v++) {
+                JSONObject row = visits.optJSONObject(v);
+                Visit visit = new Visit();
+                if (row != null) {
+                    visit.author = row.optString("author", "");
+                    visit.text = row.optString("text", "");
+                    visit.date = row.optString("date", "");
+                    visit.place = row.optString("place", "");
+                    visit.image = row.optString("image", "");
+                }
+                item.visits[v] = visit;
+            }
             scene.items.add(item);
         }
         return scene;

@@ -47,6 +47,8 @@
     // Photo stories and plant IDs this close float where they were photographed.
     const AR_FIND_KM = 0.5;
     const AR_FINDS = 4;
+    // Visitors' notes and photos listed on the "Visitor experiences" card.
+    const AR_VISITS = 8;
     // Standing this close to a site (or inside its land) opens its own AR.
     const SITE_AR_KM = 0.5;
 
@@ -820,9 +822,14 @@
         credit: first ? `On This Site, ${landTitle}` : "On This Site",
         image: first ? arSiteImage(first.entry.siteId) || undefined : undefined
       };
+      // Before the signs, the invitation to share, left on the land you are on (or the
+      // nearest place), with the notes from there and from the places nearest you.
+      const joinSite = first ? { slug: first.entry.slug, title: landTitle } : nearby[0] && { slug: nearby[0].site.slug, title: arText(nearby[0].site.title) };
+      const visitors = joinSite ? [arVisitors(joinSite.slug, joinSite.title,
+        [joinSite.slug, ...nearby.slice(0, AR_HERE_NEARBY).map(({ site }) => site.slug)])] : [];
       const ordered = [...essentials, ...own, ...arInterleave(arShuffled(around, random), arShuffled(others, random))]
-        .slice(0, AR_MAX_ITEMS - 1 - signs.length);
-      const scene = arScene("Around you", [hereItem, ...ordered, ...signs], random, here, true);
+        .slice(0, AR_MAX_ITEMS - 1 - visitors.length - signs.length);
+      const scene = arScene("Around you", [hereItem, ...ordered, ...visitors, ...signs], random, here, true);
       // The signs rise once this many bubbles (those that float up anywhere) are open.
       scene.sky_after = ordered.filter(item => !Number.isFinite(item.bearing_deg) && !item.spot).length;
       return scene;
@@ -885,38 +892,45 @@
         (state.plantObservations || []).filter(plant => plant.site_slug === slug && arShared(plant)),
         here
       ).slice(0, 7));
-      // What people shared on the page, newest first. A comment with a photo is
-      // the photo with its words as the caption; one without needs enough words
-      // to say something ("Seen" alone doesn't).
-      (state.publicComments || [])
-        .filter(comment => comment.site_slug === slug && String(comment.source_type || "site") === "site" && comment.comment
-          && (comment.comment_image || arText(comment.comment).length >= 40))
-        .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
-        .slice(0, 3)
-        .forEach(comment => {
-          const text = arText(comment.comment);
-          const author = arText(comment.author_name);
-          if (!comment.comment_image) {
-            extras.push({
-              id: `note-${comment.id}`, layer: "archival", kind: "note", placement: "discover",
-              title: author ? `${author} says` : "A community note", caption: text, credit: "Community note on On This Site"
-            });
-            return;
-          }
-          // A caption of a word or two is the photo's label, not a title on its own.
-          const short = text.split(/\s+/).length < 3;
-          extras.push({
-            id: `note-${comment.id}`, layer: "family", kind: "photo", placement: "discover",
-            title: short ? `“${text}”, a photo ${author || "a visitor"} shared at ${title}` : arStoryTitle(text),
-            caption: short ? `${author || "A visitor"} shared this photo on the On This Site page for ${title}, captioned “${text}”.` : text,
-            credit: [author ? `Shared by ${author}` : "", comment.created_at ? new Date(comment.created_at).toLocaleDateString() : ""].filter(Boolean).join(" · "),
-            image: arAsset(comment.comment_image)
-          });
-        });
       // In order: the welcome, the people tied to the place, the page's photos and
-      // readings with one of the rest after every two, then words to learn.
+      // readings with one of the rest after every two, words to learn, and last
+      // what visitors have shared here, with an invitation to add yours.
       return arScene(title, [welcome, ...people, ...arInterleave(items, arShuffled(extras, random)),
-        ...words.map(word => arWordCard(word, random))], random, here, true);
+        ...words.map(word => arWordCard(word, random)), arVisitors(slug, title)], random, here, true);
+    }
+
+    // "Visitor experiences": the notes and photos people left on a place's page
+    // (in AR or on the map), newest first, and an invitation to join in. The app
+    // lists them on the opened card and opens the place's Community Notes to add
+    // one, with the AR photo just taken if there is one. `slugs` adds nearby
+    // places' notes; the note is left on `slug`.
+    function arVisitors(slug, title, slugs = [slug]) {
+      const names = new Map((state.sites || []).map(site => [site.slug, arText(site.title)]));
+      const visits = (state.publicComments || [])
+        .filter(comment => slugs.includes(comment.site_slug) && String(comment.source_type || "site") === "site"
+          && !comment.parent_comment && (comment.comment || comment.comment_image))
+        .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+        .slice(0, AR_VISITS)
+        .map(comment => ({
+          author: arText(comment.author_name) || "A visitor",
+          text: arText(comment.comment),
+          date: comment.created_at ? new Date(comment.created_at).toLocaleDateString() : "",
+          place: comment.site_slug === slug ? "" : names.get(comment.site_slug) || "",
+          image: arAsset(comment.comment_image)
+        }));
+      const count = visits.length;
+      return {
+        id: `visitors-${slug}`, layer: "family", kind: "visitors", placement: "discover",
+        title: `Visitor experiences at ${title}`,
+        caption: count
+          ? `${count === 1 ? "One visitor post" : `${count} visitor posts`} so far. See what people noticed here, then add yours: a note, a memory, a question or a photo of what you notice.`
+          : "No one has shared here yet. Be the first: a note, a memory, a question or a photo of what you notice.",
+        // Older apps show the notes as text.
+        more: visits.map(visit => `“${visit.text || "A photo"}” (${visit.author}${visit.place ? `, at ${visit.place}` : ""}${visit.date ? `, ${visit.date}` : ""})`).join("\n\n"),
+        visits, join: slug, join_title: title,
+        credit: "Community Notes on On This Site",
+        image: visits.find(visit => visit.image)?.image || undefined
+      };
     }
 
     // Phones that can't run full AR get the camera with the bubbles over it,
@@ -1123,6 +1137,36 @@
         if (detail.classList.contains("open")) syncSiteArButton();
       }, 8000);
     }
+
+    // From AR's "Visitor experiences" bubble (the Android app calls this as AR
+    // closes): the place's Community Notes, ready to write in, with the AR photo
+    // just taken (a JPEG data URL) attached when there is one.
+    async function joinFromAr({ slug, photo } = {}) {
+      if (!slug || !ctx.openSite) return false;
+      await ctx.openSite(slug, { focus: true });
+      let section = null;
+      for (let tries = 0; tries < 50 && !section; tries++) {
+        section = document.querySelector(`.discussion-section[data-discussion-slug="${CSS.escape(slug)}"]`);
+        if (!section) await new Promise(resolve => setTimeout(resolve, 150));
+      }
+      if (!section) {
+        ctx.showBanner?.("Scroll down to Community Notes to add yours.");
+        return false;
+      }
+      section.scrollIntoView({ block: "start", behavior: "smooth" });
+      const input = section.querySelector("[data-discussion-input]");
+      if (!input) {
+        ctx.showBanner?.(photo ? "Log in to post. Your AR photo is in your Photos, in the On This Site album." : "Log in to add your note.");
+        return true;
+      }
+      if (photo && ctx.prepareCommentPhotoFile) {
+        const bytes = Uint8Array.from(atob(String(photo).split(",")[1] || ""), char => char.charCodeAt(0));
+        await ctx.prepareCommentPhotoFile(section, new File([bytes], "ar-photo.jpg", { type: "image/jpeg" })).catch(() => null);
+      }
+      input.focus({ preventScroll: true });
+      return true;
+    }
+    if (ctx.openSite) window.NLI_AR_JOIN = joinFromAr;
 
     return { available: arAppAvailable, openAr, watch, regionArScene, siteArScene };
   }
