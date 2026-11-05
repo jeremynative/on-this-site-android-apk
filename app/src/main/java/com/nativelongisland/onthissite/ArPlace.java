@@ -23,6 +23,7 @@ final class ArPlace {
 
     static final String LANDBACK = "landback";
     static final String SHINNECOCK_LAND = "shinnecock-land";
+    static final String STILL_HERE = "still-here";
     static final String FLAG = "flag";
 
     // The flag at scale 1 (metres): a pole, a ball on top, and the cloth near its top.
@@ -61,6 +62,7 @@ final class ArPlace {
     static final Asset[] ASSETS = {
         new Asset(LANDBACK, "#LANDBACK sticker", false, 0.6f),
         new Asset(SHINNECOCK_LAND, "Shinnecock Land sticker", false, 0.5f),
+        new Asset(STILL_HERE, "We Are Still Here sticker", false, 0.55f),
         new Asset(FLAG, "Shinnecock flag (3D)", true, 0f),
     };
 
@@ -103,6 +105,13 @@ final class ArPlace {
     /** A sticker's face, as placed: graffiti lettering, die-cut. */
     static Bitmap sticker(String id, Resources resources) {
         Typeface face = graffiti(resources);
+        if (STILL_HERE.equals(id)) {
+            // Wampum's white and purple. "Still" in lower case: this face's capital L
+            // is a hook, and "STILL" read as "STIhh".
+            return tag(face, -3f,
+                new TagLine("WE ARE Still", 1f, Color.WHITE, Color.rgb(209, 196, 233), new int[] {}),
+                new TagLine("HERE", 1.9f, Color.rgb(179, 136, 255), Color.rgb(74, 20, 140), new int[] {0, 1, 3}));
+        }
         if (SHINNECOCK_LAND.equals(id)) {
             return tag(face, -4f,
                 new TagLine("SHINNECOCK", 1f, Color.rgb(77, 208, 196), Color.rgb(0, 105, 92), new int[] {}),
