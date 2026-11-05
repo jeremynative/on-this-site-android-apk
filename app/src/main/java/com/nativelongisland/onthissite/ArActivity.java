@@ -26,6 +26,7 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -35,10 +36,14 @@ import com.google.ar.core.Anchor;
 import com.google.ar.core.ArCoreApk;
 import com.google.ar.core.Camera;
 import com.google.ar.core.Config;
+import com.google.ar.core.DepthPoint;
 import com.google.ar.core.Frame;
 import com.google.ar.core.HitResult;
+import com.google.ar.core.Plane;
+import com.google.ar.core.Point;
 import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
+import com.google.ar.core.Trackable;
 import com.google.ar.core.TrackingFailureReason;
 import com.google.ar.core.TrackingState;
 import java.io.InputStream;
@@ -208,6 +213,26 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private final ConcurrentLinkedQueue<float[]> drags = new ConcurrentLinkedQueue<>();
     private final Random random = new Random();
 
+    // "Place": stickers and a flag the visitor puts into their own space, held
+    // by ARCore anchors where they were placed while AR stays open. The one
+    // chosen in the drawer waits for a tap; the selected one can be resized,
+    // turned or removed (guarded by lock).
+    private static final int PLACED_MAX = 12;
+    private static final ArGl.Mesh POLE = ArPlace.cylinder(18, ArPlace.POLE_RADIUS, ArPlace.POLE_HEIGHT);
+    private static final ArGl.Mesh FINIAL = ArPlace.sphere(8, 12, ArPlace.FINIAL_RADIUS);
+    private static final ArGl.Mesh CLOTH = ArPlace.cloth(24, 12);
+    private final List<ArPlace.Placed> placed = new ArrayList<>();
+    private ArPlace.Placed selectedPlace;
+    private ArPlace.Asset placingAsset;
+    private volatile boolean aimFound;
+    private final long placeClock = SystemClock.uptimeMillis();
+    private List<MeshDraw> videoMeshes = Collections.emptyList();
+    // QA builds: assets to place as soon as tracking starts (files/qa-ar-place).
+    private final List<ArPlace.Asset> qaPlace = new ArrayList<>();
+    private View placeButton;
+    private LinearLayout placeDrawer;
+    private LinearLayout placeTools;
+
     // Scene state (guarded by lock).
     private ArScene scene;
     private final Map<String, Anchor> discoverAnchors = new HashMap<>();  // itemId -> anchor
@@ -286,7 +311,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (!Double.isNaN(scene.hereLat)) compass.setLocation(scene.hereLat, scene.hereLng);
         locations = (android.location.LocationManager) getSystemService(LOCATION_SERVICE);
         buildUi();
-        if (BuildConfig.DEBUG) runQaCardHooks();
+        if (BuildConfig.DEBUG) {
+            runQaCardHooks();
+            readQaPlace();
+        }
     }
 
     /**
@@ -466,6 +494,11 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             loading.clear();
         }
         for (String layer : ArScene.LAYERS) gl.queueTexture("orb:" + layer, ArCards.orb(ArCards.layerColor(layer)));
+        // The Place drawer's artwork.
+        for (ArPlace.Asset asset : ArPlace.ASSETS) if (!asset.model) gl.queueTexture(asset.texture(), ArPlace.sticker(asset.id));
+        gl.queueTexture("place:flag-cloth", ArPlace.flagCloth(getResources()));
+        gl.queueTexture("place:ring", ArPlace.ring());
+        gl.queueTexture("place:outline", ArPlace.outline());
     }
 
     @Override
@@ -491,6 +524,11 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
         if (videoFrameSource == null) return;
         gl.drawBackground(videoFrameSource);
+        if (videoViewProjection != null && !videoMeshes.isEmpty()) {
+            gl.beginMeshes();
+            for (MeshDraw mesh : videoMeshes) gl.drawMesh(videoViewProjection, mesh.model, mesh.mesh, gl.texture(mesh.texture), mesh.color, mesh.wave, placeSeconds());
+            gl.endMeshes();
+        }
         gl.beginQuads();
         if (videoViewProjection != null) {
             for (Draw draw : videoDraws) gl.drawQuad(videoViewProjection, draw.model, gl.texture(draw.texture), draw.alpha);
@@ -529,6 +567,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         gl.drawBackground(frame);
         videoFrameSource = frame;
         videoDraws = Collections.emptyList();
+        videoMeshes = Collections.emptyList();
         videoViewProjection = null;
         synchronized (lock) {
             if (camera.getTrackingState() != TrackingState.TRACKING) {
@@ -554,15 +593,22 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
             List<Draw> draws = new ArrayList<>();
             collectFreeDraws(draws, cameraPose);
+            List<MeshDraw> meshes = new ArrayList<>();
+            placeQaAssets(frame, cameraPose);
+            collectPlaced(frame, draws, meshes, cameraPoint);
 
             float[] tap;
-            while ((tap = taps.poll()) != null) handleTap(tap[0], tap[1], draws, viewProjection);
+            while ((tap = taps.poll()) != null) handleTap(frame, tap[0], tap[1], draws, viewProjection, cameraPose);
             float[] drag;
             while ((drag = drags.poll()) != null) handleDrag(drag, draws, viewProjection);
 
             Collections.sort(draws, (a, b) -> Float.compare(b.distance, a.distance));
             videoDraws = draws;
+            videoMeshes = meshes;
             videoViewProjection = viewProjection;
+            gl.beginMeshes();
+            for (MeshDraw mesh : meshes) gl.drawMesh(viewProjection, mesh.model, mesh.mesh, gl.texture(mesh.texture), mesh.color, mesh.wave, placeSeconds());
+            gl.endMeshes();
             gl.beginQuads();
             for (Draw draw : draws) gl.drawQuad(viewProjection, draw.model, gl.texture(draw.texture), draw.alpha);
             gl.endQuads();
@@ -1050,6 +1096,182 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
     }
 
+    // ---- Place ----
+
+    /** Seconds the flag has been waving (wrapped so the shader keeps its precision). */
+    private float placeSeconds() {
+        return (SystemClock.uptimeMillis() - placeClock) / 1000f % 600f;
+    }
+
+    /** A surface under a screen point, and how the chosen sticker or flag would sit there. */
+    private static final class Aim {
+        final Pose pose;
+        final Trackable trackable;
+
+        Aim(Pose pose, Trackable trackable) {
+            this.pose = pose;
+            this.trackable = trackable;
+        }
+    }
+
+    /**
+     * Where the asset would go if placed now: a detected wall, floor or table, or
+     * any surface the depth sensor sees there; null when none is under the point.
+     * The flag only stands on something facing up.
+     */
+    private Aim aim(Frame frame, float x, float y, ArPlace.Asset asset, float[] cameraPoint) {
+        for (HitResult hit : frame.hitTest(x, y)) {
+            Trackable trackable = hit.getTrackable();
+            Pose hitPose = hit.getHitPose();
+            boolean surface = trackable instanceof Plane
+                ? ((Plane) trackable).isPoseInPolygon(hitPose) && ((Plane) trackable).getSubsumedBy() == null
+                : trackable instanceof DepthPoint
+                    || trackable instanceof Point && ((Point) trackable).getOrientationMode() == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL;
+            if (!surface) continue;
+            float[] normal = hitPose.getYAxis();
+            if (asset.model && normal[1] < 0.8f) continue;
+            float[] point = hitPose.getTranslation();
+            return new Aim(new Pose(point, ArPlacement.placedRotation(normal, point, cameraPoint, asset.model)), trackable);
+        }
+        return null;
+    }
+
+    /**
+     * Places the asset chosen in the drawer where the centre of the view meets a
+     * surface (or under the tap). With no surface found yet it is held in space
+     * ahead: a sticker at arm's length facing the visitor, the flag a few steps
+     * away at about floor height.
+     */
+    private void placeChosen(Frame frame, float x, float y, Pose cameraPose) {
+        ArPlace.Asset asset = placingAsset;
+        float[] cameraPoint = cameraPose.getTranslation();
+        Aim aim = aim(frame, viewportWidth / 2f, viewportHeight / 2f, asset, cameraPoint);
+        if (aim == null) aim = aim(frame, x, y, asset, cameraPoint);
+        Anchor anchor;
+        try {
+            if (aim != null) {
+                anchor = aim.trackable.createAnchor(aim.pose);
+            } else {
+                float[] back = cameraPose.getZAxis();
+                float length = (float) Math.hypot(back[0], back[2]);
+                float[] forward = length < 1e-3f ? new float[] {0f, 0f, -1f} : new float[] {-back[0] / length, 0f, -back[2] / length};
+                float ahead = asset.model ? 2.5f : 1.2f;
+                float[] point = {cameraPoint[0] + forward[0] * ahead, cameraPoint[1] - (asset.model ? 1.4f : 0f), cameraPoint[2] + forward[2] * ahead};
+                float[] normal = asset.model ? new float[] {0f, 1f, 0f} : new float[] {-forward[0], 0f, -forward[2]};
+                anchor = session.createAnchor(new Pose(point, ArPlacement.placedRotation(normal, point, cameraPoint, asset.model)));
+                toast(asset.model ? "No ground found yet, so the flag stands a few steps ahead. Aim at the ground to plant it there."
+                    : "No wall found yet, so it hangs in the air ahead of you.");
+            }
+        } catch (RuntimeException error) {
+            android.util.Log.w("OnThisSiteAR", "Couldn't place " + asset.id + ": " + error);
+            toast("Couldn't place it here. Move the phone slowly and try again.");
+            return;
+        }
+        if (placed.size() >= PLACED_MAX) placed.get(0).removed = true;
+        ArPlace.Placed thing = new ArPlace.Placed(asset, anchor);
+        placed.add(thing);
+        selectedPlace = thing;
+        placingAsset = null;
+        runOnUiThread(() -> {
+            vibrateConfirm();
+            showPlaceTools();
+        });
+    }
+
+    private ArPlace.Placed placedById(String id) {
+        if (id == null) return null;
+        for (ArPlace.Placed thing : placed) if (thing.id.equals(id)) return thing;
+        return null;
+    }
+
+    /** Placed stickers and flags, and while aiming, where the chosen one would go. */
+    private void collectPlaced(Frame frame, List<Draw> draws, List<MeshDraw> meshes, float[] cameraPoint) {
+        for (java.util.Iterator<ArPlace.Placed> it = placed.iterator(); it.hasNext(); ) {
+            ArPlace.Placed thing = it.next();
+            if (thing.removed) {
+                thing.anchor.detach();
+                it.remove();
+                continue;
+            }
+            if (thing.anchor.getTrackingState() != TrackingState.TRACKING) continue;
+            Pose pose = thing.anchor.getPose();
+            float[] base = new float[16];
+            pose.toMatrix(base, 0);
+            Matrix.rotateM(base, 0, (float) Math.toDegrees(thing.turn), 0f, 1f, 0f);
+            addPlacedDraws(thing.id, thing.asset, base, thing.scale, distance(pose.getTranslation(), cameraPoint), 1f,
+                thing == selectedPlace, cameraPoint, draws, meshes);
+        }
+        if (placingAsset == null) return;
+        Aim aim = aim(frame, viewportWidth / 2f, viewportHeight / 2f, placingAsset, cameraPoint);
+        aimFound = aim != null;
+        if (aim == null) return;
+        float[] base = new float[16];
+        aim.pose.toMatrix(base, 0);
+        // A see-through preview of the sticker (or the flag with a ring at its foot).
+        addPlacedDraws(null, placingAsset, base, 1f, distance(aim.pose.getTranslation(), cameraPoint), 0.6f, true, cameraPoint, draws, meshes);
+    }
+
+    /**
+     * One placed thing's draws: a sticker is a quad lying on its surface (the
+     * anchor's +Y is the normal, so the quad's +Z is turned onto it); the flag is
+     * its pole, the ball on top and the waving cloth, with an invisible box round
+     * them for taps. id null draws a preview that can't be tapped.
+     */
+    private void addPlacedDraws(String id, ArPlace.Asset asset, float[] base, float scale, float distance, float alpha,
+                                boolean selected, float[] cameraPoint, List<Draw> draws, List<MeshDraw> meshes) {
+        if (asset.model) {
+            float[] pole = base.clone();
+            Matrix.scaleM(pole, 0, scale, scale, scale);
+            meshes.add(MeshDraw.solid(POLE, pole.clone(), new float[] {0.78f, 0.8f, 0.82f, 1f}));
+            float[] finial = pole.clone();
+            Matrix.translateM(finial, 0, 0f, ArPlace.POLE_HEIGHT + ArPlace.FINIAL_RADIUS * 0.6f, 0f);
+            meshes.add(MeshDraw.solid(FINIAL, finial, new float[] {0.84f, 0.67f, 0.26f, 1f}));
+            float[] cloth = pole.clone();
+            Matrix.translateM(cloth, 0, ArPlace.POLE_RADIUS, ArPlace.POLE_HEIGHT - ArPlace.FLAG_TOP_GAP - ArPlace.FLAG_HEIGHT, 0f);
+            Matrix.scaleM(cloth, 0, ArPlace.FLAG_WIDTH, ArPlace.FLAG_HEIGHT, 1f);
+            meshes.add(MeshDraw.cloth(CLOTH, cloth, asset.texture(), ArPlace.FLAG_WAVE * scale));
+            if (id != null) {
+                // The tap box turns to face the visitor, so the flag can be tapped from any side.
+                float[] middle = new float[4];
+                Matrix.multiplyMV(middle, 0, pole, 0, new float[] {ArPlace.FLAG_WIDTH / 2f, ArPlace.POLE_HEIGHT / 2f, 0f, 1f}, 0);
+                float[] point = {middle[0], middle[1], middle[2]};
+                float yaw = ArPlacement.yawTowards(point[0], point[2], cameraPoint[0], cameraPoint[2]);
+                draws.add(Draw.posed(id, new Pose(point, ArPlacement.yawQuaternion(yaw)), null,
+                    (ArPlace.FLAG_WIDTH * 2f + 0.3f) * scale, (ArPlace.POLE_HEIGHT + 0.1f) * scale, 0f, distance));
+            }
+            if (selected) {
+                float[] ring = pole.clone();
+                Matrix.rotateM(ring, 0, -90f, 1f, 0f, 0f);
+                Matrix.translateM(ring, 0, 0f, 0f, 0.005f);
+                Matrix.scaleM(ring, 0, 0.6f, 0.6f, 1f);
+                draws.add(Draw.of(null, ring, "place:ring", 0.9f, distance + 0.01f));
+            }
+            return;
+        }
+        String key = asset.texture();
+        float aspect = gl.aspect(key);
+        if (aspect <= 0f) return;
+        float width = asset.width * scale;
+        float[] model = base.clone();
+        Matrix.rotateM(model, 0, -90f, 1f, 0f, 0f);
+        // A few millimetres off the surface, so it doesn't flicker into it.
+        Matrix.translateM(model, 0, 0f, 0f, 0.004f);
+        if (selected && id != null) {
+            float[] edge = model.clone();
+            Matrix.scaleM(edge, 0, width * 1.08f, width * aspect + width * 0.08f, 1f);
+            draws.add(Draw.of(null, edge, "place:outline", 1f, distance + 0.001f));
+        }
+        Matrix.scaleM(model, 0, width, width * aspect, 1f);
+        draws.add(Draw.of(id, model, key, alpha, distance));
+    }
+
+    /** QA builds: places what files/qa-ar-place names, once tracking starts, for a screenshot. */
+    private void placeQaAssets(Frame frame, Pose cameraPose) {
+        if (qaPlace.isEmpty() || session == null) return;
+        placingAsset = qaPlace.remove(0);
+        placeChosen(frame, viewportWidth / 2f, viewportHeight / 2f, cameraPose);
+    }
+
     // ---- Taps ----
 
     /** The nearest bubble or card under a point on the screen, or null. */
@@ -1062,8 +1284,22 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         return picked;
     }
 
-    private void handleTap(float x, float y, List<Draw> draws, float[] viewProjection) {
+    private void handleTap(Frame frame, float x, float y, List<Draw> draws, float[] viewProjection, Pose cameraPose) {
+        if (placingAsset != null) {
+            placeChosen(frame, x, y, cameraPose);
+            return;
+        }
         Draw picked = pick(x, y, draws, viewProjection);
+        ArPlace.Placed thing = picked == null ? null : placedById(picked.itemId);
+        if (thing != null || selectedPlace != null) {
+            // A placed sticker or flag is chosen to resize, turn or remove; a tap elsewhere lets it go.
+            selectedPlace = thing;
+            runOnUiThread(this::showPlaceTools);
+            if (thing != null) {
+                runOnUiThread(() -> infoPanel.setVisibility(View.GONE));
+                return;
+            }
+        }
         if (picked == null) {
             runOnUiThread(() -> infoPanel.setVisibility(View.GONE));
             return;
@@ -1130,6 +1366,11 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             if (discovered.isEmpty()) return "Tap a bubble to open it";
             return cameraField.draggedOnce() ? "" : "Drag a bubble down or up to move it";
         }
+        if (placingAsset != null) {
+            if (!aimFound) return placingAsset.model ? "Aim at the ground nearby, moving the phone slowly" : "Aim at a wall or the ground, moving the phone slowly";
+            return placingAsset.model ? "Tap to plant the flag here" : "Tap to place it here";
+        }
+        if (selectedPlace != null) return "";
         String turn = directionHint();
         if (turn != null) return turn;
         if (discovered.isEmpty()) return "Walk up to a bubble or tap it";
@@ -1250,6 +1491,175 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             return true;
         });
         root.addView(surface, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    /**
+     * The Place button, its drawer (a tile for each sticker and the flag) and,
+     * once one is chosen or tapped, its tools. Placing needs ARCore's surfaces,
+     * so camera-only mode has no Place button.
+     */
+    private void buildPlaceControls(LinearLayout bottom) {
+        LinearLayout button = column();
+        button.setGravity(Gravity.CENTER_HORIZONTAL);
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(R.drawable.ic_ar_place);
+        icon.setPadding(dp(13), dp(13), dp(13), dp(13));
+        icon.setBackground(oval(Color.argb(150, 20, 26, 23)));
+        button.addView(icon, new LinearLayout.LayoutParams(dp(52), dp(52)));
+        TextView label = text(12, true, "Place");
+        label.setGravity(Gravity.CENTER);
+        button.addView(label, new LinearLayout.LayoutParams(-2, -2));
+        button.setContentDescription("Place a sticker or a flag in your space");
+        button.setOnClickListener(v -> {
+            synchronized (lock) {
+                placingAsset = null;
+            }
+            placeDrawer.setVisibility(placeDrawer.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
+            showPlaceTools();
+        });
+        button.setVisibility(cameraOnly ? View.INVISIBLE : View.VISIBLE);
+        placeButton = button;
+
+        placeDrawer = column();
+        placeDrawer.setVisibility(View.GONE);
+        placeDrawer.setBackground(rounded(Color.argb(235, 20, 26, 23), 22));
+        placeDrawer.setPadding(dp(16), dp(14), dp(16), dp(12));
+        placeDrawer.setClickable(true);
+        placeDrawer.addView(text(17, true, "Place in your space"));
+        TextView how = text(13, false, "Choose one, aim at a wall or the ground, then tap. It stays put while AR is open.");
+        how.setTextColor(Color.rgb(200, 214, 205));
+        how.setPadding(0, dp(2), 0, dp(10));
+        placeDrawer.addView(how);
+        HorizontalScrollView scroller = new HorizontalScrollView(this);
+        scroller.setHorizontalScrollBarEnabled(false);
+        LinearLayout tiles = row();
+        for (ArPlace.Asset asset : ArPlace.ASSETS) {
+            LinearLayout tile = column();
+            tile.setGravity(Gravity.CENTER_HORIZONTAL);
+            tile.setPadding(dp(6), dp(6), dp(6), dp(6));
+            tile.setBackground(rounded(Color.argb(60, 255, 255, 255), 16));
+            ImageView picture = new ImageView(this);
+            picture.setImageBitmap(ArPlace.tile(asset.id, getResources()));
+            picture.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            tile.addView(picture, new LinearLayout.LayoutParams(dp(88), dp(88)));
+            TextView name = text(12, true, asset.label);
+            name.setGravity(Gravity.CENTER);
+            name.setMaxLines(2);
+            tile.addView(name, new LinearLayout.LayoutParams(dp(96), -2));
+            tile.setContentDescription("Place " + asset.label);
+            tile.setOnClickListener(v -> choosePlace(asset));
+            LinearLayout.LayoutParams tileParams = new LinearLayout.LayoutParams(-2, -2);
+            tileParams.rightMargin = dp(10);
+            tiles.addView(tile, tileParams);
+        }
+        scroller.addView(tiles);
+        placeDrawer.addView(scroller);
+        LinearLayout.LayoutParams drawerParams = new LinearLayout.LayoutParams(-1, -2);
+        drawerParams.topMargin = dp(10);
+        bottom.addView(placeDrawer, drawerParams);
+
+        placeTools = row();
+        placeTools.setGravity(Gravity.CENTER);
+        placeTools.setVisibility(View.GONE);
+        LinearLayout.LayoutParams toolsParams = new LinearLayout.LayoutParams(-1, -2);
+        toolsParams.topMargin = dp(10);
+        bottom.addView(placeTools, toolsParams);
+    }
+
+    private void choosePlace(ArPlace.Asset asset) {
+        synchronized (lock) {
+            placingAsset = asset;
+            selectedPlace = null;
+            aimFound = false;
+        }
+        placeDrawer.setVisibility(View.GONE);
+        showPlaceTools();
+    }
+
+    /** While aiming: Cancel. With a placed sticker or flag chosen: Smaller, Bigger, Turn, Remove, Done. */
+    private void showPlaceTools() {
+        ArPlace.Placed thing;
+        ArPlace.Asset choosing;
+        synchronized (lock) {
+            thing = selectedPlace;
+            choosing = placingAsset;
+        }
+        placeTools.removeAllViews();
+        if (choosing != null) {
+            placeTools.addView(placeTool("Cancel", "cancel"));
+        } else if (thing != null) {
+            placeTools.addView(placeTool("Smaller", "smaller"));
+            placeTools.addView(placeTool("Bigger", "bigger"));
+            placeTools.addView(placeTool("Turn", "turn"));
+            placeTools.addView(placeTool("Remove", "remove"));
+            placeTools.addView(placeTool("Done", "done"));
+        }
+        placeTools.setVisibility(placeTools.getChildCount() > 0 ? View.VISIBLE : View.GONE);
+    }
+
+    private TextView placeTool(String label, String action) {
+        TextView tool = text(14, true, label);
+        tool.setGravity(Gravity.CENTER);
+        tool.setBackground(rounded("done".equals(action) ? Color.rgb(46, 125, 84) : Color.argb(200, 20, 26, 23), 18));
+        tool.setPadding(dp(12), dp(9), dp(12), dp(9));
+        tool.setOnClickListener(v -> placeAction(action));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, -2);
+        params.leftMargin = dp(3);
+        params.rightMargin = dp(3);
+        tool.setLayoutParams(params);
+        return tool;
+    }
+
+    private void placeAction(String action) {
+        synchronized (lock) {
+            ArPlace.Placed thing = selectedPlace;
+            if ("cancel".equals(action)) {
+                placingAsset = null;
+            } else if (thing != null) {
+                switch (action) {
+                    case "smaller":
+                        thing.scale = Math.max(0.2f, thing.scale / 1.25f);
+                        break;
+                    case "bigger":
+                        thing.scale = Math.min(6f, thing.scale * 1.25f);
+                        break;
+                    case "turn":
+                        thing.turn += (float) Math.toRadians(15);
+                        break;
+                    case "remove":
+                        thing.removed = true;
+                        selectedPlace = null;
+                        break;
+                    default:
+                        selectedPlace = null;
+                        break;
+                }
+            }
+        }
+        showPlaceTools();
+    }
+
+    /** QA builds: what to place as soon as tracking starts, from files/qa-ar-place (asset ids, comma-separated). */
+    private void readQaPlace() {
+        java.io.File flag = new java.io.File(getFilesDir(), "qa-ar-place");
+        if (!flag.exists()) return;
+        try {
+            String ids = new String(java.nio.file.Files.readAllBytes(flag.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+            for (String id : ids.split(",")) {
+                ArPlace.Asset asset = ArPlace.asset(id.trim());
+                if (asset != null) qaPlace.add(asset);
+            }
+            // The artwork as placed, and the drawer's tiles, for checking without an ARCore device.
+            java.io.File out = new java.io.File(getFilesDir(), "qa-cards");
+            if (out.isDirectory() || out.mkdirs()) {
+                for (ArPlace.Asset asset : ArPlace.ASSETS) {
+                    saveQaCard(new java.io.File(out, "place-" + asset.id + "-tile.png"), ArPlace.tile(asset.id, getResources()));
+                    if (!asset.model) saveQaCard(new java.io.File(out, "place-" + asset.id + ".png"), ArPlace.sticker(asset.id));
+                }
+            }
+        } catch (Exception error) {
+            android.util.Log.w("OnThisSiteAR", "QA place file unreadable: " + error);
+        }
     }
 
     /** Camera-only mode: the field asks about and reports on bubbles here. */
@@ -1379,10 +1789,22 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 if ((action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) && video != null) stopArVideo();
                 return false;
             });
+            // Place, left of the shutter: stickers and the flag to put into the
+            // visitor's own space, from a drawer that opens above it.
+            buildPlaceControls(bottom);
+            LinearLayout controls = row();
+            controls.setGravity(Gravity.CENTER);
+            controls.addView(placeButton, new LinearLayout.LayoutParams(dp(68), -2));
             LinearLayout.LayoutParams shutterParams = new LinearLayout.LayoutParams(dp(68), dp(68));
-            shutterParams.gravity = Gravity.CENTER_HORIZONTAL;
-            shutterParams.topMargin = dp(12);
-            bottom.addView(shutter, shutterParams);
+            shutterParams.leftMargin = dp(28);
+            shutterParams.rightMargin = dp(28);
+            controls.addView(shutter, shutterParams);
+            // Keeps the shutter centred.
+            controls.addView(new View(this), new LinearLayout.LayoutParams(dp(68), dp(68)));
+            LinearLayout.LayoutParams controlsParams = new LinearLayout.LayoutParams(-2, -2);
+            controlsParams.gravity = Gravity.CENTER_HORIZONTAL;
+            controlsParams.topMargin = dp(12);
+            bottom.addView(controls, controlsParams);
         }
 
         // The card a bubble opens into, centred over the dimmed camera view:
@@ -2411,6 +2833,32 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         return drawable;
     }
 
+    /** One part of a placed 3D thing to draw this frame. */
+    private static final class MeshDraw {
+        ArGl.Mesh mesh;
+        float[] model;
+        String texture;
+        float[] color = {1f, 1f, 1f, 1f};
+        float wave;
+
+        static MeshDraw solid(ArGl.Mesh mesh, float[] model, float[] color) {
+            MeshDraw draw = new MeshDraw();
+            draw.mesh = mesh;
+            draw.model = model;
+            draw.color = color;
+            return draw;
+        }
+
+        static MeshDraw cloth(ArGl.Mesh mesh, float[] model, String texture, float wave) {
+            MeshDraw draw = new MeshDraw();
+            draw.mesh = mesh;
+            draw.model = model;
+            draw.texture = texture;
+            draw.wave = wave;
+            return draw;
+        }
+    }
+
     /** One textured quad to draw this frame. */
     private static final class Draw {
         String itemId;
@@ -2426,6 +2874,17 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             draw.model = new float[16];
             pose.toMatrix(draw.model, 0);
             Matrix.scaleM(draw.model, 0, width, height, 1f);
+            draw.alpha = alpha;
+            draw.distance = distance;
+            return draw;
+        }
+
+        /** A quad already placed by its model matrix (a placed sticker, or a tap box with no texture). */
+        static Draw of(String itemId, float[] model, String texture, float alpha, float distance) {
+            Draw draw = new Draw();
+            draw.itemId = itemId;
+            draw.texture = texture;
+            draw.model = model;
             draw.alpha = alpha;
             draw.distance = distance;
             return draw;
