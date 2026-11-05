@@ -47,8 +47,9 @@ final class ArGl {
             + "void main() { vec4 c = texture2D(u_Texture, v_TexCoord); gl_FragColor = vec4(c.rgb, c.a * u_Alpha); }\n";
 
     // Placed 3D things (the flag): lit from above, both sides shaded alike. With
-    // u_Wave above 0 the mesh is a unit cloth that ripples away from its pole
-    // edge (texture u = 0) over time.
+    // u_Wave above 0 the mesh is a unit cloth blowing from its pole edge
+    // (texture u = 0): a slow swing about the pole, a travelling ripple, and a
+    // quicker flutter, all growing towards the free end.
     private static final String MESH_VERTEX =
         "uniform mat4 u_Mvp;\n"
             + "uniform mat4 u_Model;\n"
@@ -64,9 +65,12 @@ final class ArGl {
             + "  vec3 n = a_Normal;\n"
             + "  if (u_Wave > 0.0) {\n"
             + "    float along = a_TexCoord.x;\n"
-            + "    float phase = 4.0 * along - 2.5 * u_Time + 0.8 * a_TexCoord.y;\n"
-            + "    p.z += u_Wave * along * sin(phase);\n"
-            + "    float slope = u_Wave * (sin(phase) + 4.0 * along * cos(phase));\n"
+            + "    float swing = 2.0 * sin(0.8 * u_Time);\n"
+            + "    float phase = 5.0 * along - 3.4 * u_Time + 0.9 * a_TexCoord.y;\n"
+            + "    float flutter = 11.0 * along - 6.5 * u_Time + 2.0 * a_TexCoord.y;\n"
+            + "    p.z += u_Wave * along * (swing + sin(phase) + 0.3 * sin(flutter));\n"
+            + "    float slope = u_Wave * (swing + sin(phase) + 0.3 * sin(flutter)\n"
+            + "      + along * (5.0 * cos(phase) + 3.3 * cos(flutter)));\n"
             + "    n = normalize(vec3(-slope, 0.0, 1.0));\n"
             + "  }\n"
             + "  v_TexCoord = a_TexCoord;\n"

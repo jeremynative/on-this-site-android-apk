@@ -29,13 +29,13 @@ final class ArPlace {
     static final float POLE_HEIGHT = 2.2f;
     static final float POLE_RADIUS = 0.022f;
     static final float FINIAL_RADIUS = 0.045f;
-    // The Shinnecock flag is twice as wide as it is high.
-    static final float FLAG_WIDTH = 1.2f;
+    // The usual flag shape, 3:2; the bundled image is cropped to it round the seal.
+    static final float FLAG_WIDTH = 0.9f;
     static final float FLAG_HEIGHT = 0.6f;
     static final float FLAG_TOP_GAP = 0.06f;
-    // How far the cloth's free end swings out of its plane (metres): gentle, so
-    // the seal and its lettering stay legible.
-    static final float FLAG_WAVE = 0.045f;
+    // The ripple at the cloth's free end (metres); the whole cloth also swings
+    // about the pole by twice this, and a quicker flutter rides on top.
+    static final float FLAG_WAVE = 0.08f;
 
     /** One placeable thing in the drawer. */
     static final class Asset {
