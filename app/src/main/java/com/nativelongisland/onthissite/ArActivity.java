@@ -1312,7 +1312,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             float[] pole = base.clone();
             Matrix.scaleM(pole, 0, scale, scale, scale);
             int first = meshes.size();
-            meshes.add(MeshDraw.solid(POLE, pole.clone(), new float[] {0.78f, 0.8f, 0.82f, 1f}));
+            meshes.add(MeshDraw.solid(POLE, pole.clone(), ArPlace.poleColor(asset)));
             float[] finial = pole.clone();
             Matrix.translateM(finial, 0, 0f, ArPlace.POLE_HEIGHT + ArPlace.FINIAL_RADIUS * 0.6f, 0f);
             meshes.add(MeshDraw.solid(FINIAL, finial, new float[] {0.84f, 0.67f, 0.26f, 1f}));
