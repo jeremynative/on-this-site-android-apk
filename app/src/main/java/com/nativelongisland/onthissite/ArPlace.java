@@ -3,7 +3,6 @@ package com.nativelongisland.onthissite;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.BitmapShader;
 import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -93,10 +92,10 @@ final class ArPlace {
     static final String[][] LOOKS = {
         {"graffiti", "Graffiti"}, {"black", "Black letters"}, {"digital", "Digital"}, {"painted", "Black only"}, {"badge", "Badge"},
     };
-    // The flag's field colours (id, name in the drawer).
-    static final String[][] FIELDS = {{"gold", "Gold"}, {"black", "Black"}, {"white", "White"}, {"silver", "Silver"}};
+    // The flag is always the gold Shinnecock flag; its pole comes in these colours (id, name in the drawer).
+    static final String[][] POLES = {{"gold", "Gold pole"}, {"black", "Black pole"}, {"white", "White pole"}, {"silver", "Silver pole"}};
 
-    /** One placeable thing in the drawer: a sticker in one look, or the flag in one colour. */
+    /** One placeable thing in the drawer: a sticker in one look, or the flag on one colour of pole. */
     static final class Asset {
         final String id;
         // The drawer section it sits in, and its name there.
@@ -107,7 +106,7 @@ final class ArPlace {
         // A sticker's width at scale 1 (metres).
         final float width;
         final Phrase phrase;
-        // The sticker's look, or the flag's field colour.
+        // The sticker's look, or the flag pole's colour.
         final String look;
 
         Asset(String id, String group, String label, boolean model, float width, Phrase phrase, String look) {
@@ -121,7 +120,8 @@ final class ArPlace {
         }
 
         String texture() {
-            return "place:" + id;
+            // Every pole flies the same cloth.
+            return model ? "place:" + FLAG : "place:" + id;
         }
     }
 
@@ -134,8 +134,8 @@ final class ArPlace {
                 assets.add(new Asset(phrase.id + ":" + look[0], phrase.title, look[1], false, phrase.width, phrase, look[0]));
             }
         }
-        for (String[] field : FIELDS) {
-            assets.add(new Asset(FLAG + ":" + field[0], "Shinnecock flag (3D)", field[1], true, 0f, null, field[0]));
+        for (String[] pole : POLES) {
+            assets.add(new Asset(FLAG + ":" + pole[0], "Shinnecock flag (3D)", pole[1], true, 0f, null, pole[0]));
         }
         return assets.toArray(new Asset[0]);
     }
@@ -178,7 +178,7 @@ final class ArPlace {
 
     /** What an asset looks like as placed: a sticker's face, or the flag's cloth. */
     static Bitmap artwork(Asset asset, Resources resources) {
-        if (asset.model) return flagCloth(resources, asset.look);
+        if (asset.model) return flagCloth(resources);
         Phrase phrase = asset.phrase;
         switch (asset.look) {
             case "black":
@@ -442,35 +442,25 @@ final class ArPlace {
         return bitmap;
     }
 
-    /**
-     * The flag's cloth: the Shinnecock flag (the Great Seal on gold) as Jeremy
-     * supplied it, or the seal on a black, white or silver field.
-     */
-    static Bitmap flagCloth(Resources resources, String field) {
+    /** The flag's cloth: the Shinnecock flag (the Great Seal on gold) as Jeremy supplied it. */
+    static Bitmap flagCloth(Resources resources) {
         BitmapFactory.Options options = new BitmapFactory.Options();
         options.inScaled = false;
-        Bitmap gold = BitmapFactory.decodeResource(resources, R.drawable.shinnecock_flag, options);
-        if (field == null || "gold".equals(field)) return gold;
-        int width = gold.getWidth();
-        int height = gold.getHeight();
-        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        if ("silver".equals(field)) {
-            paint.setShader(new LinearGradient(0, 0, width, height,
-                new int[] {Color.rgb(236, 238, 240), Color.rgb(168, 172, 176), Color.rgb(224, 226, 228), Color.rgb(150, 154, 158)},
-                new float[] {0f, 0.38f, 0.62f, 1f}, Shader.TileMode.CLAMP));
-        } else {
-            paint.setColor("black".equals(field) ? Color.rgb(18, 18, 18) : Color.rgb(246, 246, 244));
+        return BitmapFactory.decodeResource(resources, R.drawable.shinnecock_flag, options);
+    }
+
+    /** The flag pole's colour (red, green, blue, alpha from 0 to 1) for its look. */
+    static float[] poleColor(Asset asset) {
+        switch (asset.look) {
+            case "gold":
+                return new float[] {0.84f, 0.67f, 0.26f, 1f};
+            case "black":
+                return new float[] {0.12f, 0.12f, 0.13f, 1f};
+            case "white":
+                return new float[] {0.95f, 0.95f, 0.94f, 1f};
+            default:
+                return new float[] {0.78f, 0.8f, 0.82f, 1f};
         }
-        canvas.drawRect(0, 0, width, height, paint);
-        // The seal, taken from the gold flag round its rim: its edges measured 209, 747, 49 and 588 px
-        // (left, right, top, bottom of 960 x 640), a circle of radius 268.5 round (478, 318.5); cut 1 px inside it so no gold shows.
-        Paint seal = new Paint(Paint.ANTI_ALIAS_FLAG);
-        seal.setShader(new BitmapShader(gold, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
-        canvas.drawCircle(width / 2f - 2f, height / 2f - 1.5f, height * 0.418f, seal);
-        gold.recycle();
-        return bitmap;
     }
 
     /** The flag's contact shadow: dark at the foot of the pole, gone by its edge. */
@@ -523,8 +513,9 @@ final class ArPlace {
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         Bitmap art = artwork(asset, resources);
         if (asset.model) {
-            paint.setColor(Color.rgb(200, 204, 208));
-            canvas.drawRect(70, 30, 80, 236, paint);
+            float[] pole = poleColor(asset);
+            paint.setColor(Color.rgb(Math.round(pole[0] * 255), Math.round(pole[1] * 255), Math.round(pole[2] * 255)));
+            canvas.drawRect(69, 30, 81, 236, paint);
             paint.setColor(Color.rgb(214, 172, 66));
             canvas.drawCircle(75, 26, 12, paint);
             canvas.drawBitmap(art, null, new RectF(80, 40, 246, 40 + 166f * FLAG_HEIGHT / FLAG_WIDTH), paint);
