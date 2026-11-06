@@ -26,7 +26,6 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
-import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -231,6 +230,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private final List<ArPlace.Asset> qaPlace = new ArrayList<>();
     private View placeButton;
     private LinearLayout placeDrawer;
+    private LinearLayout placeList;
     private LinearLayout placeTools;
 
     // Scene state (guarded by lock).
@@ -314,6 +314,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (BuildConfig.DEBUG) {
             runQaCardHooks();
             readQaPlace();
+            openQaDrawer();
         }
     }
 
@@ -494,9 +495,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             loading.clear();
         }
         for (String layer : ArScene.LAYERS) gl.queueTexture("orb:" + layer, ArCards.orb(ArCards.layerColor(layer)));
-        // The Place drawer's artwork.
-        for (ArPlace.Asset asset : ArPlace.ASSETS) if (!asset.model) gl.queueTexture(asset.texture(), ArPlace.sticker(asset.id, getResources()));
-        gl.queueTexture("place:flag-cloth", ArPlace.flagCloth(getResources()));
+        // The Place drawer's shared pieces; each sticker's and flag's artwork is
+        // drawn the first time it is used (placeArtwork).
+        gl.queueTexture("place:shadow", ArPlace.shadowBlob());
+        gl.queueTexture("place:shadow-streak", ArPlace.shadowStreak());
         gl.queueTexture("place:ring", ArPlace.ring());
         gl.queueTexture("place:outline", ArPlace.outline());
     }
@@ -1219,6 +1221,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
      */
     private void addPlacedDraws(String id, ArPlace.Asset asset, float[] base, float scale, float distance, float alpha,
                                 boolean selected, float[] cameraPoint, List<Draw> draws, List<MeshDraw> meshes) {
+        placeArtwork(asset);
         if (asset.model) {
             float[] pole = base.clone();
             Matrix.scaleM(pole, 0, scale, scale, scale);
@@ -1226,10 +1229,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             float[] finial = pole.clone();
             Matrix.translateM(finial, 0, 0f, ArPlace.POLE_HEIGHT + ArPlace.FINIAL_RADIUS * 0.6f, 0f);
             meshes.add(MeshDraw.solid(FINIAL, finial, new float[] {0.84f, 0.67f, 0.26f, 1f}));
-            float[] cloth = pole.clone();
-            Matrix.translateM(cloth, 0, ArPlace.POLE_RADIUS, ArPlace.POLE_HEIGHT - ArPlace.FLAG_TOP_GAP - ArPlace.FLAG_HEIGHT, 0f);
-            Matrix.scaleM(cloth, 0, ArPlace.FLAG_WIDTH, ArPlace.FLAG_HEIGHT, 1f);
-            meshes.add(MeshDraw.cloth(CLOTH, cloth, asset.texture(), ArPlace.FLAG_WAVE * scale));
+            // The cloth shows once its colour's artwork is ready (a moment after it is first chosen).
+            if (gl.hasTexture(asset.texture())) {
+                float[] cloth = pole.clone();
+                Matrix.translateM(cloth, 0, ArPlace.POLE_RADIUS, ArPlace.POLE_HEIGHT - ArPlace.FLAG_TOP_GAP - ArPlace.FLAG_HEIGHT, 0f);
+                Matrix.scaleM(cloth, 0, ArPlace.FLAG_WIDTH, ArPlace.FLAG_HEIGHT, 1f);
+                meshes.add(MeshDraw.cloth(CLOTH, cloth, asset.texture(), ArPlace.FLAG_WAVE * scale));
+            }
+            addFlagShadow(pole, scale, distance, draws);
             if (id != null) {
                 // The tap box turns to face the visitor, so the flag can be tapped from any side.
                 float[] middle = new float[4];
@@ -1263,6 +1270,44 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         Matrix.scaleM(model, 0, width, width * aspect, 1f);
         draws.add(Draw.of(id, model, key, alpha, distance));
+    }
+
+    /** Draws a sticker's or flag's artwork the first time it is needed, off the GL thread. */
+    private void placeArtwork(ArPlace.Asset asset) {
+        String key = asset.texture();
+        if (gl.hasTexture(key) || !loading.add(key)) return;
+        loader.execute(() -> {
+            try {
+                gl.queueTexture(key, ArPlace.artwork(asset, getResources()));
+            } catch (RuntimeException error) {
+                android.util.Log.w("OnThisSiteAR", "Artwork " + key + " failed: " + error);
+            }
+        });
+    }
+
+    /**
+     * The flag's shadow on the ground, so it stands there rather than floating:
+     * a soft dark patch at the foot of the pole, and a fainter streak that
+     * stretches away from the light and fades out.
+     */
+    private void addFlagShadow(float[] pole, float scale, float distance, List<Draw> draws) {
+        float[] foot = {pole[12], pole[13], pole[14]};
+        float[] patch = new float[16];
+        Matrix.setIdentityM(patch, 0);
+        Matrix.translateM(patch, 0, foot[0], foot[1] + 0.002f, foot[2]);
+        Matrix.rotateM(patch, 0, -90f, 1f, 0f, 0f);
+        Matrix.scaleM(patch, 0, 0.55f * scale, 0.55f * scale, 1f);
+        draws.add(Draw.of(null, patch, "place:shadow", 0.9f, distance + 0.02f));
+        float[] away = ArPlace.SHADOW_DIRECTION;
+        float length = 1.7f * scale;
+        float[] streak = new float[16];
+        Matrix.setIdentityM(streak, 0);
+        Matrix.translateM(streak, 0, foot[0] + away[0] * length / 2f, foot[1] + 0.003f, foot[2] + away[2] * length / 2f);
+        // Its length (the quad's x) along the shadow's direction, lying flat.
+        Matrix.rotateM(streak, 0, (float) Math.toDegrees(Math.atan2(-away[2], away[0])), 0f, 1f, 0f);
+        Matrix.rotateM(streak, 0, -90f, 1f, 0f, 0f);
+        Matrix.scaleM(streak, 0, length, 0.5f * scale, 1f);
+        draws.add(Draw.of(null, streak, "place:shadow-streak", 0.85f, distance + 0.021f));
     }
 
     /** QA builds: places what files/qa-ar-place names, once tracking starts, for a screenshot. */
@@ -1514,6 +1559,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             synchronized (lock) {
                 placingAsset = null;
             }
+            fillPlaceDrawer();
             placeDrawer.setVisibility(placeDrawer.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
             showPlaceTools();
         });
@@ -1530,30 +1576,13 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         how.setTextColor(Color.rgb(200, 214, 205));
         how.setPadding(0, dp(2), 0, dp(10));
         placeDrawer.addView(how);
-        HorizontalScrollView scroller = new HorizontalScrollView(this);
-        scroller.setHorizontalScrollBarEnabled(false);
-        LinearLayout tiles = row();
-        for (ArPlace.Asset asset : ArPlace.ASSETS) {
-            LinearLayout tile = column();
-            tile.setGravity(Gravity.CENTER_HORIZONTAL);
-            tile.setPadding(dp(6), dp(6), dp(6), dp(6));
-            tile.setBackground(rounded(Color.argb(60, 255, 255, 255), 16));
-            ImageView picture = new ImageView(this);
-            picture.setImageBitmap(ArPlace.tile(asset.id, getResources()));
-            picture.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            tile.addView(picture, new LinearLayout.LayoutParams(dp(88), dp(88)));
-            TextView name = text(12, true, asset.label);
-            name.setGravity(Gravity.CENTER);
-            name.setMaxLines(2);
-            tile.addView(name, new LinearLayout.LayoutParams(dp(96), -2));
-            tile.setContentDescription("Place " + asset.label);
-            tile.setOnClickListener(v -> choosePlace(asset));
-            LinearLayout.LayoutParams tileParams = new LinearLayout.LayoutParams(-2, -2);
-            tileParams.rightMargin = dp(10);
-            tiles.addView(tile, tileParams);
-        }
-        scroller.addView(tiles);
-        placeDrawer.addView(scroller);
+        // The choices scroll up and down, grouped: each sticker's looks, then the flag's colours.
+        placeList = column();
+        ScrollView scroller = new ScrollView(this);
+        scroller.setVerticalScrollBarEnabled(true);
+        scroller.addView(placeList, new FrameLayout.LayoutParams(-1, -2));
+        placeDrawer.addView(scroller, new LinearLayout.LayoutParams(-1,
+            Math.round(getResources().getDisplayMetrics().heightPixels * 0.42f)));
         LinearLayout.LayoutParams drawerParams = new LinearLayout.LayoutParams(-1, -2);
         drawerParams.topMargin = dp(10);
         bottom.addView(placeDrawer, drawerParams);
@@ -1564,6 +1593,72 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         LinearLayout.LayoutParams toolsParams = new LinearLayout.LayoutParams(-1, -2);
         toolsParams.topMargin = dp(10);
         bottom.addView(placeTools, toolsParams);
+    }
+
+    /**
+     * The drawer's choices, made when it first opens: a heading for each group
+     * and its tiles in rows, as many to a row as fit. Pictures are drawn in the
+     * background and appear as they are ready.
+     */
+    private void fillPlaceDrawer() {
+        if (placeList.getChildCount() > 0) return;
+        float tileDp = 100f;
+        float widthDp = getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density;
+        int perRow = Math.max(3, (int) ((widthDp - 56f) / tileDp));
+        String group = null;
+        LinearLayout tiles = null;
+        for (ArPlace.Asset asset : ArPlace.ASSETS) {
+            if (!asset.group.equals(group)) {
+                group = asset.group;
+                TextView heading = text(14, true, group);
+                heading.setTextColor(Color.rgb(126, 211, 158));
+                heading.setPadding(dp(2), dp(placeList.getChildCount() == 0 ? 0 : 12), 0, dp(6));
+                placeList.addView(heading);
+                tiles = null;
+            }
+            if (tiles == null || tiles.getChildCount() >= perRow) {
+                tiles = row();
+                tiles.setGravity(Gravity.START);
+                LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
+                rowParams.bottomMargin = dp(8);
+                placeList.addView(tiles, rowParams);
+            }
+            LinearLayout tile = column();
+            tile.setGravity(Gravity.CENTER_HORIZONTAL);
+            tile.setPadding(dp(5), dp(5), dp(5), dp(5));
+            tile.setBackground(rounded(Color.argb(60, 255, 255, 255), 14));
+            ImageView picture = new ImageView(this);
+            picture.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            tile.addView(picture, new LinearLayout.LayoutParams(-1, dp(72)));
+            TextView name = text(12, true, asset.label);
+            name.setGravity(Gravity.CENTER);
+            name.setMaxLines(2);
+            tile.addView(name, new LinearLayout.LayoutParams(-1, -2));
+            tile.setContentDescription("Place " + asset.group + ", " + asset.label);
+            tile.setOnClickListener(v -> choosePlace(asset));
+            LinearLayout.LayoutParams tileParams = new LinearLayout.LayoutParams(0, -2, 1f);
+            tileParams.rightMargin = dp(8);
+            tiles.addView(tile, tileParams);
+            loader.execute(() -> {
+                try {
+                    Bitmap art = ArPlace.tile(asset, getResources());
+                    runOnUiThread(() -> picture.setImageBitmap(art));
+                } catch (RuntimeException error) {
+                    android.util.Log.w("OnThisSiteAR", "Tile " + asset.id + " failed: " + error);
+                }
+            });
+        }
+        // A short last row keeps its tiles the same width as the others.
+        for (int i = 0; i < placeList.getChildCount(); i++) {
+            View child = placeList.getChildAt(i);
+            if (!(child instanceof LinearLayout)) continue;
+            LinearLayout row = (LinearLayout) child;
+            while (row.getChildCount() < perRow) {
+                LinearLayout.LayoutParams spacer = new LinearLayout.LayoutParams(0, 1, 1f);
+                spacer.rightMargin = dp(8);
+                row.addView(new View(this), spacer);
+            }
+        }
     }
 
     private void choosePlace(ArPlace.Asset asset) {
@@ -1639,6 +1734,25 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         showPlaceTools();
     }
 
+    /** QA builds: files/qa-ar-drawer opens the Place drawer (even camera-only) to check its layout. */
+    private void openQaDrawer() {
+        if (!new java.io.File(getFilesDir(), "qa-ar-drawer").exists()) return;
+        placeDrawer.postDelayed(() -> {
+            placeButton.setVisibility(View.VISIBLE);
+            fillPlaceDrawer();
+            placeDrawer.setVisibility(View.VISIBLE);
+        }, 1500);
+    }
+
+    private static void saveQaShadows(java.io.File out) {
+        try {
+            saveQaCard(new java.io.File(out, "place-shadow.png"), ArPlace.shadowBlob());
+            saveQaCard(new java.io.File(out, "place-shadow-streak.png"), ArPlace.shadowStreak());
+        } catch (Exception error) {
+            android.util.Log.w("OnThisSiteAR", "QA shadows failed: " + error);
+        }
+    }
+
     /** QA builds: what to place as soon as tracking starts, from files/qa-ar-place (asset ids, comma-separated). */
     private void readQaPlace() {
         java.io.File flag = new java.io.File(getFilesDir(), "qa-ar-place");
@@ -1652,10 +1766,18 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             // The artwork as placed, and the drawer's tiles, for checking without an ARCore device.
             java.io.File out = new java.io.File(getFilesDir(), "qa-cards");
             if (out.isDirectory() || out.mkdirs()) {
-                for (ArPlace.Asset asset : ArPlace.ASSETS) {
-                    saveQaCard(new java.io.File(out, "place-" + asset.id + "-tile.png"), ArPlace.tile(asset.id, getResources()));
-                    if (!asset.model) saveQaCard(new java.io.File(out, "place-" + asset.id + ".png"), ArPlace.sticker(asset.id, getResources()));
-                }
+                loader.execute(() -> {
+                    for (ArPlace.Asset asset : ArPlace.ASSETS) {
+                        String name = "place-" + asset.id.replace(':', '-');
+                        try {
+                            saveQaCard(new java.io.File(out, name + "-tile.png"), ArPlace.tile(asset, getResources()));
+                            saveQaCard(new java.io.File(out, name + ".png"), ArPlace.artwork(asset, getResources()));
+                        } catch (Exception error) {
+                            android.util.Log.w("OnThisSiteAR", "QA artwork " + name + " failed: " + error);
+                        }
+                    }
+                    saveQaShadows(out);
+                });
             }
         } catch (Exception error) {
             android.util.Log.w("OnThisSiteAR", "QA place file unreadable: " + error);
