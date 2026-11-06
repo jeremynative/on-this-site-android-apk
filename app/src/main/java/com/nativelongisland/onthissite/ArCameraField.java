@@ -70,7 +70,15 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     private static final double SKY_RISE_DEG = 12;
     private static final long SKY_RISE_MS = 1300;
     private static final long SKY_STAGGER_MS = 280;
-    private static final long REVEAL_GAP_MS = 1400;
+    // Without a compass (the iPlay tablets have only an accelerometer), bubbles come
+    // over time and space as on a phone with ARCore: one at a time where the visitor
+    // looks and nothing is waiting, at least this long apart, or sooner after a few
+    // steps; an unopened one left out of view after a walk (or a long while) makes
+    // way for new ones, so the next room gets its own.
+    private static final long REVEAL_GAP_MS = 4000;
+    private static final int REVEAL_STEPS = 5;
+    private static final int LEFT_BEHIND_STEPS = 10;
+    private static final long LEFT_BEHIND_MS = 40000;
     // After a bubble is put away with its ✕, the next one takes its time.
     private static final long REVEAL_AFTER_DISMISS_MS = 6000;
     // Below this (degrees) the camera is looking at the floor; above the
@@ -93,9 +101,12 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         // Compass mode: the direction and height (degrees) it floats at.
         double bearing;
         double elevation;
-        // Without a compass: placed in front of the visitor when revealed.
+        // Without a compass: placed in front of the visitor when revealed, the steps
+        // walked by then, and since when it has been out of view (0: in view).
         boolean placed;
         long shownAt;
+        int stepsAtReveal;
+        long outOfViewSince;
         // Brought closer (above 1) or pushed away (below) by a drag.
         float near = 1f;
         // The marker or a sky sign: drawn as its own picture, kept after it is opened.
@@ -161,6 +172,14 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     private double pitch;
     private long lastReveal;
     private long revealNotBefore;
+    private int stepsAtLastReveal;
+    // Steps counted from the accelerometer: its reading less gravity (slowly
+    // followed), smoothed, rising through a threshold about twice a second.
+    private int steps;
+    private long lastStepAt;
+    private float gravityLevel = SensorManager.GRAVITY_EARTH;
+    private float stepSignal;
+    private boolean stepArmed = true;
     // Turn tracking from the camera image (no compass).
     private Bitmap flowFrame;
     private int[] flowPixels;
@@ -487,6 +506,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             double nextPitch = -Math.toDegrees(Math.asin(clamp(event.values[2] / g)));
             pitch += (nextPitch - pitch) * 0.12;
             if (Double.isNaN(heading)) heading = 0;
+            countSteps(g, event.timestamp / 1000000L);
             return;
         }
         SensorManager.getRotationMatrixFromVector(rotation, event.values);
@@ -500,6 +520,19 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         if (Double.isNaN(heading)) heading = nextHeading;
         else heading = (heading + angleBetween(heading, nextHeading) * 0.15 + 360) % 360;
         pitch += (nextPitch - pitch) * 0.15;
+    }
+
+    /** A walking step: the bounce above gravity passing 0.6 m/s² (then back under 0.15), at most every 280 ms. */
+    private void countSteps(float magnitude, long nowMs) {
+        gravityLevel += (magnitude - gravityLevel) * 0.02f;
+        stepSignal += ((magnitude - gravityLevel) - stepSignal) * 0.3f;
+        if (stepArmed && stepSignal > 0.6f && nowMs - lastStepAt > 280) {
+            steps++;
+            lastStepAt = nowMs;
+            stepArmed = false;
+        } else if (stepSignal < 0.15f) {
+            stepArmed = true;
+        }
     }
 
     @Override
@@ -660,19 +693,41 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     }
 
     /**
-     * Without a compass: up to three bubbles at a time, each appearing in
-     * front of the visitor near eye level, the next shortly after one is
-     * opened. Not while the camera looks at the floor.
+     * Without a compass: at most three unopened bubbles at a time, each
+     * appearing in front of the visitor near eye level where none is waiting,
+     * at least REVEAL_GAP_MS after the last (or sooner after REVEAL_STEPS steps).
+     * An unopened bubble out of view after LEFT_BEHIND_STEPS steps or
+     * LEFT_BEHIND_MS is let go, to come again later where the visitor is. Not
+     * while the camera looks at the floor or the ceiling.
      */
     private void revealInFront(long now) {
         int placed = 0;
+        boolean waitingInView = false;
         Bubble next = null;
         for (Bubble bubble : bubbles) {
             if (bubble.marker || !host.visible(bubble.item) || host.discovered(bubble.item)) continue;
-            if (bubble.placed) placed++;
-            else if (next == null) next = bubble;
+            if (!bubble.placed) {
+                if (next == null) next = bubble;
+                continue;
+            }
+            double across = Math.abs(angleBetween(heading, bubble.bearing));
+            if (across <= fovAcross / 2 + 10) {
+                bubble.outOfViewSince = 0;
+                waitingInView = true;
+            } else {
+                if (bubble.outOfViewSince == 0) bubble.outOfViewSince = now;
+                if (bubble != dragged && (steps - bubble.stepsAtReveal >= LEFT_BEHIND_STEPS || now - bubble.outOfViewSince >= LEFT_BEHIND_MS)) {
+                    android.util.Log.i("OnThisSiteAR", "Camera-only: let go of " + bubble.item.id + " after " + (steps - bubble.stepsAtReveal) + " steps");
+                    bubble.placed = false;
+                    bubble.outOfViewSince = 0;
+                    continue;
+                }
+            }
+            placed++;
         }
-        if (next == null || placed >= MAX_PLACED || now - lastReveal < REVEAL_GAP_MS || now < revealNotBefore
+        boolean walked = steps - stepsAtLastReveal >= REVEAL_STEPS;
+        if (next == null || placed >= MAX_PLACED || waitingInView || now < revealNotBefore
+            || (lastReveal != 0 && now - lastReveal < REVEAL_GAP_MS && !walked)
             || pitch < LOOKING_DOWN || pitch > LOOKING_UP) return;
         // A spot in view, clear of the others, above the shutter.
         double bestBearing = heading;
@@ -697,7 +752,11 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         next.elevation = bestElevation;
         next.placed = true;
         next.shownAt = now;
+        next.stepsAtReveal = steps;
+        next.outOfViewSince = 0;
         lastReveal = now;
+        stepsAtLastReveal = steps;
+        android.util.Log.i("OnThisSiteAR", "Camera-only: revealed " + next.item.id + " at " + Math.round(bestBearing) + " degrees, " + steps + " steps");
     }
 
     /**
@@ -746,7 +805,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         if (BuildConfig.DEBUG && now - lastFlowLog > 1000) {
             lastFlowLog = now;
             android.util.Log.i("OnThisSiteAR", String.format(java.util.Locale.US,
-                "Camera-only heading=%.1f pitch=%.1f texture=%.0f shift=%.2f", heading, pitch, texture / profile.length, shift));
+                "Camera-only heading=%.1f pitch=%.1f texture=%.0f shift=%.2f steps=%d", heading, pitch, texture / profile.length, shift, steps));
         }
         if (Float.isNaN(shift) || Math.abs(shift) < 0.2f) return;
         heading = (heading - shift / FLOW_WIDTH * fovAcross + 360) % 360;

@@ -481,9 +481,11 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("qa_open_ar_nearby")) {
-            // QA: nearby bubbles from a file pushed to the app's external files folder.
+            // QA: nearby bubbles from a file pushed to the app's external files folder, or
+            // (where Android won't let adb write there) put in its own files with run-as.
             try {
-                java.io.File file = new java.io.File(getExternalFilesDir(null), "ar-nearby.json");
+                java.io.File file = new java.io.File(getFilesDir(), "qa-ar-nearby.json");
+                if (!file.exists()) file = new java.io.File(getExternalFilesDir(null), "ar-nearby.json");
                 openArNearby(new String(java.nio.file.Files.readAllBytes(file.toPath()), java.nio.charset.StandardCharsets.UTF_8));
             } catch (Exception error) {
                 android.util.Log.w("OnThisSiteAR", "QA nearby bubbles unavailable: " + error);
