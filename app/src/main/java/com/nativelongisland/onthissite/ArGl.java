@@ -50,16 +50,24 @@ final class ArGl {
     // u_Wave above 0 the mesh is a unit cloth blowing from its pole edge
     // (texture u = 0): a slow swing about the pole, a travelling ripple, and a
     // quicker flutter, all growing towards the free end.
+    //
+    // With u_Flatten above 0 the same shape is its shadow instead: slid along the
+    // light onto the ground (y = u_Foot.y) and faded with distance from u_Foot.
     private static final String MESH_VERTEX =
         "uniform mat4 u_Mvp;\n"
             + "uniform mat4 u_Model;\n"
+            + "uniform mat4 u_ViewProjection;\n"
             + "uniform float u_Wave;\n"
             + "uniform float u_Time;\n"
+            + "uniform float u_Flatten;\n"
+            + "uniform vec3 u_Foot;\n"
+            + "uniform float u_FadeLength;\n"
             + "attribute vec3 a_Position;\n"
             + "attribute vec3 a_Normal;\n"
             + "attribute vec2 a_TexCoord;\n"
             + "varying vec2 v_TexCoord;\n"
             + "varying vec3 v_Normal;\n"
+            + "varying float v_Fade;\n"
             + "void main() {\n"
             + "  vec3 p = a_Position;\n"
             + "  vec3 n = a_Normal;\n"
@@ -75,7 +83,18 @@ final class ArGl {
             + "  }\n"
             + "  v_TexCoord = a_TexCoord;\n"
             + "  v_Normal = (u_Model * vec4(n, 0.0)).xyz;\n"
-            + "  gl_Position = u_Mvp * vec4(p, 1.0);\n"
+            + "  v_Fade = 1.0;\n"
+            + "  if (u_Flatten > 0.0) {\n"
+            + "    vec3 toward = normalize(vec3(0.35, 0.9, 0.25));\n"
+            + "    vec4 world = u_Model * vec4(p, 1.0);\n"
+            + "    world.xyz -= toward * ((world.y - u_Foot.y) / toward.y);\n"
+            + "    world.y = u_Foot.y + 0.003;\n"
+            + "    v_Fade = 1.0 - clamp(distance(world.xz, u_Foot.xz) / u_FadeLength, 0.0, 1.0);\n"
+            + "    gl_Position = u_ViewProjection * world;\n"
+            + "    gl_Position.z = 0.9999 * gl_Position.w;\n"
+            + "  } else {\n"
+            + "    gl_Position = u_Mvp * vec4(p, 1.0);\n"
+            + "  }\n"
             + "}\n";
     // A flag reads the same from both sides: its back shows the picture
     // un-mirrored, as a printed two-sided flag does.
@@ -83,11 +102,17 @@ final class ArGl {
         "precision mediump float;\n"
             + "varying vec2 v_TexCoord;\n"
             + "varying vec3 v_Normal;\n"
+            + "varying float v_Fade;\n"
             + "uniform sampler2D u_Texture;\n"
             + "uniform float u_UseTexture;\n"
             + "uniform float u_TwoSided;\n"
+            + "uniform float u_ShadowAlpha;\n"
             + "uniform vec4 u_Color;\n"
             + "void main() {\n"
+            + "  if (u_ShadowAlpha > 0.0) {\n"
+            + "    gl_FragColor = vec4(0.0, 0.0, 0.0, u_ShadowAlpha * v_Fade);\n"
+            + "    return;\n"
+            + "  }\n"
             + "  float light = abs(dot(normalize(v_Normal), normalize(vec3(0.35, 0.9, 0.25))));\n"
             + "  vec2 uv = v_TexCoord;\n"
             + "  if (u_TwoSided > 0.5 && !gl_FrontFacing) uv.x = 1.0 - uv.x;\n"
@@ -250,9 +275,38 @@ final class ArGl {
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_UseTexture"), texture != 0 ? 1f : 0f);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_TwoSided"), wave > 0f ? 1f : 0f);
         GLES20.glUniform4fv(GLES20.glGetUniformLocation(meshProgram, "u_Color"), 1, color, 0);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Flatten"), 0f);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_ShadowAlpha"), 0f);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture);
         GLES20.glUniform1i(GLES20.glGetUniformLocation(meshProgram, "u_Texture"), 0);
+        drawElements(mesh);
+    }
+
+    /**
+     * The mesh's shadow on the ground at foot (world x, y, z): the shape slid
+     * along the light onto that level, darkest at the foot and fading out by
+     * fadeLength metres. Call before the meshes themselves. Every shadow
+     * fragment gets the same far depth, so where shadows overlap (the pole's and
+     * the cloth's, or a fold of the cloth) the first one wins instead of the
+     * two darkening each other, and the real meshes still draw over them.
+     */
+    void drawShadow(float[] viewProjection, float[] model, Mesh mesh, float wave, float time, float[] foot, float fadeLength, float alpha) {
+        if (meshProgram == 0) return;
+        Matrix.multiplyMM(mvp, 0, viewProjection, 0, model, 0);
+        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_Mvp"), 1, false, mvp, 0);
+        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_Model"), 1, false, model, 0);
+        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_ViewProjection"), 1, false, viewProjection, 0);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Wave"), wave);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Time"), time);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Flatten"), 1f);
+        GLES20.glUniform3fv(GLES20.glGetUniformLocation(meshProgram, "u_Foot"), 1, foot, 0);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_FadeLength"), fadeLength);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_ShadowAlpha"), alpha);
+        drawElements(mesh);
+    }
+
+    private void drawElements(Mesh mesh) {
         int position = GLES20.glGetAttribLocation(meshProgram, "a_Position");
         int normal = GLES20.glGetAttribLocation(meshProgram, "a_Normal");
         int texCoord = GLES20.glGetAttribLocation(meshProgram, "a_TexCoord");

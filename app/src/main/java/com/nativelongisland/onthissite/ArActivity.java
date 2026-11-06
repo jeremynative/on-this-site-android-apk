@@ -498,7 +498,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         // The Place drawer's shared pieces; each sticker's and flag's artwork is
         // drawn the first time it is used (placeArtwork).
         gl.queueTexture("place:shadow", ArPlace.shadowBlob());
-        gl.queueTexture("place:shadow-streak", ArPlace.shadowStreak());
         gl.queueTexture("place:ring", ArPlace.ring());
         gl.queueTexture("place:outline", ArPlace.outline());
     }
@@ -526,11 +525,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
         if (videoFrameSource == null) return;
         gl.drawBackground(videoFrameSource);
-        if (videoViewProjection != null && !videoMeshes.isEmpty()) {
-            gl.beginMeshes();
-            for (MeshDraw mesh : videoMeshes) gl.drawMesh(videoViewProjection, mesh.model, mesh.mesh, gl.texture(mesh.texture), mesh.color, mesh.wave, placeSeconds());
-            gl.endMeshes();
-        }
+        if (videoViewProjection != null && !videoMeshes.isEmpty()) drawMeshes(videoViewProjection, videoMeshes);
         gl.beginQuads();
         if (videoViewProjection != null) {
             for (Draw draw : videoDraws) gl.drawQuad(videoViewProjection, draw.model, gl.texture(draw.texture), draw.alpha);
@@ -608,9 +603,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             videoDraws = draws;
             videoMeshes = meshes;
             videoViewProjection = viewProjection;
-            gl.beginMeshes();
-            for (MeshDraw mesh : meshes) gl.drawMesh(viewProjection, mesh.model, mesh.mesh, gl.texture(mesh.texture), mesh.color, mesh.wave, placeSeconds());
-            gl.endMeshes();
+            drawMeshes(viewProjection, meshes);
             gl.beginQuads();
             for (Draw draw : draws) gl.drawQuad(viewProjection, draw.model, gl.texture(draw.texture), draw.alpha);
             gl.endQuads();
@@ -1225,6 +1218,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (asset.model) {
             float[] pole = base.clone();
             Matrix.scaleM(pole, 0, scale, scale, scale);
+            int first = meshes.size();
             meshes.add(MeshDraw.solid(POLE, pole.clone(), new float[] {0.78f, 0.8f, 0.82f, 1f}));
             float[] finial = pole.clone();
             Matrix.translateM(finial, 0, 0f, ArPlace.POLE_HEIGHT + ArPlace.FINIAL_RADIUS * 0.6f, 0f);
@@ -1236,7 +1230,12 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 Matrix.scaleM(cloth, 0, ArPlace.FLAG_WIDTH, ArPlace.FLAG_HEIGHT, 1f);
                 meshes.add(MeshDraw.cloth(CLOTH, cloth, asset.texture(), ArPlace.FLAG_WAVE * scale));
             }
-            addFlagShadow(pole, scale, distance, draws);
+            float[] foot = {pole[12], pole[13], pole[14]};
+            for (int index = first; index < meshes.size(); index++) {
+                meshes.get(index).shadowFoot = foot;
+                meshes.get(index).shadowFade = 3.5f * scale;
+            }
+            addFootShadow(foot, scale, distance, draws);
             if (id != null) {
                 // The tap box turns to face the visitor, so the flag can be tapped from any side.
                 float[] middle = new float[4];
@@ -1286,28 +1285,31 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     }
 
     /**
-     * The flag's shadow on the ground, so it stands there rather than floating:
-     * a soft dark patch at the foot of the pole, and a fainter streak that
-     * stretches away from the light and fades out.
+     * A small soft dark patch where the pole meets the ground, so it looks
+     * planted. The pole and flag cast their own shadow (drawMeshes).
      */
-    private void addFlagShadow(float[] pole, float scale, float distance, List<Draw> draws) {
-        float[] foot = {pole[12], pole[13], pole[14]};
+    private void addFootShadow(float[] foot, float scale, float distance, List<Draw> draws) {
         float[] patch = new float[16];
         Matrix.setIdentityM(patch, 0);
         Matrix.translateM(patch, 0, foot[0], foot[1] + 0.002f, foot[2]);
         Matrix.rotateM(patch, 0, -90f, 1f, 0f, 0f);
-        Matrix.scaleM(patch, 0, 0.55f * scale, 0.55f * scale, 1f);
-        draws.add(Draw.of(null, patch, "place:shadow", 0.9f, distance + 0.02f));
-        float[] away = ArPlace.SHADOW_DIRECTION;
-        float length = 1.7f * scale;
-        float[] streak = new float[16];
-        Matrix.setIdentityM(streak, 0);
-        Matrix.translateM(streak, 0, foot[0] + away[0] * length / 2f, foot[1] + 0.003f, foot[2] + away[2] * length / 2f);
-        // Its length (the quad's x) along the shadow's direction, lying flat.
-        Matrix.rotateM(streak, 0, (float) Math.toDegrees(Math.atan2(-away[2], away[0])), 0f, 1f, 0f);
-        Matrix.rotateM(streak, 0, -90f, 1f, 0f, 0f);
-        Matrix.scaleM(streak, 0, length, 0.5f * scale, 1f);
-        draws.add(Draw.of(null, streak, "place:shadow-streak", 0.85f, distance + 0.021f));
+        Matrix.scaleM(patch, 0, 0.16f * scale, 0.16f * scale, 1f);
+        draws.add(Draw.of(null, patch, "place:shadow", 0.75f, distance + 0.02f));
+    }
+
+    /**
+     * The placed 3D things: first their shadows, flattened onto the ground along
+     * the same light they are shaded with (so a flag's shadow is its pole and
+     * its cloth, moving with the wind), then the things themselves.
+     */
+    private void drawMeshes(float[] viewProjection, List<MeshDraw> meshes) {
+        float time = placeSeconds();
+        gl.beginMeshes();
+        for (MeshDraw mesh : meshes) {
+            if (mesh.shadowFoot != null) gl.drawShadow(viewProjection, mesh.model, mesh.mesh, mesh.wave, time, mesh.shadowFoot, mesh.shadowFade, 0.42f);
+        }
+        for (MeshDraw mesh : meshes) gl.drawMesh(viewProjection, mesh.model, mesh.mesh, gl.texture(mesh.texture), mesh.color, mesh.wave, time);
+        gl.endMeshes();
     }
 
     /** QA builds: places what files/qa-ar-place names, once tracking starts, for a screenshot. */
@@ -1747,7 +1749,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private static void saveQaShadows(java.io.File out) {
         try {
             saveQaCard(new java.io.File(out, "place-shadow.png"), ArPlace.shadowBlob());
-            saveQaCard(new java.io.File(out, "place-shadow-streak.png"), ArPlace.shadowStreak());
         } catch (Exception error) {
             android.util.Log.w("OnThisSiteAR", "QA shadows failed: " + error);
         }
@@ -2962,6 +2963,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         String texture;
         float[] color = {1f, 1f, 1f, 1f};
         float wave;
+        // Where its shadow falls (world x, y, z of the ground it stands on) and how far it fades out; null casts none.
+        float[] shadowFoot;
+        float shadowFade;
 
         static MeshDraw solid(ArGl.Mesh mesh, float[] model, float[] color) {
             MeshDraw draw = new MeshDraw();

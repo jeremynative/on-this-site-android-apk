@@ -10,8 +10,6 @@ import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.graphics.PorterDuff;
-import android.graphics.PorterDuffXfermode;
 import android.graphics.RadialGradient;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -49,9 +47,6 @@ final class ArPlace {
     // The ripple at the cloth's free end (metres); the whole cloth also swings
     // about the pole by twice this, and a quicker flutter rides on top.
     static final float FLAG_WAVE = 0.08f;
-    // Where the shading's light comes from (as in ArGl's mesh shader), so the
-    // flag's shadow falls the other way along the ground.
-    static final float[] SHADOW_DIRECTION = {-0.814f, 0f, -0.581f};
 
     /** A sticker's words: in the graffiti face (lines with drips), plainly for the other looks, and its colour. */
     static final class Phrase {
@@ -488,25 +483,6 @@ final class ArPlace {
             new int[] {Color.argb(150, 0, 0, 0), Color.argb(70, 0, 0, 0), Color.argb(0, 0, 0, 0)},
             new float[] {0f, 0.35f, 1f}, Shader.TileMode.CLAMP));
         canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint);
-        return bitmap;
-    }
-
-    /** The flag's shadow along the ground: darkest at the pole (left), fading away from it and at its sides. */
-    static Bitmap shadowStreak() {
-        int width = 512;
-        int height = 128;
-        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        Paint paint = new Paint();
-        paint.setShader(new LinearGradient(0, 0, width, 0,
-            new int[] {Color.argb(120, 0, 0, 0), Color.argb(55, 0, 0, 0), Color.argb(0, 0, 0, 0)},
-            new float[] {0f, 0.4f, 1f}, Shader.TileMode.CLAMP));
-        canvas.drawRect(0, 0, width, height, paint);
-        paint.setShader(new LinearGradient(0, 0, 0, height,
-            new int[] {Color.argb(0, 0, 0, 0), Color.argb(255, 0, 0, 0), Color.argb(0, 0, 0, 0)},
-            new float[] {0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
-        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
-        canvas.drawRect(0, 0, width, height, paint);
         return bitmap;
     }
 
