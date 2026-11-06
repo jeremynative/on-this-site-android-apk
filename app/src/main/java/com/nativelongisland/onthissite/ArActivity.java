@@ -1154,8 +1154,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             }
             if (item.isHere() || item.isSky()) {
                 addMarker(draws, item, point, cameraPose, cameraPoint, now, stopped);
-                if (item.isHere()) addHereDismiss(draws, drawn, distance);
-                else addCardDismiss(draws, drawn, SKY_WIDTH_M, distance);
+                // A sign is a window and has its ✕; the pin's orb gets one once it opens into its card.
+                if (item.isSky()) addCardDismiss(draws, drawn, SKY_WIDTH_M, distance);
                 // Moved by hand, it opens with a tap, like a bubble.
                 if (item.isHere() && nudge == null && distance < DISCOVER_DISTANCE && discovered.add(item.id)) {
                     runOnUiThread(() -> onDiscovered(item));
@@ -1182,11 +1182,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 float pulse = 0.85f + 0.15f * (float) Math.sin(now / 300.0);
                 // A find over a spot across the yard stays big enough to see.
                 float size = item.hasSpot() ? Math.max(0.26f, distance * 0.05f) : 0.26f;
+                // No ✕ on an orb (a reach for it too easily put it away); its card has one once opened.
                 draws.add(Draw.billboard(item.id, point, cameraPose, key, size, size, pulse, distance));
-                // On the bubble's white ring (a quarter of the picture's width out), up and to the right.
-                float badge = dismissSize(size, 0.19f, 0.27f, distance);
-                float along = (0.25f * size + 0.2f * badge) * 0.7071f;
-                addDismiss(draws, drawn, size, size, along, along, badge);
             }
         }
         for (String id : stopped) {
@@ -1220,17 +1217,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         float badge = dismissSize(width, 0.12f, 0.2f, distance);
         float inset = 0.3f * badge;
         addDismiss(draws, drawn, width, height, width / 2f - inset, height / 2f - inset, badge);
-    }
-
-    /** The ✕ on the "You are here" pin's orb (not the corner of its picture, which is empty). */
-    private void addHereDismiss(List<Draw> draws, int drawn, float distance) {
-        if (draws.size() <= drawn) return;
-        float width = HERE_WIDTH_M;
-        float height = width * gl.aspect(draws.get(drawn).texture);
-        float badge = dismissSize(width, 0.12f, 0.18f, distance);
-        float orbY = height / 2f - ArCards.HERE_ORB_Y * width;
-        float along = (ArCards.HERE_RING * width + 0.2f * badge) * 0.7071f;
-        addDismiss(draws, drawn, width, height, along, orbY + along, badge);
     }
 
     /**
