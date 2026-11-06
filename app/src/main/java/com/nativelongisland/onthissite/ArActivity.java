@@ -82,6 +82,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private static final int REQUEST_CAMERA = 41;
     private static final int REQUEST_MICROPHONE = 42;
     private static final String PREF_ASKED_MICROPHONE = "asked_microphone";
+    // The name on the selfie name tag; it stays on this phone.
+    private static final String PREF_SELFIE_NAME = "selfie_name";
     private static final float[] IDENTITY = new float[16];
 
     static {
@@ -275,10 +277,18 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private GLSurfaceView surface;
     private boolean cameraOnly;
     private ArCameraField cameraField;
+    // Selfie mode: the front camera and the visitor's name tag, in place of AR.
+    private ArSelfie selfie;
+    private boolean selfieMode;
+    private TextView modeAr;
+    private TextView modeSelfie;
+    private View hideButton;
+    private View statusCapsule;
     private Session session;
     private boolean installRequested;
     private boolean resumed;
     private int availabilityChecks;
+    private int resumeRetries;
     private boolean textureBound;
     private int viewportWidth = 1;
     private int viewportHeight = 1;
@@ -415,6 +425,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     private void startAr() {
         if (scene == null || !resumed) return;
+        if (selfieMode) {
+            selfie.start();
+            return;
+        }
         if (cameraOnly) {
             if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[] {Manifest.permission.CAMERA}, REQUEST_CAMERA);
@@ -458,10 +472,16 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         try {
             session.resume();
         } catch (Exception error) {
+            // Just after selfie mode the front camera may still be closing.
+            if (resumeRetries++ < 6) {
+                surface.postDelayed(this::startAr, 300);
+                return;
+            }
             showFatal("The camera is busy in another app. Close it and try again.");
             session = null;
             return;
         }
+        resumeRetries = 0;
         surface.onResume();
     }
 
@@ -473,7 +493,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         compass.stop(sensors);
         if (locations != null) locations.removeUpdates(fixListener);
         if (cameraField != null) cameraField.stop();
-        if (session != null) {
+        if (selfie != null) selfie.stop();
+        if (session != null && !selfieMode) {
             surface.onPause();
             session.pause();
         }
@@ -1724,6 +1745,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     }
 
     private String hintText() {
+        if (selfieMode) return selfieHint();
         if (cameraOnly) {
             if (bubblesHidden) return "";
             String turn = cameraField.turnHint();
@@ -1774,6 +1796,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         } else {
             addArSurface(root);
         }
+        selfie = new ArSelfie(this, selfieHost());
+        selfie.setVisibility(View.GONE);
+        root.addView(selfie, new FrameLayout.LayoutParams(-1, -1));
         buildOverlay(root);
     }
 
@@ -1943,6 +1968,132 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         });
         show.run();
         return button;
+    }
+
+    /** "AR  Selfie": the AR camera, or the front camera with the visitor's name tag. */
+    private LinearLayout buildModeSwitch() {
+        LinearLayout modes = row();
+        modes.setBackground(rounded(Color.argb(150, 20, 26, 23), 18));
+        modes.setPadding(dp(4), dp(4), dp(4), dp(4));
+        modeAr = text(14, true, "AR");
+        modeAr.setContentDescription("AR camera");
+        modeAr.setOnClickListener(v -> setSelfieMode(false));
+        modeSelfie = text(14, true, "Selfie");
+        modeSelfie.setContentDescription("Selfie camera, with your name tag");
+        modeSelfie.setOnClickListener(v -> setSelfieMode(true));
+        for (TextView mode : new TextView[] {modeAr, modeSelfie}) {
+            mode.setGravity(Gravity.CENTER);
+            mode.setPadding(dp(16), dp(6), dp(16), dp(6));
+            modes.addView(mode, new LinearLayout.LayoutParams(-2, -2));
+        }
+        showMode();
+        return modes;
+    }
+
+    private void showMode() {
+        modeAr.setBackground(selfieMode ? null : rounded(Color.rgb(46, 125, 84), 14));
+        modeSelfie.setBackground(selfieMode ? rounded(Color.rgb(46, 125, 84), 14) : null);
+        modeAr.setTextColor(selfieMode ? Color.rgb(200, 214, 205) : Color.WHITE);
+        modeSelfie.setTextColor(selfieMode ? Color.WHITE : Color.rgb(200, 214, 205));
+    }
+
+    /**
+     * Selfie mode puts AR to sleep (the bubbles, stickers and flag stay where
+     * they were) and opens the front camera with the visitor's name tag; AR
+     * mode closes it and wakes AR again.
+     */
+    private void setSelfieMode(boolean on) {
+        if (on == selfieMode) return;
+        stopArVideo();
+        if (on) {
+            if (cameraField != null) cameraField.stop();
+            if (session != null) {
+                surface.onPause();
+                session.pause();
+            }
+            selfieMode = true;
+            infoPanel.setVisibility(View.GONE);
+            placeDrawer.setVisibility(View.GONE);
+            placeTools.setVisibility(View.GONE);
+            foundPill.setVisibility(View.GONE);
+            selfie.setName(selfieName());
+            selfie.setVisibility(View.VISIBLE);
+            startAr();
+        } else {
+            selfie.stop();
+            selfie.setVisibility(View.GONE);
+            selfieMode = false;
+            startAr();
+            showPlaceTools();
+        }
+        placeButton.setVisibility(on || cameraOnly ? View.INVISIBLE : View.VISIBLE);
+        hideButton.setVisibility(on ? View.INVISIBLE : View.VISIBLE);
+        statusCapsule.setVisibility(on ? View.INVISIBLE : View.VISIBLE);
+        shutter.setContentDescription(on ? "Take a selfie" : "Take a photo. Hold to record a video.");
+        showMode();
+        lastStatusText = "";
+        hint.setText(on ? selfieHint() : "");
+        hint.setVisibility(on ? View.VISIBLE : View.GONE);
+    }
+
+    private String selfieHint() {
+        return selfieName().isEmpty() ? "Tap the name tag to write your name" : "Drag the name tag to move it";
+    }
+
+    private String selfieName() {
+        return getPreferences(MODE_PRIVATE).getString(PREF_SELFIE_NAME, "");
+    }
+
+    /** Writing the name on the tag; it is kept on this phone for the next selfie. */
+    private void editSelfieName() {
+        android.widget.EditText field = new android.widget.EditText(this);
+        field.setSingleLine(true);
+        field.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PERSON_NAME
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+        field.setFilters(new android.text.InputFilter[] {new android.text.InputFilter.LengthFilter(30)});
+        field.setHint("Your name");
+        field.setText(selfieName());
+        field.setSelection(field.getText().length());
+        FrameLayout box = new FrameLayout(this);
+        box.setPadding(dp(22), dp(6), dp(22), 0);
+        box.addView(field);
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
+            .setTitle("_____ nutusuwis")
+            .setMessage("_____ is my name. Write yours for your name tag; it stays on this phone and shows only on the selfies you take.")
+            .setView(box)
+            .setPositiveButton("Done", (shown, which) -> {
+                String name = field.getText().toString().trim().replaceAll("\\s+", " ");
+                getPreferences(MODE_PRIVATE).edit().putString(PREF_SELFIE_NAME, name).apply();
+                selfie.setName(name);
+                hint.setText(selfieHint());
+            })
+            .setNegativeButton("Cancel", null)
+            .create();
+        if (dialog.getWindow() != null) dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        // The keyboard's ✓ (or a keyboard's Enter) is Done too.
+        field.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        field.setOnEditorActionListener((view, action, event) -> {
+            boolean enter = event != null && event.getKeyCode() == android.view.KeyEvent.KEYCODE_ENTER;
+            if (action != android.view.inputmethod.EditorInfo.IME_ACTION_DONE && !enter) return false;
+            if (!enter || event.getAction() == android.view.KeyEvent.ACTION_DOWN) {
+                dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();
+            }
+            return true;
+        });
+        dialog.show();
+        field.requestFocus();
+    }
+
+    private ArSelfie.Host selfieHost() {
+        return new ArSelfie.Host() {
+            @Override public void editName() {
+                editSelfieName();
+            }
+            @Override public void failed(String message) {
+                hint.setText(message);
+                hint.setVisibility(View.VISIBLE);
+            }
+        };
     }
 
     /**
@@ -2193,6 +2344,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         close.setOnClickListener(v -> finish());
         titleRow.addView(close, new LinearLayout.LayoutParams(dp(46), dp(46)));
         LinearLayout capsule = column();
+        statusCapsule = capsule;
         capsule.setBackground(rounded(Color.argb(150, 20, 26, 23), 23));
         capsule.setPadding(dp(16), dp(7), dp(16), dp(9));
         TextView heading = text(16, true, scene.title);
@@ -2276,10 +2428,16 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             shutterParams.rightMargin = dp(28);
             controls.addView(shutter, shutterParams);
             // Hide all / Show all, right of the shutter (keeping it centred).
-            controls.addView(buildHideButton(), new LinearLayout.LayoutParams(dp(68), -2));
+            hideButton = buildHideButton();
+            controls.addView(hideButton, new LinearLayout.LayoutParams(dp(68), -2));
+            // AR or Selfie, above the shutter, as a phone's camera switches modes.
+            LinearLayout.LayoutParams modeParams = new LinearLayout.LayoutParams(-2, -2);
+            modeParams.gravity = Gravity.CENTER_HORIZONTAL;
+            modeParams.topMargin = dp(10);
+            bottom.addView(buildModeSwitch(), modeParams);
             LinearLayout.LayoutParams controlsParams = new LinearLayout.LayoutParams(-2, -2);
             controlsParams.gravity = Gravity.CENTER_HORIZONTAL;
-            controlsParams.topMargin = dp(12);
+            controlsParams.topMargin = dp(10);
             bottom.addView(controls, controlsParams);
         }
 
@@ -2588,14 +2746,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     private void takeArPhoto() {
         if (captureWanted) return;
-        captureWanted = !cameraOnly;
+        captureWanted = !cameraOnly && !selfieMode;
         flash.animate().cancel();
         flash.setAlpha(0.85f);
         flash.setVisibility(View.VISIBLE);
         flash.animate().alpha(0f).setDuration(350).withEndAction(() -> flash.setVisibility(View.GONE)).start();
         vibrateConfirm();
-        if (cameraOnly) {
-            Bitmap photo = cameraField.capture();
+        if (cameraOnly || selfieMode) {
+            Bitmap photo = selfieMode ? selfie.capture() : cameraField.capture();
             if (photo != null) loader.execute(() -> savePhoto(photo));
         }
     }
@@ -2718,7 +2876,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         photoSavedText.setText((inPhotos ? "Saved to your photos, in the On This Site album."
             : shareable != null ? "This phone didn't let it into your photos, but you can still share it."
             : "The photo couldn't be saved.")
-            + (recordedVideo ? "" : "\nHold the camera button to record a video."));
+            + (recordedVideo || selfieMode ? "" : "\nHold the camera button to record a video."));
         photoShare.setVisibility(shareable != null ? View.VISIBLE : View.GONE);
         photoPost.setVisibility(shareable != null && visitorsItem() != null ? View.VISIBLE : View.GONE);
         photoSaved.setVisibility(View.VISIBLE);
@@ -2766,7 +2924,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     /** Holding the shutter: records a video until it is let go, up to a minute. */
     private boolean startArVideo() {
-        if (video != null || captureWanted || (!cameraOnly && session == null)) return false;
+        if (selfieMode || video != null || captureWanted || (!cameraOnly && session == null)) return false;
         boolean microphone = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
         android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
         if (!microphone && !prefs.getBoolean(PREF_ASKED_MICROPHONE, false)) {
@@ -3051,6 +3209,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             photoViewer.setVisibility(View.GONE);
         } else if (infoPanel != null && infoPanel.getVisibility() == View.VISIBLE) {
             infoPanel.setVisibility(View.GONE);
+        } else if (selfieMode) {
+            setSelfieMode(false);
         } else {
             finish();
         }

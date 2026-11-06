@@ -80,6 +80,37 @@ final class ArCards {
         return label;
     }
 
+    /**
+     * The selfie's name tag, like the site's people greet: "Jeremy nutusuwis"
+     * over "(Jeremy is my name)", or blanks to fill before a name is written.
+     */
+    static Bitmap nameTag(String name) {
+        String who = name == null || name.trim().isEmpty() ? "_______" : name.trim();
+        int width = 760;
+        int pad = 34;
+        int accent = Color.rgb(126, 211, 158);
+        TextPaint namePaint = textPaint(70, Color.WHITE, true);
+        TextPaint meaningPaint = textPaint(36, Color.rgb(205, 222, 211), false);
+        StaticLayout line = centred(who + " nutusuwis", namePaint, width - pad * 2, 3);
+        StaticLayout meaning = centred("(" + who + " is my name)", meaningPaint, width - pad * 2, 2);
+        int height = pad + line.getHeight() + 8 + meaning.getHeight() + pad;
+        Bitmap label = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(label);
+        Paint background = new Paint(Paint.ANTI_ALIAS_FLAG);
+        background.setColor(Color.argb(215, 18, 24, 22));
+        canvas.drawRoundRect(new RectF(0, 0, width, height), 40, 40, background);
+        Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
+        edge.setStyle(Paint.Style.STROKE);
+        edge.setStrokeWidth(5);
+        edge.setColor(accent);
+        canvas.drawRoundRect(new RectF(2.5f, 2.5f, width - 2.5f, height - 2.5f), 38, 38, edge);
+        canvas.translate(pad, pad);
+        line.draw(canvas);
+        canvas.translate(0, line.getHeight() + 8);
+        meaning.draw(canvas);
+        return label;
+    }
+
     static Bitmap promptCard(ArScene.Item item) {
         return promptCard(item, null);
     }
