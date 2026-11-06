@@ -49,6 +49,37 @@ final class ArCards {
     }
 
     /** Language prompt or audio clip card, revealed once the visitor walks up to an orb. */
+    /**
+     * The small label a recognized thing floats as, on the thing itself: what it
+     * is (in English, small) over its words. The opened card has the rest.
+     */
+    static Bitmap objectLabel(ArScene.Item item) {
+        int width = 720;
+        int pad = 30;
+        int accent = layerColor(item.layer);
+        TextPaint whatPaint = textPaint(30, accent, true);
+        whatPaint.setLetterSpacing(0.08f);
+        TextPaint wordPaint = textPaint(64, Color.WHITE, true);
+        StaticLayout what = layout(item.title.toUpperCase(java.util.Locale.US), whatPaint, width - pad * 2);
+        StaticLayout words = layout(item.brief, wordPaint, width - pad * 2);
+        int height = pad + what.getHeight() + 6 + words.getHeight() + pad;
+        Bitmap label = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(label);
+        Paint background = new Paint(Paint.ANTI_ALIAS_FLAG);
+        background.setColor(Color.argb(215, 18, 24, 22));
+        canvas.drawRoundRect(new RectF(0, 0, width, height), 36, 36, background);
+        Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
+        edge.setStyle(Paint.Style.STROKE);
+        edge.setStrokeWidth(5);
+        edge.setColor(accent);
+        canvas.drawRoundRect(new RectF(2.5f, 2.5f, width - 2.5f, height - 2.5f), 34, 34, edge);
+        canvas.translate(pad, pad);
+        what.draw(canvas);
+        canvas.translate(0, what.getHeight() + 6);
+        words.draw(canvas);
+        return label;
+    }
+
     static Bitmap promptCard(ArScene.Item item) {
         return promptCard(item, null);
     }
