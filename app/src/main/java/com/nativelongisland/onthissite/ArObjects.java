@@ -26,7 +26,8 @@ import java.util.regex.Pattern;
 /**
  * Recognizes what the camera is pointed at and names it in Algonquian
  * languages: a door (a house's, a car's) is sqôt in Mohegan and quont in
- * Natick. The middle of the camera image is described on the device itself
+ * Natick; a turtle, a house, a beach and the rest of the Knowledgebase's
+ * word lists have their Shinnecock and Poosepatuck words. The middle of the camera image is described on the device itself
  * (Gemini Nano through ML Kit's image description), so no picture leaves the
  * phone. It needs Android 8 and a phone with on-device AI (the Galaxy S25,
  * recent Pixels); elsewhere it stays off.
@@ -43,17 +44,25 @@ final class ArObjects {
         }
     }
 
-    /** A thing the camera can name: how a description mentions it, and its words. */
+    /**
+     * A thing the camera can name: how a description mentions it, its words,
+     * what its opened card says about where the words come from, and the
+     * sources (the card's small print).
+     */
     static final class Thing {
         final String key;
         final String english;
         final Pattern mention;
         final Word[] words;
+        final String about;
+        final String credit;
 
-        Thing(String key, String english, String mention, Word... words) {
+        Thing(String key, String english, String mention, String about, String credit, Word... words) {
             this.key = key;
             this.english = english;
             this.mention = Pattern.compile(mention, Pattern.CASE_INSENSITIVE);
+            this.about = about;
+            this.credit = credit;
             this.words = words;
         }
 
@@ -75,18 +84,24 @@ final class ArObjects {
         String title() {
             return english.substring(0, 1).toUpperCase(Locale.US) + english.substring(1);
         }
+
+        /** The opened card's text: where the word comes from, then the languages' story. */
+        String notes() {
+            return about + "\n\n" + LANGUAGE_NOTES;
+        }
+
+        /** The opened card's small print. */
+        String sources() {
+            return credit + "; " + LANGUAGE_SOURCES;
+        }
     }
 
-    // What an opened label teaches about the languages its words come from. Drawn
-    // from On This Site's "Algonquian Language" Knowledgebase article and its sources
+    // What every opened label teaches about Long Island's languages. Drawn from On
+    // This Site's "Algonquian Language" Knowledgebase article and its sources
     // (LANGUAGE_SOURCES); nothing here is new.
-    static final String LANGUAGE_NOTES = "About these languages\n"
-        + "Mohegan and Natick are Southern New England Algonquian languages, related to the languages once spoken across "
-        + "Long Island. There was no single language across the island: eastern communities kept language ties with peoples "
-        + "across Long Island Sound and southern New England, and much of western Long Island had close Munsee and Lenape ties.\n\n"
-        + "Why Mohegan and Natick words?\n"
-        + "Long Island's own languages were never documented completely. Language reclamation, including Unkechaug and "
-        + "Shinnecock efforts, uses surviving word lists, related Eastern Algonquian languages and community teaching.\n\n"
+    static final String LANGUAGE_NOTES = "Long Island's languages\n"
+        + "There was no single language across Long Island: eastern communities kept language ties with peoples across "
+        + "Long Island Sound and southern New England, and much of western Long Island had close Munsee and Lenape ties.\n\n"
         + "What happened to Long Island's languages?\n"
         + "Colonialism, schooling, land loss and pressure to use English interrupted everyday fluency. Surviving word lists "
         + "and family memories remain important records, and language reclamation treats dormancy as a condition that can "
@@ -100,20 +115,97 @@ final class ArObjects {
         + "Eastern Long Island (2001), pp. 28-32, 159-160; Gaynell Stone, The Shinnecock Indians: A Culture History (1983), "
         + "pp. 314, 338, 351";
 
+    // The word lists the Knowledgebase article gives, and how a word from each is introduced.
+    private static final String SHINNECOCK_POOSEPATUCK = "Shinnecock and Poosepatuck";
+    private static final String HARRINGTON_ABOUT = "About this word\n"
+        + "It is from M. R. Harrington's 1903 Shinnecock notes, reprinted in Bonvillain and Stone, Languages and Lore of the "
+        + "Long Island Indians (p. 22): a short Poosepatuck and Shinnecock word list. Lists like it are useful for "
+        + "environmental education, but they are not a complete dictionary.";
+    private static final String HARRINGTON_CREDIT = "M. R. Harrington (1903), in Bonvillain and Stone, Languages and Lore "
+        + "of the Long Island Indians, p. 22";
+    private static final String ELDERS_ABOUT = "About this word\n"
+        + "It is recorded in Natural Resources Identified by Shinnecock Elders (Shinnecock Environmental Department, 2014).";
+    private static String eldersCredit(int page) {
+        return "Shinnecock Environmental Department, Natural Resources Identified by Shinnecock Elders, April 4, 2014, PDF p. " + page;
+    }
+
     static final Thing[] THINGS = {
         // A house's front door, a car door, a doorway, a doorknob or frame, an entrance;
         // and the side of a car (its doors), which a description may name only as the car.
         new Thing("door", "door",
             "\\bdoor(s|way|ways|knob|knobs|frame|frames|step|steps)?\\b|\\b(entrance|entranceway|entryway)\\b"
                 + "|\\b(car|truck|van|suv|vehicle)\\b[^.]*\\b(side|handle|handles)\\b",
+            "About these words\n"
+                + "Mohegan and Natick are Southern New England Algonquian languages, related to the languages once spoken "
+                + "across Long Island. Long Island's own languages were never documented completely; language reclamation, "
+                + "including Unkechaug and Shinnecock efforts, uses surviving word lists, related Eastern Algonquian languages "
+                + "and community teaching.",
+            "Mohegan and Natick words for door",
             new Word("Mohegan", "sqôt"), new Word("Natick", "quont")),
+        new Thing("turtle", "turtle", "\\b(turtle|turtles|tortoise|tortoises|terrapin|terrapins)\\b",
+            HARRINGTON_ABOUT + " Shinnecock Elders recorded it too, as Matcik: turtles as a group, not only box turtles.",
+            HARRINGTON_CREDIT + "; " + eldersCredit(9),
+            new Word(SHINNECOCK_POOSEPATUCK, "matcík")),
+        new Thing("snake", "snake", "\\b(snake|snakes|serpent|serpents)\\b",
+            HARRINGTON_ABOUT + " Shinnecock Elders recorded it too, as Skuk: snakes as a group.",
+            HARRINGTON_CREDIT + "; " + eldersCredit(10),
+            new Word(SHINNECOCK_POOSEPATUCK, "skúk")),
+        new Thing("deer", "deer", "\\b(deer|fawn|fawns)\\b",
+            ELDERS_ABOUT, eldersCredit(9),
+            new Word("Shinnecock", "Autuk")),
+        new Thing("raccoon", "raccoon", "\\b(raccoon|raccoons)\\b",
+            ELDERS_ABOUT + " Its original question mark makes this a tentative form.", eldersCredit(11),
+            new Word("Shinnecock", "Ahrahoon?")),
+        new Thing("oysters", "oysters", "\\b(oyster|oysters)\\b",
+            ELDERS_ABOUT, eldersCredit(4),
+            new Word("Shinnecock", "Chunckoo")),
+        new Thing("shellfish", "shellfish", "\\b(shellfish|shell fish|clam|clams|mussel|mussels|scallop|scallops|quahog|quahogs|whelk|whelks|seashell|seashells)\\b",
+            HARRINGTON_ABOUT, HARRINGTON_CREDIT,
+            new Word(SHINNECOCK_POOSEPATUCK, "sétcawa")),
+        new Thing("beach", "sea beach", "\\b(beach|beaches|seashore|shore|shoreline|seaside)\\b",
+            HARRINGTON_ABOUT, HARRINGTON_CREDIT,
+            new Word(SHINNECOCK_POOSEPATUCK, "síwã a")),
+        new Thing("rain", "rain", "\\b(rain|raining|rainy|rainfall|raindrops)\\b",
+            HARRINGTON_ABOUT, HARRINGTON_CREDIT,
+            new Word(SHINNECOCK_POOSEPATUCK, "kémio")),
+        new Thing("house", "house", "\\b(house|houses|home|homes|cottage|cottages|cabin|cabins)\\b",
+            HARRINGTON_ABOUT, HARRINGTON_CREDIT,
+            new Word(SHINNECOCK_POOSEPATUCK, "wíkam")),
+        new Thing("corn-mush", "corn mush", "\\b(corn mush|mush|porridge|grits|polenta|cornmeal)\\b",
+            HARRINGTON_ABOUT, HARRINGTON_CREDIT,
+            new Word(SHINNECOCK_POOSEPATUCK, "suppán")),
+        new Thing("woman", "woman", "\\b(woman|women)\\b",
+            HARRINGTON_ABOUT, HARRINGTON_CREDIT,
+            new Word(SHINNECOCK_POOSEPATUCK, "skwá")),
+        // A related-language comparison the article gives (the Whale's Fin entry), not a
+        // documented local Shinnecock word.
+        new Thing("whale", "whale", "\\b(whale|whales)\\b",
+            "About this word\n"
+                + "Potab is a Natick dictionary form, a related-language comparison rather than a documented local "
+                + "Shinnecock word. On This Site's Whale's Fin entry discusses it, with wapwekan (fish fin).",
+            "Natick dictionary forms, in On This Site, \"Whale's Fin\"",
+            new Word("Natick", "potab")),
+        new Thing("child", "child", "\\b(child|children|kid|kids|toddler|toddlers)\\b",
+            HARRINGTON_ABOUT + " Some words in such lists may reflect borrowing or later language contact.", HARRINGTON_CREDIT,
+            new Word(SHINNECOCK_POOSEPATUCK, "papús")),
     };
 
-    /** The first thing a description names, or null. */
+    /**
+     * The thing a description names first (the picture's subject usually comes
+     * first: "a turtle on a beach" is the turtle), or null.
+     */
     static Thing thingIn(String description) {
         if (description == null) return null;
-        for (Thing thing : THINGS) if (thing.mention.matcher(description).find()) return thing;
-        return null;
+        Thing first = null;
+        int firstAt = Integer.MAX_VALUE;
+        for (Thing thing : THINGS) {
+            java.util.regex.Matcher match = thing.mention.matcher(description);
+            if (match.find() && match.start() < firstAt) {
+                first = thing;
+                firstAt = match.start();
+            }
+        }
+        return first;
     }
 
     interface Result {

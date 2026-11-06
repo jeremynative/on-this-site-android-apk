@@ -1352,8 +1352,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         item.title = thing.title();
         item.brief = thing.headline();
         item.word = thing.wordsLine();
-        item.more = ArObjects.LANGUAGE_NOTES + "\n\nYour phone recognized this itself: what the camera sees is never sent anywhere.";
-        item.credit = ArObjects.LANGUAGE_SOURCES;
+        item.more = thing.notes() + "\n\nYour phone recognized this itself: what the camera sees is never sent anywhere.";
+        item.credit = thing.sources();
         return item;
     }
 
@@ -1740,7 +1740,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (turn != null) return turn;
         if (discovered.isEmpty()) return "Walk up to a bubble or tap it";
         if (!draggedOnce) return "Drag a bubble down or up to move it";
-        return objects != null && objects.available() && seenThings.isEmpty() ? "Point at a door to name it in Mohegan and Natick" : "";
+        return objects != null && objects.available() && seenThings.isEmpty() ? "Point at a door, a house or a beach to see its Native name" : "";
     }
 
     private void postStatus(String text, String hintValue) {
