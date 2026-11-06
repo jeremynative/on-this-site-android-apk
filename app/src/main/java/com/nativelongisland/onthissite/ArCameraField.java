@@ -56,6 +56,8 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         Bitmap markerBitmap(ArScene.Item item);
         /** A tap on a bubble, or on empty camera view (null). */
         void tapped(ArScene.Item item);
+        /** A tap on a bubble's or marker's ✕: put it away for this visit. */
+        void dismiss(ArScene.Item item);
         void changed();
         void failed(String message);
     }
@@ -103,6 +105,10 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         float drawY;
         float drawRadius;
         boolean onScreen;
+        // Its ✕ badge on screen this frame: the middle and the radius that takes a tap (0: none).
+        float closeX;
+        float closeY;
+        float closeRadius;
 
         Bubble(ArScene.Item item, Random random) {
             this.item = item;
@@ -118,6 +124,9 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     private final Paint bitmapPaint = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
     private final Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint placeholderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private Bitmap badge;
+    // QA builds: files/qa-ar-level holds the view level, so a tablet lying on a desk shows bubbles.
+    private final boolean qaLevel;
     private final SensorManager sensors;
     private final Sensor rotationSensor;
     private final Sensor accelerometer;
@@ -165,6 +174,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         if (rotationVector == null && sensors != null) rotationVector = sensors.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR);
         rotationSensor = rotationVector;
         accelerometer = sensors == null ? null : sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        qaLevel = BuildConfig.DEBUG && new java.io.File(context.getFilesDir(), "qa-ar-level").exists();
         for (ArScene.Item item : scene.items) {
             Bubble bubble = new Bubble(item, random);
             // A real place floats its real way; the rest spread all round.
@@ -264,7 +274,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         if (frame == null) return null;
         Bitmap photo = frame.copy(Bitmap.Config.ARGB_8888, true);
         frame.recycle();
-        drawBubbles(new Canvas(photo));
+        drawBubbles(new Canvas(photo), false);
         return photo;
     }
 
@@ -286,7 +296,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             if (frame != null) canvas.drawBitmap(frame, 0f, 0f, null);
             canvas.save();
             canvas.scale(recording.width / (float) getWidth(), recording.height / (float) getHeight());
-            drawBubbles(canvas);
+            drawBubbles(canvas, false);
             canvas.restore();
             canvas.drawBitmap(recording.credit, 0f, recording.height - recording.credit.getHeight(), null);
         });
@@ -460,6 +470,11 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
 
     @Override
     public void onSensorChanged(SensorEvent event) {
+        if (qaLevel) {
+            pitch = 0;
+            if (Double.isNaN(heading)) heading = 0;
+            return;
+        }
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
             if (rotationSensor != null) return;
             // How far the camera looks up or down: gravity along the device's
@@ -504,13 +519,14 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         super.dispatchDraw(canvas);
         if (!started) return;
         trackTurning();
-        drawBubbles(canvas);
+        drawBubbles(canvas, true);
         if (video != null) recordFrame(video);
         host.changed();
         postInvalidateOnAnimation();
     }
 
-    private void drawBubbles(Canvas canvas) {
+    /** badges: the ✕ on each (on screen, not in a photo or video). */
+    private void drawBubbles(Canvas canvas, boolean badges) {
         long now = SystemClock.uptimeMillis();
         // In view coordinates, also on a photo or a video frame scaled to them.
         int width = getWidth();
@@ -522,9 +538,10 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         if (!compass) revealInFront(now);
         for (Bubble bubble : bubbles) {
             bubble.onScreen = false;
+            bubble.closeRadius = 0f;
             if (!host.visible(bubble.item) || (host.discovered(bubble.item) && !bubble.marker)) continue;
             if (bubble.marker) {
-                drawMarker(canvas, bubble, now, width, height);
+                drawMarker(canvas, bubble, now, width, height, badges);
                 continue;
             }
             if (!compass && !bubble.placed) continue;
@@ -545,6 +562,10 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             Bitmap bitmap = bitmapFor(bubble);
             if (bitmap != null) {
                 canvas.drawBitmap(bitmap, null, new RectF(x - size, y - size, x + size, y + size), bitmapPaint);
+                // On the white ring (half the bubble's radius out), up and to the right.
+                float badgeRadius = Math.max(dp(11), size * 0.2f);
+                float along = (size * 0.5f + badgeRadius * 0.4f) * 0.7071f;
+                if (badges && grow >= 1f) drawBadge(canvas, bubble, x + along, y - along, badgeRadius, 255);
             } else {
                 placeholderPaint.setColor(ArCards.layerColor(bubble.item.layer));
                 placeholderPaint.setAlpha(200);
@@ -580,7 +601,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         }
     }
 
-    private void drawMarker(Canvas canvas, Bubble bubble, long now, int width, int height) {
+    private void drawMarker(Canvas canvas, Bubble bubble, long now, int width, int height, boolean badges) {
         if (bubble.sky && now < bubble.riseAt) return;
         double across = angleBetween(heading, bubble.bearing);
         if (Math.abs(across) > fovAcross / 2 + 25) return;
@@ -610,6 +631,29 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         bitmapPaint.setAlpha(Math.round(255 * alpha));
         canvas.drawBitmap(bitmap, null, new RectF(x - w / 2, y - h / 2, x + w / 2, y + h / 2), bitmapPaint);
         bitmapPaint.setAlpha(255);
+        if (!badges) return;
+        if (bubble.sky) {
+            // In the sign's top-right corner.
+            float radius = Math.max(dp(11), w * 0.06f);
+            drawBadge(canvas, bubble, x + w / 2 - radius * 0.6f, y - h / 2 + radius * 0.6f, radius, Math.round(255 * alpha));
+        } else {
+            // On the "You are here" pin's orb.
+            float radius = Math.max(dp(11), w * 0.07f);
+            float along = (ArCards.HERE_RING * w + radius * 0.4f) * 0.7071f;
+            drawBadge(canvas, bubble, x + along, y - h / 2 + ArCards.HERE_ORB_Y * w - along, radius, 255);
+        }
+    }
+
+    /** A ✕ badge of this radius centred at x, y; a tap within its whole picture puts the bubble away. */
+    private void drawBadge(Canvas canvas, Bubble bubble, float x, float y, float radius, int alpha) {
+        if (badge == null) badge = ArCards.dismissBadge();
+        float half = radius / ArCards.BADGE_SHARE;
+        bitmapPaint.setAlpha(alpha);
+        canvas.drawBitmap(badge, null, new RectF(x - half, y - half, x + half, y + half), bitmapPaint);
+        bitmapPaint.setAlpha(255);
+        bubble.closeX = x;
+        bubble.closeY = y;
+        bubble.closeRadius = half;
     }
 
     /**
@@ -811,7 +855,9 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
                 // A mostly up-or-down move past a small slop drags the bubble pressed.
                 if (!dragging && Math.abs(dy) >= dp(16) && Math.abs(dy) > Math.abs(dx)) {
                     dragging = true;
-                    dragged = bubbleAt(down[0], down[1]);
+                    // Pressing on a ✕ and dragging moves what it sits on.
+                    dragged = badgeAt(down[0], down[1]);
+                    if (dragged == null) dragged = bubbleAt(down[0], down[1]);
                     dragFromY = event.getY();
                     dragFromNear = dragged == null ? 1f : dragged.near;
                     if (dragged != null) draggedOnce = true;
@@ -823,8 +869,13 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
                 break;
             case MotionEvent.ACTION_UP:
                 if (!dragging && Math.hypot(dx, dy) < dp(16)) {
-                    Bubble picked = bubbleAt(event.getX(), event.getY());
-                    host.tapped(picked == null ? null : picked.item);
+                    Bubble closing = badgeAt(event.getX(), event.getY());
+                    if (closing != null) {
+                        host.dismiss(closing.item);
+                    } else {
+                        Bubble picked = bubbleAt(event.getX(), event.getY());
+                        host.tapped(picked == null ? null : picked.item);
+                    }
                     performClick();
                 }
                 dragged = null;
@@ -851,6 +902,14 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             }
         }
         return picked;
+    }
+
+    /** The bubble whose ✕ is under a point, or null. */
+    private Bubble badgeAt(float x, float y) {
+        for (Bubble bubble : bubbles) {
+            if (bubble.closeRadius > 0f && Math.hypot(x - bubble.closeX, y - bubble.closeY) <= bubble.closeRadius) return bubble;
+        }
+        return null;
     }
 
     @Override

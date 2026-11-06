@@ -179,6 +179,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private static final float DRAG_NEAREST_BUBBLE_M = 0.5f;
     private static final float DRAG_NEAREST_CARD_M = 0.6f;
     private static final float DRAG_FARTHEST_M = 5f;
+    // A ✕ badge's draw is the item's id after this.
+    private static final String DISMISS = "dismiss:";
     private static final float DRAG_START = 0f;
     private static final float DRAG_MOVE = 1f;
     private static final float DRAG_END = 2f;
@@ -248,6 +250,12 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private final Set<String> discovered = new HashSet<>();
     private final Set<String> loading = new HashSet<>();
     private final Set<String> enabledLayers = new HashSet<>();
+    // Put away with their ✕ (for this visit), and every bubble hidden at once
+    // (the Hide all button, to work with stickers and the flag in a clear view).
+    private final Set<String> dismissed = Collections.synchronizedSet(new HashSet<>());
+    private volatile boolean bubblesHidden;
+    // The item whose card the info panel last opened (put away with it, the panel closes).
+    private volatile String shownItemId;
 
     private long lastSpawnAttempt;
 
@@ -500,6 +508,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         gl.queueTexture("place:shadow", ArPlace.shadowBlob());
         gl.queueTexture("place:ring", ArPlace.ring());
         gl.queueTexture("place:outline", ArPlace.outline());
+        gl.queueTexture("ui:dismiss", ArCards.dismissBadge());
     }
 
     @Override
@@ -528,7 +537,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (videoViewProjection != null && !videoMeshes.isEmpty()) drawMeshes(videoViewProjection, videoMeshes);
         gl.beginQuads();
         if (videoViewProjection != null) {
-            for (Draw draw : videoDraws) gl.drawQuad(videoViewProjection, draw.model, gl.texture(draw.texture), draw.alpha);
+            for (Draw draw : videoDraws) {
+                if (!isDismiss(draw)) gl.drawQuad(videoViewProjection, draw.model, gl.texture(draw.texture), draw.alpha);
+            }
         }
         ArVideo recording = video;
         float aspect = gl.aspect("video-credit");
@@ -605,7 +616,12 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             videoViewProjection = viewProjection;
             drawMeshes(viewProjection, meshes);
             gl.beginQuads();
-            for (Draw draw : draws) gl.drawQuad(viewProjection, draw.model, gl.texture(draw.texture), draw.alpha);
+            // The ✕ badges stay out of a photo being taken from this frame.
+            boolean photo = captureWanted;
+            for (Draw draw : draws) {
+                if (photo && isDismiss(draw)) continue;
+                gl.drawQuad(viewProjection, draw.model, gl.texture(draw.texture), draw.alpha);
+            }
             gl.endQuads();
 
             postStatus(statusText(), hintText());
@@ -617,6 +633,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     // ---- Content ----
 
     private boolean visible(ArScene.Item item) {
+        return inLayers(item) && !bubblesHidden && !dismissed.contains(item.id);
+    }
+
+    private boolean inLayers(ArScene.Item item) {
         return enabledLayers.contains(item.layer) && (!item.sample || BuildConfig.DEBUG);
     }
 
@@ -814,7 +834,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (scene.skyAfter <= 0) return true;
         int opened = 0;
         for (ArScene.Item item : scene.items) {
-            if (!item.isHere() && !item.isSky() && discovered.contains(item.id)) opened++;
+            // One put away with its ✕ counts as seen.
+            if (!item.isHere() && !item.isSky() && (discovered.contains(item.id) || dismissed.contains(item.id))) opened++;
         }
         return opened >= scene.skyAfter;
     }
@@ -1031,21 +1052,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             if (nudge != null) {
                 for (int i = 0; i < 3; i++) point[i] += nudge[i];
             }
-            if (item.isHere() && discovered.contains(item.id)) {
-                // Walked up to (or tapped), the pin opens into the land's card, like every bubble.
-                addCard(draws, item, point, cameraPoint, 0.5f);
-                continue;
-            }
-            if (item.isHere() || item.isSky()) {
-                addMarker(draws, item, point, cameraPose, cameraPoint, now, stopped);
-                if (item.isHere() && distance(point, cameraPoint) < DISCOVER_DISTANCE && discovered.add(item.id)) {
-                    runOnUiThread(() -> onDiscovered(item));
-                }
-                continue;
-            }
             float distance = distance(point, cameraPoint);
-            // Held by the visitor: along the line from the camera to the
-            // distance the drag asks for.
+            // Held by the visitor (a bubble, a card, the "You are here" pin or a
+            // sign): along the line from the camera to the distance the drag asks for.
             if (item.id.equals(dragId) && !Float.isNaN(dragTo) && nudge != null && distance > 0.01f) {
                 float stretch = dragTo / distance - 1f;
                 for (int i = 0; i < 3; i++) {
@@ -1054,6 +1063,23 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                     point[i] += step;
                 }
                 distance = dragTo;
+            }
+            int drawn = draws.size();
+            if (item.isHere() && discovered.contains(item.id)) {
+                // Walked up to (or tapped), the pin opens into the land's card, like every bubble.
+                addCard(draws, item, point, cameraPoint, 0.5f);
+                addCardDismiss(draws, drawn, 0.5f, distance);
+                continue;
+            }
+            if (item.isHere() || item.isSky()) {
+                addMarker(draws, item, point, cameraPose, cameraPoint, now, stopped);
+                if (item.isHere()) addHereDismiss(draws, drawn, distance);
+                else addCardDismiss(draws, drawn, SKY_WIDTH_M, distance);
+                // Moved by hand, it opens with a tap, like a bubble.
+                if (item.isHere() && nudge == null && distance < DISCOVER_DISTANCE && discovered.add(item.id)) {
+                    runOnUiThread(() -> onDiscovered(item));
+                }
+                continue;
             }
             // An unopened bubble left behind in another room makes way for new ones.
             if (!discovered.contains(item.id) && !item.hasSpot()
@@ -1067,6 +1093,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             }
             if (discovered.contains(item.id)) {
                 addCard(draws, item, point, cameraPoint, 0.5f);
+                addCardDismiss(draws, drawn, 0.5f, distance);
             } else {
                 String key = "bubble:" + item.id;
                 ensureTexture(item, key);
@@ -1075,20 +1102,86 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 // A find over a spot across the yard stays big enough to see.
                 float size = item.hasSpot() ? Math.max(0.26f, distance * 0.05f) : 0.26f;
                 draws.add(Draw.billboard(item.id, point, cameraPose, key, size, size, pulse, distance));
+                // On the bubble's white ring (a quarter of the picture's width out), up and to the right.
+                float badge = dismissSize(size, 0.19f, 0.27f, distance);
+                float along = (0.25f * size + 0.2f * badge) * 0.7071f;
+                addDismiss(draws, drawn, size, size, along, along, badge);
             }
         }
         for (String id : stopped) {
             android.util.Log.i("OnThisSiteAR", "Let go of " + id + (discoverLostSince.containsKey(id) ? " (lost with tracking)" : " (stopped or left behind)"));
-            discoverLostSince.remove(id);
-            Anchor anchor = discoverAnchors.remove(id);
-            if (anchor != null) anchor.detach();
-            discoverLift.remove(id);
-            discoverNudge.remove(id);
-            skyShownAt.remove(id);
-            skyFrom.remove(id);
-            skyHeading.remove(id);
-            skyTier.remove(id);
+            letGo(id);
         }
+    }
+
+    /** Forgets a bubble's anchor and how it was placed, so it can be placed again (or not, once dismissed). */
+    private void letGo(String id) {
+        discoverLostSince.remove(id);
+        Anchor anchor = discoverAnchors.remove(id);
+        if (anchor != null) anchor.detach();
+        discoverLift.remove(id);
+        discoverNudge.remove(id);
+        skyShownAt.remove(id);
+        skyFrom.remove(id);
+        skyHeading.remove(id);
+        skyTier.remove(id);
+    }
+
+    /** The ✕ badge's width (metres): easy to see from afar, within a share of what it sits on. */
+    private static float dismissSize(float width, float least, float most, float distance) {
+        return Math.max(least * width, Math.min(most * width, 0.035f * distance));
+    }
+
+    /** The ✕ in a card's or sign's top-right corner, a little in from the edge. */
+    private void addCardDismiss(List<Draw> draws, int drawn, float width, float distance) {
+        if (draws.size() <= drawn) return;
+        float height = width * gl.aspect(draws.get(drawn).texture);
+        float badge = dismissSize(width, 0.12f, 0.2f, distance);
+        float inset = 0.3f * badge;
+        addDismiss(draws, drawn, width, height, width / 2f - inset, height / 2f - inset, badge);
+    }
+
+    /** The ✕ on the "You are here" pin's orb (not the corner of its picture, which is empty). */
+    private void addHereDismiss(List<Draw> draws, int drawn, float distance) {
+        if (draws.size() <= drawn) return;
+        float width = HERE_WIDTH_M;
+        float height = width * gl.aspect(draws.get(drawn).texture);
+        float badge = dismissSize(width, 0.12f, 0.18f, distance);
+        float orbY = height / 2f - ArCards.HERE_ORB_Y * width;
+        float along = (ArCards.HERE_RING * width + 0.2f * badge) * 0.7071f;
+        addDismiss(draws, drawn, width, height, along, orbY + along, badge);
+    }
+
+    /**
+     * A ✕ badge over the item drawn at draws[drawn] (width by height metres),
+     * centred x, y metres from its middle (up and right). Tapping it puts the
+     * item away; its quad is larger than the badge, so it is easy to hit.
+     */
+    private void addDismiss(List<Draw> draws, int drawn, float width, float height, float x, float y, float badge) {
+        if (draws.size() <= drawn || height <= 0f || !gl.hasTexture("ui:dismiss")) return;
+        Draw target = draws.get(drawn);
+        float[] model = target.model.clone();
+        Matrix.translateM(model, 0, x / width, y / height, 0f);
+        float quad = badge / ArCards.BADGE_SHARE;
+        Matrix.scaleM(model, 0, quad / width, quad / height, 1f);
+        // Steady while a bubble pulses; fades in with a rising sign.
+        draws.add(Draw.of(DISMISS + target.itemId, model, "ui:dismiss", target.alpha < 0.7f ? target.alpha : 1f, target.distance - 0.002f));
+    }
+
+    private static boolean isDismiss(Draw draw) {
+        return draw.itemId != null && draw.itemId.startsWith(DISMISS);
+    }
+
+    /** Puts a bubble, card, pin or sign away for the rest of this visit. */
+    private void dismiss(String id) {
+        dismissed.add(id);
+        letGo(id);
+        if (id.equals(dragId)) dragId = null;
+        android.util.Log.i("OnThisSiteAR", "Dismissed " + id);
+        runOnUiThread(() -> {
+            vibrateConfirm();
+            if (id.equals(shownItemId)) infoPanel.setVisibility(View.GONE);
+        });
     }
 
     // ---- Place ----
@@ -1337,6 +1430,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             return;
         }
         Draw picked = pick(x, y, draws, viewProjection);
+        if (picked != null && picked.itemId.startsWith(DISMISS)) {
+            dismiss(picked.itemId.substring(DISMISS.length()));
+            return;
+        }
         ArPlace.Placed thing = picked == null ? null : placedById(picked.itemId);
         if (thing != null || selectedPlace != null) {
             // A placed sticker or flag is chosen to resize, turn or remove; a tap elsewhere lets it go.
@@ -1365,7 +1462,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private void handleDrag(float[] drag, List<Draw> draws, float[] viewProjection) {
         if (drag[0] == DRAG_START) {
             Draw picked = pick(drag[1], drag[2], draws, viewProjection);
-            dragId = picked == null || !discoverAnchors.containsKey(picked.itemId) ? null : picked.itemId;
+            // Pressing on a ✕ and dragging moves what it sits on.
+            String id = picked == null ? null : picked.itemId.startsWith(DISMISS) ? picked.itemId.substring(DISMISS.length()) : picked.itemId;
+            dragId = id == null || !discoverAnchors.containsKey(id) ? null : id;
             dragFromY = drag[3];
             dragFromDistance = picked == null ? 0f : picked.distance;
             dragTo = Float.NaN;
@@ -1397,9 +1496,13 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     }
 
     private String statusText() {
+        if (bubblesHidden) return "Bubbles hidden · Show all brings them back";
         int found = discovered.size();
         int total = 0;
-        for (ArScene.Item item : scene.items) if (visible(item)) total++;
+        // Hidden ones still count; one put away unopened doesn't.
+        for (ArScene.Item item : scene.items) {
+            if (inLayers(item) && (discovered.contains(item.id) || !dismissed.contains(item.id))) total++;
+        }
         return found >= total && total > 0
             ? "You found all " + total + ". Thank you for learning with us!"
             : found + " of " + total + " found · "
@@ -1408,6 +1511,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     private String hintText() {
         if (cameraOnly) {
+            if (bubblesHidden) return "";
             String turn = cameraField.turnHint();
             if (!turn.isEmpty()) return turn;
             if (discovered.isEmpty()) return "Tap a bubble to open it";
@@ -1417,7 +1521,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             if (!aimFound) return placingAsset.model ? "Aim at the ground nearby, moving the phone slowly" : "Aim at a wall or the ground, moving the phone slowly";
             return placingAsset.model ? "Tap to plant the flag here" : "Tap to place it here";
         }
-        if (selectedPlace != null) return "";
+        if (selectedPlace != null || bubblesHidden) return "";
         String turn = directionHint();
         if (turn != null) return turn;
         if (discovered.isEmpty()) return "Walk up to a bubble or tap it";
@@ -1595,6 +1699,35 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         LinearLayout.LayoutParams toolsParams = new LinearLayout.LayoutParams(-1, -2);
         toolsParams.topMargin = dp(10);
         bottom.addView(placeTools, toolsParams);
+    }
+
+    /**
+     * Hides every bubble, card, pin and sign at once (to place stickers and the
+     * flag in a clear view, or take a plain photo), and shows them again where
+     * they were.
+     */
+    private LinearLayout buildHideButton() {
+        LinearLayout button = column();
+        button.setGravity(Gravity.CENTER_HORIZONTAL);
+        ImageView icon = new ImageView(this);
+        icon.setPadding(dp(13), dp(13), dp(13), dp(13));
+        icon.setBackground(oval(Color.argb(150, 20, 26, 23)));
+        button.addView(icon, new LinearLayout.LayoutParams(dp(52), dp(52)));
+        TextView label = text(12, true, "");
+        label.setGravity(Gravity.CENTER);
+        button.addView(label, new LinearLayout.LayoutParams(-2, -2));
+        Runnable show = () -> {
+            icon.setImageResource(bubblesHidden ? R.drawable.ic_ar_show : R.drawable.ic_ar_hide);
+            label.setText(bubblesHidden ? "Show all" : "Hide all");
+            button.setContentDescription(bubblesHidden ? "Show the floating bubbles again" : "Hide all the floating bubbles");
+        };
+        button.setOnClickListener(v -> {
+            bubblesHidden = !bubblesHidden;
+            if (bubblesHidden) infoPanel.setVisibility(View.GONE);
+            show.run();
+        });
+        show.run();
+        return button;
     }
 
     /**
@@ -1813,6 +1946,11 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 if (discovered.add(item.id)) onDiscovered(item);
                 showItem(item);
             }
+            @Override public void dismiss(ArScene.Item item) {
+                dismissed.add(item.id);
+                vibrateConfirm();
+                if (item.id.equals(shownItemId)) infoPanel.setVisibility(View.GONE);
+            }
             @Override public void changed() {
                 postStatus(statusText(), hintText());
             }
@@ -1922,8 +2060,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             shutterParams.leftMargin = dp(28);
             shutterParams.rightMargin = dp(28);
             controls.addView(shutter, shutterParams);
-            // Keeps the shutter centred.
-            controls.addView(new View(this), new LinearLayout.LayoutParams(dp(68), dp(68)));
+            // Hide all / Show all, right of the shutter (keeping it centred).
+            controls.addView(buildHideButton(), new LinearLayout.LayoutParams(dp(68), -2));
             LinearLayout.LayoutParams controlsParams = new LinearLayout.LayoutParams(-2, -2);
             controlsParams.gravity = Gravity.CENTER_HORIZONTAL;
             controlsParams.topMargin = dp(12);
@@ -2080,6 +2218,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     }
 
     private void showItem(ArScene.Item item) {
+        shownItemId = item.id;
         showInfoImage(item);
         infoChoices.removeAllViews();
         infoScroll.scrollTo(0, 0);

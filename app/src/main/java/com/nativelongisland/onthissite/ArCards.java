@@ -170,12 +170,17 @@ final class ArCards {
      * with a cone hanging from the ring and pointing down at the visitor's spot, and "You are
      * here" and the land's name beneath. Walked up to or tapped, it opens into the land's card.
      */
+    // Where the marker's orb sits, as shares of the marker's width: its middle's
+    // depth from the top, and its white ring's radius.
+    static final float HERE_ORB_Y = 128f / 420f;
+    static final float HERE_RING = 128f * 0.42f / 420f;
+
     static Bitmap hereMarker(ArScene.Item item) {
         int width = 420;
         float c = width / 2f;
-        float glowRadius = 128f;
+        float glowRadius = HERE_ORB_Y * width;
         float cy = glowRadius;
-        float ring = glowRadius * 0.42f;
+        float ring = HERE_RING * width;
         float tipY = cy + ring + 86f;
         TextPaint youPaint = textPaint(34, Color.WHITE, true);
         TextPaint landPaint = textPaint(30, Color.WHITE, false);
@@ -301,6 +306,32 @@ final class ArCards {
     }
 
     /** Soft glowing orb shown before a discoverable prompt has been found. */
+    // The ✕ badge's share of its picture's width; the clear rest round it is extra room to tap.
+    static final float BADGE_SHARE = 0.6f;
+
+    /** The ✕ at a bubble's, card's or sign's top right that puts it away: white on a dark disc. */
+    static Bitmap dismissBadge() {
+        int size = 160;
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        float c = size / 2f;
+        float r = size * BADGE_SHARE / 2f;
+        Paint disc = new Paint(Paint.ANTI_ALIAS_FLAG);
+        disc.setColor(Color.argb(225, 20, 26, 23));
+        canvas.drawCircle(c, c, r, disc);
+        Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
+        line.setStyle(Paint.Style.STROKE);
+        line.setColor(Color.WHITE);
+        line.setStrokeWidth(5);
+        canvas.drawCircle(c, c, r - 2.5f, line);
+        line.setStrokeWidth(9);
+        line.setStrokeCap(Paint.Cap.ROUND);
+        float arm = r * 0.36f;
+        canvas.drawLine(c - arm, c - arm, c + arm, c + arm, line);
+        canvas.drawLine(c - arm, c + arm, c + arm, c - arm, line);
+        return bitmap;
+    }
+
     static Bitmap orb(int color) {
         int size = 256;
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
