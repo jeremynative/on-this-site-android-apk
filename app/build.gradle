@@ -23,6 +23,10 @@ dependencies {
     // Declared "optional" in the manifest so devices without ARCore still
     // install the app and simply never offer the AR view.
     implementation "com.google.ar:core:1.56.0"
+    // On-device recognition in AR (a door gets its Mohegan and Natick names):
+    // Gemini Nano through ML Kit's image description. Android 8+ only; the
+    // manifest lets the app keep minSdk 24 and ArObjects checks at runtime.
+    implementation "com.google.mlkit:genai-image-description:1.0.0-beta1"
 }
 
 def releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")

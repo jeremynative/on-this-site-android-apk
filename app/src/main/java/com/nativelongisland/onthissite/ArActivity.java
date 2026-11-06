@@ -256,6 +256,19 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private volatile boolean bubblesHidden;
     // The item whose card the info panel last opened (put away with it, the panel closes).
     private volatile String shownItemId;
+    // Real things the camera recognized on the phone (a door), each labeled with
+    // its words where it was seen. Found on the recognizer's thread, made into
+    // labels (with anchors) on the GL thread.
+    private ArObjects objects;
+    private final List<SeenThing> seenThings = new ArrayList<>();
+    private final ConcurrentLinkedQueue<SeenThing> seenPending = new ConcurrentLinkedQueue<>();
+    private long lastLookAt;
+    private long lastSteadyAt;
+    private float[] lastSteadyFrom;
+    private float[] lastSteadyFacing;
+    private boolean steadyNow;
+    private int seenCount;
+    private int cameraImageRotation = -1;
 
     private long lastSpawnAttempt;
 
@@ -308,6 +321,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         Collections.addAll(enabledLayers, ArScene.LAYERS);
         cameraOnly = getIntent().getBooleanExtra(EXTRA_CAMERA_ONLY, false);
+        if (!cameraOnly) objects = ArObjects.create(this);
+        identifyQaPhoto();
         // Camera-only AR turns with the device (a tablet is often held
         // sideways); full AR keeps the portrait screen it was built for.
         if (cameraOnly) setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR);
@@ -462,6 +477,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         if (session != null) session.close();
         session = null;
+        if (objects != null) objects.close();
+        objects = null;
         loader.shutdownNow();
         stopAudio();
     }
@@ -601,6 +618,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
             List<Draw> draws = new ArrayList<>();
             collectFreeDraws(draws, cameraPose);
+            lookForThings(frame, cameraPose);
+            collectSeenThings(draws, cameraPoint);
             List<MeshDraw> meshes = new ArrayList<>();
             placeQaAssets(frame, cameraPose);
             collectPlaced(frame, draws, meshes, cameraPoint);
@@ -1176,12 +1195,176 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private void dismiss(String id) {
         dismissed.add(id);
         letGo(id);
+        seenThings.removeIf(seen -> {
+            if (!seen.item.id.equals(id)) return false;
+            seen.anchor.detach();
+            return true;
+        });
         if (id.equals(dragId)) dragId = null;
         android.util.Log.i("OnThisSiteAR", "Dismissed " + id);
         runOnUiThread(() -> {
             vibrateConfirm();
             if (id.equals(shownItemId)) infoPanel.setVisibility(View.GONE);
         });
+    }
+
+    // ---- Things the camera recognizes ----
+
+    private static final long LOOK_EVERY_MS = 3000;
+
+    /** A thing the camera recognized, labeled where the middle of the view met it. */
+    private static final class SeenThing {
+        final ArObjects.Thing thing;
+        final float[] point;
+        Anchor anchor;
+        ArScene.Item item;
+
+        SeenThing(ArObjects.Thing thing, float[] point) {
+            this.thing = thing;
+            this.point = point;
+        }
+    }
+
+    /**
+     * Every few seconds while the phone is held still, the middle of the view is
+     * described on the phone; a door there gets its Mohegan and Natick names,
+     * floating on it where the middle of the view met its surface.
+     */
+    private void lookForThings(Frame frame, Pose cameraPose) {
+        SeenThing found;
+        while ((found = seenPending.poll()) != null) addSeenThing(found);
+        if (objects == null || !objects.ready() || bubblesHidden || placingAsset != null || video != null) return;
+        if (infoPanel.getVisibility() == View.VISIBLE) return;
+        long now = SystemClock.uptimeMillis();
+        // Still enough to aim: under 6 cm and about 6 degrees of movement in the last half second.
+        if (now - lastSteadyAt >= 500) {
+            float[] from = cameraPose.getTranslation();
+            float[] facing = cameraPose.getZAxis();
+            steadyNow = lastSteadyFrom != null && distance(from, lastSteadyFrom) < 0.06f
+                && facing[0] * lastSteadyFacing[0] + facing[1] * lastSteadyFacing[1] + facing[2] * lastSteadyFacing[2] > 0.994f;
+            lastSteadyFrom = from;
+            lastSteadyFacing = facing;
+            lastSteadyAt = now;
+        }
+        if (!steadyNow || now - lastLookAt < LOOK_EVERY_MS) return;
+        lastLookAt = now;
+        float[] point = surfaceAtCenter(frame, cameraPose);
+        byte[] nv21;
+        int width;
+        int height;
+        try (android.media.Image image = frame.acquireCameraImage()) {
+            nv21 = ArObjects.nv21(image);
+            width = image.getWidth();
+            height = image.getHeight();
+        } catch (Exception error) {
+            return;
+        }
+        objects.describeCenter(nv21, width, height, cameraImageRotation(), (description, thing) -> {
+            if (BuildConfig.DEBUG) android.util.Log.i("OnThisSiteAR", "Seen: " + description + (thing != null ? " -> " + thing.key : ""));
+            if (thing != null) seenPending.add(new SeenThing(thing, point));
+        });
+    }
+
+    /** Where the middle of the view meets a surface (or 1.5 m ahead in the air), a little toward the visitor. */
+    private float[] surfaceAtCenter(Frame frame, Pose cameraPose) {
+        float[] eye = cameraPose.getTranslation();
+        float[] at = null;
+        for (HitResult hit : frame.hitTest(viewportWidth / 2f, viewportHeight / 2f)) {
+            Trackable trackable = hit.getTrackable();
+            if ((trackable instanceof Plane && ((Plane) trackable).isPoseInPolygon(hit.getHitPose()))
+                || trackable instanceof DepthPoint || trackable instanceof Point) {
+                at = hit.getHitPose().getTranslation();
+                break;
+            }
+        }
+        if (at == null) at = cameraPose.compose(Pose.makeTranslation(0f, 0f, -1.5f)).getTranslation();
+        // 8 cm out from the door, so its name floats on it rather than sinking in.
+        float length = Math.max(0.01f, distance(at, eye));
+        for (int i = 0; i < 3; i++) at[i] += (eye[i] - at[i]) / length * Math.min(0.08f, length * 0.5f);
+        return at;
+    }
+
+    /** Degrees to turn the camera's own image upright on this (portrait) screen. */
+    private int cameraImageRotation() {
+        if (cameraImageRotation >= 0) return cameraImageRotation;
+        int sensor = 90;
+        try {
+            android.hardware.camera2.CameraManager manager = (android.hardware.camera2.CameraManager) getSystemService(CAMERA_SERVICE);
+            Integer orientation = manager.getCameraCharacteristics(session.getCameraConfig().getCameraId())
+                .get(android.hardware.camera2.CameraCharacteristics.SENSOR_ORIENTATION);
+            if (orientation != null) sensor = orientation;
+        } catch (Exception ignored) {
+            // The usual back camera: 90 degrees.
+        }
+        int display = 0;
+        switch (getWindowManager().getDefaultDisplay().getRotation()) {
+            case android.view.Surface.ROTATION_90: display = 90; break;
+            case android.view.Surface.ROTATION_180: display = 180; break;
+            case android.view.Surface.ROTATION_270: display = 270; break;
+            default: break;
+        }
+        cameraImageRotation = (sensor - display + 360) % 360;
+        return cameraImageRotation;
+    }
+
+    /** A recognized thing becomes a label, unless the same thing already has one within 1.2 m. */
+    private void addSeenThing(SeenThing found) {
+        if (session == null) return;
+        for (SeenThing other : seenThings) {
+            if (other.thing == found.thing && distance(other.anchor.getPose().getTranslation(), found.point) < 1.2f) return;
+        }
+        // At most ten at once: the oldest makes way.
+        if (seenThings.size() >= 10) seenThings.remove(0).anchor.detach();
+        found.anchor = session.createAnchor(Pose.makeTranslation(found.point[0], found.point[1], found.point[2]));
+        found.item = thingItem(found.thing, ++seenCount);
+        seenThings.add(found);
+        android.util.Log.i("OnThisSiteAR", "Labeled a " + found.thing.key + " as " + found.thing.headline());
+        runOnUiThread(() -> {
+            vibrateConfirm();
+            showFound("✨ " + found.thing.english.substring(0, 1).toUpperCase(Locale.US) + found.thing.english.substring(1) + ": " + found.thing.headline());
+        });
+    }
+
+    /** The word card a recognized thing floats as (and opens into). */
+    private static ArScene.Item thingItem(ArObjects.Thing thing, int number) {
+        ArScene.Item item = new ArScene.Item();
+        item.id = "seen-" + thing.key + "-" + number;
+        item.kind = ArScene.KIND_PHRASE;
+        item.layer = ArScene.LAYER_LANGUAGE;
+        item.title = thing.english.substring(0, 1).toUpperCase(Locale.US) + thing.english.substring(1);
+        item.word = thing.headline();
+        item.meaning = thing.meaning();
+        item.more = "Your phone recognized this itself: what the camera sees is never sent anywhere.";
+        return item;
+    }
+
+    private void collectSeenThings(List<Draw> draws, float[] cameraPoint) {
+        if (bubblesHidden) return;
+        seenThings.removeIf(seen -> {
+            if (seen.anchor.getTrackingState() != TrackingState.STOPPED) return false;
+            seen.anchor.detach();
+            return true;
+        });
+        for (SeenThing seen : seenThings) {
+            if (dismissed.contains(seen.item.id) || seen.anchor.getTrackingState() != TrackingState.TRACKING) continue;
+            float[] point = seen.anchor.getPose().getTranslation();
+            int drawn = draws.size();
+            addCard(draws, seen.item, point, cameraPoint, 0.42f);
+            addCardDismiss(draws, drawn, 0.42f, distance(point, cameraPoint));
+        }
+    }
+
+    /** QA builds: files/qa-ar-identify.jpg (a photo of a door) is described once, and the result logged. */
+    private void identifyQaPhoto() {
+        java.io.File photo = new java.io.File(getFilesDir(), "qa-ar-identify.jpg");
+        if (!BuildConfig.DEBUG || objects == null || !photo.exists()) return;
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            if (objects == null) return;
+            Bitmap picture = BitmapFactory.decodeFile(photo.getAbsolutePath());
+            android.util.Log.i("OnThisSiteAR", "Identify QA: available=" + objects.available() + " ready=" + objects.ready());
+            objects.describe(picture, (description, thing) ->
+                android.util.Log.i("OnThisSiteAR", "Identify QA: \"" + description + "\" -> " + (thing != null ? thing.key + " " + thing.headline() : "nothing known")));
+        }, 4000);
     }
 
     // ---- Place ----
@@ -1448,6 +1631,12 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             runOnUiThread(() -> infoPanel.setVisibility(View.GONE));
             return;
         }
+        for (SeenThing seen : seenThings) {
+            if (seen.item.id.equals(picked.itemId)) {
+                runOnUiThread(() -> showItem(seen.item));
+                return;
+            }
+        }
         for (ArScene.Item item : scene.items) {
             if (item.id.equals(picked.itemId)) {
                 // Like walking up to it: a tapped bubble counts as found.
@@ -1525,7 +1714,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         String turn = directionHint();
         if (turn != null) return turn;
         if (discovered.isEmpty()) return "Walk up to a bubble or tap it";
-        return draggedOnce ? "" : "Drag a bubble down or up to move it";
+        if (!draggedOnce) return "Drag a bubble down or up to move it";
+        return objects != null && objects.available() && seenThings.isEmpty() ? "Point at a door to name it in Mohegan and Natick" : "";
     }
 
     private void postStatus(String text, String hintValue) {
