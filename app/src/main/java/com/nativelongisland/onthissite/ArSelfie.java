@@ -27,7 +27,8 @@ import java.util.Collections;
 /**
  * Selfie mode: the front camera, full screen and mirrored like a mirror, with
  * the visitor's name tag ("Jeremy nutusuwis", "Jeremy is my name") floating
- * over it. A tap on the tag writes the name; a drag moves it. A photo is the
+ * over it. A tap on the tag writes the name, a drag moves it, and two fingers
+ * size and turn it. A photo is the
  * camera image as it was seen with the tag drawn on it, reading the right way
  * round.
  */
@@ -42,10 +43,27 @@ final class ArSelfie extends FrameLayout {
     private final TextureView preview;
     private final ImageView tag;
     private Bitmap tagArt;
-    // Where the tag sits, as a share of the free space across and down
-    // (kept when the screen turns); placed under the face to begin with.
+    // Where the tag's middle sits, as a share of the screen across and down
+    // (kept when the screen turns); under the face to begin with. Pinched:
+    // how much bigger, and turned how far (degrees, clockwise).
     private float tagAcross = 0.5f;
     private float tagDown = 0.62f;
+    private float tagScale = 1f;
+    private float tagTurn;
+    // The gesture under way: one finger on the tag drags it, two fingers
+    // anywhere size and turn it, and a tap on it writes the name.
+    private final float slop;
+    private float downX;
+    private float downY;
+    private float fromAcross;
+    private float fromDown;
+    private boolean onTag;
+    private boolean dragging;
+    private boolean pinched;
+    private float pinchFromSpacing;
+    private float pinchFromAngle;
+    private float pinchFromScale;
+    private float pinchFromTurn;
 
     private boolean started;
     private CameraDevice camera;
@@ -67,35 +85,82 @@ final class ArSelfie extends FrameLayout {
         tag.setAdjustViewBounds(true);
         tag.setScaleType(ImageView.ScaleType.FIT_CENTER);
         addView(tag, new LayoutParams(-2, -2));
-        float slop = 12 * getResources().getDisplayMetrics().density;
-        final float[] down = new float[4];
-        final boolean[] dragging = new boolean[1];
-        tag.setOnTouchListener((view, event) -> {
-            switch (event.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN:
-                    down[0] = event.getRawX();
-                    down[1] = event.getRawY();
-                    down[2] = view.getX();
-                    down[3] = view.getY();
-                    dragging[0] = false;
-                    return true;
-                case MotionEvent.ACTION_MOVE: {
-                    float dx = event.getRawX() - down[0];
-                    float dy = event.getRawY() - down[1];
-                    if (!dragging[0] && Math.hypot(dx, dy) >= slop) dragging[0] = true;
-                    if (dragging[0]) moveTag(down[2] + dx, down[3] + dy);
+        tag.setOnClickListener(view -> host.editName());
+        slop = 12 * getResources().getDisplayMetrics().density;
+    }
+
+    // Every touch is the tag's gesture, wherever it starts (a pinch rarely lands on the tag itself).
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent event) {
+        return true;
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                downX = event.getX();
+                downY = event.getY();
+                fromAcross = tagAcross;
+                fromDown = tagDown;
+                onTag = onTag(downX, downY);
+                dragging = false;
+                pinched = false;
+                return true;
+            case MotionEvent.ACTION_POINTER_DOWN:
+                if (event.getPointerCount() == 2) {
+                    pinched = true;
+                    dragging = false;
+                    pinchFromSpacing = Math.max(1f, ArActivity.fingerSpacing(event));
+                    pinchFromAngle = ArActivity.fingerAngle(event);
+                    pinchFromScale = tagScale;
+                    pinchFromTurn = tagTurn;
+                }
+                return true;
+            case MotionEvent.ACTION_MOVE:
+                if (pinched) {
+                    if (event.getPointerCount() < 2) return true;
+                    tagScale = Math.max(0.4f, Math.min(3f, pinchFromScale * ArActivity.fingerSpacing(event) / pinchFromSpacing));
+                    tagTurn = pinchFromTurn + (float) Math.toDegrees(ArActivity.fingerAngle(event) - pinchFromAngle);
+                    placeTag();
                     return true;
                 }
-                case MotionEvent.ACTION_UP:
-                    if (!dragging[0]) {
-                        view.performClick();
-                        host.editName();
-                    }
-                    return true;
-                default:
-                    return true;
-            }
-        });
+                if (!onTag) return true;
+                float dx = event.getX() - downX;
+                float dy = event.getY() - downY;
+                if (!dragging && Math.hypot(dx, dy) >= slop) dragging = true;
+                if (dragging) {
+                    tagAcross = Math.max(0f, Math.min(1f, fromAcross + dx / Math.max(1, getWidth())));
+                    tagDown = Math.max(0f, Math.min(1f, fromDown + dy / Math.max(1, getHeight())));
+                    placeTag();
+                }
+                return true;
+            case MotionEvent.ACTION_UP:
+                if (onTag && !dragging && !pinched) {
+                    performClick();
+                    host.editName();
+                }
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    @Override
+    public boolean performClick() {
+        return super.performClick();
+    }
+
+    /** True when a point on the screen is on the tag, as turned and sized (with a finger's slop). */
+    private boolean onTag(float x, float y) {
+        if (tag.getWidth() == 0) return false;
+        float centerX = tag.getX() + tag.getWidth() / 2f;
+        float centerY = tag.getY() + tag.getHeight() / 2f;
+        double turn = Math.toRadians(-tagTurn);
+        float along = (float) ((x - centerX) * Math.cos(turn) - (y - centerY) * Math.sin(turn)) / tagScale;
+        float across = (float) ((x - centerX) * Math.sin(turn) + (y - centerY) * Math.cos(turn)) / tagScale;
+        return Math.abs(along) <= tag.getWidth() / 2f + slop && Math.abs(across) <= tag.getHeight() / 2f + slop;
     }
 
     /** The tag for this name (blank lines to fill before one is written). */
@@ -121,17 +186,12 @@ final class ArSelfie extends FrameLayout {
         placeTag();
     }
 
-    private void moveTag(float x, float y) {
-        float freeAcross = Math.max(1f, getWidth() - tag.getWidth());
-        float freeDown = Math.max(1f, getHeight() - tag.getHeight());
-        tagAcross = Math.max(0f, Math.min(1f, x / freeAcross));
-        tagDown = Math.max(0f, Math.min(1f, y / freeDown));
-        placeTag();
-    }
-
     private void placeTag() {
-        tag.setX(tagAcross * Math.max(0, getWidth() - tag.getWidth()));
-        tag.setY(tagDown * Math.max(0, getHeight() - tag.getHeight()));
+        tag.setX(tagAcross * getWidth() - tag.getWidth() / 2f);
+        tag.setY(tagDown * getHeight() - tag.getHeight() / 2f);
+        tag.setScaleX(tagScale);
+        tag.setScaleY(tagScale);
+        tag.setRotation(tagTurn);
     }
 
     void start() {
@@ -158,10 +218,15 @@ final class ArSelfie extends FrameLayout {
         Bitmap photo = frame.copy(Bitmap.Config.ARGB_8888, true);
         frame.recycle();
         if (tagArt != null && tag.getWidth() > 0) {
-            float scale = photo.getWidth() / (float) Math.max(1, getWidth());
-            RectF where = new RectF(tag.getX() * scale, tag.getY() * scale,
-                (tag.getX() + tag.getWidth()) * scale, (tag.getY() + tag.getHeight()) * scale);
-            new Canvas(photo).drawBitmap(tagArt, null, where, new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG));
+            // As on the screen: at its middle, turned and sized.
+            float toPhoto = photo.getWidth() / (float) Math.max(1, getWidth());
+            float size = tag.getWidth() / (float) tagArt.getWidth() * tagScale * toPhoto;
+            android.graphics.Matrix place = new android.graphics.Matrix();
+            place.setTranslate(-tagArt.getWidth() / 2f, -tagArt.getHeight() / 2f);
+            place.postScale(size, size);
+            place.postRotate(tagTurn);
+            place.postTranslate((tag.getX() + tag.getWidth() / 2f) * toPhoto, (tag.getY() + tag.getHeight() / 2f) * toPhoto);
+            new Canvas(photo).drawBitmap(tagArt, place, new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG));
         }
         return photo;
     }

@@ -71,6 +71,8 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     private static final long SKY_RISE_MS = 1300;
     private static final long SKY_STAGGER_MS = 280;
     private static final long REVEAL_GAP_MS = 1400;
+    // After a bubble is put away with its ✕, the next one takes its time.
+    private static final long REVEAL_AFTER_DISMISS_MS = 6000;
     // Below this (degrees) the camera is looking at the floor; above the
     // other, at the ceiling or sky.
     private static final double LOOKING_DOWN = -45;
@@ -158,6 +160,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     private double heading = Double.NaN;
     private double pitch;
     private long lastReveal;
+    private long revealNotBefore;
     // Turn tracking from the camera image (no compass).
     private Bitmap flowFrame;
     private int[] flowPixels;
@@ -669,7 +672,8 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             if (bubble.placed) placed++;
             else if (next == null) next = bubble;
         }
-        if (next == null || placed >= MAX_PLACED || now - lastReveal < REVEAL_GAP_MS || pitch < LOOKING_DOWN || pitch > LOOKING_UP) return;
+        if (next == null || placed >= MAX_PLACED || now - lastReveal < REVEAL_GAP_MS || now < revealNotBefore
+            || pitch < LOOKING_DOWN || pitch > LOOKING_UP) return;
         // A spot in view, clear of the others, above the shutter.
         double bestBearing = heading;
         double bestElevation = pitch;
@@ -872,6 +876,8 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
                     Bubble closing = badgeAt(event.getX(), event.getY());
                     if (closing != null) {
                         host.dismiss(closing.item);
+                        // Its spot stays taken (placed bubbles keep theirs) while the next waits.
+                        revealNotBefore = SystemClock.uptimeMillis() + REVEAL_AFTER_DISMISS_MS;
                     } else {
                         Bubble picked = bubbleAt(event.getX(), event.getY());
                         host.tapped(picked == null ? null : picked.item);
