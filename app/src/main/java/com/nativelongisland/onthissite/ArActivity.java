@@ -100,6 +100,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private static final long FREE_GAP_MS = 8000;
     private static final double FREE_APART_DEG = 40;
     private long lastFreeSpawnAt;
+    private long lastDismissAt;
+    private float[] lastCameraPoint;
+    private final List<float[]> dismissedSpots = new ArrayList<>();
     private float[] lastFreeSpawnFrom;
     // Real places float in their real direction once the compass is lined
     // up with the AR world; bubbles stay in front of walls and furniture.
@@ -186,6 +189,12 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private static final float DRAG_START = 0f;
     private static final float DRAG_MOVE = 1f;
     private static final float DRAG_END = 2f;
+    // Two fingers on a recognized thing's label: its size and turn.
+    private static final float PINCH_START = 3f;
+    private static final float PINCH_MOVE = 4f;
+    private static final float PINCH_END = 5f;
+    // Spots of bubbles put away with their ✕ that new bubbles keep clear of.
+    private static final int DISMISSED_SPOTS_MAX = 6;
 
     private final Object lock = new Object();
     private final ArGl gl = new ArGl();
@@ -270,6 +279,16 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private float[] lastSteadyFacing;
     private boolean steadyNow;
     private int seenCount;
+    // A recognized thing's label held by one finger (moved across the view at its
+    // distance) or by two (sized and turned); seenGestured once either is done.
+    private SeenThing movingSeen;
+    private float movingDistance;
+    private SeenThing pinchSeen;
+    private float pinchFromSpacing;
+    private float pinchFromAngle;
+    private float pinchFromScale;
+    private float pinchFromRoll;
+    private boolean seenGestured;
     private int cameraImageRotation = -1;
 
     private long lastSpawnAttempt;
@@ -633,6 +652,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 taps.clear();
                 drags.clear();
                 dragId = null;
+                if (movingSeen != null) movingSeen.heldAt = null;
+                movingSeen = null;
+                pinchSeen = null;
                 postStatus(trackingProblem(camera), "");
                 return;
             }
@@ -659,7 +681,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             float[] tap;
             while ((tap = taps.poll()) != null) handleTap(frame, tap[0], tap[1], draws, viewProjection, cameraPose);
             float[] drag;
-            while ((drag = drags.poll()) != null) handleDrag(drag, draws, viewProjection);
+            while ((drag = drags.poll()) != null) handleDrag(drag, draws, viewProjection, cameraPoint);
 
             Collections.sort(draws, (a, b) -> Float.compare(b.distance, a.distance));
             videoDraws = draws;
@@ -755,6 +777,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         float[] forward = {-back[0], -back[1], -back[2]};
         compass.sample(forward);
         lastForward = forward;
+        lastCameraPoint = cameraPoint.clone();
         long now = SystemClock.uptimeMillis();
         if (now - lastSpawnAttempt < 500) return;
         lastSpawnAttempt = now;
@@ -824,12 +847,15 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         ArScene.Item next;
         boolean directional = ahead != null && waiting <= FREE_WAITING_MAX;
+        boolean walked = lastFreeSpawnFrom == null
+            || Math.hypot(cameraPoint[0] - lastFreeSpawnFrom[0], cameraPoint[2] - lastFreeSpawnFrom[2]) > FREE_STEP_M;
+        // Just after one is put away with its ✕, nothing new comes for a while (or until
+        // the visitor walks on), so another doesn't pop up in its place.
+        if (now - lastDismissAt < FREE_GAP_MS && !walked) return;
         if (directional) {
             next = ahead;
         } else {
             if (ambient == null || waiting >= FREE_WAITING_MAX) return;
-            boolean walked = lastFreeSpawnFrom == null
-                || Math.hypot(cameraPoint[0] - lastFreeSpawnFrom[0], cameraPoint[2] - lastFreeSpawnFrom[2]) > FREE_STEP_M;
             if (waiting > 0 && !walked && now - lastFreeSpawnAt < FREE_GAP_MS) return;
             next = ambient;
         }
@@ -850,6 +876,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 waitingHeadings.add(ArCompass.arHeading(new float[] {at[0] - cameraPoint[0], 0f, at[2] - cameraPoint[2]}));
             }
         }
+        // Nor where one was just put away: new ones come elsewhere.
+        taken.addAll(dismissedSpots);
         for (int attempt = 0; attempt < (directional ? 5 : 12); attempt++) {
             // Places sharing a direction fan out a little and sit at different distances.
             double fan = 6 + 4 * attempt;
@@ -1228,6 +1256,16 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     /** Puts a bubble, card, pin or sign away for the rest of this visit. */
     private void dismiss(String id) {
         dismissed.add(id);
+        Anchor anchor = discoverAnchors.get(id);
+        ArScene.Item here = hereItem();
+        if (anchor != null && !skyHeading.containsKey(id) && (here == null || !here.id.equals(id))) {
+            // Its spot stays taken, and the next bubble waits as if this one had just appeared.
+            dismissedSpots.add(anchor.getPose().getTranslation());
+            if (dismissedSpots.size() > DISMISSED_SPOTS_MAX) dismissedSpots.remove(0);
+            lastDismissAt = SystemClock.uptimeMillis();
+            lastFreeSpawnAt = lastDismissAt;
+            if (lastCameraPoint != null) lastFreeSpawnFrom = lastCameraPoint.clone();
+        }
         letGo(id);
         seenThings.removeIf(seen -> {
             if (!seen.item.id.equals(id)) return false;
@@ -1253,6 +1291,15 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         final float[] point;
         Anchor anchor;
         ArScene.Item item;
+        // Pinched: how much bigger than 30 cm, and turned how far (radians).
+        float scale = 1f;
+        float roll;
+        // While dragged: where the finger holds it (anchored there when let go).
+        float[] heldAt;
+
+        float[] where() {
+            return heldAt != null ? heldAt : anchor.getPose().getTranslation();
+        }
 
         SeenThing(ArObjects.Thing thing, float[] point) {
             this.thing = thing;
@@ -1387,16 +1434,19 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         });
         for (SeenThing seen : seenThings) {
             if (dismissed.contains(seen.item.id) || seen.anchor.getTrackingState() != TrackingState.TRACKING) continue;
-            float[] point = seen.anchor.getPose().getTranslation();
+            float[] point = seen.where();
             String key = "seen:" + seen.item.id;
             ensureTexture(seen.item, key);
             float aspect = gl.aspect(key);
             if (aspect <= 0f) continue;
-            // A small label on the thing (30 cm across), turned to face the visitor.
+            // A small label on the thing (30 cm across, or as pinched), facing the visitor.
             float yaw = ArPlacement.yawTowards(point[0], point[2], cameraPoint[0], cameraPoint[2]);
+            Pose pose = new Pose(point, ArPlacement.yawQuaternion(yaw));
+            if (seen.roll != 0f) pose = pose.compose(Pose.makeRotation(0f, 0f, (float) Math.sin(seen.roll / 2), (float) Math.cos(seen.roll / 2)));
+            float width = 0.3f * seen.scale;
             int drawn = draws.size();
-            draws.add(Draw.posed(seen.item.id, new Pose(point, ArPlacement.yawQuaternion(yaw)), key, 0.3f, 0.3f * aspect, 0.97f, distance(point, cameraPoint)));
-            addCardDismiss(draws, drawn, 0.3f, distance(point, cameraPoint));
+            draws.add(Draw.posed(seen.item.id, pose, key, width, width * aspect, 0.97f, distance(point, cameraPoint)));
+            addCardDismiss(draws, drawn, width, distance(point, cameraPoint));
         }
     }
 
@@ -1693,9 +1743,42 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
     }
 
-    /** A press on a bubble or card dragged down brings it closer; up pushes it away. */
-    private void handleDrag(float[] drag, List<Draw> draws, float[] viewProjection) {
-        if (drag[0] == DRAG_START) {
+    /**
+     * A press on a bubble or card dragged down brings it closer; up pushes it
+     * away. A recognized thing's label follows the finger across the view
+     * instead, and two fingers on it size and turn it.
+     */
+    private void handleDrag(float[] drag, List<Draw> draws, float[] viewProjection, float[] cameraPoint) {
+        if (drag[0] == PINCH_START) {
+            pinchSeen = seenAt(drag[1], drag[2], draws, viewProjection);
+            if (pinchSeen == null) pinchSeen = seenAt(drag[5], drag[6], draws, viewProjection);
+            if (pinchSeen == null) pinchSeen = seenAt(drag[7], drag[8], draws, viewProjection);
+            if (pinchSeen == null) return;
+            pinchFromSpacing = Math.max(1f, drag[3]);
+            pinchFromAngle = drag[4];
+            pinchFromScale = pinchSeen.scale;
+            pinchFromRoll = pinchSeen.roll;
+            seenGestured = true;
+        } else if (drag[0] == PINCH_MOVE) {
+            if (pinchSeen == null) return;
+            pinchSeen.scale = Math.max(0.4f, Math.min(4f, pinchFromScale * drag[1] / pinchFromSpacing));
+            // Screen angles run clockwise; the label turns the same way as the fingers.
+            pinchSeen.roll = pinchFromRoll - (drag[2] - pinchFromAngle);
+        } else if (drag[0] == PINCH_END) {
+            pinchSeen = null;
+        } else if (drag[0] == DRAG_START) {
+            movingSeen = seenAt(drag[1], drag[2], draws, viewProjection);
+            if (movingSeen != null) {
+                movingDistance = distance(movingSeen.where(), cameraPoint);
+                dragId = null;
+                seenGestured = true;
+                return;
+            }
+            // Sideways drags move only a recognized thing's label.
+            if (drag[4] < 0.5f) {
+                dragId = null;
+                return;
+            }
             Draw picked = pick(drag[1], drag[2], draws, viewProjection);
             // Pressing on a ✕ and dragging moves what it sits on.
             String id = picked == null ? null : picked.itemId.startsWith(DISMISS) ? picked.itemId.substring(DISMISS.length()) : picked.itemId;
@@ -1706,15 +1789,65 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             if (dragId == null) return;
             if (!discoverNudge.containsKey(dragId)) discoverNudge.put(dragId, new float[3]);
             draggedOnce = true;
-        } else if (drag[0] == DRAG_MOVE && dragId != null) {
+        } else if (drag[0] == DRAG_MOVE) {
+            if (movingSeen != null) {
+                float[] held = pointUnder(drag[1], drag[2], viewProjection, cameraPoint, movingDistance);
+                if (held != null) movingSeen.heldAt = held;
+                return;
+            }
+            if (dragId == null) return;
             float nearest = discovered.contains(dragId) ? DRAG_NEAREST_CARD_M : DRAG_NEAREST_BUBBLE_M;
             // A find over a spot farther than this can still be pushed back to it.
             float farthest = Math.max(DRAG_FARTHEST_M, dragFromDistance);
             float want = dragFromDistance * (float) Math.pow(2, (dragFromY - drag[2]) / (viewportHeight / 3f));
             dragTo = Math.max(nearest, Math.min(farthest, want));
         } else if (drag[0] == DRAG_END) {
+            if (movingSeen != null && movingSeen.heldAt != null && session != null && seenThings.contains(movingSeen)) {
+                // Anchored again where it was let go.
+                float[] held = movingSeen.heldAt;
+                movingSeen.anchor.detach();
+                movingSeen.anchor = session.createAnchor(Pose.makeTranslation(held[0], held[1], held[2]));
+            }
+            if (movingSeen != null) movingSeen.heldAt = null;
+            movingSeen = null;
             dragId = null;
         }
+    }
+
+    /** How far apart the first two fingers are (pixels). */
+    static float fingerSpacing(MotionEvent event) {
+        return (float) Math.hypot(event.getX(1) - event.getX(0), event.getY(1) - event.getY(0));
+    }
+
+    /** The line between the first two fingers, as a screen angle (radians, clockwise). */
+    static float fingerAngle(MotionEvent event) {
+        return (float) Math.atan2(event.getY(1) - event.getY(0), event.getX(1) - event.getX(0));
+    }
+
+    /** The recognized thing whose label (or its ✕) is under a point on the screen, or null. */
+    private SeenThing seenAt(float x, float y, List<Draw> draws, float[] viewProjection) {
+        Draw picked = pick(x, y, draws, viewProjection);
+        if (picked == null) return null;
+        String id = picked.itemId.startsWith(DISMISS) ? picked.itemId.substring(DISMISS.length()) : picked.itemId;
+        for (SeenThing seen : seenThings) if (seen.item.id.equals(id)) return seen;
+        return null;
+    }
+
+    /** The point this far from the camera along the line through a point on the screen. */
+    private float[] pointUnder(float x, float y, float[] viewProjection, float[] cameraPoint, float far) {
+        float[] inverse = new float[16];
+        if (!Matrix.invertM(inverse, 0, viewProjection, 0)) return null;
+        float[] at = new float[4];
+        Matrix.multiplyMV(at, 0, inverse, 0, new float[] {2f * x / viewportWidth - 1f, 1f - 2f * y / viewportHeight, 1f, 1f}, 0);
+        if (Math.abs(at[3]) < 1e-6f) return null;
+        float[] direction = {at[0] / at[3] - cameraPoint[0], at[1] / at[3] - cameraPoint[1], at[2] / at[3] - cameraPoint[2]};
+        float length = (float) Math.sqrt(direction[0] * direction[0] + direction[1] * direction[1] + direction[2] * direction[2]);
+        if (length < 1e-6f) return null;
+        return new float[] {
+            cameraPoint[0] + direction[0] / length * far,
+            cameraPoint[1] + direction[1] / length * far,
+            cameraPoint[2] + direction[2] / length * far,
+        };
     }
 
     // ---- Status ----
@@ -1762,7 +1895,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (turn != null) return turn;
         if (discovered.isEmpty()) return "Walk up to a bubble or tap it";
         if (!draggedOnce) return "Drag a bubble down or up to move it";
-        return objects != null && objects.available() && seenThings.isEmpty() ? "Point at a door, a house or a beach to see its Native name" : "";
+        if (!seenThings.isEmpty()) return seenGestured ? "" : "Drag a word to move it · pinch to size and turn it";
+        return objects != null && objects.available() ? "Point at a door, a house or a beach to see its Native name" : "";
     }
 
     private void postStatus(String text, String hintValue) {
@@ -1847,6 +1981,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         surface.setWillNotDraw(false);
         final float[] down = new float[2];
         final boolean[] dragging = new boolean[1];
+        final boolean[] pinching = new boolean[1];
         surface.setOnTouchListener((view, event) -> {
             float dx = event.getX() - down[0];
             float dy = event.getY() - down[1];
@@ -1855,17 +1990,38 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                     down[0] = event.getX();
                     down[1] = event.getY();
                     dragging[0] = false;
+                    pinching[0] = false;
+                    break;
+                case MotionEvent.ACTION_POINTER_DOWN:
+                    // A second finger: a pinch, which sizes and turns a recognized thing's label.
+                    if (event.getPointerCount() == 2) {
+                        if (dragging[0]) drags.add(new float[] {DRAG_END});
+                        dragging[0] = false;
+                        pinching[0] = true;
+                        drags.add(new float[] {PINCH_START, (event.getX(0) + event.getX(1)) / 2f, (event.getY(0) + event.getY(1)) / 2f,
+                            fingerSpacing(event), fingerAngle(event), event.getX(0), event.getY(0), event.getX(1), event.getY(1)});
+                    }
                     break;
                 case MotionEvent.ACTION_MOVE:
-                    // A mostly up-or-down move past a small slop is a drag; the
-                    // render loop finds what was pressed.
-                    if (!dragging[0] && Math.abs(dy) >= dp(16) && Math.abs(dy) > Math.abs(dx)) {
+                    if (pinching[0]) {
+                        if (event.getPointerCount() >= 2) drags.add(new float[] {PINCH_MOVE, fingerSpacing(event), fingerAngle(event)});
+                        break;
+                    }
+                    // A move past a small slop is a drag; the render loop finds what was
+                    // pressed (up or down moves a bubble nearer or farther; a recognized
+                    // thing's label follows the finger any way).
+                    if (!dragging[0] && Math.hypot(dx, dy) >= dp(16)) {
                         dragging[0] = true;
-                        drags.add(new float[] {DRAG_START, down[0], down[1], event.getY()});
+                        drags.add(new float[] {DRAG_START, down[0], down[1], event.getY(), Math.abs(dy) > Math.abs(dx) ? 1f : 0f});
                     }
                     if (dragging[0]) drags.add(new float[] {DRAG_MOVE, event.getX(), event.getY()});
                     break;
+                case MotionEvent.ACTION_POINTER_UP:
+                    if (pinching[0] && event.getPointerCount() == 2) drags.add(new float[] {PINCH_END});
+                    break;
                 case MotionEvent.ACTION_UP:
+                    // The pinch ended when its second finger lifted; this is no tap.
+                    if (pinching[0]) break;
                     if (dragging[0]) {
                         drags.add(new float[] {DRAG_END});
                     } else if (Math.hypot(dx, dy) < dp(16)) {
@@ -1875,6 +2031,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                     break;
                 case MotionEvent.ACTION_CANCEL:
                     if (dragging[0]) drags.add(new float[] {DRAG_END});
+                    if (pinching[0]) drags.add(new float[] {PINCH_END});
                     break;
                 default:
                     break;
@@ -2019,6 +2176,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             selfie.setName(selfieName());
             selfie.setVisibility(View.VISIBLE);
             startAr();
+            if (BuildConfig.DEBUG && new java.io.File(getFilesDir(), "qa-ar-pinch").exists()) selfie.postDelayed(this::qaPinchSelfie, 2500);
         } else {
             selfie.stop();
             selfie.setVisibility(View.GONE);
@@ -2037,7 +2195,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     }
 
     private String selfieHint() {
-        return selfieName().isEmpty() ? "Tap the name tag to write your name" : "Drag the name tag to move it";
+        return selfieName().isEmpty() ? "Tap the name tag to write your name" : "Drag the name tag to move it · pinch to size and turn it";
     }
 
     private String selfieName() {
@@ -2233,6 +2391,47 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             }
         }
         showPlaceTools();
+    }
+
+    /**
+     * QA builds: with files/qa-ar-pinch, selfie mode gets a two-finger pinch (spread
+     * to about twice as far apart, turning 15 degrees) around the screen's middle,
+     * through the window like a real touch, since adb can only send one finger.
+     */
+    private void qaPinchSelfie() {
+        View window = getWindow().getDecorView();
+        float centerX = window.getWidth() / 2f;
+        float centerY = window.getHeight() * 0.6f;
+        long start = SystemClock.uptimeMillis();
+        for (int step = 0; step <= 12; step++) {
+            float share = Math.min(1f, step / 10f);
+            double angle = Math.toRadians(15 * share);
+            float half = 150 + 160 * share;
+            float[][] fingers = {
+                {centerX - half * (float) Math.cos(angle), centerY - half * (float) Math.sin(angle)},
+                {centerX + half * (float) Math.cos(angle), centerY + half * (float) Math.sin(angle)},
+            };
+            int action = step == 0 ? MotionEvent.ACTION_DOWN : step == 1 ? MotionEvent.ACTION_POINTER_DOWN | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT)
+                : step == 11 ? MotionEvent.ACTION_POINTER_UP | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT) : step == 12 ? MotionEvent.ACTION_UP : MotionEvent.ACTION_MOVE;
+            int count = step == 0 || step == 12 ? 1 : 2;
+            MotionEvent.PointerProperties[] properties = new MotionEvent.PointerProperties[count];
+            MotionEvent.PointerCoords[] coords = new MotionEvent.PointerCoords[count];
+            for (int i = 0; i < count; i++) {
+                properties[i] = new MotionEvent.PointerProperties();
+                properties[i].id = i;
+                properties[i].toolType = MotionEvent.TOOL_TYPE_FINGER;
+                coords[i] = new MotionEvent.PointerCoords();
+                coords[i].x = fingers[i][0];
+                coords[i].y = fingers[i][1];
+                coords[i].pressure = 1f;
+                coords[i].size = 0.1f;
+            }
+            MotionEvent event = MotionEvent.obtain(start, start + step * 16L, action, count, properties, coords, 0, 0, 1f, 1f, 0, 0,
+                android.view.InputDevice.SOURCE_TOUCHSCREEN, 0);
+            window.dispatchTouchEvent(event);
+            event.recycle();
+        }
+        android.util.Log.i("OnThisSiteAR", "QA pinch sent to selfie mode");
     }
 
     /** QA builds: files/qa-ar-drawer opens the Place drawer (even camera-only) to check its layout. */
