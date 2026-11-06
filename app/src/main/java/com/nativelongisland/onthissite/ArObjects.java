@@ -64,17 +64,49 @@ final class ArObjects {
             return text.toString();
         }
 
-        /** "Door. Mohegan: sqôt · Natick: quont" */
-        String meaning() {
-            StringBuilder text = new StringBuilder(english.substring(0, 1).toUpperCase(Locale.US) + english.substring(1) + ".");
-            for (int i = 0; i < words.length; i++) text.append(i == 0 ? " " : " · ").append(words[i].language).append(": ").append(words[i].word);
+        /** "sqôt (Mohegan) · quont (Natick)" */
+        String wordsLine() {
+            StringBuilder text = new StringBuilder();
+            for (Word word : words) text.append(text.length() > 0 ? "  ·  " : "").append(word.word).append(" (").append(word.language).append(")");
             return text.toString();
+        }
+
+        /** "Door" */
+        String title() {
+            return english.substring(0, 1).toUpperCase(Locale.US) + english.substring(1);
         }
     }
 
+    // What an opened label teaches about the languages its words come from. Drawn
+    // from On This Site's "Algonquian Language" Knowledgebase article and its sources
+    // (LANGUAGE_SOURCES); nothing here is new.
+    static final String LANGUAGE_NOTES = "About these languages\n"
+        + "Mohegan and Natick are Southern New England Algonquian languages, related to the languages once spoken across "
+        + "Long Island. There was no single language across the island: eastern communities kept language ties with peoples "
+        + "across Long Island Sound and southern New England, and much of western Long Island had close Munsee and Lenape ties.\n\n"
+        + "Why Mohegan and Natick words?\n"
+        + "Long Island's own languages were never documented completely. Language reclamation, including Unkechaug and "
+        + "Shinnecock efforts, uses surviving word lists, related Eastern Algonquian languages and community teaching.\n\n"
+        + "What happened to Long Island's languages?\n"
+        + "Colonialism, schooling, land loss and pressure to use English interrupted everyday fluency. Surviving word lists "
+        + "and family memories remain important records, and language reclamation treats dormancy as a condition that can "
+        + "change, not as disappearance.\n\n"
+        + "Learn the languages\n"
+        + "Stony Brook University's Algonquian Language Revitalization Project works with Montaukett, Shinnecock and "
+        + "Unkechaug community members and leaders. The university offers language courses, and opened an Algonquian "
+        + "library in 2023 for teaching, research, dictionaries, grammars and community learning.";
+
+    static final String LANGUAGE_SOURCES = "On This Site, \"Algonquian Language\"; John A. Strong, The Montaukett Indians of "
+        + "Eastern Long Island (2001), pp. 28-32, 159-160; Gaynell Stone, The Shinnecock Indians: A Culture History (1983), "
+        + "pp. 314, 338, 351";
+
     static final Thing[] THINGS = {
-        // A house's front door, a car door, a doorway: "door" as a whole word.
-        new Thing("door", "door", "\\bdoor(s|way|ways)?\\b", new Word("Mohegan", "sqôt"), new Word("Natick", "quont")),
+        // A house's front door, a car door, a doorway, a doorknob or frame, an entrance;
+        // and the side of a car (its doors), which a description may name only as the car.
+        new Thing("door", "door",
+            "\\bdoor(s|way|ways|knob|knobs|frame|frames|step|steps)?\\b|\\b(entrance|entranceway|entryway)\\b"
+                + "|\\b(car|truck|van|suv|vehicle)\\b[^.]*\\b(side|handle|handles)\\b",
+            new Word("Mohegan", "sqôt"), new Word("Natick", "quont")),
     };
 
     /** The first thing a description names, or null. */
@@ -146,16 +178,31 @@ final class ArObjects {
         busy = true;
         worker.execute(() -> {
             Bitmap picture = null;
-            String description = null;
+            StringBuilder text = new StringBuilder();
+            boolean[] reported = new boolean[1];
             try {
-                picture = centerOf(nv21, width, height, rotationDegrees, 0.6f);
-                description = describeNow(picture);
+                // Most of the view (80% of its short side): a door is big, and a tight crop
+                // of its panel alone may not read as a door.
+                picture = centerOf(nv21, width, height, rotationDegrees, 0.8f);
+                // The text arrives a few words at a time: a door is named the moment it is
+                // mentioned, without waiting for the rest of the description.
+                describer.runInference(ImageDescriptionRequest.builder(picture).build(), chunk -> {
+                    text.append(chunk);
+                    Thing thing = thingIn(text.toString());
+                    if (thing != null && !reported[0] && !closed) {
+                        reported[0] = true;
+                        result.described(text.toString(), thing);
+                    }
+                }).get();
             } catch (Throwable error) {
                 android.util.Log.w("OnThisSiteAR", "On-device recognition failed: " + error);
             } finally {
                 if (picture != null) picture.recycle();
             }
-            finish(description, result);
+            busy = false;
+            String description = text.toString();
+            android.util.Log.i("OnThisSiteAR", "Seen: " + (description.length() > 200 ? description.substring(0, 200) + "..." : description));
+            if (!reported[0] && !closed) result.described(description, null);
         });
     }
 

@@ -375,8 +375,19 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                     android.util.Log.w("OnThisSiteAR", "QA card " + item.id + " failed: " + error);
                 }
             }
+            // Each thing the camera can name: its small label, and ("seen-<key>" in the file) its opened card.
+            for (ArObjects.Thing thing : ArObjects.THINGS) {
+                try {
+                    saveQaCard(new java.io.File(out, "seen-" + thing.key + "-label.png"), ArCards.objectLabel(thingItem(thing, 0)));
+                } catch (Exception error) {
+                    android.util.Log.w("OnThisSiteAR", "QA label " + thing.key + " failed: " + error);
+                }
+            }
             android.util.Log.i("OnThisSiteAR", "QA cards rendered: " + index);
         });
+        for (ArObjects.Thing thing : ArObjects.THINGS) {
+            if (openId.equals("seen-" + thing.key)) infoPanel.postDelayed(() -> showItem(thingItem(thing, 0)), 1500);
+        }
         for (ArScene.Item item : scene.items) {
             if (item.id.equals(openId)) {
                 infoPanel.postDelayed(() -> showItem(item), 1500);
@@ -676,6 +687,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 Bitmap bitmap;
                 if (key.startsWith("card:")) {
                     bitmap = ArCards.promptCard(item, decodeImage(item.image, 900));
+                } else if (key.startsWith("seen:")) {
+                    bitmap = ArCards.objectLabel(item);
                 } else if (key.startsWith("here:")) {
                     bitmap = ArCards.hereMarker(item);
                 } else if (key.startsWith("sky:")) {
@@ -1210,7 +1223,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     // ---- Things the camera recognizes ----
 
-    private static final long LOOK_EVERY_MS = 3000;
+    // As soon as the last look is done, at most once a second.
+    private static final long LOOK_EVERY_MS = 1000;
 
     /** A thing the camera recognized, labeled where the middle of the view met it. */
     private static final class SeenThing {
@@ -1236,12 +1250,13 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (objects == null || !objects.ready() || bubblesHidden || placingAsset != null || video != null) return;
         if (infoPanel.getVisibility() == View.VISIBLE) return;
         long now = SystemClock.uptimeMillis();
-        // Still enough to aim: under 6 cm and about 6 degrees of movement in the last half second.
+        // Held, not swung: under 15 cm and about 12 degrees of movement in the last half
+        // second (a quick turn blurs the picture), so an ordinary hand-held aim counts.
         if (now - lastSteadyAt >= 500) {
             float[] from = cameraPose.getTranslation();
             float[] facing = cameraPose.getZAxis();
-            steadyNow = lastSteadyFrom != null && distance(from, lastSteadyFrom) < 0.06f
-                && facing[0] * lastSteadyFacing[0] + facing[1] * lastSteadyFacing[1] + facing[2] * lastSteadyFacing[2] > 0.994f;
+            steadyNow = lastSteadyFrom != null && distance(from, lastSteadyFrom) < 0.15f
+                && facing[0] * lastSteadyFacing[0] + facing[1] * lastSteadyFacing[1] + facing[2] * lastSteadyFacing[2] > 0.978f;
             lastSteadyFrom = from;
             lastSteadyFacing = facing;
             lastSteadyAt = now;
@@ -1260,7 +1275,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             return;
         }
         objects.describeCenter(nv21, width, height, cameraImageRotation(), (description, thing) -> {
-            if (BuildConfig.DEBUG) android.util.Log.i("OnThisSiteAR", "Seen: " + description + (thing != null ? " -> " + thing.key : ""));
             if (thing != null) seenPending.add(new SeenThing(thing, point));
         });
     }
@@ -1325,16 +1339,21 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         });
     }
 
-    /** The word card a recognized thing floats as (and opens into). */
+    /**
+     * A recognized thing's card: it floats as a small label (its name over its
+     * words) and opens into its words with their languages, then what the
+     * Knowledgebase teaches about those languages and how to learn them.
+     */
     private static ArScene.Item thingItem(ArObjects.Thing thing, int number) {
         ArScene.Item item = new ArScene.Item();
         item.id = "seen-" + thing.key + "-" + number;
         item.kind = ArScene.KIND_PHRASE;
         item.layer = ArScene.LAYER_LANGUAGE;
-        item.title = thing.english.substring(0, 1).toUpperCase(Locale.US) + thing.english.substring(1);
-        item.word = thing.headline();
-        item.meaning = thing.meaning();
-        item.more = "Your phone recognized this itself: what the camera sees is never sent anywhere.";
+        item.title = thing.title();
+        item.brief = thing.headline();
+        item.word = thing.wordsLine();
+        item.more = ArObjects.LANGUAGE_NOTES + "\n\nYour phone recognized this itself: what the camera sees is never sent anywhere.";
+        item.credit = ArObjects.LANGUAGE_SOURCES;
         return item;
     }
 
@@ -1348,9 +1367,15 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         for (SeenThing seen : seenThings) {
             if (dismissed.contains(seen.item.id) || seen.anchor.getTrackingState() != TrackingState.TRACKING) continue;
             float[] point = seen.anchor.getPose().getTranslation();
+            String key = "seen:" + seen.item.id;
+            ensureTexture(seen.item, key);
+            float aspect = gl.aspect(key);
+            if (aspect <= 0f) continue;
+            // A small label on the thing (30 cm across), turned to face the visitor.
+            float yaw = ArPlacement.yawTowards(point[0], point[2], cameraPoint[0], cameraPoint[2]);
             int drawn = draws.size();
-            addCard(draws, seen.item, point, cameraPoint, 0.42f);
-            addCardDismiss(draws, drawn, 0.42f, distance(point, cameraPoint));
+            draws.add(Draw.posed(seen.item.id, new Pose(point, ArPlacement.yawQuaternion(yaw)), key, 0.3f, 0.3f * aspect, 0.97f, distance(point, cameraPoint)));
+            addCardDismiss(draws, drawn, 0.3f, distance(point, cameraPoint));
         }
     }
 
