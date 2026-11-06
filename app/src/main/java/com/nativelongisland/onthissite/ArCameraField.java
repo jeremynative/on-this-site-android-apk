@@ -597,11 +597,8 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             if (!bubble.onScreen) continue;
             Bitmap bitmap = bitmapFor(bubble);
             if (bitmap != null) {
+                // No ✕ on an orb (a reach for it too easily put it away); its card opens instead.
                 canvas.drawBitmap(bitmap, null, new RectF(x - size, y - size, x + size, y + size), bitmapPaint);
-                // On the white ring (half the bubble's radius out), up and to the right.
-                float badgeRadius = Math.max(dp(11), size * 0.2f);
-                float along = (size * 0.5f + badgeRadius * 0.4f) * 0.7071f;
-                if (badges && grow >= 1f) drawBadge(canvas, bubble, x + along, y - along, badgeRadius, 255);
             } else {
                 placeholderPaint.setColor(ArCards.layerColor(bubble.item.layer));
                 placeholderPaint.setAlpha(200);
@@ -672,8 +669,8 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             // In the sign's top-right corner.
             float radius = Math.max(dp(11), w * 0.06f);
             drawBadge(canvas, bubble, x + w / 2 - radius * 0.6f, y - h / 2 + radius * 0.6f, radius, Math.round(255 * alpha));
-        } else {
-            // On the "You are here" pin's orb.
+        } else if (host.discovered(bubble.item)) {
+            // On the "You are here" pin's orb, once it has been opened (an orb has no ✕ before).
             float radius = Math.max(dp(11), w * 0.07f);
             float along = (ArCards.HERE_RING * w + radius * 0.4f) * 0.7071f;
             drawBadge(canvas, bubble, x + along, y - h / 2 + ArCards.HERE_ORB_Y * w - along, radius, 255);
