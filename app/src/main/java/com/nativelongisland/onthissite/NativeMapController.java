@@ -1115,10 +1115,19 @@ final class NativeMapController {
                     ),
                     Expression.literal(0)
                 ))
+                // The "new content" badge is smaller than a pin and shrinks with
+                // it (pins: 0.72 at zoom 6 to 1.08 at zoom 14); its offset shrinks
+                // too, so it stays on the pin's corner.
                 .withProperties(
-                    circleRadius(6.3f), circleColor("#d71920"), circleOpacity(0.98f),
-                    circleStrokeColor("#ffffff"), circleStrokeWidth(1.4f),
-                    circleTranslate(new Float[] { 8f, -8f })
+                    circleRadius(Expression.interpolate(Expression.linear(), Expression.zoom(),
+                        Expression.stop(6, 3.4f), Expression.stop(14, 5.2f))),
+                    circleColor("#d71920"), circleOpacity(0.98f),
+                    circleStrokeColor("#ffffff"),
+                    circleStrokeWidth(Expression.interpolate(Expression.linear(), Expression.zoom(),
+                        Expression.stop(6, 0.8f), Expression.stop(14, 1.2f))),
+                    circleTranslate(Expression.interpolate(Expression.linear(), Expression.zoom(),
+                        Expression.stop(6, Expression.literal(new Float[] { 5f, -5f })),
+                        Expression.stop(14, Expression.literal(new Float[] { 7.5f, -7.5f }))))
                 ));
             style.addLayer(new SymbolLayer("nli-site-unread-counts", SITE_POINT_SOURCE_ID)
                 .withFilter(Expression.gt(
@@ -1131,9 +1140,13 @@ final class NativeMapController {
                 .withProperties(
                     textField(Expression.get("unread_label")),
                     textFont(new String[] { "Noto Sans Regular" }),
-                    textSize(8.5f), textColor("#ffffff"),
+                    textSize(Expression.interpolate(Expression.linear(), Expression.zoom(),
+                        Expression.stop(6, 4.6f), Expression.stop(14, 7f))),
+                    textColor("#ffffff"),
                     textAllowOverlap(true), textIgnorePlacement(true),
-                    textTranslate(new Float[] { 8f, -8f })
+                    textTranslate(Expression.interpolate(Expression.linear(), Expression.zoom(),
+                        Expression.stop(6, Expression.literal(new Float[] { 5f, -5f })),
+                        Expression.stop(14, Expression.literal(new Float[] { 7.5f, -7.5f }))))
                 ));
             SymbolLayer territoryLabelLayer = new SymbolLayer("nli-territory-labels", LABEL_SOURCE_ID)
                 .withFilter(Expression.eq(Expression.get("label_kind"), Expression.literal("territory")))
