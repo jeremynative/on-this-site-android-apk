@@ -1,10 +1,10 @@
 package com.nativelongisland.onthissite;
 
 import android.graphics.Bitmap;
+import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.LinearGradient;
 import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
@@ -227,72 +227,82 @@ final class ArCards {
 
     static final int HERE_RED = 0xFFE0352B;
 
-    /**
-     * "You are here": the same orb as every bubble (white core, glow, white ring), in red,
-     * with a cone hanging from the ring and pointing down at the visitor's spot, and "You are
-     * here" and the land's name beneath. Walked up to or tapped, it opens into the land's card.
-     */
-    // Where the marker's orb sits, as shares of the marker's width: its middle's
-    // depth from the top, and its white ring's radius.
-    static final float HERE_ORB_Y = 128f / 420f;
-    static final float HERE_RING = 128f * 0.42f / 420f;
+    // The marker's size in its bitmap, and where its head sits as shares of that width:
+    // the middle's depth from the top, and its radius.
+    private static final int HERE_WIDTH = 520;
+    static final float HERE_ORB_Y = 176f / HERE_WIDTH;
+    static final float HERE_RING = 92f / HERE_WIDTH;
 
+    /**
+     * "You are here": a bubble drawn out into a drop that points down at the visitor's spot.
+     * One shape with one white rim, lit from a white core like every orb, in a soft red halo,
+     * with "You are here" and the land's name on a plate like the floating cards. Walked up to
+     * or tapped, it opens into the land's card.
+     */
     static Bitmap hereMarker(ArScene.Item item) {
-        int width = 420;
+        int width = HERE_WIDTH;
         float c = width / 2f;
-        float glowRadius = HERE_ORB_Y * width;
-        float cy = glowRadius;
-        float ring = HERE_RING * width;
-        float tipY = cy + ring + 86f;
-        TextPaint youPaint = textPaint(34, Color.WHITE, true);
-        TextPaint landPaint = textPaint(30, Color.WHITE, false);
-        for (TextPaint paint : new TextPaint[] {youPaint, landPaint}) paint.setShadowLayer(8, 0, 2, Color.argb(230, 0, 0, 0));
+        float radius = HERE_RING * width;
+        float cy = HERE_ORB_Y * width;
+        float tipY = cy + radius * 2.5f;
         String land = item.land.isEmpty() ? "Long Island" : item.land.replaceFirst("^On ", "");
-        StaticLayout you = centred("You are here", youPaint, width - 20, 1);
-        StaticLayout where = centred(land, landPaint, width - 20, 2);
-        int labelTop = Math.round(tipY) + 18;
-        Bitmap bitmap = Bitmap.createBitmap(width, labelTop + you.getHeight() + 4 + where.getHeight() + 12, Bitmap.Config.ARGB_8888);
+        int textWidth = width - 72;
+        StaticLayout you = centred("You are here", textPaint(40, Color.WHITE, true), textWidth, 1);
+        StaticLayout where = centred(land, textPaint(32, Color.rgb(221, 221, 221), false), textWidth, 2);
+        float plateWidth = Math.max(widest(you), widest(where)) + 64f;
+        float plateHeight = you.getHeight() + 6f + where.getHeight() + 36f;
+        float plateTop = tipY + 26f;
+        Bitmap bitmap = Bitmap.createBitmap(width, Math.round(plateTop + plateHeight) + 8, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
-        // The orb, as ArCards.orb draws it.
-        Paint glow = new Paint(Paint.ANTI_ALIAS_FLAG);
-        glow.setShader(new RadialGradient(c, cy, glowRadius,
-            new int[] {Color.argb(255, 255, 255, 255), withAlpha(HERE_RED, 220), withAlpha(HERE_RED, 0)},
-            new float[] {0f, 0.35f, 1f}, Shader.TileMode.CLAMP));
-        canvas.drawCircle(c, cy, glowRadius, glow);
-        // The cone: from the bottom of the ring down to a point, in the orb's red, edged in white.
-        float half = ring * 0.78f;
-        float top = cy + (float) Math.sqrt(ring * ring - half * half);
-        android.graphics.Path cone = new android.graphics.Path();
-        cone.moveTo(c - half, top);
-        cone.lineTo(c, tipY);
-        cone.lineTo(c + half, top);
-        cone.close();
-        // Only below the ring, so the orb's inside stays as it is on every bubble.
-        android.graphics.Path inside = new android.graphics.Path();
-        inside.addCircle(c, cy, ring, android.graphics.Path.Direction.CW);
-        cone.op(inside, android.graphics.Path.Op.DIFFERENCE);
-        Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
-        fill.setShader(new LinearGradient(0f, top, 0f, tipY, withAlpha(HERE_RED, 235), withAlpha(HERE_RED, 200), Shader.TileMode.CLAMP));
-        canvas.drawPath(cone, fill);
+        Paint halo = new Paint(Paint.ANTI_ALIAS_FLAG);
+        halo.setColor(withAlpha(HERE_RED, 191));
+        halo.setMaskFilter(new BlurMaskFilter(44f, BlurMaskFilter.Blur.NORMAL));
+        canvas.drawPath(hereDrop(c, cy, radius * 1.12f, tipY + 10f), halo);
+        android.graphics.Path drop = hereDrop(c, cy, radius, tipY);
+        Paint body = new Paint(Paint.ANTI_ALIAS_FLAG);
+        body.setShader(new RadialGradient(c, cy, radius * 2.3f,
+            new int[] {Color.WHITE, 0xFFFFD7D0, withAlpha(HERE_RED, 245), withAlpha(0xFFB81F1A, 235)},
+            new float[] {0f, 0.2f, 0.42f, 1f}, Shader.TileMode.CLAMP));
+        canvas.drawPath(drop, body);
+        Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);
+        rim.setStyle(Paint.Style.STROKE);
+        rim.setStrokeWidth(7);
+        rim.setStrokeJoin(Paint.Join.ROUND);
+        rim.setColor(Color.WHITE);
+        canvas.drawPath(drop, rim);
+        RectF plate = new RectF(c - plateWidth / 2f, plateTop, c + plateWidth / 2f, plateTop + plateHeight);
+        Paint background = new Paint(Paint.ANTI_ALIAS_FLAG);
+        background.setColor(Color.argb(225, 18, 24, 22));
+        canvas.drawRoundRect(plate, 28, 28, background);
         Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
         edge.setStyle(Paint.Style.STROKE);
-        edge.setStrokeWidth(6);
-        edge.setStrokeJoin(Paint.Join.ROUND);
-        edge.setColor(Color.WHITE);
-        android.graphics.Path sides = new android.graphics.Path();
-        sides.moveTo(c - half, top);
-        sides.lineTo(c, tipY);
-        sides.lineTo(c + half, top);
-        canvas.drawPath(sides, edge);
-        // The white ring every orb has, over the top of the cone.
-        canvas.drawCircle(c, cy, ring, edge);
+        edge.setStrokeWidth(4);
+        edge.setColor(HERE_RED);
+        canvas.drawRoundRect(new RectF(plate.left + 2, plate.top + 2, plate.right - 2, plate.bottom - 2), 26, 26, edge);
         canvas.save();
-        canvas.translate(10, labelTop);
+        canvas.translate((width - textWidth) / 2f, plateTop + 18f);
         you.draw(canvas);
-        canvas.translate(0, you.getHeight() + 4);
+        canvas.translate(0, you.getHeight() + 6f);
         where.draw(canvas);
         canvas.restore();
         return bitmap;
+    }
+
+    /** A round head of the given radius tapering in smooth curves to a point straight below it. */
+    private static android.graphics.Path hereDrop(float c, float cy, float radius, float tipY) {
+        android.graphics.Path path = new android.graphics.Path();
+        path.moveTo(c, tipY);
+        path.cubicTo(c - radius * 0.18f, tipY - radius * 0.85f, c - radius, cy + radius * 0.8f, c - radius, cy);
+        path.arcTo(new RectF(c - radius, cy - radius, c + radius, cy + radius), 180f, 180f, false);
+        path.cubicTo(c + radius, cy + radius * 0.8f, c + radius * 0.18f, tipY - radius * 0.85f, c, tipY);
+        path.close();
+        return path;
+    }
+
+    private static float widest(StaticLayout layout) {
+        float widest = 0f;
+        for (int line = 0; line < layout.getLineCount(); line++) widest = Math.max(widest, layout.getLineWidth(line));
+        return widest;
     }
 
     /**
