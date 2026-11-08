@@ -44,7 +44,9 @@ final class ArGl {
             + "varying vec2 v_TexCoord;\n"
             + "uniform sampler2D u_Texture;\n"
             + "uniform float u_Alpha;\n"
-            + "void main() { vec4 c = texture2D(u_Texture, v_TexCoord); gl_FragColor = vec4(c.rgb, c.a * u_Alpha); }\n";
+            + "uniform float u_Premultiplied;\n"
+            + "void main() { vec4 c = texture2D(u_Texture, v_TexCoord);"
+            + " gl_FragColor = vec4(c.rgb * mix(1.0, u_Alpha, u_Premultiplied), c.a * u_Alpha); }\n";
 
     // Placed 3D things (the flag): lit from above, both sides shaded alike. With
     // u_Wave above 0 the mesh is a unit cloth blowing from its pole edge
@@ -227,10 +229,21 @@ final class ArGl {
 
     /** model already includes the quad's world pose and its width/height scale. */
     void drawQuad(float[] viewProjection, float[] model, int texture, float alpha) {
+        drawQuad(viewProjection, model, texture, alpha, false);
+    }
+
+    /**
+     * premultiplied: blend the texture as Android drew it (colour already
+     * multiplied by alpha), so a soft coloured glow lights what is behind it
+     * instead of darkening it. Placed artwork (the neon stickers) needs this.
+     */
+    void drawQuad(float[] viewProjection, float[] model, int texture, float alpha, boolean premultiplied) {
         if (texture == 0 || alpha <= 0.01f) return;
+        GLES20.glBlendFunc(premultiplied ? GLES20.GL_ONE : GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
         Matrix.multiplyMM(mvp, 0, viewProjection, 0, model, 0);
         GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(quadProgram, "u_Mvp"), 1, false, mvp, 0);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(quadProgram, "u_Alpha"), Math.min(1f, alpha));
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(quadProgram, "u_Premultiplied"), premultiplied ? 1f : 0f);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture);
         GLES20.glUniform1i(GLES20.glGetUniformLocation(quadProgram, "u_Texture"), 0);

@@ -21,8 +21,9 @@ import java.util.List;
 /**
  * The "Place" drawer: things a visitor puts into their own space through AR,
  * each held by an ARCore anchor where it was placed for the rest of the AR
- * session. The stickers (#LANDBACK, Shinnecock Land, We Are Still Here) each
- * come in five looks and lie on the wall or ground that was aimed at; the flag
+ * session. The stickers (#LANDBACK, Shinnecock Land, We Are Still Here, You Are
+ * On Native Land) each come in eight looks, three of them neon, and lie on the
+ * wall or ground that was aimed at; the flag
  * is a 3D pole flying the Shinnecock flag on gold, black, white or silver,
  * planted on the ground with a soft shadow. Artwork is drawn here from the
  * bundled font and flag, so nothing is downloaded.
@@ -33,6 +34,7 @@ final class ArPlace {
     static final String LANDBACK = "landback";
     static final String SHINNECOCK_LAND = "shinnecock-land";
     static final String STILL_HERE = "still-here";
+    static final String NATIVE_LAND = "native-land";
     static final String FLAG = "flag";
 
     // The flag at scale 1 (metres): a pole, a ball on top, and the cloth near its top.
@@ -86,11 +88,18 @@ final class ArPlace {
                 new TagLine("WE ARE Still", 1f, Color.WHITE, Color.rgb(209, 196, 233), new int[] {}),
                 new TagLine("HERE", 1.9f, Color.rgb(179, 136, 255), Color.rgb(74, 20, 140), new int[] {0, 1, 3})},
             new String[] {"WE ARE STILL", "HERE"}, Color.rgb(142, 68, 220)),
+        // "land" in lower case for the same reason: "LAND" read as "hAND".
+        new Phrase(NATIVE_LAND, "You Are On Native Land", 0.6f, -4f,
+            new TagLine[] {
+                new TagLine("YOU ARE ON", 1f, Color.WHITE, Color.rgb(255, 224, 178), new int[] {}),
+                new TagLine("NATIVE land", 1.35f, Color.rgb(105, 240, 174), Color.rgb(0, 121, 70), new int[] {1, 4, 8})},
+            new String[] {"YOU ARE ON", "NATIVE LAND"}, Color.rgb(46, 125, 50)),
     };
 
     // Every sticker comes in these looks (id, name in the drawer).
     static final String[][] LOOKS = {
         {"graffiti", "Graffiti"}, {"black", "Black letters"}, {"digital", "Digital"}, {"painted", "Black only"}, {"badge", "Badge"},
+        {"neon-black", "Neon black"}, {"neon-red", "Neon red"}, {"neon-green", "Neon green"},
     };
     // The flag is always the gold Shinnecock flag; its pole comes in these colours (id, name in the drawer).
     static final String[][] POLES = {{"gold", "Gold pole"}, {"black", "Black pole"}, {"white", "White pole"}, {"silver", "Silver pole"}};
@@ -189,6 +198,10 @@ final class ArPlace {
                 return digital(phrase.plain, phrase.color);
             case "badge":
                 return badge(phrase.plain, phrase.color);
+            case "neon-black":
+            case "neon-red":
+            case "neon-green":
+                return neon(phrase.plain, asset.look);
             default:
                 return tag(graffiti(resources), phrase.tilt, Look.COLOUR, phrase.graffiti);
         }
@@ -406,6 +419,91 @@ final class ArPlace {
             canvas.drawCircle(cx, cy, cell * 0.47f, paint);
         }
         paint.setShader(null);
+        return bitmap;
+    }
+
+    /**
+     * Neon: the words bent in glass tube. Red and green tubes are lit, with a
+     * white-hot middle and a glow thrown round them onto the wall; black tubes
+     * are dark glass lit from behind, so a white halo glows round each letter.
+     * A short last line is drawn up to half as large again, as signs do.
+     */
+    private static Bitmap neon(String[] lines, String look) {
+        float span = 1000f;
+        Paint letters = new Paint(Paint.ANTI_ALIAS_FLAG);
+        letters.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
+        // Tubes are bent apart, so letters stand a little wider than type.
+        letters.setLetterSpacing(0.06f);
+        letters.setTextSize(100f);
+        float widest = 0f;
+        for (String line : lines) widest = Math.max(widest, letters.measureText(line));
+        float base = 100f * span / widest;
+        Path all = new Path();
+        float baseline = 0f;
+        for (int i = 0; i < lines.length; i++) {
+            letters.setTextSize(100f);
+            float size = Math.min(base * 1.5f, 100f * span / letters.measureText(lines[i]));
+            letters.setTextSize(size);
+            // Capitals stand about 0.72 of the size; lines are a third of the first's height apart.
+            baseline += (i == 0 ? 0f : base * 0.34f) + size * 0.72f;
+            Path path = new Path();
+            letters.getTextPath(lines[i], 0, lines[i].length(), -letters.measureText(lines[i]) / 2f, baseline, path);
+            all.addPath(path);
+        }
+        RectF bounds = new RectF();
+        all.computeBounds(bounds, true);
+        float tube = base * 0.05f;
+        float glow = base * 0.22f;
+        float margin = glow * 2.2f + tube;
+        Bitmap bitmap = Bitmap.createBitmap(Math.round(bounds.width() + 2 * margin), Math.round(bounds.height() + 2 * margin),
+            Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.translate(margin - bounds.left, margin - bounds.top);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setStyle(Paint.Style.FILL_AND_STROKE);
+        paint.setStrokeJoin(Paint.Join.ROUND);
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        if (look.equals("neon-black")) {
+            // Warm white light from behind the letters, onto the wall.
+            paint.setStrokeWidth(tube * 3f);
+            paint.setColor(Color.argb(150, 255, 246, 228));
+            paint.setMaskFilter(new BlurMaskFilter(glow, BlurMaskFilter.Blur.NORMAL));
+            canvas.drawPath(all, paint);
+            paint.setColor(Color.argb(235, 255, 250, 240));
+            paint.setMaskFilter(new BlurMaskFilter(glow * 0.4f, BlurMaskFilter.Blur.NORMAL));
+            canvas.drawPath(all, paint);
+            // The dark tube, with a soft sheen along its middle.
+            paint.setMaskFilter(null);
+            paint.setStrokeWidth(tube);
+            paint.setColor(Color.rgb(16, 16, 18));
+            canvas.drawPath(all, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.argb(140, 120, 120, 128));
+            paint.setMaskFilter(new BlurMaskFilter(tube * 0.6f, BlurMaskFilter.Blur.INNER));
+            canvas.drawPath(all, paint);
+            return bitmap;
+        }
+        boolean red = look.equals("neon-red");
+        int light = red ? Color.rgb(255, 23, 68) : Color.rgb(0, 230, 118);
+        int glass = red ? Color.rgb(255, 84, 112) : Color.rgb(80, 255, 152);
+        int hot = red ? Color.rgb(255, 232, 236) : Color.rgb(232, 255, 240);
+        // The glow thrown wide onto the wall, then close round the tube.
+        paint.setStrokeWidth(tube * 2f);
+        paint.setColor(Color.argb(150, Color.red(light), Color.green(light), Color.blue(light)));
+        paint.setMaskFilter(new BlurMaskFilter(glow, BlurMaskFilter.Blur.NORMAL));
+        canvas.drawPath(all, paint);
+        paint.setColor(Color.argb(230, Color.red(light), Color.green(light), Color.blue(light)));
+        paint.setMaskFilter(new BlurMaskFilter(glow * 0.35f, BlurMaskFilter.Blur.NORMAL));
+        canvas.drawPath(all, paint);
+        // The lit tube, white-hot along its middle.
+        paint.setMaskFilter(null);
+        paint.setStrokeWidth(tube);
+        paint.setColor(glass);
+        canvas.drawPath(all, paint);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(hot);
+        paint.setMaskFilter(new BlurMaskFilter(tube * 0.6f, BlurMaskFilter.Blur.INNER));
+        canvas.drawPath(all, paint);
         return bitmap;
     }
 
