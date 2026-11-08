@@ -626,8 +626,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             if (!bubble.marker || bubble.placed || (bubble.sky && !skyReady)) continue;
             if (bubble.item.isHere()) {
                 bubble.bearing = heading;
-                // A short (landscape) view has the shutter and hint in its lower middle: the pin goes above them.
-                bubble.elevation = getHeight() < getWidth() ? pitch + fovUp * 0.1 : Math.max(-30, pitch - HERE_BELOW_DEG);
+                bubble.elevation = Math.max(-30, pitch - HERE_BELOW_DEG);
             } else {
                 bubble.riseAt = now + skyIndex++ * SKY_STAGGER_MS;
             }
@@ -654,7 +653,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         }
         Bitmap bitmap = bitmapFor(bubble);
         if (bitmap == null) return;
-        float w = (bubble.sky ? dp(200) : Math.min(dp(210), height * 0.3f)) * bubble.near;
+        float w = dp(bubble.sky ? 200 : 210) * bubble.near;
         float h = w * bitmap.getHeight() / (float) bitmap.getWidth();
         float x = width / 2f + (float) (across / fovAcross) * width;
         float y = height / 2f - (float) ((elevation - pitch) / fovUp) * height + bob;
