@@ -606,7 +606,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         gl.beginQuads();
         if (videoViewProjection != null) {
             for (Draw draw : videoDraws) {
-                if (!isDismiss(draw)) gl.drawQuad(videoViewProjection, draw.model, gl.texture(draw.texture), draw.alpha);
+                if (!isDismiss(draw)) gl.drawQuad(videoViewProjection, draw.model, gl.texture(draw.texture), draw.alpha, isPlacedArt(draw));
             }
         }
         ArVideo recording = video;
@@ -693,7 +693,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             boolean photo = captureWanted;
             for (Draw draw : draws) {
                 if (photo && isDismiss(draw)) continue;
-                gl.drawQuad(viewProjection, draw.model, gl.texture(draw.texture), draw.alpha);
+                gl.drawQuad(viewProjection, draw.model, gl.texture(draw.texture), draw.alpha, isPlacedArt(draw));
             }
             gl.endQuads();
 
@@ -1237,6 +1237,11 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     private static boolean isDismiss(Draw draw) {
         return draw.itemId != null && draw.itemId.startsWith(DISMISS);
+    }
+
+    /** Placed stickers (and their ring, outline and shadow) blend premultiplied, so a neon glow lights the wall. */
+    private static boolean isPlacedArt(Draw draw) {
+        return draw.texture != null && draw.texture.startsWith("place:");
     }
 
     /** Puts a bubble, card, pin or sign away for the rest of this visit. */
