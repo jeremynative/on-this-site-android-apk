@@ -216,10 +216,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private TextView photoPost;
     private Uri photoSavedUri;
     private String photoSavedType = "image/jpeg";
-    // AR video (hold the shutter): the recording while it runs, and in full AR
-    // the frame it draws again (GL thread only).
+    // AR video: the recording while it runs, and in full AR the frame it draws
+    // again (GL thread only).
     private volatile ArVideo video;
-    private boolean recordedVideo;
+    // A double tap on the record button can't stop what its first tap started.
+    private static final long VIDEO_MIN_MS = 1000;
+    private static final int VIDEO_RED = Color.rgb(222, 48, 48);
+    // Video in the mode switch: the shutter starts and stops a recording.
+    private boolean videoMode;
     private ImageView shutter;
     private TextView recordPill;
     private final android.os.Handler videoTicker = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -305,7 +309,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     // Selfie mode: the front camera and the visitor's name tag, in place of AR.
     private ArSelfie selfie;
     private boolean selfieMode;
-    private TextView modeAr;
+    private LinearLayout modeSwitch;
+    private TextView modePhoto;
+    private TextView modeVideo;
     private TextView modeSelfie;
     private View hideButton;
     private View statusCapsule;
@@ -548,7 +554,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         if (requestCode == REQUEST_MICROPHONE) {
             boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
-            toast(granted ? "Now hold the camera button to record a video." : "Hold the camera button to record a video (without sound).");
+            if (!granted) toast("Videos will record without sound.");
         }
     }
 
@@ -2160,31 +2166,60 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         return button;
     }
 
-    /** "AR  Selfie": the AR camera, or the front camera with the visitor's name tag. */
+    /**
+     * "Photo  Video  Selfie", as a phone's camera switches modes: Photo and
+     * Video are the AR camera, Selfie the front camera with the visitor's name tag.
+     */
     private LinearLayout buildModeSwitch() {
-        LinearLayout modes = row();
-        modes.setBackground(rounded(Color.argb(150, 20, 26, 23), 18));
-        modes.setPadding(dp(4), dp(4), dp(4), dp(4));
-        modeAr = text(14, true, "AR");
-        modeAr.setContentDescription("AR camera");
-        modeAr.setOnClickListener(v -> setSelfieMode(false));
+        modeSwitch = row();
+        modeSwitch.setBackground(rounded(Color.argb(150, 20, 26, 23), 18));
+        modeSwitch.setPadding(dp(4), dp(4), dp(4), dp(4));
+        modePhoto = text(14, true, "Photo");
+        modePhoto.setContentDescription("AR photos");
+        modePhoto.setOnClickListener(v -> setCameraMode(false, false));
+        modeVideo = text(14, true, "Video");
+        modeVideo.setContentDescription("AR videos");
+        modeVideo.setOnClickListener(v -> setCameraMode(true, false));
         modeSelfie = text(14, true, "Selfie");
         modeSelfie.setContentDescription("Selfie camera, with your name tag");
-        modeSelfie.setOnClickListener(v -> setSelfieMode(true));
-        for (TextView mode : new TextView[] {modeAr, modeSelfie}) {
+        modeSelfie.setOnClickListener(v -> setCameraMode(false, true));
+        for (TextView mode : new TextView[] {modePhoto, modeVideo, modeSelfie}) {
             mode.setGravity(Gravity.CENTER);
             mode.setPadding(dp(16), dp(6), dp(16), dp(6));
-            modes.addView(mode, new LinearLayout.LayoutParams(-2, -2));
+            modeSwitch.addView(mode, new LinearLayout.LayoutParams(-2, -2));
         }
         showMode();
-        return modes;
+        return modeSwitch;
+    }
+
+    private void setCameraMode(boolean video, boolean selfie) {
+        videoMode = video;
+        setSelfieMode(selfie);
+        showMode();
+        if (video) askForMicrophoneOnce();
     }
 
     private void showMode() {
-        modeAr.setBackground(selfieMode ? null : rounded(Color.rgb(46, 125, 84), 14));
-        modeSelfie.setBackground(selfieMode ? rounded(Color.rgb(46, 125, 84), 14) : null);
-        modeAr.setTextColor(selfieMode ? Color.rgb(200, 214, 205) : Color.WHITE);
-        modeSelfie.setTextColor(selfieMode ? Color.WHITE : Color.rgb(200, 214, 205));
+        TextView active = selfieMode ? modeSelfie : videoMode ? modeVideo : modePhoto;
+        for (TextView mode : new TextView[] {modePhoto, modeVideo, modeSelfie}) {
+            mode.setBackground(mode == active ? rounded(Color.rgb(46, 125, 84), 14) : null);
+            mode.setTextColor(mode == active ? Color.WHITE : Color.rgb(200, 214, 205));
+        }
+        showShutter();
+    }
+
+    /** The shutter shows what a tap will do: camera for a photo, red dot to record, red square to stop. */
+    private void showShutter() {
+        GradientDrawable ring = oval(Color.argb(120, 20, 26, 23));
+        ring.setStroke(dp(4), Color.WHITE);
+        shutter.setBackground(ring);
+        boolean recording = video != null;
+        boolean records = videoMode && !selfieMode;
+        int inset = !records ? 19 : recording ? 23 : 13;
+        shutter.setPadding(dp(inset), dp(inset), dp(inset), dp(inset));
+        if (records) shutter.setImageDrawable(recording ? rounded(VIDEO_RED, 5) : oval(VIDEO_RED));
+        else shutter.setImageResource(R.drawable.ic_ar_camera);
+        shutter.setContentDescription(selfieMode ? "Take a selfie" : !records ? "Take a photo" : recording ? "Stop recording" : "Record a video");
     }
 
     /**
@@ -2220,7 +2255,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         placeButton.setVisibility(on || cameraOnly ? View.INVISIBLE : View.VISIBLE);
         hideButton.setVisibility(on ? View.INVISIBLE : View.VISIBLE);
         statusCapsule.setVisibility(on ? View.INVISIBLE : View.VISIBLE);
-        shutter.setContentDescription(on ? "Take a selfie" : "Take a photo. Hold to record a video.");
         showMode();
         lastStatusText = "";
         hint.setText(on ? selfieHint() : "");
@@ -2635,20 +2669,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             pillParams.topMargin = dp(10);
             bottom.addView(recordPill, pillParams);
             // The shutter: saves what the camera sees, bubbles and all, to
-            // Photos. Holding it records a video until it is let go.
+            // Photos, as a photo or a video by the mode switch above it.
             shutter = new ImageView(this);
-            setShutterRing(false);
-            shutter.setImageResource(R.drawable.ic_ar_camera);
             shutter.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            shutter.setPadding(dp(19), dp(19), dp(19), dp(19));
-            shutter.setContentDescription("Take a photo. Hold to record a video.");
-            shutter.setOnClickListener(v -> takeArPhoto());
-            shutter.setOnLongClickListener(v -> startArVideo());
-            shutter.setOnTouchListener((v, event) -> {
-                int action = event.getActionMasked();
-                if ((action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) && video != null) stopArVideo();
-                return false;
-            });
+            shutter.setOnClickListener(v -> pressShutter());
             // Place, left of the shutter: stickers and the flag to put into the
             // visitor's own space, from a drawer that opens above it.
             buildPlaceControls(bottom);
@@ -2662,7 +2686,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             // Hide all / Show all, right of the shutter (keeping it centred).
             hideButton = buildHideButton();
             controls.addView(hideButton, new LinearLayout.LayoutParams(dp(68), -2));
-            // AR or Selfie, above the shutter, as a phone's camera switches modes.
+            // Photo, Video or Selfie, above the shutter, as on a phone's camera.
             LinearLayout.LayoutParams modeParams = new LinearLayout.LayoutParams(-2, -2);
             modeParams.gravity = Gravity.CENTER_HORIZONTAL;
             modeParams.topMargin = dp(10);
@@ -3105,12 +3129,19 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         photoSavedImage.setImageBitmap(photo);
         photoSavedImage.setContentDescription("Your AR photo");
         photoSavedImage.setOnClickListener(null);
-        photoSavedText.setText((inPhotos ? "Saved to your photos, in the On This Site album."
+        photoSavedText.setText(inPhotos ? "Saved to your photos, in the On This Site album."
             : shareable != null ? "This phone didn't let it into your photos, but you can still share it."
-            : "The photo couldn't be saved.")
-            + (recordedVideo || selfieMode ? "" : "\nHold the camera button to record a video."));
+            : "The photo couldn't be saved.");
         photoShare.setVisibility(shareable != null ? View.VISIBLE : View.GONE);
         photoPost.setVisibility(shareable != null && visitorsItem() != null ? View.VISIBLE : View.GONE);
+        showSavedCard();
+    }
+
+    /** The saved card, its picture sized for how the device is held now so its buttons always fit. */
+    private void showSavedCard() {
+        int screen = getResources().getDisplayMetrics().heightPixels;
+        photoSavedImage.getLayoutParams().height = Math.max(dp(96), Math.min(Math.round(screen * 0.5f), screen - dp(220)));
+        photoSavedImage.requestLayout();
         photoSaved.setVisibility(View.VISIBLE);
     }
 
@@ -3148,46 +3179,52 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     // ---- AR videos ----
 
-    private void setShutterRing(boolean recording) {
-        GradientDrawable ring = oval(recording ? Color.argb(170, 196, 40, 40) : Color.argb(120, 20, 26, 23));
-        ring.setStroke(dp(4), Color.WHITE);
-        shutter.setBackground(ring);
+    /** Takes a photo, or in Video mode starts or stops the recording. */
+    private void pressShutter() {
+        if (selfieMode || !videoMode) {
+            takeArPhoto();
+            return;
+        }
+        ArVideo recording = video;
+        if (recording == null) startArVideo();
+        else if (SystemClock.elapsedRealtime() - recording.startedAt >= VIDEO_MIN_MS) stopArVideo();
     }
 
-    /** Holding the shutter: records a video until it is let go, up to a minute. */
-    private boolean startArVideo() {
-        if (selfieMode || video != null || captureWanted || (!cameraOnly && session == null)) return false;
-        boolean microphone = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+    /** Choosing Video asks once for the microphone, so the first tap of the record button records. */
+    private void askForMicrophoneOnce() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) return;
         android.content.SharedPreferences prefs = getPreferences(MODE_PRIVATE);
-        if (!microphone && !prefs.getBoolean(PREF_ASKED_MICROPHONE, false)) {
-            // Asked once, for sound; the visitor holds the button again after answering.
-            prefs.edit().putBoolean(PREF_ASKED_MICROPHONE, true).apply();
-            requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, REQUEST_MICROPHONE);
-            return true;
-        }
+        if (prefs.getBoolean(PREF_ASKED_MICROPHONE, false)) return;
+        prefs.edit().putBoolean(PREF_ASKED_MICROPHONE, true).apply();
+        requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, REQUEST_MICROPHONE);
+    }
+
+    /** Records a video until the shutter is tapped again, up to a minute. */
+    private void startArVideo() {
+        if (selfieMode || video != null || captureWanted || (!cameraOnly && session == null)) return;
+        boolean microphone = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
         int width = cameraOnly ? cameraField.getWidth() : viewportWidth;
         int height = cameraOnly ? cameraField.getHeight() : viewportHeight;
-        if (width <= 0 || height <= 0) return false;
+        if (width <= 0 || height <= 0) return;
         ArVideo started;
         try {
             started = ArVideo.start(this, CaptureFileProvider.createArVideoFile(this), width, height, microphone, this::creditStrip);
         } catch (Exception error) {
             android.util.Log.w("OnThisSiteAR", "AR video did not start: " + error.getMessage());
             toast("This phone couldn't start a video.");
-            return true;
+            return;
         }
         android.util.Log.i("OnThisSiteAR", String.format(Locale.US, "AR video started: %dx%d, %s",
             started.width, started.height, microphone ? "with sound" : "no sound"));
         video = started;
-        recordedVideo = true;
         if (cameraOnly) cameraField.setVideo(started);
         else gl.queueTexture("video-credit", started.credit);
         vibrateConfirm();
-        setShutterRing(true);
+        showShutter();
+        modeSwitch.setVisibility(View.INVISIBLE);
         recordPill.setText("\u25CF 0:00");
         recordPill.setVisibility(View.VISIBLE);
         videoTicker.postDelayed(videoTick, 250);
-        return true;
     }
 
     private void tickVideo() {
@@ -3202,14 +3239,15 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         videoTicker.postDelayed(videoTick, 250);
     }
 
-    /** Letting go of the shutter (or a minute up, or leaving AR): stops, saves and shows the video. */
+    /** The shutter tapped again (or a minute up, or leaving AR): stops, saves and shows the video. */
     private void stopArVideo() {
         ArVideo recording = video;
         if (recording == null) return;
         video = null;
         videoTicker.removeCallbacks(videoTick);
         recordPill.setVisibility(View.GONE);
-        setShutterRing(false);
+        showShutter();
+        modeSwitch.setVisibility(View.VISIBLE);
         vibrateConfirm();
         if (cameraOnly) {
             cameraField.setVideo(null);
@@ -3232,7 +3270,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     private void saveArVideo(ArVideo recording) {
         if (!recording.finish()) {
-            toast(recording.failed() ? "This phone couldn't record the AR view." : "Hold the button a little longer to record a video.");
+            toast(recording.failed() ? "This phone couldn't record the AR view." : "That video was too short to save.");
             return;
         }
         Bitmap still = videoStill(recording);
@@ -3345,7 +3383,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         photoShare.setVisibility(shareable != null ? View.VISIBLE : View.GONE);
         // Community Notes take photos, not videos.
         photoPost.setVisibility(View.GONE);
-        photoSaved.setVisibility(View.VISIBLE);
+        showSavedCard();
     }
 
     private void playArVideo() {
