@@ -91,21 +91,24 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     }
 
 
-    // Free roam reveals bubbles slowly as the visitor explores: at most two unopened
+    // Free roam reveals bubbles as the visitor explores: at most two unopened
     // at once, well apart, each fading in on its own turn however fast the visitor
     // walks or opens them.
     private static final int FREE_WAITING_MAX = 2;
-    // About 12 feet apart. In a small space, after a long wait for that much room, about 8.
+    // About 12 feet apart. When that much room does not turn up soon, about 8.
     private static final float FREE_SPACING_M = 3.6f;
     private static final float FREE_SPACING_TIGHT_M = 2.4f;
-    private static final long FREE_TIGHT_AFTER_MS = 40000;
+    private static final long FREE_TIGHT_AFTER_MS = 12000;
     // Clear of the "You are here" pin, which stands just ahead when AR opens.
     private static final float FREE_PIN_CLEAR_M = 1.8f;
-    private static final long FREE_GAP_MS = 15000;
+    private static final long FREE_GAP_MS = 7000;
+    // The first bubble follows the "You are here" pin quickly.
+    private static final long FREE_FIRST_MS = 3000;
     // Once one is opened, time to read it before the next comes.
-    private static final long FREE_AFTER_OPEN_MS = 10000;
+    private static final long FREE_AFTER_OPEN_MS = 5000;
     private static final long FREE_FADE_MS = 1800;
     private static final double FREE_APART_DEG = 60;
+    private static final double FREE_APART_TIGHT_DEG = 40;
     private long lastFreeSpawnAt;
     private volatile long lastFreeOpenAt;
     private final Map<String, Long> discoverShownAt = new HashMap<>();
@@ -803,7 +806,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 cameraPoint[2] - (float) Math.cos(facing) * HERE_AHEAD_M)));
             discoverLift.put(here.id, 0f);
             discoverShownAt.put(here.id, now);
-            lastFreeSpawnAt = now;
+            lastFreeSpawnAt = now - FREE_GAP_MS + FREE_FIRST_MS;
             return;
         }
         // Without a compass after a while, places are placed like the rest.
@@ -874,7 +877,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         // Nor where one was just put away: new ones come elsewhere.
         taken.addAll(dismissedSpots);
-        float apart = now - lastFreeSpawnAt > FREE_TIGHT_AFTER_MS ? FREE_SPACING_TIGHT_M : FREE_SPACING_M;
+        boolean tight = now - lastFreeSpawnAt > FREE_TIGHT_AFTER_MS;
+        float apart = tight ? FREE_SPACING_TIGHT_M : FREE_SPACING_M;
         if (spot != null) {
             float[] point = spotPoint(spot, cameraPoint, facing, taken, apart);
             if (point != null) {
@@ -914,13 +918,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 && (pin == null || Math.hypot(point[0] - pin[0], point[2] - pin[2]) >= FREE_PIN_CLEAR_M);
             if (!directional) {
                 for (double other : waitingHeadings) {
-                    if (Math.abs(Math.toDegrees(angleBetween(heading, other))) < FREE_APART_DEG) spaced = false;
+                    if (Math.abs(Math.toDegrees(angleBetween(heading, other))) < (tight ? FREE_APART_TIGHT_DEG : FREE_APART_DEG)) spaced = false;
                 }
             }
             if (!spaced) continue;
             discoverAnchors.put(next.id, session.createAnchor(Pose.makeTranslation(point[0], point[1], point[2])));
             discoverLift.put(next.id, 0f);
             discoverShownAt.put(next.id, now);
+            android.util.Log.i("OnThisSiteAR", String.format(Locale.US, "Placed %s %.1f s after the last, at least %.1f m from the others", next.id, (now - lastFreeSpawnAt) / 1000f, apart));
             lastFreeSpawnAt = now;
             return;
         }
