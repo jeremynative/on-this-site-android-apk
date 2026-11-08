@@ -69,18 +69,17 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     private static final double SKY_ELEVATION = 22;
     private static final double SKY_RISE_DEG = 12;
     private static final long SKY_RISE_MS = 1300;
-    private static final long SKY_STAGGER_MS = 280;
+    private static final long SKY_STAGGER_MS = 1500;
     // Without a compass (the iPlay tablets have only an accelerometer), bubbles come
     // over time and space as on a phone with ARCore: one at a time where the visitor
-    // looks and nothing is waiting, at least this long apart, or sooner after a few
-    // steps; an unopened one left out of view after a walk (or a long while) makes
+    // looks and nothing is waiting, at least this long apart however far the visitor
+    // walks; an unopened one left out of view after a walk (or a long while) makes
     // way for new ones, so the next room gets its own.
-    private static final long REVEAL_GAP_MS = 4000;
-    private static final int REVEAL_STEPS = 5;
+    private static final long REVEAL_GAP_MS = 15000;
     private static final int LEFT_BEHIND_STEPS = 10;
     private static final long LEFT_BEHIND_MS = 40000;
-    // After a bubble is put away with its ✕, the next one takes its time.
-    private static final long REVEAL_AFTER_DISMISS_MS = 6000;
+    // After a bubble is opened or put away with its ✕, the next one takes its time.
+    private static final long REVEAL_AFTER_CLOSE_MS = 10000;
     // Below this (degrees) the camera is looking at the floor; above the
     // other, at the ceiling or sky.
     private static final double LOOKING_DOWN = -45;
@@ -172,7 +171,6 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     private double pitch;
     private long lastReveal;
     private long revealNotBefore;
-    private int stepsAtLastReveal;
     // Steps counted from the accelerometer: its reading less gravity (slowly
     // followed), smoothed, rising through a threshold about twice a second.
     private int steps;
@@ -587,8 +585,9 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             float bob = dp(6) * (float) Math.sin(now / 900.0 + bubble.phase);
             float x = width / 2f + (float) (across / fovAcross) * width;
             float y = height / 2f - (float) ((bubble.elevation - pitch) / fovUp) * height + bob;
-            // A fresh bubble grows in; all of them pulse gently.
-            float grow = compass ? 1f : Math.min(1f, (now - bubble.shownAt) / 450f);
+            // A fresh bubble slowly fades and grows in; all of them pulse gently.
+            float fade = compass ? 1f : Math.min(1f, (now - bubble.shownAt) / 1800f);
+            float grow = 0.75f + 0.25f * fade;
             float size = radius * grow * bubble.near * (0.94f + 0.06f * (float) Math.sin(now / 300.0 + bubble.phase));
             bubble.drawX = x;
             bubble.drawY = y;
@@ -598,7 +597,9 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             Bitmap bitmap = bitmapFor(bubble);
             if (bitmap != null) {
                 // No ✕ on an orb (a reach for it too easily put it away); its card opens instead.
+                bitmapPaint.setAlpha(Math.round(255 * fade * fade * (3f - 2f * fade)));
                 canvas.drawBitmap(bitmap, null, new RectF(x - size, y - size, x + size, y + size), bitmapPaint);
+                bitmapPaint.setAlpha(255);
             } else {
                 placeholderPaint.setColor(ArCards.layerColor(bubble.item.layer));
                 placeholderPaint.setAlpha(200);
@@ -625,7 +626,8 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             if (!bubble.marker || bubble.placed || (bubble.sky && !skyReady)) continue;
             if (bubble.item.isHere()) {
                 bubble.bearing = heading;
-                bubble.elevation = Math.max(-30, pitch - HERE_BELOW_DEG);
+                // A short (landscape) view has the shutter and hint in its lower middle: the pin goes above them.
+                bubble.elevation = getHeight() < getWidth() ? pitch + fovUp * 0.1 : Math.max(-30, pitch - HERE_BELOW_DEG);
             } else {
                 bubble.riseAt = now + skyIndex++ * SKY_STAGGER_MS;
             }
@@ -652,7 +654,7 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         }
         Bitmap bitmap = bitmapFor(bubble);
         if (bitmap == null) return;
-        float w = dp(bubble.sky ? 200 : 170) * bubble.near;
+        float w = (bubble.sky ? dp(200) : Math.min(dp(210), height * 0.3f)) * bubble.near;
         float h = w * bitmap.getHeight() / (float) bitmap.getWidth();
         float x = width / 2f + (float) (across / fovAcross) * width;
         float y = height / 2f - (float) ((elevation - pitch) / fovUp) * height + bob;
@@ -692,12 +694,14 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     /**
      * Without a compass: at most three unopened bubbles at a time, each
      * appearing in front of the visitor near eye level where none is waiting,
-     * at least REVEAL_GAP_MS after the last (or sooner after REVEAL_STEPS steps).
+     * at least REVEAL_GAP_MS after the last.
      * An unopened bubble out of view after LEFT_BEHIND_STEPS steps or
      * LEFT_BEHIND_MS is let go, to come again later where the visitor is. Not
      * while the camera looks at the floor or the ceiling.
      */
     private void revealInFront(long now) {
+        // The pin comes first, on its own; the first bubble waits its turn too.
+        if (lastReveal == 0) lastReveal = now;
         int placed = 0;
         boolean waitingInView = false;
         Bubble next = null;
@@ -722,9 +726,8 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
             }
             placed++;
         }
-        boolean walked = steps - stepsAtLastReveal >= REVEAL_STEPS;
         if (next == null || placed >= MAX_PLACED || waitingInView || now < revealNotBefore
-            || (lastReveal != 0 && now - lastReveal < REVEAL_GAP_MS && !walked)
+            || now - lastReveal < REVEAL_GAP_MS
             || pitch < LOOKING_DOWN || pitch > LOOKING_UP) return;
         // A spot in view, clear of the others, above the shutter.
         double bestBearing = heading;
@@ -752,7 +755,6 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
         next.stepsAtReveal = steps;
         next.outOfViewSince = 0;
         lastReveal = now;
-        stepsAtLastReveal = steps;
         android.util.Log.i("OnThisSiteAR", "Camera-only: revealed " + next.item.id + " at " + Math.round(bestBearing) + " degrees, " + steps + " steps");
     }
 
@@ -933,9 +935,10 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
                     if (closing != null) {
                         host.dismiss(closing.item);
                         // Its spot stays taken (placed bubbles keep theirs) while the next waits.
-                        revealNotBefore = SystemClock.uptimeMillis() + REVEAL_AFTER_DISMISS_MS;
+                        revealNotBefore = SystemClock.uptimeMillis() + REVEAL_AFTER_CLOSE_MS;
                     } else {
                         Bubble picked = bubbleAt(event.getX(), event.getY());
+                        if (picked != null) revealNotBefore = SystemClock.uptimeMillis() + REVEAL_AFTER_CLOSE_MS;
                         host.tapped(picked == null ? null : picked.item);
                     }
                     performClick();

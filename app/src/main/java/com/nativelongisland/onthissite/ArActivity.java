@@ -91,26 +91,32 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     }
 
 
-    // Free roam reveals bubbles gradually as the visitor explores: at most two
-    // unopened at once, spread out, a new one after opening one, walking a
-    // little, or a short wait.
+    // Free roam reveals bubbles slowly as the visitor explores: at most two unopened
+    // at once, well apart, each fading in on its own turn however fast the visitor
+    // walks or opens them.
     private static final int FREE_WAITING_MAX = 2;
-    private static final float FREE_SPACING_M = 2f;
-    private static final float FREE_STEP_M = 1.5f;
-    private static final long FREE_GAP_MS = 8000;
-    private static final double FREE_APART_DEG = 40;
+    // About 12 feet apart. In a small space, after a long wait for that much room, about 8.
+    private static final float FREE_SPACING_M = 3.6f;
+    private static final float FREE_SPACING_TIGHT_M = 2.4f;
+    private static final long FREE_TIGHT_AFTER_MS = 40000;
+    // Clear of the "You are here" pin, which stands just ahead when AR opens.
+    private static final float FREE_PIN_CLEAR_M = 1.8f;
+    private static final long FREE_GAP_MS = 15000;
+    // Once one is opened, time to read it before the next comes.
+    private static final long FREE_AFTER_OPEN_MS = 10000;
+    private static final long FREE_FADE_MS = 1800;
+    private static final double FREE_APART_DEG = 60;
     private long lastFreeSpawnAt;
-    private long lastDismissAt;
-    private float[] lastCameraPoint;
+    private volatile long lastFreeOpenAt;
+    private final Map<String, Long> discoverShownAt = new HashMap<>();
     private final List<float[]> dismissedSpots = new ArrayList<>();
-    private float[] lastFreeSpawnFrom;
     // Real places float in their real direction once the compass is lined
     // up with the AR world; bubbles stay in front of walls and furniture.
     private static final double FREE_VIEW_DEG = 25;
     private static final float FREE_WALL_GAP_M = 0.4f;
     private static final float FREE_MIN_M = 0.9f;
     private static final float FREE_PLACE_MIN_M = 0.7f;
-    private static final float FREE_UNKNOWN_M = 2.2f;
+    private static final float FREE_UNKNOWN_M = 3.2f;
     private static final long FREE_COMPASS_WAIT_MS = 15000;
     // "You are here" opens just ahead, below eye level, before anything else. Nearby
     // sites rise into the sky in their real directions, one after another, far enough
@@ -118,14 +124,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     // Far enough that the visitor walks up to it (DISCOVER_DISTANCE) to open it.
     private static final float HERE_AHEAD_M = 2.4f;
     private static final float HERE_BELOW_EYE_M = 0.3f;
-    private static final float HERE_WIDTH_M = 0.42f;
+    private static final float HERE_WIDTH_M = 0.52f;
     private static final float SKY_DISTANCE_M = 9f;
     private static final float SKY_HEIGHT_M = 3.2f;
     private static final float SKY_STACK_M = 1.7f;
     private static final float SKY_WIDTH_M = 2.1f;
     private static final double SKY_APART_DEG = 14;
     private static final long SKY_RISE_MS = 1300;
-    private static final long SKY_STAGGER_MS = 280;
+    private static final long SKY_STAGGER_MS = 1500;
     private static final float SKY_RISE_FROM_M = 2.4f;
     // Walking this far from where the signs were set out places them again around you.
     private static final float SKY_REPLACE_M = 6f;
@@ -606,7 +612,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         gl.beginQuads();
         if (videoViewProjection != null) {
             for (Draw draw : videoDraws) {
-                if (!isDismiss(draw)) gl.drawQuad(videoViewProjection, draw.model, gl.texture(draw.texture), draw.alpha, isPlacedArt(draw));
+                if (!isDismiss(draw)) gl.drawQuad(videoViewProjection, draw.model, gl.texture(draw.texture), draw.alpha, blendsPremultiplied(draw));
             }
         }
         ArVideo recording = video;
@@ -693,7 +699,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             boolean photo = captureWanted;
             for (Draw draw : draws) {
                 if (photo && isDismiss(draw)) continue;
-                gl.drawQuad(viewProjection, draw.model, gl.texture(draw.texture), draw.alpha, isPlacedArt(draw));
+                gl.drawQuad(viewProjection, draw.model, gl.texture(draw.texture), draw.alpha, blendsPremultiplied(draw));
             }
             gl.endQuads();
 
@@ -777,7 +783,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         float[] forward = {-back[0], -back[1], -back[2]};
         compass.sample(forward);
         lastForward = forward;
-        lastCameraPoint = cameraPoint.clone();
         long now = SystemClock.uptimeMillis();
         if (now - lastSpawnAttempt < 500) return;
         lastSpawnAttempt = now;
@@ -791,6 +796,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 cameraPoint[0] + (float) Math.sin(facing) * HERE_AHEAD_M, cameraPoint[1] - HERE_BELOW_EYE_M,
                 cameraPoint[2] - (float) Math.cos(facing) * HERE_AHEAD_M)));
             discoverLift.put(here.id, 0f);
+            discoverShownAt.put(here.id, now);
+            lastFreeSpawnAt = now;
             return;
         }
         // Without a compass after a while, places are placed like the rest.
@@ -841,22 +848,42 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 }
             }
         }
+        // However fast the visitor walks or opens them, the next one waits its turn.
+        if (now - lastFreeSpawnAt < FREE_GAP_MS || now - lastFreeOpenAt < FREE_AFTER_OPEN_MS) return;
+        List<float[]> taken = new ArrayList<>();
+        List<Double> waitingHeadings = new ArrayList<>();
+        float[] pin = null;
+        for (Map.Entry<String, Anchor> entry : discoverAnchors.entrySet()) {
+            // The sky signs are far overhead; they don't crowd the bubbles.
+            if (skyHeading.containsKey(entry.getKey())) continue;
+            float[] at = entry.getValue().getPose().getTranslation();
+            if (here != null && here.id.equals(entry.getKey())) {
+                pin = at;
+                continue;
+            }
+            taken.add(at);
+            if (!discovered.contains(entry.getKey())) {
+                waitingHeadings.add(ArCompass.arHeading(new float[] {at[0] - cameraPoint[0], 0f, at[2] - cameraPoint[2]}));
+            }
+        }
+        // Nor where one was just put away: new ones come elsewhere.
+        taken.addAll(dismissedSpots);
+        float apart = now - lastFreeSpawnAt > FREE_TIGHT_AFTER_MS ? FREE_SPACING_TIGHT_M : FREE_SPACING_M;
         if (spot != null) {
-            placeAtSpot(spot, cameraPoint, facing);
-            return;
+            float[] point = spotPoint(spot, cameraPoint, facing, taken, apart);
+            if (point != null) {
+                placeAtSpot(spot, point);
+                discoverShownAt.put(spot.id, now);
+                lastFreeSpawnAt = now;
+                return;
+            }
         }
         ArScene.Item next;
         boolean directional = ahead != null && waiting <= FREE_WAITING_MAX;
-        boolean walked = lastFreeSpawnFrom == null
-            || Math.hypot(cameraPoint[0] - lastFreeSpawnFrom[0], cameraPoint[2] - lastFreeSpawnFrom[2]) > FREE_STEP_M;
-        // Just after one is put away with its ✕, nothing new comes for a while (or until
-        // the visitor walks on), so another doesn't pop up in its place.
-        if (now - lastDismissAt < FREE_GAP_MS && !walked) return;
         if (directional) {
             next = ahead;
         } else {
             if (ambient == null || waiting >= FREE_WAITING_MAX) return;
-            if (waiting > 0 && !walked && now - lastFreeSpawnAt < FREE_GAP_MS) return;
             next = ambient;
         }
         float[] view = new float[16];
@@ -865,35 +892,20 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         camera.getViewMatrix(view, 0);
         camera.getProjectionMatrix(projection, 0, 0.05f, 100f);
         Matrix.multiplyMM(viewProjection, 0, projection, 0, view, 0);
-        List<float[]> taken = new ArrayList<>();
-        List<Double> waitingHeadings = new ArrayList<>();
-        for (Map.Entry<String, Anchor> entry : discoverAnchors.entrySet()) {
-            // The marker and the sky signs sit apart from the bubbles; they don't crowd them.
-            if (skyHeading.containsKey(entry.getKey()) || (here != null && here.id.equals(entry.getKey()))) continue;
-            float[] at = entry.getValue().getPose().getTranslation();
-            taken.add(at);
-            if (!discovered.contains(entry.getKey())) {
-                waitingHeadings.add(ArCompass.arHeading(new float[] {at[0] - cameraPoint[0], 0f, at[2] - cameraPoint[2]}));
-            }
-        }
-        // Nor where one was just put away: new ones come elsewhere.
-        taken.addAll(dismissedSpots);
-        for (int attempt = 0; attempt < (directional ? 5 : 12); attempt++) {
+        for (int attempt = 0; attempt < (directional ? 10 : 12); attempt++) {
             // Places sharing a direction fan out a little and sit at different distances.
-            double fan = 6 + 4 * attempt;
+            double fan = 6 + 2.5 * attempt;
             double heading = directional
                 ? aheadHeading + Math.toRadians(-fan + 2 * fan * random.nextFloat())
                 : facing + Math.toRadians(-FREE_VIEW_DEG + 2 * FREE_VIEW_DEG * random.nextFloat());
             float dx = (float) Math.sin(heading);
             float dz = (float) -Math.cos(heading);
-            float want = directional ? 2.2f + 1.2f * random.nextFloat() : 2f + 1.5f * random.nextFloat();
+            float want = directional ? 2.6f + 2.4f * random.nextFloat() : 2.4f + 2f * random.nextFloat();
             float distance = freeDistance(frame, viewProjection, cameraPoint, dx, dz, want, directional ? FREE_PLACE_MIN_M : FREE_MIN_M);
             if (distance < 0) continue;
             float[] point = {cameraPoint[0] + dx * distance, cameraPoint[1] - 0.05f + 0.2f * (random.nextFloat() - 0.5f), cameraPoint[2] + dz * distance};
-            boolean spaced = true;
-            for (float[] other : taken) {
-                if (Math.hypot(point[0] - other[0], point[2] - other[2]) < (directional ? 1f : FREE_SPACING_M)) spaced = false;
-            }
+            boolean spaced = isClear(point, taken, apart)
+                && (pin == null || Math.hypot(point[0] - pin[0], point[2] - pin[2]) >= FREE_PIN_CLEAR_M);
             if (!directional) {
                 for (double other : waitingHeadings) {
                     if (Math.abs(Math.toDegrees(angleBetween(heading, other))) < FREE_APART_DEG) spaced = false;
@@ -902,12 +914,18 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             if (!spaced) continue;
             discoverAnchors.put(next.id, session.createAnchor(Pose.makeTranslation(point[0], point[1], point[2])));
             discoverLift.put(next.id, 0f);
-            if (!directional) {
-                lastFreeSpawnAt = now;
-                lastFreeSpawnFrom = cameraPoint.clone();
-            }
+            discoverShownAt.put(next.id, now);
+            lastFreeSpawnAt = now;
             return;
         }
+    }
+
+    /** Whether a point is at least apart metres (along the ground) from every point in others. */
+    private static boolean isClear(float[] point, List<float[]> others, float apart) {
+        for (float[] other : others) {
+            if (Math.hypot(point[0] - other[0], point[2] - other[2]) < apart) return false;
+        }
+        return true;
     }
 
     /** The nearby sites' signs rise once this many other bubbles are open (scene.skyAfter). */
@@ -987,6 +1005,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 stopped.add(item.id);
                 return;
             }
+            alpha = fadeIn(item.id, now);
             // The landmark floats gently; a bounce would make its ground ring hop.
             point[1] += 0.015f * (float) Math.sin(now / 900.0);
         }
@@ -998,13 +1017,36 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         draws.add(Draw.billboard(item.id, point, cameraPose, key, width, width * aspect, alpha, distance(point, cameraPoint)));
     }
 
-    /** A find floats over the spot where it was photographed, a little below eye level. */
-    private void placeAtSpot(ArScene.Item item, float[] cameraPoint, double facing) {
+    /** How far a bubble has faded in: 0 when it first appears, 1 once it is fully there. */
+    private float fadeIn(String id, long now) {
+        Long shownAt = discoverShownAt.get(id);
+        if (shownAt == null) return 1f;
+        float t = Math.min(1f, (now - shownAt) / (float) FREE_FADE_MS);
+        return t * t * (3f - 2f * t);
+    }
+
+    /**
+     * Where a find floats: over its spot, a little below eye level, or moved aside when
+     * another bubble is already there (GPS is only good to a few metres anyway). Null
+     * when there is no room near it yet.
+     */
+    private float[] spotPoint(ArScene.Item item, float[] cameraPoint, double facing, List<float[]> taken, float apart) {
         // Standing on the spot, the direction means nothing: it floats ahead.
         double heading = item.distanceM < SPOT_MIN_M ? facing : compass.arHeadingFor(item.bearing);
         float distance = (float) Math.max(item.distanceM, SPOT_MIN_M);
         float[] point = {cameraPoint[0] + (float) Math.sin(heading) * distance, cameraPoint[1] - SPOT_BELOW_EYE_M,
             cameraPoint[2] - (float) Math.cos(heading) * distance};
+        if (isClear(point, taken, apart)) return point;
+        for (int attempt = 0; attempt < 12; attempt++) {
+            double angle = random.nextDouble() * 2 * Math.PI;
+            float shift = apart * (0.8f + 0.7f * random.nextFloat());
+            float[] moved = {point[0] + (float) Math.sin(angle) * shift, point[1], point[2] + (float) Math.cos(angle) * shift};
+            if (isClear(moved, taken, apart) && Math.hypot(moved[0] - cameraPoint[0], moved[2] - cameraPoint[2]) >= SPOT_MIN_M) return moved;
+        }
+        return null;
+    }
+
+    private void placeAtSpot(ArScene.Item item, float[] point) {
         discoverAnchors.put(item.id, session.createAnchor(Pose.makeTranslation(point[0], point[1], point[2])));
         discoverLift.put(item.id, 0f);
         android.util.Log.i("OnThisSiteAR", String.format(Locale.US, "Placed %s at its spot, %.0f m at %.0f deg",
@@ -1183,7 +1225,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 // A find over a spot across the yard stays big enough to see.
                 float size = item.hasSpot() ? Math.max(0.26f, distance * 0.05f) : 0.26f;
                 // No ✕ on an orb (a reach for it too easily put it away); its card has one once opened.
-                draws.add(Draw.billboard(item.id, point, cameraPose, key, size, size, pulse, distance));
+                draws.add(Draw.billboard(item.id, point, cameraPose, key, size, size, pulse * fadeIn(item.id, now), distance));
             }
         }
         for (String id : stopped) {
@@ -1198,6 +1240,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         Anchor anchor = discoverAnchors.remove(id);
         if (anchor != null) anchor.detach();
         discoverLift.remove(id);
+        discoverShownAt.remove(id);
         discoverNudge.remove(id);
         skyShownAt.remove(id);
         skyFrom.remove(id);
@@ -1239,9 +1282,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         return draw.itemId != null && draw.itemId.startsWith(DISMISS);
     }
 
-    /** Placed stickers (and their ring, outline and shadow) blend premultiplied, so a neon glow lights the wall. */
-    private static boolean isPlacedArt(Draw draw) {
-        return draw.texture != null && draw.texture.startsWith("place:");
+    /** Placed stickers and the "You are here" pin blend premultiplied, so a glow lights what is behind it instead of darkening it. */
+    private static boolean blendsPremultiplied(Draw draw) {
+        return draw.texture != null && (draw.texture.startsWith("place:") || draw.texture.startsWith("here:"));
     }
 
     /** Puts a bubble, card, pin or sign away for the rest of this visit. */
@@ -1253,9 +1296,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             // Its spot stays taken, and the next bubble waits as if this one had just appeared.
             dismissedSpots.add(anchor.getPose().getTranslation());
             if (dismissedSpots.size() > DISMISSED_SPOTS_MAX) dismissedSpots.remove(0);
-            lastDismissAt = SystemClock.uptimeMillis();
-            lastFreeSpawnAt = lastDismissAt;
-            if (lastCameraPoint != null) lastFreeSpawnFrom = lastCameraPoint.clone();
+            lastFreeSpawnAt = SystemClock.uptimeMillis();
         }
         letGo(id);
         seenThings.removeIf(seen -> {
@@ -1608,7 +1649,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 draws.add(Draw.posed(id, new Pose(point, ArPlacement.yawQuaternion(yaw)), null,
                     (ArPlace.FLAG_WIDTH * 2f + 0.3f) * scale, (ArPlace.POLE_HEIGHT + 0.1f) * scale, 0f, distance));
             }
-            if (selected) {
+            // The ring marks where the flag will go while aiming; a placed flag has none.
+            if (selected && id == null) {
                 float[] ring = pole.clone();
                 Matrix.rotateM(ring, 0, -90f, 1f, 0f, 0f);
                 Matrix.translateM(ring, 0, 0f, 0f, 0.005f);
@@ -3457,6 +3499,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     }
 
     private void onDiscovered(ArScene.Item item) {
+        lastFreeOpenAt = SystemClock.uptimeMillis();
         vibrateConfirm();
         String name = !item.word.isEmpty() ? item.word : !item.name.isEmpty() ? item.name : item.title.isEmpty() ? "a story" : item.title;
         showFound(item.isHere() ? "📍 " + item.title : "✨ You found " + name.replaceFirst("^(Nearby: |Meet )", ""));
