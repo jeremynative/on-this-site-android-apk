@@ -75,11 +75,13 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
     // looks and nothing is waiting, at least this long apart however far the visitor
     // walks; an unopened one left out of view after a walk (or a long while) makes
     // way for new ones, so the next room gets its own.
-    private static final long REVEAL_GAP_MS = 15000;
+    private static final long REVEAL_GAP_MS = 7000;
+    // The first bubble follows the "You are here" pin quickly.
+    private static final long REVEAL_FIRST_MS = 3000;
     private static final int LEFT_BEHIND_STEPS = 10;
     private static final long LEFT_BEHIND_MS = 40000;
     // After a bubble is opened or put away with its ✕, the next one takes its time.
-    private static final long REVEAL_AFTER_CLOSE_MS = 10000;
+    private static final long REVEAL_AFTER_CLOSE_MS = 5000;
     // Below this (degrees) the camera is looking at the floor; above the
     // other, at the ceiling or sky.
     private static final double LOOKING_DOWN = -45;
@@ -699,8 +701,8 @@ final class ArCameraField extends FrameLayout implements SensorEventListener {
      * while the camera looks at the floor or the ceiling.
      */
     private void revealInFront(long now) {
-        // The pin comes first, on its own; the first bubble waits its turn too.
-        if (lastReveal == 0) lastReveal = now;
+        // The pin comes first, on its own; the first bubble follows soon after.
+        if (lastReveal == 0) lastReveal = now - REVEAL_GAP_MS + REVEAL_FIRST_MS;
         int placed = 0;
         boolean waitingInView = false;
         Bubble next = null;
