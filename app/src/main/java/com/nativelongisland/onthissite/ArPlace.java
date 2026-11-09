@@ -22,8 +22,8 @@ import java.util.List;
  * The "Place" drawer: things a visitor puts into their own space through AR,
  * each held by an ARCore anchor where it was placed for the rest of the AR
  * session. The stickers (#LANDBACK, Shinnecock Land, We Are Still Here, You Are
- * On Native Land) each come in eight looks, three of them neon, and lie on the
- * wall or ground that was aimed at; the flag
+ * On Native Land, and each ancestral community's name) each come in eight looks,
+ * three of them neon, and lie on the wall or ground that was aimed at; the flag
  * is a 3D pole flying the Shinnecock flag on gold, black, white or silver,
  * planted on the ground with a soft shadow. Artwork is drawn here from the
  * bundled font and flag, so nothing is downloaded.
@@ -96,6 +96,47 @@ final class ArPlace {
             new String[] {"YOU ARE ON", "NATIVE LAND"}, Color.rgb(46, 125, 50)),
     };
 
+    // The thirteen ancestral communities, west to east, named as on their homeland
+    // pages and coloured from their homelands on the map.
+    static final Phrase[] COMMUNITIES = {
+        community("Canarsie", 0x081078), community("Rockaway", 0x66FF00), community("Matinecock", 0xB52CBF),
+        community("Merrick", 0xF4FFAD), community("Massapequa", 0x26100D), community("Nissequogue", 0xAD6323),
+        community("Secatogue", 0x08FFC5), community("Setauket", 0xFF26DB), community("Unkechaug", 0x5454FF),
+        community("Corchaug", 0xFFDBF3), community("Shinnecock", 0xFFD93D), community("Montaukett", 0xFF1F1F),
+        community("Manhansett", 0x66FF00),
+    };
+
+    /** One community's name alone, on one line. */
+    private static Phrase community(String name, int mapColor) {
+        String letters = name.toUpperCase(java.util.Locale.US);
+        return new Phrase("community-" + name.toLowerCase(java.util.Locale.US), name, 0.6f, -4f,
+            new TagLine[] {new TagLine(letters, 1f, tone(mapColor, 0.3f, 0.62f, 0.6f, 0.4f), tone(mapColor, 0.55f, 0.95f, 0.25f, 0.3f),
+                dripLetters(letters))},
+            new String[] {letters}, tone(mapColor, 0.6f, 0.9f, 0.42f, 0.22f));
+    }
+
+    /**
+     * Up to three letters to drip paint, spread along the word, from letters with
+     * straight legs only: a name must stay readable, and a drip under a U reads as
+     * a Y, under a C as a cedilla, under an O as a Q.
+     */
+    private static int[] dripLetters(String letters) {
+        List<Integer> legs = new ArrayList<>();
+        for (int i = 0; i < letters.length(); i++) {
+            if ("AEFHIKMNPRT".indexOf(letters.charAt(i)) >= 0) legs.add(i);
+        }
+        return new int[] {legs.get(0), legs.get(legs.size() / 2), legs.get(legs.size() - 1)};
+    }
+
+    /** A map colour made readable as lettering: its hue, saturation held in a range, and its depth eased towards the middle. */
+    private static int tone(int mapColor, float minSaturation, float maxSaturation, float darkest, float range) {
+        float[] hsv = new float[3];
+        Color.colorToHSV(mapColor, hsv);
+        hsv[1] = Math.max(minSaturation, Math.min(maxSaturation, hsv[1]));
+        hsv[2] = darkest + range * hsv[2];
+        return Color.HSVToColor(hsv);
+    }
+
     // Every sticker comes in these looks (id, name in the drawer).
     static final String[][] LOOKS = {
         {"graffiti", "Graffiti"}, {"black", "Black letters"}, {"digital", "Digital"}, {"painted", "Black only"}, {"badge", "Badge"},
@@ -112,17 +153,20 @@ final class ArPlace {
         final String label;
         // A 3D model (planted on the ground) rather than a flat sticker.
         final boolean model;
+        // One of the ancestral communities' names, which fold away in the drawer.
+        final boolean community;
         // A sticker's width at scale 1 (metres).
         final float width;
         final Phrase phrase;
         // The sticker's look, or the flag pole's colour.
         final String look;
 
-        Asset(String id, String group, String label, boolean model, float width, Phrase phrase, String look) {
+        Asset(String id, String group, String label, boolean model, boolean community, float width, Phrase phrase, String look) {
             this.id = id;
             this.group = group;
             this.label = label;
             this.model = model;
+            this.community = community;
             this.width = width;
             this.phrase = phrase;
             this.look = look;
@@ -138,15 +182,18 @@ final class ArPlace {
 
     private static Asset[] catalog() {
         List<Asset> assets = new ArrayList<>();
-        for (Phrase phrase : PHRASES) {
-            for (String[] look : LOOKS) {
-                assets.add(new Asset(phrase.id + ":" + look[0], phrase.title, look[1], false, phrase.width, phrase, look[0]));
-            }
-        }
+        for (Phrase phrase : PHRASES) addLooks(assets, phrase, false);
+        for (Phrase phrase : COMMUNITIES) addLooks(assets, phrase, true);
         for (String[] pole : POLES) {
-            assets.add(new Asset(FLAG + ":" + pole[0], "Shinnecock flag (3D)", pole[1], true, 0f, null, pole[0]));
+            assets.add(new Asset(FLAG + ":" + pole[0], "Shinnecock flag (3D)", pole[1], true, false, 0f, null, pole[0]));
         }
         return assets.toArray(new Asset[0]);
+    }
+
+    private static void addLooks(List<Asset> assets, Phrase phrase, boolean community) {
+        for (String[] look : LOOKS) {
+            assets.add(new Asset(phrase.id + ":" + look[0], phrase.title, look[1], false, community, phrase.width, phrase, look[0]));
+        }
     }
 
     static Asset asset(String id) {

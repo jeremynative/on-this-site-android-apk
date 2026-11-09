@@ -51,6 +51,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -243,12 +244,17 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     // chosen in the drawer waits for a tap; the selected one can be resized,
     // turned or removed (guarded by lock).
     private static final int PLACED_MAX = 12;
+    private static final float PLACE_SCALE_MIN = 0.2f;
+    private static final float PLACE_SCALE_MAX = 6f;
     private static final ArGl.Mesh POLE = ArPlace.cylinder(18, ArPlace.POLE_RADIUS, ArPlace.POLE_HEIGHT);
     private static final ArGl.Mesh FINIAL = ArPlace.sphere(8, 12, ArPlace.FINIAL_RADIUS);
     private static final ArGl.Mesh CLOTH = ArPlace.cloth(24, 12);
     private final List<ArPlace.Placed> placed = new ArrayList<>();
     private ArPlace.Placed selectedPlace;
     private ArPlace.Asset placingAsset;
+    // How big the one being aimed will be, set by pinching.
+    private float placingScale = 1f;
+    private boolean pinchingPlacement;
     private volatile boolean aimFound;
     private final long placeClock = SystemClock.uptimeMillis();
     private List<MeshDraw> videoMeshes = Collections.emptyList();
@@ -1579,6 +1585,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         if (placed.size() >= PLACED_MAX) placed.get(0).removed = true;
         ArPlace.Placed thing = new ArPlace.Placed(asset, anchor);
+        thing.scale = placingScale;
         placed.add(thing);
         selectedPlace = thing;
         placingAsset = null;
@@ -1618,7 +1625,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         float[] base = new float[16];
         aim.pose.toMatrix(base, 0);
         // A see-through preview of the sticker (or the flag with a ring at its foot).
-        addPlacedDraws(null, placingAsset, base, 1f, distance(aim.pose.getTranslation(), cameraPoint), 0.6f, true, cameraPoint, draws, meshes);
+        addPlacedDraws(null, placingAsset, base, placingScale, distance(aim.pose.getTranslation(), cameraPoint), 0.6f, true, cameraPoint, draws, meshes);
     }
 
     /**
@@ -1790,10 +1797,17 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     /**
      * A press on a bubble or card dragged down brings it closer; up pushes it
      * away. A recognized thing's label follows the finger across the view
-     * instead, and two fingers on it size and turn it.
+     * instead, and two fingers on it size and turn it. While a sticker or the
+     * flag is being aimed, two fingers anywhere size it.
      */
     private void handleDrag(float[] drag, List<Draw> draws, float[] viewProjection, float[] cameraPoint) {
         if (drag[0] == PINCH_START) {
+            if (placingAsset != null) {
+                pinchingPlacement = true;
+                pinchFromSpacing = Math.max(1f, drag[3]);
+                pinchFromScale = placingScale;
+                return;
+            }
             pinchSeen = seenAt(drag[1], drag[2], draws, viewProjection);
             if (pinchSeen == null) pinchSeen = seenAt(drag[5], drag[6], draws, viewProjection);
             if (pinchSeen == null) pinchSeen = seenAt(drag[7], drag[8], draws, viewProjection);
@@ -1804,11 +1818,16 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             pinchFromRoll = pinchSeen.roll;
             seenGestured = true;
         } else if (drag[0] == PINCH_MOVE) {
+            if (pinchingPlacement) {
+                placingScale = Math.max(PLACE_SCALE_MIN, Math.min(PLACE_SCALE_MAX, pinchFromScale * drag[1] / pinchFromSpacing));
+                return;
+            }
             if (pinchSeen == null) return;
             pinchSeen.scale = Math.max(0.4f, Math.min(4f, pinchFromScale * drag[1] / pinchFromSpacing));
             // Screen angles run clockwise; the label turns the same way as the fingers.
             pinchSeen.roll = pinchFromRoll - (drag[2] - pinchFromAngle);
         } else if (drag[0] == PINCH_END) {
+            pinchingPlacement = false;
             pinchSeen = null;
         } else if (drag[0] == DRAG_START) {
             movingSeen = seenAt(drag[1], drag[2], draws, viewProjection);
@@ -1932,7 +1951,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         if (placingAsset != null) {
             if (!aimFound) return placingAsset.model ? "Aim at the ground nearby, moving the phone slowly" : "Aim at a wall or the ground, moving the phone slowly";
-            return placingAsset.model ? "Tap to plant the flag here" : "Tap to place it here";
+            return (placingAsset.model ? "Tap to plant the flag here" : "Tap to place it here") + " · pinch to size it";
         }
         if (selectedPlace != null || bubblesHidden) return "";
         String turn = directionHint();
@@ -2328,31 +2347,70 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     /**
      * The drawer's choices, made when it first opens: a heading for each group
-     * and its tiles in rows, as many to a row as fit. Pictures are drawn in the
-     * background and appear as they are ready.
+     * and its tiles in rows. The ancestral communities are a list of names, each
+     * opening onto its looks, so their pictures are only drawn when wanted.
      */
     private void fillPlaceDrawer() {
         if (placeList.getChildCount() > 0) return;
         float tileDp = 100f;
         float widthDp = getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density;
         int perRow = Math.max(3, (int) ((widthDp - 56f) / tileDp));
-        String group = null;
-        LinearLayout tiles = null;
+        Map<String, List<ArPlace.Asset>> groups = new LinkedHashMap<>();
         for (ArPlace.Asset asset : ArPlace.ASSETS) {
-            if (!asset.group.equals(group)) {
-                group = asset.group;
-                TextView heading = text(14, true, group);
-                heading.setTextColor(Color.rgb(126, 211, 158));
-                heading.setPadding(dp(2), dp(placeList.getChildCount() == 0 ? 0 : 12), 0, dp(6));
-                placeList.addView(heading);
-                tiles = null;
+            if (!groups.containsKey(asset.group)) groups.put(asset.group, new ArrayList<>());
+            groups.get(asset.group).add(asset);
+        }
+        boolean communitiesHeaded = false;
+        for (Map.Entry<String, List<ArPlace.Asset>> group : groups.entrySet()) {
+            if (!group.getValue().get(0).community) {
+                addPlaceHeading(group.getKey());
+                addPlaceTiles(placeList, group.getValue(), perRow);
+                continue;
             }
+            if (!communitiesHeaded) addPlaceHeading("Ancestral communities");
+            communitiesHeaded = true;
+            addCommunityRow(group.getKey(), group.getValue(), perRow);
+        }
+    }
+
+    private void addPlaceHeading(String title) {
+        TextView heading = text(14, true, title);
+        heading.setTextColor(Color.rgb(126, 211, 158));
+        heading.setPadding(dp(2), dp(placeList.getChildCount() == 0 ? 0 : 12), 0, dp(6));
+        placeList.addView(heading);
+    }
+
+    /** A community's name; tapped, its looks open under it and are drawn the first time. */
+    private void addCommunityRow(String name, List<ArPlace.Asset> assets, int perRow) {
+        TextView row = text(15, true, "\u25B8  " + name);
+        row.setBackground(rounded(Color.argb(60, 255, 255, 255), 14));
+        row.setPadding(dp(14), dp(11), dp(14), dp(11));
+        row.setContentDescription(name + " stickers");
+        LinearLayout looks = column();
+        looks.setVisibility(View.GONE);
+        row.setOnClickListener(v -> {
+            boolean open = looks.getVisibility() != View.VISIBLE;
+            if (open && looks.getChildCount() == 0) addPlaceTiles(looks, assets, perRow);
+            looks.setVisibility(open ? View.VISIBLE : View.GONE);
+            row.setText((open ? "\u25BE  " : "\u25B8  ") + name);
+            if (open) placeList.post(() -> ((ScrollView) placeList.getParent()).smoothScrollTo(0, row.getTop()));
+        });
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
+        rowParams.bottomMargin = dp(6);
+        placeList.addView(row, rowParams);
+        placeList.addView(looks, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    /** A group's tiles in rows, as many to a row as fit. Pictures are drawn in the background and appear as they are ready. */
+    private void addPlaceTiles(LinearLayout parent, List<ArPlace.Asset> assets, int perRow) {
+        LinearLayout tiles = null;
+        for (ArPlace.Asset asset : assets) {
             if (tiles == null || tiles.getChildCount() >= perRow) {
                 tiles = row();
                 tiles.setGravity(Gravity.START);
                 LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
                 rowParams.bottomMargin = dp(8);
-                placeList.addView(tiles, rowParams);
+                parent.addView(tiles, rowParams);
             }
             LinearLayout tile = column();
             tile.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -2380,21 +2438,17 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             });
         }
         // A short last row keeps its tiles the same width as the others.
-        for (int i = 0; i < placeList.getChildCount(); i++) {
-            View child = placeList.getChildAt(i);
-            if (!(child instanceof LinearLayout)) continue;
-            LinearLayout row = (LinearLayout) child;
-            while (row.getChildCount() < perRow) {
-                LinearLayout.LayoutParams spacer = new LinearLayout.LayoutParams(0, 1, 1f);
-                spacer.rightMargin = dp(8);
-                row.addView(new View(this), spacer);
-            }
+        while (tiles != null && tiles.getChildCount() < perRow) {
+            LinearLayout.LayoutParams spacer = new LinearLayout.LayoutParams(0, 1, 1f);
+            spacer.rightMargin = dp(8);
+            tiles.addView(new View(this), spacer);
         }
     }
 
     private void choosePlace(ArPlace.Asset asset) {
         synchronized (lock) {
             placingAsset = asset;
+            placingScale = 1f;
             selectedPlace = null;
             aimFound = false;
         }
@@ -2444,10 +2498,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             } else if (thing != null) {
                 switch (action) {
                     case "smaller":
-                        thing.scale = Math.max(0.2f, thing.scale / 1.25f);
+                        thing.scale = Math.max(PLACE_SCALE_MIN, thing.scale / 1.25f);
                         break;
                     case "bigger":
-                        thing.scale = Math.min(6f, thing.scale * 1.25f);
+                        thing.scale = Math.min(PLACE_SCALE_MAX, thing.scale * 1.25f);
                         break;
                     case "turn":
                         thing.turn += (float) Math.toRadians(15);
