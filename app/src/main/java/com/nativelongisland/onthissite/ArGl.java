@@ -98,8 +98,9 @@ final class ArGl {
             + "    gl_Position = u_Mvp * vec4(p, 1.0);\n"
             + "  }\n"
             + "}\n";
-    // A flag reads the same from both sides: its back shows the picture
-    // un-mirrored, as a printed two-sided flag does.
+    // A flag reads the same from both sides: the seal on its back is un-mirrored,
+    // as on a printed two-sided flag. The rest of the cloth, with its tears and
+    // wear, stays where it is, and the shadow has the tears too.
     private static final String MESH_FRAGMENT =
         "precision mediump float;\n"
             + "varying vec2 v_TexCoord;\n"
@@ -111,14 +112,18 @@ final class ArGl {
             + "uniform float u_ShadowAlpha;\n"
             + "uniform vec4 u_Color;\n"
             + "void main() {\n"
+            + "  vec4 cloth = u_UseTexture > 0.5 ? texture2D(u_Texture, v_TexCoord) : vec4(1.0);\n"
+            + "  if (cloth.a < 0.5) discard;\n"
             + "  if (u_ShadowAlpha > 0.0) {\n"
             + "    gl_FragColor = vec4(0.0, 0.0, 0.0, u_ShadowAlpha * v_Fade);\n"
             + "    return;\n"
             + "  }\n"
             + "  float light = abs(dot(normalize(v_Normal), normalize(vec3(0.35, 0.9, 0.25))));\n"
-            + "  vec2 uv = v_TexCoord;\n"
-            + "  if (u_TwoSided > 0.5 && !gl_FrontFacing) uv.x = 1.0 - uv.x;\n"
-            + "  vec4 base = u_UseTexture > 0.5 ? texture2D(u_Texture, uv) : u_Color;\n"
+            + "  vec4 base = u_UseTexture > 0.5 ? cloth : u_Color;\n"
+            + "  if (u_TwoSided > 0.5 && !gl_FrontFacing) {\n"
+            + "    vec4 flipped = texture2D(u_Texture, vec2(1.0 - v_TexCoord.x, v_TexCoord.y));\n"
+            + "    base = mix(base, flipped, 1.0 - smoothstep(0.285, 0.33, abs(v_TexCoord.x - 0.5)));\n"
+            + "  }\n"
             + "  gl_FragColor = vec4(base.rgb * (0.5 + 0.5 * light), base.a);\n"
             + "}\n";
 
@@ -304,7 +309,7 @@ final class ArGl {
      * the cloth's, or a fold of the cloth) the first one wins instead of the
      * two darkening each other, and the real meshes still draw over them.
      */
-    void drawShadow(float[] viewProjection, float[] model, Mesh mesh, float wave, float time, float[] foot, float fadeLength, float alpha) {
+    void drawShadow(float[] viewProjection, float[] model, Mesh mesh, int texture, float wave, float time, float[] foot, float fadeLength, float alpha) {
         if (meshProgram == 0) return;
         Matrix.multiplyMM(mvp, 0, viewProjection, 0, model, 0);
         GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_Mvp"), 1, false, mvp, 0);
@@ -316,6 +321,10 @@ final class ArGl {
         GLES20.glUniform3fv(GLES20.glGetUniformLocation(meshProgram, "u_Foot"), 1, foot, 0);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_FadeLength"), fadeLength);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_ShadowAlpha"), alpha);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_UseTexture"), texture != 0 ? 1f : 0f);
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture);
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(meshProgram, "u_Texture"), 0);
         drawElements(mesh);
     }
 
