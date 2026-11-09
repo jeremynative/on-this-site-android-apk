@@ -1729,7 +1729,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         float time = placeSeconds();
         gl.beginMeshes();
         for (MeshDraw mesh : meshes) {
-            if (mesh.shadowFoot != null) gl.drawShadow(viewProjection, mesh.model, mesh.mesh, mesh.wave, time, mesh.shadowFoot, mesh.shadowFade, 0.42f);
+            if (mesh.shadowFoot != null) gl.drawShadow(viewProjection, mesh.model, mesh.mesh, gl.texture(mesh.texture), mesh.wave, time, mesh.shadowFoot, mesh.shadowFade, 0.42f);
         }
         for (MeshDraw mesh : meshes) gl.drawMesh(viewProjection, mesh.model, mesh.mesh, gl.texture(mesh.texture), mesh.color, mesh.wave, time);
         gl.endMeshes();

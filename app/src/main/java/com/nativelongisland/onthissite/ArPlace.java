@@ -3,12 +3,17 @@ package com.nativelongisland.onthissite;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.BitmapShader;
 import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
 import android.graphics.RadialGradient;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -22,8 +27,9 @@ import java.util.List;
  * The "Place" drawer: things a visitor puts into their own space through AR,
  * each held by an ARCore anchor where it was placed for the rest of the AR
  * session. The stickers (#LANDBACK, Shinnecock Land, We Are Still Here, You Are
- * On Native Land, and each ancestral community's name) each come in eight looks,
- * three of them neon, and lie on the wall or ground that was aimed at; the flag
+ * On Native Land, and each ancestral community's name) each come in ten looks,
+ * three of them neon and two plain block letters, and lie on the wall or ground
+ * that was aimed at; the flag, new or tattered,
  * is a 3D pole flying the Shinnecock flag on gold, black, white or silver,
  * planted on the ground with a soft shadow. Artwork is drawn here from the
  * bundled font and flag, so nothing is downloaded.
@@ -36,6 +42,7 @@ final class ArPlace {
     static final String STILL_HERE = "still-here";
     static final String NATIVE_LAND = "native-land";
     static final String FLAG = "flag";
+    static final String TATTERED_FLAG = "flag-tattered";
 
     // The flag at scale 1 (metres): a pole, a ball on top, and the cloth near its top.
     static final float POLE_HEIGHT = 2.2f;
@@ -97,12 +104,12 @@ final class ArPlace {
     };
 
     // The thirteen ancestral communities, west to east, named as on their homeland
-    // pages and coloured from their homelands on the map.
+    // pages (Montauk in its short form) and coloured from their homelands on the map.
     static final Phrase[] COMMUNITIES = {
         community("Canarsie", 0x081078), community("Rockaway", 0x66FF00), community("Matinecock", 0xB52CBF),
         community("Merrick", 0xF4FFAD), community("Massapequa", 0x26100D), community("Nissequogue", 0xAD6323),
         community("Secatogue", 0x08FFC5), community("Setauket", 0xFF26DB), community("Unkechaug", 0x5454FF),
-        community("Corchaug", 0xFFDBF3), community("Shinnecock", 0xFFD93D), community("Montaukett", 0xFF1F1F),
+        community("Corchaug", 0xFFDBF3), community("Shinnecock", 0xFFD93D), community("Montauk", 0xFF1F1F),
         community("Manhansett", 0x66FF00),
     };
 
@@ -141,6 +148,7 @@ final class ArPlace {
     static final String[][] LOOKS = {
         {"graffiti", "Graffiti"}, {"black", "Black letters"}, {"digital", "Digital"}, {"painted", "Black only"}, {"badge", "Badge"},
         {"neon-black", "Neon black"}, {"neon-red", "Neon red"}, {"neon-green", "Neon green"},
+        {"block-white", "Block white"}, {"block-black", "Block black"},
     };
     // The flag is always the gold Shinnecock flag; its pole comes in these colours (id, name in the drawer).
     static final String[][] POLES = {{"gold", "Gold pole"}, {"black", "Black pole"}, {"white", "White pole"}, {"silver", "Silver pole"}};
@@ -173,8 +181,12 @@ final class ArPlace {
         }
 
         String texture() {
-            // Every pole flies the same cloth.
-            return model ? "place:" + FLAG : "place:" + id;
+            // Every pole flies the same cloth, new or tattered.
+            return model ? "place:" + (tattered() ? TATTERED_FLAG : FLAG) : "place:" + id;
+        }
+
+        boolean tattered() {
+            return id.startsWith(TATTERED_FLAG + ":");
         }
     }
 
@@ -186,6 +198,9 @@ final class ArPlace {
         for (Phrase phrase : COMMUNITIES) addLooks(assets, phrase, true);
         for (String[] pole : POLES) {
             assets.add(new Asset(FLAG + ":" + pole[0], "Shinnecock flag (3D)", pole[1], true, false, 0f, null, pole[0]));
+        }
+        for (String[] pole : POLES) {
+            assets.add(new Asset(TATTERED_FLAG + ":" + pole[0], "Shinnecock flag, tattered (3D)", pole[1], true, false, 0f, null, pole[0]));
         }
         return assets.toArray(new Asset[0]);
     }
@@ -234,7 +249,7 @@ final class ArPlace {
 
     /** What an asset looks like as placed: a sticker's face, or the flag's cloth. */
     static Bitmap artwork(Asset asset, Resources resources) {
-        if (asset.model) return flagCloth(resources);
+        if (asset.model) return asset.tattered() ? tatteredFlagCloth(resources) : flagCloth(resources);
         Phrase phrase = asset.phrase;
         switch (asset.look) {
             case "black":
@@ -249,6 +264,10 @@ final class ArPlace {
             case "neon-red":
             case "neon-green":
                 return neon(phrase.plain, asset.look);
+            case "block-white":
+                return block(phrase.plain, Color.WHITE);
+            case "block-black":
+                return block(phrase.plain, Color.rgb(12, 12, 12));
             default:
                 return tag(graffiti(resources), phrase.tilt, Look.COLOUR, phrase.graffiti);
         }
@@ -594,6 +613,145 @@ final class ArPlace {
         return BitmapFactory.decodeResource(resources, R.drawable.shinnecock_flag, options);
     }
 
+    /**
+     * The flag after years outdoors: sun-faded and grimy, with a woven grain and
+     * worn creases, its fly end ripped and frayed and its long edges nibbled. The
+     * hoist and the seal stay whole, and the tears are the same every time.
+     */
+    static Bitmap tatteredFlagCloth(Resources resources) {
+        Bitmap flag = flagCloth(resources);
+        int width = 1024;
+        int height = Math.round(width * FLAG_HEIGHT / FLAG_WIDTH);
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        java.util.Random random = new java.util.Random(1790L);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        ColorMatrix dull = new ColorMatrix();
+        dull.setSaturation(0.78f);
+        paint.setColorFilter(new ColorMatrixColorFilter(dull));
+        canvas.drawBitmap(flag, null, new Rect(0, 0, width, height), paint);
+        paint.setColorFilter(null);
+        flag.recycle();
+        // Bleached most where it flies free.
+        paint.setShader(new LinearGradient(width * 0.25f, 0f, width, 0f, Color.argb(0, 244, 234, 205), Color.argb(105, 244, 234, 205), Shader.TileMode.CLAMP));
+        canvas.drawRect(0, 0, width, height, paint);
+        // Creases: soft dark and light bands where it has folded.
+        for (int i = 0; i < 11; i++) {
+            float x = width * (0.06f + 0.9f * random.nextFloat());
+            float band = 18f + 46f * random.nextFloat();
+            double lean = (random.nextFloat() - 0.5f) * 0.5f;
+            float across = band * (float) Math.cos(lean);
+            float down = band * (float) Math.sin(lean);
+            paint.setShader(new LinearGradient(x - across, height / 2f - down, x + across, height / 2f + down,
+                new int[] {Color.argb(0, 60, 44, 16), Color.argb(26, 60, 44, 16), Color.argb(18, 255, 248, 225), Color.argb(0, 255, 248, 225)},
+                new float[] {0f, 0.46f, 0.56f, 1f}, Shader.TileMode.CLAMP));
+            canvas.drawRect(0, 0, width, height, paint);
+        }
+        // Grime, heavier towards the fly and the bottom edge.
+        for (int i = 0; i < 60; i++) {
+            float x = width * (float) Math.sqrt(random.nextFloat());
+            float y = height * (float) Math.pow(random.nextFloat(), 0.7);
+            float radius = 24f + 110f * random.nextFloat();
+            paint.setShader(new RadialGradient(x, y, radius, Color.argb(16 + random.nextInt(24), 58, 44, 22), Color.argb(0, 58, 44, 22), Shader.TileMode.CLAMP));
+            canvas.drawCircle(x, y, radius, paint);
+        }
+        // The weave.
+        Bitmap weave = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888);
+        for (int y = 0; y < 64; y++) {
+            for (int x = 0; x < 64; x++) {
+                boolean over = ((x / 2) + (y / 2)) % 2 == 0;
+                weave.setPixel(x, y, over ? Color.argb(6 + random.nextInt(12), 255, 250, 232) : Color.argb(9 + random.nextInt(15), 40, 30, 12));
+            }
+        }
+        paint.setShader(new BitmapShader(weave, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT));
+        canvas.drawRect(0, 0, width, height, paint);
+        paint.setShader(null);
+        weave.recycle();
+        // The fly end, torn: a ragged line down the cloth with rips running in from it,
+        // none reaching the seal, whose edge is at about three quarters of the width.
+        float sealClear = width * 0.815f;
+        List<float[]> ragged = new ArrayList<>();
+        float y = -6f;
+        float nextRip = height * (0.04f + 0.08f * random.nextFloat());
+        while (y < height + 6f) {
+            float x = width * 0.925f + 30f * (float) Math.sin(y * 0.011f + 1.3f) + 16f * (float) Math.sin(y * 0.047f) + (random.nextFloat() - 0.5f) * 26f;
+            ragged.add(new float[] {x, y});
+            if (y >= nextRip) {
+                float depth = Math.min(40f + 120f * random.nextFloat(), x - sealClear);
+                float wide = 8f + 16f * random.nextFloat();
+                for (int step = 1; step <= 5; step++) ragged.add(new float[] {x - depth * step / 5f + (random.nextFloat() - 0.5f) * 10f, y + wide * step / 5f});
+                for (int step = 4; step >= 0; step--) ragged.add(new float[] {x - depth * step / 5f + (random.nextFloat() - 0.5f) * 10f, y + wide + wide * (5 - step) / 5f});
+                y += 2f * wide;
+                nextRip = y + height * (0.07f + 0.13f * random.nextFloat());
+            }
+            y += 4f + 8f * random.nextFloat();
+        }
+        Path tear = new Path();
+        tear.moveTo(width + 20f, -20f);
+        for (float[] point : ragged) tear.lineTo(point[0], point[1]);
+        tear.lineTo(width + 20f, height + 20f);
+        tear.close();
+        // The long edges, nibbled more towards the fly, with a few real bites.
+        for (int side = 0; side < 2; side++) {
+            float edge = side == 0 ? -12f : height + 12f;
+            float inward = side == 0 ? 1f : -1f;
+            float flat = side == 0 ? 0f : height;
+            tear.moveTo(width * 0.42f, edge);
+            float x = width * 0.42f;
+            while (x < width + 12f) {
+                float towardsFly = (x - width * 0.42f) / (width * 0.58f);
+                float bite = random.nextFloat() < 0.07f ? 12f + 24f * random.nextFloat() : 2f + 9f * towardsFly * random.nextFloat();
+                tear.lineTo(x, flat + inward * bite * (0.35f + 0.65f * towardsFly));
+                x += 5f + 11f * random.nextFloat();
+            }
+            tear.lineTo(width + 20f, edge);
+            tear.close();
+        }
+        // A few holes worn through near the fly.
+        for (int i = 0; i < 7; i++) {
+            float radius = 5f + 12f * random.nextFloat();
+            float cx = sealClear + radius * 1.4f + width * 0.08f * random.nextFloat();
+            float cy = height * (0.1f + 0.8f * random.nextFloat());
+            for (int corner = 0; corner < 9; corner++) {
+                double angle = corner * Math.PI * 2 / 9;
+                float reach = radius * (0.6f + 0.7f * random.nextFloat());
+                float px = cx + (float) Math.cos(angle) * reach;
+                float py = cy + (float) Math.sin(angle) * reach;
+                if (corner == 0) tear.moveTo(px, py);
+                else tear.lineTo(px, py);
+            }
+            tear.close();
+        }
+        Paint cut = new Paint(Paint.ANTI_ALIAS_FLAG);
+        cut.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.CLEAR));
+        canvas.drawPath(tear, cut);
+        // Dirt worked into the torn edge, on the cloth only.
+        Paint worn = new Paint(Paint.ANTI_ALIAS_FLAG);
+        worn.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP));
+        worn.setStyle(Paint.Style.STROKE);
+        worn.setStrokeWidth(12f);
+        worn.setColor(Color.argb(48, 92, 70, 32));
+        worn.setMaskFilter(new BlurMaskFilter(6f, BlurMaskFilter.Blur.NORMAL));
+        canvas.drawPath(tear, worn);
+        // Loose threads off the fly end.
+        Paint thread = new Paint(Paint.ANTI_ALIAS_FLAG);
+        thread.setStyle(Paint.Style.STROKE);
+        thread.setStrokeCap(Paint.Cap.ROUND);
+        thread.setStrokeWidth(3f);
+        int[] yarn = {Color.rgb(222, 186, 84), Color.rgb(190, 152, 62), Color.rgb(206, 176, 100)};
+        for (float[] point : ragged) {
+            if (point[1] < 4f || point[1] > height - 4f || random.nextFloat() > 0.4f) continue;
+            float length = 12f + 34f * random.nextFloat();
+            float drift = (random.nextFloat() - 0.5f) * 22f;
+            thread.setColor(yarn[random.nextInt(yarn.length)]);
+            Path strand = new Path();
+            strand.moveTo(point[0] - 5f, point[1]);
+            strand.quadTo(point[0] + length * 0.5f, point[1] + drift, point[0] + length, point[1] + drift * 0.4f);
+            canvas.drawPath(strand, thread);
+        }
+        return bitmap;
+    }
+
     /** The flag pole's colour (red, green, blue, alpha from 0 to 1) for its look. */
     static float[] poleColor(Asset asset) {
         switch (asset.look) {
@@ -618,6 +776,45 @@ final class ArPlace {
             new int[] {Color.argb(150, 0, 0, 0), Color.argb(70, 0, 0, 0), Color.argb(0, 0, 0, 0)},
             new float[] {0f, 0.35f, 1f}, Shader.TileMode.CLAMP));
         canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint);
+        return bitmap;
+    }
+
+    /** Heavy block capitals in one flat colour and nothing else: every line the same width, short ones taller. */
+    private static Bitmap block(String[] lines, int color) {
+        Paint letters = new Paint(Paint.ANTI_ALIAS_FLAG);
+        letters.setTypeface(Typeface.create("sans-serif-black", Typeface.NORMAL));
+        letters.setTextScaleX(1.08f);
+        letters.setTextSize(100f);
+        float widest = 0f;
+        for (String line : lines) widest = Math.max(widest, letters.measureText(line));
+        float span = 1000f;
+        float base = 100f * span / widest;
+        Path all = new Path();
+        float baseline = 0f;
+        for (int i = 0; i < lines.length; i++) {
+            letters.setTextSize(100f);
+            float size = Math.min(base * 1.6f, 100f * span / letters.measureText(lines[i]));
+            letters.setTextSize(size);
+            baseline += i == 0 ? size * 0.74f : size * 0.84f;
+            Path path = new Path();
+            letters.getTextPath(lines[i], 0, lines[i].length(), -letters.measureText(lines[i]) / 2f, baseline, path);
+            all.addPath(path);
+        }
+        // Fattened with square corners, which is what makes it block.
+        float weight = base * 0.05f;
+        RectF bounds = new RectF();
+        all.computeBounds(bounds, true);
+        float margin = weight + 12f;
+        Bitmap bitmap = Bitmap.createBitmap(Math.round(bounds.width() + 2 * margin), Math.round(bounds.height() + 2 * margin), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.translate(margin - bounds.left, margin - bounds.top);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setStyle(Paint.Style.FILL_AND_STROKE);
+        paint.setStrokeJoin(Paint.Join.MITER);
+        paint.setStrokeMiter(3f);
+        paint.setStrokeWidth(weight);
+        paint.setColor(color);
+        canvas.drawPath(all, paint);
         return bitmap;
     }
 
