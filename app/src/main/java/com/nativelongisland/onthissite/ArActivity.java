@@ -261,6 +261,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     // QA builds: assets to place as soon as tracking starts (files/qa-ar-place).
     private final List<ArPlace.Asset> qaPlace = new ArrayList<>();
     private View placeButton;
+    // Far from the map, the Place button is pointed out (a pulsing gold ring) until tapped.
+    private ImageView placeIcon;
+    private TextView placeLabel;
+    private android.animation.ObjectAnimator placePulse;
     private LinearLayout placeDrawer;
     private LinearLayout placeList;
     private LinearLayout placeTools;
@@ -1928,6 +1932,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     private String statusText() {
         if (bubblesHidden) return "Bubbles hidden · Show all brings them back";
+        // Far from the map there is one orb to find, so no count.
+        if (scene.far) return scene.placeInvite ? "Tap Place for stickers and the flag" : "Open AR on Long Island for its stories";
         int found = discovered.size();
         int total = 0;
         // Hidden ones still count; one put away unopened doesn't.
@@ -2121,16 +2127,12 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         label.setGravity(Gravity.CENTER);
         button.addView(label, new LinearLayout.LayoutParams(-2, -2));
         button.setContentDescription("Place a sticker or a flag in your space");
-        button.setOnClickListener(v -> {
-            synchronized (lock) {
-                placingAsset = null;
-            }
-            fillPlaceDrawer();
-            placeDrawer.setVisibility(placeDrawer.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
-            showPlaceTools();
-        });
+        button.setOnClickListener(v -> togglePlaceDrawer(placeDrawer.getVisibility() != View.VISIBLE));
         button.setVisibility(cameraOnly ? View.INVISIBLE : View.VISIBLE);
         placeButton = button;
+        placeIcon = icon;
+        placeLabel = label;
+        if (scene.placeInvite && !cameraOnly) pointOutPlace();
 
         placeDrawer = column();
         placeDrawer.setVisibility(View.GONE);
@@ -2560,11 +2562,18 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         android.util.Log.i("OnThisSiteAR", "QA pinch sent to selfie mode");
     }
 
-    /** QA builds: files/qa-ar-drawer opens the Place drawer (even camera-only) to check its layout. */
+    /**
+     * QA builds: files/qa-ar-drawer opens the Place drawer (even camera-only) to check its layout;
+     * with a far-from-the-map scene (place_invite) it shows the pointed-out Place button instead.
+     */
     private void openQaDrawer() {
         if (!new java.io.File(getFilesDir(), "qa-ar-drawer").exists()) return;
         placeDrawer.postDelayed(() -> {
             placeButton.setVisibility(View.VISIBLE);
+            if (scene.placeInvite) {
+                if (placePulse == null) pointOutPlace();
+                return;
+            }
             fillPlaceDrawer();
             placeDrawer.setVisibility(View.VISIBLE);
         }, 1500);
@@ -2932,6 +2941,15 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         setCredit(item);
         infoActions.removeAllViews();
         if (!item.audio.isEmpty()) infoActions.addView(button("Play", v -> playAudio(item)));
+        if ("place".equals(item.action) && placeButton.getVisibility() == View.VISIBLE) {
+            Button place = button("Place a sticker", v -> {
+                infoPanel.setVisibility(View.GONE);
+                togglePlaceDrawer(true);
+            });
+            LinearLayout.LayoutParams placeParams = new LinearLayout.LayoutParams(-2, -2);
+            placeParams.rightMargin = dp(10);
+            infoActions.addView(place, placeParams);
+        }
         infoActions.addView(doneButton());
         infoPanel.setVisibility(View.VISIBLE);
     }
@@ -3465,6 +3483,40 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         done.setPadding(dp(28), dp(12), dp(28), dp(12));
         done.setOnClickListener(v -> infoPanel.setVisibility(View.GONE));
         return done;
+    }
+
+    /** Opens (or closes) the Place drawer, which also stops pointing the button out. */
+    private void togglePlaceDrawer(boolean open) {
+        synchronized (lock) {
+            placingAsset = null;
+        }
+        stopPointingOutPlace();
+        fillPlaceDrawer();
+        placeDrawer.setVisibility(open ? View.VISIBLE : View.GONE);
+        showPlaceTools();
+    }
+
+    /** Far from the map: a gold ring on the Place button that gently pulses, and a gold label. */
+    private void pointOutPlace() {
+        GradientDrawable ring = oval(Color.argb(150, 20, 26, 23));
+        ring.setStroke(dp(3), Color.rgb(242, 196, 70));
+        placeIcon.setBackground(ring);
+        placeLabel.setTextColor(Color.rgb(242, 196, 70));
+        placePulse = android.animation.ObjectAnimator.ofPropertyValuesHolder(placeIcon,
+            android.animation.PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.14f),
+            android.animation.PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.14f));
+        placePulse.setDuration(750);
+        placePulse.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+        placePulse.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        placePulse.start();
+    }
+
+    private void stopPointingOutPlace() {
+        if (placePulse == null) return;
+        placePulse.cancel();
+        placePulse = null;
+        placeIcon.setScaleX(1f);
+        placeIcon.setScaleY(1f);
     }
 
     /** A full-width answer button for a language question. */

@@ -56,6 +56,8 @@ final class ArScene {
         // The figure drawn inside the bubble (a person's icon, for a person
         // who asks a word) and the answers offered for a language question.
         String figure = "";
+        // What the opened card offers besides Done: "place" opens the Place drawer.
+        String action = "";
         String[] choices = new String[0];
         // Set once the visitor answers a language question correctly.
         boolean answered;
@@ -102,6 +104,11 @@ final class ArScene {
     double hereLng = Double.NaN;
     // The nearby sites' sky signs rise once this many other bubbles are open (they come last).
     int skyAfter = 0;
+    // Far from the map (far), AR has no stories of the place: one orb invites the
+    // visitor to Long Island, and the Place button (stickers and the flag) is pointed
+    // out where the phone can place them (placeInvite).
+    boolean far = false;
+    boolean placeInvite = false;
     final List<Item> items = new ArrayList<>();
 
     static ArScene fromJson(String json) throws Exception {
@@ -109,6 +116,8 @@ final class ArScene {
         ArScene scene = new ArScene();
         scene.title = root.optString("title", scene.title);
         scene.skyAfter = Math.max(0, root.optInt("sky_after", 0));
+        scene.far = root.optBoolean("far", false);
+        scene.placeInvite = root.optBoolean("place_invite", false);
         JSONObject here = root.optJSONObject("here");
         if (here != null) {
             scene.hereLat = here.optDouble("lat", Double.NaN);
@@ -137,6 +146,7 @@ final class ArScene {
             item.name = o.optString("name", "");
             item.brief = o.optString("brief", "");
             item.land = o.optString("land", "");
+            item.action = o.optString("action", "");
             JSONArray nearby = o.optJSONArray("nearby");
             item.nearby = new String[nearby == null ? 0 : nearby.length()];
             for (int n = 0; n < item.nearby.length; n++) item.nearby[n] = nearby.getString(n);
