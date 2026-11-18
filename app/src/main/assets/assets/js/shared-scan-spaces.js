@@ -430,7 +430,7 @@
       ["oral_history_content", "Oral history"],
       ["translation_content", "What the name means"],
       ["legends_and_lore_content", "Legends and lore"],
-      ["artifacts_content", "Artifacts"],
+      ["artifacts_content", "Material Culture"],
       ["colonial_description_content", "In colonial records"],
       ["land_loss_content", "How the land was lost"],
       ["preservation_content", "Caring for this place"]
@@ -734,6 +734,51 @@
       return (close.length >= AR_NEARBY_MIN ? close : all.slice(0, AR_NEARBY_MIN)).slice(0, AR_NEARBY_PLACES);
     }
 
+    // Far from the map (in Middletown, Connecticut, say: no mapped ancestral land
+    // within 25 km) there are no stories of the place to show around you. Every
+    // spot on Long Island is within 10 km of one; the Connecticut shore, Westchester
+    // and New Jersey near the city are within 25 km and keep the full AR.
+    const AR_FAR_KM = 25;
+    function arFarFromMap(here, entries) {
+      return !entries.some(entry => {
+        if (!entry.isAncestralLand) return false;
+        const geometry = arEntryGeometry(entry);
+        return arInsideGeometry(here, geometry) || (arNearestPoint(here, geometry)?.km ?? Infinity) <= AR_FAR_KM;
+      });
+    }
+
+    // There AR floats one orb, an invitation to open AR on Long Island, and keeps
+    // the stickers and the flag to place wherever you are. far drops the app's
+    // "found" count; place_invite has it point out its Place button, which the
+    // orb's card also opens (action). Phones without full AR (camera only) have
+    // no Place button.
+    function arFarScene(here) {
+      const canPlace = Boolean(window.AndroidApp?.isArSupported?.());
+      const nearest = (state.sites || [])
+        .filter(site => Array.isArray(site.center) && site.summary && !arSensitiveSite(site))
+        .map(site => ({ site, km: arDistanceKm(here, { lng: Number(site.center[0]), lat: Number(site.center[1]) }) }))
+        .sort((a, b) => a.km - b.km)[0];
+      const island = (state.sites || []).find(site => site.slug === AR_ISLAND_SLUG);
+      const invite = {
+        id: "invite-long-island", layer: "archival", kind: "note", placement: "discover",
+        title: "Visit Long Island for the full AR experience",
+        caption: [
+          "On Long Island (Paumanok), AR fills the space around you with the stories of the land you stand on. Open it there to see them.",
+          canPlace ? "Here, you can still place the stickers and the Shinnecock flag: tap Place, left of the shutter." : ""
+        ].filter(Boolean).join("\n\n"),
+        more: [
+          "There, AR opens on a pin naming the ancestral land you are on, then its teachings, Native place names, neighbouring homelands, people and words, with the nearby sites rising as signs in their real directions.",
+          nearest ? `The nearest place on the map, ${arText(nearest.site.title)}, is ${Math.round(nearest.km)} km (${Math.round(nearest.km / 1.609)} miles) from you.` : ""
+        ].filter(Boolean).join("\n\n"),
+        credit: "On This Site", image: island ? arSiteImage(island.id) || undefined : undefined,
+        action: canPlace ? "place" : undefined
+      };
+      const scene = arScene("Away from Long Island", [invite], Math.random, here, true);
+      scene.far = true;
+      if (canPlace) scene.place_invite = true;
+      return scene;
+    }
+
     // Anywhere, in this order: the "You are here" pin with the ancestral land you
     // are on (or the nearest one); three teachings for everyone; that land's own
     // teachings and photos; then what is around you (Native place names,
@@ -754,6 +799,7 @@
           .map(learning => arLearning(learning, entry.slug)));
         return arScene("Around you", [...essentials, ...learned, ...arPickWords(AR_WORDS, random).map(word => arWordCard(word, random))], random, null, true);
       }
+      if (arFarFromMap(here, entries)) return arFarScene(here);
       const homelands = arHomelands(here, entries)
         .sort((a, b) => (b.entry.slug === preferLand) - (a.entry.slug === preferLand));
       const own = [];
@@ -815,11 +861,12 @@
       const first = homelands[0];
       const nearest = nearby.slice(0, AR_HERE_NEARBY).map(({ site, km }) => `${arText(site.title)} · ${arKm(km)}`);
       const landTitle = first ? arText(first.entry.title) : "";
-      const landLine = !first ? "Long Island (Paumanok)"
+      // No land within 10 km: off the island (the Connecticut shore, Westchester, the water).
+      const landLine = !first ? "Near Long Island (Paumanok)"
         : first.near ? `Near ${landTitle} · ${arKm(first.near.km)}` : `On ${landTitle}`;
       const hereItem = {
         id: "here", layer: "archival", kind: "here", placement: "discover",
-        title: !first ? "You are on Long Island (Paumanok)" : first.near ? `Near ${landTitle}` : `You are on ${landTitle}`,
+        title: !first ? "You are near Long Island (Paumanok)" : first.near ? `Near ${landTitle}` : `You are on ${landTitle}`,
         land: landLine, nearby: nearest,
         caption: first ? arText(first.entry.description) : "Every town on Long Island sits within Native homelands.",
         more: [first ? arText(landPages[first.entry.slug]?.why_this_matters) : "",
@@ -1054,6 +1101,7 @@
     // the AR of each ancestral land you are standing on.
     const AR_CHOICE_SITE_KM = 1.609;
     const AR_CHOICE_SITES = 3;
+    const AR_CHOICE_RIGHT_HERE_KM = 0.1;
 
     function arSiteGeometry(site) {
       const shape = site?.displayGeometry || site?.geojson || null;
@@ -1065,9 +1113,10 @@
       }
     }
 
-    // The places AR can open for here: the nearby sites (nearest first; place
-    // names are left to the land's own AR), then each ancestral land you are on,
-    // or the land around you when you are on none.
+    // The places AR can open for here, nearest first (place names are left to the
+    // land's own AR): sites within 100 m, then the areas you are inside, then each
+    // ancestral land you are on (or the land around you when you are on none), then
+    // the sites farther off.
     function arPlaceChoices(here) {
       const entries = arLandEntries();
       const lands = entries.filter(entry => entry.isAncestralLand && arInsideGeometry(here, arEntryGeometry(entry)));
@@ -1080,14 +1129,20 @@
           km: arDistanceKm(here, { lng: Number(site.center[0]), lat: Number(site.center[1]) }) }))
         .filter(choice => choice.inside || choice.km <= AR_CHOICE_SITE_KM)
         .sort((a, b) => a.km - b.km);
-      // The nearest places first, then every area you are inside (a reservation, a park).
-      const chosen = [...sites.filter(choice => !choice.inside).slice(0, AR_CHOICE_SITES), ...sites.filter(choice => choice.inside)]
-        .map(({ site, inside, km }) => ({ kind: "site", site, title: arText(site.title),
-          note: inside ? "You are inside this place · its own stories" : `${arKm(km)} away · the stories of this place` }));
+      const nearby = sites.filter(choice => !choice.inside).slice(0, AR_CHOICE_SITES);
+      const areas = sites.filter(choice => choice.inside);
+      const rightHere = choice => choice.km <= AR_CHOICE_RIGHT_HERE_KM;
+      const offer = ({ site, inside, km }) => ({ kind: "site", site, title: arText(site.title),
+        note: inside ? "You are inside this place · its own stories" : `${arKm(km)} away · the stories of this place` });
       const homes = lands.length
         ? lands.map(entry => ({ kind: "land", land: entry.slug, title: arText(entry.title), note: "The ancestral land you are on · its history around you" }))
         : [{ kind: "land", land: "", title: "Around you", note: "The ancestral land, people and places near you" }];
-      return [...chosen, ...homes];
+      return [
+        ...[...nearby, ...areas].filter(rightHere).sort((a, b) => a.km - b.km).map(offer),
+        ...areas.filter(choice => !rightHere(choice)).map(offer),
+        ...homes,
+        ...nearby.filter(choice => !rightHere(choice)).map(offer)
+      ];
     }
 
     async function openArChoice(choice) {
@@ -1102,7 +1157,7 @@
     // Ancestral Land; with only one place to show, it opens straight away.
     function askArPlace(choices) {
       openSheet(sheetEl);
-      if (!listEl) return openArChoice(choices[choices.length - 1]);
+      if (!listEl) return openArChoice(choices.find(choice => choice.kind === "land"));
       const escape = value => String(value).replace(/[&<>"']/g, character => `&#${character.charCodeAt(0)};`);
       listEl.innerHTML = `<p class="summary">You are near more than one place. Which should AR show?</p>
         <div class="ar-choices">${choices.map((choice, index) => `<button class="ar-choice" type="button" data-ar-choice="${index}">
