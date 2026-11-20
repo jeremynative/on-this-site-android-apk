@@ -480,6 +480,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        current = new java.lang.ref.WeakReference<>(this);
         if (BuildConfig.DEBUG && getIntent() != null && getIntent().hasExtra("qa_open_ar_nearby")) {
             // QA: nearby bubbles from a file pushed to the app's external files folder, or
             // (where Android won't let adb write there) put in its own files with run-as.
@@ -2802,6 +2803,23 @@ public class MainActivity extends Activity {
 
     void openArNearby(String bubblesJson) {
         openArNearbyWhenKnown(bubblesJson, 0);
+    }
+
+    // The app's page, for AR to save a photo an admin placed (it writes with the admin's own session).
+    private static java.lang.ref.WeakReference<MainActivity> current = new java.lang.ref.WeakReference<>(null);
+
+    /**
+     * Hands a placed photo (or its removal) to the web app, which saves it to Directus and answers
+     * through AppBridge.arPhotoSaved. False when the app's page isn't there to take it.
+     */
+    static boolean saveArPhoto(String requestJson) {
+        MainActivity activity = current.get();
+        if (activity == null || activity.webView == null) return false;
+        String script = "window.NLI_AR_PHOTO_SAVE ? (window.NLI_AR_PHOTO_SAVE(" + requestJson + "), true) : false";
+        activity.webView.post(() -> activity.webView.evaluateJavascript(script, value -> {
+            if (!"true".equals(value)) ArActivity.deliverPhotoSaved("{\"ok\":false,\"error\":\"Update the app's page (pull to refresh) and try again.\"}");
+        }));
+        return true;
     }
 
     /**

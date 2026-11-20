@@ -57,6 +57,13 @@ class AppBridge {
         activity.runOnUiThread(() -> activity.openArNearby(bubblesJson));
     }
 
+    /** The web app's answer to an AR photo save (NLI_AR_PHOTO_SAVE): {request_id, ok, id, error}. */
+    @JavascriptInterface
+    public void arPhotoSaved(String token, String resultJson) {
+        if (!activity.validBridgeToken(token) || resultJson == null || resultJson.length() > 4_000) return;
+        ArActivity.deliverPhotoSaved(resultJson);
+    }
+
     @JavascriptInterface
     public boolean isDebugBuild() {
         return BuildConfig.DEBUG;

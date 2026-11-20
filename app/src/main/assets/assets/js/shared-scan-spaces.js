@@ -992,8 +992,130 @@
       return Boolean(app?.openArNearby) && (!app.isArSupported || app.isArSupported() || Boolean(app.hasArCameraMode?.()));
     }
 
-    function openArBubbles(scene) {
-      window.AndroidApp.openArNearby(androidBridgeToken(), JSON.stringify(scene));
+    // ---- Photos placed in AR (ar_photo_anchors) ----
+    // An admin holds a photo up where it was taken and anchors it with an ARCore Cloud Anchor;
+    // every phone with full AR nearby finds the same anchor and shows the photo in that spot.
+    // The admin's drawer offers the photos in the Directus folder "On This Site AR / Ma's House".
+    const AR_PHOTO_RADIUS_M = 400;
+    const AR_PHOTO_FOLDER = "d634266f-c76e-445c-89aa-cbf168bb90cd";
+    const AR_PHOTO_SITE = "mas-house";
+    const AR_PHOTO_ASSETS_MAX = 400;
+
+    function arPhotoImage(id, query = "") {
+      return id ? `${DIRECTUS}/assets/${encodeURIComponent(id)}${query}` : "";
+    }
+
+    async function arPhotoAnchors(here) {
+      if (!here) return [];
+      const dLat = AR_PHOTO_RADIUS_M / 111320;
+      const dLng = AR_PHOTO_RADIUS_M / (111320 * Math.max(0.2, Math.cos(here.lat * Math.PI / 180)));
+      const params = new URLSearchParams({
+        limit: "40",
+        fields: "id,title,caption,credit,date_label,image,width_m,height_m,cloud_anchor_id,latitude,longitude",
+        "filter[status][_eq]": "published",
+        "filter[cloud_anchor_id][_nnull]": "true",
+        "filter[latitude][_between]": `${here.lat - dLat},${here.lat + dLat}`,
+        "filter[longitude][_between]": `${here.lng - dLng},${here.lng + dLng}`
+      });
+      const response = await fetch(`${DIRECTUS}/items/ar_photo_anchors?${params}`, { cache: "no-store" });
+      if (!response.ok) return [];
+      const rows = (await response.json()).data || [];
+      return rows.filter(row => row.image && row.cloud_anchor_id).map(row => ({
+        id: String(row.id),
+        cloud_anchor_id: row.cloud_anchor_id,
+        image: arPhotoImage(row.image),
+        title: arText(row.title),
+        caption: arText(row.caption),
+        credit: arText(row.credit),
+        date_label: arText(row.date_label),
+        width_m: Number(row.width_m) || 1,
+        height_m: Number(row.height_m) || 0.75
+      }));
+    }
+
+    // The admin's drawer: the folder's photos, newest first (listed with the admin's own session).
+    async function arAdminPhotos() {
+      const token = await ctx.adminSession?.();
+      if (!token) return [];
+      const params = new URLSearchParams({
+        limit: String(AR_PHOTO_ASSETS_MAX),
+        sort: "-uploaded_on",
+        fields: "id,title,width,height,description",
+        "filter[folder][_eq]": AR_PHOTO_FOLDER,
+        "filter[type][_starts_with]": "image/"
+      });
+      const response = await fetch(`${DIRECTUS}/files?${params}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+      if (!response.ok) return [];
+      // Kept short (the scene goes to the app through a size-limited bridge): the app makes
+      // each photo's address from the assets base and its id.
+      return ((await response.json()).data || []).map(file => ({
+        id: file.id,
+        title: arText(file.title).slice(0, 120),
+        w: Number(file.width) || 0,
+        h: Number(file.height) || 0
+      }));
+    }
+
+    async function withPlacedPhotos(scene) {
+      const here = arUserLocation();
+      const [photos, adminPhotos] = await Promise.all([
+        arPhotoAnchors(here).catch(() => []),
+        ctx.isAdmin?.() ? arAdminPhotos().catch(() => []) : Promise.resolve(null)
+      ]);
+      const out = { ...scene };
+      if (photos.length) out.photo_anchors = photos;
+      if (adminPhotos) out.admin = { site_slug: AR_PHOTO_SITE, assets_base: `${DIRECTUS}/assets/`, photos: adminPhotos };
+      return out;
+    }
+
+    // The app saves a photo it placed (or removes one) through here, so the admin's own
+    // session writes it; the answer goes back to the AR screen.
+    window.NLI_AR_PHOTO_SAVE = async (request = {}) => {
+      const reply = result => window.AndroidApp?.arPhotoSaved?.(androidBridgeToken(), JSON.stringify({ request_id: request.request_id || "", ...result }));
+      try {
+        if (!ctx.isAdmin?.()) throw new Error("Only an admin can place photos for everyone.");
+        const token = await ctx.adminSession?.();
+        if (!token) throw new Error("Log in again to place photos.");
+        const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+        if (request.action === "hide") {
+          const response = await fetch(`${DIRECTUS}/items/ar_photo_anchors/${encodeURIComponent(request.id)}`, { method: "PATCH", headers, body: JSON.stringify({ status: "hidden" }) });
+          if (!response.ok) throw new Error(`The photo could not be removed (${response.status}).`);
+          reply({ ok: true, id: String(request.id), action: "hide" });
+          return true;
+        }
+        const ttl = Math.max(1, Math.min(365, Number(request.ttl_days) || 365));
+        const body = {
+          status: "published",
+          title: String(request.title || "").slice(0, 250),
+          caption: String(request.caption || "").slice(0, 2000),
+          credit: String(request.credit || "").slice(0, 250),
+          date_label: String(request.date_label || "").slice(0, 120),
+          image: request.image_id,
+          width_m: Number(request.width_m) || 1,
+          height_m: Number(request.height_m) || 0.75,
+          cloud_anchor_id: request.cloud_anchor_id,
+          anchor_ttl_days: ttl,
+          anchor_expires_at: new Date(Date.now() + ttl * 86400000).toISOString(),
+          latitude: Number.isFinite(request.latitude) ? request.latitude : null,
+          longitude: Number.isFinite(request.longitude) ? request.longitude : null,
+          location_accuracy_m: Number.isFinite(request.accuracy_m) ? request.accuracy_m : null,
+          heading_deg: Number.isFinite(request.heading_deg) ? request.heading_deg : null,
+          site_slug: request.site_slug || AR_PHOTO_SITE
+        };
+        if (!body.image || !body.cloud_anchor_id) throw new Error("The photo or its anchor is missing.");
+        const response = await fetch(`${DIRECTUS}/items/ar_photo_anchors`, { method: "POST", headers, body: JSON.stringify(body) });
+        if (!response.ok) throw new Error(`The photo could not be saved (${response.status}).`);
+        const saved = (await response.json()).data || {};
+        reply({ ok: true, id: String(saved.id || ""), action: "create" });
+      } catch (error) {
+        reply({ ok: false, error: String(error?.message || error) });
+      }
+      return true;
+    };
+
+    async function openArBubbles(scene) {
+      const full = await withPlacedPhotos(scene).catch(() => scene);
+      window.AndroidApp.openArNearby(androidBridgeToken(), JSON.stringify(full));
     }
 
     async function openRegionAr(preferLand = "") {
@@ -1241,7 +1363,7 @@
     }
     if (ctx.openSite) window.NLI_AR_JOIN = joinFromAr;
 
-    return { available: arAppAvailable, openAr, watch, regionArScene, siteArScene };
+    return { available: arAppAvailable, openAr, watch, regionArScene, siteArScene, withPlacedPhotos };
   }
 
   window.NLI_SCAN_SPACES = { create };

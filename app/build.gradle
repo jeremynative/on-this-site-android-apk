@@ -23,6 +23,10 @@ dependencies {
     // Declared "optional" in the manifest so devices without ARCore still
     // install the app and simply never offer the AR view.
     implementation "com.google.ar:core:1.56.0"
+    // ARCore Cloud Anchors kept up to a year (photos placed for everyone) use keyless
+    // authorization: the app's signing certificate is registered with the project's
+    // ARCore API in Google Cloud, and ARCore signs in through Play services.
+    implementation "com.google.android.gms:play-services-auth:21.3.0"
     // On-device recognition in AR (a door gets its Mohegan and Natick names):
     // Gemini Nano through ML Kit's image description. Android 8+ only; the
     // manifest lets the app keep minSdk 24 and ArObjects checks at runtime.
