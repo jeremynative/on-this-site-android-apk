@@ -269,6 +269,34 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private LinearLayout placeList;
     private LinearLayout placeTools;
 
+    // ---- Photos placed for everyone (ARCore Cloud Anchors; see ArPhotoAnchor) ----
+    private static volatile java.lang.ref.WeakReference<ArActivity> running = new java.lang.ref.WeakReference<>(null);
+    private final List<ArPhotoAnchor> photoAnchors = new ArrayList<>();
+    private boolean photosRequested;
+    // Admin: the photo held up ahead while it is lined up with the place, before it is anchored.
+    private ArScene.AdminPhoto holdingPhoto;
+    private float holdDistance = 2f;
+    private float holdWidth = 1.2f;
+    private float holdAlpha = 0.55f;
+    private Pose holdPose;
+    private boolean anchorHeldWanted;
+    // Admin: the photo just anchored, while its spot is scanned and saved for everyone.
+    private ArPhotoAnchor hosting;
+    private boolean hostWanted;
+    private Session.FeatureMapQuality hostQuality;
+    // The photo whose panel is open (its Then / Now slider).
+    private ArPhotoAnchor shownPhoto;
+    private LinearLayout photoPanel;
+    private TextView photoPanelTitle;
+    private TextView photoPanelMeta;
+    private TextView photoPanelText;
+    private TextView photoPanelStatus;
+    private android.widget.SeekBar photoPanelSlider;
+    private LinearLayout photoPanelSliderRow;
+    private TextView photoPanelSliderStart;
+    private TextView photoPanelSliderEnd;
+    private LinearLayout photoPanelActions;
+
     // Scene state (guarded by lock).
     private ArScene scene;
     private final Map<String, Anchor> discoverAnchors = new HashMap<>();  // itemId -> anchor
@@ -374,6 +402,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             return;
         }
         Collections.addAll(enabledLayers, ArScene.LAYERS);
+        running = new java.lang.ref.WeakReference<>(this);
         cameraOnly = getIntent().getBooleanExtra(EXTRA_CAMERA_ONLY, false);
         if (!cameraOnly) objects = ArObjects.create(this);
         identifyQaPhoto();
@@ -527,6 +556,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         resumeRetries = 0;
         surface.onResume();
+        resolvePlacedPhotos();
     }
 
     @Override
@@ -582,6 +612,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             // detected as planes yet.
             config.setDepthMode(Config.DepthMode.AUTOMATIC);
         }
+        // Photos placed for everyone are found (and, for an admin, saved) as Cloud Anchors.
+        if (!scene.placedPhotos.isEmpty() || scene.isAdmin()) config.setCloudAnchorMode(Config.CloudAnchorMode.ENABLED);
         session.configure(config);
     }
 
@@ -702,6 +734,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             List<MeshDraw> meshes = new ArrayList<>();
             placeQaAssets(frame, cameraPose);
             collectPlaced(frame, draws, meshes, cameraPoint);
+            collectPhotos(current, draws, cameraPose);
 
             float[] tap;
             while ((tap = taps.poll()) != null) handleTap(frame, tap[0], tap[1], draws, viewProjection, cameraPose);
@@ -1746,6 +1779,553 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         placeChosen(frame, viewportWidth / 2f, viewportHeight / 2f, cameraPose);
     }
 
+    // ---- Photos placed for everyone ----
+
+    /** Starts finding the scene's placed photos once ARCore runs; each appears when its Cloud Anchor resolves. */
+    private void resolvePlacedPhotos() {
+        if (photosRequested || session == null || scene.placedPhotos.isEmpty()) return;
+        photosRequested = true;
+        for (ArScene.PlacedPhoto info : scene.placedPhotos) {
+            ArPhotoAnchor photo = ArPhotoAnchor.from(info);
+            synchronized (lock) {
+                photoAnchors.add(photo);
+                loadPhotoTexture(photo.texture(), photo.image);
+            }
+            try {
+                session.resolveCloudAnchorAsync(info.cloudAnchorId, (anchor, state) -> {
+                    synchronized (lock) {
+                        if (state == Anchor.CloudAnchorState.SUCCESS && anchor != null) {
+                            photo.anchor = anchor;
+                            photo.state = ArPhotoAnchor.State.SHOWN;
+                            android.util.Log.i("OnThisSiteAR", "Photo " + info.id + " found");
+                        } else {
+                            photo.state = ArPhotoAnchor.State.NOT_FOUND;
+                            photo.message = ArPhotoAnchor.errorMessage(state);
+                            android.util.Log.w("OnThisSiteAR", "Photo " + info.id + " not found: " + state);
+                        }
+                    }
+                });
+            } catch (RuntimeException error) {
+                synchronized (lock) {
+                    photo.state = ArPhotoAnchor.State.NOT_FOUND;
+                }
+                android.util.Log.w("OnThisSiteAR", "Couldn't look for photo " + info.id + ": " + error);
+            }
+        }
+    }
+
+    /** Downloads a photo for AR (at most 2048 px) the first time it is needed. Call holding the lock. */
+    private void loadPhotoTexture(String key, String url) {
+        if (url == null || url.isEmpty() || gl.hasTexture(key) || !loading.add(key)) return;
+        loader.execute(() -> {
+            Bitmap bitmap = decodeImage(url, 2048);
+            if (bitmap != null) {
+                gl.queueTexture(key, bitmap);
+            } else {
+                synchronized (lock) {
+                    loading.remove(key);
+                }
+                android.util.Log.w("OnThisSiteAR", "Photo " + url + " didn't load");
+            }
+        });
+    }
+
+    private ArPhotoAnchor photoByDrawId(String drawId) {
+        for (ArPhotoAnchor photo : photoAnchors) if (photo.drawId.equals(drawId)) return photo;
+        return null;
+    }
+
+    /**
+     * The placed photos where their anchors are, each facing the way it was placed; for an admin,
+     * the photo held up ahead while lining it up, and the scan of the spot while it is saved.
+     */
+    private void collectPhotos(Session current, List<Draw> draws, Pose cameraPose) {
+        float[] cameraPoint = cameraPose.getTranslation();
+        for (java.util.Iterator<ArPhotoAnchor> it = photoAnchors.iterator(); it.hasNext(); ) {
+            ArPhotoAnchor photo = it.next();
+            if (photo.removed) {
+                if (photo.anchor != null) photo.anchor.detach();
+                it.remove();
+                continue;
+            }
+            if (photo.anchor == null || photo.anchor.getTrackingState() != TrackingState.TRACKING) continue;
+            float aspect = gl.aspect(photo.texture());
+            if (aspect <= 0f) continue;
+            Pose pose = photo.anchor.getPose();
+            float[] model = new float[16];
+            pose.toMatrix(model, 0);
+            Matrix.scaleM(model, 0, photo.width, photo.width * aspect, 1f);
+            draws.add(Draw.of(photo.drawId, model, photo.texture(), photo.alpha, distance(pose.getTranslation(), cameraPoint)));
+        }
+        ArScene.AdminPhoto held = holdingPhoto;
+        if (held != null) {
+            // Upright at eye height, straight ahead, facing the holder.
+            float[] back = cameraPose.getZAxis();
+            float length = (float) Math.hypot(back[0], back[2]);
+            float[] forward = length < 1e-3f ? new float[] {0f, 0f, -1f} : new float[] {-back[0] / length, 0f, -back[2] / length};
+            float[] point = {cameraPoint[0] + forward[0] * holdDistance, cameraPoint[1], cameraPoint[2] + forward[2] * holdDistance};
+            Pose pose = new Pose(point, ArPlacement.yawQuaternion(ArPlacement.yawTowards(point[0], point[2], cameraPoint[0], cameraPoint[2])));
+            String key = "photo-tex:" + held.image;
+            loadPhotoTexture(key, held.image);
+            float aspect = gl.aspect(key);
+            holdPose = pose;
+            if (anchorHeldWanted && aspect > 0f) {
+                anchorHeldWanted = false;
+                float[] cameraForward = {-back[0], -back[1], -back[2]};
+                anchorHeld(current, held, pose, aspect, compass.ready() ? compass.facingDeg(cameraForward) : Double.NaN);
+            } else if (aspect > 0f) {
+                draws.add(Draw.posed(null, pose, key, holdWidth, holdWidth * aspect, holdAlpha, holdDistance));
+            }
+        }
+        ArPhotoAnchor saving = hosting;
+        if (saving != null && saving.state == ArPhotoAnchor.State.SCANNING) {
+            try {
+                hostQuality = current.estimateFeatureMapQualityForHosting(cameraPose);
+            } catch (RuntimeException error) {
+                hostQuality = null;
+            }
+            if (hostWanted) {
+                hostWanted = false;
+                hostPhoto(current, saving);
+            }
+            postHostQuality();
+        }
+    }
+
+    /** Admin: anchors the held photo where it is, then scans the spot to save it for everyone. */
+    private void anchorHeld(Session current, ArScene.AdminPhoto asset, Pose pose, float aspect, double headingDeg) {
+        Anchor anchor;
+        try {
+            anchor = current.createAnchor(pose);
+        } catch (RuntimeException error) {
+            android.util.Log.w("OnThisSiteAR", "Couldn't anchor the photo: " + error);
+            toast("Couldn't anchor it here. Move the phone slowly and try again.");
+            return;
+        }
+        ArPhotoAnchor photo = ArPhotoAnchor.placing(asset, holdWidth, aspect);
+        photo.anchor = anchor;
+        photo.alpha = holdAlpha;
+        photo.headingDeg = headingDeg;
+        photoAnchors.add(photo);
+        hosting = photo;
+        holdingPhoto = null;
+        holdPose = null;
+        runOnUiThread(() -> {
+            vibrateConfirm();
+            showHostingPanel();
+        });
+    }
+
+    /** Admin: saves the anchored spot as a Cloud Anchor (a year), then the photo to On This Site. */
+    private void hostPhoto(Session current, ArPhotoAnchor photo) {
+        photo.state = ArPhotoAnchor.State.HOSTING;
+        postPhotoStatus("Saving the spot with Google…", false);
+        try {
+            current.hostCloudAnchorAsync(photo.anchor, ArPhotoAnchor.TTL_DAYS, (cloudId, state) -> {
+                boolean saved = state == Anchor.CloudAnchorState.SUCCESS && cloudId != null && !cloudId.isEmpty();
+                synchronized (lock) {
+                    if (saved) {
+                        photo.cloudAnchorId = cloudId;
+                        photo.state = ArPhotoAnchor.State.SAVING;
+                    } else {
+                        photo.state = ArPhotoAnchor.State.SCANNING;
+                        photo.message = ArPhotoAnchor.errorMessage(state);
+                    }
+                }
+                android.util.Log.i("OnThisSiteAR", "Photo spot hosting: " + state);
+                if (saved) savePlacedPhoto(photo);
+                else postPhotoStatus(photo.message, true);
+            });
+        } catch (RuntimeException error) {
+            photo.state = ArPhotoAnchor.State.SCANNING;
+            android.util.Log.w("OnThisSiteAR", "Couldn't save the spot: " + error);
+            postPhotoStatus("Couldn't save the spot (" + error.getClass().getSimpleName() + "). Try again.", true);
+        }
+    }
+
+    /** Hands the placed photo to the app's page, which saves it with the admin's own login. */
+    private void savePlacedPhoto(ArPhotoAnchor photo) {
+        org.json.JSONObject request = new org.json.JSONObject();
+        try {
+            photo.requestId = java.util.UUID.randomUUID().toString();
+            request.put("request_id", photo.requestId);
+            request.put("action", "create");
+            request.put("image_id", photo.imageId);
+            request.put("title", photo.title);
+            request.put("width_m", photo.width);
+            request.put("height_m", photo.height);
+            request.put("cloud_anchor_id", photo.cloudAnchorId);
+            request.put("ttl_days", ArPhotoAnchor.TTL_DAYS);
+            request.put("site_slug", scene.adminSite);
+            double[] here = fix;
+            if (here != null) {
+                request.put("latitude", here[0]);
+                request.put("longitude", here[1]);
+                request.put("accuracy_m", here[2]);
+            } else if (!Double.isNaN(scene.hereLat)) {
+                request.put("latitude", scene.hereLat);
+                request.put("longitude", scene.hereLng);
+            }
+            if (!Double.isNaN(photo.headingDeg)) request.put("heading_deg", photo.headingDeg);
+        } catch (org.json.JSONException error) {
+            return;
+        }
+        postPhotoStatus("Saving the photo to On This Site…", false);
+        if (!MainActivity.saveArPhoto(request.toString())) {
+            synchronized (lock) {
+                photo.state = ArPhotoAnchor.State.SAVE_FAILED;
+                photo.message = "The app's page isn't open to save it. Close AR, open the app and try again.";
+            }
+            postPhotoStatus(photo.message, true);
+        }
+    }
+
+    /** The app's page answered a save or a removal (AppBridge.arPhotoSaved). */
+    static void deliverPhotoSaved(String json) {
+        ArActivity activity = running.get();
+        if (activity != null) activity.runOnUiThread(() -> activity.onPhotoSaved(json));
+    }
+
+    private void onPhotoSaved(String json) {
+        org.json.JSONObject result;
+        try {
+            result = new org.json.JSONObject(json);
+        } catch (org.json.JSONException error) {
+            return;
+        }
+        String requestId = result.optString("request_id", "");
+        boolean ok = result.optBoolean("ok", false);
+        ArPhotoAnchor match = null;
+        synchronized (lock) {
+            for (ArPhotoAnchor photo : photoAnchors) {
+                if (requestId.isEmpty() ? photo.state == ArPhotoAnchor.State.SAVING : requestId.equals(photo.requestId)) {
+                    match = photo;
+                    break;
+                }
+            }
+            if (match == null) return;
+            if (!ok) {
+                if (match.state == ArPhotoAnchor.State.SAVING) match.state = ArPhotoAnchor.State.SAVE_FAILED;
+                match.message = result.optString("error", "It couldn't be saved.");
+            } else if ("hide".equals(result.optString("action", ""))) {
+                match.removed = true;
+            } else {
+                match.recordId = result.optString("id", "");
+                match.state = ArPhotoAnchor.State.SHOWN;
+                match.alpha = 1f;
+                if (hosting == match) hosting = null;
+            }
+        }
+        if (!ok) {
+            postPhotoStatus(match.message, true);
+            if (match == shownPhoto) toast(match.message);
+            return;
+        }
+        if ("hide".equals(result.optString("action", ""))) {
+            toast("Removed for everyone.");
+            closePhotoPanel();
+            return;
+        }
+        vibrateConfirm();
+        toast("Placed for everyone. Anyone in AR here will see it in this spot.");
+        closePhotoPanel();
+    }
+
+    // ---- The photo panel: Then / Now, lining up, saving ----
+
+    private void buildPhotoPanel(LinearLayout bottom) {
+        photoPanel = column();
+        photoPanel.setVisibility(View.GONE);
+        photoPanel.setClickable(true);
+        photoPanel.setBackground(rounded(Color.argb(235, 20, 26, 23), 22));
+        photoPanel.setPadding(dp(16), dp(14), dp(16), dp(12));
+        photoPanelTitle = text(17, true, "");
+        photoPanel.addView(photoPanelTitle);
+        photoPanelMeta = text(13, false, "");
+        photoPanelMeta.setTextColor(Color.rgb(159, 176, 166));
+        photoPanel.addView(photoPanelMeta);
+        photoPanelText = text(14, false, "");
+        photoPanelText.setTextColor(Color.rgb(214, 226, 218));
+        photoPanelText.setPadding(0, dp(6), 0, 0);
+        photoPanel.addView(photoPanelText);
+        photoPanelSliderRow = row();
+        photoPanelSliderRow.setGravity(Gravity.CENTER_VERTICAL);
+        photoPanelSliderRow.setPadding(0, dp(10), 0, dp(2));
+        photoPanelSliderStart = text(13, true, "");
+        photoPanelSliderRow.addView(photoPanelSliderStart);
+        photoPanelSlider = new android.widget.SeekBar(this);
+        photoPanelSlider.setMax(100);
+        photoPanelSliderRow.addView(photoPanelSlider, new LinearLayout.LayoutParams(0, -2, 1f));
+        photoPanelSliderEnd = text(13, true, "");
+        photoPanelSliderRow.addView(photoPanelSliderEnd);
+        photoPanel.addView(photoPanelSliderRow, new LinearLayout.LayoutParams(-1, -2));
+        photoPanelStatus = text(13, true, "");
+        photoPanelStatus.setTextColor(Color.rgb(243, 210, 159));
+        photoPanelStatus.setPadding(0, dp(6), 0, 0);
+        photoPanel.addView(photoPanelStatus);
+        photoPanelActions = column();
+        photoPanelActions.setPadding(0, dp(8), 0, 0);
+        photoPanel.addView(photoPanelActions, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.topMargin = dp(10);
+        bottom.addView(photoPanel, params);
+    }
+
+    private void setPhotoSlider(String start, String end, int progress, java.util.function.IntConsumer changed) {
+        photoPanelSliderStart.setText(start);
+        photoPanelSliderEnd.setText(end);
+        photoPanelSlider.setOnSeekBarChangeListener(null);
+        photoPanelSlider.setProgress(progress);
+        photoPanelSlider.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(android.widget.SeekBar bar, int value, boolean fromUser) {
+                if (fromUser) changed.accept(value);
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar bar) {
+            }
+            @Override public void onStopTrackingTouch(android.widget.SeekBar bar) {
+            }
+        });
+        photoPanelSliderRow.setVisibility(View.VISIBLE);
+    }
+
+    /** A row of panel buttons; the last one listed is the main one. */
+    private void addPhotoActions(Object... labelsAndActions) {
+        LinearLayout actions = row();
+        actions.setGravity(Gravity.CENTER);
+        for (int i = 0; i + 1 < labelsAndActions.length; i += 2) {
+            TextView button = text(14, true, (String) labelsAndActions[i]);
+            button.setGravity(Gravity.CENTER);
+            boolean main = i + 2 >= labelsAndActions.length;
+            button.setBackground(rounded(main ? Color.rgb(46, 125, 84) : Color.argb(200, 44, 54, 48), 18));
+            button.setPadding(dp(12), dp(9), dp(12), dp(9));
+            Runnable action = (Runnable) labelsAndActions[i + 1];
+            button.setOnClickListener(v -> action.run());
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -2, 1f);
+            params.leftMargin = dp(3);
+            params.rightMargin = dp(3);
+            actions.addView(button, params);
+        }
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
+        rowParams.topMargin = dp(6);
+        photoPanelActions.addView(actions, rowParams);
+    }
+
+    private void openPhotoPanel(String title, String meta, String body) {
+        photoPanelTitle.setText(title);
+        photoPanelMeta.setText(meta);
+        photoPanelMeta.setVisibility(meta.isEmpty() ? View.GONE : View.VISIBLE);
+        photoPanelText.setText(body);
+        photoPanelText.setVisibility(body.isEmpty() ? View.GONE : View.VISIBLE);
+        photoPanelStatus.setText("");
+        photoPanelStatus.setVisibility(View.GONE);
+        photoPanelSliderRow.setVisibility(View.GONE);
+        photoPanelActions.removeAllViews();
+        placeDrawer.setVisibility(View.GONE);
+        placeTools.setVisibility(View.GONE);
+        photoPanel.setVisibility(View.VISIBLE);
+    }
+
+    /** Anyone: a placed photo's title, date and story, with Then / Now to fade it into the place today. */
+    private void showPhotoPanel(ArPhotoAnchor photo) {
+        shownPhoto = photo;
+        String meta = photo.dateLabel + (!photo.dateLabel.isEmpty() && !photo.credit.isEmpty() ? " · " : "") + photo.credit;
+        openPhotoPanel(photo.title.isEmpty() ? "Then and now" : photo.title, meta,
+            photo.caption.isEmpty() ? "This photo was taken right here. Slide to see the place as it is now." : photo.caption);
+        setPhotoSlider("Then", "Now", Math.round((1f - photo.alpha) * 100f), value -> {
+            synchronized (lock) {
+                photo.alpha = 1f - value / 100f;
+            }
+        });
+        if (scene.isAdmin() && !photo.recordId.isEmpty()) {
+            final boolean[] armed = {false};
+            addPhotoActions("Remove for everyone", (Runnable) () -> {
+                if (!armed[0]) {
+                    armed[0] = true;
+                    photoPanelStatus.setText("Tap Remove again to take it away for everyone.");
+                    photoPanelStatus.setVisibility(View.VISIBLE);
+                    return;
+                }
+                removePlacedPhoto(photo);
+            }, "Done", (Runnable) this::closePhotoPanel);
+        } else {
+            addPhotoActions("Done", (Runnable) this::closePhotoPanel);
+        }
+    }
+
+    private void removePlacedPhoto(ArPhotoAnchor photo) {
+        org.json.JSONObject request = new org.json.JSONObject();
+        try {
+            photo.requestId = java.util.UUID.randomUUID().toString();
+            request.put("request_id", photo.requestId);
+            request.put("action", "hide");
+            request.put("id", photo.recordId);
+        } catch (org.json.JSONException error) {
+            return;
+        }
+        photoPanelStatus.setText("Removing…");
+        photoPanelStatus.setVisibility(View.VISIBLE);
+        if (!MainActivity.saveArPhoto(request.toString())) toast("The app's page isn't open. Close AR and try again.");
+    }
+
+    /** Admin: the drawer's photos to place for everyone (from the On This Site AR folder). */
+    private void addAdminPhotoTiles(int perRow) {
+        addPlaceHeading("Photos to place for everyone (admin)");
+        TextView note = text(12, false, scene.adminPhotos.isEmpty()
+            ? "No photos in the On This Site AR folder yet."
+            : "Only you see these. Stand where a photo was taken, hold it up, line it up and anchor it. Everyone in AR here will then see it in that spot.");
+        note.setTextColor(Color.rgb(200, 214, 205));
+        note.setPadding(dp(2), 0, 0, dp(8));
+        placeList.addView(note);
+        LinearLayout tiles = null;
+        for (ArScene.AdminPhoto photo : scene.adminPhotos) {
+            if (tiles == null || tiles.getChildCount() >= perRow) {
+                tiles = row();
+                tiles.setGravity(Gravity.START);
+                LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
+                rowParams.bottomMargin = dp(8);
+                placeList.addView(tiles, rowParams);
+            }
+            LinearLayout tile = column();
+            tile.setGravity(Gravity.CENTER_HORIZONTAL);
+            tile.setPadding(dp(4), dp(4), dp(4), dp(4));
+            tile.setBackground(rounded(Color.argb(60, 255, 255, 255), 14));
+            ImageView picture = new ImageView(this);
+            picture.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            tile.addView(picture, new LinearLayout.LayoutParams(-1, dp(80)));
+            TextView name = text(11, false, photo.title);
+            name.setGravity(Gravity.CENTER);
+            name.setMaxLines(1);
+            name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            tile.addView(name, new LinearLayout.LayoutParams(-1, -2));
+            tile.setContentDescription("Place the photo " + photo.title);
+            tile.setOnClickListener(v -> holdPhoto(photo));
+            LinearLayout.LayoutParams tileParams = new LinearLayout.LayoutParams(0, -2, 1f);
+            tileParams.rightMargin = dp(8);
+            tiles.addView(tile, tileParams);
+            loader.execute(() -> {
+                Bitmap thumb = decodeImage(photo.thumb, 240);
+                if (thumb != null) runOnUiThread(() -> picture.setImageBitmap(thumb));
+            });
+        }
+        while (tiles != null && tiles.getChildCount() < perRow) {
+            LinearLayout.LayoutParams spacer = new LinearLayout.LayoutParams(0, 1, 1f);
+            spacer.rightMargin = dp(8);
+            tiles.addView(new View(this), spacer);
+        }
+    }
+
+    /** Admin: holds the chosen photo up ahead, see-through, to line it up with the place. */
+    private void holdPhoto(ArScene.AdminPhoto photo) {
+        synchronized (lock) {
+            placingAsset = null;
+            selectedPlace = null;
+            holdingPhoto = photo;
+            holdDistance = 2f;
+            holdWidth = 1.2f;
+            holdAlpha = 0.55f;
+            anchorHeldWanted = false;
+        }
+        openPhotoPanel(photo.title.isEmpty() ? "Line up the photo" : photo.title, "Placing for everyone",
+            "Stand where it was taken. Move it closer or farther and resize it until it lines up with what you see, then anchor it.");
+        setPhotoSlider("Clear", "Solid", Math.round(holdAlpha * 100f), value -> {
+            synchronized (lock) {
+                holdAlpha = Math.max(0.1f, value / 100f);
+            }
+        });
+        addPhotoActions("Closer", (Runnable) () -> adjustHold(-0.25f, 1f), "Farther", (Runnable) () -> adjustHold(0.25f, 1f),
+            "Smaller", (Runnable) () -> adjustHold(0f, 1f / 1.15f), "Bigger", (Runnable) () -> adjustHold(0f, 1.15f));
+        addPhotoActions("Cancel", (Runnable) this::closePhotoPanel, "Anchor here", (Runnable) () -> {
+            synchronized (lock) {
+                anchorHeldWanted = true;
+            }
+        });
+    }
+
+    private void adjustHold(float distance, float scale) {
+        synchronized (lock) {
+            holdDistance = Math.max(0.5f, Math.min(12f, holdDistance + distance * Math.max(1f, holdDistance / 2f)));
+            holdWidth = Math.max(0.2f, Math.min(8f, holdWidth * scale));
+        }
+    }
+
+    /** Admin: anchored; the spot is scanned from a few steps around, then saved for everyone. */
+    private void showHostingPanel() {
+        openPhotoPanel("Save the spot for everyone", "",
+            "Walk slowly a few steps to the left and right of the photo, keeping it in view, so the spot can be mapped. Save when it says Good.");
+        photoPanelStatus.setVisibility(View.VISIBLE);
+        photoPanelStatus.setText("Mapping the spot…");
+        ArPhotoAnchor photo = hosting;
+        if (photo != null) {
+            setPhotoSlider("Clear", "Solid", Math.round(photo.alpha * 100f), value -> {
+                synchronized (lock) {
+                    photo.alpha = Math.max(0.1f, value / 100f);
+                }
+            });
+        }
+        addPhotoActions("Cancel", (Runnable) this::closePhotoPanel, "Save for everyone", (Runnable) () -> {
+            synchronized (lock) {
+                ArPhotoAnchor current = hosting;
+                if (current == null) return;
+                if (current.state == ArPhotoAnchor.State.SAVE_FAILED && !current.cloudAnchorId.isEmpty()) {
+                    current.state = ArPhotoAnchor.State.SAVING;
+                    loader.execute(() -> savePlacedPhoto(current));
+                    return;
+                }
+                if (current.state != ArPhotoAnchor.State.SCANNING) return;
+                if (hostQuality == Session.FeatureMapQuality.INSUFFICIENT) {
+                    postPhotoStatus("Not mapped enough yet: walk a few steps to each side, then save.", true);
+                    return;
+                }
+                hostWanted = true;
+            }
+        });
+    }
+
+    private long lastHostStatus;
+
+    /** The scan's quality while saving the spot, a few times a second. */
+    private void postHostQuality() {
+        long now = SystemClock.uptimeMillis();
+        if (now - lastHostStatus < 400) return;
+        lastHostStatus = now;
+        Session.FeatureMapQuality quality = hostQuality;
+        String text = quality == null ? "Mapping the spot…"
+            : quality == Session.FeatureMapQuality.GOOD ? "Spot mapped: Good. Tap Save for everyone."
+            : quality == Session.FeatureMapQuality.SUFFICIENT ? "Spot mapped: OK. A few more steps to each side makes it Good."
+            : "Spot mapped: not enough yet. Walk slowly to each side, keeping the photo in view.";
+        postPhotoStatus(text, false);
+    }
+
+    private void postPhotoStatus(String text, boolean problem) {
+        runOnUiThread(() -> {
+            if (photoPanelStatus == null || photoPanel.getVisibility() != View.VISIBLE) {
+                if (problem) toast(text);
+                return;
+            }
+            photoPanelStatus.setText(text);
+            photoPanelStatus.setTextColor(problem ? Color.rgb(255, 170, 150) : Color.rgb(243, 210, 159));
+            photoPanelStatus.setVisibility(View.VISIBLE);
+        });
+    }
+
+    /** Closes the panel; a photo still being lined up or saved (not yet saved) is let go. */
+    private void closePhotoPanel() {
+        synchronized (lock) {
+            holdingPhoto = null;
+            holdPose = null;
+            anchorHeldWanted = false;
+            ArPhotoAnchor saving = hosting;
+            if (saving != null && saving.recordId.isEmpty() && saving.state != ArPhotoAnchor.State.HOSTING
+                && saving.state != ArPhotoAnchor.State.SAVING) {
+                saving.removed = true;
+            }
+            if (saving != null && saving.state != ArPhotoAnchor.State.HOSTING && saving.state != ArPhotoAnchor.State.SAVING) hosting = null;
+            hostWanted = false;
+            shownPhoto = null;
+        }
+        if (photoPanel != null) photoPanel.setVisibility(View.GONE);
+    }
+
     // ---- Taps ----
 
     /** The nearest bubble or card under a point on the screen, or null. */
@@ -1763,7 +2343,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             placeChosen(frame, x, y, cameraPose);
             return;
         }
+        // Lining up or saving a photo: the panel's buttons do the work.
+        if (holdingPhoto != null || hosting != null) return;
         Draw picked = pick(x, y, draws, viewProjection);
+        if (picked != null && picked.itemId.startsWith(ArPhotoAnchor.DRAW_PREFIX)) {
+            ArPhotoAnchor photo = photoByDrawId(picked.itemId);
+            if (photo != null) runOnUiThread(() -> showPhotoPanel(photo));
+            return;
+        }
         if (picked != null && picked.itemId.startsWith(DISMISS)) {
             dismiss(picked.itemId.substring(DISMISS.length()));
             return;
@@ -2161,6 +2748,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         LinearLayout.LayoutParams toolsParams = new LinearLayout.LayoutParams(-1, -2);
         toolsParams.topMargin = dp(10);
         bottom.addView(placeTools, toolsParams);
+        buildPhotoPanel(bottom);
     }
 
     /**
@@ -2357,6 +2945,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         float tileDp = 100f;
         float widthDp = getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density;
         int perRow = Math.max(3, (int) ((widthDp - 56f) / tileDp));
+        // Admin only: photos to place for everyone, first.
+        if (scene.isAdmin()) addAdminPhotoTiles(perRow);
         Map<String, List<ArPlace.Asset>> groups = new LinkedHashMap<>();
         for (ArPlace.Asset asset : ArPlace.ASSETS) {
             if (!groups.containsKey(asset.group)) groups.put(asset.group, new ArrayList<>());
@@ -3584,7 +4174,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     /** Back closes the zoomed photo first, then the card, and only then leaves AR. */
     private void handleBack() {
-        if (photoSaved != null && photoSaved.getVisibility() == View.VISIBLE) {
+        if (photoPanel != null && photoPanel.getVisibility() == View.VISIBLE) {
+            closePhotoPanel();
+        } else if (photoSaved != null && photoSaved.getVisibility() == View.VISIBLE) {
             photoSaved.setVisibility(View.GONE);
         } else if (photoViewer != null && photoViewer.getVisibility() == View.VISIBLE) {
             photoViewer.setVisibility(View.GONE);

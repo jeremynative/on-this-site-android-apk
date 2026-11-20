@@ -111,6 +111,42 @@ final class ArScene {
     boolean placeInvite = false;
     final List<Item> items = new ArrayList<>();
 
+    /**
+     * A photo placed in AR for everyone (ar_photo_anchors): an admin anchored it where it was
+     * taken with an ARCore Cloud Anchor, which every phone resolves to the same spot.
+     */
+    static final class PlacedPhoto {
+        String id = "";
+        String cloudAnchorId = "";
+        String image = "";
+        String title = "";
+        String caption = "";
+        String credit = "";
+        String dateLabel = "";
+        float widthM = 1f;
+        float heightM = 0.75f;
+    }
+
+    /** A photo the admin can place, from the admin-only folder. */
+    static final class AdminPhoto {
+        String id = "";
+        String title = "";
+        String caption = "";
+        String image = "";
+        String thumb = "";
+        int width;
+        int height;
+    }
+
+    final List<PlacedPhoto> placedPhotos = new ArrayList<>();
+    // Set only for an admin: the photos they can place, and the place they belong to.
+    List<AdminPhoto> adminPhotos = null;
+    String adminSite = "";
+
+    boolean isAdmin() {
+        return adminPhotos != null;
+    }
+
     static ArScene fromJson(String json) throws Exception {
         JSONObject root = new JSONObject(json);
         ArScene scene = new ArScene();
@@ -177,6 +213,41 @@ final class ArScene {
                 item.visits[v] = visit;
             }
             scene.items.add(item);
+        }
+        JSONArray photos = root.optJSONArray("photo_anchors");
+        for (int i = 0; photos != null && i < photos.length(); i++) {
+            JSONObject o = photos.optJSONObject(i);
+            if (o == null || o.optString("cloud_anchor_id", "").isEmpty() || o.optString("image", "").isEmpty()) continue;
+            PlacedPhoto photo = new PlacedPhoto();
+            photo.id = o.optString("id", "");
+            photo.cloudAnchorId = o.optString("cloud_anchor_id", "");
+            photo.image = o.optString("image", "");
+            photo.title = o.optString("title", "");
+            photo.caption = o.optString("caption", "");
+            photo.credit = o.optString("credit", "");
+            photo.dateLabel = o.optString("date_label", "");
+            photo.widthM = (float) Math.max(0.2, Math.min(6.0, o.optDouble("width_m", 1.0)));
+            photo.heightM = (float) Math.max(0.1, Math.min(6.0, o.optDouble("height_m", 0.75)));
+            scene.placedPhotos.add(photo);
+        }
+        JSONObject admin = root.optJSONObject("admin");
+        if (admin != null) {
+            scene.adminSite = admin.optString("site_slug", "");
+            scene.adminPhotos = new ArrayList<>();
+            String base = admin.optString("assets_base", "https://directus.nativelongisland.com/assets/");
+            JSONArray list = admin.optJSONArray("photos");
+            for (int i = 0; list != null && i < list.length(); i++) {
+                JSONObject o = list.optJSONObject(i);
+                if (o == null || !o.optString("id", "").matches("[0-9a-fA-F-]{36}")) continue;
+                AdminPhoto photo = new AdminPhoto();
+                photo.id = o.optString("id", "");
+                photo.title = o.optString("title", "");
+                photo.image = base + photo.id;
+                photo.thumb = base + photo.id + "?width=240&height=240&fit=cover&quality=70";
+                photo.width = o.optInt("w", 0);
+                photo.height = o.optInt("h", 0);
+                scene.adminPhotos.add(photo);
+            }
         }
         return scene;
     }
