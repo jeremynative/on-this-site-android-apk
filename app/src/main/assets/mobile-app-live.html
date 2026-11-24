@@ -18,10 +18,12 @@
   <link rel="preconnect" href="https://directus.nativelongisland.com">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link href="assets/vendor/maplibre-gl/maplibre-gl.css?v=ab1e70d59ec4" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/mobile-app.css?v=b8eae1181d0f">
-  <link rel="stylesheet" href="assets/css/shared-research-question.css?v=58d7f9115b8a">
-  <link rel="stylesheet" href="assets/css/shared-plant-insights.css?v=99ff3c90714e">
-  <link rel="stylesheet" href="assets/css/shared-learning-hub.css?v=d8f1883754f2">
+  <link rel="stylesheet" href="assets/css/mobile-app.css?v=4d769618bc54">
+  <link rel="stylesheet" href="assets/css/shared-research-question.css?v=1ecf6c418813">
+  <link rel="stylesheet" href="assets/css/shared-plant-insights.css?v=70518b5cdce9">
+  <link rel="stylesheet" href="assets/css/shared-learning-hub.css?v=6bda318de78d">
+  <link rel="stylesheet" href="assets/css/shared-article-contents.css?v=c7a3a1457312">
+  <link rel="stylesheet" href="assets/css/shared-blog.css?v=0818400c7399">
 </head>
 <body>
   <div class="loading-screen" id="loading-screen" role="status" aria-live="polite">
@@ -38,7 +40,7 @@
         <span class="title-actions">
           <button class="story-plus-button" id="map-story-open" type="button" title="Add to the map" aria-label="Add to the map" hidden>+</button>
           <span id="account-button-home-anchor" hidden></span>
-          <button class="ghost-button account-button" id="login-open" type="button">Login</button>
+          <button class="ghost-button account-button" id="login-open" type="button">Log in</button>
         </span>
       </div>
       <div class="search-autocomplete">
@@ -49,7 +51,6 @@
       <button class="territory-subtitle" id="territory-subtitle" type="button" hidden></button>
       <div class="quick-actions" aria-label="App actions">
         <button class="ghost-button mobile-priority-action" data-app-page="about" type="button">About</button>
-        <button class="ghost-button mobile-priority-action" id="mobile-learn-quick" type="button" hidden>Learn</button>
         <button class="ghost-button mobile-priority-action" id="feedback-open" type="button">Feedback</button>
         <details class="mobile-layer-menu" id="mobile-layer-menu">
           <summary>Labels</summary>
@@ -78,9 +79,17 @@
               <span>Biography icons</span>
               <input id="mobile-layer-biography-icons" type="checkbox" checked>
             </label>
+            <label class="mobile-layer-option" for="mobile-layer-moving-animals">
+              <span>Moving animals</span>
+              <input id="mobile-layer-moving-animals" type="checkbox" checked>
+            </label>
             <label class="mobile-layer-option" for="mobile-layer-shell-middens">
               <span>Shell Middens</span>
               <input id="mobile-layer-shell-middens" class="mobile-layer-category" type="checkbox" value="shell-middens" checked>
+            </label>
+            <label class="mobile-layer-option" for="mobile-layer-material-culture">
+              <span>Material Culture</span>
+              <input id="mobile-layer-material-culture" class="mobile-layer-category" type="checkbox" value="material-culture" checked>
             </label>
             <label class="mobile-layer-option" for="mobile-layer-fishing-sites">
               <span>Fishing Sites</span>
@@ -195,6 +204,7 @@
     </header>
     <div class="mobile-map-shell">
       <div id="map" aria-label="Native Long Island mobile map"></div>
+      <button id="land-history-toggle" class="land-history-toggle" type="button" aria-pressed="false" hidden>How The Land Was Lost</button>
         <button class="mobile-map-locate" id="mobile-map-locate" type="button" data-allow-geolocation aria-label="Go to my location. Press and hold to show all of Long Island" title="Go to my location. Press and hold to show all of Long Island">
           <span class="mobile-map-locate-dot" aria-hidden="true"></span>
         </button>
@@ -227,6 +237,7 @@
     <button class="mobile-ar-button" id="mobile-ar-open" type="button" aria-label="AR: stories around you" title="AR" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3Z"></path><path d="M4 7.5 12 12l8-4.5"></path><path d="M12 12v9"></path></svg>
       <span class="mobile-ar-label" aria-hidden="true">AR</span>
+      <span class="mobile-activity-unread-badge" data-mobile-ar-badge hidden></span>
     </button>
     <button class="landscape-panel-resizer" id="landscape-panel-resizer" type="button" role="separator" aria-orientation="vertical" aria-label="Resize map and content panels" aria-valuemin="0" aria-valuemax="100" aria-valuenow="42" title="Drag to resize the map and content panels"></button>
     <div class="mobile-view-tabs" role="group" aria-label="Mobile section">
@@ -295,27 +306,16 @@
       </div>
     </div>
   </dialog>
-  <section class="sheet account-sheet ar-scans-sheet" id="ar-scans-sheet" aria-live="polite">
-    <div class="sheet-head">
-      <h2>AR</h2>
-      <button class="close" data-close-sheet type="button" aria-label="Close AR">x</button>
-    </div>
-    <div class="sheet-body">
-      <div class="ar-scans" id="mobile-ar-scans-list"></div>
-    </div>
-  </section>
-
   <section class="sheet account-sheet" id="login-sheet" aria-live="polite">
     <div class="sheet-head">
-      <h2 id="account-sheet-title">Login</h2>
+      <h2 id="account-sheet-title">Log in</h2>
       <button class="close" data-close-sheet type="button" aria-label="Close login">x</button>
     </div>
     <div class="sheet-body">
       <div class="login-hero">
         <strong>Contributor account</strong>
-        <p>Sign in once for contributor tools on the desktop map and mobile app. You can close this screen and keep browsing.</p>
+        <p>Comment, share photos and plant finds, earn achievements and keep a public profile. One account works on the website and in the app.</p>
       </div>
-      <p class="summary login-intro">Use a contributor account for comments, achievements, visitor photos, suggested edits, and your public biography.</p>
       <div class="field login-field">
         <label for="login-email">Email</label>
         <input id="login-email" autocomplete="username">
@@ -324,19 +324,35 @@
         <label for="login-password">Password</label>
         <input id="login-password" type="password" autocomplete="current-password">
       </div>
-      <button class="action" id="login-submit" type="button">Login</button>
+      <button class="action login-primary" id="login-submit" type="button">Log in</button>
       <p class="form-status" id="login-status" hidden></p>
-      <button class="action secondary" id="register-toggle" type="button">Register</button>
-      <button class="action secondary" id="password-reset-toggle" type="button">Reset password</button>
+      <button class="login-link" id="password-reset-toggle" type="button">Forgot your password?</button>
+      <section class="profile-card" id="password-reset-panel" hidden>
+        <strong>Reset your password</strong>
+        <p class="summary" id="password-reset-help">Enter your account email. If it exists, we will send a one-time link to set a new password.</p>
+        <div class="field">
+          <label for="password-reset-email">Account email</label>
+          <input id="password-reset-email" autocomplete="email" inputmode="email">
+        </div>
+        <div class="field" id="password-reset-new-password-field" hidden>
+          <label for="password-reset-password">New password</label>
+          <input id="password-reset-password" type="password" autocomplete="new-password">
+        </div>
+        <button class="action login-wide" id="password-reset-submit" type="button">Email reset link</button>
+        <p class="form-status" id="password-reset-status" hidden></p>
+        <a class="action secondary" id="password-reset-return-app" href="onthissite://account/verified" hidden>Return to the iPhone app</a>
+      </section>
+      <p class="login-divider"><span>New here?</span></p>
+      <button class="action secondary login-wide" id="register-toggle" type="button">Create an account</button>
       <section class="profile-card" id="register-panel" hidden>
-        <strong>Create contributor login</strong>
+        <strong>Create your account</strong>
         <p class="summary">Use your email as your username. We will send a verification link to activate your account on desktop and mobile.</p>
         <div class="field">
           <label for="register-name">Display name</label>
           <input id="register-name" autocomplete="name">
         </div>
         <div class="field">
-          <label for="register-email">Email / username</label>
+          <label for="register-email">Email</label>
           <input id="register-email" autocomplete="email" inputmode="email">
         </div>
         <div class="field">
@@ -355,26 +371,11 @@
           </span>
           <input id="register-agreement" type="checkbox" required aria-required="true">
         </div>
-        <button class="action" id="register-submit" type="button">Create account</button>
+        <button class="action login-wide" id="register-submit" type="button">Create account</button>
         <p class="form-status" id="register-status" hidden></p>
       </section>
-      <section class="profile-card" id="password-reset-panel" hidden>
-        <strong>Request password reset</strong>
-        <p class="summary" id="password-reset-help">Enter your account email. If it exists, we will send a one-time link to set a new password.</p>
-        <div class="field">
-          <label for="password-reset-email">Account email</label>
-          <input id="password-reset-email" autocomplete="email" inputmode="email">
-        </div>
-        <div class="field" id="password-reset-new-password-field" hidden>
-          <label for="password-reset-password">New password</label>
-          <input id="password-reset-password" type="password" autocomplete="new-password">
-        </div>
-        <button class="action" id="password-reset-submit" type="button">Email reset link</button>
-        <p class="form-status" id="password-reset-status" hidden></p>
-        <a class="action secondary" id="password-reset-return-app" href="onthissite://account/verified" hidden>Return to the iPhone app</a>
-      </section>
       <button class="action secondary" id="logout-submit" type="button" hidden>Logout</button>
-      <button class="action secondary account-continue" data-close-sheet type="button">Continue without login</button>
+      <button class="login-link account-continue" data-close-sheet type="button">Continue without an account</button>
       <div class="profile-card" id="profile-card"></div>
       <p class="summary account-data-links"><a href="https://nativelongisland.com/privacy-policy.html">Privacy policy</a> · <a href="https://nativelongisland.com/account-deletion.html">Delete account and data</a></p>
     </div>
@@ -425,6 +426,16 @@
     </div>
     <div class="sheet-body">
       <div class="activity-feed" id="mobile-activity-list"></div>
+    </div>
+  </section>
+
+  <section class="sheet account-sheet ar-scans-sheet" id="ar-scans-sheet" aria-live="polite">
+    <div class="sheet-head">
+      <h2>AR</h2>
+      <button class="close" data-close-sheet type="button" aria-label="Close AR">x</button>
+    </div>
+    <div class="sheet-body">
+      <div class="ar-scans" id="mobile-ar-scans-list"></div>
     </div>
   </section>
 
@@ -677,48 +688,53 @@
 
   <div class="banner" id="banner"></div>
 
-  <script>window.NLI_SITE_DETAIL_MANIFEST_URL = "assets/data/native-long-island-site-detail-manifest.966c60238879.js";</script>
-<script>window.NLI_WIKI_DETAIL_MANIFEST_URL = "assets/data/native-long-island-wiki-detail-manifest.9b896a4140dd.js";</script>
-<script src="assets/data/mobile-media-map.js?v=df457a8718f1" defer></script>
-<script src="assets/data/place-name-area-overlays.js?v=adb2735000cd" defer></script>
+  <script>window.NLI_SITE_DETAIL_MANIFEST_URL = "assets/data/native-long-island-site-detail-manifest.6accca59a67e.js";</script>
+<script>window.NLI_WIKI_DETAIL_MANIFEST_URL = "assets/data/native-long-island-wiki-detail-manifest.abda4e1b7c78.js";</script>
+<script src="assets/data/mobile-media-map.js?v=4f8cabdb1d14" defer></script>
+<script src="assets/data/place-name-area-overlays.js?v=272b49bfeb19" defer></script>
 <script id="maplibre-gl-script" src="assets/vendor/maplibre-gl/maplibre-gl.js?v=45a9b07a9189" async></script>
-  <script src="assets/js/shared-directus-config.js?v=8a579662a02f" defer></script>
+  <script src="assets/js/shared-directus-config.js?v=d43884939f2c" defer></script>
   <script src="assets/js/water-labels.js?v=897e649388c9" defer></script>
-  <script src="assets/js/shared-utils.ec513049a234.js?v=ec513049a234" defer></script>
-  <script src="assets/js/shared-site-utils.js?v=b7776568ee89" defer></script>
+  <script src="assets/js/shared-utils.e778b56d2403.js?v=e778b56d2403" defer></script>
+  <script src="assets/js/shared-site-utils.js?v=522ab9c7bfc3" defer></script>
+  <script src="assets/js/shared-land-history.c2711f8f93b2.js?v=c2711f8f93b2" defer></script>
+  <script src="assets/js/land-history-data.b389d3087a94.js?v=b389d3087a94" defer></script>
   <script src="assets/js/shared-site-title-utils.js?v=b764a9581872" defer></script>
-  <script src="assets/js/shared-search-utils.js?v=eb472b29dcd2" defer></script>
+  <script src="assets/js/shared-search-utils.js?v=1385d821efc8" defer></script>
   <script src="assets/js/shared-lifecycle-utils.js?v=3b8473cbc8a7" defer></script>
-  <script src="assets/js/shared-profile-utils.e491e7c01599.js?v=e491e7c01599" defer></script>
-  <script src="assets/js/shared-map-story-utils.3b9fd2fb01d8.js?v=3b9fd2fb01d8" defer></script>
+  <script src="assets/js/shared-profile-utils.b7f41fe84504.js?v=b7f41fe84504" defer></script>
+  <script src="assets/js/shared-map-story-utils.ee2c7a910ab1.js?v=ee2c7a910ab1" defer></script>
   <script src="assets/js/shared-learning-card-utils.js?v=61b351e0cc97" defer></script>
   <script src="assets/js/shared-learning-paths.js?v=154b66b70048" defer></script>
-  <script src="assets/js/shared-learning-hub.js?v=87e2a090273d" defer></script>
-  <script src="assets/js/shared-learning-guide.js?v=5c9d7e5864c3" defer></script>
-  <script src="assets/js/shared-activity-utils.c8e627a88bd4.js?v=c8e627a88bd4" defer></script>
-  <script src="assets/js/shared-comment-utils.9b392b5b6e75.js?v=9b392b5b6e75" defer></script>
+  <script src="assets/js/shared-learning-hub.js?v=008750623d0a" defer></script>
+  <script src="assets/js/shared-learning-guide.js?v=2b3ac1ed0a2d" defer></script>
+  <script src="assets/js/shared-activity-utils.71a15ed07ba7.js?v=71a15ed07ba7" defer></script>
+  <script src="assets/js/shared-comment-utils.5ebefc379de7.js?v=5ebefc379de7" defer></script>
   <script src="assets/js/shared-quote-comment-utils.js?v=a023f2a30d3c" defer></script>
-  <script src="assets/js/shared-timeline-utils.2981611c9742.js?v=2981611c9742" defer></script>
-  <script src="assets/js/shared-biography-data.7f1d311478e4.js?v=7f1d311478e4" defer></script>
+  <script src="assets/js/shared-timeline-utils.2c5c00021f79.js?v=2c5c00021f79" defer></script>
+  <script src="assets/js/shared-biography-data.4d43fd5151ae.js?v=4d43fd5151ae" defer></script>
   <script src="assets/js/shared-moderation-utils.js?v=1ad838b0ba73" defer></script>
-  <script src="assets/js/shared-plant-utils.js?v=ddb688324ee2" defer></script>
-  <script src="assets/js/shared-calendar-utils.4643d26b4828.js?v=4643d26b4828" defer></script>
-  <script src="assets/js/shared-geometry-utils.js?v=acf0224db6df" defer></script>
-  <script src="assets/js/shared-route-utils.js?v=e3b1d86bbffe" defer></script>
-  <script src="assets/js/shared-html-utils.2f5965d1c506.js?v=2f5965d1c506" defer></script>
-  <script src="assets/js/shared-directus-client.ac2eefac6c4e.js?v=ac2eefac6c4e" defer></script>
-  <script src="assets/js/shared-media-utils.c67e3fc698eb.js?v=c67e3fc698eb" defer></script>
-  <script src="assets/js/shared-map-utils.b946463e7311.js?v=b946463e7311" defer></script>
+  <script src="assets/js/shinnecock-resource-plants.js?v=c69e6c4b79d6" defer></script>
+  <script src="assets/js/shared-plant-utils.js?v=658147abd3ad" defer></script>
+  <script src="assets/js/shared-plant-camera.js?v=d9b304f15a7c" defer></script>
+  <script src="assets/js/shared-calendar-utils.19ad01894048.js?v=19ad01894048" defer></script>
+  <script src="assets/js/shared-geometry-utils.ec2a981af8c1.js?v=ec2a981af8c1" defer></script>
+  <script src="assets/js/shared-route-utils.js?v=d9a13190c21a" defer></script>
+  <script src="assets/js/shared-html-utils.14d1239f48e5.js?v=14d1239f48e5" defer></script>
+  <script src="assets/js/shared-directus-client.5773ef9683cc.js?v=5773ef9683cc" defer></script>
+  <script src="assets/js/shared-scan-spaces.e3f052ca3671.js?v=e3f052ca3671" defer></script>
+  <script src="assets/js/shared-map-idle.5243b1405120.js?v=5243b1405120" defer></script>
+  <script src="assets/js/shared-google-signin.70125ce9cf37.js?v=70125ce9cf37" defer></script>
+  <script src="assets/js/shared-media-utils.11a2089c62c0.js?v=11a2089c62c0" defer></script>
+  <script src="assets/js/shared-blog-presentation.js?v=d41323c216ac" defer></script>
+  <script src="assets/js/shared-map-utils.a29e65df8879.js?v=a29e65df8879" defer></script>
   <script src="assets/js/shared-feedback-utils.2dbdff6eec00.js?v=2dbdff6eec00" defer></script>
   <script src="assets/js/support-public-config.js?v=ef1c524e1ffc" defer></script>
-  <script src="assets/js/shared-support-utils.js?v=1939b96a5eac" defer></script>
-  <script src="assets/js/shared-research-question-utils.js?v=bc939b15024b" defer></script>
+  <script src="assets/js/shared-support-utils.js?v=4b7a2ce25e66" defer></script>
+  <script src="assets/js/shared-research-question-utils.js?v=d1d8ad10b117" defer></script>
   <script src="assets/js/language-quiz-words.js?v=9395720dbb1d" defer></script>
   <script src="assets/js/userviews-tracker.js?v=c3326553d1b0" defer></script>
-  <script src="assets/js/land-history-data.js" defer></script>
-  <script src="assets/js/shared-scan-spaces.js" defer></script>
-  <script src="assets/js/shared-map-idle.js" defer></script>
-  <script src="assets/js/mobile-app.js?v=28507c1d85d3" defer></script>
-<script src="assets/js/shared-plant-camera.js" defer></script>
+  <script src="assets/js/mobile-app.js?v=64e59a4f6c6c" defer></script>
+  <script src="assets/js/shared-article-contents.js?v=3bd154bc5e58" defer></script>
 </body>
 </html>

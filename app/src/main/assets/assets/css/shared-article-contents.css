@@ -1,0 +1,35 @@
+/* Scoped reader navigation, shared by desktop and app readers. */
+.article-contents[hidden], .article-contents [hidden] { display: none !important; }
+.article-contents { color:#284d3d; font-family:inherit; min-width:0; z-index:9; }
+.article-contents.is-floating { position:fixed; width:216px; display:flex; flex-direction:column; border:1px solid #d1ded5; border-radius:14px; background:rgba(250,252,248,.97); box-shadow:0 8px 30px #183c2721; overflow:hidden; }
+.article-contents .article-contents-toggle { display:flex; align-items:center; gap:10px; width:100%; min-height:44px; padding:8px 12px; border:0; border-radius:0; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+.article-contents .article-contents-caption { flex:1; min-width:0; display:flex; align-items:center; gap:8px; }
+.article-contents-label { font-size:11px; font-weight:800; white-space:nowrap; }
+.is-floating .article-contents-caption { display:grid; gap:3px; }
+.is-floating .article-contents-label { text-transform:uppercase; letter-spacing:.09em; font-size:10px; }
+.is-floating .article-contents-toggle { padding:13px 14px; }
+.article-contents-symbol { font-size:16px; line-height:1; opacity:.7; }
+/* A drawn chevron: the "⌄" character sat low, like a stray "v". */
+.article-contents-chevron { display:inline-block; flex:0 0 auto; width:8px; height:8px; margin:0 6px 4px; border-right:2px solid currentColor; border-bottom:2px solid currentColor; font-size:0; transform:rotate(45deg); transition:transform .15s ease; }
+.is-expanded .article-contents-chevron { transform:translateY(4px) rotate(225deg); }
+.article-contents .article-contents-list { margin:0; padding:6px; list-style:none; overflow:auto; max-height:var(--contents-list-height,240px); min-height:0; overscroll-behavior:contain; scrollbar-width:thin; border-top:1px solid #dbe4dd; }
+.article-contents-list li { margin:0; padding:0; }
+.article-contents .article-contents-link { display:block; position:relative; width:100%; min-height:36px; padding:8px 10px 8px calc(12px + var(--contents-depth,0)*10px); border:0; border-left:2px solid transparent; border-radius:4px; background:transparent; color:#52665a; font:inherit; font-size:12px; font-weight:500; line-height:1.4; text-align:left; white-space:normal; overflow-wrap:normal; word-break:normal; cursor:pointer; }
+.article-contents .article-contents-link:hover { background:#eef3ed; color:#254b39; }
+.article-contents .article-contents-link[aria-current] { background:#e5eee4; border-left-color:#3e7454; color:#214d36; font-weight:750; }
+.article-contents button:focus-visible { outline:2px solid #477354; outline-offset:-3px; }
+#article.has-article-contents-inline, #detail.has-article-contents-inline { grid-template-rows:auto auto minmax(0,1fr); }
+.article-contents:not(.is-floating) { position:relative; border-block:1px solid #dce4dd; background:#f3f7f1; margin:0; }
+.article-contents:not(.is-floating) .article-contents-list { position:absolute; top:100%; left:8px; right:8px; z-index:10; background:#fafcf8; border:1px solid #cbd9ce; border-radius:0 0 12px 12px; box-shadow:0 10px 20px #193c2824; }
+.article-contents:not(.is-floating) .article-contents-link { min-height:44px; font-size:13px; }
+@media (prefers-reduced-motion:reduce) { .article-contents-chevron { transition:none; } }
+/* Keep touch swipes inside the menu instead of resizing the reader or panning the map. */
+.article-contents-list { touch-action:pan-y; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+.article-references { margin:16px 0; border:1px solid #d1ded5; border-radius:10px; background:#f5f8f3; }
+.article-references > summary { cursor:pointer; padding:12px 14px; color:#284d3d; min-height:44px; box-sizing:border-box; }
+.article-references > summary > :is(h2,h3,h4,h5,h6) { display:inline; margin:0; font-size:14px; font-weight:700; }
+.article-references[open] > summary { border-bottom:1px solid #d1ded5; margin-bottom:12px; }
+.article-references > :not(summary) { margin-left:14px; margin-right:14px; }
+.article-references > summary:focus-visible { outline:2px solid #3e7454; outline-offset:2px; }
+.article-contents-count { display:inline-block; margin-left:7px; padding:1px 6px; border-radius:9px; background:#e3ebe1; color:#46624e; font-size:10px; font-weight:650; line-height:1.5; font-variant-numeric:tabular-nums; vertical-align:middle; }
+.article-contents-link[aria-current] .article-contents-count { background:#d0dfcc; color:#214d36; }

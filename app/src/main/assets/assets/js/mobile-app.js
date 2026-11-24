@@ -1,3 +1,4 @@
+    let landHistoryController = null;
     const SHARED_CONFIG = window.NLI_SHARED_CONFIG || {};
     const SHARED_FIELDS = SHARED_CONFIG.fields || {};
     const SHARED_MAP_STORY = SHARED_CONFIG.mapStory || {};
@@ -97,6 +98,8 @@
     const WHALING_FEATURE_SLUG = "whaling";
     const MOVING_DOG_ICON_URL = "assets/map-icons/dog-moving-icon.png";
     const MOVING_DOG_WIKI_SLUG = "dog-ceremonialism";
+    const MOVING_DOG_TITLE = "Dog (arrúm)";
+    const MOVING_WHALE_TITLE = "Whale (púttap)";
     // The browser fallback uses DOM markers, so keep their route samples close
     // enough to read as continuous motion. Android uses the separate compact
     // native-source cadence below and does not pay this DOM update cost.
@@ -107,6 +110,9 @@
     // samples to keep the artwork gliding instead of stepping between points.
     const MOBILE_NATIVE_MOVING_MARKER_OVERVIEW_INTERVAL_MS = 56;
     const MOBILE_NATIVE_MOVING_MARKER_CLOSE_INTERVAL_MS = 24;
+    const NATIVE_MOVING_FEATURE_MIN_STEP_PX = 0.5;
+    const NATIVE_MOVING_FEATURE_OPACITY_STEP = 0.04;
+    const NATIVE_MOVING_FEATURE_HEARTBEAT_MS = 1000;
     // Never let a delayed timer "catch up" with one conspicuous jump. Gesture
     // and visibility resumes reset each route clock; this cap also covers a
     // short main-thread stall between otherwise normal updates.
@@ -115,10 +121,7 @@
     const MOBILE_MOVING_LAND_CACHE_MAX = 4000;
     const mobileMovingRouteModelCache = new WeakMap();
     const MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS = 300000;
-    const MOBILE_BIOGRAPHY_ROUTE_DURATION_MS = 300000;
-    const MOBILE_BIOGRAPHY_REFERENCE_ROUTE_DISTANCE = 0.35;
-    const MOBILE_BIOGRAPHY_MIN_SEGMENT_MS = 4000;
-    const MOBILE_BIOGRAPHY_BASE_MOTION_SCALE = 0.72;
+    const MOBILE_BIOGRAPHY_BASE_MOTION_SCALE = 1;
     const MOBILE_BIOGRAPHY_MARKER_STAGGER_MS = 85;
     const MOBILE_BIOGRAPHY_MARKER_FADE_MS = 1600;
     const MOBILE_BIOGRAPHY_MARKER_RESET_MS = 2400;
@@ -237,19 +240,26 @@
     const MOBILE_BIOGRAPHY_ICON_PREFERENCE_VERSION = 2;
     const MOBILE_BIOGRAPHY_PATH_PREFERENCE_VERSION = 1;
     const KNOWLEDGEBASE_CATEGORIES = [
-      { label: "Language, Words, and Place Names", slugs: ["language", "algonquian-language-and-place-names", "history-and-place-names"] },
-      { label: "Biography", slugs: ["mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "quashawam", "elizabeth-thunder-bird-haile-shinnecock", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "mary-emma-cuffee-bunn", "wickham-cuffee", "princess-sun-tama-ann-harding-murdock", "chief-robert-pharaoh", "donald-treadwell-lone-otter", "anthony-beaman-chief-running-bull", "david-fowler-montaukett", "george-lewis-fowler", "sasarataicko-sassakataka", "charles-sumner-bunn", "alice-bunn-martinez", "charles-martinez", "eliza-fowler-beaman", "elliott-alphonso-kellis", "sachem-warawakmy-of-the-setauket", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "john-a-strong", "nathan-jeffrey-cuffee", "samson-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "penhawitz-sachem-of-the-canarsie", "stephen-talkhouse-pharoah", "nasseconset-sachem-of-the-nissequogue", "keeossechok-sachem-of-the-secatogue", "sunksquaws-and-indigenous-womens-leadership", "jeremy-dennis"] },
+      { label: "Language, Words, and Place Names", slugs: ["language", "history-and-place-names"] },
+      { label: "Biography", slugs: ["kevin-sells-setalcott-family-history", "helen-sells-setalcott-history-and-stewardship", "theodore-blue-medicine-green", "mocomanto-shinnecock-sachem-1640", "sagamore-raseokan-ratiocanof-matinnicoke-matinecock", "chief-harry-wallace-of-the-unkechaug", "worison-unkechaug-whaler", "sunksqua-weany-pametsechs", "wuchikittawbut", "quashawam", "elizabeth-thunder-bird-haile-shinnecock", "betty-lewis-cromwell-shinnecock", "sachem-aquash-of-the-montaukett", "jeremiah-pharoah-montaukett-whaler", "sylvester-pharoah", "mary-rebecca-bunn-aunt-becky", "mary-emma-cuffee-bunn", "wickham-cuffee", "princess-sun-tama-ann-harding-murdock", "chief-robert-pharaoh", "donald-treadwell-lone-otter", "anthony-beaman-chief-running-bull", "david-fowler-montaukett", "george-lewis-fowler", "sasarataicko-sassakataka", "charles-sumner-bunn", "alice-bunn-martinez", "charles-martinez", "eliza-fowler-beaman", "elliott-alphonso-kellis", "sachem-warawakmy-of-the-setauket", "chief-mahue-mayhew-of-unkechaug", "peter-john-cuffee", "lois-princess-nowedonah-hunter", "mandush-17th-century-sachem-of-shinnecock", "ninigret-eastern-niantic-sachem", "poggatacut-sachem-of-the-manhassets-of-shelter-island", "momoweta", "paucamp", "wobetom", "william-wallace-tooker", "john-a-strong", "nathan-jeffrey-cuffee", "samson-occom", "wyandanch", "cockenoe", "rev-paul-cuffee", "sachem-tackapousha", "mangwobe-sachem-of-rockaway", "adam-achitteronose", "penhawitz-sachem-of-the-canarsie", "stephen-talkhouse-pharoah", "nasseconset-sachem-of-the-nissequogue", "keeossechok-sachem-of-the-secatogue", "sunksquaws-and-indigenous-womens-leadership", "jeremy-dennis"] },
       { label: "Tribal Nations and Communities", entries: [["wiki", "native-long-island-overview"], ["wiki", "continued-indigenous-presence-today"], ["wiki", "the-tribes-of-long-island"], ["wiki", "western-long-island-native-communities"], ["wiki", "central-long-island-native-communities"], ["wiki", "eastern-long-island-native-communities"], ["wiki", "myth-of-the-thirteen-tribes"], ["site", "montaukett-ancestral-land"], ["site", "shinnecock-indian-reservation"], ["site", "unkechaug-indian-reservation"], ["site", "corchaug-tribe"], ["site", "manhansack-aqua-quash-awamock"], ["site", "setauket-ancestral-land"], ["site", "nissaquogue"], ["site", "matinecock"], ["site", "secatogues"], ["site", "massapequas"], ["site", "merricks"], ["site", "rockaways"], ["site", "canarsie"]] },
       { label: "History", slugs: ["native-long-island-overview", "slavery", "indian-missions-on-long-island", "education-at-shinnecock", "shinnecock-veterans-and-wartime-service", "colonial-descriptions-of-indians", "indian-forts", "13-tribes-of-long-island-david-martine", "early-contact-period-1600-ad-1700-ad", "post-contact", "creation-of-long-island", "land-deeds-and-dispossession", "myth-of-extinction-and-survivance", "myth-of-the-thirteen-tribes", "historic-preservation", "history-and-place-names", "merrick-people-in-early-land-records"] },
       { label: "Sovereignty and Governance", slugs: ["tribal-trustees", "sovereignty-recognition-and-detribalization", "land-deeds-and-dispossession", "continued-indigenous-presence-today"] },
       { label: "Native Animals and Ecology", slugs: ["white-tailed-deer", "eastern-box-turtle", "wild-turkey", "american-black-duck", "american-eel"] },
-      { label: "Culture, Ceremony, and Lifeways", slugs: ["duck-decoys", "sweat-lodge", "nunnowa", "wampum", "burial", "powwow", "spirituality-ceremony-cosmology", "language", "algonquian-language-and-place-names", "dog-ceremonialism", "spring", "summer", "fall", "winter", "food", "fishing", "whaling", "indigenous-whaling-and-maritime-labor", "ecology-and-flexible-sedentism"] },
+      { label: "Culture, Ceremony, and Lifeways", slugs: ["duck-decoys", "sweat-lodge", "nunnowa", "wampum", "burial", "powwow", "spirituality-ceremony-cosmology", "language", "dog-ceremonialism", "spring", "summer", "fall", "winter", "food", "fishing", "whaling", "indigenous-whaling-and-maritime-labor", "ecology-and-flexible-sedentism"] },
       { label: "Time Periods and Archaeology", slugs: ["paleo-indian-period", "archaic-period", "orient-transitional-period", "woodland-period", "late-woodland", "early-contact-period-1600-ad-1700-ad", "post-contact", "shell-midden", "killed-pottery", "arrow-heads", "phase-archaeology-investigation", "phase-ii-archaeology-investigation", "phase-iii-archaeological-investigation", "burial-protection-and-sacred-landscapes"] },
       { label: "Preservation and Site Protection", slugs: ["preservation", "burial-protection-and-sacred-landscapes", "vandalism", "phase-archaeology-investigation", "phase-ii-archaeology-investigation", "phase-iii-archaeological-investigation"] },
       { label: "Natural Resources", slugs: ["native-plants", "beach-plum", "spring", "summer", "fall", "winter", "food", "fishing", "whaling", "indigenous-whaling-and-maritime-labor", "shell-midden", "ecology-and-flexible-sedentism"] },
-      { label: "Maps and Reference", slugs: ["13-tribes-of-long-island-david-martine", "history-and-place-names", "algonquian-language-and-place-names", "western-long-island-native-communities", "central-long-island-native-communities", "eastern-long-island-native-communities"] }
+      { label: "Maps and Reference", slugs: ["13-tribes-of-long-island-david-martine", "history-and-place-names", "language", "western-long-island-native-communities", "central-long-island-native-communities", "eastern-long-island-native-communities"] },
+      // The old site's "Browse by Objects": the objects in sites' Material Culture sections
+      // and object articles, as a gallery, with those articles listed after it.
+      { label: "Material Culture", materialCulture: true, slugs: SITE_UTILS.MATERIAL_CULTURE_ARTICLES || [] },
+      // Answered visitor questions: every published "visitor-question-..." article.
+      { label: "Questions and Answers", slugPrefix: "visitor-question-" }
     ];
     const KNOWLEDGEBASE_CATEGORY_DESCRIPTIONS = {
+      "Questions and Answers": "Read answers to questions visitors have asked On This Site, with sources and links to related places and articles.",
+      "Material Culture": "Browse the objects connected to Native Long Island places, from projectile points and pottery to engraved stones and shell, each linked to the place or article it comes from.",
       "Language, Words, and Place Names": "Find Indigenous words, place-name translations, historical vocabulary, and language revitalization on Long Island.",
       "Biography": "Meet the people whose leadership, work, memory, and scholarship shape Native Long Island history.",
       "Tribal Nations and Communities": "Begin with living Nations and community histories, then explore ancestral lands across Long Island.",
@@ -590,6 +600,9 @@
           { label: "Merrick and south bays", place: "Merrick / southern Hempstead bays", coordinates: [-73.555, 40.667], reason: "The conference records connected Rockaway, Merrick, Massapequa, and Hempstead interests." }
         ]
       },
+      "helen-sells-setalcott-history-and-stewardship": { ...window.NLI_BIOGRAPHY_PATH_DATA?.["helen-sells-setalcott-history-and-stewardship"] },
+      "kevin-sells-setalcott-family-history": { ...window.NLI_BIOGRAPHY_PATH_DATA?.["kevin-sells-setalcott-family-history"] },
+      "theodore-blue-medicine-green": { ...window.NLI_BIOGRAPHY_PATH_DATA?.["theodore-blue-medicine-green"] },
       "sachem-warawakmy-of-the-setauket": {
         title: "Warawakmy associated places",
         note: "Broad places tied to Setauket records.",
@@ -776,7 +789,7 @@
     const SITE_CENTER_URL = "assets/data/mobile-site-centers.json";
     const SITE_CENTER_VERSION = "20260812-startup-centers-v1";
     const SITE_GEOMETRY_URL = "assets/data/mobile-site-geometry.json";
-    const SITE_GEOMETRY_VERSION = "20260831-shoreline-edge-audit-v4";
+    const SITE_GEOMETRY_VERSION = "20261117-related-fields-v9";
     const SITE_DETAIL_FIELDS = SHARED_FIELDS.mobileSiteDetail;
     const WIKI_INDEX_FIELDS = SHARED_FIELDS.mobileWikiIndex;
     const WIKI_INDEX_URL = "assets/data/mobile-wiki-index.json";
@@ -827,7 +840,12 @@
     const SITE_CHECKIN_RADIUS_MILES = Number(PROFILE_UTILS.SITE_CHECKIN_RADIUS_MILES || 0.05);
     const SITE_VISIT_ALERT_RADIUS_MILES = 0.5;
     const SITE_LABEL_MIN_ZOOM = 10.75;
-    const SITE_POINT_LABEL_MIN_ZOOM = 13.35;
+    const SITE_POINT_LABEL_MIN_ZOOM = 8.2;
+    // From this zoom, sites with a featured photo show it as a thumbnail,
+    // wherever it would not cover another site.
+    const SITE_THUMBNAIL_MIN_ZOOM = 13;
+    // A site's icon artwork hides while its photo is shown over it.
+    const MOBILE_SITE_ICON_OPACITY = ["case", ["boolean", ["feature-state", "photo"], false], 0, 1];
     const DAILY_LEARNING_SITE_ZOOM = 14.5;
     const PLACE_NAME_AREA_LABEL_MIN_ZOOM = 10.25;
     const ATTENTION_SITE_WINDOWS = [
@@ -1125,6 +1143,7 @@
       mobileSiteIconImagesLoaded: new Set(),
       mobileSiteIconImagesFailed: new Set(),
       mobileSiteIconImagePlaceholders: new Set(),
+      mobileSiteThumbMarkers: new Map(),
       mobileStyleImageMissingBound: false,
       mobileSiteIconImagesLoading: false,
       mobileSiteIconImageQueue: [],
@@ -1241,7 +1260,6 @@
     const mobileRefreshAppBtn = document.getElementById("mobile-refresh-app");
     const suggestSiteOpenBtn = document.getElementById("suggest-site-open");
     const mobileLearnOpenBtn = document.getElementById("mobile-learn-open");
-    const mobileLearnQuickBtn = document.getElementById("mobile-learn-quick");
     const mobileDonateButton = document.getElementById("mobile-donate-button");
     const mobileAdminMenu = document.getElementById("mobile-admin-menu");
     const mobileBasemapSelect = document.getElementById("mobile-basemap");
@@ -1266,6 +1284,7 @@
     const mobileLayerShapesInput = document.getElementById("mobile-layer-shapes");
     const mobileLayerBiographyPathsInput = document.getElementById("mobile-layer-biography-paths");
     const mobileLayerBiographyIconsInput = document.getElementById("mobile-layer-biography-icons");
+    const mobileLayerMovingAnimalsInput = document.getElementById("mobile-layer-moving-animals");
     const mobileLayerCategoryInputs = [...document.querySelectorAll(".mobile-layer-category")];
     const mobileLayerEraInputs = [...document.querySelectorAll(".mobile-layer-era")];
     const collapseListBtn = document.getElementById("collapse-list");
@@ -1331,6 +1350,83 @@
     const mapStoryPhotoButtonEl = document.getElementById("map-story-photo-button");
     const mapStoryCameraButtonEl = document.getElementById("map-story-camera-button");
     let mapStoryPhotoDraft = null;
+    let mapStoryCameraFile = null;
+    const STORY_CAMERA_RETURN_KEY = "nli-story-camera-return-v1";
+    let storyCameraReturn = null;
+
+    function readStoryCameraReturn(requireAccount = true) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORY_CAMERA_RETURN_KEY) || "null");
+        if (saved && Date.now() - saved.savedAt < 3600000 && (!requireAccount || String(saved.profileId) === String(currentContributorProfile()?.id))) return saved;
+      } catch {}
+      return null;
+    }
+
+    function saveStoryCameraReturn(awaiting = false, photo) {
+      const previous = storyCameraReturn || readStoryCameraReturn();
+      storyCameraReturn = {
+        savedAt: Date.now(), profileId: currentContributorProfile()?.id,
+        caption: mapStoryCaptionEl?.value || "", prompt: mapStoryPromptEl?.value || "",
+        location: state.userLocation || null, awaiting,
+        photo: photo === undefined ? previous?.photo || null : photo
+      };
+      try { localStorage.setItem(STORY_CAMERA_RETURN_KEY, JSON.stringify(storyCameraReturn)); return true; }
+      catch { setMapStoryStatus("Your photo is ready here, but this device could not save a recovery copy. Keep this window open until you submit."); return false; }
+    }
+
+    function clearStoryCameraReturn() {
+      storyCameraReturn = null; mapStoryCameraFile = null;
+      delete mapStorySheetEl?.dataset.cameraReturnReady;
+      try { localStorage.removeItem(STORY_CAMERA_RETURN_KEY); } catch {}
+    }
+
+    function showMapStoryPhoto(file) {
+      mapStoryPhotoDraft = null;
+      if (!mapStoryPhotoPreviewEl) return;
+      let image = mapStoryPhotoPreviewEl.querySelector("img");
+      if (!image) { image = document.createElement("img"); image.alt = "Selected story photo"; mapStoryPhotoPreviewEl.replaceChildren(image); }
+      MEDIA_UTILS.setFilePreview(mapStorySheetEl, image, file, { key: "_storyPhotoPreviewUrl" });
+    }
+
+    function restoreStoryCameraReturn() {
+      const saved = storyCameraReturn || readStoryCameraReturn();
+      if (!saved || !isApprovedContributor() || String(saved.profileId) !== String(currentContributorProfile()?.id)) return false;
+      storyCameraReturn = saved;
+      renderMapStoryPrompts();
+      mapStoryCaptionEl.value = saved.caption || "";
+      mapStoryPromptEl.value = saved.prompt || MAP_STORY_PROMPTS[0]?.key || "";
+      if (saved.location) state.userLocation = saved.location;
+      if (saved.photo) {
+        mapStoryCameraFile = fileFromBase64(saved.photo.base64, saved.photo.mimeType, saved.photo.filename);
+        showMapStoryPhoto(mapStoryCameraFile);
+      }
+      openSheet(mapStorySheetEl);
+      mapStorySheetEl.dataset.cameraReturnReady = "true";
+      setMapStoryStatus(saved.photo ? "Your story photo and draft are ready. Review them before submitting." : saved.awaiting ? "Your story draft is restored. Waiting for the camera photo..." : "Your story draft is restored.");
+      return true;
+    }
+
+    function receiveMapStoryCameraPhoto(ok, message, base64, mimeType, filename) {
+      // Route before account restoration so native retries cannot land in a comment form.
+      const saved = storyCameraReturn || readStoryCameraReturn(false);
+      const composerReady = mapStorySheetEl?.dataset.cameraReturnReady === "true" && mapStorySheetEl.classList.contains("open");
+      if (saved && (saved.awaiting || saved.photo?.filename === filename) && ((state.mobileStartupRendering && !composerReady) || String(saved.profileId) !== String(currentContributorProfile()?.id))) return false;
+      if (saved?.photo?.filename === filename && filename) return true;
+      if (!saved?.awaiting) return null;
+      if ((state.mobileStartupRendering && !composerReady) || !isApprovedContributor()) return false;
+      if (!composerReady && !restoreStoryCameraReturn()) return false;
+      if (!ok) {
+        saveStoryCameraReturn(false);
+        setMapStoryStatus(message || "Camera cancelled. Your story draft is still here.");
+        return true;
+      }
+      if (!base64) return false;
+      mapStoryCameraFile = fileFromBase64(base64, mimeType, filename || `story-photo-${Date.now()}.jpg`);
+      showMapStoryPhoto(mapStoryCameraFile);
+      const persisted = saveStoryCameraReturn(false, { base64, mimeType, filename: mapStoryCameraFile.name });
+      if (persisted) setMapStoryStatus("Photo ready. Add your story and submit when ready.");
+      return true;
+    }
     const mapStoryPhotoPreviewEl = document.getElementById("map-story-photo-preview");
     const mapStoryLocationEl = document.getElementById("map-story-location");
     const mapStorySubmitEl = document.getElementById("map-story-submit");
@@ -1339,6 +1435,9 @@
     const mobileActivityListEl = document.getElementById("mobile-activity-list");
     const mobileNotificationsOpenBtn = document.getElementById("mobile-notifications-open");
     const mobileNotificationsListEl = document.getElementById("mobile-notifications-list");
+    const mobileArOpenBtn = document.getElementById("mobile-ar-open");
+    const arScansSheetEl = document.getElementById("ar-scans-sheet");
+    const mobileArScansListEl = document.getElementById("mobile-ar-scans-list");
     const contributeStoryOpenBtn = document.getElementById("contribute-story-open");
     const contributePlantStoryOpenBtn = document.getElementById("contribute-plant-story-open");
     const contributeSiteOpenBtn = document.getElementById("contribute-site-open");
@@ -1482,6 +1581,7 @@
     }
 
     function saveProfile(profile) {
+      document.querySelectorAll("[data-copy-story-control]").forEach(element => element.remove());
       const previousKey = state.profile ? `${state.profile.email || ""}:${state.profile.profileId || ""}:${state.profile.token || ""}` : "";
       state.profile = profile;
       if (profile) {
@@ -1536,8 +1636,7 @@
     function scheduleContributorInvite(delay = 8000) {
       window.clearTimeout(contributorInvitationTimer);
       contributorInvitationTimer = null;
-      // Accounts can't be made or opened offline, so don't invite then.
-      if (!contributorInvitationEl || isOfflineTextMode() || state.profile || state.passwordResetToken || contributorInviteDismissed()) return;
+      if (!contributorInvitationEl || state.profile || state.passwordResetToken || contributorInviteDismissed()) return;
       contributorInvitationTimer = window.setTimeout(() => {
         contributorInvitationTimer = null;
         if (state.profile || state.passwordResetToken || contributorInviteDismissed() || contributorInvitationEl.open) return;
@@ -1945,7 +2044,7 @@
         supportGoalEl.innerHTML = "";
         return;
       }
-      const goal = Number(settings.monthly_goal || 300);
+      const goal = Number(settings.monthly_goal || 200);
       const current = monthlySupportCurrent();
       const pct = goal > 0 ? Math.min(100, Math.round((current / goal) * 100)) : 0;
       supportGoalEl.hidden = false;
@@ -2153,16 +2252,28 @@
     }
 
     function stripHtml(value) {
-      const div = document.createElement("div");
-      div.innerHTML = String(value || "")
+      const cache = stripHtml.textCache || (stripHtml.textCache = new Map());
+      return HTML_UTILS.cachedDisplayText(cache, value, stripHtmlUncached);
+    }
+
+    function stripHtmlUncached(value) {
+      // A template parses without loading anything; a plain detached element
+      // fetches every image the markup names (each listing's article photos).
+      const template = document.createElement("template");
+      template.innerHTML = String(value || "")
         .replace(/This map feature is imported from WP Go Maps but is not paired to (?:a complete )?[^.]*listing yet\.?/gi, "")
         .replace(/<script[\s\S]*?<\/script>/gi, "")
         .replace(/<style[\s\S]*?<\/style>/gi, "")
         .replace(/&nbsp;/gi, " ");
-      return div.textContent.replace(/\s+/g, " ").trim();
+      return template.content.textContent.replace(/\s+/g, " ").trim();
     }
 
     function cleanPlainText(value) {
+      const cache = cleanPlainText.textCache || (cleanPlainText.textCache = new Map());
+      return HTML_UTILS.cachedDisplayText(cache, value, cleanPlainTextUncached);
+    }
+
+    function cleanPlainTextUncached(value) {
       const textarea = document.createElement("textarea");
       textarea.innerHTML = String(value || "");
       let text = textarea.value;
@@ -2274,6 +2385,7 @@
       state.wikiArticles = rows.map(sanitizePublicWikiArticle);
       state.wikiById = new Map(state.wikiArticles.map(article => [Number(article.id), article]));
       state.wikiBySlug = new Map(state.wikiArticles.map(article => [article.slug, article]));
+      ROUTE_UTILS.addWikiAliases?.(state.wikiBySlug);
       refreshMobileInternalLinkCatalog();
       rebuildMobileSearchIndex();
       clearRelatedSiteCaches();
@@ -2328,10 +2440,11 @@
 
     function sourceAwareSectionHtml(title, content, options = {}) {
       const sourceNote = importedFootnoteSources(content).join("; ");
-      const html = removeFootnoteReferenceMarkers(formatSectionContent(title, content, {
+      // A section whose text opens with its own title as a heading shows the title once.
+      const html = HTML_UTILS.withoutLeadingTitleHeading(title, removeFootnoteReferenceMarkers(formatSectionContent(title, content, {
         used: options.linked,
         excludeHref: options.excludeHref
-      }));
+      })));
       return `
         <section class="section${sourceNote ? " has-source" : ""}"${options.introduction ? ` data-site-introduction="section"` : ""}${options.field ? ` data-content-section-field="${escapeHtml(options.field)}"` : ""}>
           <h3>${escapeHtml(title)}</h3>
@@ -2360,6 +2473,22 @@
     function listingImageFallback(site) {
       if (isOfflineTextMode()) return "";
       return MEDIA_UTILS.listingRewrittenImageFallback(site, { directusAssetUrl, rewriteMediaUrl });
+    }
+
+    // A card's small picture: the listing's thumbnail when it has one (a 52px card
+    // needn't fetch a 1920px, half-megabyte photo), with the full photo behind it.
+    function listingCardImage(site) {
+      if (isOfflineTextMode()) return "";
+      const card = MEDIA_UTILS.listingImage(site, { directusAssetUrl, rewriteMediaUrl });
+      // The offline app shows only bundled pictures; keep the full photo if the thumbnail isn't one.
+      if (card && isApkSnapshotMode() && !isBundledMobileImageUrl(card)) return listingImage(site);
+      return card;
+    }
+
+    function listingCardImageFallback(site) {
+      const card = listingCardImage(site);
+      const hero = listingImage(site);
+      return hero && hero !== card ? hero : listingImageFallback(site);
     }
 
     function isBundledMobileImageUrl(url) {
@@ -2400,8 +2529,8 @@
 
     function siteCardThumbHtml(site) {
       const icon = siteMapIconUrl(site);
-      const image = mobileSnapshotImageUrl(icon || listingImage(site));
-      const fallback = mobileSnapshotImageUrl(icon ? listingImage(site) || listingImageFallback(site) : listingImageFallback(site));
+      const image = mobileSnapshotImageUrl(icon || listingCardImage(site));
+      const fallback = mobileSnapshotImageUrl(icon ? listingCardImage(site) || listingCardImageFallback(site) : listingCardImageFallback(site));
       if (!image) return `<span class="thumb empty">${escapeHtml((site.title || "?").slice(0, 1))}</span>`;
       return `<img class="thumb${icon ? " map-icon" : ""}" src="${escapeHtml(image)}" alt="" loading="lazy" decoding="async" onerror="${imageErrorAction(fallback)}">`;
     }
@@ -2442,6 +2571,7 @@
     }
 
     function shouldShowExhibitMarker(exhibit) {
+      if (landHistoryEnabled()) return false;
       return state.settings.exhibits && isExhibitCurrentOrUpcoming(exhibit);
     }
 
@@ -2515,11 +2645,15 @@
     }
 
     function mobileSiteTitleHtml(site) {
-      const territory = territoryForSite(site);
+      // Reviewed chapter attribution takes precedence over approximate display areas.
+      const homelandLabel = window.NLI_LAND_HISTORY_DATA?.entries?.find(entry => entry.slug === site.slug)?.homelandLabel || "";
+      const territory = homelandLabel ? null : territoryForSite(site);
       return `
         <h2>${escapeHtml(site.title)}</h2>
+        <p class="detail-meta present-day-location">${escapeHtml(SITE_UTILS.presentDayLocation(site))}</p>
         ${placeAdoptionBylineHtml(site)}
         <p class="detail-meta">${escapeHtml(siteSubtitle(site))} ${distanceLabel(site) ? ` - ${escapeHtml(distanceLabel(site))}` : ""}</p>
+        ${homelandLabel ? `<p class="detail-meta">${escapeHtml(homelandLabel)}</p>` : ""}
         ${territory ? `<button class="detail-territory-link" type="button" data-site-territory-slug="${escapeHtml(territory.slug)}">On ${escapeHtml(territory.title)}</button>` : ""}
       `;
     }
@@ -2559,10 +2693,10 @@
         <section class="section adopt-place-section" data-adopt-place-section>
           <div class="adopt-place-sign">
             <span class="adopt-place-kicker">${active ? "Place Stewardship" : "Adopt This Place"}</span>
-            <h3>${active ? `Adopted by ${escapeHtml(activeName)}` : "Adopt This Place"}</h3>
+            <h3>${active ? `Adopted by ${escapeHtml(activeName)}` : SUPPORT_UTILS.adoptionTitle}</h3>
             <p>${active
               ? escapeHtml(`${activeName} helps support care, research, source review, and public information connected to ${title}.`)
-              : escapeHtml(`For $25/month, registered supporters can help steward ${title}. Confirmed adopters may have their public display name shown below the listing title as "Adopted by Name."`)}</p>
+              : escapeHtml(`For $25/month, registered supporters can help steward ${title}. ${SUPPORT_UTILS.adoptionRecognition}`)}</p>
             <p class="adopt-place-note">${escapeHtml("Adoption supports the map, sources, community knowledge, and respectful updates. It does not imply ownership or permission to access private or sensitive places.")}</p>
             <button class="action adopt-place-button" type="button" data-mobile-adopt-place data-adopt-place-slug="${escapeHtml(slug)}" data-adopt-place-title="${escapeHtml(title)}">
               ${active ? "Add support for this place" : "Adopt this place - $25/month"}
@@ -2659,7 +2793,7 @@
     }
 
     function timelineEventMatchesToday(event, today = localDateKey()) {
-      return CALENDAR_UTILS.timelineEventMatchesToday(event, today);
+      return CALENDAR_UTILS.isNativeHistoryMoment(event) && CALENDAR_UTILS.timelineEventMatchesToday(event, today);
     }
 
     function activeSiteAttentionEntries(today = localDateKey()) {
@@ -2707,7 +2841,12 @@
       };
     }
 
-    function siteDisplayGeometry(site) {
+    const siteDisplayGeometry = GEOMETRY_UTILS.cacheSiteDisplayGeometry(
+      computeMobileDisplayGeometry, () => state.landMaskData,
+      site => SITE_UTILS.siteUsesDefaultBluePin?.(site)
+    );
+
+    function computeMobileDisplayGeometry(site) {
       const displayGeometry = site?.display_geojson || null;
       if (SITE_UTILS.siteUsesDefaultBluePin?.(site)) {
         const center = geometryCenter(site?.geojson || displayGeometry);
@@ -2846,7 +2985,7 @@
       { title: "legends_and_lore_title", content: "legends_and_lore_content", defaultTitle: "Legends and Lore" },
       { title: "translation_title", content: "translation_content", defaultTitle: "Translation" },
       { title: "preservation_title", content: "preservation_content", defaultTitle: "Preservation" },
-      { title: "artifacts_title", content: "artifacts_content", defaultTitle: "Artifacts" },
+      { title: "artifacts_title", content: "artifacts_content", defaultTitle: "Material Culture" },
       { title: "colonial_description_title", content: "colonial_description_content", defaultTitle: "Colonial Description" },
       { title: "land_loss_title", content: "land_loss_content", defaultTitle: "Land Loss" },
       { title: "excavation_title", content: "excavation_content", defaultTitle: "Excavation" },
@@ -2930,23 +3069,11 @@
       });
     }
 
-    function mobileWhyThisMattersFallback(item) {
-      const text = publicCleanText([
-        item?.summary,
-        item?.introduction_content,
-        item?.preservation_content,
-        item?.history_content
-      ].filter(Boolean).join(" "));
-      const fallback = "A mapped place can connect Native Long Island history, presence, stewardship, and memory.";
-      return firstCompleteSentences(text, 2, 320) || fallback;
-    }
-
     function whyThisMattersHtml(item, options = {}) {
+      // The article's own "Why ... Matters" section already carries this (no second section).
+      if (SHARED_UTILS.hasOwnWhyMattersSection?.(item, MOBILE_SITE_CONTENT_SECTION_FIELDS, ["content"])) return "";
       const paragraphs = SHARED_UTILS.uniqueTextBlocks(
-        (() => {
-          const realTexts = [item?.why_this_matters || "", ...legacyWhyThisMattersTexts(item)].filter(Boolean);
-          return realTexts.length ? realTexts : [mobileWhyThisMattersFallback(item)];
-        })(),
+        [item?.why_this_matters || "", ...legacyWhyThisMattersTexts(item)].filter(Boolean),
         { cleanText: publicCleanText, normalizeText }
       );
       return paragraphs.length ? `<section class="section" data-content-section-field="why_this_matters"><h3>Why This Matters</h3>${paragraphs.map(text => `<p>${autoLinkHtml(escapeHtml(text), options)}</p>`).join("")}</section>` : "";
@@ -3653,6 +3780,8 @@
             if (row.geometry_cleanup_status) site.geometry_cleanup_status = row.geometry_cleanup_status;
             if (row.territory_display_label) site.territory_display_label = row.territory_display_label;
             if (row.territory_assignment_version) site.territory_assignment_version = row.territory_assignment_version;
+            if (Array.isArray(row.related_community_keys)) site.related_community_keys = row.related_community_keys;
+            if (Array.isArray(row.related_center)) site.related_center = row.related_center;
             site.displayGeometry = siteDisplayGeometry(site);
             site.center = geometryCenter(site.displayGeometry);
             site.checkinCenter = geometryCenter(site.geojson || site.display_geojson || site.displayGeometry);
@@ -3661,6 +3790,7 @@
           state.siteGeometryLoaded = true;
           appEl?.setAttribute("data-site-geometry", "loaded");
           if (!changed) return true;
+          clearRelatedSiteCaches();
           state.mapSites = state.sites.filter(site => (
             site.center &&
             site.slug !== WHALING_FEATURE_SLUG &&
@@ -3931,6 +4061,7 @@
         state.learningPathSiteRows = window.NLI_MOBILE_DATA.learningPathSites || [];
         state.wikiById = new Map(state.wikiArticles.map(article => [Number(article.id), article]));
         state.wikiBySlug = new Map(state.wikiArticles.map(article => [article.slug, article]));
+        ROUTE_UTILS.addWikiAliases?.(state.wikiBySlug);
         state.layers = window.NLI_MOBILE_DATA.layers || [];
         state.timelineEvents = window.NLI_MOBILE_DATA.timelineEvents || [];
         state.timelineById = new Map(state.timelineEvents.map(item => [String(item.id), item]));
@@ -4827,7 +4958,7 @@
 
     function mobileDidYouKnowMoment() {
       const moments = sortedTimelineEvents().filter(event => (
-        !timelineEventMatchesToday(event)
+        CALENDAR_UTILS.isNativeHistoryMoment(event) && !timelineEventMatchesToday(event)
         && publicCleanText(event.description || event.summary || event.title)
       ));
       return moments[mobilePromoDailyIndex(moments.length, "did-you-know")] || null;
@@ -5143,7 +5274,7 @@
       refreshMobileSearchSuggestions();
     }
 
-    function openMobileSearchResultsPage() {
+    async function openMobileSearchResultsPage() {
       if (!searchEl) return;
       const query = activeMobileSearchValue().trim();
       // Commit Android's full native composition into the DOM before any
@@ -5157,6 +5288,12 @@
         setMobilePanelMode("nearby");
         setNearbyPanelState("default");
         return;
+      }
+      const exactArchiveMatch = state.filtered.some(site => normalizeText(site.title || "") === normalizeText(query));
+      if (!exactArchiveMatch && SEARCH_UTILS.landmarkMatches(query).length) {
+        await updateAddressSearch(query, { suggestionsOnly: true });
+        if (activeMobileSearchValue().trim() !== query) return;
+        if (selectPlaceSearchResult(0, query.toLowerCase())) return;
       }
       state.nearbyRenderLimit = Math.min(NEARBY_LIST_SEARCH_LIMIT, Math.max(18, defaultNearbyRenderLimit()));
       renderList();
@@ -5214,6 +5351,7 @@
       if (state.addressSearchFallbackQuery !== state.lastSearchValue.trim().toLowerCase()) state.addressSearchFallbackQuery = "";
       state.lastSearchDataVersion = state.searchDataVersion;
       refreshMobileSearchSuggestions();
+      schedulePlaceSuggestions(state.lastSearchValue);
       window.clearTimeout(state.searchTimer);
       if (isNativeAndroidApp() && document.activeElement === searchEl) startSearchValueWatch();
     }
@@ -5310,6 +5448,8 @@
       state.addressSearchToken = "";
       state.addressSearchFallbackQuery = "";
       state.addressSearchResult = null;
+      state.placeSearchSuggestions = null;
+      window.clearTimeout(placeSuggestionTimer);
       state.filtered = state.filtered.filter(site => site.slug !== "address-result");
       if (state.addressMarker) {
         state.addressMarker.remove();
@@ -5318,86 +5458,80 @@
       scheduleNativeMapStateSync("address-cleared", 0);
     }
 
-    async function updateAddressSearch(query) {
-      if (!query || query.length < 3) return;
-      const token = query;
-      state.addressSearchToken = token;
-      try {
-        const bbox = LONG_ISLAND_BOUNDS.flat().join(",");
-        const tokenValue = window.mapboxgl?.accessToken || MAPBOX_PUBLIC_TOKEN;
-        const normalizedQuery = query.replace(/\bstonybrook\b/ig, "stony brook");
-        const feature = await geocodePlaceSearch(normalizedQuery, tokenValue, bbox);
-        if (state.addressSearchToken !== token) return;
-        if (!feature?.center) {
-          state.addressSearchMode = false;
-          state.addressSearchFallbackQuery = query;
-          state.filtered = [];
-          resetNearbyRenderLimit();
-          renderList();
-          syncMarkers();
-          showBanner("Map search is unavailable. You can continue with this destination in Maps.");
-          return;
-        }
-        state.addressSearchFallbackQuery = "";
-        applyAddressSearchFeature(feature);
-      } catch {
-        if (state.addressSearchToken === token) {
-          state.addressSearchMode = false;
-          state.addressSearchFallbackQuery = query;
-          state.filtered = [];
-          resetNearbyRenderLimit();
-          renderList();
-          syncMarkers();
-          showBanner("Map search is unavailable. You can continue with this destination in Maps.");
-        }
-      }
+    let placeSuggestionTimer = null;
+    function geocodePlaceSearch(query, tokenValue, bbox) {
+      return SEARCH_UTILS.searchPlaces(query, bbox);
     }
 
-    async function geocodePlaceSearch(query, tokenValue, bbox) {
-      const geocodeQuery = /\b(new york|ny|long island|nassau|suffolk|brooklyn|queens)\b/i.test(query)
-        ? query
-        : `${query}, Long Island, NY`;
-      const explicitNyc = /\b(new york city|nyc|manhattan|brooklyn|queens|bronx|staten island)\b/i.test(query);
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(geocodeQuery)}.json?access_token=${encodeURIComponent(tokenValue)}&autocomplete=false&limit=5&types=poi,address,place,locality,neighborhood&bbox=${bbox}&proximity=-73.1,40.85`;
-      const response = await fetch(url);
-      if (!response.ok) return null;
-      const data = await response.json();
-      const candidates = (data.features || []).filter(item => {
-        if (!pointWithinBounds(item.center, LONG_ISLAND_BOUNDS)) return false;
-        if (!explicitNyc && /\b(new york|manhattan|brooklyn|queens|bronx|staten island)\b/.test(normalizeText([item.place_name, item.text, ...(item.context || []).map(context => `${context.text || ""} ${context.short_code || ""}`)].join(" ")))) return false;
-        const resultName = normalizeText(item.text || item.place_name);
-        return resultName !== "long island" || normalizeText(query).split(" ").length <= 1;
-      });
-      const feature = candidates
-        .map(item => ({
-          item,
-          suggestion: {
-            feature_type: item.place_type?.[0] || "",
-            name: item.text || "",
-            full_address: item.place_name || "",
-            place_formatted: item.place_name || ""
-          }
-        }))
-        .sort((a, b) => {
-          const score = suggestion => MAP_UTILS.scorePlaceSuggestion(suggestion, query, { normalizeText });
-          return score(b.suggestion) - score(a.suggestion);
-        })[0]?.item;
-      if (!feature?.center) return null;
-      return {
-        center: feature.center,
-        placeName: feature.place_name,
-        label: "Search result",
-        summary: "Map search result"
-      };
+    function placeSearchResultsHtml(query, suggestions = false) {
+      const result = state.placeSearchSuggestions;
+      if (!result || result.query !== query.trim().toLowerCase()) return "";
+      const options = (result.features || []).map((feature, index) => `
+        <button class="${suggestions ? "search-suggestion" : "site-card place-search-result"}" type="button"${suggestions ? ' role="option"' : ""} data-place-search-result="${index}" data-place-search-key="${escapeHtml(result.query)}">
+          <strong>${escapeHtml(feature.name || feature.placeName)}</strong>
+          <span>${escapeHtml(feature.summary || "Place / address")}</span>
+        </button>`).join("");
+      return options ? `${suggestions ? "" : '<h3 class="place-search-heading">Places and addresses</h3>'}${options}<small class="place-search-attribution">${escapeHtml([...new Set(result.features.map(feature => feature.attribution).filter(Boolean))].join(" · "))}</small>` : "";
+    }
+
+    function schedulePlaceSuggestions(query) {
+      window.clearTimeout(placeSuggestionTimer);
+      const key = query.trim().toLowerCase();
+      if (key.length < 3 || state.placeSearchSuggestions?.query === key) return;
+      placeSuggestionTimer = window.setTimeout(() => updateAddressSearch(key, { suggestionsOnly: true }), 650);
+    }
+
+    async function updateAddressSearch(query, options = {}) {
+      if (!query || query.length < 3) return;
+      const key = query.trim().toLowerCase();
+      state.addressSearchToken = key;
+      state.placeSearchSuggestions = { query: key, features: [], pending: true };
+      try {
+        const features = await geocodePlaceSearch(query.replace(/\bstonybrook\b/ig, "stony brook"), "", LONG_ISLAND_BOUNDS.flat().join(","));
+        if (state.addressSearchToken !== key || activeMobileSearchValue().trim().toLowerCase() !== key) return;
+        state.placeSearchSuggestions = { query: key, features, pending: false };
+        state.addressSearchFallbackQuery = "";
+      } catch {
+        if (state.addressSearchToken !== key || activeMobileSearchValue().trim().toLowerCase() !== key) return;
+        state.placeSearchSuggestions = { query: key, features: [], pending: false, error: true };
+        state.addressSearchFallbackQuery = key;
+      }
+      state.addressSearchMode = false;
+      if (!options.suggestionsOnly || appEl?.classList.contains("mobile-search-results")) {
+        // Remote availability must never erase the archive's own matches.
+        state.filtered = mobileSearchCandidates(query);
+        resetNearbyRenderLimit();
+        renderList();
+      }
+      renderSearchSuggestions();
+    }
+
+    function selectPlaceSearchResult(index, key) {
+      const result = state.placeSearchSuggestions;
+      const feature = result?.query === key ? result.features?.[Number(index)] : null;
+      if (!feature) return false;
+      state.addressSearchToken = "";
+      window.clearTimeout(placeSuggestionTimer);
+      searchEl?.blur?.();
+      hideMobileStartupSpotlight();
+      setMobilePanelMode("nearby");
+      setMobileBottomPanelState("collapsed");
+      applyAddressSearchFeature(feature);
+      const address = state.filtered.find(item => item.slug === "address-result");
+      window.requestAnimationFrame(() => { if (address) focusSite(address); });
+      showBanner(`${feature.name || feature.placeName} pinned on the map.`);
+      return true;
     }
 
     function setAddressMarker(center, label = "Your search") {
-      if (!state.map || !Array.isArray(center) || !window.mapboxgl?.Marker) return;
-      if (state.addressMarker) state.addressMarker.remove();
+      if (!Array.isArray(center) || center.length !== 2 || !center.every(Number.isFinite)) return;
       state.addressSearchResult = {
         center: center.map(Number),
         label: String(label || "Your search")
       };
+      scheduleNativeMapStateSync("address-result", 0);
+      if (!state.map || !window.mapboxgl?.Marker) return;
+      if (state.addressMarker) state.addressMarker.remove();
       const territoryLine = territoryLineForPoint(center);
       const element = document.createElement("button");
       element.type = "button";
@@ -5417,11 +5551,9 @@
       state.addressMarker = new mapboxgl.Marker({ element, anchor: "center" })
         .setLngLat(center)
         .addTo(state.map);
+      // Marker.setPopup owns its click listener; a second toggle closes it again.
       if (popup) state.addressMarker.setPopup(popup);
-      element.addEventListener("click", () => {
-        if (popup) state.addressMarker.togglePopup();
-        else showBanner("Your search result.");
-      });
+      else element.addEventListener("click", () => showBanner(label || "Your search result."));
       scheduleNativeMapStateSync("address-result", 0);
     }
 
@@ -5545,7 +5677,72 @@
       return key ? active.has(key) : true;
     }
 
+    function landHistoryEnabled() { return landHistoryController?.enabled === true; }
+    function installLandHistoryMode() {
+      const api = window.NLI_LAND_HISTORY;
+      const data = window.NLI_LAND_HISTORY_DATA;
+      if (landHistoryController || !api || !data) return;
+      const landButton = document.getElementById("land-history-toggle");
+      const notice = document.createElement("div");
+      notice.className = "mobile-land-history-notice";
+      notice.setAttribute("role", "status");
+      notice.hidden = true;
+      notice.innerHTML = '<strong>How the land was lost</strong><p>The map now highlights selected deeds, land claims and continuing Native homelands. Choose a chapter to read its history and sources.</p><p>Tap the deed icon again to return to the normal map.</p><button type="button" aria-label="Dismiss land history explanation">Got it</button>';
+      document.querySelector(".mobile-map-shell")?.append(notice);
+      let noticeTimer = 0, noticeActive = false;
+      const hideNotice = () => { window.clearTimeout(noticeTimer); notice.hidden = true; };
+      notice.querySelector("button").addEventListener("click", hideNotice);
+      for (const event of ["pointerdown", "click", "dblclick"]) notice.addEventListener(event, e => e.stopPropagation());
+      landHistoryController = api.createController({
+        catalog: api.createCatalog(data), getMap: () => state.map,
+        getFocus: () => state.selectedSite ? {site:state.selectedSite, center:state.selectedSite.center} : null,
+        getLandGeometry: () => state.landMaskData?.geometry,
+        openSite: slug => openSite(slug),
+        button: document.getElementById("land-history-toggle"),
+        location: window.location, history: window.history,
+        onStatus: status => {
+          const active = status === api.TITLE;
+          document.body.classList.toggle("land-history-active", active);
+          if (active && !noticeActive) {
+            notice.hidden = false;
+            noticeTimer = window.setTimeout(hideNotice, 10000);
+          } else if (!active) hideNotice();
+          noticeActive = active;
+        },
+        redraw: enabled => {
+          blockMobileMapTaps(1200);
+          api.syncAuxiliaryMarkers([state.addressMarker, state.suggestionMarker], enabled);
+          const profileMode = state.profileMapMode;
+          if (profileMode && state.map?.getStyle?.()) {
+            if (enabled) profileMode.layerVisibility?.forEach((visibility, id) => {
+              if (state.map.getLayer(id)) state.map.setLayoutProperty(id, "visibility", visibility);
+            });
+            for (const id of MOBILE_PROFILE_PROGRESS_LAYER_IDS) {
+              if (state.map.getLayer(id)) state.map.setLayoutProperty(id, "visibility", enabled ? "none" : "visible");
+            }
+            (profileMode.domMarkers || []).forEach(marker => { marker.getElement().hidden = enabled; });
+          }
+          invalidateMapSourceCache();
+          refreshMobileMapSources({ force: true });
+          syncMarkers();
+          if (!enabled && profileMode) renderMobileProfileProgressMap();
+          syncNativeMapState("land-history-toggle");
+        }
+      });
+      landButton.setAttribute("aria-label", "How the land was lost — toggle map mode");
+      mobilePromoDockEl?.append(landButton);
+      syncMobilePromoDock();
+      landHistoryController.restoreRoute();
+      if (!landHistoryEnabled()) {
+        invalidateMapSourceCache();
+        refreshMobileMapSources({ force: true });
+      }
+      window.addEventListener("popstate", () => landHistoryController.restoreRoute());
+    }
+
     function siteVisibleInMobileLayers(site) {
+      if (landHistoryController && !landHistoryController.includes(site)) return false;
+      if (landHistoryEnabled()) return true;
       if (!sitePassesMobileLayerCategories(site)) return false;
       if (!sitePassesMobileEraCategories(site)) return false;
       const exhibitSite = SITE_UTILS.isExhibitSite(site);
@@ -5572,6 +5769,8 @@
     }
 
     function relatedSiteCenter(site) {
+      // Precomputed at build time (related-site-build-utils.js) so desktop and phone measure from the same point.
+      if (Array.isArray(site?.related_center) && site.related_center.length >= 2) return site.related_center;
       if (Array.isArray(site?.center) && site.center.length >= 2) return site.center;
       const geometry = siteDisplayGeometry(site);
       if (geometry?.type === "Point" && Array.isArray(geometry.coordinates)) return geometry.coordinates;
@@ -5602,6 +5801,10 @@
     }
 
     function relatedCommunityKeys(site) {
+      // Precomputed from the full article text (the live app holds only titles and summaries until a site opens).
+      if (Array.isArray(site?.related_community_keys) && site.related_community_keys.length) {
+        return site.related_community_keys;
+      }
       const text = normalizeText([
         site?.title,
         site?.summary,
@@ -5810,8 +6013,8 @@
       const isWiki = item.resultType === "wiki";
       const isExternalMapResult = item.slug === "address-result";
       const sourceType = isWiki ? "wiki" : "site";
-      const image = isWiki ? "" : mobileSnapshotImageUrl(listingImage(item));
-      const fallback = isWiki ? "" : mobileSnapshotImageUrl(listingImageFallback(item));
+      const image = isWiki ? "" : mobileSnapshotImageUrl(listingCardImage(item));
+      const fallback = isWiki ? "" : mobileSnapshotImageUrl(listingCardImageFallback(item));
       const summary = isWiki
         ? stripHtml(item.summary || item.content || "")
         : stripHtml(item.summary || item.introduction_content || item.why_this_matters || "");
@@ -5947,12 +6150,19 @@
         renderSearchSuggestions();
         return;
       }
+      const placeResults = showingAddressResults ? "" : placeSearchResultsHtml(query);
+      if (!count && placeResults) {
+        statusEl.textContent = `${state.placeSearchSuggestions.features.length} places and addresses for "${query}"`;
+        listEl.innerHTML = placeResults;
+        renderSearchSuggestions();
+        return;
+      }
       if (!count) {
         listEl.innerHTML = `
           <div class="site-card empty-state" role="status">
             <span class="site-copy">
               <h2>${state.addressSearchMode ? "Searching the map..." : fallbackQuery ? "Continue in Maps" : "No matching sites found"}</h2>
-              <p>${state.addressSearchMode && state.addressSearchPending ? `Looking for "${escapeHtml(state.addressSearchPending)}" as a place or business.` : fallbackQuery ? "On This Site map search is temporarily unavailable or its free allowance has been reached. Your destination is preserved." : query ? `No local site matched "${escapeHtml(query)}". Try a broader search or a nearby place name.` : "No sites are available for this view."}</p>
+              <p>${state.addressSearchMode && state.addressSearchPending ? `Looking for "${escapeHtml(state.addressSearchPending)}" as a place or business.` : fallbackQuery ? "Place search is temporarily unavailable. Try again shortly, or open this destination in Maps." : query ? `No local site matched "${escapeHtml(query)}". Try a broader search or a nearby place name.` : "No sites are available for this view."}</p>
               ${fallbackQuery ? `<a class="action primary" href="${escapeHtml(mapsDirectionsQueryUrl(fallbackQuery))}" target="_blank" rel="noreferrer">Open directions in Maps</a>` : ""}
               ${didYouMean ? `<button class="action secondary" type="button" data-search-suggestion="${escapeHtml(didYouMean.title)}">Did you mean: ${escapeHtml(didYouMean.title)}</button>` : ""}
             </span>
@@ -5964,6 +6174,7 @@
       const hasMore = count > renderLimit;
       listEl.innerHTML = `
         ${visibleCards.map(nearbyFeedCardHtml).join("")}
+        ${placeResults}
         ${hasMore ? `
           <div class="learning-feed-more" data-learning-feed-sentinel="nearby">
             <button type="button" data-nearby-show-more>Load more places</button>
@@ -5999,8 +6210,8 @@
         geojson: { type: "Point", coordinates: feature.center },
         center: feature.center
       };
+      setAddressMarker(feature.center, feature.placeName);
       if (state.map && window.mapboxgl?.Marker) {
-        setAddressMarker(feature.center, feature.placeName);
         state.map.easeTo({ center: feature.center, zoom: Math.max(state.map.getZoom(), 10.8), duration: 650 });
       }
       const nearby = visitableSites()
@@ -6075,15 +6286,16 @@
           seen.add(key);
           return true;
         });
-      const suggestions = localSuggestions.slice(0, 4);
+      const suggestions = localSuggestions.slice(0, 6);
+      const placeOptions = placeSearchResultsHtml(query, true);
       const offerMapSearch = query.length >= 3 && !localSuggestions.some(item => normalizeText(item.title) === normalizeText(query));
-      if (!suggestions.length && !offerMapSearch) return hide();
+      if (!suggestions.length && !offerMapSearch && !placeOptions) return hide();
       searchSuggestionsEl.innerHTML = `${suggestions.map(item => `
         <button class="search-suggestion" type="button" role="option" data-search-suggestion="${escapeHtml(item.title)}"${item.resultType === "site" ? ` data-search-site="${escapeHtml(item.slug)}"` : item.resultType === "wiki" ? ` data-search-wiki="${escapeHtml(item.slug)}"` : ""}>
           <strong>${escapeHtml(item.title)}</strong>
           <span>${escapeHtml(item.resultType === "wiki" ? "Knowledgebase" : mobileSearchResultTypeLabel(item.site_type))}</span>
         </button>
-      `).join("")}${offerMapSearch ? `
+      `).join("")}${placeOptions}${offerMapSearch ? `
         <button class="search-suggestion place-search-suggestion" type="button" role="option" data-map-search-query="${escapeHtml(query)}">
           <strong>Search the map for “${escapeHtml(query)}”</strong>
           <span>Address, business, or place on Long Island</span>
@@ -6134,6 +6346,7 @@
         // site/wiki article.  Their card correctly renders without a dead
         // Full article action, rather than disappearing from the timeline.
         .filter(event => event && (event.title || event.description || event.date_label || event.sort_key))
+        .filter(event => !TIMELINE_UTILS.browseExclusionReason(event))
         .sort((a, b) =>
           timelineSortValue(a) - timelineSortValue(b) ||
           String(a.date_label || "").localeCompare(String(b.date_label || "")) ||
@@ -6218,7 +6431,7 @@
 
     function smoothTimelineMapOptions(options = {}) {
       return {
-        duration: 5200,
+        duration: 1400,
         essential: true,
         easing: t => 0.5 - Math.cos(Math.PI * t) / 2,
         ...options
@@ -6228,8 +6441,8 @@
     function mobileTimelineCardImage(event, contentTarget) {
       if (contentTarget?.type === "site") {
         return {
-          imageUrl: mobileSnapshotImageUrl(listingImage(contentTarget.record)),
-          imageFallbackUrl: mobileSnapshotImageUrl(listingImageFallback(contentTarget.record))
+          imageUrl: mobileSnapshotImageUrl(listingCardImage(contentTarget.record)),
+          imageFallbackUrl: mobileSnapshotImageUrl(listingCardImageFallback(contentTarget.record))
         };
       }
       if (contentTarget?.type === "calendar_event") {
@@ -6278,17 +6491,20 @@
       const coordinates = mobileTimelineCardCoordinates(event, contentTarget);
       const sourceName = cleanPlainText(event.source_title || targetRecord?.title || "Historic record");
       const sourceNote = timelineSourceText(event);
+      // A moment shows its own words. The timeline index leaves descriptions out to
+      // stay small; until hydrateMobileTimelineDescriptions fills one in, the card
+      // waits rather than borrowing the linked place's summary (another subject).
+      const descriptionPending = event.description === undefined && !event.excerpt && !event.summary;
       const excerpt = cleanPlainText(
         timelineDisplayDescription(event) ||
         event.excerpt ||
         event.summary ||
-        targetRecord?.summary ||
-        timelineTeaser(event)
+        (descriptionPending ? "" : timelineTeaser(event))
       );
       const card = normalizeMobileLearningCard({
         id: event.id,
         type: "historic-moment",
-        title: timelineTitle(event),
+        title: cleanPlainText(event.timeline_headline || event.title || "") || timelineTitle(event),
         sourceName,
         date: timelineLabel(event),
         imageUrl: image.imageUrl,
@@ -6317,7 +6533,8 @@
         sourceType,
         sourceNote,
         location: timelineLocationLabel(event),
-        tags: [event.period, event.source_section].filter(Boolean)
+        // The era the timeline places it in, not the free-text period note (see desktop timelineEraLabel).
+        tags: [TIMELINE_UTILS.eraForEvent ? TIMELINE_UTILS.eraForEvent(event).label : "", event.source_section].filter(Boolean)
       };
     }
 
@@ -6455,12 +6672,14 @@
     }
 
     function loadMoreMobileTimeline() {
+      // Cards are still arriving; the feed observer asks again when they finish.
+      if (state.timelineProgressiveRender) return;
       const events = visibleMobileTimelineEvents();
       const start = Math.max(0, Number(state.timelineWindowStart) || 0);
       const current = Number(state.timelineRenderLimit || TIMELINE_FEED_INITIAL_LIMIT);
       if (start + current >= events.length) return;
       state.timelineRenderLimit = Math.min(events.length - start, current + TIMELINE_FEED_INCREMENT);
-      renderMobileTimeline({ preserveScroll: true });
+      renderMobileTimeline({ preserveScroll: true, appendFrom: start + current });
     }
 
     function renderMobileTimelineIfOpen() {
@@ -6479,12 +6698,47 @@
       return template.content.firstElementChild || null;
     }
 
+    // Fetches the descriptions of the moments about to be shown (one small request per
+    // window) and redraws their cards. Offline, the cards keep their title, date and source.
+    function hydrateMobileTimelineDescriptions(events = []) {
+      const requested = state.timelineDescriptionRequests || (state.timelineDescriptionRequests = new Set());
+      const wanted = events.filter(event => event && event.description === undefined && /^\d+$/.test(String(event.id || ""))
+        && !requested.has(String(event.id))).slice(0, 40);
+      if (!wanted.length) return;
+      const ids = wanted.map(event => String(event.id));
+      ids.forEach(id => requested.add(id));
+      fetchJson(`/items/timeline_events?limit=${ids.length}&filter[id][_in]=${ids.join(",")}&fields=id,description`, {
+        cacheKey: `timeline-descriptions-${ids.join("-")}`,
+        ttl: 600000,
+        fresh: false
+      }).then(response => {
+        const feedEl = mobileTimelineCurrentBtn;
+        const byId = new Map(wanted.map(event => [String(event.id), event]));
+        (response?.data || []).forEach(row => {
+          const id = String(row.id);
+          const description = row.description || "";
+          [byId.get(id), state.timelineById?.get(id)].forEach(event => { if (event) event.description = description; });
+          const cardEl = feedEl?.querySelector(`.timeline-feed-card[data-timeline-id="${id}"]`);
+          const event = byId.get(id);
+          if (!cardEl || !event) return;
+          const replacement = mobileTimelineCardElementFromHtml(mobileTimelineFeedCardHtml(mobileTimelineFeedCardModel(event, Number(cardEl.dataset.timelineIndex))));
+          if (!replacement) return;
+          // Keep the reader's place when a card above the view grows.
+          const top = cardEl.offsetTop - feedEl.offsetTop;
+          const before = cardEl.offsetHeight;
+          cardEl.replaceWith(replacement);
+          if (top + before <= feedEl.scrollTop) feedEl.scrollTop += replacement.offsetHeight - before;
+        });
+      }).catch(() => ids.forEach(id => requested.delete(id)));
+    }
+
     function renderMobileTimeline(options = {}) {
       if (!mobileTimelineCurrentBtn) return;
+      const feedEl = mobileTimelineCurrentBtn;
       state.timelineProgressiveRender?.cancel?.();
       state.timelineProgressiveRender = null;
       state.mobileTimelineRendered = true;
-      const previousScrollTop = options.preserveScroll ? mobileTimelineCurrentBtn.scrollTop : state.timelineScrollTop;
+      const previousScrollTop = options.preserveScroll ? feedEl.scrollTop : state.timelineScrollTop;
       state.timelineFeedObserver?.disconnect?.();
       state.timelineFeedObserver = null;
       const events = visibleMobileTimelineEvents();
@@ -6497,7 +6751,7 @@
       }
       if (!events.length) {
         const loading = state.deferredDataLoading || !state.deferredDataLoaded;
-        mobileTimelineCurrentBtn.innerHTML = `
+        feedEl.innerHTML = `
           <div class="learning-feed-empty" role="status">
             <strong>${loading ? "Loading historic moments..." : "No historic moments available"}</strong>
             <span>${loading ? "Timeline records are being prepared." : "Historic records will appear here when available."}</span>
@@ -6510,25 +6764,37 @@
       const windowStart = Math.max(0, Math.min(events.length - 1, Number(state.timelineWindowStart) || 0));
       const renderLimit = Math.max(1, Math.min(events.length - windowStart, Number(state.timelineRenderLimit || TIMELINE_FEED_INITIAL_LIMIT)));
       const windowEnd = windowStart + renderLimit;
-      const cards = events.slice(windowStart, windowEnd).map((event, index) => mobileTimelineFeedCardModel(event, windowStart + index));
       const hasEarlier = windowStart > 0;
       const hasMore = windowEnd < events.length;
-      mobileTimelineCurrentBtn.innerHTML = `
+      const footerHtml = hasMore ? `
+          <div class="learning-feed-more" data-learning-feed-sentinel="timeline">
+            <button type="button" data-timeline-show-more>Load more moments</button>
+            <span>${events.length - windowEnd} remaining</span>
+          </div>
+        ` : `<p class="learning-feed-end">End of historic timeline</p>`;
+      // Loading more keeps the cards already on screen. Rebuilding the whole
+      // feed collapsed it to a few cards and threw the reader back up the list.
+      // A half-finished render has fewer cards than expected, so it rebuilds.
+      const canAppend = options.appendFrom < windowEnd
+        && options.appendFrom - windowStart === feedEl.querySelectorAll(".timeline-feed-card").length;
+      const cardStart = canAppend ? options.appendFrom : windowStart;
+      hydrateMobileTimelineDescriptions(events.slice(cardStart, windowEnd));
+      const cards = events.slice(cardStart, windowEnd).map((event, index) => mobileTimelineFeedCardModel(event, cardStart + index));
+      if (canAppend) {
+        feedEl.querySelector("[data-learning-feed-sentinel]").outerHTML = footerHtml;
+      } else {
+        feedEl.innerHTML = `
         ${hasEarlier ? `
           <div class="learning-feed-more is-earlier">
             <button type="button" data-timeline-show-earlier>Load earlier moments</button>
             <span>${windowStart} before this point</span>
           </div>
         ` : ""}
-        ${hasMore ? `
-          <div class="learning-feed-more" data-learning-feed-sentinel="timeline">
-            <button type="button" data-timeline-show-more>Load more moments</button>
-            <span>${events.length - windowEnd} remaining</span>
-          </div>
-        ` : `<p class="learning-feed-end">End of historic timeline</p>`}
+        ${footerHtml}
       `;
+      }
       syncMobileTimelineScrubber(Number.isFinite(options.jumpIndex) ? options.jumpIndex : state.timelineScrubberIndex, events);
-      const footer = mobileTimelineCurrentBtn.querySelector('[data-learning-feed-sentinel="timeline"], .learning-feed-end');
+      const footer = feedEl.querySelector('[data-learning-feed-sentinel="timeline"], .learning-feed-end');
       const scrollToRequestedCard = (card, item) => {
         const requestedIndex = Number.isFinite(options.jumpIndex)
           ? Number(options.jumpIndex)
@@ -6536,19 +6802,19 @@
             ? Number(options.preserveEventIndex)
             : NaN;
         if (Number.isFinite(requestedIndex) && Number(item.index) === requestedIndex) {
-          mobileTimelineCurrentBtn.scrollTop = Math.max(0, card.offsetTop - mobileTimelineCurrentBtn.offsetTop - 8);
+          feedEl.scrollTop = Math.max(0, card.offsetTop - feedEl.offsetTop - 8);
         } else if (!Number.isFinite(requestedIndex) && options.preserveScroll) {
-          mobileTimelineCurrentBtn.scrollTop = Math.max(0, Math.min(previousScrollTop || 0, mobileTimelineCurrentBtn.scrollHeight));
+          feedEl.scrollTop = Math.max(0, Math.min(previousScrollTop || 0, feedEl.scrollHeight));
         }
-        state.timelineScrollTop = mobileTimelineCurrentBtn.scrollTop;
+        state.timelineScrollTop = feedEl.scrollTop;
       };
       const finishTimelineRender = () => {
         if (mobileTimelineStatusEl) mobileTimelineStatusEl.textContent = `Showing ${windowStart + 1}-${windowEnd} of ${events.length}`;
         if (!Number.isFinite(options.jumpIndex) && !Number.isFinite(options.preserveEventIndex)) {
-          mobileTimelineCurrentBtn.scrollTop = Math.max(0, previousScrollTop || 0);
+          feedEl.scrollTop = Math.max(0, previousScrollTop || 0);
         }
-        state.timelineScrollTop = mobileTimelineCurrentBtn.scrollTop;
-        installLearningFeedObserver("timeline", mobileTimelineCurrentBtn, loadMoreMobileTimeline);
+        state.timelineScrollTop = feedEl.scrollTop;
+        installLearningFeedObserver("timeline", feedEl, loadMoreMobileTimeline);
       };
       if (typeof TIMELINE_UTILS.progressivelyAppendMediaItems !== "function") {
         footer?.insertAdjacentHTML("beforebegin", cards.map(mobileTimelineFeedCardHtml).join(""));
@@ -6557,11 +6823,14 @@
       }
       if (mobileTimelineStatusEl) mobileTimelineStatusEl.textContent = `Loading ${windowStart + 1} of ${events.length}`;
       const controller = TIMELINE_UTILS.progressivelyAppendMediaItems({
-        container: mobileTimelineCurrentBtn,
+        container: feedEl,
         items: cards,
         beforeNode: footer,
-        createItem: card => mobileTimelineCardElementFromHtml(mobileTimelineFeedCardHtml(card)),
-        timeoutMs: 3500,
+        createItem: card => mobileTimelineCardElementFromHtml(mobileTimelineFeedCardHtml(
+          card.excerpt || card.event.description === undefined ? card : mobileTimelineFeedCardModel(card.event, card.index)
+        )),
+        timeoutMs: 1500,
+        prefetch: 3,
         onItemReady: (element, card) => {
           if (mobileTimelineStatusEl) mobileTimelineStatusEl.textContent = `Loading ${windowStart + 1}-${card.index + 1} of ${events.length}`;
           scrollToRequestedCard(element, card);
@@ -6595,8 +6864,42 @@
       return Boolean(mobileTimelineCardCoordinates(event, target));
     }
 
+    let mobileTimelineMotionCleanup = null;
+
+    function cancelMobileTimelineMapMotion() {
+      if (!mobileTimelineMotionCleanup) return;
+      mobileTimelineMotionCleanup();
+      state.map?.stop?.();
+    }
+
+    function prepareMobileTimelineMapMotion() {
+      cancelMobileTimelineMapMotion();
+      const map = state.map;
+      if (!map) return;
+      // Settle the newly exposed map before starting. A delayed resize can
+      // interrupt easeTo while returning from a full-screen timeline.
+      window.clearTimeout(state.mobilePanelResizeTimer);
+      state.mobilePanelResizeTimer = null;
+      map.stop?.();
+      map.resize?.();
+      if (!nativeMapBridgeAvailable()) return;
+      // Android normally mirrors only moveend. For a deliberate timeline
+      // journey, stream the interpolated camera so the visible native map
+      // moves with the web camera instead of waiting and jumping at the end.
+      const move = () => syncNativeMapCameraToAndroid();
+      const finish = () => {
+        map.off("move", move);
+        map.off("moveend", finish);
+        if (mobileTimelineMotionCleanup === finish) mobileTimelineMotionCleanup = null;
+      };
+      mobileTimelineMotionCleanup = finish;
+      map.on("move", move);
+      map.on("moveend", finish);
+    }
+
     function focusMobileTimelineEvent(event) {
       if (!event) return;
+      if (mobileTimelineHasMapTarget(event)) prepareMobileTimelineMapMotion();
       const target = mobileTimelineContentTarget(event);
       const exhibit = target?.type === "calendar_event" ? target.record : null;
       if (exhibit) {
@@ -6606,13 +6909,13 @@
           state.selectedSite = site;
           syncActiveSiteMapLabel(site);
           focusSite(site, { timeline: true });
-          window.setTimeout(() => animateMobileSiteMarker(site), 2400);
+          window.setTimeout(() => animateMobileSiteMarker(site), 1400);
           showBanner(event.source_title || site.title || "Exhibit located on the map.");
           return;
         }
         if (Array.isArray(exhibit.center) && state.map) {
           state.map.easeTo(smoothTimelineMapOptions({ center: exhibit.center, zoom: 11.2 }));
-          window.setTimeout(() => pulseTimelineMapTarget(exhibit.center), 2400);
+          window.setTimeout(() => pulseTimelineMapTarget(exhibit.center), 1400);
           showBanner(event.source_title || exhibit.title || "Exhibit located on the map.");
           return;
         }
@@ -6623,14 +6926,14 @@
         state.selectedSite = site;
         syncActiveSiteMapLabel(site);
         focusSite(site, { timeline: true });
-        window.setTimeout(() => animateMobileSiteMarker(site), 2400);
+        window.setTimeout(() => animateMobileSiteMarker(site), 1400);
         showBanner(event.source_title || site.title || "Site located on the map.");
         return;
       }
       if (event.latitude && event.longitude && state.map) {
         const coordinates = [Number(event.longitude), Number(event.latitude)];
         state.map.easeTo(smoothTimelineMapOptions({ center: coordinates, zoom: 11.2 }));
-        window.setTimeout(() => pulseTimelineMapTarget(coordinates), 2400);
+        window.setTimeout(() => pulseTimelineMapTarget(coordinates), 1400);
         showBanner(event.source_title || event.title || "Historic moment located on the map.");
         return;
       }
@@ -7144,7 +7447,7 @@
     function setDetailDrawerState(stateName = "half", options = {}) {
       if (!detailEl) return;
       const cleanState = ["collapsed", "half", "expanded"].includes(stateName) ? stateName : "half";
-      detailEl.classList.remove("drawer-collapsed", "drawer-half", "drawer-expanded");
+      detailEl.classList.remove("drawer-collapsed", "drawer-half", "drawer-expanded", "plant-id-fullscreen");
       detailEl.classList.add(`drawer-${cleanState}`);
       if (!options.keepInlineHeight) detailEl.style.removeProperty("--detail-drawer-height");
       detailDrawerHandleEl?.setAttribute("aria-expanded", cleanState === "expanded" ? "true" : "false");
@@ -7179,6 +7482,9 @@
       let dragging = false;
       let armed = false;
       let touchStartX = null;
+      let activePointerId = null;
+      let pointerSurface = null;
+      let suppressHandleClick = false;
 
       const disarmForNativeScroll = () => {
         armed = false;
@@ -7186,6 +7492,11 @@
       };
 
       const reset = () => {
+        if (activePointerId !== null && pointerSurface?.hasPointerCapture?.(activePointerId)) {
+          pointerSurface.releasePointerCapture(activePointerId);
+        }
+        activePointerId = null;
+        pointerSurface = null;
         dragging = false;
         armed = false;
         touchStartX = null;
@@ -7195,6 +7506,8 @@
 
       const canStartDrag = (target, touch = false) => {
         if (!detailEl.classList.contains("open")) return false;
+        // Contents is a separate native scroll surface, outside detail-body.
+        if (target.closest(".article-contents")) return false;
         if (target.closest(".detail-drawer-handle")) return true;
         if (target.closest(".detail-head")) return !target.closest("button,a,input,select,textarea,summary");
         return touch && detailBodyEl.scrollTop < 2
@@ -7205,7 +7518,7 @@
         const deltaY = clientY - startY;
         const limits = detailDrawerLimits();
         latestHeight = Math.min(limits.expanded, Math.max(limits.collapsed * 0.66, startHeight - deltaY));
-        dragging = Math.abs(deltaY) > 6;
+        dragging = dragging || Math.abs(deltaY) > 4;
         if (dragging) {
           detailEl.classList.add("dragging");
           detailEl.style.setProperty("--detail-drawer-height", `${Math.round(latestHeight)}px`);
@@ -7216,45 +7529,57 @@
         if (!armed) return;
         const limits = detailDrawerLimits();
         const shouldClose = dragging && latestHeight < limits.collapsed * 0.78;
-        const snapState = nearestDetailDrawerState(latestHeight || startHeight);
+        let snapState = nearestDetailDrawerState(latestHeight || startHeight);
+        const initialState = nearestDetailDrawerState(startHeight);
+        if (dragging && snapState === initialState && Math.abs(latestHeight - startHeight) >= 24) {
+          const states = ["collapsed", "half", "expanded"];
+          const step = latestHeight > startHeight ? 1 : -1;
+          snapState = states[Math.max(0, Math.min(2, states.indexOf(initialState) + step))];
+        }
+        suppressHandleClick = dragging;
         reset();
         if (shouldClose) closeDetail();
         else setDetailDrawerState(snapState);
       };
 
       detailEl.addEventListener("pointerdown", event => {
-        if (event.pointerType === "touch") return;
+        if (activePointerId !== null) return;
         if (event.pointerType === "mouse" && event.button !== 0) return;
         if (!canStartDrag(event.target)) return;
+        suppressHandleClick = false;
+        activePointerId = event.pointerId;
+        pointerSurface = event.target.closest(".detail-drawer-handle,.detail-head") || detailEl;
         armed = true;
         dragging = false;
         startY = event.clientY;
         startHeight = detailEl.getBoundingClientRect().height || detailDrawerLimits().half;
         latestHeight = startHeight;
-        detailEl.setPointerCapture?.(event.pointerId);
+        pointerSurface.setPointerCapture?.(event.pointerId);
       });
 
       detailEl.addEventListener("pointermove", event => {
-        // Android sends pointer events as well as touch events for one finger.
-        // The touch path owns those gestures; otherwise this pointer handler
-        // sees its shared armed state and turns an upward reading swipe into a
-        // drawer resize before touchmove can hand it to native scrolling.
-        if (event.pointerType === "touch") return;
+        // Header pointers are captured; body touches retain native scrolling.
+        if (event.pointerId !== activePointerId) return;
         if (!armed) return;
         movePanel(event.clientY);
         if (dragging) event.preventDefault();
       });
 
       detailEl.addEventListener("pointerup", event => {
-        if (event.pointerType === "touch") return;
+        if (event.pointerId !== activePointerId) return;
         finishDrag();
       });
       detailEl.addEventListener("pointercancel", event => {
-        if (event.pointerType === "touch") return;
+        if (event.pointerId !== activePointerId) return;
+        const snapState = nearestDetailDrawerState(latestHeight || startHeight);
+        suppressHandleClick = dragging;
         reset();
+        setDetailDrawerState(snapState);
       });
 
       detailEl.addEventListener("touchstart", event => {
+        if (activePointerId !== null) return;
+        suppressHandleClick = false;
         if (event.touches.length !== 1) return;
         if (!canStartDrag(event.target, true)) return;
         const touch = event.touches[0];
@@ -7267,6 +7592,7 @@
       }, { passive: true });
 
       detailEl.addEventListener("touchmove", event => {
+        if (activePointerId !== null) return;
         // An upward or horizontal body swipe may already have been handed to
         // native scrolling. Do not reset the drawer on later move events from
         // that same touch, because the style writes in reset() cancel WebView
@@ -7288,11 +7614,18 @@
         if (dragging) event.preventDefault();
       }, { passive: false });
 
-      detailEl.addEventListener("touchend", finishDrag, { passive: true });
-      detailEl.addEventListener("touchcancel", reset, { passive: true });
+      detailEl.addEventListener("touchend", () => {
+        if (activePointerId === null) finishDrag();
+      }, { passive: true });
+      detailEl.addEventListener("touchcancel", () => {
+        if (activePointerId === null) reset();
+      }, { passive: true });
       detailDrawerHandleEl?.addEventListener("click", event => {
-        if (dragging) return;
         event.preventDefault();
+        if (dragging || suppressHandleClick) {
+          suppressHandleClick = false;
+          return;
+        }
         cycleDetailDrawerState();
       });
     }
@@ -7335,9 +7668,11 @@
             geometry_refinement: shorelineRefinementNoteForSite(site),
             label_size: polygonLabelSize(site),
             has_header_image: siteHasHeaderImage(site),
+            blue_pin: FORCE_BLUE_DOT_SITE_SLUGS.has(site.slug),
             has_icon: !!siteMapIconUrl(site),
             icon_key: mobileSiteIconKey(site),
             native_icon_key: nativeSiteIconKey(site),
+            thumb_url: mobileSiteThumbnailUrl(site),
             startup_distance: mobileStartupSiteDistance(siteDisplayGeometry(site)?.coordinates),
             unread_count: unreadCount,
             unread_label: mobileUnreadCountLabel(unreadCount),
@@ -7364,13 +7699,14 @@
     }
 
     function mobilePlaceNameAreaFeatures(sites = []) {
-      if (state.settings.showShapes === false) return [];
-      if (state.settings.layerCategories?.["place-name-areas"] === false) return [];
+      if (!landHistoryEnabled() && state.settings.showShapes === false) return [];
+      if (!landHistoryEnabled() && state.settings.layerCategories?.["place-name-areas"] === false) return [];
       const activeBySlug = new Map((sites || []).map(site => [site.slug, site]));
       const activeCategories = activeMobileLayerCategories();
       return (state.placeNameAreas?.features || [])
         .filter(feature => activeBySlug.has(feature.properties?.directus_site_slug || feature.properties?.slug))
         .filter(feature => {
+          if (landHistoryEnabled()) return true;
           const keys = String(feature.properties?.layer_categories || "").split(/\s+/).filter(Boolean);
           return SITE_UTILS.passesLayerCategoryFilters(keys, activeCategories, mobileLayerCategoryInputs.length);
         })
@@ -7439,6 +7775,7 @@
         const siteFeatures = siteFeatureCollection([...shapeSites, ...pointHitSites]);
         const placeNameAreas = mobilePlaceNameAreaFeatures(sites);
         siteFeatures.features.push(...placeNameAreas);
+        if (landHistoryEnabled()) siteFeatures.features = siteFeatures.features.map(feature => landHistoryController.decorate(feature));
         state.mapSourceCache = {
           sites: siteFeatures,
           attention: siteAttentionFeatureCollection(sites),
@@ -7489,14 +7826,18 @@
       return unreadBadges;
     }
 
+    // Asked several times per moving-marker tick, and each read of the injected Java object
+    // is slow. Once the app has injected the bridge and its token, they stay for the page.
     function nativeMapBridgeAvailable() {
-      return Boolean(
+      if (state.nativeMapBridgeConfirmed) return true;
+      state.nativeMapBridgeConfirmed = Boolean(
         isNativeAndroidApp()
         && androidBridgeToken()
         && window.AndroidApp?.syncNativeMapState
         && window.AndroidApp?.syncNativeMapCamera
         && window.AndroidApp?.syncNativeMapMovingFeatures
       );
+      return state.nativeMapBridgeConfirmed;
     }
 
     function nativeProfilePointFeatures(model = {}) {
@@ -7507,6 +7848,7 @@
           index,
           label: String(index + 1),
           title: group.title || "Contribution",
+          caption: group.caption,
           slug: group.related_slug || "",
           color: MOBILE_PROFILE_ACTIVITY_COLORS[group.primary_type] || MOBILE_PROFILE_ACTIVITY_COLORS.interaction
         }
@@ -7545,9 +7887,11 @@
     }
 
     function nativeCommunityContributionFeatures() {
+      if (landHistoryEnabled()) return [];
       const features = [];
+      const placements = mapStoryPlacements();
       activeMapStories().forEach(story => {
-        const coordinates = mapStoryDisplayCoordinates(story)?.map(Number) || [];
+        const coordinates = placements.get(String(story.id))?.map(Number) || [];
         if (coordinates.length < 2 || !coordinates.every(Number.isFinite)) return;
         features.push({
           type: "Feature",
@@ -7556,6 +7900,8 @@
             native_kind: "story",
             native_key: String(story.id || ""),
             contribution_kind: "story",
+            story_count: placements.groups.get(String(story.id))?.length || 1,
+            story_ids: JSON.stringify(placements.groups.get(String(story.id)) || [String(story.id)]),
             title: story.attached_site_title || story.title || "Visitor story"
           }
         });
@@ -7596,6 +7942,7 @@
     }
 
     function nativeTemporaryMapFeatures() {
+      if (landHistoryEnabled()) return [];
       const features = [];
       const addressCoordinates = state.addressSearchResult?.center?.map(Number) || [];
       if (addressCoordinates.length >= 2 && addressCoordinates.every(Number.isFinite)) {
@@ -7677,11 +8024,9 @@
     }
 
     function syncNativeMapState(reason = "state") {
-      // Offline there is no web map, but the native map still needs the
-      // Labels choices (which places and shapes to show).
-      if (!nativeMapBridgeAvailable() || (!state.map && !isOfflineTextMode())) return false;
+      if (!nativeMapBridgeAvailable() || !state.map) return false;
       const sourceData = cachedMobileMapSourceData();
-      const profileModel = state.profileMapMode?.model || null;
+      const profileModel = landHistoryEnabled() ? null : (state.profileMapMode?.model || null);
       const profileJourney = profileModel ? mobileProfileJourneyMapData(profileModel) : null;
       const profileKey = state.profileMapMode?.profileKey || "";
       const profileSignature = profileModel
@@ -7696,13 +8041,13 @@
       const temporarySignature = temporaryFeatures.map(feature => `${feature.properties.temporary_kind}:${feature.properties.native_key}:${feature.geometry.coordinates.join(",")}`).join("|");
       const nativeBasemap = Object.prototype.hasOwnProperty.call(MOBILE_BASEMAPS, state.settings.basemap) ? state.settings.basemap : "outdoors";
       const eventSignature = exhibitFeatures.map(feature => feature.properties.event_key).join(",");
-      const baseSignature = `${state.nativeMapBaseRevision}|${profileKey}|${profileSignature}|basemap:${nativeBasemap}|bio-paths:${mobileBiographyPathsEnabled() ? 1 : 0}`;
+      const baseSignature = `${state.nativeMapBaseRevision}|land-history:${landHistoryEnabled()}|${profileKey}|${profileSignature}|basemap:${nativeBasemap}|bio-paths:${mobileBiographyPathsEnabled() ? 1 : 0}`;
       const staticParts = nativeMapStaticPayloadParts(sourceData, profileModel, `${state.mapSourceCacheKey}|${baseSignature}|${state.nativeMapPointRevision}`);
       const pointSignature = staticParts.pointSignature;
       const transientSignature = `user:${userLocationSignature}|community:${communitySignature}|temporary:${temporarySignature}|events:${eventSignature}|pick:${!!state.suggestionMapPickMode}`;
       const signature = `${baseSignature}|points:${pointSignature}|${transientSignature}`;
-      const center = state.map?.getCenter?.();
-      const camera = center ? { center: [Number(center.lng), Number(center.lat)], zoom: Number(state.map.getZoom?.()) } : null;
+      const center = state.map.getCenter?.();
+      const camera = center ? { center: [Number(center.lng), Number(center.lat)], zoom: Number(state.map.getZoom?.()), bearing: Number(state.map.getBearing?.() || 0), pitch: Number(state.map.getPitch?.() || 0) } : null;
       const transientPayload = {
         signature,
         baseSignature,
@@ -7789,6 +8134,8 @@
             globalThis.__nliMapIdle.wake();
             return true;
           }
+          if (isMobileMapTapBlocked()) return false;
+          if (landHistoryEnabled() && (kind !== "site" || !landHistoryController.includes({ slug: key }))) return false;
           const selectedMapCenter = Array.isArray(mapCenter) && mapCenter.length >= 2 && mapCenter.map(Number).every(Number.isFinite)
             ? mapCenter.map(Number)
             : null;
@@ -7826,8 +8173,7 @@
           if (kind === "story") {
             const story = (state.mapStories || []).find(item => String(item.id || "") === String(key || ""));
             if (!story) return false;
-            focusMapStory(story, { duration: 0 });
-            openMapStory(story);
+            mapStoryMarkerElement({ ...story, clusterStoryIds: mapStoryPlacements().groups.get(String(story.id)) }).click();
             return true;
           }
           if (kind === "plant") {
@@ -7876,7 +8222,6 @@
           const nextZoom = Number(zoom);
           const nextBearing = Number(bearing);
           const nextPitch = Number(pitch);
-          if (center.every(Number.isFinite)) state.nativeCameraCenter = center;
           if (!state.map || !center.every(Number.isFinite) || !Number.isFinite(nextZoom)) return false;
           state.nativeMapCameraEcho = {
             longitude: center[0],
@@ -7895,8 +8240,10 @@
           return true;
         },
         gestureChanged(active) {
-          if (active) globalThis.__nliMapIdle?.wake();
-          if (active) markAndroidMapGestureActive();
+          if (active) {
+            cancelMobileTimelineMapMotion();
+            markAndroidMapGestureActive();
+          }
           else markAndroidMapGestureSettled();
           return true;
         },
@@ -8135,7 +8482,7 @@
     }
 
     function mobileGeometryHitFeatures(event) {
-      if (state.settings.showShapes === false || !event?.lngLat) return [];
+      if ((!landHistoryEnabled() && state.settings.showShapes === false) || !event?.lngLat) return [];
       const point = [event.lngLat.lng, event.lngLat.lat];
       const siteFeatures = activeMapSites()
         .filter(site => {
@@ -8218,7 +8565,7 @@
     }
 
     function mobileProjectedGeometryHitFeatures(event) {
-      if (state.settings.showShapes === false || !state.map || !event?.point) return [];
+      if ((!landHistoryEnabled() && state.settings.showShapes === false) || !state.map || !event?.point) return [];
       const siteFeatures = activeMapSites()
         .filter(site => {
           const geometry = siteDisplayGeometry(site);
@@ -8312,7 +8659,7 @@
     }
 
     function nearestMobileMarkerFeature(event, radius = 24) {
-      if (state.settings.showPins === false || !state.map || !event?.point) return null;
+      if ((!landHistoryEnabled() && state.settings.showPins === false) || !state.map || !event?.point) return null;
       let best = null;
       activeMapSites().forEach(site => {
         if (!Array.isArray(site.center)) return;
@@ -8368,15 +8715,15 @@
       }
       consider(state.mobileMovingDogMarker, {
         wiki_slug: MOVING_DOG_WIKI_SLUG,
-        title: "Dog",
+        title: MOVING_DOG_TITLE,
         feature_kind: "moving-dog"
       });
       for (const {animal,marker} of state.mobileNativeAnimalMarkers.values()) {
         consider(marker,{wiki_slug:animal.slug,title:animal.title,feature_kind:"native-animal"});
       }
       const whalingProperties = state.siteBySlug.has(WHALING_FEATURE_SLUG)
-        ? { slug: WHALING_FEATURE_SLUG, title: "Whaling", feature_kind: "moving-whale" }
-        : { wiki_slug: WHALING_FEATURE_SLUG, title: "Whaling", feature_kind: "moving-whale" };
+        ? { slug: WHALING_FEATURE_SLUG, title: MOVING_WHALE_TITLE, feature_kind: "moving-whale" }
+        : { wiki_slug: WHALING_FEATURE_SLUG, title: MOVING_WHALE_TITLE, feature_kind: "moving-whale" };
       consider(state.mobileMovingWhaleMarker, whalingProperties);
       consider(state.mobileMovingAmethystShipMarker, {
         wiki_slug: WHALING_FEATURE_SLUG,
@@ -8995,8 +9342,8 @@
         return localIcon || "";
       }
       if (forceBlueDot) return FORCE_BLUE_DOT_LOCAL_ICON;
-      if (HEADER_IMAGE_BLUE_PLACEHOLDER_ICON_IDS.has(rawIcon) && !siteHasHeaderImage(site) && !forceBlueDot) return TEXT_ONLY_GREEN_PLACEHOLDER_ICON;
-      const iconUrl = MEDIA_UTILS.siteMapIconUrl(site, { directusAssetUrl }) || "";
+      if (HEADER_IMAGE_BLUE_PLACEHOLDER_ICON_IDS.has(rawIcon) && !siteHasHeaderImage(site)) return TEXT_ONLY_GREEN_PLACEHOLDER_ICON;
+      const iconUrl = APK_LOCAL_MAP_ICON_OVERRIDES[rawIcon] || MEDIA_UTILS.siteMapIconUrl(site, { directusAssetUrl }) || "";
       return MEDIA_UTILS.optimizedMapIconUrl?.(iconUrl, { width: 128, height: 128 }) || iconUrl;
     }
 
@@ -9015,6 +9362,105 @@
       const filename = String(assetPath).split("/").pop()?.replace(/\.png$/i, "") || "";
       const key = SHARED_UTILS.sanitizeDomKey(filename);
       return key ? `nli-icon-${key}` : "";
+    }
+
+    // Every site with a featured (header) photo gets a photo thumbnail; where
+    // it shows, it covers the site's dot or icon artwork. The app's native map
+    // reads the same URL from the point's thumb_url.
+    function mobileSiteThumbnailUrl(site) {
+      if (!site || isOfflineTextMode() || !siteHasHeaderImage(site)) return "";
+      return MEDIA_UTILS.siteMapThumbnailUrl(site, { directusAssetUrl });
+    }
+
+    // Grows gently with zoom: 28 px when photos first appear, at most 40 px.
+    function mobileSiteThumbnailSize(zoom) {
+      return Math.round(Math.min(40, 28 + Math.max(0, zoom - SITE_THUMBNAIL_MIN_ZOOM) * 4));
+    }
+
+    // Web map only: zoomed in, a photo site on screen gets a round photo
+    // marker over its dot, but only where the photo covers no other site's
+    // dot, icon or title and no other photo, and only while the map shows
+    // the site's own title. It stays invisible until loaded.
+    function syncMobileSiteThumbnails() {
+      if (!state.map || !window.mapboxgl?.Marker) return;
+      const wanted = new Map();
+      const zoom = state.map.getZoom();
+      if (zoom >= SITE_THUMBNAIL_MIN_ZOOM && !nativeMapBridgeAvailable() && !isApkSnapshotMode()) {
+        const size = mobileSiteThumbnailSize(zoom);
+        state.map.getContainer().style.setProperty("--mobile-site-thumb-size", `${size}px`);
+        const canvas = state.map.getCanvas();
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        const obstacleLayers = ["mobile-site-point-dots", "mobile-site-icons", "mobile-site-point-labels", "mobile-detail-labels", "mobile-detail-labels-unread", "mobile-territory-labels", "mobile-territory-labels-unread", "mobile-place-name-area-labels", "mobile-water-name-major", "mobile-water-name-bay", "mobile-water-name-inland", "mobile-water-name-canal", "mobile-water-name-stream"]
+          .filter(id => state.map.getLayer(id));
+        const placed = [];
+        const candidates = [];
+        let titled = new Set();
+        try { titled = new Set(state.map.queryRenderedFeatures({ layers: ["mobile-site-point-labels"] }).map(feature => feature.properties?.slug)); } catch {}
+        activeMapSites().forEach(site => {
+          const coordinates = siteDisplayGeometry(site)?.type === "Point" ? siteDisplayGeometry(site).coordinates.map(Number) : null;
+          const url = coordinates && titled.has(site.slug) ? mobileSiteThumbnailUrl(site) : "";
+          if (!url) return;
+          const point = state.map.project(coordinates);
+          if (point.x < size || point.x > width - size || point.y < size || point.y > height - size) return;
+          candidates.push({ site, url, coordinates, point, distance: Math.hypot(point.x - width / 2, point.y - height / 2) });
+        });
+        candidates.sort((a, b) => a.distance - b.distance).slice(0, 40).forEach(candidate => {
+          const half = size / 2 + 3;
+          const box = [[candidate.point.x - half, candidate.point.y - half], [candidate.point.x + half, candidate.point.y + half]];
+          // Right after a camera jump MapLibre's feature index can still be
+          // rebuilding and throw; skip the photo now, the re-check catches it.
+          let hits = null;
+          try { hits = state.map.queryRenderedFeatures(box, { layers: obstacleLayers }); } catch {}
+          const crowded = !hits
+            || placed.some(other => Math.abs(other.x - candidate.point.x) < size + 6 && Math.abs(other.y - candidate.point.y) < size + 6)
+            || hits.some(feature => feature.properties?.slug !== candidate.site.slug);
+          if (crowded) return;
+          placed.push(candidate.point);
+          wanted.set(candidate.site.slug, candidate);
+        });
+      }
+      const setPhotoShown = (slug, photo) => {
+        try { state.map.setFeatureState({ source: "mobile-sites", id: slug }, { photo }); } catch {}
+      };
+      // A photo no longer wanted fades out (its icon back underneath) before
+      // its marker is removed.
+      for (const [slug, marker] of state.mobileSiteThumbMarkers) {
+        if (wanted.has(slug)) continue;
+        setPhotoShown(slug, false);
+        marker.getElement().classList.add("is-leaving");
+        window.setTimeout(() => marker.remove(), 340);
+        state.mobileSiteThumbMarkers.delete(slug);
+      }
+      wanted.forEach(({ site, url, coordinates }, slug) => {
+        if (state.mobileSiteThumbMarkers.has(slug)) return;
+        const element = document.createElement("button");
+        element.type = "button";
+        element.className = "mobile-site-thumb-marker";
+        element.setAttribute("aria-label", `Open ${site.title || "site"}`);
+        const fallback = rewriteMediaUrl(MEDIA_UTILS.cleanImageUrl(site.listing_image_thumb_url));
+        element.innerHTML = `<span class="mobile-site-thumb-face"><img src="${escapeHtml(url)}" alt="" decoding="async" onerror="${imageErrorAction(fallback === url ? "" : fallback)}"></span>`;
+        element.querySelector("img").addEventListener("load", () => {
+          element.classList.add("is-ready");
+          if (state.mobileSiteThumbMarkers.get(slug)?.getElement() === element) setPhotoShown(slug, true);
+        });
+        element.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          openSite(slug, { contentUpdateItems: mobileUnreadContentActivityItems("site", slug) });
+        });
+        state.mobileSiteThumbMarkers.set(slug, new mapboxgl.Marker({ element, anchor: "center" }).setLngLat(coordinates).addTo(state.map));
+      });
+      // Titles can shift after the camera stops (other features move or
+      // load), so shown photos are checked again every 2 s while still.
+      if (state.mobileSiteThumbMarkers.size && !state.mobileSiteThumbRecheck) {
+        state.mobileSiteThumbRecheck = window.setInterval(() => {
+          if (!state.map?.isMoving?.()) syncMobileSiteThumbnails();
+        }, 2000);
+      } else if (!state.mobileSiteThumbMarkers.size && state.mobileSiteThumbRecheck) {
+        window.clearInterval(state.mobileSiteThumbRecheck);
+        state.mobileSiteThumbRecheck = null;
+      }
     }
 
     function prepareMobileSiteIconImage(image) {
@@ -9062,7 +9508,7 @@
       }, 72);
     }
 
-    function processMobileSiteIconQueue() {
+    async function processMobileSiteIconQueue() {
       if (!state.map || state.mobileSiteIconImagesLoading) return;
       const entry = state.mobileSiteIconImageQueue.shift();
       if (!entry) return;
@@ -9074,24 +9520,20 @@
         return;
       }
       state.mobileSiteIconImagesLoading = true;
-      state.map.loadImage(url, (error, image) => {
-        try {
-          if (error || !image) {
-            state.mobileSiteIconImagesFailed.add(key);
-            return;
-          }
-          if (state.mobileSiteIconImagePlaceholders.has(key) && state.map.hasImage?.(key)) state.map.removeImage(key);
-          const prepared = prepareMobileSiteIconImage(image);
-          if (!state.map.hasImage?.(key)) state.map.addImage(key, prepared.image, { sdf: false, ...(prepared.options || {}) });
-          state.mobileSiteIconImagePlaceholders.delete(key);
-          state.mobileSiteIconImagesLoaded.add(key);
-        } catch {
-          state.mobileSiteIconImagesFailed.add(key);
-        } finally {
-          state.mobileSiteIconImagesLoading = false;
-          scheduleNextMobileSiteIcon();
-        }
-      });
+      try {
+        const { data: image } = await state.map.loadImage(url);
+        if (!image) throw new Error();
+        if (state.mobileSiteIconImagePlaceholders.has(key) && state.map.hasImage?.(key)) state.map.removeImage(key);
+        const prepared = prepareMobileSiteIconImage(image);
+        if (!state.map.hasImage?.(key)) state.map.addImage(key, prepared.image, { sdf: false, ...(prepared.options || {}) });
+        state.mobileSiteIconImagePlaceholders.delete(key);
+        state.mobileSiteIconImagesLoaded.add(key);
+      } catch {
+        state.mobileSiteIconImagesFailed.add(key);
+      } finally {
+        state.mobileSiteIconImagesLoading = false;
+        scheduleNextMobileSiteIcon();
+      }
     }
 
     function loadMobileSiteIconImages() {
@@ -9138,6 +9580,7 @@
       }
       if (shouldShowCustomMapIcons()) loadMobileSiteIconImages();
       refreshMobileMapSources();
+      syncMobileSiteThumbnails();
       if (includeAuxiliary) {
         syncExhibitMarkers();
         syncApprovedSuggestionMarkers();
@@ -9174,11 +9617,10 @@
           element.style.width = "27px";
           element.style.height = "27px";
           element.style.border = "0";
-          element.style.borderRadius = "0";
-          element.style.background = isCalendarBadge ? "transparent" : `url(${EXHIBIT_MARKER_ICON}) center / contain no-repeat`;
+          element.style.background = "transparent";
           element.style.boxShadow = "none";
           element.style.padding = "0";
-          if (isCalendarBadge) element.innerHTML = CALENDAR_UTILS.calendarBadgeMarkup(exhibit, "calendar-event-badge");
+          element.innerHTML = isCalendarBadge ? CALENDAR_UTILS.calendarBadgeMarkup(exhibit, "calendar-event-badge") : `<img class="mobile-exhibit-artwork" src="${EXHIBIT_MARKER_ICON}" alt="">`;
           element.addEventListener("click", () => openExhibit(exhibit));
           state.exhibitMarkers.set(key, new mapboxgl.Marker({ element, anchor: isCalendarBadge || attachedSite ? "bottom" : "center", offset: attachedSite ? [23, -6] : [0, 0] }).setLngLat(exhibit.center).addTo(state.map));
         });
@@ -9223,7 +9665,8 @@
 
     function syncApprovedSuggestionMarkers() {
       if (!state.map) return;
-      const active = new Set(approvedSiteSuggestions().map(item => String(item.id || item.title)));
+      const suggestions = landHistoryEnabled() ? [] : approvedSiteSuggestions();
+      const active = new Set(suggestions.map(item => String(item.id || item.title)));
       for (const [key, marker] of state.suggestionPublicMarkers) {
         if (!active.has(key)) {
           marker.remove();
@@ -9234,7 +9677,7 @@
         scheduleNativeMapStateSync("approved-suggestions", 0);
         return;
       }
-      approvedSiteSuggestions().forEach(suggestion => {
+      suggestions.forEach(suggestion => {
         const key = String(suggestion.id || suggestion.title);
         if (state.suggestionPublicMarkers.has(key)) return;
         state.suggestionPublicMarkers.set(key, new mapboxgl.Marker({ element: suggestionMarkerElement(suggestion), anchor: "bottom" })
@@ -9260,6 +9703,7 @@
     }
 
     function activeMapStories() {
+      if (landHistoryEnabled()) return [];
       return MAP_STORY_UTILS.activeStories(state.mapStories, state.mapStoryVotes, MAP_STORY_RULES);
     }
 
@@ -9333,28 +9777,41 @@
     function mapStoryMarkerElement(story) {
       const element = document.createElement("button");
       element.type = "button";
+      element.dataset.storyMembers = (story.clusterStoryIds || [String(story.id)]).join(",");
       const isPlantStory = String(story?.prompt_key || "") === "plant_observation" || Boolean(relationId(story?.plant_observation));
       element.className = `mobile-story-marker${story.attached_site_slug ? " is-attached" : ""}${isPlantStory ? " is-plant-story" : ""}`;
       element.setAttribute("aria-label", isPlantStory ? "Open plant ID story" : "Open visitor story");
-      if (isPlantStory) element.textContent = "✿";
+      if (story.clusterStoryIds?.length > 1) {
+        element.innerHTML = MAP_STORY_UTILS.markerSvg(story.clusterStoryIds.length);
+        element.setAttribute("aria-label", `Open ${story.clusterStoryIds.length} stories`);
+      }
+      else if (isPlantStory) element.textContent = "✿";
+      else element.innerHTML = MAP_STORY_UTILS.markerSvg();
       element.addEventListener("click", event => {
         event.preventDefault();
         event.stopPropagation();
+        if (story.clusterStoryIds?.length > 1) {
+          MAP_STORY_UTILS.showCluster(story.clusterStoryIds, state.mapStories, mapStoryViewEl, openMapStory);
+          state.map.easeTo({center: mapStoryDisplayCoordinates(story), zoom: Math.min(18, state.map.getZoom() + 2), duration: 850});
+          return;
+        }
         focusMapStory(story);
         openMapStory(story);
       });
       return element;
     }
 
-    function mapStoryMarkerOffset(story) {
-      if (!story?.attached_site_slug) return [0, -12];
-      const zoom = Number(state.map?.getZoom?.() || 0);
-      // Keep an attached story close enough to its listing that it reads as
-      // one location, including on the wide overview used at mobile startup.
-      if (zoom >= 15) return [0, -10];
-      if (zoom >= 13.5) return [0, -16];
-      if (zoom >= 11) return [0, -22];
-      return [0, -28];
+    function mapStoryPlacements() {
+      const map = state.map;
+      if (!map) return new Map();
+      const container = map.getContainer();
+      return MAP_STORY_UTILS.placeMarkers(
+        activeMapStories().map(story => ({ id: story.id, coordinates: mapStoryDisplayCoordinates(story) })).filter(story => story.coordinates),
+        [],
+        coords => map.project(coords),
+        point => { const ll = map.unproject([point.x, point.y]); return [ll.lng, ll.lat]; },
+        { width: container.clientWidth, height: container.clientHeight }
+      );
     }
 
     function focusMapStory(story, options = {}) {
@@ -9367,28 +9824,16 @@
 
     function syncMapStoryMarkers() {
       if (!state.map) return;
-      const stories = activeMapStories();
-      const visible = new Set(stories.map(story => String(story.id)));
-      const storyById = new Map(stories.map(story => [String(story.id), story]));
-      for (const [id, marker] of state.storyMarkers) {
-        if (!visible.has(id)) {
-          marker.remove();
-          state.storyMarkers.delete(id);
-          continue;
-        }
-        const story = storyById.get(id);
-        const coords = mapStoryDisplayCoordinates(story);
-        if (coords) marker.setLngLat(coords);
-        marker.setOffset(mapStoryMarkerOffset(story));
-      }
-      stories.forEach(story => {
-        const key = String(story.id);
-        if (state.storyMarkers.has(key)) return;
-        const coords = mapStoryDisplayCoordinates(story);
-        if (!coords) return;
-        state.storyMarkers.set(key, new mapboxgl.Marker({ element: mapStoryMarkerElement(story), anchor: "bottom", offset: mapStoryMarkerOffset(story) }).setLngLat(coords).addTo(state.map));
-      });
+      const placements = mapStoryPlacements();
+      MAP_STORY_UTILS.syncMarkers(state.storyMarkers, activeMapStories(), placements, (story, coords) =>
+        new mapboxgl.Marker({ element: mapStoryMarkerElement(story), anchor: "center", offset: [0, 0] }).setLngLat(coords).addTo(state.map));
       scheduleNativeMapStateSync("map-stories", 0);
+    }
+
+    function toggleStoryPermanence(button) {
+      return MAP_STORY_UTILS.handlePermanenceToggle(state.mapStories, state.mapStoryVotes, button, {
+        ...MAP_STORY_RULES, isAdmin: isAdminContributor, patch: patchDirectusItem, render: openMapStory, notify: showBanner
+      });
     }
 
     function openMapStory(story) {
@@ -9397,10 +9842,10 @@
       const deleted = contributionIsModerated(story);
       const photo = deleted ? "" : directusAssetUrl(story.photo);
       const attached = story.attached_site_slug
-        ? `<button class="action secondary" type="button" data-story-site="${escapeHtml(story.attached_site_slug)}">Open ${escapeHtml(story.attached_site_title || "attached site")}</button>`
+        ? `<button class="action secondary" type="button" data-story-origin="${escapeHtml(story.id)}" data-story-site="${escapeHtml(story.attached_site_slug)}">Open ${escapeHtml(story.attached_site_title || "attached site")}</button>`
         : "";
       const territory = story.ancestral_territory_slug && story.ancestral_territory_slug !== story.attached_site_slug
-        ? `<button class="action secondary" type="button" data-story-territory="${escapeHtml(story.ancestral_territory_slug)}">Open ${escapeHtml(story.ancestral_territory_title || "ancestral-land plant inventory")}</button>`
+        ? `<button class="action secondary" type="button" data-story-origin="${escapeHtml(story.id)}" data-story-territory="${escapeHtml(story.ancestral_territory_slug)}">Open ${escapeHtml(story.ancestral_territory_title || "ancestral-land plant inventory")}</button>`
         : "";
       const isPlantStory = String(story.prompt_key || "") === "plant_observation" || Boolean(relationId(story.plant_observation));
       mapStoryViewEl.innerHTML = `
@@ -9411,11 +9856,12 @@
         <p class="detail-meta">${escapeHtml(MAP_STORY_UTILS.timeLabel(story, state.mapStoryVotes, MAP_STORY_RULES))}</p>
         ${attached}
         ${territory}
-        ${isPlantStory ? `<p class="detail-meta">This Story is temporary. Its plant observation remains in the ancestral-land inventory.</p>` : ""}
+        ${isPlantStory ? `<p class="detail-meta">Plant observations stay in the ancestral-land inventory.</p>` : ""}
         <div class="map-story-vote-row">
           ${deleted ? "" : `<button class="action secondary" type="button" data-story-vote="1" data-story-id="${escapeHtml(story.id)}">Helpful ${counts.up}</button>`}
+          ${deleted ? "" : MAP_STORY_UTILS.permanenceButton(story, state.mapStoryVotes, { ...MAP_STORY_RULES, isAdmin: isAdminContributor(), escape: escapeHtml, className: "action secondary" })}
           ${isAdminContributor() ? `<button class="action secondary" type="button" data-delete-map-story="${escapeHtml(story.id)}">Delete contribution</button>` : ""}
-          <span class="detail-meta">${counts.up} helpful vote${counts.up === 1 ? "" : "s"}; 10 keeps it.</span>
+          <span class="detail-meta">${MAP_STORY_UTILS.voteSummary(story, state.mapStoryVotes)}</span>
         </div>
         ${!deleted && MAP_STORY_UTILS.hasMemberVote(story, state.mapStoryVotes, currentContributorProfile()?.id) ? `<p class="detail-meta">You already voted on this story.</p>` : ""}
       `;
@@ -9467,7 +9913,7 @@
             up_votes: counts.up,
             down_votes: counts.down,
             vote_score: counts.score,
-            permanent: Boolean(story.permanent || counts.score >= MAP_STORY_PERMANENT_SCORE)
+            permanent: !story.admin_temporary && Boolean(story.permanent || counts.score >= MAP_STORY_PERMANENT_SCORE)
           };
           const expiry = MAP_STORY_UTILS.effectiveExpiresAt(story, state.mapStoryVotes, MAP_STORY_RULES);
           if (expiry) patch.expires_at = expiry.toISOString();
@@ -9504,6 +9950,8 @@
       }
       const profile = currentContributorProfile();
       if (!contributorCanUseDailyAction("stories", profile)) return;
+      if (restoreStoryCameraReturn()) return;
+      clearStoryCameraReturn();
       renderMapStoryPrompts();
       setMapStoryStatus();
       if (mapStoryCaptionEl) mapStoryCaptionEl.value = "";
@@ -9593,7 +10041,7 @@
         if (!contributorCanUseDailyAction("stories", profile)) {
           throw new Error(contributorDailyLimitMessage("stories", profile));
         }
-        const file = mapStoryPhotoEl?.files?.[0];
+        const file = mapStoryCameraFile || mapStoryPhotoEl?.files?.[0];
         const assertStoryAccount = () => {
           if (!isApprovedContributor() || String(currentContributorProfile()?.id) !== String(profile?.id)) {
             throw new Error("Account changed. Review your story before submitting.");
@@ -9661,6 +10109,7 @@
         const created = await postDirectusItem("mobile_map_stories", payload, { requireAuth: true, timeout: 20000 });
         if (!created?.data?.id) throw new Error("Save unconfirmed. Your draft is still here. Check your Stories before retrying.");
         mapStoryPhotoDraft = null;
+        clearStoryCameraReturn();
         state.mapStories.push({
           id: created.data.id,
           ...payload,
@@ -9676,7 +10125,7 @@
           vote_score: Number(created.data?.vote_score || 0),
           ...(created.data || {})
         });
-        mapStorySheetEl.classList.remove("open");
+        dismissMobileSheet(mapStorySheetEl);
         syncMapStoryMarkers();
         refreshMapStories();
         if (activitySheetEl?.classList.contains("open")) renderMobileActivitySheet();
@@ -9713,6 +10162,7 @@
     }
 
     function plantObservationMarkerEntriesForSite(site = state.selectedSite) {
+      if (landHistoryEnabled()) return [];
       if (!site?.slug) return [];
       const observations = approvedPlantObservationsForSite(site);
       return observations
@@ -9849,18 +10299,21 @@
       const openPanel = detailEl?.classList.contains("open")
         ? detailEl
         : document.querySelector(".sheet.open");
-      const sidePanel = openPanel === detailEl && document.body.classList.contains("tablet-landscape");
-      const settledPanelSize = sidePanel
-        ? Math.max(0, Number(openPanel?.offsetWidth) || 0)
-        : Math.max(0, Number(openPanel?.offsetHeight) || 0);
-      const maxBottom = Math.max(12, mapRect.height - 72);
-      const maxRight = Math.max(12, mapRect.width - 72);
-      return {
-        top: 12,
-        right: sidePanel ? Math.min(maxRight, Math.round(settledPanelSize + 14)) : 12,
-        bottom: sidePanel ? 12 : Math.min(maxBottom, Math.round(settledPanelSize + 14)),
-        left: 12
-      };
+      // Use settled layout coordinates, not the panel's animated transform.
+      // Only count its overlap with the map (the map may already end above it).
+      const left = Number(openPanel?.offsetLeft) || 0;
+      const top = Number(openPanel?.offsetTop) || 0;
+      const width = Number(openPanel?.offsetWidth) || 0;
+      const height = Number(openPanel?.offsetHeight) || 0;
+      const overlapX = Math.max(0, Math.min(mapRect.right, left + width) - Math.max(mapRect.left, left));
+      const overlapY = Math.max(0, Math.min(mapRect.bottom, top + height) - Math.max(mapRect.top, top));
+      const padding = { top: 12, right: 12, bottom: 12, left: 12 };
+      if (overlapX && overlapY) {
+        const sidePanel = width < mapRect.width * .85 && height > mapRect.height * .5;
+        const edge = sidePanel ? (left + width / 2 > mapRect.left + mapRect.width / 2 ? "right" : "left") : "bottom";
+        padding[edge] = Math.min(Math.max(12, (sidePanel ? mapRect.width : mapRect.height) - 72), Math.round((sidePanel ? overlapX : overlapY) + 14));
+      }
+      return padding;
     }
 
     function mobilePanelMapOffset() {
@@ -9874,8 +10327,11 @@
     function focusMobileCoordinateInVisibleMap(coordinates, options = {}) {
       if (!state.map || !Array.isArray(coordinates) || !coordinates.every(Number.isFinite)) return;
       const currentZoom = Number(state.map.getZoom?.()) || 10;
+      window.__nliSyncNativeMapViewport?.();
       state.map.easeTo?.({
         center: coordinates,
+        padding: 0,
+        retainPadding: false,
         zoom: Number.isFinite(Number(options.zoom)) ? Number(options.zoom) : currentZoom,
         ...(nativeMapBridgeAvailable() ? {} : { offset: mobilePanelMapOffset() }),
         duration: Number.isFinite(Number(options.duration)) ? Number(options.duration) : 420,
@@ -9884,22 +10340,12 @@
     }
 
     function focusSite(site, options = {}) {
-      if (!state.map) {
-        // The offline shell has no web map: move the native map instead (its
-        // padding keeps the site clear of an open panel).
-        const center = options.center || site?.center;
-        if (isOfflineTextMode() && Array.isArray(center) && androidBridgeToken() && window.AndroidApp?.syncNativeMapCamera) {
-          const point = siteDisplayGeometry(site)?.type !== "Polygon" && siteDisplayGeometry(site)?.type !== "MultiPolygon";
-          window.AndroidApp.syncNativeMapCamera(androidBridgeToken(), Number(center[0]), Number(center[1]),
-            options.preserveZoom ? 12 : options.zoom || (point ? 13 : 11));
-        }
-        return;
-      }
-      if (!site?.center) return;
+      if (!state.map || !site?.center) return;
       const geometry = siteDisplayGeometry(site);
       const duration = options.duration || 600;
       const motion = options.timeline ? smoothTimelineMapOptions() : { duration, essential: true };
-      const padding = options.forPanel ? mobilePanelMapPadding() : (options.timeline ? 64 : 40);
+      window.__nliSyncNativeMapViewport?.();
+      const padding = options.forPanel && !nativeMapBridgeAvailable() ? mobilePanelMapPadding() : (options.timeline ? 64 : 40);
       const currentZoom = Number(state.map.getZoom?.()) || 10;
       if (geometry?.type === "Point") {
         const method = options.preview && typeof state.map.flyTo === "function" ? "flyTo" : "easeTo";
@@ -10398,9 +10844,40 @@
       return "auto";
     }
 
+    function requestPlantAIConsent() {
+      // Permission is per analysis, never inferred from camera access or account terms.
+      return new Promise(resolve => {
+        const previousFocus = document.activeElement;
+        const dialog = document.createElement("dialog");
+        dialog.setAttribute("aria-labelledby", "plant-ai-consent-title");
+        dialog.style.cssText = "max-width:30rem;width:calc(100% - 32px);max-height:80dvh;overflow:auto;border:1px solid #526158;border-radius:16px;padding:20px;background:#fff;color:#122219;";
+        dialog.innerHTML = `<h2 id="plant-ai-consent-title">Analyze this photo with AI?</h2>
+          <p>On This Site will receive this photo, filename, selected site, optional notes, and available location (your device location or the selected site's center).</p>
+          <p>Pl@ntNet receives the photo and plant-part selection to identify the plant. OpenAI receives identification labels for an explanation and may receive the photo, selected site, and notes for an automatic review fallback.</p>
+          <p>This happens now, before you share a public Story. Avoid photos of people or private details. AI results can be wrong and are not medical or harvesting advice.</p>
+          <p><a href="https://nativelongisland.com/privacy-policy.html#plant-identification" target="_blank" rel="noopener noreferrer">Plant identification privacy details</a></p>
+          <div style="display:flex;flex-wrap:wrap;gap:12px"><button type="button" data-plant-ai-cancel autofocus>Cancel — do not send</button><button type="button" data-plant-ai-allow>Allow this analysis</button></div>`;
+        const finish = allowed => {
+          dialog.remove();
+          if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+          resolve(allowed);
+        };
+        dialog.querySelector("[data-plant-ai-cancel]").addEventListener("click", () => finish(false));
+        dialog.querySelector("[data-plant-ai-allow]").addEventListener("click", () => finish(true));
+        dialog.addEventListener("cancel", event => { event.preventDefault(); finish(false); });
+        document.body.appendChild(dialog);
+        // Fail closed on older embedded browsers without modal-dialog support.
+        try { dialog.showModal(); } catch { finish(false); }
+      });
+    }
+
     async function analyzePlantPhoto(file, section) {
       const endpoint = plantIdentificationEndpoint();
       if (endpoint) {
+        if (!await requestPlantAIConsent()) {
+          showBanner("Analysis cancelled. No photo was sent for identification.");
+          return null;
+        }
         const providerStatus = await fetchPlantProviderStatus().catch(() => null);
         if (providerStatus && providerStatus.ready_for_species_id === false && providerStatus.automatic_review_available !== true) {
           const vocabularyMatch = analysisFromPlantGuess(plantObservationGuess(section, { rawName: file?.name || "" }));
@@ -10499,7 +10976,16 @@
     function renderPlantContext(section) {
       const output = section.querySelector("[data-plant-preview]");
       if (!output) return;
+      output.setAttribute("aria-busy", String(!!section._plantIdentifying));
+      section.querySelectorAll("[data-take-plant-photo],[data-upload-plant-photo]").forEach(control => { control.disabled = !!section._plantIdentifying; });
       const submitButton = section.querySelector("[data-submit-plant-report]");
+      if (section._plantIdentifying || section._plantPhotoError) {
+        if (submitButton) submitButton.disabled = true;
+        output.innerHTML = section._plantIdentifying
+          ? '<div class="plant-context-card plant-identifying" role="status"><span class="plant-id-spinner" aria-hidden="true"></span><strong>Identifying your plant…</strong><span>Please wait while we prepare your photo and check for a match.</span></div>'
+          : `<div class="plant-context-card" role="alert"><strong>Photo identification could not finish</strong><span>${escapeHtml(section._plantPhotoError)}</span><span>Take or upload another photo to try again.</span></div>`;
+        return;
+      }
       const isPlantStory = section.dataset.plantStory === "true";
       const analysis = section._plantAnalysis || null;
       const guess = plantObservationGuess(section, analysis);
@@ -10527,13 +11013,9 @@
         identification: analysis.scientificName,
         vocabulary: analysis.algonquianWord || guess?.algonquian || ""
       });
-      const nativeBadge = nativeStatusBadgeText(analysis.nativeStatus || guess?.native || guess?.invasive || "");
-      const indigenousName = analysis.algonquianWord || guess?.algonquian || "";
-      const indigenousLabel = indigenousName || "Indigenous name not yet added";
       const confidenceScore = Number(analysis.confidence || 0);
       const confidenceLabel = confidenceScore ? `${Math.round(confidenceScore * 100)}% confidence` : "confidence not provided";
       const summary = plantUseEcologySummary(analysis, guess);
-      const topMatches = Array.isArray(analysis.topMatches) ? analysis.topMatches : [];
       const topMatchesHtml = Array.isArray(analysis?.topMatches) && analysis.topMatches.length
         ? `<div class="plant-match-list">${analysis.topMatches.slice(0, 3).map(match => {
             const common = match?.common_name || match?.commonName || "";
@@ -10559,9 +11041,8 @@
           ${section._plantPreviewUrl ? `<img class="plant-photo-preview" src="${escapeHtml(section._plantPreviewUrl)}" alt="">` : ""}
           <strong>${plantWikiLinkHtml(analysis.commonName || "Plant observation", guideMatch)}</strong>
           <span>${escapeHtml(analysis.scientificName || "Scientific name not yet verified")}</span>
-          <span>${plantWikiLinkHtml(indigenousLabel, guideMatch)}</span>
+          ${plantObservationFactsHtml(analysis)}
           <div class="plant-context-tags">
-            <span>${escapeHtml(nativeBadge)}</span>
             ${photoSeason ? `<span>${escapeHtml(photoSeason)} observation</span>` : ""}
             <span>No harvesting</span>
             <span>${escapeHtml(confidenceLabel)}</span>
@@ -10740,157 +11221,6 @@
       });
     }
 
-    let plantCameraStream = null;
-    let plantCameraOverlay = null;
-
-    function stopPlantCameraStream() {
-      if (plantCameraStream) {
-        plantCameraStream.getTracks().forEach(track => track.stop());
-        plantCameraStream = null;
-      }
-      if (plantCameraOverlay) {
-        plantCameraOverlay.remove();
-        plantCameraOverlay = null;
-      }
-    }
-
-    function capturePlantVideoFrame(video, digitalZoom = 1) {
-      const width = video.videoWidth || 1280;
-      const height = video.videoHeight || 720;
-      const canvas = document.createElement("canvas");
-      const maxEdge = 1280;
-      const scale = Math.min(1, maxEdge / Math.max(width, height));
-      canvas.width = Math.max(1, Math.round(width * scale));
-      canvas.height = Math.max(1, Math.round(height * scale));
-      const zoom = Math.max(1, Number(digitalZoom || 1));
-      const sourceWidth = width / zoom;
-      const sourceHeight = height / zoom;
-      const sourceX = (width - sourceWidth) / 2;
-      const sourceY = (height - sourceHeight) / 2;
-      canvas.getContext("2d").drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
-      return new Promise((resolve, reject) => {
-        canvas.toBlob(blob => {
-          if (!blob) {
-            reject(new Error("Could not capture the plant photo."));
-            return;
-          }
-          resolve(new File([blob], `plant-observation-${Date.now()}.jpg`, { type: "image/jpeg", lastModified: Date.now() }));
-        }, "image/jpeg", 0.82);
-      });
-    }
-
-    function plantCameraTouchDistance(touches) {
-      if (!touches || touches.length < 2) return 0;
-      return Math.hypot(touches[1].clientX - touches[0].clientX, touches[1].clientY - touches[0].clientY);
-    }
-
-    async function setPlantCameraZoom(overlay, requestedZoom) {
-      const zoomState = overlay?._plantCameraZoomState;
-      if (!zoomState) return;
-      const value = Math.min(zoomState.max, Math.max(zoomState.min, Number(requestedZoom || zoomState.min)));
-      zoomState.value = value;
-      zoomState.output.textContent = `${value.toFixed(value < 2 ? 1 : 0)}x`;
-      zoomState.output.classList.add("visible");
-      window.clearTimeout(zoomState.indicatorTimer);
-      zoomState.indicatorTimer = window.setTimeout(() => zoomState.output.classList.remove("visible"), 650);
-      if (zoomState.optical) {
-        try {
-          await zoomState.track.applyConstraints({ advanced: [{ zoom: value }] });
-          zoomState.video.style.transform = "";
-          return;
-        } catch (error) {
-          console.warn("Optical camera zoom was unavailable; using centered digital zoom instead.", error);
-          zoomState.optical = false;
-          zoomState.min = 1;
-          zoomState.max = 4;
-          zoomState.step = 0.1;
-          zoomState.value = Math.min(4, Math.max(1, value));
-        }
-      }
-      zoomState.output.textContent = `${zoomState.value.toFixed(zoomState.value < 2 ? 1 : 0)}x`;
-      zoomState.video.style.transform = `scale(${zoomState.value})`;
-    }
-
-    function bindPlantCameraZoom(overlay, video, track) {
-      const output = overlay.querySelector("[data-plant-camera-zoom-value]");
-      const capabilities = typeof track?.getCapabilities === "function" ? track.getCapabilities() : {};
-      const settings = typeof track?.getSettings === "function" ? track.getSettings() : {};
-      const optical = Number.isFinite(Number(capabilities?.zoom?.min)) && Number.isFinite(Number(capabilities?.zoom?.max))
-        && Number(capabilities.zoom.max) > Number(capabilities.zoom.min);
-      const min = optical ? Number(capabilities.zoom.min) : 1;
-      const max = optical ? Number(capabilities.zoom.max) : 4;
-      const step = optical ? Math.max(0.1, Number(capabilities.zoom.step || 0.1)) : 0.1;
-      const value = Math.min(max, Math.max(min, Number(settings?.zoom || min || 1)));
-      overlay._plantCameraZoomState = { optical, track, video, output, min, max, step, value, indicatorTimer: 0 };
-      output.textContent = `${value.toFixed(value < 2 ? 1 : 0)}x`;
-      let pinchDistance = 0;
-      let pinchZoom = value;
-      video.addEventListener("touchstart", event => {
-        if (event.touches.length !== 2) return;
-        pinchDistance = plantCameraTouchDistance(event.touches);
-        pinchZoom = overlay._plantCameraZoomState?.value || 1;
-      }, { passive: true });
-      video.addEventListener("touchmove", event => {
-        if (event.touches.length !== 2 || !pinchDistance) return;
-        event.preventDefault();
-        setPlantCameraZoom(overlay, pinchZoom * (plantCameraTouchDistance(event.touches) / pinchDistance));
-      }, { passive: false });
-      video.addEventListener("touchend", event => {
-        if (event.touches.length < 2) pinchDistance = 0;
-      }, { passive: true });
-      setPlantCameraZoom(overlay, value);
-    }
-
-    async function openInAppPlantCamera(section) {
-      if (!navigator.mediaDevices?.getUserMedia) return false;
-      stopPlantCameraStream();
-      const overlay = document.createElement("div");
-      overlay.className = "plant-camera-overlay";
-      overlay.innerHTML = `
-        <div class="plant-camera-preview"><video autoplay playsinline muted></video><output class="plant-camera-zoom-indicator" data-plant-camera-zoom-value aria-live="polite">1.0x</output></div>
-        <div class="plant-camera-controls">
-          <p class="plant-camera-help">Frame the plant clearly. Pinch the live image to zoom, then capture. Stay on public paths and do not pick or disturb plants.</p>
-          <button class="action" type="button" data-plant-capture>Capture</button>
-          <button class="ghost-button" type="button" data-plant-cancel>Cancel</button>
-        </div>
-      `;
-      document.body.appendChild(overlay);
-      plantCameraOverlay = overlay;
-      const video = overlay.querySelector("video");
-      try {
-        plantCameraStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
-          audio: false
-        });
-        video.srcObject = plantCameraStream;
-        await video.play();
-        bindPlantCameraZoom(overlay, video, plantCameraStream.getVideoTracks()[0]);
-      } catch (error) {
-        stopPlantCameraStream();
-        return false;
-      }
-      overlay.querySelector("[data-plant-cancel]").addEventListener("click", stopPlantCameraStream, { once: true });
-      overlay.querySelector("[data-plant-capture]").addEventListener("click", async event => {
-        const button = event.currentTarget;
-        button.textContent = "Capturing...";
-        button.disabled = true;
-        try {
-          const zoomState = overlay._plantCameraZoomState;
-          const file = await capturePlantVideoFrame(video, zoomState?.optical ? 1 : zoomState?.value || 1);
-          stopPlantCameraStream();
-          await processPlantPhotoFile(section, file);
-        } catch (error) {
-          showBanner(error.message || "Could not capture that plant photo.");
-          stopPlantCameraStream();
-        }
-      });
-      return true;
-    }
-
     const PLANT_CAMERA_RETURN_KEY = "nli-plant-camera-return";
     function savePlantCameraReturn() {
       const section = state.pendingPlantObservationPanel;
@@ -10955,6 +11285,8 @@
     };
 
     window.onAndroidCommentPhoto = (ok, message, base64, mimeType, filename) => {
+      const storyResult = receiveMapStoryCameraPhoto(ok, message, base64, mimeType, filename);
+      if (storyResult !== null) return storyResult;
       const section = state.pendingCommentPhotoDiscussion || document.querySelector("[data-checkin-observation-form][open], .discussion-section");
       if (!ok) {
         state.pendingCommentPhotoDiscussion = null;
@@ -11159,7 +11491,6 @@
     }
 
     function contributorWritePrompt() {
-      if (isOfflineTextMode()) return "Commenting and logging in work when you're back online.";
       if (state.profile?.pending) return "Your account is waiting for review. Commenting unlocks after approval.";
       if (state.profile && !hasContributorWriteSession()) return "Log in again to comment or reply. Approved comments appear on contributor profiles.";
       return "Login to comment or reply. Approved comments appear on contributor profiles.";
@@ -11395,6 +11726,7 @@
         records,
         profile,
         points: mobileProfilePointTotal(stats),
+        email: state.profile?.email,
         relationId,
         identityIds: profileIdentityIds(profile),
         dateFields,
@@ -11403,9 +11735,7 @@
     }
 
     function contributorDailyLimitMessage(kind = "comments", profile = currentContributorProfile()) {
-      const limitState = contributorDailyState(kind, profile);
-      const label = kind === "plants" ? "plant IDs" : kind === "stories" ? "map stories" : "comments";
-      return `${limitState.tier.label}: ${limitState.used} of ${PROFILE_UTILS.contributorLimitLabel(limitState.limit)} ${label} used today.`;
+      return PROFILE_UTILS.contributorDailyLimitMessage(contributorDailyState(kind, profile), kind);
     }
 
     function contributorCanUseDailyAction(kind = "comments", profile = currentContributorProfile()) {
@@ -11520,7 +11850,7 @@
             <div class="native-plant-sites">
               ${siteLinks.map(([slug, title]) => `<button type="button" data-slug="${escapeHtml(slug)}">${escapeHtml(title)}</button>`).join("")}
             </div>
-          ` : `<p class="summary">${isOfflineTextMode() ? "Observations load when you're back online." : "No approved site observations yet."}</p>`}
+          ` : `<p class="summary">No approved site observations yet.</p>`}
         </section>
       `;
     }
@@ -12013,15 +12343,14 @@
                 fields.vocabulary ? `Vocabulary: ${fields.vocabulary}` : ""
               ].filter(Boolean);
               return `
-                <article class="site-plant-card" id="${escapeHtml(cardId)}">
+                <article class="site-plant-card" id="${escapeHtml(cardId)}" data-plant-observation-id="${escapeHtml(String(sourceRecord.id || ""))}">
                   ${attachment ? `<button class="site-plant-image-button" type="button" data-plant-photo-view="${escapeHtml(attachment)}" data-plant-photo-title="${escapeHtml(imageLabel)}" aria-label="Open larger photo of ${escapeHtml(commonName)}"><img src="${escapeHtml(attachment)}" alt="" loading="lazy" decoding="async"></button>` : ""}
                   <div class="site-plant-card-body">
                     <span class="site-plant-card-title">${plantWikiLinkHtml(commonName, guideMatch)}</span>
                     ${indigenousName ? `<span>${plantWikiLinkHtml(indigenousName, guideMatch)}</span>` : ""}
                     <span><em>${plantWikiLinkHtml(scientificName, guideMatch)}</em></span>
                     <span class="site-plant-status-pill">${escapeHtml(pending ? "Pending review" : statusLabel)}</span>
-                    ${plantObservationFactsHtml(fields)}
-                    ${context ? `<span class="site-plant-card-context">${escapeHtml(context)}</span>` : ""}
+                    ${plantObservationFactsHtml(comment.fields || comment)}
                     ${fields.visitor_notes ? `<span class="site-plant-card-context">${escapeHtml(fields.visitor_notes)}</span>` : ""}
                     <span class="site-plant-card-location">${escapeHtml(locationText)}</span>
                     <span class="site-plant-card-meta">
@@ -12300,7 +12629,7 @@
                 ` : ""}`}
               </div>
               <div class="comment-meta-row">
-                <span>${deleted ? "Removed by moderator" : (comment.created_at ? escapeHtml(PROFILE_UTILS.parseContributionTimestamp(comment.created_at).toLocaleString()) : "Approved comment")}</span>
+                <span>${deleted ? "Removed by moderator" : (comment.created_at ? escapeHtml(PROFILE_UTILS.parseContributionTimestamp(comment.created_at).toLocaleString("en-US")) : "Approved comment")}</span>
                 ${pending ? `<span class="comment-status-pill">Not public</span>` : ""}
                 ${!pending && !deleted ? `<span class="comment-actions" data-comment-actions="${escapeHtml(comment.id)}">${commentReactionControls(comment)}</span>` : ""}
                 ${canContribute && !pending && !deleted ? `<button class="comment-reply-button" type="button" data-reply-comment="${escapeHtml(comment.id)}" data-reply-profile="${escapeHtml(comment.member_profile || "")}">Reply</button>` : ""}
@@ -12391,7 +12720,7 @@
               ${canContribute ? `
                 <p class="plant-safety-warning plant-submit-limit-note">${escapeHtml(contributorDailyLimitMessage("plants", profile))} The first goal is 100 profile points.<span data-plant-limit-status></span></p>
                 <button class="action" type="button" data-submit-plant-report disabled>Take a plant photo first</button>
-              ` : `<p class="summary">${isOfflineTextMode() ? "Plant observations can be added when you're back online." : "Login as an approved contributor to submit plant observations."}</p>`}
+              ` : `<p class="summary">Login as an approved contributor to submit plant observations.</p>`}
             </details>
           ` : ""}
         </section>
@@ -12658,6 +12987,7 @@
       if (!section._plantAnalysis) {
         section._plantAnalysis = await analyzePlantPhoto(image, section);
         renderPlantContext(section);
+        if (!section._plantAnalysis) return;
       }
       const guess = plantObservationGuess(section, section._plantAnalysis);
       const button = section.querySelector("[data-submit-plant-report]");
@@ -12869,13 +13199,16 @@
       `).join("");
     }
 
-    function openExhibit(exhibit) {
+    function openExhibit(exhibit, options = {}) {
+      setMobileContentRoute({ calendar: exhibit.slug || exhibit.id }, options);
       const externalUrl = safeExternalUrl(exhibit.external_url);
+      const promoImage = directusAssetUrl(exhibit.cover_image);
       detailTitleEl.innerHTML = `
         <h2>${escapeHtml(exhibit.title)}</h2>
         <p class="detail-meta">${escapeHtml([CALENDAR_UTILS.exhibitDateLabel(exhibit), exhibit.venue || exhibit.address_label, CALENDAR_UTILS.eventTypeLabel(exhibit.event_type || exhibit.status)].filter(Boolean).join(" - "))}</p>
       `;
       detailBodyEl.innerHTML = `
+        ${promoImage ? `<img class="event-promo-hero" src="${escapeHtml(promoImage)}" alt="${escapeHtml(exhibit.title)}" decoding="async" onerror="this.remove()">` : ""}
         ${exhibit.summary ? `<p class="summary">${escapeHtml(exhibit.summary)}</p>` : ""}
         ${exhibit.body ? `<section class="section"><h3>Details</h3><div>${cleanHtml(exhibit.body)}</div></section>` : ""}
         ${(exhibit.collection_piece_title || exhibit.collection_artist || exhibit.collection_date) ? `
@@ -12913,7 +13246,7 @@
     }
 
     function mobileBiographyPathPersonName(article, fallbackSlug = "") {
-      const title = stripHtml(article?.title || "").trim();
+      const title = stripHtml(article?.title || BIOGRAPHY_PLACE_PATHS[fallbackSlug]?.mapLabel || "").trim();
       if (title) return title;
       const pathTitle = stripHtml(BIOGRAPHY_PLACE_PATHS[fallbackSlug]?.title || "").replace(/\s+(associated\s+places|life\s+timeline|timeline|path|places).*$/i, "").trim();
       if (pathTitle) return pathTitle;
@@ -12951,7 +13284,17 @@
       return words.slice(0, 2).join(" ");
     }
 
+    // The moving-marker tick asks for each walker's next stop many times a second.
+    const mobileBiographyCompactPlaceCache = new WeakMap();
     function mobileBiographyPathCompactPlace(place = {}) {
+      const cached = mobileBiographyCompactPlaceCache.get(place);
+      if (cached && cached.place === place.place && cached.label === place.label) return cached.text;
+      const text = mobileBiographyPathCompactPlaceText(place);
+      mobileBiographyCompactPlaceCache.set(place, { place: place.place, label: place.label, text });
+      return text;
+    }
+
+    function mobileBiographyPathCompactPlaceText(place) {
       const candidates = [place.place, place.label].filter(Boolean);
       for (const candidate of candidates) {
         let text = stripHtml(candidate)
@@ -13038,10 +13381,17 @@
     }
 
     function mobileBiographyPathsEnabled() {
+      if (landHistoryEnabled()) return false;
       return state.settings.showBiographyPaths === true;
     }
 
+    // Deer, turtle, turkey, duck, eel, dog, whale and the whaling ship.
+    function mobileMovingAnimalsEnabled() {
+      return !landHistoryEnabled() && state.settings.showMovingAnimals !== false;
+    }
+
     function mobileBiographyIconsEnabled() {
+      if (landHistoryEnabled()) return false;
       return state.settings.showBiographyIcons === true;
     }
 
@@ -13077,7 +13427,7 @@
       if (!enabled) return { type: "FeatureCollection", features: [] };
       const features = [];
       for (const slug of Object.keys(BIOGRAPHY_PLACE_PATHS)) {
-        const article = state.wikiBySlug.get(slug) || { slug, title: BIOGRAPHY_PLACE_PATHS[slug]?.title || "" };
+        const article = state.wikiBySlug.get(slug) || { slug, title: mobileBiographyPathPersonName(null, slug) };
         const path = mobileBiographyTimelineData(article, timelineEventsForSource("wiki", article.id, slug)) || mobileBiographyPathData(article);
         if (path?.hidePath) continue;
         if (!path?.places?.length) continue;
@@ -13552,7 +13902,8 @@
         const rawDelta = Math.max(0, now - Number(controller.lastFrameAt || now));
         controller.lastFrameAt = now;
         if (!paused) {
-          const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+          // matchMedia builds a new query per call; the tick asks for every walker, so keep one.
+          const reducedMotion = (state.reducedMotionQuery ||= window.matchMedia?.("(prefers-reduced-motion: reduce)"))?.matches === true;
           // Geographic route time must never depend on camera zoom. Scaling the
           // clock to counter screen magnification made an overview frame count
           // as several route-seconds and exposed that accumulated advance as a
@@ -13573,7 +13924,7 @@
     function mobileBiographyIconAt(item, ms = 0) {
       const controller = state.mobileBiographyMotionControllers.get(item?.slug);
       if (!controller) return null;
-      const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+      const reducedMotion = (state.reducedMotionQuery ||= window.matchMedia?.("(prefers-reduced-motion: reduce)"))?.matches === true;
       const ahead = Math.max(0, Number(ms) || 0) * MOBILE_BIOGRAPHY_BASE_MOTION_SCALE * (reducedMotion ? 0.5 : 1);
       const motion = mobileMovingBiographyLoop(item.route, Math.max(1000, Number(item.duration) || MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS),
         0, (Number(controller.elapsedMs) || 0) + ahead, { continuous: item.continuous === true });
@@ -13581,19 +13932,9 @@
     }
 
     function mobileMovingRouteDuration(route = []) {
-      const segments = mobileMovingRouteSegments(route);
-      if (!segments.length) return MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS;
-      return segments.reduce((total, segment) => {
-        const coordinateDistance = Math.hypot(
-          Number(segment.end?.[0] || 0) - Number(segment.start?.[0] || 0),
-          Number(segment.end?.[1] || 0) - Number(segment.start?.[1] || 0)
-        );
-        if (!coordinateDistance) return total;
-        return total + Math.max(
-          MOBILE_BIOGRAPHY_MIN_SEGMENT_MS,
-          (coordinateDistance / MOBILE_BIOGRAPHY_REFERENCE_ROUTE_DISTANCE) * MOBILE_BIOGRAPHY_ROUTE_DURATION_MS
-        );
-      }, 0) || MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS;
+      return mobileMovingRouteSegments(route).reduce((total, segment) =>
+        total + TIMELINE_UTILS.biographyTravelDuration(segment.start, segment.end), 0)
+        || MOBILE_BIOGRAPHY_MARKER_ONE_WAY_MS;
     }
 
     const MOBILE_CANOE_LAND_SAMPLE_RADIUS_DEG = 0.00022;
@@ -13622,6 +13963,8 @@
       // classification before showing a canoe.
       const geometry = state.landMaskData?.geometry || null;
       if (!coordinates.every(Number.isFinite) || !geometry) return true;
+      // The mask covers Long Island only: the mainland across the Sound and the harbor is land too.
+      if (MAP_UTILS.isMainland?.(coordinates)) return true;
       if (state.mobileMovingLandCacheGeometry !== geometry) {
         state.mobileMovingLandCacheGeometry = geometry;
         state.mobileMovingLandStateCache.clear();
@@ -13799,7 +14142,7 @@
     function mobileMovingBiographyItems() {
       const items = Object.keys(BIOGRAPHY_PLACE_PATHS)
         .map((slug, index) => {
-          const article = state.wikiBySlug.get(slug) || { slug, title: BIOGRAPHY_PLACE_PATHS[slug]?.title || slug };
+          const article = state.wikiBySlug.get(slug) || { slug, title: mobileBiographyPathPersonName(null, slug) };
           const configuredPath = BIOGRAPHY_PLACE_PATHS[slug] || null;
           const configuredPlaces = (configuredPath?.places || [])
             .filter(place => Array.isArray(place?.coordinates) && place.coordinates.every(Number.isFinite));
@@ -13821,7 +14164,7 @@
             route,
             person: mobileBiographyPathPersonName(article, slug),
             duration: mobileMovingRouteDuration(route),
-            offset: index * 31000,
+            offset: TIMELINE_UTILS.biographyInitialElapsed(slug, [{ type: "move", duration: mobileMovingRouteDuration(route) }]),
             localWander: configuredRoute.length === 1,
             fixedSurfaceIsLand: configuredRoute.length === 1 ? mobileMovingPointIsOnLand(route[0]) : null,
             // A local wander should turn around naturally instead of vanishing
@@ -13923,9 +14266,10 @@
     }
 
     function nativeMovingFeatureCollection(now = performance.now()) {
+      if (landHistoryEnabled()) return nativeMapFeatureCollection();
       if (state.profileMapMode) return nativeMapFeatureCollection();
       const motionNow = Math.max(0, now - (state.mobileMovingMarkerPausedDurationMs || 0));
-      const showLabel = Number(state.map?.getZoom?.() || 0) >= SITE_POINT_LABEL_MIN_ZOOM;
+      const showLabel = Number(state.map?.getZoom?.() || 0) >= 13.35;
       const features = [];
       (state.nativeMovingBiographyItems || []).forEach(item => {
         const motion = mobileBiographyMotionFor(item, now);
@@ -13957,10 +14301,11 @@
           }
         });
       });
+      if (!mobileMovingAnimalsEnabled()) return nativeMapFeatureCollection(features);
       const dogMotion = mobileMovingPingPong(MOBILE_DOG_ROUTE, MOBILE_DOG_ONE_WAY_MS, MOBILE_DOG_START_OFFSET_MS, motionNow);
       const animalElapsed = MAP_UTILS.stepNativeAnimalClock(state.mobileNativeAnimalClock,motionNow);
       for (const animal of MAP_UTILS.nativeAnimals || []) {
-        const motion = MAP_UTILS.nativeAnimalMotion(animal,animalElapsed,window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+        const motion = MAP_UTILS.nativeAnimalMotion(animal,animalElapsed,(state.reducedMotionQuery ||= window.matchMedia?.("(prefers-reduced-motion: reduce)"))?.matches === true);
         features.push({type:"Feature",geometry:{type:"Point",coordinates:motion.coordinates},properties:{
           native_kind:"wiki",native_key:animal.slug,moving_kind:"animal",
           icon_key:`nli-icon-animal-${animal.slug}${motion.direction === "left" ? "-left" : ""}`,
@@ -13975,8 +14320,8 @@
           native_key: MOVING_DOG_WIKI_SLUG,
           moving_kind: "dog",
           icon_key: `nli-icon-dog-moving-icon${dogMotion.direction === "left" ? "-left" : ""}`,
-          title: "Dog",
-          label: "Dog",
+          title: MOVING_DOG_TITLE,
+          label: MOVING_DOG_TITLE,
           show_label: showLabel,
           direction: dogMotion.direction
         }
@@ -13991,8 +14336,8 @@
           native_key: WHALING_FEATURE_SLUG,
           moving_kind: "whale",
           icon_key: `nli-icon-whaling-moving-whale${whaleMotion.direction === "left" ? "-left" : ""}`,
-          title: "Whaling",
-          label: "Whaling",
+          title: MOVING_WHALE_TITLE,
+          label: MOVING_WHALE_TITLE,
           show_label: false,
           direction: whaleMotion.direction
         }
@@ -14017,12 +14362,61 @@
       return nativeMapFeatureCollection(features);
     }
 
-    function syncNativeMovingFeaturesToAndroid(now = performance.now()) {
+    // People walk about 6 m/s and the animals at most ~110 m/s, so below zoom 12 most 24–56 ms
+    // ticks moved nothing by even half a pixel, yet each one made the native map re-parse,
+    // re-tile and redraw every moving feature (most of the app's CPU on the tablets). A tick is
+    // sent only when something visibly changed, during gestures or a follow, and once a second.
+    // Every send still carries every feature; the view only decides whose movement counts.
+    function nativeMovingFeatureTriggerBounds() {
+      // The WebView map mirrors the native camera (cameraChanged → jumpTo) at each camera idle.
+      // Pad by a whole view on every side so a fling or stale echo still counts nearby motion.
+      const canvas = state.map?.getCanvas?.();
+      const bounds = canvas && canvas.width > 64 && canvas.height > 64 ? state.map.getBounds?.() : null;
+      if (!bounds) return null;
+      const west = bounds.getWest(), east = bounds.getEast(), south = bounds.getSouth(), north = bounds.getNorth();
+      if (![west, east, south, north].every(Number.isFinite) || east <= west || north <= south) return null;
+      return { west: west - (east - west), east: east + (east - west), south: south - (north - south), north: north + (north - south) };
+    }
+
+    function nativeMovingFeaturesChanged(collection, now) {
+      const last = state.nativeMovingFeaturesLastSent;
+      const features = collection.features || [];
+      if (!last || now - last.at >= NATIVE_MOVING_FEATURE_HEARTBEAT_MS) return true;
+      if (state.androidMapGestureActive || state.mobileFollowedBiographySlug) return true;
+      if (performance.now() < Number(state.nativeMapAutoMoveUntil || 0)) return true;
+      if (features.length !== last.features.length) return true;
+      const zoom = Number(state.map?.getZoom?.());
+      const equatorMetersPerPixel = 40075016.686 / (512 * 2 ** (Number.isFinite(zoom) ? zoom : 22));
+      const view = nativeMovingFeatureTriggerBounds();
+      const inView = (lng, lat) => !view || (lng >= view.west && lng <= view.east && lat >= view.south && lat <= view.north);
+      for (let index = 0; index < features.length; index += 1) {
+        const { motion_opacity: opacity, ...properties } = features[index].properties || {};
+        const sent = last.features[index];
+        if (JSON.stringify(properties) !== sent.properties) return true;
+        const [lng, lat] = features[index].geometry?.coordinates || [];
+        if (!inView(lng, lat) && !inView(sent.lng, sent.lat)) continue;
+        if (opacity !== sent.opacity && (opacity === 0 || opacity === 1
+          || !(Math.abs(Number(opacity) - Number(sent.opacity)) < NATIVE_MOVING_FEATURE_OPACITY_STEP))) return true;
+        const cos = Math.cos((Number(lat) * Math.PI) / 180);
+        const meters = Math.hypot((lng - sent.lng) * 111320 * cos, (lat - sent.lat) * 110540);
+        if (!(meters / (equatorMetersPerPixel * cos) < NATIVE_MOVING_FEATURE_MIN_STEP_PX)) return true;
+      }
+      return false;
+    }
+
+    function syncNativeMovingFeaturesToAndroid(now = performance.now(), options = {}) {
       if (!nativeMapBridgeAvailable()) return false;
-      window.AndroidApp.syncNativeMapMovingFeatures(
-        androidBridgeToken(),
-        JSON.stringify(nativeMovingFeatureCollection(now))
-      );
+      const collection = nativeMovingFeatureCollection(now);
+      if (options.ifChanged && !nativeMovingFeaturesChanged(collection, now)) return false;
+      state.nativeMovingFeaturesLastSent = {
+        at: now,
+        features: (collection.features || []).map(feature => {
+          const { motion_opacity: opacity, ...properties } = feature.properties || {};
+          const [lng, lat] = feature.geometry?.coordinates || [];
+          return { properties: JSON.stringify(properties), opacity, lng, lat };
+        })
+      };
+      window.AndroidApp.syncNativeMapMovingFeatures(androidBridgeToken(), JSON.stringify(collection));
       return true;
     }
 
@@ -14081,7 +14475,7 @@
       button.dataset.motionPhase = motion.phase;
       button.dataset.followed = item.slug === state.mobileFollowedBiographySlug ? "true" : "false";
       button.style.opacity = String(Math.max(0, Math.min(1, motion.opacity)));
-      button.dataset.showLabel = state.map?.getZoom?.() >= SITE_POINT_LABEL_MIN_ZOOM || item.slug === state.mobileFollowedBiographySlug ? "true" : "false";
+      button.dataset.showLabel = state.map?.getZoom?.() >= 13.35 || item.slug === state.mobileFollowedBiographySlug ? "true" : "false";
       const isOnLand = mobileBiographyIsOnLand(item, motion.coordinates);
       button.dataset.onWater = isOnLand ? "false" : "true";
       const status = button.querySelector(".mobile-moving-biography-status");
@@ -14146,9 +14540,9 @@
 
     function mobileMovingDogHtml() {
       return `
-        <button class="mobile-moving-dog-marker" type="button" aria-label="Open Dog article">
+        <button class="mobile-moving-dog-marker" type="button" aria-label="Open ${escapeHtml(MOVING_DOG_TITLE)} article">
           <span class="mobile-moving-dog-shell" aria-hidden="true"><img src="${escapeHtml(MOVING_DOG_ICON_URL)}" alt=""></span>
-          <span class="mobile-moving-dog-label" aria-hidden="true">Dog</span>
+          <span class="mobile-moving-dog-label" aria-hidden="true">${escapeHtml(MOVING_DOG_TITLE)}</span>
         </button>
       `;
     }
@@ -14186,12 +14580,12 @@
       const button = state.mobileMovingDogMarker.getElement?.()?.querySelector?.(".mobile-moving-dog-marker");
       if (!button) return;
       button.dataset.direction = motion.direction;
-      button.dataset.showLabel = state.map?.getZoom?.() >= SITE_POINT_LABEL_MIN_ZOOM ? "true" : "false";
+      button.dataset.showLabel = state.map?.getZoom?.() >= 13.35 ? "true" : "false";
     }
 
     function mobileMovingWhaleHtml() {
       return `
-        <button class="mobile-moving-whale-marker" type="button" aria-label="Open Whaling">
+        <button class="mobile-moving-whale-marker" type="button" aria-label="Open ${escapeHtml(MOVING_WHALE_TITLE)}; article: Whaling">
           <span class="mobile-moving-whale-shell" aria-hidden="true"><img src="${escapeHtml(WHALING_WHALE_ICON_URL)}" alt=""></span>
         </button>
       `;
@@ -14218,7 +14612,7 @@
 
     function updateMobileNativeAnimalMarkers(now) {
       const elapsed = MAP_UTILS.stepNativeAnimalClock(state.mobileNativeAnimalClock,now);
-      const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      const reduced = (state.reducedMotionQuery ||= window.matchMedia?.("(prefers-reduced-motion: reduce)"))?.matches === true;
       for (const {animal,marker,button} of state.mobileNativeAnimalMarkers.values()) {
         const motion = MAP_UTILS.nativeAnimalMotion(animal,elapsed,reduced);
         marker.setLngLat(motion.coordinates);
@@ -14305,7 +14699,7 @@
       if (!state.map || document.hidden || state.profileMapMode || state.mobileMovingMarkerPauseReasons.size || now < (state.mobileMovingMarkerInteractionUntil || 0)) return;
       if (nativeMapBridgeAvailable()) {
         removeMobileMovingDomMarkers();
-        syncNativeMovingFeaturesToAndroid(now);
+        syncNativeMovingFeaturesToAndroid(now, { ifChanged: true });
         const followedItem = (state.nativeMovingBiographyItems || []).find(item => item.slug === state.mobileFollowedBiographySlug);
         if (followedItem) syncMobileFollowedBiographyCamera(followedItem, mobileBiographyMotionFor(followedItem, now), now);
         return;
@@ -14370,6 +14764,19 @@
         state.androidMapGestureSettleTimer = null;
         syncMobileMovingFeatureVisibility(now);
       }, Math.max(300, Number(delay) || 1200));
+    }
+
+    function recoverMobileMovingFeatureAnimation(now = performance.now()) {
+      if (!state.map || document.hidden || state.profileMapMode) return false;
+      // Android WebViews can resume timers without delivering visibilitychange.
+      // Reconcile a stale visibility pause, preserving deliberate pause reasons.
+      const hiddenPause = state.mobileMovingMarkerPauseReasons.has("visibility");
+      if (!hiddenPause && state.mobileMovingMarkerPauseReasons.size) return false;
+      if (!hiddenPause && state.mobileMovingMarkerTimer && now - state.mobileMovingMarkerLastAt <= 5000) return false;
+      window.clearTimeout(state.mobileMovingMarkerTimer);
+      state.mobileMovingMarkerTimer = null;
+      syncMobileMovingFeatureVisibility(now);
+      return true;
     }
 
     function bindMobileMovingFeatureMapLifecycle() {
@@ -14460,6 +14867,7 @@
         nativeBridgeAvailable: nativeMapBridgeAvailable(),
         zoom: Number(state.map?.getZoom?.()),
         motionScale: MOBILE_BIOGRAPHY_BASE_MOTION_SCALE,
+        animalElapsedMs: state.mobileNativeAnimalClock.elapsed,
         biographyCount: (state.nativeMovingBiographyItems || []).length,
         mapReady: Boolean(state.map)
       };
@@ -14494,7 +14902,8 @@
       cancelAndroidLifecycleDetailScrollRestore();
       if (state.profileMapMode) exitMobileProfileMapMode();
       clearMobileBiographyPathOverlay();
-      const slug = typeof articleOrSlug === "string" ? articleOrSlug : articleOrSlug?.slug;
+      const requestedSlug = typeof articleOrSlug === "string" ? articleOrSlug : articleOrSlug?.slug;
+      const slug = ROUTE_UTILS.wikiSlugAlias?.(requestedSlug) || requestedSlug;
       if (!slug) {
         showBanner("This knowledgebase article is not available yet.");
         return;
@@ -14745,7 +15154,7 @@
         </section>
         <section class="section ots-support-strip">
           <h3>Project support</h3>
-          <p>On This Site has been supported in part through a Monument Lab fellowship, alongside community contributions, artist research, and public history partnerships.</p>
+          <p>On This Site has been supported in part through a Monument Lab fellowship, and its app and AR features by the Indigenous Screen Office and Agog: The Immersive Media Institute, alongside community contributions, artist research, and public history partnerships.</p>
         </section>
       `);
     }
@@ -14773,9 +15182,22 @@
             </div>
           </article>
         </section>
+        <section class="section ots-page-intro">
+          <h3>How to read this map</h3>
+          <p>The shaded homelands are broad, and many of them overlap. Long Island’s Native communities were tied together by kinship, marriage and alliance, and their lands were never fenced off from one another. Drawing hard lines between them would repeat what colonial surveyors did when they divided Native land into lots. Each shaded area shows where records, archaeology and community memory connect a people with a place. It is not a legal boundary, and it does not say who owns land today.</p>
+          <p>Much of what was written down about Native Long Island comes from deeds, court records and town books kept by colonists. Those records leave many people out, especially women and laborers. The map reads them alongside archaeology, census records and oral history, and cites its sources so you can check them.</p>
+          <p>A town with no marker still has Native history. Farming, building and looting destroyed many places before anyone studied them, and other histories have not been researched yet. The map keeps growing as research, family histories and corrections come in.</p>
+          <p>Some places are shown only approximately, or not pinned at all, to protect burials, private homes and fragile archaeological sites. Each place says whether it can be visited. Long Island’s Native nations are still here, and the map is a place to start learning, not a replacement for learning from them.</p>
+        </section>
+        <section class="section ots-page-intro">
+          <h3>Sharing and reuse</h3>
+          <p>You are welcome to share links, screenshots and short passages from On This Site for teaching, research and other non-commercial uses, and to print maps and pages for a class or community program. Please credit “On This Site - Native Long Island, nativelongisland.com” and link to the page you used.</p>
+          <p>Ask the project first, through Contact, before using the map, its text or its photographs in anything sold or commercial, such as a book, app, advertisement or merchandise, and before republishing whole articles or the map’s data. Jeremy Dennis’s photographs are artworks, so ask before publishing them anywhere beyond a class or presentation. Historical images and quoted sources belong to their own collections and authors; follow the credit given with each one.</p>
+          <p>The map is not a legal record. Please don’t use it to settle land claims, property lines or other legal questions.</p>
+        </section>
         <section class="section ots-support-strip">
           <h3>Project support</h3>
-          <p>Running Strong for American Indian Youth supported the project through its Dreamstarter program, and Monument Lab has supported the project through a fellowship. Community members, collaborators, and visitors continue to help keep the archive public.</p>
+          <p>Running Strong for American Indian Youth supported the project through its Dreamstarter program, and Monument Lab has supported the project through a fellowship. The <a href="https://iso-bea.ca/" target="_blank" rel="noopener noreferrer">Indigenous Screen Office (ISO)</a> and <a href="https://agog.org/" target="_blank" rel="noopener noreferrer">Agog: The Immersive Media Institute</a> are supporting the app and its augmented reality features through the 2026–2027 ISO Immersive Fund Interactive and Immersive Program. Community members, collaborators, and visitors continue to help keep the archive public.</p>
           <div class="ots-support-logos" aria-label="Project supporters">
             <a class="ots-support-logo-link" href="https://indianyouth.org/" target="_blank" rel="noopener noreferrer" aria-label="Visit Running Strong for American Indian Youth">
               <img class="ots-support-logo" src="assets/about/running-strong-logo.png" alt="Running Strong for American Indian Youth" loading="lazy" decoding="async">
@@ -14804,7 +15226,9 @@
     }
 
     function openSupportPanel(options = {}) {
-      const identity = currentContributorIdentity?.() || {};
+      const signedIn = currentContributorIdentity?.() || {};
+      // "Contributor" is the signed-out placeholder, not a name to prefill.
+      const identity = { ...signedIn, name: signedIn.name && signedIn.name !== "Contributor" ? signedIn.name : "" };
       const adoption = options.adoption ? {
         siteSlug: options.adoption.siteSlug || "",
         siteTitle: options.adoption.siteTitle || "this place",
@@ -14847,15 +15271,26 @@
     async function submitSupportPayment(section) {
       const button = section.querySelector("[data-support-submit]");
       const originalLabel = button?.textContent || "Continue to secure payment";
+      const setStatus = (message, kind) => SUPPORT_UTILS.setSupportStatus(section, message, kind);
+      const restoreButton = () => {
+        if (!button) return;
+        button.disabled = false;
+        button.textContent = originalLabel;
+      };
       if (button) {
         button.disabled = true;
         button.textContent = "Opening secure payment...";
       }
       try {
-        const checkoutResult = await SUPPORT_UTILS.startCheckout(section, { pageUrl: window.location.href });
+        // Inside the Android app Stripe's own page in the phone's browser is
+        // more dependable than its embedded form in the WebView (and offers
+        // Google Pay); the app hands checkout.stripe.com links to the browser.
+        // (Play-installed apps check out through Google Play before this matters.)
+        const inAndroidApp = isNativeAndroidApp();
+        const checkoutResult = await SUPPORT_UTILS.startCheckout(section, { pageUrl: window.location.href, embedded: !inAndroidApp });
         const checkoutUrl = typeof checkoutResult === "string" ? checkoutResult : checkoutResult?.url;
         if (checkoutResult?.native) {
-          setInlineStatus(section, "[data-support-status]", "Complete your purchase in Google Play.", "success");
+          setStatus("Complete your purchase in Google Play.", "success");
           if (button) {
             button.disabled = true;
             button.textContent = "Google Play opened";
@@ -14863,27 +15298,29 @@
           return;
         }
         if (checkoutResult?.embedded) {
-          setInlineStatus(section, "[data-support-status]", "Secure payment form is ready below.", "success");
+          setStatus("Secure payment form is ready below.", "success");
           if (button) {
             button.disabled = true;
             button.textContent = "Payment form ready";
           }
+          section.querySelector("[data-support-embedded-checkout]")?.scrollIntoView({ behavior: "smooth", block: "start" });
           return;
         }
         if (!checkoutUrl) throw new Error("Payment setup is not connected yet.");
-        setInlineStatus(section, "[data-support-status]", "Opening secure payment...", "success");
+        setStatus(inAndroidApp ? "Secure checkout opened in your browser." : "Opening secure payment...", "success");
         window.location.href = checkoutUrl;
+        // The app opens the link in the browser and this page stays put; on
+        // the web, a blocked navigation shouldn't leave the button stuck.
+        window.setTimeout(restoreButton, inAndroidApp ? 1500 : 8000);
       } catch (error) {
-        setInlineStatus(section, "[data-support-status]", error.message || "Payment setup is not connected yet.", "error");
+        setStatus(error.message || "Payment setup is not connected yet.", "error");
         showBanner(error.message || "Payment setup is not connected yet.");
-        if (button) {
-          button.disabled = false;
-          button.textContent = originalLabel;
-        }
+        restoreButton();
       }
     }
 
     function openBrowsePanel() {
+      markMobileActivityTabOpened("site-list");
       const sites = [...state.sites].sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
       const unreadSites = sites.filter(site => mobileContentUnreadCount("site", site.slug) > 0);
       const unreadSlugs = new Set(unreadSites.map(site => site.slug));
@@ -14949,9 +15386,7 @@
       if (state.learningPathsLoaded && !options.fresh) return state.learningPaths;
       let pathRows = Array.isArray(state.learningPathRows) ? state.learningPathRows : [];
       let stopRows = Array.isArray(state.learningPathSiteRows) ? state.learningPathSiteRows : [];
-      // Offline, skip the CMS and use the bundled guided paths that
-      // mergePathRows() adds below.
-      if ((!pathRows.length || options.fresh) && !isOfflineTextMode()) {
+      if (!pathRows.length || options.fresh) {
         try {
           const [pathResponse, stopResponse] = await Promise.all([
             fetchJson("/items/learning_paths?limit=-1&filter[is_public][_eq]=true&sort=sort_order,title&fields=id,title,slug,short_description,long_intro,theme,estimated_time_minutes,recommended_grades,cover_image,icon,badge_name,key_questions,sensitivity_level,is_public,sort_order", { cacheKey: "mobile-learning-paths", ttl: 300000, fresh: Boolean(options.fresh) }),
@@ -14962,7 +15397,7 @@
           state.learningPathRows = pathRows;
           state.learningPathSiteRows = stopRows;
         } catch (error) {
-          if (!window.NLI_GUIDED_LEARNING_PATH_SEEDS?.length && !pathRows.length) throw error;
+          if (!pathRows.length) throw error;
         }
       }
       [pathRows, stopRows] = window.NLILearningHub.mergePathRows(pathRows, stopRows, state.sites);
@@ -14980,6 +15415,7 @@
           sort_order: Number(row.sort_order || row.stop_number || index + 1),
           title: publicCleanText(row.stop_title_override || site?.title || "Learning stop"),
           why: publicCleanText(row.why_this_stop_matters || ""),
+          reading: publicCleanText(String(site?.summary || site?.introduction_content || "").replace(/<\/(?:h[1-6]|p|div|li|section)>/gi, ". ").replace(/<br\s*\/?\s*>/gi, " ")),
           question: publicCleanText(row.path_question || ""),
           activity: publicCleanText(row.short_activity || ""),
           sensitiveNote: publicCleanText(row.sensitive_note || "")
@@ -15012,6 +15448,7 @@
     }
 
     async function openMobileLearningPathsPanel(options = {}) {
+      setMobileContentRoute({ page: "learn" }, options);
       state.activeLearningPathSlug = "";
       detailTitleEl.innerHTML = `<h2>Learning Paths</h2><p class="detail-meta">Guided learning</p>`;
       detailBodyEl.innerHTML = `<p class="summary">Loading guided learning paths...</p>`;
@@ -15025,6 +15462,7 @@
           paths: paths.map(path => ({
             slug: path.slug, title: path.title, summary: path.summary, theme: path.theme,
             minutes: path.estimatedMinutes, grades: path.recommendedGrades,
+            image: window.NLILearningHub.cover(path, listingImage, directusAssetUrl),
             question: path.keyQuestions[0], stops: path.stops.map(stop => stop.title),
             completed: path.stops.filter(stop => completedMobileLearningPathStops(path.slug).has(String(stop.id))).length
           }))
@@ -15038,51 +15476,37 @@
       }
     }
 
-    async function openMobileLearningPath(pathSlug) {
+    async function openMobileLearningPath(pathSlug, options = {}) {
       if (!state.learningPathsLoaded) await loadMobileLearningPaths();
       const path = state.learningPathBySlug.get(String(pathSlug || ""));
       if (!path) {
         showBanner("That learning path is not available yet.");
         return;
       }
+      setMobileContentRoute({ path: path.slug }, options);
       const completed = completedMobileLearningPathStops(path.slug);
       state.activeLearningPathSlug = path.slug;
-      const questions = path.keyQuestions.length ? `
-        <section class="section mobile-learning-path-questions">
-          <h3>Questions to carry with you</h3>
-          <ul>${path.keyQuestions.map(question => `<li>${escapeHtml(question)}</li>`).join("")}</ul>
-        </section>
-      ` : "";
-      openInfoPanel(path.title, `${completed.size} of ${path.stops.length} stops complete`, `
-        <div class="actions mobile-learning-path-top-actions">
-          <button class="action secondary" type="button" data-mobile-learning-path-back>All learning paths</button>
-        </div>
-        <section class="section mobile-learning-path-intro">
-          ${path.theme ? `<p class="section-kicker">${escapeHtml(path.theme)}</p>` : ""}
-          <p class="summary">${escapeHtml(path.introduction || path.summary)}</p>
-          <p class="detail-meta">${escapeHtml([path.estimatedMinutes ? `${path.estimatedMinutes} minutes` : "", path.recommendedGrades, path.badgeName ? `Badge: ${path.badgeName}` : ""].filter(Boolean).join(" · "))}</p>
-          <progress value="${completed.size}" max="${path.stops.length}" aria-label="${escapeHtml(`${completed.size} of ${path.stops.length} learning path stops complete`)}"></progress>
-        </section>
-        ${questions}
-        <section class="mobile-learning-path-stops" aria-label="Learning path stops">
-          ${path.stops.map(stop => {
-            const isComplete = completed.has(String(stop.id));
-            return `
-              <article class="section mobile-learning-path-stop${isComplete ? " is-complete" : ""}">
-                <p class="section-kicker">Stop ${escapeHtml(String(stop.stop_number))}${stop.is_required === false ? " · Optional" : ""}</p>
-                <h3>${escapeHtml(stop.title)}</h3>
-                ${window.NLILearningGuide.mobileStopHtml(path, stop)}
-                ${stop.sensitiveNote ? `<p class="detail-meta">${escapeHtml(stop.sensitiveNote)}</p>` : ""}
-                ${stop.show_exact_location === false ? `<p class="detail-meta">Use the broad public location shown in the listing.</p>` : ""}
-                <div class="actions">
-                  ${stop.site?.slug ? `<button class="action" type="button" data-slug="${escapeHtml(stop.site.slug)}">Open stop</button>` : `<span class="detail-meta">Linked place unavailable.</span>`}
-                  <button class="action secondary" type="button" data-mobile-learning-path-complete="${escapeHtml(stop.id)}" data-mobile-learning-path-slug="${escapeHtml(path.slug)}">${isComplete ? "Completed" : "Mark complete"}</button>
-                </div>
-              </article>
-            `;
-          }).join("")}
-        </section>
+      openInfoPanel(path.title, `Lesson plan · ${completed.size} of ${path.stops.length} stops complete`, `
+        <button class="action secondary" type="button" data-mobile-learning-path-back>All learning paths</button>
+        ${window.NLILearningGuide.mobileOverview(path, completed)}
       `);
+    }
+
+    async function openMobileLearningLesson(pathSlug, index, complete = false) {
+      if (!state.learningPathsLoaded) await loadMobileLearningPaths();
+      const path = state.learningPathBySlug.get(pathSlug);
+      if (!path?.stops.length) return;
+      index = Math.max(0, Math.min(path.stops.length - 1, Number(index) || 0));
+      if (complete) {
+        const stop = path.stops[index];
+        if (!completedMobileLearningPathStops(pathSlug).has(String(stop.id))) toggleMobileLearningPathStop(pathSlug, stop.id);
+        if (index === path.stops.length - 1) return openMobileLearningPath(pathSlug);
+        index++;
+      }
+      state.activeLearningPathSlug = pathSlug;
+      setMobileContentRoute({ path: pathSlug, lesson: String(index + 1) });
+      openInfoPanel(path.stops[index].title, `Lesson · Stop ${index+1} of ${path.stops.length}`, window.NLILearningGuide.mobileLesson(path, index));
+      detailBodyEl.querySelector(".learn-lesson-direction")?.scrollIntoView({ block: "start" });
     }
 
     function mobileLearningStopHeader(site) {
@@ -15092,6 +15516,11 @@
 
     function mobileKnowledgebaseCategoryItems(category) {
       if (!category) return [];
+      if (category.slugPrefix) {
+        return state.wikiArticles
+          .filter(article => String(article.slug || "").startsWith(category.slugPrefix))
+          .map(item => ({ type: "wiki", item }));
+      }
       return (category.entries || (category.slugs || []).map(slug => ["wiki", slug]))
         .map(([type, slug]) => {
           const item = type === "site" ? state.sites.find(site => site.slug === slug) : state.wikiBySlug.get(slug);
@@ -15118,7 +15547,9 @@
         label: category.label,
         description: KNOWLEDGEBASE_CATEGORY_DESCRIPTIONS[category.label] || "Explore connected On This Site research and mapped history.",
         matches,
-        count: matches.length || (category.entries || category.slugs || []).length,
+        count: category.materialCulture && state.materialCultureObjects
+          ? state.materialCultureObjects.length
+          : matches.length || (category.entries || category.slugs || []).length,
         updatedAt: mobileKnowledgebaseItemTimestamp(newest),
         highlight: newest?.item || null
       };
@@ -15245,6 +15676,7 @@
     }
 
     async function openKnowledgebasePanel(options = {}) {
+      markMobileActivityTabOpened("knowledgebase");
       const previousScroll = detailBodyEl.scrollTop;
       detailTitleEl.innerHTML = `<h2>Knowledgebase <span class="mobile-content-unread-badge" data-mobile-knowledgebase-unread-badge hidden></span></h2><p class="detail-meta">Articles</p>`;
       detailBodyEl.innerHTML = `<p class="summary">Loading knowledgebase articles...</p>`;
@@ -15303,6 +15735,114 @@
       else detailBodyEl.scrollTop = 0;
     }
 
+    /**
+     * The Material Culture gallery's objects: every captioned photo in the sites'
+     * Material Culture sections and the object articles. Details come from the
+     * app's own copies first (so it works offline), then the CMS.
+     */
+    function loadMobileMaterialCulture() {
+      if (state.materialCultureObjects) return Promise.resolve(state.materialCultureObjects);
+      if (!state.materialCulturePromise) {
+        const places = state.sites.filter(site => SITE_UTILS.siteLayerCategoryKeys(site).includes("material-culture"));
+        const slugs = SITE_UTILS.MATERIAL_CULTURE_ARTICLES || [];
+        state.materialCulturePromise = Promise.all([
+          Promise.all(places.map(site => fetchSiteDetail(site).catch(() => null))),
+          Promise.all(slugs.map(slug => fetchWikiDetail(slug).catch(() => null)))
+        ]).then(([sites, articles]) => {
+          state.materialCultureObjects = SITE_UTILS.materialCultureObjects({ sites: sites.filter(Boolean), articles: articles.filter(Boolean) });
+          state.materialCulturePlaces = places;
+          return state.materialCultureObjects;
+        }).finally(() => {
+          state.materialCulturePromise = null;
+        });
+      }
+      return state.materialCulturePromise;
+    }
+
+    function mobileMaterialCultureItemHtml(object) {
+      const article = object.articles[0];
+      const attr = object.site ? `data-slug="${escapeHtml(object.site.slug)}"` : `data-wiki-slug="${escapeHtml(article.slug)}"`;
+      const where = [object.site?.title, ...object.articles.map(item => item.title)].filter(Boolean).join(" · ");
+      return `
+        <button class="mobile-material-item" type="button" ${attr}>
+          <span class="mobile-material-photo"><img src="${escapeHtml(object.image)}" alt="${escapeHtml(object.title)}" loading="lazy" decoding="async"></span>
+          <span class="mobile-material-text">
+            <span class="mobile-material-kind">${escapeHtml(object.typeLabel)}</span>
+            <strong>${escapeHtml(object.title)}</strong>
+            <span class="mobile-material-where">${escapeHtml(where)}</span>
+            <span class="mobile-material-caption">${escapeHtml(object.caption)}</span>
+          </span>
+        </button>
+      `;
+    }
+
+    /** Objects by kind (the old site's "Browse by Objects"), as a grid or a list, then their places and articles. */
+    function renderMobileMaterialCulture(model, matches) {
+      const objects = state.materialCultureObjects;
+      const back = `
+        <div class="actions mobile-knowledgebase-back-row">
+          <button class="action secondary" type="button" data-mobile-kb-back>All categories</button>
+        </div>
+      `;
+      const articles = matches.length ? `
+        <section class="section compact-list">
+          <h3>Articles about objects</h3>
+          ${matches.map(mobileKnowledgebaseEntryHtml).join("")}
+        </section>
+      ` : "";
+      if (!objects) {
+        detailBodyEl.innerHTML = `
+          ${back}
+          <section class="mobile-knowledgebase-category-intro" data-mobile-material-culture><p>${escapeHtml(model.description)}</p></section>
+          <p class="summary" role="status" data-mobile-material-status>Loading objects…</p>
+          ${articles}
+        `;
+        return;
+      }
+      const kinds = [{ key: "all", label: "All", count: objects.length }, ...SITE_UTILS.materialCultureTypeCounts(objects)];
+      const kind = kinds.some(item => item.key === state.materialCultureType) ? state.materialCultureType : "all";
+      const shown = kind === "all" ? objects : objects.filter(object => object.type === kind);
+      const view = state.materialCultureView === "list" ? "list" : "grid";
+      const meta = detailTitleEl.querySelector(".detail-meta");
+      if (meta) meta.textContent = `Knowledgebase category · ${objects.length} objects`;
+      const placeSlugs = new Set(objects.filter(object => object.site).map(object => object.site.slug));
+      const places = (state.materialCulturePlaces || []).filter(site => placeSlugs.has(site.slug) || SITE_UTILS.siteHasMaterialCulture(site));
+      const chip = (attribute, value, label, active) =>
+        `<button class="mobile-material-chip${active ? " active" : ""}" type="button" ${attribute}="${escapeHtml(value)}" aria-pressed="${active}">${label}</button>`;
+      detailBodyEl.innerHTML = `
+        ${back}
+        <section class="mobile-knowledgebase-category-intro" data-mobile-material-culture>
+          <p>${escapeHtml(model.description)}</p>
+          <p class="detail-meta">${objects.length} objects from ${placeSlugs.size} places</p>
+        </section>
+        <div class="mobile-material-chips" role="group" aria-label="Kinds of objects">
+          ${kinds.map(item => chip("data-mobile-material-type", item.key, `${escapeHtml(item.label)} <span>${item.count}</span>`, item.key === kind)).join("")}
+        </div>
+        <div class="mobile-material-chips mobile-material-views" role="group" aria-label="Show objects as">
+          ${chip("data-mobile-material-view", "grid", "Grid", view === "grid")}${chip("data-mobile-material-view", "list", "List", view === "list")}
+        </div>
+        <div class="mobile-material-${view}">
+          ${shown.map(mobileMaterialCultureItemHtml).join("")}
+        </div>
+        ${places.length ? `
+          <section class="section compact-list">
+            <h3>Places with Material Culture</h3>
+            ${places.map(siteCardButton).join("")}
+          </section>
+        ` : ""}
+        ${articles}
+      `;
+      refreshMobileContentUnreadBadges();
+    }
+
+    function rerenderMobileMaterialCulture() {
+      const category = KNOWLEDGEBASE_CATEGORIES.find(item => item.materialCulture);
+      const scroll = detailBodyEl.scrollTop;
+      const model = mobileKnowledgebaseCategoryModel(category);
+      renderMobileMaterialCulture(model, [...model.matches].sort((a, b) => String(a.item?.title || "").localeCompare(String(b.item?.title || ""))));
+      detailBodyEl.scrollTop = scroll;
+    }
+
     async function openMobileKnowledgebaseCategory(label) {
       await loadDeferredData();
       const category = KNOWLEDGEBASE_CATEGORIES.find(item => item.label === label);
@@ -15317,6 +15857,22 @@
         detailBodyEl.innerHTML = mobileBiographyKnowledgebaseHtml(model, matches);
         detailBodyEl.scrollTop = 0;
         refreshMobileContentUnreadBadges();
+        return;
+      }
+      if (category.materialCulture) {
+        renderMobileMaterialCulture(model, matches);
+        detailBodyEl.scrollTop = 0;
+        if (!state.materialCultureObjects) {
+          loadMobileMaterialCulture()
+            .then(() => {
+              if (detailBodyEl.querySelector("[data-mobile-material-culture]")) renderMobileMaterialCulture(mobileKnowledgebaseCategoryModel(category), matches);
+            })
+            .catch(error => {
+              console.warn("Material Culture objects could not load.", error);
+              const status = detailBodyEl.querySelector("[data-mobile-material-status]");
+              if (status) status.textContent = "The objects could not load. Open this category again to retry.";
+            });
+        }
         return;
       }
       detailBodyEl.innerHTML = `
@@ -15335,25 +15891,29 @@
     }
 
     async function fetchBlogPosts() {
-      if (state.blogPostsLoaded) return state.blogPosts;
-      try {
-        const response = await fetchJson(
-          "/items/blog_posts?limit=12&sort=-published_at,title&filter[status][_eq]=published&fields=id,title,slug,summary,content,published_at,featured_image_url,source_url",
-          { cacheKey: "mobile-blog-posts", ttl: 300000, fresh: false }
-        );
-        state.blogPosts = (response.data || []).map(normalizeBlogPost);
-        if (!state.blogPosts.length) throw new Error("Directus blog unavailable");
-      } catch {
+      if (!state.blogPostsLoaded) {
         try {
-          const response = await fetch("https://nativelongisland.com/wp-json/wp/v2/posts?per_page=12&_embed=1", { cache: "no-store" });
-          if (!response.ok) throw new Error("WordPress blog unavailable");
-          state.blogPosts = (await response.json()).map(normalizeBlogPost);
+          const response = await fetchJson(
+            "/items/blog_posts?limit=12&sort=-published_at,title&filter[status][_eq]=published&fields=id,title,slug,summary,content,published_at,featured_image_url,source_url",
+            { cacheKey: "mobile-blog-posts", ttl: 300000, fresh: false }
+          );
+          state.blogPosts = (response.data || []).map(normalizeBlogPost);
+          if (!state.blogPosts.length) throw new Error("Directus blog unavailable");
         } catch {
-          state.blogPosts = [];
+          try {
+            const response = await fetch("https://nativelongisland.com/wp-json/wp/v2/posts?per_page=12&_embed=1", { cache: "no-store" });
+            if (!response.ok) throw new Error("WordPress blog unavailable");
+            state.blogPosts = (await response.json()).map(normalizeBlogPost);
+          } catch {
+            state.blogPosts = [];
+          }
         }
+        state.blogPostsLoaded = true;
       }
-      state.blogPostsLoaded = true;
-      return state.blogPosts;
+      // The iOS app keeps funding links out of its App Store release.
+      return state.blogPosts = /OnThisSite-iOS/.test(navigator.userAgent)
+        ? state.blogPosts.filter(post => !/patreon/i.test(JSON.stringify(post)))
+        : state.blogPosts;
     }
 
     function normalizeBlogPost(post = {}) {
@@ -15370,38 +15930,30 @@
     }
 
     async function openBlogPanel() {
-      detailTitleEl.innerHTML = `<h2>Blog</h2><p class="detail-meta">Latest posts</p>`;
-      detailBodyEl.innerHTML = `<p class="summary">Loading recent posts...</p>`;
+      detailTitleEl.innerHTML = `<h2>Stories & news</h2><p class="detail-meta">News, exhibitions & community</p>`;
+      detailBodyEl.innerHTML = `<p class="summary">Loading stories...</p>`;
       detailEl.classList.add("open");
       syncMobilePanelAccessibility();
       const posts = await fetchBlogPosts();
-      detailBodyEl.innerHTML = `
-        <p class="summary">Recent posts open here inside the app.</p>
-        <section class="section compact-list">
-          ${posts.map((post, index) => {
-            const image = post._embedded?.["wp:featuredmedia"]?.[0]?.source_url || "";
-            return `
-              <button class="site-card" type="button" data-blog-index="${index}">
-                ${image ? `<img class="thumb" src="${escapeHtml(image)}" alt="" loading="lazy" decoding="async">` : `<span class="thumb empty">B</span>`}
-                <span>
-                  <h2>${escapeHtml(cleanPlainText(post.title?.rendered || "Blog post"))}</h2>
-                  <p>${escapeHtml(publicCleanText(post.excerpt?.rendered || "").slice(0, 150))}</p>
-                </span>
-              </button>
-            `;
-          }).join("") || `<p class="summary">${isOfflineTextMode() ? "Blog posts load when you're back online." : "Recent posts could not be loaded right now."}</p>`}
-        </section>
-      `;
+      detailBodyEl.innerHTML = `<section class="blog-feed">${posts.map((post, index) => {
+        const item = {slug:post.slug,featured_image_url:post._embedded?.["wp:featuredmedia"]?.[0]?.source_url};
+        const presentation = window.NLI_BLOG_PRESENTATION;
+        return `<button class="blog-card" type="button" data-blog-index="${index}">
+${presentation?.mediaHtml(item, escapeHtml, {eager:index<2}) || ""}
+<span class="blog-card-copy"><span class="blog-card-source">${escapeHtml(presentation?.describe(item).publisher || "On This Site")}</span><span class="blog-card-date">${escapeHtml(presentation?.dateLabel(post.date) || "")}</span><strong class="blog-card-title">${escapeHtml(cleanPlainText(post.title?.rendered || "Blog post"))}</strong><span class="blog-card-summary">${escapeHtml(publicCleanText(post.excerpt?.rendered || ""))}</span><span class="blog-card-read">Read story <span aria-hidden="true">↗</span></span></span></button>`;
+      }).join("") || `<p class="summary">Posts could not be loaded.</p>`}</section>`;
     }
 
     function openBlogPost(index) {
       const post = state.blogPosts[Number(index)];
       if (!post) return;
+      setMobileContentRoute({ blog: post.slug });
       const contentHtml = removeRepeatedContent(cleanHtml(post.content?.rendered || post.excerpt?.rendered || ""));
-      openInfoPanel(cleanPlainText(post.title?.rendered || "Blog post"), post.date ? new Date(post.date).toLocaleDateString() : "Blog", `
-        ${post._embedded?.["wp:featuredmedia"]?.[0]?.source_url ? `<img class="hero" src="${escapeHtml(post._embedded["wp:featuredmedia"][0].source_url)}" alt="" loading="lazy" decoding="async">` : ""}
-        <section class="section"><div class="section-content">${contentHtml}</div></section>
-      `, { type: "blog", item: { title: cleanPlainText(post.title?.rendered || "Blog post"), slug: post.slug || post.id || String(index) } });
+      const title = cleanPlainText(post.title?.rendered || "Blog post");
+      openInfoPanel(title, post.date ? new Date(post.date).toLocaleDateString() : "Blog", `
+${window.NLI_BLOG_PRESENTATION?.mediaHtml({slug:post.slug,featured_image_url:post._embedded?.["wp:featuredmedia"]?.[0]?.source_url}, escapeHtml, {hero:true,eager:true}) || ""}
+<section class="section"><div class="section-content">${contentHtml}</div></section>
+      `, { type: "blog", item: { title, slug: post.slug || post.id || String(index) } });
     }
 
     async function openInternalAppLink(value) {
@@ -15457,6 +16009,109 @@
       return false;
     }
 
+    // The home-screen AR button and the site AR button live in shared-scan-spaces.js.
+    const scanSpaces = window.NLI_SCAN_SPACES?.create({
+      state, DIRECTUS, openSheet, androidBridgeToken, requestUserLocation, nativeCachedUserPosition,
+      sheetEl: arScansSheetEl, listEl: mobileArScansListEl,
+      // For AR's "Visitor experiences": the place's Community Notes, with the AR photo.
+      openSite, prepareCommentPhotoFile, showBanner, setDetailDrawerState,
+      // AR photo anchors: an admin places photos for everyone; saved with their own session.
+      isAdmin: isAdminContributor,
+      adminSession: () => directusClient.ensureAuthSession({ requireAuth: true, authExpiredMessage: "Your login expired. Log in again to place photos." })
+    });
+
+    // Idle screensaver on the main map (shared-map-idle.js): left open and
+    // untouched, the map drifts along Long Island with "Did you know" cards.
+    // "Continue with Google" / "with Facebook" under the login and register
+    // buttons (shared-google-signin.js); in the Android app they sign in in
+    // the browser, through the app. The iOS app has no sign-in bridge yet, and
+    // the provider redirect would leave it on its offline copy, so it counts as
+    // an app without one and shows no buttons.
+    const googleSignIn = window.NLI_GOOGLE_SIGNIN?.create({
+      directusUrl: DIRECTUS,
+      registrationUrl: "https://nativelongisland.com/account-registration.php",
+      inApp: () => Boolean(window.AndroidApp) || /OnThisSite-iOS/.test(navigator.userAgent),
+      loginSelector: "#login-submit, #register-submit",
+      profileFor: (token, email) => contributorProfileForToken(token, email),
+      signIn: (tokens, email) => finishContributorLogin(tokens, email),
+      notify: (message, tone) => {
+        showLoginStatus(message, tone);
+        showBanner(message);
+      }
+    });
+    googleSignIn?.watch();
+    googleSignIn?.finishReturn()?.catch(error => console.warn("Sign-in could not finish.", error));
+
+    const mapIdle = window.NLI_MAP_IDLE?.create({
+      getMap: () => state.map,
+      getSites: () => state.sites,
+      mainMapIdle: () => !document.body.classList.contains("mobile-content-open")
+        && !detailEl?.classList.contains("open")
+        && !document.body.classList.contains("mobile-profile-map-mode")
+        && !appEl?.classList.contains("mobile-search-results")
+        && !appEl?.classList.contains("panel-maximized")
+        && !document.querySelector(".search-suggestions:not([hidden]), .mobile-layer-menu[open]")
+        && !mobileTimelineMotionCleanup
+        && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || ""),
+      openSite: slug => void openSite(slug, { focus: true }),
+      escapeHtml,
+      // The card's "Present day: town · ancestral land" line, as on the site page.
+      placeOf: site => ({
+        presentDay: SITE_UTILS.presentDayLocation?.(site) || "",
+        land: window.NLI_LAND_HISTORY_DATA?.entries?.find(entry => entry.slug === site.slug)?.homelandLabel || territoryForSite(site)?.title || ""
+      }),
+      // A few stops are people from the biography paths and the map's
+      // animal relatives; now and then a fact about the project itself.
+      // A person whose icon is walking the map is met (and followed) where
+      // the icon is, not at a place in their record.
+      people: () => {
+        const walking = mobileBiographyIconsEnabled()
+          ? (state.nativeMovingBiographyItems?.length ? state.nativeMovingBiographyItems : mobileMovingBiographyItems())
+            .filter(item => state.mobileBiographyMotionControllers.has(item.slug))
+          : [];
+        return Object.entries(BIOGRAPHY_PLACE_PATHS).map(([slug, path]) => {
+          const item = walking.find(candidate => candidate.slug === slug);
+          return {
+            slug,
+            name: mobileBiographyPathPersonName(state.wikiBySlug.get(slug), slug),
+            article: state.wikiBySlug.get(slug),
+            places: path?.places || [],
+            ...(item ? { centerAt: ms => mobileBiographyIconAt(item, ms) } : {}),
+            open: () => void openWikiArticle(slug, { focus: false })
+          };
+        });
+      },
+      animals: () => mobileMovingAnimalsEnabled() ? (MAP_UTILS.nativeAnimals || []).map(animal => ({
+        slug: animal.slug,
+        title: animal.title,
+        article: state.wikiBySlug.get(animal.slug),
+        image: MAP_UTILS.nativeAnimalIcon(animal),
+        centerAt: ms => MAP_UTILS.nativeAnimalMotion(animal, (state.mobileNativeAnimalClock.elapsed || 0) + ms,
+          window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches).coordinates,
+        open: () => void openWikiArticle(animal.slug, { focus: false })
+      })) : [],
+      project: {
+        openAbout: () => openAboutPanel(),
+        openSupport: () => openSupportPanel(),
+        // The beta invitation is for Android phones not already in the app.
+        betaInviteUrl: /Android/i.test(navigator.userAgent || "") && !window.AndroidApp
+          ? window.NLI_RESEARCH_QUESTION_UTILS?.ANDROID_BETA_EMAIL_URL || "" : ""
+      },
+      // Apps that can ease the native map do so directly (smooth, no per-frame bridge calls).
+      camera: {
+        ready: () => Boolean(nativeMapBridgeAvailable() && window.AndroidApp?.easeNativeMapCamera),
+        // A fly also says where on screen the site should land (padding).
+        // The page's mirror of the camera is stale until the flight ends, so the
+        // moving-feature gate sends every tick for the flight (nativeMovingFeaturesChanged).
+        move: view => (state.nativeMapAutoMoveUntil = performance.now() + (Number(view.duration) || 0) + 500) && view.fly && window.AndroidApp.flyNativeMapCamera
+          ? window.AndroidApp.flyNativeMapCamera(androidBridgeToken(), view.center[0], view.center[1], view.zoom, view.duration,
+            Number.isFinite(view.padTop) ? view.padTop : -1, Number.isFinite(view.padBottom) ? view.padBottom : -1)
+          : window.AndroidApp.easeNativeMapCamera(androidBridgeToken(), view.center[0], view.center[1], view.zoom, view.duration),
+        stop: () => { state.nativeMapAutoMoveUntil = 0; window.AndroidApp?.stopNativeMapCamera?.(androidBridgeToken()); }
+      }
+    });
+    window.__nliMapIdle = mapIdle;
+
     function nativeTakePlantPhoto() {
       try {
         if (window.AndroidApp?.takePlantPhoto) {
@@ -15487,17 +16142,22 @@
         openSiteTagList(tagRoute, { skipRoute: true });
         return true;
       }
+      const pathRoute = params.get("path");
+      if (pathRoute) { if (params.has("lesson")) openMobileLearningLesson(pathRoute, Number(params.get("lesson"))-1); else openMobileLearningPath(pathRoute, { skipRoute: true }); return true; }
       const pageRoute = params.get("page");
       if (pageRoute) return openInternalAppLink(`#page/${pageRoute}`);
       const blogRoute = params.get("blog");
       if (blogRoute) return openInternalAppLink(`#blog/${blogRoute}`);
       const eventRoute = params.get("calendar") || params.get("event");
       if (eventRoute) {
-        const exhibit = state.exhibits.find(item => String(item.slug || item.id) === String(eventRoute));
-        if (exhibit) {
-          openExhibit(exhibit);
-          return true;
-        }
+        // Calendar records arrive with the deferred data, after startup routing.
+        const openRouteExhibit = () => {
+          const exhibit = state.exhibits.find(item => String(item.slug || item.id) === String(eventRoute));
+          if (exhibit) openExhibit(exhibit, { skipRoute: true });
+          return Boolean(exhibit);
+        };
+        if (openRouteExhibit()) return true;
+        ensureDeferredDataLoaded().then(openRouteExhibit);
       }
       return false;
     }
@@ -15529,7 +16189,9 @@
     function setMobileContentRoute(params, options = {}) {
       if (options.skipRoute) return;
       const url = new URL(window.location.href);
+      const keepLandHistory = landHistoryController ? landHistoryEnabled() : ["landloss", "land-history"].includes(url.searchParams.get("mode"));
       url.search = "";
+      if (keepLandHistory) url.searchParams.set("mode", "landloss");
       for (const [key, value] of Object.entries(params || {})) {
         if (value) url.searchParams.set(key, value);
       }
@@ -15784,7 +16446,12 @@
     }
 
     function clearMobileRoute() {
-      window.history.replaceState(null, "", window.location.pathname);
+      const url = new URL(window.location.href);
+      const keepLandHistory = landHistoryController ? landHistoryEnabled() : ["landloss", "land-history"].includes(url.searchParams.get("mode"));
+      url.search = "";
+      url.hash = "";
+      if (keepLandHistory) url.searchParams.set("mode", "landloss");
+      window.history.replaceState(null, "", url);
     }
 
     async function openAppPage(page, options = {}) {
@@ -15798,7 +16465,7 @@
         if (routePage === "support") openSupportPanel();
         if (routePage === "support-admin") await openSupportAdminPanel();
         if (routePage === "browse") openBrowsePanel();
-        if (routePage === "learn") await openMobileLearningPathsPanel();
+        if (routePage === "learn") await openMobileLearningPathsPanel(options);
         if (routePage === "knowledgebase") await openKnowledgebasePanel();
         if (routePage === "blog") await openBlogPanel();
         if (routePage === "native-plants") openNativePlantsGuide();
@@ -15823,7 +16490,9 @@
     }
 
     async function openSite(slug, options = {}) {
-      slug = ROUTE_UTILS.listingSlugAlias?.(slug) || slug;
+      // A slug that is a real place opens that place; old WordPress aliases are only for slugs that no longer
+      // exist ("nissaquogues" is Nissequogue Ancestral Land, not the Smithtown place its alias points to).
+      if (!state.sites?.some?.(site => site?.slug === slug)) slug = ROUTE_UTILS.listingSlugAlias?.(slug) || slug;
       cancelAndroidLifecycleDetailScrollRestore();
       stopMobileBiographyFollow();
       state.mobileBiographyFollowUserStoppedSlug = "";
@@ -15859,6 +16528,7 @@
         : (options.mapCenter || site.center);
       state.selectedSlug = slug;
       state.selectedSite = site;
+      landHistoryController?.refreshContext();
       state.selectedWikiSlug = "";
       const lifecycleSnapshot = options.lifecycleSnapshot || null;
       const drawerState = lifecycleSnapshot?.detailDrawerState || options.drawerState || "half";
@@ -15950,6 +16620,7 @@
         ${renderedSiteTimelineSlot ? "" : `<div data-mobile-site-timeline-slot>${historyHtml}</div>`}
         ${whyThisMattersHtml(site, { used: linked, excludeHref })}
         ${relatedSitesSection(site)}
+        ${window.NLI_LAND_HISTORY?.placementHtml(site, window.NLI_LAND_HISTORY_DATA) || ""}
         <div data-mobile-site-sources-slot>${sourcesEvidenceSection(site)}</div>
         ${mobileAdoptPlaceCtaHtml(site)}
         ${discussionHtml("site", site)}
@@ -15962,6 +16633,7 @@
         </div>
         ${mobileCheckinHistoryHtml(site)}
       `;
+      if (isAdminContributor()) void PROFILE_UTILS.appendCopyStory?.(detailBodyEl, site.id, {site, baseUrl: DIRECTUS, tokenProvider: () => state.profile?.token});
       removeUnbundledSnapshotImages(detailBodyEl);
       detailBodyEl.scrollTop = 0;
       syncDetailHeroScrollState();
@@ -16008,6 +16680,9 @@
             excludeHref,
             field: historyEntry?.[2]?.content
           }) : "");
+        if (options.timelineEventId) {
+          window.requestAnimationFrame(() => focusMobileHistoricMoment(options.timelineEventId));
+        }
       }).catch(() => {});
       void sourceListPromise.then(sourceList => {
         if (!Array.isArray(sourceList) || !sourceList.length || state.selectedSlug !== slug || !detailEl?.classList.contains("open")) return;
@@ -16052,7 +16727,7 @@
       clearMobileBiographyPathOverlay();
       syncSitePlantMarkers(null);
       renderList();
-      if (!options.skipRoute) window.history.replaceState(null, "", window.location.pathname);
+      if (!options.skipRoute) clearMobileRoute();
       syncMobilePanelAccessibility();
       if (returnToLongIslandView && options.restoreMapView !== false) {
         window.setTimeout(() => fitLongIslandMapView("mobile-startup-spotlight-article-closed"), 120);
@@ -16132,6 +16807,8 @@
         openWikiArticle(wikiRoute, { skipRoute: true });
         return;
       }
+      const pathRoute = params.get("path");
+      if (pathRoute) { if (params.has("lesson")) openMobileLearningLesson(pathRoute, Number(params.get("lesson"))-1); else openMobileLearningPath(pathRoute, { skipRoute: true }); return true; }
       const pageRoute = params.get("page");
       if (pageRoute) {
         openAppPage(pageRoute, { skipRoute: true });
@@ -16205,6 +16882,11 @@
       }
       if (state.mobilePanelState !== "collapsed") {
         setMobileBottomPanelState("collapsed");
+        return true;
+      }
+      // Back leaves "How the land was lost" mode before offering to exit the app.
+      if (landHistoryEnabled()) {
+        landHistoryController.setEnabled(false);
         return true;
       }
       return false;
@@ -16338,7 +17020,7 @@
         const summary = [context, publicCleanText(exhibit.summary || "")].filter(Boolean).join(". ");
         return {
           kind,
-          label: "Upcoming exhibit",
+          label: String(exhibit.start_datetime || exhibit.collection_date).slice(0, 10) <= localDateKey() ? "On view now" : "Upcoming exhibit",
           title: exhibit.title || "On This Site exhibit",
           summary: summary || "Open the event details for dates, location, and related sites.",
           actionLabel: "View exhibit",
@@ -16439,7 +17121,7 @@
 
     function syncMobilePromoDock() {
       if (!mobilePromoDockEl) return;
-      if (!isNativeAndroidApp() || isOfflineTextMode()) {
+      if (isOfflineTextMode()) {
         mobilePromoDockEl.hidden = true;
         return;
       }
@@ -16447,7 +17129,7 @@
       mobilePromoButtons.forEach(button => {
         button.hidden = !available.has(button.dataset.mobilePromoKind || "");
       });
-      mobilePromoDockEl.hidden = available.size === 0;
+      mobilePromoDockEl.hidden = available.size === 0 && !landHistoryController;
     }
 
     function showMobilePromo(kind) {
@@ -16707,25 +17389,17 @@
       const token = androidBridgeToken();
       const app = window.AndroidApp;
       if (!token || !app?.syncNativeMapCamera || !app?.syncNativeMapTransientState || !navigator.geolocation) return false;
-      const showOfflineLocation = (longitude, latitude) => {
-        state.userLocation = [longitude, latitude];
+      setLocationControlsBusy(true);
+      navigator.geolocation.getCurrentPosition(position => {
+        setLocationControlsBusy(false);
+        state.userLocation = [position.coords.longitude, position.coords.latitude];
         app.syncNativeMapTransientState(token, JSON.stringify({
           signature: `offline-location:${state.userLocation.join(",")}`,
           userLocation: nativeMapFeatureCollection(nativeUserLocationFeatures())
         }));
-        app.syncNativeMapCamera(token, longitude, latitude, 13);
-      };
-      // A fresh GPS fix can take a minute indoors, so centre on the device's
-      // last fix (up to five minutes old) at once and refine when one arrives.
-      const cached = nativeCachedUserPosition();
-      if (cached) showOfflineLocation(cached.longitude, cached.latitude);
-      setLocationControlsBusy(!cached);
-      navigator.geolocation.getCurrentPosition(position => {
-        setLocationControlsBusy(false);
-        showOfflineLocation(position.coords.longitude, position.coords.latitude);
+        app.syncNativeMapCamera(token, state.userLocation[0], state.userLocation[1], 13);
       }, error => {
         setLocationControlsBusy(false);
-        if (cached) return;
         showBanner(error?.code === 1
           ? "Location permission is off for On This Site."
           : "Could not get a GPS fix yet. Try near a window or outside.", { centered: true });
@@ -17059,7 +17733,7 @@
           <div class="checkin-history-heading">
             <div>
               <h3>Check-in history</h3>
-              <p>A dated visitor log for people who confirmed they were near this place.</p>
+              <p>${escapeHtml(SITE_UTILS.checkinHistoryDescription)}</p>
             </div>
             <strong>${entries.length}</strong>
           </div>
@@ -17241,7 +17915,8 @@
       }
       const sourceData = cachedMobileMapSourceData();
       CALENDAR_UTILS.addOnThisDayMapImage?.(state.map, "mobile-on-this-day-calendar");
-      state.map.addSource("mobile-sites", { type: "geojson", data: sourceData.sites });
+      // Keyed by slug so a site's icon can hide while its photo shows.
+      state.map.addSource("mobile-sites", { type: "geojson", data: sourceData.sites, promoteId: "slug" });
       state.map.addSource("mobile-site-attention", { type: "geojson", data: sourceData.attention });
       state.map.addSource("mobile-place-name-area-labels", { type: "geojson", data: sourceData.placeNameAreaLabels });
       state.map.addSource("mobile-biography-paths", { type: "geojson", data: allMobileBiographyPathFeatureCollection({ enabled: mobileBiographyPathsEnabled() }) });
@@ -17400,8 +18075,9 @@
         source: "mobile-sites",
         filter: ["==", ["geometry-type"], "Point"],
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 4.4, 10, 5.8, 14, 7.2],
-          "circle-color": ["case", ["==", ["get", "has_header_image"], true], "#326fe3", "#496f5d"],
+          // Keep overview dots quiet; the separate hit layer preserves easy taps.
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 1.6, 10, 2.5, 12, 3.5, 14, 5, 16, 6],
+          "circle-color": ["case", ["any", ["get", "has_header_image"], ["get", "blue_pin"]], "#326fe3", "#496f5d"],
           "circle-opacity": 0.92,
           "circle-stroke-color": "rgba(255,255,255,0.36)",
           "circle-stroke-width": 0,
@@ -17415,12 +18091,13 @@
         filter: ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "has_icon"], true]],
         layout: {
           "icon-image": ["get", "icon_key"],
-          "icon-size": ["interpolate", ["linear"], ["zoom"], 6, 0.72, 10, 0.9, 14, 1.08],
+          "icon-size": MAP_UTILS.mapIconSize(1.08),
           "icon-anchor": "center",
           "icon-allow-overlap": true,
           "icon-ignore-placement": true,
           "icon-optional": true
-        }
+        },
+        paint: { "icon-opacity": MOBILE_SITE_ICON_OPACITY }
       });
       ensureMobileUnreadBadgeImages();
       state.map.addLayer({
@@ -17430,13 +18107,15 @@
         filter: ["all", ["==", ["geometry-type"], "Point"], [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0]],
         layout: {
           "icon-image": ["get", "unread_icon"],
-          "icon-size": 1,
+          // Smaller than a pin and shrinking with it; the offset shrinks too so
+          // the badge stays on the pin's corner at low zoom.
+          "icon-size": MAP_UTILS.mapIconSize(0.8),
           "icon-anchor": "center",
           "icon-allow-overlap": true,
           "icon-ignore-placement": true
         },
         paint: {
-          "icon-translate": [9, -9]
+          "icon-translate": ["interpolate", ["linear"], ["zoom"], 7, ["literal", [4, -4]], 13, ["literal", [8, -8]]]
         }
       });
       state.map.addLayer({
@@ -17462,7 +18141,7 @@
         filter: ["==", ["get", "attention_kind"], "on-this-day"],
         layout: {
           "icon-image": "mobile-on-this-day-calendar",
-          "icon-size": ["interpolate", ["linear"], ["zoom"], 6, 0.72, 10, 0.92, 14, 1.08],
+          "icon-size": MAP_UTILS.mapIconSize(1.08),
           "icon-anchor": "center",
           "icon-allow-overlap": true,
           "icon-ignore-placement": true
@@ -17585,7 +18264,7 @@
           "text-max-width": 9,
           "text-optional": false,
           "icon-image": ["get", "unread_icon"],
-          "icon-size": 1,
+          "icon-size": MAP_UTILS.mapIconSize(1),
           "icon-anchor": "center",
           "icon-offset": ["interpolate", ["linear"], ["zoom"], 6, ["get", "unread_badge_offset_low"], 12, ["get", "unread_badge_offset_high"]],
           "icon-allow-overlap": true,
@@ -17606,6 +18285,7 @@
         filter: ["<=", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
         minzoom: SITE_LABEL_MIN_ZOOM,
         layout: {
+          "text-padding": MAP_UTILS.siteTitlePadding,
           "text-field": ["get", "title"],
           "text-size": ["interpolate", ["linear"], ["zoom"], SITE_LABEL_MIN_ZOOM, ["*", ["get", "label_size"], 0.84], 16, ["*", ["get", "label_size"], 1.25]],
           "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
@@ -17631,6 +18311,7 @@
         filter: [">", ["coalesce", ["to-number", ["get", "unread_count"]], 0], 0],
         minzoom: SITE_LABEL_MIN_ZOOM,
         layout: {
+          "text-padding": MAP_UTILS.siteTitlePadding,
           "text-field": ["get", "title"],
           "text-size": ["interpolate", ["linear"], ["zoom"], SITE_LABEL_MIN_ZOOM, ["*", ["get", "label_size"], 0.84], 16, ["*", ["get", "label_size"], 1.25]],
           "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
@@ -17641,7 +18322,7 @@
           "text-max-width": 8,
           "text-optional": false,
           "icon-image": ["get", "unread_icon"],
-          "icon-size": 1,
+          "icon-size": MAP_UTILS.mapIconSize(1),
           "icon-anchor": "center",
           "icon-offset": ["interpolate", ["linear"], ["zoom"], SITE_LABEL_MIN_ZOOM, ["get", "unread_badge_offset_low"], 16, ["get", "unread_badge_offset_high"]],
           "icon-allow-overlap": true,
@@ -17687,11 +18368,13 @@
         minzoom: SITE_POINT_LABEL_MIN_ZOOM,
         layout: {
           "text-field": ["get", "title"],
-          "text-size": ["interpolate", ["linear"], ["zoom"], SITE_POINT_LABEL_MIN_ZOOM, 10.25, 17, 14],
+          "text-size": ["interpolate", ["linear"], ["zoom"], SITE_POINT_LABEL_MIN_ZOOM, 10, 12, 11.5, 17, 14],
+          "text-padding": MAP_UTILS.siteTitlePadding,
           "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
           "text-anchor": "bottom",
           "text-variable-anchor": ["literal", ["bottom", "top", "left", "right"]],
-          "text-radial-offset": 0.55,
+          // Zoomed in, a photo site's title clears its round photo.
+          "text-radial-offset": ["step", ["zoom"], 0.55, SITE_THUMBNAIL_MIN_ZOOM, ["case", ["!=", ["coalesce", ["get", "thumb_url"], ""], ""], 1.9, 0.55]],
           "text-justify": "auto",
           "text-offset": ["literal", [0, -1.45]],
           "text-allow-overlap": false,
@@ -17777,7 +18460,7 @@
       state.mobileStartupSiteRevealRunning = false;
       try {
         state.map?.setPaintProperty("mobile-site-point-dots", "circle-opacity", 0.92);
-        state.map?.setPaintProperty("mobile-site-icons", "icon-opacity", 1);
+        state.map?.setPaintProperty("mobile-site-icons", "icon-opacity", MOBILE_SITE_ICON_OPACITY);
         state.map?.setPaintProperty("mobile-site-point-labels", "text-opacity", ["interpolate", ["linear"], ["zoom"], SITE_POINT_LABEL_MIN_ZOOM, 0, SITE_POINT_LABEL_MIN_ZOOM + 0.35, 1]);
         MAP_UTILS.setLayerVisibilityMany(state.map, MOBILE_STARTUP_REVEAL_HIDDEN_LAYERS, "visible");
         syncMobileBiographyPathLayers();
@@ -17971,6 +18654,7 @@
         ["mobile-place-name-area-labels", data.placeNameAreaLabels]
       ];
       MAP_UTILS.setGeoJsonSourceDataMany(state.map, sources);
+      window.NLI_LAND_HISTORY?.syncOutlineLayers(state.map, ["mobile-sites"], landHistoryEnabled());
       state.mapSourceAppliedKey = sourceKey;
       syncMobileBiographyPathLayers();
       syncMobileSiteAttentionPulseLifecycle();
@@ -17983,6 +18667,8 @@
 
     function markAndroidMapGestureActive() {
       if (!isNativeAndroidApp()) return;
+      // A finger on the native map ends the idle screensaver.
+      globalThis.__nliMapIdle?.wake();
       stopMobileBiographyFollow({ user: true });
       state.androidMapGestureActive = true;
       if (state.androidMapGestureSettleTimer) {
@@ -18074,7 +18760,7 @@
       }
       if (!loginOpenBtn) return;
       if (!state.profile) {
-        loginOpenBtn.textContent = "Login";
+        loginOpenBtn.textContent = "Log in";
         loginOpenBtn.title = "Login or register as a contributor";
         return;
       }
@@ -18148,11 +18834,11 @@
       loginSheetEl?.classList.toggle("has-profile", !!state.profile);
       if (accountSheetTitleEl) accountSheetTitleEl.textContent = state.profile
         ? (state.profileMapMode?.sheet === loginSheetEl ? "Contributor Profile" : "Contributor Account")
-        : "Login";
+        : "Log in";
       if (mapStoryOpenBtn) mapStoryOpenBtn.hidden = !isApprovedContributor();
       if (mapStoryOpenMenuBtn) mapStoryOpenMenuBtn.hidden = !isApprovedContributor();
       if (!state.profile) {
-        profileCardEl.innerHTML = `<p class="summary">Not logged in. Use one contributor account for the desktop map and mobile app.</p>`;
+        profileCardEl.innerHTML = "";
         updateProfileMenuButton();
         loginSubmitBtn.hidden = false;
         registerToggleBtn.hidden = false;
@@ -18199,7 +18885,7 @@
       const profileMapModel = linkedProfile ? mobileContributorProfileMapModel(linkedProfile) : null;
       profileCardEl.innerHTML = `
         <strong>${escapeHtml(displayName || "Contributor")}</strong>
-        ${profileSyncing ? `<p class="detail-meta">Refreshing latest Directus activity...</p>` : ""}
+        ${profileSyncing ? `<p class="detail-meta">Refreshing your latest activity...</p>` : ""}
         <p class="detail-meta">${escapeHtml([roleLabel, locationLabel].filter(Boolean).join(" - "))}</p>
         ${userSinceLine ? `<p class="detail-meta">${escapeHtml(userSinceLine)}</p>` : ""}
         ${state.profile.pending ? `<p class="detail-meta">Thank you for registering. Your account is waiting for review.</p>` : ""}
@@ -18522,24 +19208,25 @@
         ["Stories posted", stats.storiesPosted],
         ["Suggested sites", stats.suggestionsCount]
       ];
-      const chips = [["checkin", "Checked-in Sites"], ["comment", "Commented On"], ["language", "Words Learned"], ["quiz", "Quizzes Completed"], ["plant", "Plant Finds"], ["story", "Stories"], ["suggestion", "Suggested Sites"]]
+      const chips = [["checkin", "Check-ins"], ["comment", "Comments"], ["story", "Photo stories"], ["plant", "Plant finds"], ["language", "Words learned"], ["quiz", "Word quizzes"], ["suggestion", "Suggested sites"]]
         .filter(([type]) => Number(model.counts[type] || 0));
       return `
         <section class="mobile-profile-progress-overview" data-mobile-profile-map-summary>
           <div class="mobile-profile-progress-heading"><div><span>Personal learning path</span><strong>Progress map</strong></div><b>${model.groups.length} mapped</b></div>
-          <p>Numbered markers follow this contributor's activity by date, with ancestral lands kept as quiet context.</p>
+          <p>Each numbered dot is a place, in the order it was first contributed to; its color shows the main kind of contribution. Tap a dot or a moment below.</p>
           ${model.empty ? `<div class="mobile-profile-progress-empty"><strong>Your map is still empty.</strong><p>Check in at a site, comment on a story, learn a language word, or complete a quiz to begin filling it in.</p></div>` : `<div class="mobile-profile-progress-chips">${chips.map(([type, label]) => `<span data-progress-type="${type}">${escapeHtml(label)} <b>${Number(model.counts[type] || 0)}</b></span>`).join("")}</div>`}
           <div class="mobile-profile-progress-stats">${rows.map(([label, value]) => `<div><strong>${Number(value || 0).toLocaleString()}</strong><span>${escapeHtml(label)}</span></div>`).join("")}</div>
+          ${PROFILE_UTILS.profileJourneyHtml(model)}
           ${model.unmappedCount ? `<p class="detail-meta">${model.unmappedCount} additional progress item${model.unmappedCount === 1 ? " is" : "s are"} counted but not mapped without reliable coordinates.</p>` : ""}
         </section>
       `;
     }
 
     function mobileProfileMapPopupHtml(group) {
-      const labels = { checkin: "Checked in", visit: "Visited", comment: "Commented", language: "Learned a word", quiz: "Quiz completed", plant: "Plant find", story: "Story", suggestion: "Suggested site", interaction: "Community interaction" };
+      const labels = { checkin: "Checked in", visit: "Visited", comment: "Commented", language: "Learned a word", quiz: "Quiz completed", plant: "Plant find", story: "Photo story", suggestion: "Suggested site", interaction: "Community interaction" };
       return `<div class="mobile-profile-map-popup">
         ${group.image ? `<img src="${escapeHtml(group.image)}" alt="" loading="lazy" decoding="async">` : ""}
-        <span class="mobile-profile-map-stop-label">Stop ${Number(group.stop_number || 0) || ""}${group.first_date ? ` · first activity ${escapeHtml(activityDateLabel(group.first_date))}` : ""}</span>
+        <span class="mobile-profile-map-stop-label">Stop ${Number(group.stop_number || 0) || ""}${group.caption ? ` · ${escapeHtml(group.caption)}` : ""}</span>
         <strong>${escapeHtml(group.title)}</strong>
         ${group.items.slice().sort((a, b) => new Date(b.date_time || 0) - new Date(a.date_time || 0)).map(item => `<p><b>${escapeHtml(labels[item.activity_type] || "Activity")}</b> <small>${escapeHtml(activityDateLabel(item.date_time))}</small>${item.excerpt ? ` <span>${escapeHtml(item.excerpt)}</span>` : ""}</p>`).join("")}
         ${group.related_slug ? `<button type="button" data-profile-map-source="${escapeHtml(group.related_type)}" data-profile-map-slug="${escapeHtml(group.related_slug)}">Open full ${group.related_type === "wiki" ? "article" : "site"}</button>` : ""}
@@ -18639,11 +19326,9 @@
       if (options.moveMap !== false) {
         const currentZoom = Number(state.map.getZoom?.());
         state.map.stop?.();
-        state.map.easeTo?.({
-          center: group.coordinates,
+        focusMobileCoordinateInVisibleMap(group.coordinates, {
           zoom: Math.max(Number.isFinite(currentZoom) ? currentZoom : 10, 11.8),
-          duration: 620,
-          essential: true
+          duration: 620
         });
         window.setTimeout(() => scheduleNativeMapStateSync("profile-stop-focus", 0), 660);
       }
@@ -18653,23 +19338,10 @@
     }
 
     function mobileProfileJourneyMapData(model = {}) {
-      const segments = Array.isArray(model.journeySegments) ? model.journeySegments : [];
       return {
         lines: {
           type: "FeatureCollection",
-          features: segments.map(segment => ({
-            type: "Feature",
-            geometry: { type: "LineString", coordinates: [segment.from, segment.to] },
-            properties: { order: segment.order, date_label: activityDateLabel(segment.date_time), title: segment.title || "Contribution" }
-          }))
-        },
-        labels: {
-          type: "FeatureCollection",
-          features: segments.map(segment => ({
-            type: "Feature",
-            geometry: { type: "Point", coordinates: [(segment.from[0] + segment.to[0]) / 2, (segment.from[1] + segment.to[1]) / 2] },
-            properties: { label: `${segment.order}. ${activityDateLabel(segment.date_time)}` }
-          }))
+          features: (model.stopSegments || []).map(segment => ({ type: "Feature", geometry: { type: "LineString", coordinates: [segment.from, segment.to] }, properties: { order: segment.order } }))
         }
       };
     }
@@ -18727,6 +19399,7 @@
         marker.setOffset(offset);
         placed.push({ x: origin.x + offset[0], y: origin.y + offset[1] });
       });
+      PROFILE_UTILS.layoutProfileStopLabels(mode.domMarkers.map((marker, index) => ({ group: mode.model.groups[index], marker: marker.getElement(), label: marker.getElement().lastChild })), { selected: mode.selectedStopNumber, container: state.map.getContainer(), zoom: state.map.getZoom() });
     }
 
     function installApkSiteCameraAudit() {
@@ -18793,6 +19466,7 @@
     }
 
     function renderMobileProfileProgressMap() {
+      if (landHistoryEnabled()) return;
       const mode = state.profileMapMode;
       if (!mode || !state.map) return;
       const currentStyle = state.map.getStyle?.();
@@ -18836,7 +19510,7 @@
       state.map.addLayer({ id: "mobile-profile-progress-territory-lines", type: "line", source: "mobile-profile-progress-context", paint: { "line-color": "#496f5d", "line-width": 0.8, "line-opacity": 0.28, "line-dasharray": [2, 2] } });
       const journeyData = mobileProfileJourneyMapData(mode.model);
       state.map.addSource("mobile-profile-progress-path", { type: "geojson", data: journeyData.lines });
-      state.map.addLayer({ id: "mobile-profile-progress-path", type: "line", source: "mobile-profile-progress-path", paint: { "line-color": "#315c48", "line-width": 2.35, "line-opacity": 0.68, "line-dasharray": [2, 1.5] } });
+      state.map.addLayer({ id: "mobile-profile-progress-path", type: "line", source: "mobile-profile-progress-path", paint: { "line-color": "#315c48", "line-width": 1.6, "line-opacity": 0.3, "line-dasharray": [2, 2] } });
       const features = mode.model.groups.map((group, index) => ({ type: "Feature", geometry: { type: "Point", coordinates: group.coordinates }, properties: { index, title: group.title, type: group.primary_type, count: group.items.length } }));
       state.map.addSource("mobile-profile-progress-points", { type: "geojson", data: { type: "FeatureCollection", features } });
       state.map.addLayer({ id: "mobile-profile-progress-points", type: "circle", source: "mobile-profile-progress-points", paint: {
@@ -18852,7 +19526,7 @@
         const markerButton = document.createElement("button");
         markerButton.type = "button";
         markerButton.className = "mobile-profile-progress-marker";
-        markerButton.textContent = String(group.stop_number || index + 1);
+        markerButton.innerHTML = `${group.stop_number || index + 1}<span class="profile-stop-label" aria-hidden="true"><strong>${escapeHtml(group.title)}</strong><small>${escapeHtml(group.caption)}</small><i>${escapeHtml(group.note)}</i></span>`;
         markerButton.dataset.title = group.title || "Contribution";
         markerButton.dataset.profileMapStop = String(group.stop_number || index + 1);
         markerButton.style.setProperty("--profile-marker-color", MOBILE_PROFILE_ACTIVITY_COLORS[group.primary_type] || MOBILE_PROFILE_ACTIVITY_COLORS.interaction);
@@ -18955,6 +19629,7 @@
     }
 
     function settleMobileProfileProgressMap() {
+      if (landHistoryEnabled()) return;
       const mode = state.profileMapMode;
       if (!mode || !state.map) return;
       state.map.resize?.();
@@ -19024,7 +19699,7 @@
       profilesSheetEl?.classList.remove("profile-progress-active");
       loginSheetEl?.classList.remove("profile-progress-active");
       profilesSheetEl?.querySelector(".sheet-head h2")?.replaceChildren(document.createTextNode("Contributors"));
-      if (accountSheetTitleEl) accountSheetTitleEl.textContent = state.profile ? "Contributor Account" : "Login";
+      if (accountSheetTitleEl) accountSheetTitleEl.textContent = state.profile ? "Contributor Account" : "Log in";
       restoreMobileMapLayers();
       scheduleNativeMapStateSync("profile-exit", 0);
       scheduleMobilePanelMapResize();
@@ -19166,7 +19841,7 @@
               <button class="action secondary" type="button" data-profile-site="${escapeHtml(comment.site_slug || comment.source_slug || "")}">View on ${escapeHtml(comment.site_title || comment.source_title || "article")}</button>
               <p>${escapeHtml(comment.comment || "")}</p>
             </article>
-          `).join("") : `<p class="detail-meta">${isOfflineTextMode() ? "Comments load when you're back online." : "No approved comments yet."}</p>`}
+          `).join("") : `<p class="detail-meta">No approved comments yet.</p>`}
         </section>
       `;
     }
@@ -19331,7 +20006,7 @@
               <span class="distance">Open</span>
             </button>
           `;
-        }).join("") || `<p class="summary">${isOfflineTextMode() ? "Events and exhibits load when you're back online." : "No published events or exhibits yet."}</p>`}
+        }).join("") || `<p class="summary">No published events or exhibits yet.</p>`}
         ${isAdminContributor() ? `<a class="action secondary" href="${DIRECTUS}/admin/content/calendar_events/+" target="_blank" rel="noreferrer">Add event</a>` : ""}
       `;
     }
@@ -19421,6 +20096,8 @@
         const deleted = contributionIsModerated(story);
         return ({
         type: "map-story",
+        plantObservationId: relationId(story.plant_observation),
+        prompt_key: story.prompt_key,
         slug: String(story.id || ""),
         contentSourceType: story.attached_site_slug ? "site" : "",
         contentSlug: story.attached_site_slug || "",
@@ -19689,7 +20366,7 @@
         .map(item => ({
           type: "account-review",
           slug: String(item.id || ""),
-          title: "New contributor account",
+          title: String(item.status || "").toLowerCase() === "pending_verification" ? "Awaiting email verification" : "New contributor account",
           label: "Account request",
           preview: activityPreview(item.review_note || item.email || item.email_normalized || "A contributor account is waiting for review."),
           date: ACTIVITY_UTILS.registrationDate(item),
@@ -19805,7 +20482,7 @@
         context.arc(14, 14, 12, 0, Math.PI * 2);
         context.fill();
         context.fillStyle = "#fff";
-        context.font = `700 ${label.length > 2 ? 11 : (label.length > 1 ? 14 : 16)}px sans-serif`;
+        context.font = `400 ${label.length > 2 ? 11 : (label.length > 1 ? 14 : 16)}px sans-serif`;
         context.textAlign = "center";
         context.textBaseline = "middle";
         context.fillText(label, 14, 14.5);
@@ -19858,6 +20535,18 @@
       return mobileActivityUnreadTracker.items();
     }
 
+    // Each tab's red number counts only unread items newer than the last time
+    // this profile opened that tab, so opening the tab clears it. Cards, list
+    // rows and pins keep their own red marks until viewed or a week old.
+    function mobileUnreadItemsNewSinceTab(tab, items = mobileUnreadActivityItems()) {
+      return ACTIVITY_UTILS.itemsNewSince(items, ACTIVITY_UTILS.readTabOpened(tab, mobileActivityReceiptProfileKeys()[0]));
+    }
+
+    function markMobileActivityTabOpened(tab) {
+      ACTIVITY_UTILS.markTabOpened(tab, mobileActivityReceiptProfileKeys()[0]);
+      updateMobileActivityUnreadBadge();
+    }
+
     function mobileUnreadActivityCount() {
       // Match the toolbar badge to the number of red-dotted cards the user
       // can actually see in Community Activity. Grouped updates remain one
@@ -19877,6 +20566,11 @@
       const candidates = ACTIVITY_UTILS.contentUpdateTargetCandidates(activityItems);
       let discussionFallback = null;
       for (const candidate of candidates) {
+        if (candidate.type === "plant-observation") {
+          const exact = candidate.id ? detailBodyEl.querySelector(`[data-plant-observation-id="${CSS.escape(candidate.id)}"]`) : null;
+          if (exact) return exact;
+          discussionFallback ||= detailBodyEl.querySelector(".site-plant-grid");
+        }
         if (candidate.type === "comment") {
           const commentId = candidate.id;
           const exactComment = commentId
@@ -19916,11 +20610,8 @@
         || detailBodyEl.querySelector('[data-site-introduction="summary"]')
         || detailBodyEl.querySelector(".section");
       if (!target) return;
-      detailBodyEl.querySelectorAll(".content-update-highlight").forEach(element => element.classList.remove("content-update-highlight"));
-      target.classList.add("content-update-highlight");
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      ACTIVITY_UTILS.revealContentTarget(detailBodyEl, target);
       showBanner("New content highlighted.");
-      window.setTimeout(() => target.classList.remove("content-update-highlight"), 8000);
     }
 
     function revealMobileWikiContentUpdate(item, activityItems = []) {
@@ -19930,11 +20621,8 @@
         || detailBodyEl.querySelector(".discussion-section")
         || detailBodyEl.querySelector(".section");
       if (!target) return;
-      detailBodyEl.querySelectorAll(".content-update-highlight").forEach(element => element.classList.remove("content-update-highlight"));
-      target.classList.add("content-update-highlight");
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      ACTIVITY_UTILS.revealContentTarget(detailBodyEl, target);
       showBanner("New article content highlighted.");
-      window.setTimeout(() => target.classList.remove("content-update-highlight"), 8000);
     }
 
     function mobileUnreadCountLabel(count) {
@@ -19982,8 +20670,8 @@
         badge.hidden = count <= 0;
         element.classList.toggle("has-unread-activity", count > 0);
       });
-      const wikiCount = ACTIVITY_UTILS.weightedActivityCount(mobileUnreadActivityItems().filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.type === "wiki"));
-      const siteCount = ACTIVITY_UTILS.weightedActivityCount(mobileUnreadActivityItems().filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.type === "site"));
+      const wikiCount = ACTIVITY_UTILS.weightedActivityCount(mobileUnreadItemsNewSinceTab("knowledgebase").filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.type === "wiki"));
+      const siteCount = ACTIVITY_UTILS.weightedActivityCount(mobileUnreadItemsNewSinceTab("site-list").filter(item => ACTIVITY_UTILS.activityContentTarget(item)?.type === "site"));
       document.querySelectorAll('.mobile-more-menu [data-app-page="browse"]').forEach(button => {
         let badge = button.querySelector("[data-mobile-site-list-unread-badge]");
         if (!badge) {
@@ -20010,7 +20698,8 @@
 
     function updateMobileActivityUnreadBadge() {
       const badge = document.querySelector("[data-mobile-activity-unread-badge]");
-      const count = mobileUnreadActivityCount();
+      if (activitySheetEl?.classList.contains("open")) ACTIVITY_UTILS.markTabOpened("activity", mobileActivityReceiptProfileKeys()[0]);
+      const count = mobileUnreadItemsNewSinceTab("activity").length;
       if (badge) {
         badge.textContent = count > 99 ? "99+" : String(count);
         badge.hidden = count <= 0;
@@ -20079,7 +20768,7 @@
                   </button>
                 ` : ""}
               </div>
-              <time>${comment.created_at ? escapeHtml(PROFILE_UTILS.parseContributionTimestamp(comment.created_at).toLocaleString()) : "Approved comment"}</time>
+              <time>${comment.created_at ? escapeHtml(PROFILE_UTILS.parseContributionTimestamp(comment.created_at).toLocaleString("en-US")) : "Approved comment"}</time>
             </div>
           </article>
           ${repliesFor(comment.id).map(reply => renderComment(reply, depth + 1)).join("")}
@@ -20291,12 +20980,13 @@
       if (!mobileNotificationsListEl) return;
       const items = latestMobileNotifications();
       mobileNotificationsListEl.innerHTML = `
-        <p class="summary">Replies, plant notes, and review items.</p>
+        <p class="summary">Replies, plant notes, scan updates, and review items.</p>
         ${items.map((item, index) => `
           <article class="activity-feed-item" data-mobile-notification-index="${index}" data-mobile-notification-type="${escapeHtml(item.type)}" data-mobile-notification-slug="${escapeHtml(item.slug || "")}" data-mobile-notification-source-type="${escapeHtml(item.sourceType || "")}" data-mobile-notification-comment-id="${escapeHtml(item.commentId || "")}">
             <button class="notification-main" type="button" data-open-mobile-notification>
               ${item.image ? `<span class="notification-thumb"><img src="${escapeHtml(item.image)}" alt="" loading="lazy" decoding="async" onerror="this.closest('.notification-thumb')?.remove();"></span>` : ""}
-              <span class="detail-meta">${escapeHtml(item.label)} - ${escapeHtml(item.meta || activityDateLabel(item.date))}</span>
+              <span class="detail-meta">${escapeHtml(item.label)}${item.meta ? ` - ${escapeHtml(item.meta)}` : ""}</span>
+              <span class="notification-date">${escapeHtml(ACTIVITY_UTILS.dateLabel(item.date, { includeTime: true }))}</span>
               <strong>${escapeHtml(item.title || "Notification")}</strong>
               ${item.preview ? `<p>${escapeHtml(item.preview)}</p>` : ""}
             </button>
@@ -20315,6 +21005,7 @@
       const activityReady = state.deferredCommunityDataLoaded;
       if (activityReady) renderMobileActivitySheet();
       openSheet(activitySheetEl);
+      markMobileActivityTabOpened("activity");
       showFirstUnreadMobileActivityCard();
       if (!activityReady) {
         state.mobileActivityRenderedSignature = "";
@@ -20358,6 +21049,9 @@
       if (type === "map-story" && slug) {
         const story = state.mapStories.find(item => String(item.id) === String(slug));
         if (story && MAP_STORY_UTILS.isActive(story, state.mapStoryVotes, MAP_STORY_RULES)) {
+          if (story.attached_site_slug && relationId(story.plant_observation)) {
+            return openSite(story.attached_site_slug, { contentUpdateItems: [{ ...story, type: "map-story" }] });
+          }
           focusMapStory(story, { duration: 950 });
           openMapStory(story);
         }
@@ -20463,7 +21157,8 @@
         return String(a.profile.display_name || a.profile.username || "").localeCompare(String(b.profile.display_name || b.profile.username || ""));
       });
       profilesListEl.innerHTML = rows.length ? rows.map(({ profile, activity, languageWords, stats }) => {
-        const totalPoints = `${mobileProfilePointTotal(stats)} points`;
+        // Point records are private, so signed-out visitors would only see "0 points".
+        const totalPoints = state.profile ? `${mobileProfilePointTotal(stats)} points` : "";
         const avatar = directusAssetUrl(profile.avatar);
         const profileKey = String(profile.id || profile.slug || profile.display_name || "");
         const profileAnchor = `mobile-profile-${profileKey.replace(/[^a-z0-9_-]/gi, "-")}`;
@@ -20480,7 +21175,7 @@
                 <strong>${escapeHtml(name)}</strong>
                 ${banned ? `<span>Banned - public contributions show as [deleted]</span>` : ""}
                 <span>${escapeHtml(profile.role_label || "Contributor")}${profile.location_label ? ` - ${escapeHtml(profile.location_label)}` : ""}</span>
-                <span>${escapeHtml(totalPoints)} - ${activity.comments.length} comments - ${activity.visits.length} visits</span>
+                <span>${totalPoints ? `${escapeHtml(totalPoints)} - ` : ""}${activity.comments.length} comments - ${activity.visits.length} visits</span>
               </span>
               <span class="contributor-chevron" aria-hidden="true">${expanded ? "Hide" : "Open"}</span>
             </button>
@@ -20496,7 +21191,7 @@
                 <button class="profile-stat" type="button" data-show-profile-language aria-expanded="false"><strong>${languageWords.length}</strong><span class="detail-meta">language words</span></button>
                 <button class="profile-stat" type="button" data-show-mobile-profile-progress aria-expanded="false"><strong>${stats.loginStreak}</strong><span class="detail-meta">day streak</span></button>
               </div>
-              <button class="profile-total-points" type="button" data-show-mobile-profile-progress aria-expanded="false">${escapeHtml(totalPoints)} - view details</button>
+              <button class="profile-total-points" type="button" data-show-mobile-profile-progress aria-expanded="false">${totalPoints ? `${escapeHtml(totalPoints)} - view details` : "View details"}</button>
               <p class="detail-meta">${escapeHtml(milestoneText(profile))}</p>
               ${supporterLine(profile) ? `<p class="detail-meta">${escapeHtml(supporterLine(profile))}</p>` : ""}
               ${mobileProfileBadgesHtml(profile)}
@@ -20516,7 +21211,7 @@
             </div>
           </article>
         `;
-      }).join("") : `<p class="summary">${isOfflineTextMode() ? "Contributor profiles load when you're back online." : "No public contributor profiles are published yet."}</p>`;
+      }).join("") : `<p class="summary">No public contributor profiles are published yet.</p>`;
     }
 
     function openMobileContributorProfile(profileKey) {
@@ -20577,6 +21272,7 @@
       if (state.profileMapMode && sheet !== state.profileMapMode.sheet) exitMobileProfileMapMode();
       document.querySelectorAll(".sheet.open").forEach(item => item.classList.remove("open"));
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
+      sheet.classList.remove("plant-id-fullscreen");
       sheet.classList.add("open");
       syncMobilePanelAccessibility();
       resetMobilePanelScroll(sheet);
@@ -21097,8 +21793,6 @@
       if (isOfflineTextMode()) {
         renderOfflineMapIndex();
         statusEl.textContent = `${state.filtered.length || state.sites.length} saved places`;
-        // Saved Labels choices apply to the native map offline too.
-        scheduleNativeMapStateSync("map-load");
         return false;
       }
       const ready = await waitForMobileMapRuntime();
@@ -21198,6 +21892,7 @@
         state.map.on("load", () => {
           collapseMobileMapAttribution();
           addPolygonLayers();
+          installLandHistoryMode();
           installNativeMapBridge();
           syncNativeMapState("map-load");
           syncMarkers();
@@ -21210,10 +21905,21 @@
           });
           state.map.on("zoomend", () => {
             syncMarkers({ auxiliary: false });
-            syncMapStoryMarkers();
+          });
+          state.map.on("movestart", () => {
+            for (const marker of state.storyMarkers.values()) marker.getElement().style.visibility = "hidden";
+          });
+          // Photos fade out as soon as the map zooms out past their zoom.
+          state.map.on("zoom", () => {
+            if (state.mobileSiteThumbMarkers.size && state.map.getZoom() < SITE_THUMBNAIL_MIN_ZOOM) syncMobileSiteThumbnails();
           });
           state.map.on("moveend", () => {
             reprioritizeQueuedMobileSiteIcons();
+            syncMobileSiteThumbnails();
+            // Titles settle a moment after the camera stops; check the photos again.
+            window.clearTimeout(state.mobileSiteThumbTimer);
+            state.mobileSiteThumbTimer = window.setTimeout(syncMobileSiteThumbnails, 700);
+            syncMapStoryMarkers();
             syncNativeMapCameraToAndroid();
           });
           window.setTimeout(() => {
@@ -21297,9 +22003,6 @@
         button.setAttribute("aria-disabled", "true");
         button.dataset.requiresOnline = "true";
       });
-      // The guided learning paths are bundled, so Learn takes Feedback's
-      // place beside About and Labels while offline.
-      if (mobileLearnQuickBtn) mobileLearnQuickBtn.hidden = false;
       updateMobileHeaderInstruction();
     }
 
@@ -21330,6 +22033,8 @@
       if (mobileLayerShapesInput) mobileLayerShapesInput.checked = state.settings.showShapes !== false;
       if (mobileLayerBiographyPathsInput) mobileLayerBiographyPathsInput.checked = mobileBiographyPathsEnabled();
       if (mobileLayerBiographyIconsInput) mobileLayerBiographyIconsInput.checked = mobileBiographyIconsEnabled();
+      if (mobileLayerMovingAnimalsInput) mobileLayerMovingAnimalsInput.checked = mobileMovingAnimalsEnabled();
+      document.body.classList.toggle("hide-moving-animals", !mobileMovingAnimalsEnabled());
       const configured = state.settings.layerCategories || {};
       mobileLayerCategoryInputs.forEach(input => {
         input.checked = configured[input.value] !== false;
@@ -21346,7 +22051,8 @@
           state.settings.showPins !== false,
           state.settings.showShapes !== false,
           mobileBiographyPathsEnabled(),
-          mobileBiographyIconsEnabled()
+          mobileBiographyIconsEnabled(),
+          mobileMovingAnimalsEnabled()
         ];
         const primaryCount = primaryStates.filter(Boolean).length;
         const categoryCount = mobileLayerCategoryInputs.filter(input => input.checked).length;
@@ -21374,6 +22080,51 @@
       }
     }
 
+    // Labels double as a legend: each shows the icon its sites use on the map
+    // (the most common one among the sites in that category) or a swatch.
+    function renderMobileLayerLegend() {
+      if (!mobileLayerMenu || !state.sites?.length) return;
+      const counts = new Map();
+      const add = (key, url) => {
+        if (!url) return;
+        const tally = counts.get(key) || new Map();
+        tally.set(url, (tally.get(url) || 0) + 1);
+        counts.set(key, tally);
+      };
+      for (const site of state.sites) {
+        const url = siteMapIconUrl(site);
+        add("pins", url);
+        for (const key of SITE_UTILS.siteLayerCategoryKeys(site)) add(key, url);
+      }
+      // Placeholder dots and one-off custom icons don't explain a category.
+      const top = key => [...(counts.get(key) || [])]
+        .filter(([url, n]) => n >= 2 && !url.includes("dot-placeholder") && ![...HEADER_IMAGE_BLUE_PLACEHOLDER_ICON_IDS].some(id => url.includes(id)))
+        .sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+      const icons = {
+        exhibits: EXHIBIT_MARKER_ICON, pins: top("pins"), "biography-icons": BIOGRAPHY_PERSON_ICON_URL,
+        "moving-animals": MOVING_DOG_ICON_URL, shapes: "area", "biography-paths": "path", "place-name-areas": "area",
+        polygons: "area", "approximate-locations": "approx",
+        // Categories with their own map icon.
+        "shell-middens": "assets/map-icons/shellheap-marker.png", "fishing-sites": "assets/map-icons/fishingsite-marker.png",
+        "whaling-sites": "assets/map-icons/whales-fin-fluke-marker-v2.png", "burial-sacred": "assets/map-icons/sacredsite-marker.png"
+      };
+      mobileLayerMenu.querySelectorAll(".mobile-layer-option").forEach(option => {
+        const input = option.querySelector("input");
+        const key = input?.classList.contains("mobile-layer-era") ? "" : (input?.value && input.value !== "on" ? input.value : input?.id.replace("mobile-layer-", ""));
+        if (!key) return;
+        const icon = icons[key] || top(key) || "dot";
+        let mark = option.querySelector(".mobile-layer-icon");
+        if (!mark) {
+          mark = document.createElement("i");
+          mark.className = "mobile-layer-icon";
+          mark.setAttribute("aria-hidden", "true");
+          option.prepend(mark);
+        }
+        mark.dataset.swatch = icon.includes("/") ? "" : icon;
+        mark.style.backgroundImage = icon.includes("/") ? `url("${icon}")` : "";
+      });
+    }
+
     function setMobileLayerVisibility(kind, visible) {
       if (kind === "exhibits") state.settings.exhibits = visible;
       if (kind === "pins") state.settings.showPins = visible;
@@ -21390,6 +22141,7 @@
         const now = performance.now();
         state.mobileBiographyMotionControllers.forEach(controller => { controller.lastFrameAt = now; });
       }
+      if (kind === "movingAnimals") state.settings.showMovingAnimals = visible;
       if (kind === "category") {
         state.settings.layerCategories = { ...(state.settings.layerCategories || {}) };
         mobileLayerCategoryInputs.forEach(input => {
@@ -21409,8 +22161,6 @@
       syncMarkers();
       ensureMobileMovingBiographyMarkers();
       if (kind === "era") renderMobileTimelineIfOpen();
-      // Offline the web map isn't there to pass the change on.
-      if (!state.map) scheduleNativeMapStateSync("layers");
     }
 
     function setAllMobileLayerVisibility(visible) {
@@ -21424,6 +22174,7 @@
       state.settings.showBiographyIcons = nextVisible;
       state.settings.biographyIconsPreferenceSet = true;
       state.settings.biographyIconsPreferenceVersion = MOBILE_BIOGRAPHY_ICON_PREFERENCE_VERSION;
+      state.settings.showMovingAnimals = nextVisible;
       const biographyToggleNow = performance.now();
       state.mobileBiographyMotionControllers.forEach(controller => { controller.lastFrameAt = biographyToggleNow; });
       state.settings.layerCategories = {};
@@ -21439,7 +22190,6 @@
       syncMobileLayerButtons();
       syncMobileBiographyPathLayers();
       syncMarkers();
-      if (!state.map) scheduleNativeMapStateSync("layers");
       ensureMobileMovingBiographyMarkers();
       renderMobileTimelineIfOpen();
     }
@@ -21563,6 +22313,23 @@
     }
 
     function activateMobileListTarget(target, event) {
+      const placeChoice = target?.closest?.("[data-place-search-result]");
+      if (placeChoice) {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        return selectPlaceSearchResult(placeChoice.dataset.placeSearchResult, placeChoice.dataset.placeSearchKey);
+      }
+      const selectedAddress = target?.closest?.('[data-nearby-open="address-result"], [data-nearby-map="address-result"], .site-card[data-slug="address-result"]');
+      if (selectedAddress && !target.closest("a")) {
+        const address = state.filtered.find(item => item.slug === "address-result");
+        if (address) {
+          event?.preventDefault?.();
+          setMobileBottomPanelState("collapsed");
+          setAddressMarker(address.center, address.title);
+          window.requestAnimationFrame(() => focusSite(address));
+        }
+        return true;
+      }
       const fromSearchResults = Boolean(activeMobileSearchValue().trim());
       const mapSearch = target?.closest?.("[data-map-search-query]");
       if (mapSearch) {
@@ -21574,7 +22341,7 @@
         state.addressSearchMode = true;
         state.addressSearchPending = query.toLowerCase();
         state.addressSearchFallbackQuery = "";
-        state.filtered = [];
+        state.filtered = mobileSearchCandidates(query);
         resetNearbyRenderLimit();
         renderList();
         setMobilePanelMode("nearby");
@@ -21807,7 +22574,7 @@
       }
     });
     document.addEventListener("click", event => {
-      const stopRow = event.target.closest(".profile-feed-row[data-profile-map-stop]");
+      const stopRow = event.target.closest(".profile-feed-row[data-profile-map-stop], .profile-journey [data-profile-map-stop]");
       if (stopRow && !event.target.closest("[data-profile-site], [data-profile-wiki]")) {
         event.preventDefault();
         focusMobileProfileStop(stopRow.dataset.profileMapStop, { moveMap: true, openCard: true, revealActivity: false });
@@ -21987,104 +22754,6 @@
       }
     });
     mobileNotificationsOpenBtn?.addEventListener("click", openMobileNotificationsSheet);
-    // AR needs only the camera, GPS and compass, so it works offline: the
-    // bubbles come from the bundled places, people, words and land history,
-    // with the guide figures and site pages read from the APK.
-    const scanSpaces = window.NLI_SCAN_SPACES?.create({
-      state, DIRECTUS, openSheet, androidBridgeToken, requestUserLocation, nativeCachedUserPosition,
-      sheetEl: document.getElementById("ar-scans-sheet"),
-      listEl: document.getElementById("mobile-ar-scans-list"),
-      iconBase: isOfflineTextMode() ? "asset:assets/map-icons/" : undefined,
-      siteDetail: site => fetchSiteDetail(site)
-    });
-
-    // Idle screensaver on the main map (shared-map-idle.js): left open and
-    // untouched, the map drifts along Long Island with "Did you know" cards.
-    // Offline there's no web map, so the native map is eased directly.
-    // Offline the page doesn't load the wiki index; the screensaver's people
-    // and animal cards read their summaries from the bundled copy instead.
-    let idleWikiRows = null;
-    function idleWikiArticle(slug) {
-      const article = state.wikiBySlug.get(slug);
-      if (article) return article;
-      if (!idleWikiRows) {
-        idleWikiRows = new Map();
-        fetch(`${WIKI_INDEX_URL}?v=${WIKI_INDEX_VERSION}`).then(response => response.json())
-          .then(json => (json?.rows || []).forEach(row => idleWikiRows.set(row.slug, row)))
-          .catch(() => {});
-      }
-      return idleWikiRows.get(slug);
-    }
-
-    const mapIdle = window.NLI_MAP_IDLE?.create({
-      getMap: () => state.map,
-      getSites: () => state.sites,
-      mainMapIdle: () => !document.body.classList.contains("mobile-content-open")
-        && !detailEl?.classList.contains("open")
-        && !document.body.classList.contains("mobile-profile-map-mode")
-        && !appEl?.classList.contains("mobile-search-results")
-        && !appEl?.classList.contains("panel-maximized")
-        && !document.querySelector(".search-suggestions:not([hidden]), .mobile-layer-menu[open]")
-        && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || ""),
-      openSite: slug => void openSite(slug, { focus: true }),
-      escapeHtml,
-      // The card's "Present day: town · ancestral land" line, as on the site page.
-      placeOf: site => ({
-        presentDay: SITE_UTILS.presentDayLocation?.(site) || "",
-        land: window.NLI_LAND_HISTORY_DATA?.entries?.find(entry => entry.slug === site.slug)?.homelandLabel || territoryForSite(site)?.title || ""
-      }),
-      // A few stops are people from the biography paths and the map's
-      // animal relatives; now and then a fact about the project itself.
-      // A person whose icon is walking the map is met (and followed) where
-      // the icon is, not at a place in their record. Like the animals, the
-      // icons are drawn only alongside the web map.
-      people: () => {
-        const walking = state.map && mobileBiographyIconsEnabled()
-          ? (state.nativeMovingBiographyItems?.length ? state.nativeMovingBiographyItems : mobileMovingBiographyItems())
-            .filter(item => state.mobileBiographyMotionControllers.has(item.slug))
-          : [];
-        return Object.entries(BIOGRAPHY_PLACE_PATHS).map(([slug, path]) => {
-          const item = walking.find(candidate => candidate.slug === slug);
-          return {
-            slug,
-            name: mobileBiographyPathPersonName(idleWikiArticle(slug), slug),
-            article: idleWikiArticle(slug),
-            places: path?.places || [],
-            ...(item ? { centerAt: ms => mobileBiographyIconAt(item, ms) } : {}),
-            open: () => void openWikiArticle(slug, { focus: false })
-          };
-        });
-      },
-      // The animal relatives are drawn only alongside the web map (offline, with
-      // no web map, they aren't on the map), so only then are they stops.
-      animals: () => !state.map ? [] : (MAP_UTILS.nativeAnimals || []).map(animal => ({
-        slug: animal.slug,
-        title: animal.title,
-        article: idleWikiArticle(animal.slug),
-        image: MAP_UTILS.nativeAnimalIcon(animal),
-        centerAt: ms => MAP_UTILS.nativeAnimalMotion(animal, (state.mobileNativeAnimalClock.elapsed || 0) + ms,
-          window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches).coordinates,
-        open: () => void openWikiArticle(animal.slug, { focus: false })
-      })),
-      project: {
-        openAbout: () => openAboutPanel(),
-        openSupport: () => openSupportPanel(),
-        betaInviteUrl: ""
-      },
-      showPhotos: () => !isOfflineTextMode(),
-      camera: {
-        ready: () => Boolean(window.AndroidApp?.easeNativeMapCamera && androidBridgeToken()),
-        // A fly also says where on screen the site should land (padding).
-        move: view => view.fly && window.AndroidApp.flyNativeMapCamera
-          ? window.AndroidApp.flyNativeMapCamera(androidBridgeToken(), view.center[0], view.center[1], view.zoom, view.duration,
-            Number.isFinite(view.padTop) ? view.padTop : -1, Number.isFinite(view.padBottom) ? view.padBottom : -1)
-          : window.AndroidApp.easeNativeMapCamera(androidBridgeToken(), view.center[0], view.center[1], view.zoom, view.duration),
-        stop: () => window.AndroidApp?.stopNativeMapCamera?.(androidBridgeToken()),
-        center: () => state.nativeCameraCenter
-      }
-    });
-    window.__nliMapIdle = mapIdle;
-    const mobileArOpenBtn = document.getElementById("mobile-ar-open");
     if (mobileArOpenBtn && scanSpaces?.available()) {
       mobileArOpenBtn.hidden = false;
       mobileArOpenBtn.addEventListener("click", () => void scanSpaces.openAr());
@@ -22115,6 +22784,7 @@
 
     function resetPlantPhotoPanel(panel) {
       panel._plantAnalysis = null;
+      panel._plantPhotoError = "";
       panel._plantPhotoFile = null;
       panel._plantOriginalPhotoFile = null;
       panel._plantPhotoTakenAt = "";
@@ -22200,6 +22870,24 @@
       if (event.target.closest("[data-mobile-kb-back]")) {
         event.preventDefault();
         openKnowledgebasePanel();
+        return;
+      }
+      const materialType = event.target.closest("[data-mobile-material-type]");
+      if (materialType) {
+        state.materialCultureType = materialType.dataset.mobileMaterialType;
+        rerenderMobileMaterialCulture();
+        return;
+      }
+      const materialView = event.target.closest("[data-mobile-material-view]");
+      if (materialView) {
+        state.materialCultureView = materialView.dataset.mobileMaterialView;
+        rerenderMobileMaterialCulture();
+        return;
+      }
+      const lessonControl = event.target.closest("[data-learning-lesson]");
+      if (lessonControl) {
+        event.preventDefault();
+        openMobileLearningLesson(lessonControl.dataset.learningLesson, lessonControl.dataset.lessonIndex, lessonControl.hasAttribute("data-lesson-complete"));
         return;
       }
       const learningPathOpen = event.target.closest("[data-mobile-learning-path-open]");
@@ -22835,27 +23523,36 @@
       if (requireRegisteredContributor()) openSheet(suggestSiteSheetEl);
     });
     mapStoryPhotoButtonEl?.addEventListener("click", () => {
+      saveStoryCameraReturn(true);
+      captureAndroidLifecycleSnapshot();
+      if (nativeChooseCommentPhoto()) return;
       mapStoryPhotoEl?.removeAttribute("capture");
       mapStoryPhotoEl?.click();
     });
     mapStoryCameraButtonEl?.addEventListener("click", () => {
+      saveStoryCameraReturn(true);
+      captureAndroidLifecycleSnapshot();
+      if (nativeTakeCommentPhoto()) return;
       mapStoryPhotoEl?.setAttribute("capture", "environment");
       mapStoryPhotoEl?.click();
     });
     mapStoryPhotoEl?.addEventListener("change", () => {
-      mapStoryPhotoDraft = null;
       const file = mapStoryPhotoEl.files?.[0];
-      if (!mapStoryPhotoPreviewEl) return;
-      if (!file) {
-        mapStoryPhotoPreviewEl.innerHTML = "";
-        return;
-      }
-      const url = URL.createObjectURL(file);
-      mapStoryPhotoPreviewEl.innerHTML = `<img src="${escapeHtml(url)}" alt="Selected story photo">`;
-      window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+      if (!file) { saveStoryCameraReturn(false); return; }
+      mapStoryCameraFile = file;
+      showMapStoryPhoto(file);
+      saveStoryCameraReturn(false, null);
     });
+    mapStoryPhotoEl?.addEventListener("cancel", () => saveStoryCameraReturn(false));
+    mapStoryCaptionEl?.addEventListener("input", () => saveStoryCameraReturn(Boolean(storyCameraReturn?.awaiting)));
+    mapStoryPromptEl?.addEventListener("change", () => saveStoryCameraReturn(Boolean(storyCameraReturn?.awaiting)));
     mapStorySubmitEl?.addEventListener("click", () => submitMapStory());
     mapStoryViewEl?.addEventListener("click", event => {
+      const permanenceButton = event.target.closest("[data-toggle-story-permanence]");
+      if (permanenceButton) {
+        toggleStoryPermanence(permanenceButton);
+        return;
+      }
       const remove = event.target.closest("[data-delete-map-story]");
       if (remove?.dataset.deleteMapStory) {
         removeAdminContribution("mobile_map_stories", remove.dataset.deleteMapStory);
@@ -22869,13 +23566,15 @@
       const siteLink = event.target.closest("[data-story-site]");
       if (siteLink?.dataset.storySite) {
         mapStoryViewSheetEl.classList.remove("open");
-        openSite(siteLink.dataset.storySite);
+        const story = state.mapStories.find(record => String(record.id) === siteLink.dataset.storyOrigin);
+        openSite(siteLink.dataset.storySite, { contentUpdateItems: story ? [{ ...story, type: "map-story" }] : [] });
         return;
       }
       const territoryLink = event.target.closest("[data-story-territory]");
       if (territoryLink?.dataset.storyTerritory) {
         mapStoryViewSheetEl.classList.remove("open");
-        openSite(territoryLink.dataset.storyTerritory);
+        const story = state.mapStories.find(record => String(record.id) === territoryLink.dataset.storyOrigin);
+        openSite(territoryLink.dataset.storyTerritory, { contentUpdateItems: story ? [{ ...story, type: "map-story" }] : [] });
       }
     });
     plantStorySheetEl?.addEventListener("click", event => {
@@ -22895,11 +23594,11 @@
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
       await refreshMobileAppDataFromDirectus();
     });
-    [mobileLearnOpenBtn, mobileLearnQuickBtn].forEach(button => button?.addEventListener("click", () => {
+    mobileLearnOpenBtn?.addEventListener("click", () => {
       localStorage.removeItem("nli-kid-mode");
       document.querySelector(".mobile-more-menu[open]")?.removeAttribute("open");
       openAppPage("learn");
-    }));
+    });
     suggestSiteOpenBtn.addEventListener("click", () => {
       if (!requireRegisteredContributor()) return;
       openSheet(suggestSiteSheetEl);
@@ -22960,6 +23659,7 @@
           // finishes. Briefly arm its bulk buttons so that opening Labels
           // cannot also activate the button that appears under the same touch.
           mobileLayerBulkReadyAt = Date.now() + 400;
+          renderMobileLayerLegend();
           syncMobileLayerButtons();
           window.setTimeout(() => {
             if (menu.open) syncMobileLayerButtons();
@@ -23215,50 +23915,7 @@
       showLoginStatus("Checking account...");
       try {
         const data = await directusClient.loginWithPassword(loginEmailEl.value.trim(), loginPasswordEl.value);
-        const profile = await contributorProfileForToken(data?.access_token, loginEmailEl.value.trim());
-        if (isProfileBanned(profile)) {
-          throw new Error(profile?.ban_reason || "This account has been banned.");
-        }
-        saveProfile({
-          display_name: profile?.display_name || loginEmailEl.value.trim(),
-          email: loginEmailEl.value.trim(),
-          role: profile?.role_label || "Contributor",
-          approved: profile?.account_enabled !== false,
-          pending: false,
-          account_enabled: profile?.account_enabled !== false,
-          profile_status: profile?.profile_status || "hidden",
-          public_profile: profile?.public_profile === true,
-          headline: profile?.headline || "",
-          location_label: profile?.location_label || "",
-          website_url: profile?.website_url || "",
-          bio: profile?.bio || "",
-          token: data?.access_token,
-          refreshToken: data?.refresh_token || null,
-          refresh_token: data?.refresh_token || null,
-          tokenExpires: data?.expires || null,
-          profileId: profile?.id || null
-        });
-        await directusClient.ensureAuthSession({
-          requireAuth: true,
-          authExpiredMessage: "Login could not establish a secure contributor session. Please try again."
-        });
-        showLoginStatus("Logged in.", "success");
-        showBanner("Logged in.");
-        if (state.selectedSite?.slug) openSite(state.selectedSite.slug, { focus: false });
-        renderFollowing();
-        void awardDailyLoginReward({ silent: true }).then(() => {
-          renderProfile();
-          renderRewards();
-        });
-        void ensureProfileStatsSynced().then(() => {
-          renderProfile();
-          renderRewards();
-          if (profilesSheetEl?.classList.contains("open")) renderProfiles();
-        }).catch(error => {
-          console.warn("Contributor profile activity will retry after login.", error);
-          return false;
-        });
-        scheduleMemberProfileActivityTracking({ login: true, force: true });
+        await finishContributorLogin(data, loginEmailEl.value.trim());
       } catch (error) {
         showLoginStatus(error.message || "Login did not work. Check the email/password or request account approval.", "error");
         showBanner(error.message || "Login did not work. Check the email/password or request account approval.");
@@ -23267,6 +23924,54 @@
         loginSubmitBtn.textContent = originalLabel;
       }
     });
+
+    // After a password or Google sign-in: the same contributor session.
+    async function finishContributorLogin(data, email) {
+      const profile = await contributorProfileForToken(data?.access_token, email);
+      if (isProfileBanned(profile)) {
+        throw new Error(profile?.ban_reason || "This account has been banned.");
+      }
+      saveProfile({
+        display_name: profile?.display_name || email,
+        email,
+        role: profile?.role_label || "Contributor",
+        approved: profile?.account_enabled !== false,
+        pending: false,
+        account_enabled: profile?.account_enabled !== false,
+        profile_status: profile?.profile_status || "hidden",
+        public_profile: profile?.public_profile === true,
+        headline: profile?.headline || "",
+        location_label: profile?.location_label || "",
+        website_url: profile?.website_url || "",
+        bio: profile?.bio || "",
+        token: data?.access_token,
+        refreshToken: data?.refresh_token || null,
+        refresh_token: data?.refresh_token || null,
+        tokenExpires: data?.expires || null,
+        profileId: profile?.id || null
+      });
+      await directusClient.ensureAuthSession({
+        requireAuth: true,
+        authExpiredMessage: "Login could not establish a secure contributor session. Please try again."
+      });
+      showLoginStatus("Logged in.", "success");
+      showBanner("Logged in.");
+      if (state.selectedSite?.slug) openSite(state.selectedSite.slug, { focus: false });
+      renderFollowing();
+      void awardDailyLoginReward({ silent: true }).then(() => {
+        renderProfile();
+        renderRewards();
+      });
+      void ensureProfileStatsSynced().then(() => {
+        renderProfile();
+        renderRewards();
+        if (profilesSheetEl?.classList.contains("open")) renderProfiles();
+      }).catch(error => {
+        console.warn("Contributor profile activity will retry after login.", error);
+        return false;
+      });
+      scheduleMemberProfileActivityTracking({ login: true, force: true });
+    }
     historyAlertsEl.addEventListener("change", () => {
       state.settings.historyAlerts = historyAlertsEl.checked;
       saveSettings();
@@ -23306,6 +24011,7 @@
     mobileLayerShapesInput?.addEventListener("change", () => setMobileLayerVisibility("shapes", mobileLayerShapesInput.checked));
     mobileLayerBiographyPathsInput?.addEventListener("change", () => setMobileLayerVisibility("biographyPaths", mobileLayerBiographyPathsInput.checked));
     mobileLayerBiographyIconsInput?.addEventListener("change", () => setMobileLayerVisibility("biographyIcons", mobileLayerBiographyIconsInput.checked));
+    mobileLayerMovingAnimalsInput?.addEventListener("change", () => setMobileLayerVisibility("movingAnimals", mobileLayerMovingAnimalsInput.checked));
     mobileLayerCategoryInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("category", true)));
     mobileLayerEraInputs.forEach(input => input.addEventListener("change", () => setMobileLayerVisibility("era", true)));
     function runMobileLayerBulkAction(visible) {
@@ -23408,6 +24114,9 @@
     ["click", "touchend"].forEach(type => {
       document.addEventListener(type, () => scheduleMemberProfileActivityTracking(), { passive: true });
     });
+    // Recover lost motion timers after returning to a visible map.
+    window.setInterval(() => recoverMobileMovingFeatureAnimation(), 2000);
+    window.addEventListener("pageshow", () => recoverMobileMovingFeatureAnimation());
     document.addEventListener("visibilitychange", () => {
       syncMobileMovingFeatureVisibility(performance.now());
       syncSiteHeroCarouselLifecycle();
@@ -23496,6 +24205,13 @@
           saveSettings();
         }
         state.mobileStartupRendering = true;
+        // The returning camera draft needs no archive or map data. Restore it
+        // before network work so caption/photo review is immediately usable.
+        const storyCameraResumed = !state.passwordResetToken && restoreStoryCameraReturn();
+        if (storyCameraResumed) {
+          appEl?.classList.add("mobile-map-initializing");
+          hideLoadingScreen();
+        }
         setLoadingMessage("Loading sites and nearby tools.");
         const startupLandMask = window.NLI_MOBILE_DATA && !isOfflineTextMode()
           ? ensureLandMask()
@@ -23539,7 +24255,7 @@
         if (nativeAndroid) {
           await new Promise(resolve => window.requestAnimationFrame(resolve));
         }
-        await openInitialRouteFromUrl();
+        if (!storyCameraResumed) await openInitialRouteFromUrl();
         let androidLifecycleContentRestored = false;
         const routeAlreadyOpened = Boolean(detailEl?.classList.contains("open") || document.querySelector(".sheet.open"));
         if (!routeAlreadyOpened && androidLifecycleResumeSnapshot) {
@@ -23589,6 +24305,17 @@
             platform: "mobile",
             getIdentity: currentContributorIdentity,
             getAccessToken: () => state.profile?.token || "",
+            getPreviousQuestions: () => state.wikiArticles
+              .filter(article => String(article.slug || "").startsWith("visitor-question-"))
+              .sort((a, b) => mobileKnowledgebaseItemTimestamp(b) - mobileKnowledgebaseItemTimestamp(a)),
+            openAnswer: slug => {
+              openWikiArticle(slug);
+              return true;
+            },
+            openAnswers: () => {
+              openMobileKnowledgebaseCategory("Questions and Answers");
+              return true;
+            },
             autoPrompt: false,
             showRestore: false,
             isUiBusy: () => Boolean(
@@ -23608,6 +24335,7 @@
         // pass or the polling timer before its marker is eligible to appear.
         if (!window.NLI_DISABLE_DIRECTUS_RUNTIME) refreshMapStories();
         state.mobileStartupRendering = false;
+        if (!storyCameraResumed && readStoryCameraReturn()) restoreStoryCameraReturn();
         updateMobileHeaderInstruction();
         if (nativeAndroid) {
           [300, 1000, 2500].forEach(delay => window.setTimeout(updateMobileHeaderInstruction, delay));

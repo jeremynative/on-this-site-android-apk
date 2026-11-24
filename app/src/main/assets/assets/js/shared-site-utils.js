@@ -402,6 +402,7 @@
 
   const SITE_LAYER_CATEGORIES = [
     { key: "shell-middens", label: "Shell Middens" },
+    { key: "material-culture", label: "Material Culture" },
     { key: "fishing-sites", label: "Fishing Sites" },
     { key: "whaling-sites", label: "Whaling Sites" },
     { key: "burial-sacred", label: "Sacred Sites" },
@@ -417,26 +418,49 @@
     { key: "precise-locations", label: "Precise" }
   ];
 
-  function siteLayerText(site = {}) {
-    return normalizeText([
-      site.title,
-      site.slug,
-      site.site_type,
-      site.summary,
-      site.address_label,
-      site.introduction_content,
-      site.history_content,
-      site.translation_content,
-      site.ancestral_territory_note
-    ].join(" "));
+  const SITE_LAYER_TEXT_FIELDS = [
+    "title",
+    "slug",
+    "site_type",
+    "summary",
+    "address_label",
+    "introduction_content",
+    "history_content",
+    "translation_content",
+    "ancestral_territory_note"
+  ];
+  // Layer filters ask about every site on every render, and the text includes whole articles,
+  // so the normalized text (and pattern tests on it) is kept per site until a field changes.
+  const siteLayerTextCache = new WeakMap();
+
+  function siteLayerTextEntry(site = {}) {
+    const values = SITE_LAYER_TEXT_FIELDS.map(field => site[field]);
+    const cacheable = site && typeof site === "object";
+    const cached = cacheable ? siteLayerTextCache.get(site) : null;
+    if (cached && cached.values.every((value, index) => value === values[index])) return cached;
+    const entry = { values, text: normalizeText(values.join(" ")), tests: new Map() };
+    if (cacheable) siteLayerTextCache.set(site, entry);
+    return entry;
   }
+
+  function siteLayerText(site = {}) {
+    return siteLayerTextEntry(site).text;
+  }
+
+  function siteLayerTextMatches(site, pattern) {
+    const entry = siteLayerTextEntry(site);
+    if (!entry.tests.has(pattern)) entry.tests.set(pattern, pattern.test(entry.text));
+    return entry.tests.get(pattern);
+  }
+
+  const APPROXIMATE_LOCATION_TEXT_PATTERN = /\b(approximate|general|broad|near|area|landscape|not precise|public safe|public-safe)\b/;
+  const EXHIBIT_TEXT_PATTERN = /\b(museum|gallery|exhibit|exhibition|public art|art center|cultural center|heritage center|house museum|ma s house|mas house|preservation long island)\b/;
 
   function siteLocationAccuracy(site = {}) {
     if (siteUsesDefaultBluePin(site)) return "approximate";
-    const text = siteLayerText(site);
     const status = normalizeText(site.geometry_cleanup_status || "");
     const surface = normalizeText(site.geometry_surface || "");
-    if (/\b(approximate|general|broad|near|area|landscape|not precise|public safe|public-safe)\b/.test(text)) return "approximate";
+    if (siteLayerTextMatches(site, APPROXIMATE_LOCATION_TEXT_PATTERN)) return "approximate";
     if (/approx|broad|mixed|needs review|pending/.test(`${status} ${surface}`)) return "approximate";
     if (site.display_geojson && !site.geojson) return "approximate";
     return "precise";
@@ -452,6 +476,7 @@
     const keys = new Set();
     const add = key => keys.add(key);
     if (/\bshell\s*(midden|heap|deposit|bed)|midden|shellfish|oyster|clam\b/.test(text)) add("shell-middens");
+    if (siteHasMaterialCulture(site)) add("material-culture");
     if (/\bfish|fishing|fishery|eel|weir|net|brook|creek|pond|bay|harbor|inlet\b/.test(text)) add("fishing-sites");
     if (/\bwhal|whaling|whale\b/.test(text)) add("whaling-sites");
     if (/\bburial|burial site|cemetery|grave|sacred|ceremonial|spiritual|council rock|ritual\b/.test(text) || /burial|sacred/.test(rawType)) add("burial-sacred");
@@ -502,10 +527,9 @@
 
   function isExhibitSite(site = {}) {
     if (siteUsesDefaultBluePin(site)) return false;
-    const text = siteLayerText(site);
     const rawType = normalizeText(site.site_type || "");
     return /^(exhibit|exhibit supporter|museum|gallery|public art|cultural center|heritage center|house museum|preservation)$/.test(rawType) ||
-      /\b(museum|gallery|exhibit|exhibition|public art|art center|cultural center|heritage center|house museum|ma s house|mas house|preservation long island)\b/.test(text);
+      siteLayerTextMatches(site, EXHIBIT_TEXT_PATTERN);
   }
 
   function siteTerritoryFillColor(site = {}, fallback = "#496f5d", options = {}) {
@@ -516,7 +540,152 @@
     return normalizeHex(site?.map_fill_color, fallback);
   }
 
+  // ---- Material Culture ----
+  // The old site's "Browse by Objects", from the CMS: every captioned photo in a
+  // site's Material Culture section (the artifacts fields) and in the Knowledgebase
+  // articles about objects, sorted by what the object is. Burial contexts (the
+  // Killed Pottery and Orient articles) are left out of the gallery.
+  const MATERIAL_CULTURE_ARTICLES = ["projectile-points", "wampum", "duck-decoys", "paleo-indian-period", "archaic-period", "woodland-period"];
+  // First match wins: a Thunderbird on a pottery sherd is pottery, on a cobble an engraving.
+  const MATERIAL_CULTURE_TYPES = [
+    { key: "decoys", label: "Decoys", pattern: /\bdecoys?\b/ },
+    { key: "baskets", label: "Baskets", pattern: /\bbaskets?\b|\bbasketry\b/ },
+    { key: "trade-goods", label: "Metal and trade goods", pattern: /\b(coins?|cob|silver|brass|copper|iron|kettles?|trade goods?)\b/ },
+    { key: "projectile-points", label: "Projectile points", pattern: /\b(projectile|arrowheads?|arrow points?|drill points?|spear points?|clovis|fluted|bifacial)\b|\b(island|fishtail|lanceolate|stemmed|triangle|river) point\b/ },
+    { key: "household", label: "Household tools", pattern: /\b(brush(es)?|scrubbers?|brooms?|ladles?|spoons?)\b/ },
+    { key: "pottery", label: "Pottery and vessels", pattern: /\b(pottery|sherds?|rimsherds?|pots?|vessels?|ceramics?|steatite)\b/ },
+    { key: "engraved", label: "Engraved stones and tablets", pattern: /\b(etching|etched|engraved|engraving|incised|tablets?|thunderbird)\b/ },
+    { key: "stone-tools", label: "Stone tools", pattern: /\b(celts?|adzes?|axes?|gouges?|scrapers?|pestles?|mortars?|hammerstones?|net ?sinkers?|plummets?|bannerstones?|gorgets?|claystones?|stone tools?)\b/ },
+    { key: "shell", label: "Shell and wampum", pattern: /\b(wampum|whelks?|shells?|beads?|whorls?|quahogs?)\b/ },
+    { key: "carvings", label: "Carvings and figures", pattern: /\b(carved|carvings?|figures?|idols?|effig(y|ies)|wooden)\b/ },
+    { key: "type-charts", label: "Artifact type charts", pattern: /\b(artifacts? types?|typolog(y|ies)|types of)\b/ }
+  ];
+  const MATERIAL_CULTURE_OTHER = { key: "other", label: "Other objects" };
+
+  function decodeEntities(value = "") {
+    const named = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " ", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", ndash: "–", mdash: "—" };
+    return String(value).replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, code) => {
+      if (code[0] === "#") return String.fromCodePoint(code[1].toLowerCase() === "x" ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10));
+      return named[code.toLowerCase()] ?? entity;
+    });
+  }
+
+  function htmlText(value = "") {
+    return decodeEntities(String(value).replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
+  }
+
+  function siteHasMaterialCulture(site = {}) {
+    return site.has_material_culture === true || Boolean(htmlText(site.artifacts_content || "")) ||
+      (Array.isArray(site.artifact_images_json) && site.artifact_images_json.length > 0);
+  }
+
+  function materialCultureType(caption = "") {
+    const text = normalizeText(caption);
+    return MATERIAL_CULTURE_TYPES.find(type => type.pattern.test(text)) || MATERIAL_CULTURE_OTHER;
+  }
+
+  // "Woodworking Stone Celt NATIONAL MUSEUM OF ..." is a Woodworking Stone Celt; the
+  // credit (from, courtesy, photo, a museum in capitals) follows the object's name.
+  function materialCultureTitle(caption = "") {
+    const credit = caption.search(/(?:,\s+|\s*\()(?:from|courtesy|photo|image|prepared)\b/i);
+    const capitals = caption.search(/[,.]?\s+(?=[A-Z]{4,}(?:\s+[A-Z]{2,})+)/);
+    const author = caption.search(/\s+from\s+(?=[A-Z][a-z]+\s+[A-Z])/);
+    const sentence = caption.search(/(?<!\b(?:Rev|Dr|Mr|Mrs|St|Cat|No|pp|ca|vol))\.\s/);
+    const cut = [credit, capitals, author, sentence].filter(index => index > 0).sort((a, b) => a - b)[0];
+    return (cut ? caption.slice(0, cut) : caption).replace(/[\s.,;:]+$/, "");
+  }
+
+  // The same photo in a site's section and an article is one object (sizes and protocol aside).
+  function materialCultureImageKey(src = "") {
+    return String(src).replace(/^https?:\/\//, "").replace(/[?#].*$/, "").replace(/-\d+x\d+(?=\.\w+$)/, "").toLowerCase();
+  }
+
+  function materialCultureFigures(html = "") {
+    const figures = [];
+    for (const match of String(html || "").matchAll(/<figure\b[\s\S]*?<\/figure>/gi)) {
+      const block = match[0];
+      // WordPress lazy loading left a blank placeholder before the real image.
+      const src = [...block.matchAll(/<img\b[^>]*>/gi)]
+        .map(tag => (tag[0].match(/\b(?:data-lazy-src|data-src|src)\s*=\s*"([^"]+)"/i) || [])[1] || "")
+        .find(value => value && !value.startsWith("data:"));
+      const caption = htmlText((block.match(/<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/i) || [])[1] || "");
+      if (src && caption) figures.push({ src: decodeEntities(src), caption });
+    }
+    return figures;
+  }
+
+  /**
+   * Objects for the Material Culture gallery: sites first (each object belongs to
+   * its place), then the articles, whose copies of a site's photos only add the
+   * article to that object. Articles keep only photos that name an object.
+   */
+  function materialCultureObjects({ sites = [], articles = [] } = {}) {
+    const objects = [];
+    const byImage = new Map();
+    const add = (figure, source) => {
+      const key = materialCultureImageKey(figure.src);
+      const existing = byImage.get(key);
+      if (existing) {
+        if (source.type === "wiki" && !existing.articles.some(article => article.slug === source.slug)) existing.articles.push(source);
+        return;
+      }
+      const type = materialCultureType(figure.caption);
+      if (source.type === "wiki" && type === MATERIAL_CULTURE_OTHER) return;
+      const object = {
+        id: key,
+        image: figure.src,
+        title: materialCultureTitle(figure.caption),
+        caption: figure.caption,
+        type: type.key,
+        typeLabel: type.label,
+        site: source.type === "site" ? source : null,
+        articles: source.type === "wiki" ? [source] : []
+      };
+      byImage.set(key, object);
+      objects.push(object);
+    };
+    for (const site of sites) {
+      for (const figure of materialCultureFigures(site.artifacts_content)) add(figure, { type: "site", slug: site.slug, title: site.title });
+    }
+    for (const article of articles) {
+      if (!MATERIAL_CULTURE_ARTICLES.includes(article.slug)) continue;
+      for (const figure of materialCultureFigures(article.content)) add(figure, { type: "wiki", slug: article.slug, title: article.title });
+    }
+    return objects;
+  }
+
+  /** The kinds present, in gallery order, with how many objects each has. */
+  function materialCultureTypeCounts(objects = []) {
+    return [...MATERIAL_CULTURE_TYPES, MATERIAL_CULTURE_OTHER]
+      .map(type => ({ key: type.key, label: type.label, count: objects.filter(object => object.type === type.key).length }))
+      .filter(type => type.count > 0);
+  }
+
+  // The page title search engines show (the panel heading stays the plain name). Place-name pages
+  // say what a searcher finds there: the name's meaning and its Native history.
+  function siteSearchTitle(site = {}) {
+    const title = String(site?.title || "").replace(/\s+/g, " ").trim();
+    // Titles that already say what they are about ("…: Colonial Claims and Native Rights") stay as written.
+    if (!title || title.includes(":")) return title;
+    if (isBroadTerritory(site) && /\b(?:ancestral|traditional) lands?\b/i.test(title)) {
+      return `${title}: History, Place Names and Map`;
+    }
+    // A living Nation's reservation is not a place-name entry, whatever its text says about the name.
+    if (/reservation/i.test(`${site.site_type || ""} ${title}`)) return title;
+    if (siteIsAlgonquianPlaceName(site)) {
+      const hasMeaning = Boolean(String(site.translation_title || "").trim() || String(site.translation_content || "").trim());
+      if (!hasMeaning) return `${title}: Place Name and Native History`;
+      return `${title}: ${title.length > 28 ? "Place Name and Meaning" : "Place Name, Meaning and Native History"}`;
+    }
+    return title;
+  }
+
   window.NLI_SITE_UTILS = {
+    siteSearchTitle,
+    MATERIAL_CULTURE_ARTICLES,
+    materialCultureObjects,
+    materialCultureTypeCounts,
+    siteHasMaterialCulture,
     checkinHistoryDescription,
     isCoordinateOnlyLabel,
     titleCaseSiteType,

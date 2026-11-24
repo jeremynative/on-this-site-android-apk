@@ -85,16 +85,48 @@
     }
     return html + esc(String(value || "").slice(last));
   }
+  const checks = [
+    "Tell your adult who or what this place is connected to. Point to a detail in the story or picture. Share your drawing or answer before continuing.",
+    "Name the community or people and explain your answer using one detail from this stop. Say or write where you found it.",
+    "Support your explanation with a specific detail. Identify whether it comes from the account, a photograph, or a source, and name one question it leaves open.",
+    "State a claim, identify its supporting evidence and source, and explain a limitation. Distinguish what the evidence says from your interpretation."
+  ];
+  const outputs = ["A drawing and a spoken explanation", "Two or three sentences with one supporting detail", "A short explanation with evidence and an unanswered question", "A claim supported by evidence, a source, and a limitation"];
+  function lessonPlan(path) {
+    const level = root.NLILearningHub.getLevel();
+    const question = (path.keyQuestions || path.key_questions || [])[0] || `What can these places teach us about ${path.title}?`;
+    return `<section class="learn-lesson-plan"><p class="learn-stop-band-label">LESSON PLAN · LEARNER GRADES ${grades[level]}</p><h3>Your question for this lesson</h3><p>${esc(question)}</p><p><strong>Who this is for:</strong> ${level<2 ? "A teacher or adult leads the reading and conversation with learners." : "Students can work independently, with a partner, or in a teacher-led class."} The grade band describes the learners, not the educator.</p><p><strong>You will make:</strong> ${esc(outputs[level])} at each stop, then a comparison across two places.</p><p><strong>Have ready:</strong> paper and pencil, or somewhere to record your answers. No visit or account is needed.</p><ol><li><strong>Begin · 2 minutes:</strong> read the question above and share an initial idea.</li><li><strong>Explore · about 5–8 minutes per stop:</strong> read the short account, respond to the place-specific question, and check your evidence. You can pause between stops.</li><li><strong>Finish · 5 minutes:</strong> choose two stops and explain how they answer the lesson question together.</li></ol><p><strong>Teacher / adult:</strong> model the first response. Ask “Which detail helped you?” Check for a named Native community and evidence from the place, rather than a general statement about all Native people. Accept a spoken or drawn response from younger learners. Preview the full source articles before assigning independent reading.</p><p class="learn-plan-sources">Teaching approach: <a href="https://www.nysed.gov/common/nysed/files/programs/curriculum-instruction/ss-framework-k-8a2.pdf" target="_blank" rel="noopener">NYSED inquiry and evidence practices</a> · <a href="https://americanindian.si.edu/nk360/manhattan/pdf/manhattan-lesson-at-a-glance-teacher-instructions.pdf" target="_blank" rel="noopener">Smithsonian NK360° lesson model</a>. These inform the design; this is not an endorsed or certified curriculum.</p></section>`;
+  }
+  function mobileOverview(path, completed) {
+    const next = path.stops.findIndex(s => !completed.has(String(s.id)));
+    const index = next < 0 ? 0 : next;
+    return `<button class="action learn-lesson-start" type="button" data-learning-lesson="${esc(path.slug)}" data-lesson-index="${index}">${next<0 ? "Revisit lesson" : completed.size ? `Continue at stop ${index+1}` : "Start lesson · Stop 1"}</button>${lessonPlan(path)}<section class="mobile-learning-path-stops"><h3>Your stops, in order</h3><ol>${path.stops.map((stop,i)=>`<li><button type="button" data-learning-lesson="${esc(path.slug)}" data-lesson-index="${i}">${esc(stop.title)}${completed.has(String(stop.id)) ? " · Complete" : ""}</button></li>`).join("")}</ol></section>${next<0 ? `<section class="learn-lesson-plan"><h3>You have reached the end</h3><p>Use two stops to answer the lesson question above. Name both places, share one detail from each, and explain their connection. Share one question you still have.</p><p>Progress records the stops you marked complete; it is not an assessment score.</p></section>` : ""}`;
+  }
+  function mobileLesson(path, index) {
+    const stop = path.stops[index];
+    const last = index === path.stops.length-1;
+    return `<div class="learn-lesson-screen"><p class="learn-lesson-direction">Read → Respond → Check → ${last ? "Finish" : "Next stop"}. Your work stays with you: say your answer aloud or record it on paper.</p>${mobileStopHtml(path, stop)}${stop.sensitiveNote ? `<p>${esc(stop.sensitiveNote)}</p>` : ""}<p><strong>Source for this stop:</strong> the linked place article contains the history and references behind this account.</p>${stop.site?.slug ? `<button class="action secondary" type="button" data-slug="${esc(stop.site.slug)}">Open full place article & sources</button>` : ""}<nav class="learn-lesson-nav" aria-label="Lesson navigation">${index>0?`<button class="action secondary" type="button" data-learning-lesson="${esc(path.slug)}" data-lesson-index="${index-1}">Previous stop</button>`:""}<button class="action secondary" type="button" data-mobile-learning-path-open="${esc(path.slug)}">Lesson plan</button><button class="action" type="button" data-learning-lesson="${esc(path.slug)}" data-lesson-index="${index}" data-lesson-complete>${last ? "Complete & finish lesson" : "Complete & next stop"}</button></nav></div>`;
+  }
+  function readingExcerpt(text) {
+    const sentences = String(text).replace(/\s+/g, " ").trim().match(/[^.!?]+[.!?]+(?:[”’"])?|[^.!?]+$/g) || [];
+    let result = "";
+    for (const sentence of sentences) {
+      if (result && (result + sentence).length > 1200) break;
+      result += sentence;
+    }
+    return result.trim();
+  }
   function stopHtml(info) {
     const lesson = lessons[info.pathSlug] || lessons.default;
     const selected = root.NLILearningHub.getLevel();
     const unkechaug = info.siteSlug === "unkechaug-indian-reservation";
-    const context = unkechaug ? "The Unkechaug Nation is a living Native community. Poospatuck, in Mastic on Long Island's south shore, is its continuing homeland. In the 1690 agreement described below, Tobacus acted as a sachem, or leader. People seeking to cross the land needed an agreement with the people who held authority there." : "";
-    return `<div class="learn-stop-guide"><div class="learn-stop-tools"><label>Reading & activity level <select data-learn-stop-level aria-label="Reading and activity grade band">${grades.map((g,i)=>`<option value="${i}"${i===selected?' selected':''}>Grades ${g}${i===0?' · Read together':''}</option>`).join("")}</select></label><span>Underlined words: hover, focus, or tap for a definition.</span></div>
+    const context = unkechaug ? "The Unkechaug Nation is a living Native community. Poospatuck, in Mastic on Long Island's south shore, is its continuing homeland. " : "";
+    return `<div class="learn-stop-guide"><div class="learn-stop-tools"><label>Learner grade band <select data-learn-stop-level aria-label="Reading and activity grade band">${grades.map((g,i)=>`<option value="${i}"${i===selected?' selected':''}>Grades ${g}${i===0?' · Read together':''}</option>`).join("")}</select></label><span>K–5: work with a teacher or adult. Grades 6–12: work independently or with your class. Tap underlined words for help.</span></div>
+      <section class="learn-stop-evidence"><h4>1. Read the evidence</h4>${info.reading && info.reading !== info.why ? `<p>${definedText(readingExcerpt(info.reading))}</p>` : ""}${info.why?`<p>${definedText(info.why)}</p>`:`<p>Read the linked account of ${esc(info.siteTitle || "this place")}. Look for the people involved, the setting, and the sources behind the story.</p>`}</section>
       <section class="learn-stop-context"><h4>${esc(lesson[0])}</h4><p data-learn-foundation="young"${selected===0?'':' hidden'}>${definedText(lesson[2])}</p><p data-learn-foundation="older"${selected===0?' hidden':''}>${definedText(lesson[1])}</p>${context?`<h4>Place and people</h4><p>${definedText(context)}</p>`:""}</section>
-      <section class="learn-stop-evidence"><h4>The story at this stop</h4>${info.why?`<p>${definedText(info.why)}</p>`:`<p>Read the linked account of ${esc(info.siteTitle || "this place")}. Look for the people involved, the setting, and the sources behind the story.</p>`}</section>
-      <section class="learn-stop-task"><h4>Make a connection</h4>${grades.map((g,i)=>`<div data-learn-stop-band="${i}"${i===selected?'':' hidden'}><p class="learn-stop-band-label">Grades ${g}${i===0?' · Read and talk with a grown-up':''}</p><p>${definedText(lesson[i+3])}</p>${i===1?'<p class="learn-sentence-start">Start with: “At this place, ___ mattered because ___.”</p>':i===2?'<p class="learn-sentence-start">Start with: “The detail ___ suggests ___ because ___.”</p>':i===3?'<p class="learn-sentence-start">Start with: “The source supports ___, while leaving ___ unresolved.”</p>':""}</div>`).join("")}
-      ${info.question?`<details class="learn-deeper"><summary>Go deeper: a question to discuss</summary><p>${definedText(info.question)}</p>${info.activity?`<p>${definedText(info.activity)}</p>`:""}</details>`:""}</section>
+      <section class="learn-stop-task"><h4>2. Make your response</h4>${grades.map((g,i)=>`<div data-learn-stop-band="${i}"${i===selected?'':' hidden'}><p class="learn-stop-band-label">Grades ${g}${i===0?' · Read and talk with a grown-up':''}</p><p>${definedText(lesson[i+3])}</p>${i===1?'<p class="learn-sentence-start">Start with: “At this place, ___ mattered because ___.”</p>':i===2?'<p class="learn-sentence-start">Start with: “The detail ___ suggests ___ because ___.”</p>':i===3?'<p class="learn-sentence-start">Start with: “The source supports ___, while leaving ___ unresolved.”</p>':""}</div>`).join("")}
+      ${info.question?`<section class="learn-deeper"><h4>Discuss this place</h4><p>${definedText(info.question)}</p>${info.activity?`<p>${definedText(info.activity)}</p>`:""}</section>`:""}</section>
+      <section class="learn-stop-check"><h4>3. Check before moving on</h4>${grades.map((g,i)=>`<p data-learn-check-band="${i}"${i===selected?'':' hidden'}>${esc(checks[i])}</p>`).join("")}</section>
       <details class="learn-guide-sources"><summary>Sources & reading help</summary><p>For this stop's dates, people, and events, read the linked place article and its Historic Moments and References. Definitions are reading aids; an agreement's exact words and context still matter.</p><ul><li><a href="https://americanindian.si.edu/nk360/about/essential-understandings" target="_blank" rel="noopener noreferrer">Smithsonian: Native nations, cultures, and governments</a></li><li><a href="https://americanindian.si.edu/nk360/thanksgiving/sq2ss3.html" target="_blank" rel="noopener noreferrer">Smithsonian: one example of sachem leadership, in Wampanoag society</a></li><li><a href="https://americanindian.si.edu/nk360/manhattan/journey-of-trade/journey-of-trade.cshtml" target="_blank" rel="noopener noreferrer">Smithsonian: wampum and trade in Native New York</a></li><li><a href="https://oceanservice.noaa.gov/facts/aquaculture.html" target="_blank" rel="noopener noreferrer">NOAA: aquaculture</a> · <a href="https://marineprotectedareas.noaa.gov/resources/glossary/" target="_blank" rel="noopener noreferrer">Coastal glossary</a></li><li><a href="https://www.nps.gov/subjects/archeology/glossary.htm" target="_blank" rel="noopener noreferrer">National Park Service: archaeology glossary</a></li>${unkechaug?'<li><a href="https://history.pmlib.org/node/42" target="_blank" rel="noopener noreferrer">Patchogue-Medford Library: Unkechaug history and sources</a></li>':""}</ul></details></div>`;
   }
   let active = null, bubble = null, pinned = false, leaveTimer = 0, dismissed = null;
@@ -148,18 +180,20 @@
     root.NLILearningHub.setLevel(selected); hide();
     root.document.querySelectorAll(".learn-stop-guide").forEach(guide => {
       guide.querySelector("select").value = String(selected);
+      guide.querySelectorAll("[data-learn-check-band]").forEach(block => { block.hidden = Number(block.dataset.learnCheckBand) !== selected; });
       guide.querySelectorAll("[data-learn-stop-band]").forEach(block => { block.hidden = Number(block.dataset.learnStopBand) !== selected; });
       guide.querySelector('[data-learn-foundation="young"]').hidden = selected !== 0;
       guide.querySelector('[data-learn-foundation="older"]').hidden = selected === 0;
     });
   });
   function mobileStopHtml(path, stop) {
-    return stopHtml({pathSlug:path.slug, siteSlug:stop.site?.slug, siteTitle:stop.title, why:stop.why, question:stop.question, activity:stop.activity});
+    return stopHtml({pathSlug:path.slug, siteSlug:stop.site?.slug, siteTitle:stop.title, why:stop.why, reading:stop.reading, question:stop.question, activity:stop.activity});
   }
   function mobileHeader(path, site) {
     const stop = path?.stops.find(item => item.site?.slug === site.slug);
     if (!stop) return "";
-    return `<section class="section mobile-learning-current-stop"><p class="section-kicker">Guided path · Stop ${esc(stop.stop_number)} of ${path.stops.length}</p><h3>${esc(path.title)}</h3>${mobileStopHtml(path, stop)}${stop.sensitiveNote?`<p>${esc(stop.sensitiveNote)}</p>`:""}<button type="button" class="action secondary" data-mobile-learning-path-open="${esc(path.slug)}">Return to path & progress</button></section>`;
+    const index = path.stops.indexOf(stop);
+    return `<section class="section mobile-learning-current-stop"><p>Source article for lesson stop ${index+1} of ${path.stops.length}: ${esc(path.title)}</p><button type="button" class="action" data-learning-lesson="${esc(path.slug)}" data-lesson-index="${index}">Return to lesson · Read, respond & continue</button></section>`;
   }
-  root.NLILearningGuide = { stopHtml, definedText, mobileStopHtml, mobileHeader };
+  root.NLILearningGuide = { stopHtml, definedText, mobileStopHtml, mobileHeader, lessonPlan, mobileOverview, mobileLesson };
 })(typeof window !== "undefined" ? window : globalThis);
