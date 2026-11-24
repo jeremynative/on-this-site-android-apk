@@ -156,7 +156,72 @@
     return best?.entry || null;
   }
 
+  // Operator confirms the museum is on Second House grounds:
+  // https://montaukhistoricalsociety.org/montauk-indian-museum/
+  // Public address confirmed by Visit Montauk; map position checked 2026-10-05:
+  // Google Maps museum point: 41.0314453, -71.9527557 (approximate grounds).
+  const landmarks = [{
+    name: "Montaukett Indian Museum (Montauk Indian Museum)",
+    aliases: "montauk indian museum montaukett indian museum second house museum",
+    center: [-71.9527557, 41.0314453],
+    summary: "Second House grounds, 12 Second House Road, Montauk, NY · approximate museum location",
+    attribution: "Montauk Historical Society"
+  }];
+
+  function landmarkMatches(query) {
+    const terms = defaultNormalizeText(query).split(" ").filter(Boolean);
+    if (terms.length < 2 || !terms.some(term => ["montauk", "montaukett", "second"].includes(term))) return [];
+    return landmarks.filter(item => terms.every(term => item.aliases.includes(term)))
+      .map(item => ({ ...item, placeName: `${item.name}, Montauk, NY`, label: "Landmark" }));
+  }
+
+  function withinPlaceBounds(center, bbox) {
+    const [west, south, east, north] = String(bbox).split(",").map(Number);
+    return center[0] >= west && center[0] <= east && center[1] >= south && center[1] <= north;
+  }
+
+  const placeSearchCache = new Map();
+  async function searchPlaces(query, bbox) {
+    const key = `${query.trim().toLowerCase()}:${bbox}`;
+    const known = landmarkMatches(query);
+    if (known.length) return known;
+    if (placeSearchCache.has(key)) return placeSearchCache.get(key);
+    const request = (async () => {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 8000);
+      try {
+        const params = new URLSearchParams({ q: query, limit: "8", bbox, lang: "en", lat: "40.8", lon: "-73.5" });
+        const response = await fetch(`https://photon.komoot.io/api/?${params}`, { signal: controller.signal });
+        if (!response.ok) throw new Error("Place search unavailable");
+        const data = await response.json();
+        const seen = new Set();
+        return (data.features || []).flatMap(item => {
+          const center = item.geometry?.coordinates;
+          if (!Array.isArray(center) || center.length !== 2 || !center.every(Number.isFinite)
+            || !withinPlaceBounds(center, bbox)) return [];
+          const properties = item.properties || {};
+          const street = [properties.housenumber, properties.street].filter(Boolean).join(" ");
+          const name = properties.name || street || properties.city;
+          if (!name) return [];
+          const context = [...new Set([street, properties.district, properties.city, properties.state, properties.postcode].filter(value => value && value !== name))].join(", ");
+          const id = `${properties.osm_type || ""}:${properties.osm_id || center.join(",")}`;
+          if (seen.has(id)) return [];
+          seen.add(id);
+          return [{ center, name, placeName: [name, context].filter(Boolean).join(", "),
+            label: "Place / address", summary: context, attribution: "OpenStreetMap contributors" }];
+        }).slice(0, 8);
+      } finally { window.clearTimeout(timeout); }
+    })();
+    placeSearchCache.set(key, request);
+    if (placeSearchCache.size > 32) placeSearchCache.delete(placeSearchCache.keys().next().value);
+    try { return await request; }
+    catch (error) { placeSearchCache.delete(key); throw error; }
+  }
+
+
   global.NLI_SEARCH_UTILS = Object.freeze({
+    searchPlaces,
+    landmarkMatches,
     normalizeSearchText: defaultNormalizeText,
     queryModel,
     prepareEntry,

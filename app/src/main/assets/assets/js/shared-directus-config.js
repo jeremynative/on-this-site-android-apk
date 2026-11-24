@@ -98,7 +98,7 @@
     "latitude", "longitude", "location_source", "attached_site", "attached_site_slug", "attached_site_title",
     "ancestral_territory", "ancestral_territory_slug", "ancestral_territory_title", "plant_observation",
     "member_profile", "author_name", "created_at", "expires_at", "expires_original_at",
-    "permanent", "admin_permanent", "up_votes", "down_votes", "vote_score"
+    "permanent", "admin_permanent", "admin_temporary", "up_votes", "down_votes", "vote_score"
   ]);
 
   window.NLI_SHARED_CONFIG = {

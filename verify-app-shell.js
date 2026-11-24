@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const expectedBuild = "20261101-ar-video-r328";
+const expectedBuild = "20261124-offline-refresh-r329";
 const expectedUrl = "https://directus.nativelongisland.com/app/mobile-app-live.html";
 const mainActivityPath = "app/src/main/java/com/nativelongisland/onthissite/MainActivity.java";
 const releaseWorkflowPath = ".github/workflows/build-release-apk.yml";
@@ -454,10 +454,9 @@ if (!bundledMobileJs.includes("function mobileMovingBiographyLoop")
     || !bundledMobileJs.includes("const MOBILE_NATIVE_MOVING_MARKER_OVERVIEW_INTERVAL_MS = 56")
     || !bundledMobileJs.includes("const MOBILE_NATIVE_MOVING_MARKER_CLOSE_INTERVAL_MS = 24")
     || !bundledMobileJs.includes("const MOBILE_MOVING_MARKER_MAX_FRAME_DELTA_MS = 80")
-    || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_ROUTE_DURATION_MS = 300000")
-    || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_REFERENCE_ROUTE_DISTANCE = 0.35")
-    || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_MIN_SEGMENT_MS = 4000")
-    || !bundledMobileJs.includes("const MOBILE_BIOGRAPHY_BASE_MOTION_SCALE = 0.72")
+    // Web #385 normalized biography speed across route lengths (one base scale, no per-route duration constants);
+    // the packaged runtime follows the live one since the 2026-11-24 offline refresh.
+    || !/const MOBILE_BIOGRAPHY_BASE_MOTION_SCALE = [0-9.]+;/.test(bundledMobileJs)
     || !bundledMobileJs.includes("function mobileMovingMarkerMaxFrameDeltaMs()")
     || !bundledMobileJs.includes("function mobileMovingRouteDuration(route = [])")
     || !bundledMobileJs.includes("function mobileNativeMovingMarkerIntervalMs()")
@@ -551,7 +550,7 @@ if (!bundledMobileJs.includes("nativeMapCameraEcho: null")
 }
 if (!source.includes("private void dispatchNativeMapGesture(boolean active)")
     || !bundledMobileJs.includes("gestureChanged(active)")
-    || !bundledMobileJs.includes("if (active) markAndroidMapGestureActive();")) {
+    || !/gestureChanged\(active\) \{\s*if \(active\)[\s\S]{0,120}?markAndroidMapGestureActive\(\);/.test(bundledMobileJs)) {
   throw new Error("Native touch activity must pause hidden-WebView map refresh and moving-feature work.");
 }
 if (!source.includes("notificationPermissionPromptedForSession")
@@ -625,7 +624,7 @@ if (!bundledMobileJs.includes("function enterMobileProfileMapMode(profile, optio
     || !bundledMobileJs.includes("mobile-profile-progress-context")
     || !bundledMobileJs.includes("pointsSyncing && options.syncRemote !== false && canSyncOwnPoints")
     || !bundledMobileJs.includes("mobile-profile-progress-points")
-    || !bundledMobileJs.includes('["quiz", "Quizzes Completed"]')
+    || !bundledMobileJs.includes('["quiz", "Word quizzes"]')
     || !bundledMobileJs.includes('if (mode.clickHandler) {\n        state.map.off("click", "mobile-profile-progress-points", mode.clickHandler);')
     || !bundledMobileJs.includes('state.map.once("style.load", mode.styleLoadHandler)')
     || !bundledMobileJs.includes("positionMobileProfileMapActivityCard(card = state.profileMapPopup?.element)")
@@ -667,7 +666,8 @@ const launchBackground = fs.readFileSync(launchBackgroundPath, "utf8");
 const android12Styles = fs.readFileSync(android12StylesPath, "utf8");
 
 if (!bundledMobileJs.includes("function revealMobileContentUpdate(item, activityItems = [])")
-    || !bundledMobileJs.includes('target.classList.add("content-update-highlight")')
+    // The highlight moved into the shared activity helper (ACTIVITY_UTILS.revealContentTarget adds the class).
+    || !bundledMobileJs.includes("ACTIVITY_UTILS.revealContentTarget(detailBodyEl, target)")
     || !bundledMobileJs.includes('showBanner("New content highlighted.")')
     || !bundledMobileCss.includes(".content-update-highlight::before")) {
   throw new Error("APK unread site updates must scroll to and temporarily highlight the matching content section.");
@@ -804,10 +804,11 @@ const bundledGeometryBytes = fs.statSync(
 if (bundledGeometryRows.length !== bundledSiteIndex.rows.length || bundledGeometryRows.length < 439 || detailedPolygonRows.length < 16) {
   throw new Error("Bundled Android geometry must retain all indexed sites (at least 439) and the audited detailed polygon set.");
 }
-if (bundledGeometryBytes > 2_850_000) {
+// 3.49 MB after the November shoreline-fitted shapes (web PRs 666–676); the live app loads the same file online.
+if (bundledGeometryBytes > 3_700_000) {
   throw new Error(`Bundled Android geometry exceeds its deferred-load budget: ${bundledGeometryBytes} bytes.`);
 }
-if (!bundledMobileJs.includes('SITE_GEOMETRY_VERSION = "20260831-shoreline-edge-audit-v4"')) {
+if (!bundledMobileJs.includes('SITE_GEOMETRY_VERSION = "20261117-related-fields-v9"')) {
   throw new Error("Android must invalidate the older cached polygon geometry after the shoreline audit.");
 }
 
@@ -2471,7 +2472,9 @@ for (const [label, html] of [
     'mobileMapLayerHandlers',
     'state.settings.showPins = visible;',
     'mobileLayerCategoryInputs.forEach(input => input.addEventListener("change"',
-    '"circle-color": ["case", ["==", ["get", "has_header_image"], true], "#326fe3", "#496f5d"]'
+    label === "live fallback"
+      ? '"circle-color": ["case", ["any", ["get", "has_header_image"], ["get", "blue_pin"]], "#326fe3", "#496f5d"]'
+      : '"circle-color": ["case", ["==", ["get", "has_header_image"], true], "#326fe3", "#496f5d"]'
   ]) {
     if (!html.includes(expected)) throw new Error(`Bundled Android ${label} is missing mobile map layer invariant ${expected}`);
   }
@@ -2864,13 +2867,17 @@ for (const [label, runtime] of [["modular", bundledMobileJs], ["full offline", b
   if (/search\/searchbox\/v1\/(?:suggest|retrieve)|session_token|autocomplete=true/.test(runtime)) {
     throw new Error(`Android ${label} search must not spend Mapbox Search Box sessions while typing.`);
   }
+  // The modular runtime geocodes through the shared search helper (Photon, no Mapbox sessions) since the web moved
+  // off Mapbox search; the old full offline copy (not packaged) keeps the Mapbox wording.
+  const geocodes = label === "modular"
+    ? runtime.includes("SEARCH_UTILS.searchPlaces(query, bbox)") && bundledSharedSearchUtils.includes("photon.komoot.io")
+    : runtime.includes("autocomplete=false") && runtime.includes("free allowance has been reached");
   if (!runtime.includes('data-map-search-query="${escapeHtml(query)}"')
-      || !runtime.includes("autocomplete=false")
-      || !runtime.includes("free allowance has been reached")
+      || !geocodes
       || !runtime.includes("Open directions in Maps")) {
     throw new Error(`Android ${label} search must use explicit one-request geocoding with a provider fallback.`);
   }
-  if (!/MOBILE_BIOGRAPHY_BASE_MOTION_SCALE\s*=\s*0\.72[\s\S]*?const\s+motionScale\s*=\s*MOBILE_BIOGRAPHY_BASE_MOTION_SCALE\s*\*\s*\(reducedMotion\s*\?\s*0\.5\s*:\s*1\)/.test(runtime)
+  if (!/MOBILE_BIOGRAPHY_BASE_MOTION_SCALE\s*=\s*[0-9.]+[\s\S]*?const\s+motionScale\s*=\s*MOBILE_BIOGRAPHY_BASE_MOTION_SCALE\s*\*\s*\(reducedMotion\s*\?\s*0\.5\s*:\s*1\)/.test(runtime)
       || /MOBILE_BIOGRAPHY_SCREEN_PACE_ZOOM|mobileBiographyZoomMotionScale/.test(runtime)) {
     throw new Error(`Android ${label} biography routes must use a zoom-independent route clock.`);
   }

@@ -2,10 +2,19 @@
   const FEEDBACK_UTILS = window.NLI_FEEDBACK_UTILS || {};
   const SUPPORT_UTILS = window.NLI_SUPPORT_UTILS || {};
   const SESSION_KEY = "nli-research-question-prompt-dismissed";
-  const ANDROID_BETA_SESSION_KEY = "nli-android-beta-prompt-dismissed";
-  const ANDROID_BETA_WEB_DISMISSED_UNTIL_KEY = "nli-android-beta-web-dismissed-until";
-  const ANDROID_BETA_WEB_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+  // Phone browsers are invited to the app once: the App Store on iPhone and iPad, a beta-invite email
+  // on Android. "Continue in the browser" keeps it away for two weeks; following the link, for 60 days.
+  const APP_PROMPT_DISMISSED_UNTIL_KEY = "nli-app-prompt-dismissed-until";
+  const APP_PROMPT_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000;
+  const APP_PROMPT_ACTED_COOLDOWN_MS = 60 * 24 * 60 * 60 * 1000;
+  const IOS_APP_STORE_URL = "https://apps.apple.com/us/app/on-this-site/id6809090479";
+  const APP_ICON_SVG = `<svg class="app-download-icon" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="14" fill="#496f5d"/><path d="M18 39c10-19 23-18 29-14-11 2-18 10-22 23-3-2-5-5-7-9Z" fill="#f8fbf6"/><circle cx="42" cy="19" r="4" fill="#f4c95d"/></svg>`;
   const QUESTION_PAGE_URL = "/question";
+  // Answered visitor questions are published as Knowledgebase articles whose
+  // slugs start with this prefix ("Questions and Answers" category).
+  const ANSWER_SLUG_PREFIX = "visitor-question-";
+  const ANSWERS_TOPIC_URL = "/?topic=questions-and-answers";
+  const ANSWER_LIMIT = 12;
   const ANDROID_BETA_EMAIL_URL = "mailto:jeremynative@gmail.com?subject=On%20This%20Site%20Android%20beta%20invite&body=Please%20invite%20this%20Google%20Account%20email%20to%20the%20On%20This%20Site%20Android%20closed%20beta%3A%20";
   let instance = null;
 
@@ -45,17 +54,46 @@
       && !document.body.classList.contains("native-android-app");
   }
 
-  function promptHtml(platform, includeAndroidBeta, questionUrl) {
+  // iPhone and iPad browsers, but not the On This Site iOS app (its WebView adds "OnThisSite-iOS").
+  // iPadOS Safari reports itself as a Mac, so a Mac with a touch screen counts as an iPad.
+  function isIosWebBrowserContext() {
+    const agent = navigator.userAgent || "";
+    if (/OnThisSite-iOS/.test(agent)) return false;
+    return /iPhone|iPad|iPod/i.test(agent) || (/Macintosh/i.test(agent) && Number(navigator.maxTouchPoints || 0) > 1);
+  }
+
+  // "?app-prompt=ios" or "?app-prompt=android" shows that version anywhere, for checking it.
+  function appPromptPlatform() {
+    let forced = "";
+    try { forced = new URLSearchParams(window.location.search).get("app-prompt") || ""; } catch {}
+    if (forced === "ios" || forced === "android") return forced;
+    if (isAndroidWebBrowserContext()) return "android";
+    if (isIosWebBrowserContext()) return "ios";
+    return "";
+  }
+
+  function appPromptHtml(appPlatform) {
+    if (!appPlatform) return "";
+    const ios = appPlatform === "ios";
     return `
-      ${includeAndroidBeta ? `
-      <aside class="android-beta-prompt android-beta-prompt-${platform}" data-android-beta-prompt aria-label="Request an invitation to the On This Site Android beta" hidden>
-        <button class="android-beta-prompt-close" type="button" data-android-beta-dismiss aria-label="Dismiss Android beta invitation">&times;</button>
-        <div>
-          <strong>Help test the Android app</strong>
-          <span>Email us to receive an invite.</span>
-        </div>
-        <a class="android-beta-prompt-action" href="${ANDROID_BETA_EMAIL_URL}" title="Send email to receive an Android beta invitation">Send email</a>
-      </aside>` : ""}
+      <div class="app-download-prompt app-download-prompt-${appPlatform}" data-app-prompt hidden>
+        <button class="app-download-backdrop" type="button" data-app-prompt-dismiss tabindex="-1" aria-label="Continue in the browser"></button>
+        <section class="app-download-card" role="dialog" aria-modal="true" aria-labelledby="app-download-title" aria-describedby="app-download-text">
+          ${APP_ICON_SVG}
+          <p class="app-download-kicker">On This Site app</p>
+          <h2 id="app-download-title">${ios ? "Get the free app for iPhone and iPad" : "Try the Android app"}</h2>
+          <p id="app-download-text">${ios
+            ? "The app is the best way to explore the map and its histories on your phone."
+            : "The Android app is in a closed beta. Email us the Google account email on your phone, and we'll send you an invite."}</p>
+          <a class="app-download-action" href="${ios ? IOS_APP_STORE_URL : ANDROID_BETA_EMAIL_URL}" data-app-prompt-action>${ios ? "Download on the App Store" : "Email for a beta invite"}</a>
+          <button class="app-download-continue" type="button" data-app-prompt-dismiss>Continue in the browser</button>
+        </section>
+      </div>`;
+  }
+
+  function promptHtml(platform, appPlatform, questionUrl) {
+    return `
+      ${appPromptHtml(appPlatform)}
       <aside class="research-question-prompt" data-research-question-prompt aria-label="Ask On This Site a research question" hidden>
         <button class="research-question-prompt-close" type="button" data-research-question-dismiss aria-label="Dismiss research question prompt">&times;</button>
         <div>
@@ -130,9 +168,43 @@
             </div>
             <div class="support-embedded-checkout research-question-wide" data-support-embedded-checkout hidden></div>
           </form>
+          <section class="research-question-archive" data-research-question-archive aria-labelledby="research-question-archive-title" hidden>
+            <h3 id="research-question-archive-title">Previously Asked Questions</h3>
+            <div class="research-question-archive-list" data-research-question-archive-list></div>
+            <a class="research-question-archive-all" href="${ANSWERS_TOPIC_URL}" data-research-question-answers>See all questions and answers</a>
+          </section>
         </section>
       </div>
     `;
+  }
+
+  function answerHref(slug) {
+    return `/?wiki=${encodeURIComponent(slug)}`;
+  }
+
+  function archiveItemHtml(answer) {
+    return `
+      <details class="research-question-archive-item">
+        <summary>${escapeHtml(answer.title)}</summary>
+        ${answer.summary ? `<p>${escapeHtml(answer.summary)}</p>` : ""}
+        <a href="${escapeHtml(answerHref(answer.slug))}" data-research-question-answer="${escapeHtml(answer.slug)}">Read the full answer and sources</a>
+      </details>
+    `;
+  }
+
+  async function fetchPublishedAnswers() {
+    const base = (window.NLI_SHARED_CONFIG?.directusUrl || "https://directus.nativelongisland.com").replace(/\/$/, "");
+    const params = new URLSearchParams({
+      "filter[status][_eq]": "published",
+      "filter[slug][_starts_with]": ANSWER_SLUG_PREFIX,
+      fields: "title,slug,summary,last_reviewed",
+      sort: "-last_reviewed",
+      limit: String(ANSWER_LIMIT)
+    });
+    const response = await fetch(`${base}/items/wiki_articles?${params.toString()}`, { headers: { accept: "application/json" } });
+    if (!response.ok) throw new Error(`Previously asked questions unavailable: ${response.status}`);
+    const body = await response.json();
+    return (Array.isArray(body?.data) ? body.data : []).filter(answer => answer?.slug && answer?.title);
   }
 
   function init(options = {}) {
@@ -143,13 +215,15 @@
     const questionUrl = options.questionUrl || QUESTION_PAGE_URL;
     const closeUrl = options.closeUrl || "/";
     const androidWebBrowser = isAndroidWebBrowserContext();
+    // The dedicated question page is for writing a question, so it never opens the app invitation.
+    const appPlatform = pageMode ? "" : appPromptPlatform();
     const identity = typeof options.getIdentity === "function" ? (options.getIdentity() || {}) : {};
     const shell = document.createElement("div");
     shell.className = `research-question-shell research-question-shell-${platform}`;
-    shell.innerHTML = promptHtml(platform, androidWebBrowser, questionUrl) + dialogHtml(identity);
+    shell.innerHTML = promptHtml(platform, appPlatform, questionUrl) + dialogHtml(identity);
     document.body.appendChild(shell);
 
-    const androidBetaPrompt = shell.querySelector("[data-android-beta-prompt]");
+    const appPrompt = shell.querySelector("[data-app-prompt]");
     const prompt = shell.querySelector("[data-research-question-prompt]");
     const restore = shell.querySelector("[data-research-question-restore]");
     const dialog = shell.querySelector("[data-research-question-dialog]");
@@ -159,12 +233,16 @@
     const supportToggle = shell.querySelector("[data-research-support-enabled]");
     const supportFields = shell.querySelector("[data-research-support-fields]");
     const promptDismiss = shell.querySelector("[data-research-question-dismiss]");
-    const androidBetaDismiss = shell.querySelector("[data-android-beta-dismiss]");
-    const androidBetaAction = shell.querySelector(".android-beta-prompt-action");
+    const appPromptAction = shell.querySelector("[data-app-prompt-action]");
+    const archive = shell.querySelector("[data-research-question-archive]");
+    const archiveList = shell.querySelector("[data-research-question-archive-list]");
     const showRestore = options.showRestore !== false;
+    let archiveRequest = null;
+    let archiveLoaded = false;
     const autoPrompt = options.autoPrompt !== false;
     let promptRequested = false;
-    let androidBetaRequested = false;
+    let appPromptRequested = false;
+    let appPromptReturnFocus = null;
     let questionSent = false;
     let checkoutAttempt = 0;
 
@@ -189,27 +267,21 @@
       try { sessionStorage.setItem(SESSION_KEY, "1"); } catch {}
     }
 
-    function androidBetaDismissed() {
-      if (isAndroidWebBrowser()) {
-        try {
-          return Number(localStorage.getItem(ANDROID_BETA_WEB_DISMISSED_UNTIL_KEY) || 0) > Date.now();
-        } catch {
-          return false;
-        }
-      }
-      try { return sessionStorage.getItem(ANDROID_BETA_SESSION_KEY) === "1"; } catch { return false; }
+    function appPromptForced() {
+      try { return Boolean(new URLSearchParams(window.location.search).get("app-prompt")); } catch { return false; }
     }
 
-    function setAndroidBetaDismissed() {
-      if (isAndroidWebBrowser()) {
-        try { localStorage.setItem(ANDROID_BETA_WEB_DISMISSED_UNTIL_KEY, String(Date.now() + ANDROID_BETA_WEB_COOLDOWN_MS)); } catch {}
-        return;
+    function appPromptDismissed() {
+      if (appPromptForced()) return false;
+      try {
+        return Number(localStorage.getItem(APP_PROMPT_DISMISSED_UNTIL_KEY) || 0) > Date.now();
+      } catch {
+        return false;
       }
-      try { sessionStorage.setItem(ANDROID_BETA_SESSION_KEY, "1"); } catch {}
     }
 
-    function isAndroidWebBrowser() {
-      return androidWebBrowser && isAndroidWebBrowserContext();
+    function setAppPromptDismissed(cooldown = APP_PROMPT_COOLDOWN_MS) {
+      try { localStorage.setItem(APP_PROMPT_DISMISSED_UNTIL_KEY, String(Date.now() + cooldown)); } catch {}
     }
 
     function interfaceBusy() {
@@ -218,11 +290,20 @@
     }
 
     function syncPrompt() {
-      prompt.hidden = !promptRequested || dismissed() || interfaceBusy();
-      if (androidBetaPrompt) {
-        androidBetaPrompt.hidden = !androidBetaRequested || !isAndroidWebBrowser() || androidBetaDismissed() || interfaceBusy();
+      if (appPrompt) {
+        const wasHidden = appPrompt.hidden;
+        appPrompt.hidden = !appPromptRequested || appPromptDismissed() || !dialog.hidden;
+        document.body.classList.toggle("app-download-prompt-open", !appPrompt.hidden);
+        if (wasHidden && !appPrompt.hidden) {
+          appPromptReturnFocus = document.activeElement;
+          window.requestAnimationFrame(() => appPromptAction?.focus({ preventScroll: true }));
+        }
       }
-      restore.hidden = !showRestore || !promptRequested || !prompt.hidden || !dialog.hidden;
+      // One invitation at a time: the question prompt waits until the app
+      // invitation is closed (the "?" restore button stays available).
+      const appPromptVisible = Boolean(appPrompt && !appPrompt.hidden);
+      prompt.hidden = !promptRequested || dismissed() || interfaceBusy() || appPromptVisible;
+      restore.hidden = !showRestore || !promptRequested || !prompt.hidden || !dialog.hidden || appPromptVisible;
     }
 
     function setStatus(message, kind = "") {
@@ -239,6 +320,43 @@
       if (!emailInput.value && current.email) emailInput.value = current.email;
     }
 
+    function renderArchive(answers) {
+      archiveList.innerHTML = answers.slice(0, ANSWER_LIMIT).map(archiveItemHtml).join("");
+      archive.hidden = !answers.length;
+      archiveLoaded = answers.length > 0;
+    }
+
+    // The host's loaded articles come first (also offline); Directus is the
+    // fallback. Until answers appear, each open tries again.
+    function loadArchive() {
+      if (archiveLoaded || archiveRequest) return;
+      const local = typeof options.getPreviousQuestions === "function" ? (options.getPreviousQuestions() || []) : [];
+      if (local.length) {
+        renderArchive(local);
+        return;
+      }
+      archiveRequest = fetchPublishedAnswers()
+        .then(renderArchive)
+        .catch(error => console.warn("Previously asked questions will load later.", error))
+        .finally(() => { archiveRequest = null; });
+    }
+
+    function openArchiveLink(event) {
+      const answerLink = event.target.closest("[data-research-question-answer]");
+      const allLink = event.target.closest("[data-research-question-answers]");
+      if (!answerLink && !allLink) return false;
+      // Leave /question first so the answer's own route (?wiki=, ?topic=) is shareable.
+      setQuestionRoute(false);
+      const opened = answerLink
+        ? options.openAnswer?.(answerLink.getAttribute("data-research-question-answer"))
+        : options.openAnswers?.();
+      if (!opened) return true;
+      event.preventDefault();
+      // The host already routed to the answer, so leave the URL alone.
+      closeDialog({ updateUrl: false });
+      return true;
+    }
+
     function openDialog({ updateUrl = true } = {}) {
       const nativeAndroidApp = Boolean(
         window.AndroidApp
@@ -253,6 +371,7 @@
       setDismissed();
       prompt.hidden = true;
       refreshIdentity();
+      loadArchive();
       dialog.hidden = false;
       document.body.classList.add("research-question-dialog-open");
       window.setTimeout(() => form.querySelector("[data-research-question]")?.focus(), 30);
@@ -309,11 +428,13 @@
       restore.hidden = !showRestore;
     }
 
-    function dismissAndroidBeta(event) {
+    function dismissAppPrompt(event) {
       event?.preventDefault();
       event?.stopPropagation();
-      setAndroidBetaDismissed();
-      if (androidBetaPrompt) androidBetaPrompt.hidden = true;
+      setAppPromptDismissed();
+      appPromptRequested = false;
+      syncPrompt();
+      try { appPromptReturnFocus?.focus?.({ preventScroll: true }); } catch {}
     }
 
     async function submitQuestion(event) {
@@ -397,8 +518,31 @@
       submit.textContent = supportToggle.checked ? "Send question and continue to payment" : "Send question";
     });
     promptDismiss?.addEventListener("click", dismissPrompt);
-    androidBetaDismiss?.addEventListener("click", dismissAndroidBeta);
-    androidBetaAction?.addEventListener("click", setAndroidBetaDismissed);
+    shell.querySelectorAll("[data-app-prompt-dismiss]").forEach(control => control.addEventListener("click", dismissAppPrompt));
+    // Following the link counts as an answer; the invitation stays closed when they come back.
+    appPromptAction?.addEventListener("click", () => {
+      setAppPromptDismissed(APP_PROMPT_ACTED_COOLDOWN_MS);
+      appPromptRequested = false;
+      window.setTimeout(syncPrompt, 0);
+    });
+    // Two controls: keep keyboard focus inside the invitation while it is open.
+    appPrompt?.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        dismissAppPrompt(event);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = [...appPrompt.querySelectorAll(".app-download-card a, .app-download-card button")];
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
     shell.querySelectorAll("[data-research-question-close]").forEach(control => {
       control.addEventListener("click", event => {
         event.preventDefault();
@@ -407,6 +551,7 @@
       });
     });
     shell.addEventListener("click", event => {
+      if (openArchiveLink(event)) return;
       if (event.target.closest("[data-research-question-open]")) {
         event.preventDefault();
         openDialog();
@@ -426,21 +571,21 @@
       });
     }
 
-    if (autoPrompt && !androidWebBrowser) {
+    // Phone browsers get the app invitation instead, so they are not asked twice.
+    if (autoPrompt && !androidWebBrowser && !appPlatform) {
       const delay = Number.isFinite(Number(options.delay)) ? Number(options.delay) : (platform === "mobile" ? 11000 : 9000);
       window.setTimeout(() => {
         promptRequested = true;
         syncPrompt();
       }, Math.max(0, delay));
     }
-    if (isAndroidWebBrowser()) {
-      const androidBetaDelay = Number.isFinite(Number(options.androidBetaDelay)) ? Number(options.androidBetaDelay) : 0;
-      const requestAndroidBetaPrompt = () => {
-        androidBetaRequested = true;
+    if (appPrompt && !appPromptDismissed()) {
+      // Let the map draw first, so the invitation opens over a page that is already there.
+      const appPromptDelay = Number.isFinite(Number(options.appPromptDelay)) ? Number(options.appPromptDelay) : 1200;
+      window.setTimeout(() => {
+        appPromptRequested = true;
         syncPrompt();
-      };
-      if (androidBetaDelay <= 0) requestAndroidBetaPrompt();
-      else window.setTimeout(requestAndroidBetaPrompt, androidBetaDelay);
+      }, Math.max(0, appPromptDelay));
     }
     if (pageMode || (urlBackedModal && isQuestionRoute())) openDialog({ updateUrl: false });
 
@@ -460,5 +605,5 @@
     return instance;
   }
 
-  window.NLI_RESEARCH_QUESTION_UTILS = { init, QUESTION_PAGE_URL };
+  window.NLI_RESEARCH_QUESTION_UTILS = { init, QUESTION_PAGE_URL, ANDROID_BETA_EMAIL_URL };
 }());

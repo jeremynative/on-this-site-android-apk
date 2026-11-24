@@ -1,12 +1,37 @@
 (function () {
   const DEFAULT_ALIASES = {
+    "#wiki/algonquian-language-and-place-names": "#wiki/language",
     "#wiki/tribes": "#wiki/the-tribes-of-long-island",
     "#listing/matinecocks": "#listing/matinecock-traditional-land",
     "#listing/matinecock-tribal-nation": "#listing/matinecock",
+    // Old WordPress listings still linked from site and article text.
+    "#listing/manhansets": "#listing/manhansett-ancestral-land",
+    "#listing/wickatuck-settlement": "#listing/weeckatuck",
     "#listing/west-woods-sweat-lodge": "#listing/west-woods"
   };
 
   const DEFAULT_PAGE_EXCLUSIONS = ["archive-test", "listing", "wiki", "wp-json", "wp-content", "wp-admin"];
+
+  // Leftover WordPress shop and map-plugin pages: an empty cart and checkout, a login form that does nothing,
+  // and "My first map" pages that print raw plugin CSS. Directus still holds them; the public site never opens
+  // or lists them. Same list as SEO_EXCLUDED_PAGE_SLUGS in build-static-preview.js.
+  const HIDDEN_LEGACY_PAGE_SLUGS = ["page-cart", "page-checkout", "page-map", "page-map-1", "page-map-1-2", "page-map-2", "page-map-2-2", "page-my-account", "page-shop"];
+
+  // Old WordPress knowledgebase category pages, linked from older article text, and the category that replaced each.
+  const LEGACY_WIKI_TOPICS = {
+    history: "history",
+    archaeology: "time-periods-and-archaeology",
+    "spirituality-ceremony-cosmology": "culture-ceremony-and-lifeways",
+    "culture-ritual-traditions": "culture-ceremony-and-lifeways"
+  };
+
+  function legacyWikiTopic(slug) {
+    return LEGACY_WIKI_TOPICS[String(slug || "").trim().toLowerCase()] || "";
+  }
+
+  function isHiddenLegacyPage(slug) {
+    return HIDDEN_LEGACY_PAGE_SLUGS.includes(String(slug || "").trim().toLowerCase());
+  }
 
   function decodeSlug(value) {
     try {
@@ -29,6 +54,16 @@
       setaukets: "setauket-ancestral-land",
       "west-woods-sweat-lodge": "west-woods"
     })[slug] || slug || "";
+  }
+
+  function wikiSlugAlias(slug) {
+    return slug === "algonquian-language-and-place-names" ? "language" : (slug || "");
+  }
+
+  function addWikiAliases(index) {
+    const language = index.get("language");
+    if (language) index.set("algonquian-language-and-place-names", language);
+    return index;
   }
 
   function slugFromListingUrl(url) {
@@ -108,11 +143,16 @@
   }
 
   window.NLI_ROUTE_UTILS = {
+    wikiSlugAlias,
+    addWikiAliases,
     normalizeInternalRoute,
     listingSlugAlias,
     slugFromListingUrl,
     slugFromWikiUrl,
     slugFromPageUrl,
+    HIDDEN_LEGACY_PAGE_SLUGS,
+    isHiddenLegacyPage,
+    legacyWikiTopic,
     internalHref,
     publicArchiveUrl,
     passwordResetTokenFromUrl,

@@ -26,29 +26,82 @@
     { themes:["law", "sovereignty"], grades:[["Grade 6", "Eastern Hemisphere geography and history; practice comparison and source reading."], ["Grade 7", "Native North America, colonial relationships, and land loss."], ["Grade 8", "U.S. expansion and its effects on Native peoples."]], note:"For grade 6, use Long Island as a comparison activity alongside the Eastern Hemisphere course." },
     { themes:["law", "sovereignty", "activism-protest"], grades:[["Grade 9", "Indigenous American civilizations and encounters across the Atlantic."], ["Grade 10", "Global imperialism, resistance, and changing borders."], ["Grade 11", "U.S. policy, Native sovereignty, land claims, and activism."], ["Grade 12", "Participation in government and economic decision-making."]], note:"For grades 10 and 12, local land and stewardship questions extend broader global-history and civic themes." }
   ];
+  // Classroom activities per grade band; each uses the map and, where named, one guided path.
+  const activities = [
+    [
+      { title:"Neighbors today", minutes:20, path:"contemporary-native-long-island", steps:["Open the path together and choose one stop.", "Look at its photograph. Each child names one thing they see.", "A grown-up reads the start of the story aloud.", "Draw the place and say one thing people do there today."], share:"Put the drawings together as a class map of Native Long Island today." },
+      { title:"Whose land is our school on?", minutes:15, steps:["A grown-up types the school’s address into the map’s search box.", "Find the shaded homeland around it and read its name together.", "Open one story from that homeland. Who lived here long ago? Who lives on Long Island now?"], share:"Make a class sign with the homeland’s name and one question to keep exploring." }
+    ],
+    [
+      { title:"Place-name detectives", minutes:30, path:"place-names-language", steps:["Open the path and choose two stops.", "For each name, write what its story says the name means or describes, and where that explanation comes from.", "Find each place on today’s map. Is the Native name still used? What is the place called now?", "Notice when a story says a meaning is uncertain, and talk about why."], share:"Make a card for each name: the name, its meaning, the source and today’s name.", note:"The path is written for grades 6 and up, so read the stories together." },
+      { title:"Water and work", minutes:30, path:"coastal-knowledge", steps:["Open the path and choose two stops.", "List how people used the water at each place: food, travel, trade or work.", "Write two sentences comparing the places, with one detail from each story."], share:"Add your sentences to a class chart of Long Island’s coast." }
+    ],
+    [
+      { title:"Read a deed", minutes:40, path:"colonial-law-land-loss", steps:["Open the path and choose one deed or agreement.", "Record who wrote it, who signed or witnessed it, and what it says was sold, kept or promised.", "Ask what is missing. Who is not named, and whose words were never written down?", "Find another stop that shows how Native people responded or held on to their rights."], share:"A two-column chart: what the document says, and what it leaves out.", note:"The path is suggested for grade 8 and up; preview it with younger students." },
+      { title:"Two kinds of borders", minutes:30, steps:["Search your town on the map and look at the shaded homeland around it.", "Compare it with a town or county map. Which edges are straight, and which are soft or overlapping?", "Read “How to read this map” on the About page.", "Discuss: why might a homeland have soft edges? What did straight property lines let colonists do?"], share:"A paragraph explaining one difference between a homeland and a property line." }
+    ],
+    [
+      { title:"Sources and silences", minutes:50, path:"sovereignty-tribal-governance", steps:["Open the path, choose a stop and open its references.", "Note each source’s author, date and purpose.", "Find a second kind of evidence for the same history in another stop or the timeline: a deed, newspaper, census, photograph or community account.", "Write a claim both sources support, one limit of the evidence and one question that remains."], share:"A short evidence brief, or a gallery walk of the class’s claims." },
+      { title:"Protecting places", minutes:45, path:"burial-sacred-sites", steps:["Open the path. Notice which details the stops share and which they hold back.", "Read what two places say about visiting them.", "Discuss: who should decide what a public map shows about burial grounds and sacred places? Connect your answer to Indigenous data sovereignty, the right of Native nations to govern information about their people, lands and knowledge."], share:"Draft guidelines for a school or town map that includes Native places." }
+    ]
+  ];
   let level = 1;
   try { const saved = Number(root.localStorage.getItem("nli-learn-grade")); if (root.localStorage.getItem("nli-learn-grade") !== null && Number.isInteger(saved) && saved >= 0 && saved < levels.length) level = saved; } catch {}
   let query = "", mode = "all";
   const art = '<svg viewBox="0 0 300 130" aria-hidden="true" focusable="false"><path d="M18 98C75 98 52 28 122 28S170 106 214 87 237 28 281 28" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4 6"/><g fill="currentColor"><circle cx="18" cy="98" r="6"/><circle cx="122" cy="28" r="6"/><circle cx="214" cy="87" r="6"/><circle cx="281" cy="28" r="6"/></g><g fill="currentColor" font-family="sans-serif" font-size="13"><text x="6" y="124">Notice</text><text x="110" y="14">Ask</text><text x="190" y="116">Connect</text></g></svg>';
+  const pathPhotoSites = {
+    "sovereignty-tribal-governance": "shinnecock-indian-reservation",
+    "making-a-living-economic-development": "fort-corchaug",
+    "coastal-knowledge": "whales-fin",
+    "place-names-language": "appaquogue",
+    "burial-sacred-sites": "indian-field-cemetery",
+    "colonial-law-land-loss": "manor-of-st-george",
+    "plants-animals-ecology": "fresh-pond-site",
+    "contemporary-native-long-island": "mas-house",
+    "native-resistance-and-activism": "indian-fields"
+  };
+  // Existing archive photographs only; keep a visible connection to the source site.
+  function cover(path, imageForSite, assetUrl) {
+    const explicit = path.cover_image && assetUrl?.(path.cover_image);
+    if (explicit) return { src: explicit, title: path.title };
+    const selected = pathPhotoSites[path.slug] && (path.stops || []).find(stop => stop.site?.slug === pathPhotoSites[path.slug]);
+    if (selected) return { src: `assets/images/learn/${selected.site.slug}.jpg`, title: selected.site.title };
+    for (const stop of path.stops || []) {
+      if (!stop.site) continue;
+      const src = imageForSite(stop.site);
+      if (src) return { src, title: stop.site.title || path.title };
+    }
+    return null;
+  }
+  function photo(image, kind = "card") {
+    if (!image?.src || /^(?:javascript|data):/i.test(image.src)) return "";
+    return `<figure class="learn-photo learn-photo-${kind}"><img src="${esc(image.src)}" alt="${esc(image.title)}" loading="lazy" decoding="async" width="640" height="360"><figcaption>${esc(image.title)}</figcaption></figure>`;
+  }
   function shell(paths, close) {
     return `<div class="learning-hub" aria-label="Learn about Native Long Island">
-      <div class="learn-hero"><div><p class="learn-eyebrow">ON THIS SITE · K–12 LEARNING</p><h2>Long Island is your classroom.</h2><p>Meet people, explore places, and ask bigger questions about Native Long Island—past and present.</p><span class="learn-hero-meta">${paths.length} guided paths · Learn from anywhere</span></div><div class="learn-hero-art">${art}</div>${close ? '<button type="button" class="learn-close" data-learn-close aria-label="Close Learn">×</button>' : ""}</div>
-      <section class="learn-levels" aria-label="Choose a grade band"><div class="learn-section-heading"><h3>Start with your learners</h3><p>Choose a grade band to change the activity.</p></div><div class="learn-grade-grid">${levels.map((v, i) => `<button type="button" data-learn-level="${i}" aria-pressed="${level === i}"><strong>Grades ${v.label}</strong><span>${v.name}</span></button>`).join("")}</div></section>
-      <div class="learn-view-tabs" aria-label="Learning view"><button type="button" data-learn-view="library" aria-pressed="true">Explore paths</button><button type="button" data-learn-view="lab" aria-pressed="false">Try an activity</button></div>
+      <div class="learn-hero"><div><p class="learn-eyebrow">ON THIS SITE · K–12 LEARNING</p><h2>Long Island is your classroom.</h2><p>Lessons for students, teachers, and families. K–5 learners work with an adult; grades 6–12 can learn independently or with a class. The grade buttons describe the learner’s level.</p><span class="learn-hero-meta">${paths.length} guided paths · Learn from anywhere</span></div><div class="learn-hero-art">${photo(paths.find(p => p.image)?.image, "hero") || art}</div>${close ? '<button type="button" class="learn-close" data-learn-close aria-label="Close Learn">×</button>' : ""}</div>
+      <p class="learn-how-to">1. Choose the learner’s grade. 2. Choose a path. 3. Open its lesson plan and start at stop 1.</p><section class="learn-levels" aria-label="Choose a grade band"><div class="learn-section-heading"><h3>Choose the learner’s grade</h3><p>Choose a grade band to filter paths and update the activity.</p><button type="button" data-learn-filter="all">Clear filters · Show all paths</button></div><div class="learn-grade-grid">${levels.map((v, i) => `<button type="button" data-learn-level="${i}" aria-pressed="${mode === "curriculum" && level === i}"><strong>Grades ${v.label}</strong><span>${v.name}</span></button>`).join("")}</div></section>
+      <div class="learn-view-tabs" aria-label="Learning view"><button type="button" data-learn-view="library" aria-pressed="true">Explore paths</button><button type="button" data-learn-view="activities" aria-pressed="false">Classroom activities</button><button type="button" data-learn-view="lab" aria-pressed="false">Extra practice</button></div>
       <div class="learn-workspace" data-learn-viewing="library"><section class="learn-curriculum" aria-label="New York curriculum connections" data-learn-curriculum></section><aside class="learn-lab" aria-label="Activities and classroom guide"><div data-learn-lab></div><details class="learn-teacher"><summary>For teachers & families</summary><p>Use the map in class or at home. No visit or account is needed to explore.</p><ol><li>Introduce the activity and choose a path.</li><li>Open a stop together. Read its story and follow its references.</li><li>Discuss, sketch, or write using the grade-band prompt.</li></ol><p>The activities offer K–12 scaffolding; each path retains its own suggested grades. Preview the reading and subject matter before sharing with younger learners.</p><p>Path progress is saved on this device. On a shared device, it may reflect another learner’s work.</p></details></aside>
-      <section class="learn-library" aria-label="Guided learning paths"><div class="learn-section-heading"><div><p class="learn-eyebrow">FOLLOW YOUR CURIOSITY</p><h3 tabindex="-1" data-learn-library-heading>Find your next path</h3></div></div><div class="learn-library-tools"><label class="learn-search">Search paths<input type="search" data-learn-search placeholder="Try coast, language, or leadership" value="${esc(query)}"></label><div class="learn-filter" aria-label="Path filter"><button type="button" data-learn-filter="all" aria-pressed="${mode === "all"}">All paths</button><button type="button" data-learn-filter="curriculum" aria-pressed="${mode === "curriculum"}">This curriculum</button><button type="button" data-learn-filter="progress" aria-pressed="${mode === "progress"}">My progress</button></div></div><p class="learn-results" data-learn-results role="status"></p><div class="learn-path-grid" data-learn-cards></div></section></div>
+      <section class="learn-library" aria-label="Guided learning paths"><div class="learn-section-heading"><div><p class="learn-eyebrow">FOLLOW YOUR CURIOSITY</p><h3 tabindex="-1" data-learn-library-heading>Find your next path</h3></div></div><div class="learn-library-tools"><label class="learn-search">Search paths<input type="search" data-learn-search placeholder="Try coast, language, or leadership" value="${esc(query)}"></label><div class="learn-filter" aria-label="Path filter"><button type="button" data-learn-filter="all" aria-pressed="${mode === "all"}">Show all paths</button><button type="button" data-learn-filter="progress" aria-pressed="${mode === "progress"}">My progress</button></div></div><p class="learn-results" data-learn-results role="status"></p><div class="learn-path-grid" data-learn-cards></div></section><section class="learn-activities" aria-label="Classroom activities" data-learn-activities></section></div>
     </div>`;
   }
   function card(path, index, action) {
     const completed = Math.min(path.stops.length, Math.max(0, path.completed || 0));
-    return `<article class="learn-path-card"><div class="learn-card-band"><span aria-hidden="true">${String(index + 1).padStart(2, "0")}</span><span>${esc(path.theme || "Guided exploration")}</span></div><div class="learn-card-copy"><h4>${esc(path.title)}</h4><p>${esc(path.summary)}</p><div class="learn-card-meta"><span>${path.stops.length} stops</span>${path.minutes ? `<span>${esc(path.minutes)} min</span>` : ""}${path.grades ? `<span>${esc(path.grades)}</span>` : ""}</div>${completed ? `<div class="learn-path-progress"><span>${completed} of ${path.stops.length} stops complete</span><progress value="${completed}" max="${path.stops.length}" aria-label="${esc(path.title)} progress"></progress></div>` : ""}<details class="learn-preview"><summary>Inside this path</summary>${path.question ? `<p><strong>Think about:</strong> ${esc(path.question)}</p>` : ""}<ol>${path.stops.slice(0, 3).map(s => `<li>${esc(s)}</li>`).join("")}</ol>${path.stops.length > 3 ? `<p>Plus ${path.stops.length - 3} more stops.</p>` : ""}</details><button type="button" class="learn-start" ${action}="${esc(path.slug)}">${completed ? completed === path.stops.length ? "Revisit path" : "Continue learning" : "Explore path"}<span aria-hidden="true">↗</span></button></div></article>`;
+    return `<article class="learn-path-card">${photo(path.image)}<div class="learn-card-band"><span aria-hidden="true">${String(index + 1).padStart(2, "0")}</span><span>${esc(path.theme || "Guided exploration")}</span></div><div class="learn-card-copy"><h4>${esc(path.title)}</h4><p>${esc(path.summary)}</p><div class="learn-card-meta"><span>${path.stops.length} stops</span><span>${path.stops.length*5+7}–${path.stops.length*8+7} min lesson · pause anytime</span>${path.grades ? `<span>${esc(path.grades)}</span>` : ""}</div>${completed ? `<div class="learn-path-progress"><span>${completed} of ${path.stops.length} stops complete</span><progress value="${completed}" max="${path.stops.length}" aria-label="${esc(path.title)} progress"></progress></div>` : ""}<details class="learn-preview"><summary>Inside this path</summary>${path.question ? `<p><strong>Think about:</strong> ${esc(path.question)}</p>` : ""}<ol>${path.stops.slice(0, 3).map(s => `<li>${esc(s)}</li>`).join("")}</ol>${path.stops.length > 3 ? `<p>Plus ${path.stops.length - 3} more stops.</p>` : ""}</details><button type="button" class="learn-start" ${action}="${esc(path.slug)}">${completed ? completed === path.stops.length ? "Revisit path" : "Continue lesson" : "Open lesson plan"}<span aria-hidden="true">↗</span></button></div></article>`;
   }
   function mount(target, options) {
     const paths = options.paths || [];
     target.innerHTML = shell(paths, options.close);
     const hub = target.querySelector(".learning-hub");
+    hub.addEventListener("error", event => {
+      if (event.target.matches?.(".learn-photo img")) event.target.closest("figure").hidden = true;
+    }, true);
     function related(path) { return gradeConnections[level].themes.includes(String(path.theme || '').toLowerCase()); }
     function library() {
+      hub.querySelectorAll("[data-learn-level]").forEach(b => b.setAttribute("aria-pressed", String(mode === "curriculum" && Number(b.dataset.learnLevel) === level)));
+      hub.querySelectorAll("[data-learn-filter]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.learnFilter === mode && (mode !== "all" || !query))));
+
       const matching = paths.filter(p => (mode !== "progress" || p.completed > 0) && (mode !== "curriculum" || related(p)) && `${p.title} ${p.summary} ${p.theme}`.toLowerCase().includes(query.toLowerCase().trim()));
       hub.querySelector("[data-learn-results]").textContent = `${matching.length} ${matching.length === 1 ? "path" : "paths"}${mode === "progress" ? " with saved progress" : mode === "curriculum" ? ` connected to the grades ${levels[level].label} themes` : " to explore"}`;
       hub.querySelector("[data-learn-cards]").innerHTML = matching.length ? matching.map(p => card(p, paths.indexOf(p), options.action)).join("") : `<div class="learn-empty"><h4>${mode === "progress" ? "Your next discovery starts here" : "No matching paths yet"}</h4><p>${mode === "progress" ? "Complete a stop on a path to see your progress here." : "Try a different word, or browse all paths."}</p><button type="button" data-learn-reset>Browse all paths</button></div>`;
@@ -57,8 +110,10 @@
       const v = levels[level];
       const c = curriculum[level], curriculumBox = hub.querySelector('[data-learn-curriculum]');
       const expanded = curriculumBox.querySelector('details')?.open;
-      curriculumBox.innerHTML = `<p class="learn-eyebrow">NEW YORK CURRICULUM · GRADES ${v.label}</p><h3>${c.theme}</h3><p>${c.focus}</p><details ${expanded ? 'open' : ''}><summary>Classroom connections & sources</summary><h4>Grade by grade</h4><dl class="learn-grade-notes">${gradeConnections[level].grades.map(([grade, text]) => `<div><dt>${grade}</dt><dd>${text}</dd></div>`).join("")}</dl><p>${gradeConnections[level].note}</p><a href="https://www.nysed.gov/sites/default/files/programs/standards-instruction/ss-framework-k-12-intro.pdf" target="_blank" rel="noopener">NYSED grade sequence (PDF, p. 12)</a><h4>In the state framework</h4><a href="${curriculumSources[c.document]}" target="_blank" rel="noopener">NYSED framework (PDF): ${c.refs}</a><h4>Build on it with On This Site</h4><p>${c.connection}</p>${paths.some(related) ? `<button type="button" data-learn-related>Find related paths</button><p class="learn-curriculum-note">Choose a path to preview its reading and suggested grades. Younger learners can explore selected photos and stories with an adult.</p>` : ""}<p class="learn-curriculum-note">New York requires social studies throughout K–12; districts choose their curriculum and resources. These selected connections support that teaching. On This Site is an independent learning resource.</p><a href="https://www.nysed.gov/standards-instruction/social-studies-faq" target="_blank" rel="noopener">NYSED: requirements & local curriculum</a></details>`;
+      curriculumBox.innerHTML = `${photo(paths.find(p => related(p) && p.image)?.image, "section")}<p class="learn-eyebrow">NEW YORK CURRICULUM · GRADES ${v.label}</p><h3>${c.theme}</h3><p>${c.focus}</p><details ${expanded ? 'open' : ''}><summary>Classroom connections & sources</summary><h4>Grade by grade</h4><dl class="learn-grade-notes">${gradeConnections[level].grades.map(([grade, text]) => `<div><dt>${grade}</dt><dd>${text}</dd></div>`).join("")}</dl><p>${gradeConnections[level].note}</p><a href="https://www.nysed.gov/sites/default/files/programs/standards-instruction/ss-framework-k-12-intro.pdf" target="_blank" rel="noopener">NYSED grade sequence (PDF, p. 12)</a><h4>In the state framework</h4><a href="${curriculumSources[c.document]}" target="_blank" rel="noopener">NYSED framework (PDF): ${c.refs}</a><h4>Build on it with On This Site</h4><p>${c.connection}</p>${paths.some(related) ? `<button type="button" data-learn-related>Find related paths</button><p class="learn-curriculum-note">Choose a path to preview its reading and suggested grades. Younger learners can explore selected photos and stories with an adult.</p>` : ""}<p class="learn-curriculum-note">New York requires social studies throughout K–12; districts choose their curriculum and resources. These selected connections support that teaching. On This Site is an independent learning resource.</p><a href="https://www.nysed.gov/standards-instruction/social-studies-faq" target="_blank" rel="noopener">NYSED: requirements & local curriculum</a></details>`;
       hub.querySelector("[data-learn-lab]").innerHTML = `<section class="learn-mission"><p class="learn-eyebrow">YOUR ACTIVITY · GRADES ${v.label}</p><h3>${v.name}</h3><p>${v.task}</p><span class="learn-mission-note">Choose a path, then try this at a stop.</span></section><section class="learn-challenge"><p class="learn-eyebrow">MAP LAB · TRY IT NOW</p><h3>Think like a researcher</h3><p>${v.question}</p><div class="learn-answer-options">${v.answers.map((answer, i) => `<button type="button" data-learn-answer="${i}" aria-pressed="false">${esc(answer)}</button>`).join("")}</div><div class="learn-answer-feedback" data-learn-feedback role="status"></div></section>`;
+      const pathTitle = slug => paths.find(p => p.slug === slug)?.title;
+      hub.querySelector("[data-learn-activities]").innerHTML = `<p class="learn-eyebrow">CLASSROOM ACTIVITIES · GRADES ${v.label}</p><h3>Try these in class</h3><p>Each activity uses the map, most with one guided path. Choose another grade above for other activities.</p><div class="learn-activity-grid">${activities[level].map(a => `<article class="learn-activity"><h4>${a.title}</h4><p class="learn-activity-meta">About ${a.minutes} minutes${pathTitle(a.path) ? ` · ${esc(pathTitle(a.path))}` : ""}</p><ol>${a.steps.map(s => `<li>${s}</li>`).join("")}</ol><p><strong>Share:</strong> ${a.share}</p>${a.note ? `<p class="learn-activity-note">${a.note}</p>` : ""}${pathTitle(a.path) ? `<button type="button" class="learn-start" ${options.action}="${esc(a.path)}">Open the path<span aria-hidden="true">↗</span></button>` : ""}</article>`).join("")}</div>`;
     }
     library(); lab();
     hub.addEventListener("input", event => { if (event.target.matches("[data-learn-search]")) { query = event.target.value; library(); } });
@@ -75,13 +130,18 @@
         try { root.localStorage.setItem("nli-learn-grade", String(level)); } catch {}
         hub.querySelectorAll("[data-learn-level]").forEach(b => b.setAttribute("aria-pressed", String(b === button)));
         lab();
-        if (mode === 'curriculum') library();
+        mode = "curriculum";
+        query = "";
+        hub.querySelector("[data-learn-search]").value = "";
+        hub.querySelector(".learn-workspace").dataset.learnViewing = "library";
+        hub.querySelectorAll("[data-learn-view]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.learnView === "library")));
+        library();
       }
       if (button.hasAttribute("data-learn-filter") || button.hasAttribute("data-learn-reset") || button.hasAttribute('data-learn-related')) {
         const connected = button.hasAttribute('data-learn-related');
         mode = connected ? 'curriculum' : button.dataset.learnFilter || "all";
-        if (button.hasAttribute("data-learn-reset") || connected) { query = ""; hub.querySelector("[data-learn-search]").value = ""; }
-        if (connected) {
+        if (mode === "all" || connected) { query = ""; hub.querySelector("[data-learn-search]").value = ""; }
+        if (connected || mode === "all") {
           hub.querySelector('.learn-workspace').dataset.learnViewing = 'library';
           hub.querySelectorAll('[data-learn-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.learnView === 'library')));
         }
@@ -120,5 +180,5 @@
     }
     return [paths, pathStops];
   }
-  root.NLILearningHub = { mount, mergePathRows, getLevel: () => level, setLevel: value => { level = value; try { root.localStorage.setItem("nli-learn-grade", String(level)); } catch {} } };
+  root.NLILearningHub = { cover, mount, mergePathRows, getLevel: () => level, setLevel: value => { level = value; try { root.localStorage.setItem("nli-learn-grade", String(level)); } catch {} } };
 })(typeof window !== "undefined" ? window : globalThis);

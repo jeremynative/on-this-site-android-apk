@@ -95,6 +95,35 @@
     }
   ];
 
+  plantSpeciesProfiles.push(
+    { names: ["ailanthus altissima"], common: ["tree of heaven", "tree-of-heaven"],
+      native: ["Not native to Long Island", "introduced"], conservation: ["Invasive species; protect native habitat", "introduced"],
+      facts: [["Native range", "China and Taiwan."], ["Ecological concern", "Tree-of-heaven can form dense stands and displace native vegetation."]],
+      sources: [["Kew: Ailanthus altissima", "https://powo.science.kew.org/taxon/urn:lsid:ipni.org:names:813521-1"], ["USDA: tree-of-heaven", "https://www.invasivespeciesinfo.gov/terrestrial/plants/tree-heaven"]], checked: "September 14, 2026" },
+    { names: ["styphnolobium japonicum", "sophora japonica"], common: ["japanese pagoda tree"],
+      native: ["Not native to Long Island", "introduced"], conservation: ["Protection status not yet verified", "regional"],
+      facts: [["Native range", "Central and southern China; Kew records it as introduced in New York."], ["Name history", "Despite the common name Japanese pagoda tree, its native range is in China."]],
+      sources: [["Kew: Styphnolobium japonicum", "https://powo.science.kew.org/taxon/urn:lsid:ipni.org:names:1119529-2"]], checked: "September 14, 2026" },
+    { names: ["rosa damascena", "rosa x damascena"], common: ["damask rose"],
+      native: ["Cultivated hybrid, not a native wild rose", "introduced"], conservation: ["Cultivated hybrid; wild-species status does not apply", "regional"],
+      facts: [["Plant identity", "Kew recognizes Damask rose as an artificial hybrid. It should not be confused with Long Island's native wild roses."]],
+      sources: [["Kew: Rosa × damascena", "https://powo.science.kew.org/taxon/urn:lsid:ipni.org:names:77394892-1"]], checked: "September 14, 2026" },
+    { names: ["rudbeckia fulgida"], common: ["orange coneflower"],
+      native: ["Variety needed; New York status is unresolved at species level", "regional"], conservation: ["Variety-level review needed", "regional"],
+      facts: [["Check the variety", "The New York Flora Atlas separates two varieties and lists the parent species' native status as unknown."], ["Similar names", "Black-eyed Susan refers to several Rudbeckia species. This identification is R. fulgida, not R. hirta."]],
+      sources: [["New York Flora Atlas: Rudbeckia fulgida", "https://newyork.plantatlas.usf.edu/plant.aspx?id=7745"]], checked: "September 14, 2026" },
+    { names: ["solidago rugosa"], common: ["wrinkleleaf goldenrod", "rough-stemmed goldenrod"],
+      native: ["Native to the New York region", "native"], conservation: ["Variety needed to assess protection", "regional"],
+      facts: [["Habitat", "Fields, woodland edges and wetland margins; yellow flowers support insects, and seeds feed birds."], ["Identification", "Several varieties and similar goldenrods need close comparison."]],
+      context: "USDA's plant guide records Haudenosaunee (Iroquois) medicinal use of this goldenrod. This is a historical ethnobotanical record, not treatment advice.",
+      sources: [["USDA-NRCS: Wrinkleleaf Goldenrod Plant Guide, pp. 1–2", "https://plants.usda.gov/DocumentLibrary/plantguide/pdf/pg_soru2.pdf"], ["New York native plant priority list (2026)", "https://agriculture.ny.gov/system/files/documents/2026/04/nynativeplantprioritylist.pdf"]], checked: "September 14, 2026" },
+    { names: ["asclepias syriaca"], common: ["common milkweed"],
+      native: ["Native to the New York metropolitan region", "native"], conservation: ["Protection status not yet verified", "regional"],
+      facts: [["Growth", "A sun-loving perennial that spreads by seed and underground roots."], ["Regional context", "Brooklyn Botanic Garden lists common milkweed as native and common in its metropolitan flora."]],
+      food: "NC State Extension flags poisonous characteristics. Do not treat this photo identification as confirmation that a plant is edible.",
+      sources: [["Brooklyn Botanic Garden: Common Milkweed", "https://nymf.bbg.org/species/2027"], ["NC State Extension: Asclepias syriaca", "https://plants.ces.ncsu.edu/plants/asclepias-syriaca/"]], checked: "September 14, 2026" }
+  );
+
   const nyPlantProtectionSource = ["NYSDEC: protected plants and species lists", "https://dec.ny.gov/nature/animals-fish-plants/plants/state-protected-plants"];
 
   function plantSpeciesProfile(fields = {}) {
@@ -121,24 +150,71 @@
     return percent > 0 && percent < 1 ? "<1" : String(Math.round(percent));
   }
 
+  // Preserve the same facts for API records, mapped inventory cards and photo reviews.
+  function plantInsightFields(fields = {}) {
+    return {
+      ...fields,
+      name: fields.common_name || fields.name || fields.commonName || "",
+      identification: /needs_review|pending_review|awaiting identification|identification pending/i.test(fields.identification || "") ? "" : (fields.scientific_name || fields.identification || fields.scientificName || ""),
+      algonquian: fields.algonquian_word || fields.algonquian || fields.algonquianWord || "",
+      algonquian_source: fields.algonquian_source || fields.algonquianSource || "",
+      context: fields.indigenous_context || fields.context || fields.indigenousContext || "",
+      edible_safety: fields.edible_safety || fields.edibleSafety || "",
+      medicinal_use: fields.medicinal_use || fields.medicinalUse || "",
+      native_status: fields.native_status || fields.nativeStatus || "",
+      invasive_status: fields.invasive_status || fields.invasiveStatus || "",
+      endangered_status: fields.endangered_status || fields.endangeredStatus || "",
+      source: fields.identification_source || fields.source || ""
+    };
+  }
+
+  function plantInsightValue(value, options = {}) {
+    const text = usefulPlantText(value, options);
+    return /^(?:not (?:yet )?(?:documented|assessed|shown)|unknown|awaiting|pending|no (?:reviewed |recorded )?source)|not shown without a reviewed source/i.test(text) ? "" : text;
+  }
+
+  function plantInsightGuide(fields) {
+    // Scientific identity takes precedence over common names, notes and filenames.
+    const scientific = fields.scientific_name || fields.identification;
+    return plantGuideMatchFromFields(scientific ? { identification: scientific } : { name: fields.name });
+  }
+
+  function plantResourceContext(fields) {
+    const scientific = defaultNormalizeText(fields.scientific_name || fields.identification || "");
+    const common = defaultNormalizeText(fields.common_name || fields.name || "");
+    return (window.NLI_SHINNECOCK_PLANT_CONTEXT || []).find(r => scientific
+      ? r.scientific.some(k => scientific === k || scientific.startsWith(k + " "))
+      : r.common.includes(common));
+  }
+
   function plantObservationInsightsHtml(fields = {}, options = {}) {
+    fields = plantInsightFields(fields);
     const escape = options.escapeHtml || (value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])));
     const profile = plantSpeciesProfile(fields);
     const source = usefulPlantText(fields.identification_source || fields.source || "", options);
-    const rows = plantObservationFactRows(fields, null, options);
+    const guide = plantInsightGuide(fields);
+    const resource = plantResourceContext(fields);
+    const rows = plantObservationFactRows(fields, guide, options);
+    const native = profile?.native || [plantInsightValue(fields.native_status, options) || plantInsightValue(guide?.native, options) || "Not yet verified for Long Island", "regional"];
+    const conservation = profile?.conservation || [plantInsightValue(fields.endangered_status, options) || "Species-level protection not yet verified", "regional"];
+    const nameSource = plantInsightValue(fields.algonquian_source, options) || (!plantInsightValue(fields.algonquian, options) && guide?.algonquian ? guide.source : "");
     const sources = profile ? [...profile.sources, ...(profile.nyChecked ? [nyPlantProtectionSource] : [])] : [];
+    if (resource) sources.push(["Shinnecock elders’ resource catalogue (2014), PDF p. " + resource.page, "https://nativelongisland.com/assets/documents/shinnecock-elders-natural-resources-2014.pdf#page=" + resource.page]);
     const identity = cleanText(fields.scientific_name || fields.identification || fields.common_name || fields.name, options);
     const lookup = "https://powo.science.kew.org/results?q=" + encodeURIComponent(identity || "plant");
     const statusTile = ([value, tone], label) => `<div class="plant-status-tile plant-status-${tone}"><span>${label}</span><strong>${escape(value)}</strong></div>`;
     return `<section class="plant-insights" aria-label="About the suggested plant species">
       <p class="plant-insights-label">About this suggested species</p>
-      ${profile ? `<div class="plant-status-grid">${statusTile(profile.native, "Long Island native status")}${statusTile(profile.conservation, "Conservation / protection")}</div>` : `<p class="plant-id-check">${/wisteria/i.test(identity) ? "Wisterias differ by species. Chinese and Japanese wisteria are introduced; a genus-only identification cannot settle local native or conservation status." : /^[a-z]+ [a-z]+(?:\s|$)/i.test(String(fields.scientific_name || fields.identification || "")) ? "Explore the linked botanical sources for this species’ range and conservation status." : "A species-level identification is needed to check Long Island native status and New York protection."}</p>`}
+      <div class="plant-status-grid">${statusTile(native, "Long Island native status")}${statusTile(conservation, "Conservation / protection")}</div>
+      ${profile ? "" : `<p class="plant-id-check">${/wisteria/i.test(identity) ? "Wisterias differ by species. Chinese and Japanese wisteria are introduced; a genus-only identification cannot settle local native or conservation status." : /^[a-z]+ [a-z]+(?:\s|$)/i.test(String(fields.scientific_name || fields.identification || "")) ? "Explore the linked botanical sources for this species’ range and conservation status." : "A species-level identification is needed to check Long Island native status and New York protection."}</p>`}
       <div class="site-plant-facts">${rows.map(([label, value]) => `<div class="site-plant-fact"><strong>${escape(label)}</strong><span>${escape(value)}</span></div>`).join("")}</div>
+      ${resource ? `<p><a href="#wiki/${resource.slug}">Read the plant’s Shinnecock history and remembered places</a></p>` : ""}
       <details class="plant-species-sources"><summary>Species details &amp; sources</summary>
         ${profile?.note ? `<p>${escape(profile.note)}</p>` : ""}
         <p>These facts describe the suggested species; the photo identification still needs confirmation.</p>
+        ${nameSource ? `<p>Recorded-name source: ${escape(nameSource)}</p>` : ""}
         ${source ? `<p>Photo identification: ${escape(source)}.</p>` : ""}
-        ${sources.length ? `<ul>${sources.map(([label, url]) => `<li><a href="${escape(url)}" target="_blank" rel="noopener noreferrer">${escape(label)}</a></li>`).join("")}</ul><p class="plant-source-date">Sources checked September 8, 2026.</p>` : ""}
+        ${sources.length ? `<ul>${sources.map(([label, url]) => `<li><a href="${escape(url)}" target="_blank" rel="noopener noreferrer">${escape(label)}</a></li>`).join("")}</ul><p class="plant-source-date">${profile ? `Species profile checked ${escape(profile.checked || "September 8, 2026")}.` : "Catalogue checked September 14, 2026."}</p>` : ""}
         <a href="${escape(lookup)}" target="_blank" rel="noopener noreferrer">Compare names and range in Kew's plant database</a>
       </details>
     </section>`;
@@ -259,11 +335,22 @@
   }
 
   function plantObservationFactRows(fields = {}, match = null, options = {}) {
-    const rows = [...(plantSpeciesProfile(fields)?.facts || [])];
-    const algonquian = usefulPlantText(options.algonquianValue ?? fields.algonquian ?? fields.algonquian_word, options);
-    if (algonquian) rows.push(["Recorded Indigenous name", algonquian]);
-    const medicinal = usefulPlantText(fields.medicinal_use, options);
-    if (medicinal && !/not shown|not documented|without .*source|not yet|not assessed/i.test(medicinal)) rows.push(["Medicinal use", medicinal]);
+    fields = plantInsightFields(fields);
+    match = match || plantInsightGuide(fields);
+    const profile = plantSpeciesProfile(fields);
+    const rows = [...(profile?.facts || [])];
+    const algonquian = plantInsightValue(options.algonquianValue || fields.algonquian, options) || (match?.algonquian ? `${match.algonquian} (recorded for ${match.common})` : "");
+    const recordedName = match?.algonquian && algonquian === match.algonquian ? `${algonquian} (recorded for ${match.common})` : algonquian;
+    rows.push(["Recorded Indigenous name", recordedName || "Indigenous name not yet added"]);
+    const resource = plantResourceContext(fields);
+    const context = plantInsightValue(profile?.context, options) || resource?.text || plantInsightValue(fields.context, options) || plantInsightValue(match?.context, options);
+    rows.push(["Traditional use / cultural context", context || "No documented cultural use linked to this identification yet."]);
+    const edible = plantInsightValue(profile?.food, options) || resource?.food || plantInsightValue(fields.edible_safety, options) || plantInsightValue(match?.edible, options);
+    rows.push(["Food / edibility", edible || "Edibility has not been verified. Do not eat a plant based on a photo identification."]);
+    const medicinal = plantInsightValue(fields.medicinal_use, options);
+    if (medicinal) rows.push(["Medicinal use", medicinal]);
+    const invasive = plantInsightValue(fields.invasive_status, options);
+    if (invasive) rows.push(["Invasive status", invasive]);
     return rows;
   }
 
@@ -371,6 +458,7 @@
       identification: unresolvedServiceResult ? "Identification pending review" : (record?.scientific_name || record?.identification_status || "Awaiting identification review."),
       vocabulary,
       algonquian: record?.algonquian_word || "",
+      algonquian_source: record?.algonquian_source || "",
       context: record?.indigenous_context || "",
       guidance: record?.visitor_guidance || "",
       source: unresolvedServiceResult ? "Visitor photo awaiting identification" : (record?.identification_source || ""),

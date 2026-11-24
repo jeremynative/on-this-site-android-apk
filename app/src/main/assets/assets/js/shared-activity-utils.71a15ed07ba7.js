@@ -1,0 +1,958 @@
+(function () {
+  const normalizeActivityDateInput = window.NLI_SHARED_UTILS?.normalizeActivityDateInput || (value => {
+    if (value instanceof Date || typeof value === "number") return value;
+    const text = String(value || "").trim();
+    if (!text) return value;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return `${text}T00:00:00`;
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(text) && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
+      return `${text.replace(" ", "T")}Z`;
+    }
+    return text;
+  });
+
+  const activityDateValue = window.NLI_SHARED_UTILS?.activityDateValue || (value => {
+    if (!value) return 0;
+    const time = new Date(normalizeActivityDateInput(value)).getTime();
+    return Number.isFinite(time) ? time : 0;
+  });
+
+  function localDayStart(time) {
+    const date = new Date(time);
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  }
+
+  // Reuse the four locale formatters across feed rows and refreshes. Creating
+  // them for every date blocked map input while the activity feed rebuilt.
+  // Keep relative labels uncached so Today/Yesterday still roll over at midnight.
+  const activityDateFormatters = new Map();
+  function formatActivityDate(date, style) {
+    let formatter = activityDateFormatters.get(style);
+    if (!formatter) {
+      const options = style === "date"
+        ? { month: "short", day: "numeric", year: "numeric" }
+        : style === "local-date"
+          ? { year: "numeric", month: "numeric", day: "numeric" }
+          : { hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: style === "time-zone" ? "short" : undefined };
+      formatter = new Intl.DateTimeFormat(undefined, options);
+      activityDateFormatters.set(style, formatter);
+    }
+    return formatter.format(date);
+  }
+
+  function dateLabel(value, options = {}) {
+    const time = activityDateValue(value);
+    if (!time) return "Recently";
+    const date = new Date(time);
+    const timeLabel = options.includeTime
+      ? formatActivityDate(date, options.hideTimeZone ? "time" : "time-zone")
+      : "";
+    const withTime = label => timeLabel ? `${label} - ${timeLabel}` : label;
+    if (options.relative) {
+      const days = Math.round((localDayStart(Date.now()) - localDayStart(time)) / 86400000);
+      if (days < 0) return withTime(formatActivityDate(date, "local-date"));
+      if (days <= 0) return withTime("Today");
+      if (days === 1) return withTime("Yesterday");
+      if (days < 7) return withTime(`${days} days ago`);
+      return withTime(formatActivityDate(date, "local-date"));
+    }
+    return withTime(formatActivityDate(date, "date"));
+  }
+
+  function preview(value, options = {}) {
+    const limit = Number(options.limit || 132);
+    const cleanText = typeof options.cleanText === "function"
+      ? options.cleanText(value || "")
+      : String(value || "");
+    const text = cleanText.replace(/\s+/g, " ").trim();
+    if (!text || text.length <= limit) return text;
+    if (options.preferSentence) {
+      const sentence = text.split(/(?<=[.!?])\s+/).find(part => part.length > 35 && part.length <= limit);
+      if (sentence) return sentence;
+      const clipped = text.slice(0, limit + 1);
+      const boundary = clipped.lastIndexOf(" ");
+      return `${clipped.slice(0, boundary > 48 ? boundary : limit).trim()}...`;
+    }
+    return `${text.slice(0, limit - 3).trim()}...`;
+  }
+
+  function lastSeenKey(prefix, profileKey = "public") {
+    return `${prefix}-${String(profileKey || "public").toLowerCase()}`;
+  }
+
+  function latestTimestamp(items = [], options = {}) {
+    const dateAccessor = typeof options.dateAccessor === "function" ? options.dateAccessor : item => item?.date || item?.created_at;
+    const capAtNow = options.capAtNow === true;
+    const now = Date.now();
+    return Math.max(0, ...items.map(item => {
+      const value = activityDateValue(dateAccessor(item));
+      return capAtNow ? Math.min(value, now) : value;
+    }));
+  }
+
+  function unreadCount(items = [], seen = 0, options = {}) {
+    const dateAccessor = typeof options.dateAccessor === "function" ? options.dateAccessor : item => item?.date || item?.created_at;
+    const capAtNow = options.capAtNow === true;
+    const now = Date.now();
+    return items.filter(item => {
+      const value = activityDateValue(dateAccessor(item));
+      return value > seen && (!capAtNow || value <= now);
+    }).length;
+  }
+
+  function defaultStorage() {
+    return typeof localStorage !== "undefined" ? localStorage : null;
+  }
+
+  function readSeen(storageKey, storage = defaultStorage()) {
+    try {
+      const seen = Number(storage?.getItem?.(storageKey) || 0);
+      return Number.isFinite(seen) ? seen : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  function writeSeen(storageKey, items = [], options = {}) {
+    const latest = Math.max(Date.now(), latestTimestamp(items, options));
+    try {
+      (options.storage || defaultStorage())?.setItem?.(storageKey, String(latest));
+    } catch {}
+    return latest;
+  }
+
+  function activityContentTarget(item = {}) {
+    const itemType = String(item.kind || item.type || "").toLowerCase();
+    const explicitType = String(item.contentSourceType || item.content_source_type || "").toLowerCase();
+    const explicitSlug = String(item.contentSlug || item.content_slug || item.attachedSiteSlug || item.attached_site_slug || "").trim().toLowerCase();
+    if (["site", "wiki"].includes(explicitType) && explicitSlug) {
+      return { type: explicitType, slug: explicitSlug, key: `${explicitType}|${explicitSlug}` };
+    }
+    const sourceType = itemType === "historic-moment" || itemType === "comment" || itemType === "event"
+      ? String(item.sourceType || item.source_type || "").toLowerCase()
+      : itemType;
+    const slug = String(item.sourceSlug || item.source_slug || item.slug || "").trim().toLowerCase();
+    if (!["site", "wiki"].includes(sourceType) || !slug) return null;
+    return { type: sourceType, slug, key: `${sourceType}|${slug}` };
+  }
+
+  function activityItemKey(item = {}) {
+    const groupKey = String(item.activityGroupKey || item.activity_group_key || "").trim();
+    if (groupKey) return groupKey;
+    const target = activityContentTarget(item);
+    const type = String(item.kind || item.type || "activity").toLowerCase();
+    const id = String(item.commentId || item.comment_id || item.activityId || item.activity_id || item.id || "").trim();
+    const title = String(item.title || item.sourceTitle || item.source_title || "").trim().toLowerCase();
+    const date = String(item.date || item.created_at || item.updated_at || "").trim();
+    return [type, target?.key || "global", id || String(item.slug || ""), title, date].join("|");
+  }
+
+  function activityItemKeys(item = {}) {
+    const members = Array.isArray(item.activityMembers) ? item.activityMembers : [];
+    if (!members.length) return [activityItemKey(item)];
+    return [...new Set(members.flatMap(member => activityItemKeys(member)).filter(Boolean))];
+  }
+
+  function activityContentTargetKey(type, slug) {
+    const normalizedType = String(type || "").trim().toLowerCase();
+    const normalizedSlug = String(slug || "").trim().toLowerCase();
+    return normalizedType && normalizedSlug ? `${normalizedType}|${normalizedSlug}` : "";
+  }
+
+  function contentActivityItems(items = [], type, slug) {
+    const targetKey = activityContentTargetKey(type, slug);
+    if (!targetKey) return [];
+    return items.filter(item => activityContentTarget(item)?.key === targetKey);
+  }
+
+  function contentActivityItemKeys(items = [], type, slug) {
+    return [...new Set(contentActivityItems(items, type, slug).flatMap(activityItemKeys).filter(Boolean))];
+  }
+
+  function contentUpdateActivityRecords(items = []) {
+    return items.flatMap(item => [
+      item,
+      ...(Array.isArray(item?.activityMembers) ? item.activityMembers : [])
+    ]).filter(Boolean);
+  }
+
+  function contentUpdateTargetCandidates(items = []) {
+    const precise = [];
+    const general = [];
+    const seen = new Set();
+    const add = (target, isPrecise = false) => {
+      const key = `${target.type}|${target.id || ""}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      (isPrecise ? precise : general).push(target);
+    };
+    contentUpdateActivityRecords(items).forEach(record => {
+      const type = String(record.kind || record.type || "").toLowerCase();
+      if (type === "comment") {
+        const id = String(record.commentId || record.comment_id || "").trim();
+        add({ type: "comment", id }, Boolean(id));
+      } else if (type === "historic-moment") {
+        const id = String(record.activityId || record.activity_id || record.id || "").trim();
+        add({ type: "historic-moment", id }, Boolean(id));
+      } else if (type === "map-story") {
+        const relation = record.plantObservationId || record.plant_observation;
+        const id = String(relation && typeof relation === "object" ? relation.id || "" : relation || "");
+        if (id || record.prompt_key === "plant_observation") add({ type: "plant-observation", id }, Boolean(id));
+        else add({ type: "map-story" });
+      } else if (type === "site" && /^site visit$/i.test(String(record.label || ""))) {
+        add({ type: "site-visit" });
+      }
+    });
+    return [...precise, ...general];
+  }
+
+  function revealContentTarget(root, target) {
+    root.querySelectorAll(".content-update-highlight").forEach(element => element.classList.remove("content-update-highlight"));
+    target.classList.add("content-update-highlight");
+    for (let parent = target.parentElement; parent && parent !== root; parent = parent.parentElement) {
+      if (parent.tagName === "DETAILS") parent.open = true;
+      if (parent.matches("[data-discussion-panel]")) {
+        parent.hidden = false;
+        parent.closest(".discussion-section")?.querySelector("[data-toggle-discussion]")?.setAttribute("aria-expanded", "true");
+      }
+    }
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => target.classList.remove("content-update-highlight"), 8000);
+  }
+
+  function readSeenItemKeys(storageKey, storage = defaultStorage()) {
+    try {
+      const parsed = JSON.parse(storage?.getItem?.(storageKey) || "[]");
+      return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  function readSeenItemKeysFromStorageKeys(storageKeys = [], storage = defaultStorage()) {
+    const keys = new Set();
+    [...new Set((storageKeys || []).map(String).filter(Boolean))].forEach(storageKey => {
+      readSeenItemKeys(storageKey, storage).forEach(key => keys.add(key));
+    });
+    return keys;
+  }
+
+  function writeSeenItemKeys(storageKey, keys = [], options = {}) {
+    const storage = options.storage || defaultStorage();
+    const existing = options.replace ? new Set() : readSeenItemKeys(storageKey, storage);
+    [...keys].filter(Boolean).forEach(key => existing.add(String(key)));
+    const values = [...existing].slice(-Math.max(50, Number(options.limit || 500)));
+    try {
+      storage?.setItem?.(storageKey, JSON.stringify(values));
+    } catch {}
+    return new Set(values);
+  }
+
+  // Content counts as new for a week. After that it drops off the red badges
+  // (tabs, list items and map pins) whether or not it was opened.
+  const NEW_CONTENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+  function unreadItems(items = [], options = {}) {
+    const baseline = Number(options.baseline || 0);
+    const seenKeys = options.seenKeys instanceof Set ? options.seenKeys : new Set(options.seenKeys || []);
+    const now = Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now();
+    const maxAge = Number(options.maxAgeMs);
+    const oldest = Number.isFinite(maxAge) && maxAge > 0 ? now - maxAge : -Infinity;
+    return items.map(item => {
+      const members = Array.isArray(item.activityMembers) && item.activityMembers.length ? item.activityMembers : [item];
+      const unreadMembers = members.filter(member => {
+        const date = activityDateValue(member?.date || member?.created_at);
+        return date > baseline && date >= oldest && date <= now && !seenKeys.has(activityItemKey(member));
+      });
+      if (!unreadMembers.length || seenKeys.has(activityItemKey(item))) return null;
+      return {
+        ...item,
+        unreadWeight: unreadMembers.reduce((total, member) => total + Math.max(1, Number(member.groupedCount || 1) || 1), 0),
+        unreadNewest: Math.max(...unreadMembers.map(member => activityDateValue(member?.date || member?.created_at)))
+      };
+    }).filter(Boolean);
+  }
+
+  // A tab's red number (Community Activity, Site List, Knowledgebase) clears
+  // when that tab is opened: it counts only unread items newer than the last
+  // time this profile opened the tab. The items stay unread (red dots on cards,
+  // list rows and map pins) until each is viewed or a week passes.
+  function tabOpenedKey(tab, profileKey = "public") {
+    return lastSeenKey(`nli-tab-opened-v1-${tab}`, profileKey);
+  }
+
+  function readTabOpened(tab, profileKey, storage = defaultStorage()) {
+    return readSeen(tabOpenedKey(tab, profileKey), storage);
+  }
+
+  function markTabOpened(tab, profileKey, storage = defaultStorage()) {
+    const now = Date.now();
+    try {
+      storage?.setItem?.(tabOpenedKey(tab, profileKey), String(now));
+    } catch {}
+    return now;
+  }
+
+  function itemsNewSince(items = [], since = 0) {
+    const cutoff = Number(since) || 0;
+    return items.filter(item => Number(item?.unreadNewest || activityDateValue(item?.date || item?.created_at)) > cutoff);
+  }
+
+  function activityItemWeight(item = {}) {
+    return Math.max(1, Number(item.unreadWeight || item.groupedCount || item.grouped_count || 1) || 1);
+  }
+
+  function weightedActivityCount(items = []) {
+    return items.reduce((total, item) => total + activityItemWeight(item), 0);
+  }
+
+  function createUnreadActivityTracker(options = {}) {
+    const getItems = typeof options.getItems === "function" ? options.getItems : () => [];
+    const getBaseline = typeof options.getBaseline === "function" ? options.getBaseline : () => 0;
+    const getSeenStorageKey = typeof options.getSeenStorageKey === "function" ? options.getSeenStorageKey : () => "";
+    const getSeenStorageKeys = typeof options.getSeenStorageKeys === "function" ? options.getSeenStorageKeys : null;
+    const getSessionSeenKeys = typeof options.getSessionSeenKeys === "function" ? options.getSessionSeenKeys : () => new Set();
+    const schedule = typeof options.schedule === "function"
+      ? options.schedule
+      : callback => (typeof window !== "undefined" && window.setTimeout ? window.setTimeout(callback, 0) : setTimeout(callback, 0));
+    let snapshot = null;
+
+    function invalidate() {
+      snapshot = null;
+    }
+
+    function seenStorageKeys() {
+      const primaryKey = String(getSeenStorageKey() || "");
+      return [...new Set([
+        primaryKey,
+        ...(getSeenStorageKeys ? getSeenStorageKeys() : [])
+      ].map(String).filter(Boolean))];
+    }
+
+    function buildSnapshot() {
+      const storageKeys = seenStorageKeys();
+      const primaryKey = storageKeys[0] || "";
+      const persistedSeenKeys = readSeenItemKeysFromStorageKeys(storageKeys, options.storage || defaultStorage());
+      const seenKeys = new Set([...persistedSeenKeys, ...getSessionSeenKeys(primaryKey)].map(String));
+      const now = typeof options.now === "function" ? Number(options.now()) : Number(options.now);
+      const items = unreadItems(getItems(), {
+        baseline: Number(getBaseline() || 0),
+        seenKeys,
+        maxAgeMs: options.maxAgeMs ?? NEW_CONTENT_MAX_AGE_MS,
+        ...(Number.isFinite(now) ? { now } : {})
+      });
+      const byTarget = new Map();
+      const countByTarget = new Map();
+      items.forEach(item => {
+        const targetKey = activityContentTarget(item)?.key;
+        if (!targetKey) return;
+        if (!byTarget.has(targetKey)) byTarget.set(targetKey, []);
+        byTarget.get(targetKey).push(item);
+        countByTarget.set(targetKey, (countByTarget.get(targetKey) || 0) + activityItemWeight(item));
+      });
+      const nextSnapshot = {
+        items,
+        total: weightedActivityCount(items),
+        byTarget,
+        countByTarget
+      };
+      snapshot = nextSnapshot;
+      schedule(() => {
+        if (snapshot === nextSnapshot) snapshot = null;
+      });
+      return nextSnapshot;
+    }
+
+    function current() {
+      return snapshot || buildSnapshot();
+    }
+
+    function targetKey(type, slug) {
+      return activityContentTargetKey(type, slug);
+    }
+
+    function markKeys(keys = []) {
+      const normalizedKeys = [...new Set(keys.map(String).filter(Boolean))];
+      if (!normalizedKeys.length) return [];
+      const storageKeys = seenStorageKeys();
+      const primaryKey = storageKeys[0] || "";
+      const sessionSeenKeys = getSessionSeenKeys(primaryKey);
+      normalizedKeys.forEach(key => sessionSeenKeys?.add?.(key));
+      if (primaryKey) {
+        const migratedKeys = readSeenItemKeysFromStorageKeys(storageKeys, options.storage || defaultStorage());
+        normalizedKeys.forEach(key => migratedKeys.add(key));
+        writeSeenItemKeys(primaryKey, migratedKeys, {
+          storage: options.storage || defaultStorage(),
+          limit: options.limit,
+          replace: true
+        });
+      }
+      invalidate();
+      return normalizedKeys;
+    }
+
+    function markItem(key) {
+      const normalizedKey = String(key || "");
+      if (!normalizedKey) return [];
+      const item = getItems().find(candidate => activityItemKey(candidate) === normalizedKey);
+      return markKeys(item ? activityItemKeys(item) : [normalizedKey]);
+    }
+
+    function markContent(type, slug) {
+      const key = targetKey(type, slug);
+      if (!key) return [];
+      return markKeys((current().byTarget.get(key) || []).flatMap(activityItemKeys));
+    }
+
+    return {
+      invalidate,
+      items: () => current().items,
+      count: () => current().total,
+      contentItems(type, slug) {
+        const key = targetKey(type, slug);
+        return key ? (current().byTarget.get(key) || []) : [];
+      },
+      contentCount(type, slug) {
+        const key = targetKey(type, slug);
+        return key ? (current().countByTarget.get(key) || 0) : 0;
+      },
+      markItem,
+      markContent,
+      storageKeys: seenStorageKeys
+    };
+  }
+
+  function commentLabel(sourceType = "site", options = {}) {
+    if (options.plantObservation) return `${options.authorName || "Contributor"} reported a plant`;
+    const normalized = String(sourceType || "").toLowerCase();
+    if (normalized === "wiki") return "Comment added to knowledgebase";
+    if (normalized === "support") return "Project support";
+    return "Comment added to a site";
+  }
+
+  function suggestionLabel(suggestion = {}) {
+    return /source/i.test(String(suggestion.review_note || ""))
+      ? "New source added"
+      : "New site suggested";
+  }
+
+  function suggestionDate(suggestion = {}) {
+    return suggestion.submitted_at || suggestion.date_created || suggestion.created_at || "";
+  }
+
+  function suggestionIsFeedback(suggestion = {}) {
+    return /feedback/i.test(`${suggestion.title || ""} ${suggestion.review_note || ""}`) || Number(suggestion.priority) === 1;
+  }
+
+  function registrationDate(registration = {}) {
+    return registration?.created_at || registration?.date_created || registration?.reviewed_at || "";
+  }
+
+  function registrationNeedsReview(registration = {}) {
+    const status = String(registration?.status || "pending").toLowerCase();
+    if (registration?.account_enabled === true || status === "approved") return false;
+    if (registration?.account_banned === true || status === "banned" || status === "declined") return false;
+    return true;
+  }
+
+  function siteEditedDate(site = {}, options = {}) {
+    site = site || {};
+    if (options.extended) {
+      return site.last_reviewed || site.date_updated || site.updated_at || site.modified_at || site.last_edited_at || site.lastmod || site.wp_date || site.published_at || site.date_created || site.created_at || "";
+    }
+    return site.last_reviewed || site.date_updated || site.updated_at || site.lastmod || site.wp_date || site.published_at || site.date_created || "";
+  }
+
+  function siteCreatedDate(site = {}) {
+    return site.imported_at || site.date_created || site.created_at || site.wp_date || "";
+  }
+
+  function wikiCreatedDate(article = {}) {
+    return article.date_created || article.created_at || article.imported_at || article.wp_date || "";
+  }
+
+  function contentUpdateDate(item = {}) {
+    item = item || {};
+    return item.activity_update_date || item.activity_feed_date || "";
+  }
+
+  function contentActivityDate(item = {}, options = {}) {
+    const created = options.type === "wiki" ? wikiCreatedDate(item) : siteCreatedDate(item);
+    return contentUpdateDate(item) || created || "";
+  }
+
+  function contentActivityIsAdditive(item = {}, options = {}) {
+    item = item || {};
+    const type = String(options.type || "site").toLowerCase();
+    const created = type === "wiki" ? wikiCreatedDate(item) : siteCreatedDate(item);
+    const updated = contentUpdateDate(item);
+    if (created && (!updated || sameCalendarDate(created, updated))) return true;
+    if (!updated) return false;
+
+    const summary = String(item.activity_update_summary || item.activity_feed_summary || "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    if (!summary) return false;
+
+    // Community Activity is a discovery feed, not an edit log. A timestamp or
+    // generic edit verb is never enough: the summary must explicitly describe
+    // substantive information that entered the public archive. This keeps
+    // removals, consolidation, formatting, image crops, and other maintenance
+    // out of the feed even when their summaries contain words such as
+    // "included", "featured", or "expanded" in a non-additive sense.
+    const contentSubject = "(?:new(?:ly)?|additional|previously missing|previously omitted|information|content|history|historic(?:al)?|accounts?|biograph(?:y|ies|ical)|research|sources?|citations?|timelines?|moments?|articles?|sections?|paragraphs?|photographs?|photos?|images?|stories?|records?|maps?|boundar(?:y|ies)|languages?|words?|plants?|submissions?|sites?|listings?|events?|dates?|context|details?|material|books?|collections?|donations?|organizations?|programs?|exhibits?|awards?|interviews?|names?|persons?|places?|locations?|routes?|media|videos?)";
+    const maintenanceObject = "(?:spacing|padding|margin|border|color|font|layout|formatting|crop|button|control)";
+    const actionStart = "(?:^|[.;:!?]\\s*|\\b(?:and|then|while)\\s+)(?:also\\s+)?";
+    const directAddition = new RegExp(`${actionStart}(?:(?:added|adding|created|creating)\\b(?![^.;:!?]{0,60}\\b${maintenanceObject}\\b)|(?:documented|documenting|incorporated|incorporating|introduced|introducing|published|publishing|supplemented|supplementing)\\b)\\s*:?\\s*[^.;:!?]{0,180}\\b${contentSubject}\\b`);
+    const newlyFeatured = new RegExp(`${actionStart}newly\\s+featured\\b`);
+    const meaningfulExpansion = new RegExp(`${actionStart}expand(?:ed|ing|s)?\\b[^.;:!?]{0,120}\\b(?:with|to include|by adding)\\b[^.;:!?]{0,120}\\b${contentSubject}\\b`);
+    const missingContentRestored = new RegExp(`${actionStart}restor(?:e|ed|ing|es)?\\b[^.;:!?]{0,120}\\b(?:missing|omitted|lost)\\b[^.;:!?]{0,120}\\b${contentSubject}\\b`);
+    const nowContains = new RegExp(`\\bnow\\s+(?:contains?|documents?|features?|includes?)\\b[^.;:!?]{0,180}\\b${contentSubject}\\b`);
+    return newlyFeatured.test(summary) || directAddition.test(summary) || meaningfulExpansion.test(summary) || missingContentRestored.test(summary) || nowContains.test(summary);
+  }
+
+  function createActivityMomentLookup(timelineEvents = []) {
+    const byId = new Map();
+    const bySlug = new Map();
+    const add = (map, key, row) => {
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(row);
+    };
+    timelineEvents.forEach((moment, index) => {
+      const type = String(moment?.source_type || "").toLowerCase();
+      const id = String(moment?.source_id ?? moment?.wiki_article ?? moment?.site ?? "");
+      const slug = String(moment?.source_slug || "").toLowerCase();
+      const row = { moment, index };
+      if (id) add(byId, `${type}:${id}`, row);
+      if (slug) add(bySlug, `${type}:${slug}`, row);
+    });
+    return (type, id, slug) => {
+      const rows = new Set([...(id ? byId.get(`${type}:${id}`) || [] : []), ...(slug ? bySlug.get(`${type}:${slug}`) || [] : [])]);
+      // Preserve original order for equal chronology keys, including id/slug matches.
+      return [...rows].sort((a, b) => a.index - b.index).map(row => row.moment);
+    };
+  }
+
+  function relatedActivityMoments(item = {}, options = {}) {
+    item = item || {};
+    const type = String(options.type || "site").toLowerCase();
+    const id = String(item.id ?? "");
+    const slug = String(item.slug || "").toLowerCase();
+    return (options.momentLookup ? options.momentLookup(type, id, slug) : options.timelineEvents || [])
+      .filter(moment => String(moment?.source_type || "").toLowerCase() === type)
+      .filter(moment => {
+        const sourceId = String(moment?.source_id ?? moment?.wiki_article ?? moment?.site ?? "");
+        const sourceSlug = String(moment?.source_slug || "").toLowerCase();
+        return Boolean((id && sourceId === id) || (slug && sourceSlug === slug));
+      })
+      .sort((a, b) =>
+        Number(a.sort_key ?? a.start_year ?? Number.MAX_SAFE_INTEGER) - Number(b.sort_key ?? b.start_year ?? Number.MAX_SAFE_INTEGER) ||
+        Number(a.id || 0) - Number(b.id || 0)
+      );
+  }
+
+  function activityNewsPreview(item = {}, options = {}) {
+    item = item || {};
+    const cleanText = typeof options.cleanText === "function"
+      ? options.cleanText
+      : value => String(value || "").replace(/<[^>]*>/g, " ");
+    const explicit = cleanText(item.activity_update_summary || item.activity_feed_summary || "").replace(/\s+/g, " ").trim();
+    if (explicit) return preview(explicit, { cleanText, limit: options.limit || 230, preferSentence: true });
+
+    const moments = relatedActivityMoments(item, options);
+    if (moments.length) {
+      const moment = moments[0];
+      const date = cleanText(moment.date_label || moment.period || "").replace(/\s+/g, " ").trim();
+      const detail = cleanText(moment.description || moment.source_excerpt || moment.title || "").replace(/\s+/g, " ").trim();
+      if (detail) {
+        const lead = options.isNew ? "New content includes" : "Featured research";
+        return preview(`${lead}: ${date ? `${date} - ` : ""}${detail}`, {
+          cleanText,
+          limit: options.limit || 230,
+          preferSentence: true
+        });
+      }
+    }
+
+    const candidates = options.type === "wiki"
+      ? [item.content, item.why_this_matters]
+      : [
+          item.history_content,
+          item.translation_content,
+          item.preservation_content,
+          item.oral_history_content,
+          item.land_loss_content,
+          item.why_this_matters
+        ];
+    const intro = cleanText(item.summary || item.introduction_content || item.introduction || "").replace(/\s+/g, " ").trim();
+    const substantive = candidates
+      .map(value => cleanText(value || "").replace(/\s+/g, " ").trim())
+      .find(value => value && value !== intro);
+    if (!substantive) return "";
+    return preview(`${options.isNew ? "New content includes" : "Featured research"}: ${substantive}`, {
+      cleanText,
+      limit: options.limit || 230,
+      preferSentence: true
+    });
+  }
+
+  function contentUpdateFocusField(item = {}, activityItems = [], sectionFields = [], options = {}) {
+    const cleanText = typeof options.cleanText === "function"
+      ? options.cleanText
+      : value => String(value || "").replace(/<[^>]*>/g, " ");
+    const normalize = value => cleanText(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s'-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const stopWords = new Set([
+      "about", "after", "again", "also", "been", "being", "from", "have", "into", "more", "most",
+      "new", "site", "that", "their", "there", "these", "this", "update", "updated", "with", "your"
+    ]);
+    const tokens = value => new Set(normalize(value).split(" ").filter(token => token.length > 3 && !stopWords.has(token)));
+    const activityText = [
+      item.activity_update_summary,
+      item.activity_feed_summary,
+      ...activityItems.flatMap(activity => [
+        activity?.preview,
+        activity?.label,
+        activity?.title,
+        ...(Array.isArray(activity?.activityMembers)
+          ? activity.activityMembers.flatMap(member => [member?.preview, member?.label, member?.title])
+          : [])
+      ])
+    ].filter(Boolean).join(" ");
+    const normalizedActivity = normalize(activityText);
+    const activityTokens = tokens(activityText);
+    const candidates = sectionFields
+      .map(field => ({
+        field: field.content,
+        title: item[field.title] || field.defaultTitle || "",
+        content: item[field.content] || ""
+      }))
+      .filter(candidate => candidate.field && normalize(candidate.content));
+    if (normalize(item.why_this_matters)) {
+      candidates.push({ field: "why_this_matters", title: "Why This Matters", content: item.why_this_matters });
+    }
+    if (!candidates.length) return "";
+    const titleMatch = candidates.find(candidate => {
+      const title = normalize(candidate.title);
+      return title.length > 3 && normalizedActivity.includes(title);
+    });
+    if (titleMatch) return titleMatch.field;
+    let best = null;
+    candidates.forEach(candidate => {
+      const candidateTokens = tokens(`${candidate.title} ${candidate.content}`);
+      const overlap = [...activityTokens].filter(token => candidateTokens.has(token)).length;
+      const score = overlap + (normalize(candidate.title) && normalizedActivity.includes(normalize(candidate.title)) ? 4 : 0);
+      if (!best || score > best.score) best = { field: candidate.field, score };
+    });
+    if (best?.score > 0) return best.field;
+    return candidates.find(candidate => candidate.field === "introduction_content")?.field || candidates[0].field;
+  }
+
+  function wikiActivityLabel(article = {}) {
+    const created = wikiCreatedDate(article);
+    const edited = contentUpdateDate(article);
+    if (created && (!edited || sameCalendarDate(created, edited))) return "New Article";
+    return "Wiki updated";
+  }
+
+  function wikiActivityDate(article = {}) {
+    const created = wikiCreatedDate(article);
+    const edited = contentUpdateDate(article);
+    if (created && (!edited || sameCalendarDate(created, edited))) return created;
+    return edited || created;
+  }
+
+  function wikiActivityPriority(article = {}) {
+    return wikiActivityLabel(article) === "New Article" ? 20 : 0;
+  }
+
+  function eventActivityDate(event = {}) {
+    return event.activity_feed_date ||
+      event.date_updated ||
+      event.updated_at ||
+      event.modified_at ||
+      event.date_created ||
+      event.created_at ||
+      event.added_at ||
+      "";
+  }
+
+  function calendarDateKey(value) {
+    const normalized = normalizeActivityDateInput(value);
+    if (typeof normalized === "string") {
+      const match = normalized.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (match) return match[1];
+    }
+    const time = activityDateValue(value);
+    return time ? new Date(time).toISOString().slice(0, 10) : "";
+  }
+
+  function sameCalendarDate(first, second) {
+    if (!first || !second) return false;
+    const firstKey = calendarDateKey(first);
+    const secondKey = calendarDateKey(second);
+    return Boolean(firstKey && secondKey && firstKey === secondKey);
+  }
+
+  function siteActivityLabel(site = {}) {
+    const created = siteCreatedDate(site);
+    const edited = contentUpdateDate(site);
+    if (created && (!edited || sameCalendarDate(created, edited))) return "Site added";
+    return "Site updated";
+  }
+
+  function siteActivityDate(site = {}) {
+    return contentActivityDate(site, { type: "site" });
+  }
+
+  function editedDateLabel(value, options = {}) {
+    const formatter = window.NLI_SHARED_UTILS?.formatDate;
+    const fallback = options.fallback || "10/01/2018";
+    if (typeof formatter === "function") {
+      return formatter(value, {
+        fallback,
+        invalidAsValue: true,
+        locale: options.locale || "en-US",
+        dateOptions: options.dateOptions || { month: "2-digit", day: "2-digit", year: "numeric" }
+      });
+    }
+    return String(value || fallback);
+  }
+
+  function sortByRecentActivity(items = [], options = {}) {
+    const dateAccessor = typeof options.dateAccessor === "function" ? options.dateAccessor : item => item?.date || item?.created_at;
+    const titleAccessor = typeof options.titleAccessor === "function" ? options.titleAccessor : item => item?.title || "";
+    return [...items].sort((a, b) => {
+      const pinnedA = activityIsPinned(a, options);
+      const pinnedB = activityIsPinned(b, options);
+      return Number(pinnedB) - Number(pinnedA) ||
+        // Pins are announcements: show the newest one first. Their expiry is only
+        // a tie-breaker, so a long-running older pin cannot bury a new event.
+        (pinnedB ? activityDateValue(dateAccessor(b)) : 0) - (pinnedA ? activityDateValue(dateAccessor(a)) : 0) ||
+        (pinnedB ? activityDateValue(activityPinUntil(b)) : 0) - (pinnedA ? activityDateValue(activityPinUntil(a)) : 0) ||
+        activityDateValue(dateAccessor(b)) - activityDateValue(dateAccessor(a)) ||
+        Number(b.activityPriority || b.activity_priority || 0) - Number(a.activityPriority || a.activity_priority || 0) ||
+        String(titleAccessor(a)).localeCompare(String(titleAccessor(b)));
+    });
+  }
+
+  function activityItemType(item = {}) {
+    return String(item.kind || item.type || "").toLowerCase();
+  }
+
+  function contentUpdateIdentity(item = {}) {
+    if (activityIsPinned(item)) return null;
+    const type = activityItemType(item);
+    if (!["site", "wiki", "historic-moment"].includes(type)) return null;
+    const sourceType = type === "historic-moment"
+      ? String(item.sourceType || item.source_type || "").toLowerCase()
+      : type;
+    const slug = String(item.slug || item.source_slug || "").trim().toLowerCase();
+    const day = calendarDateKey(item.date || item.created_at);
+    if (!["site", "wiki"].includes(sourceType) || !slug || !day) return null;
+    return { sourceType, slug, day, key: `${sourceType}|${slug}|${day}` };
+  }
+
+  function activityComparisonTokens(value) {
+    const stopWords = new Set(["a", "an", "and", "as", "at", "by", "for", "from", "in", "is", "of", "on", "or", "the", "to", "was", "with"]);
+    return new Set(String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter(token => token.length > 2 && !stopWords.has(token)));
+  }
+
+  function activityUpdatesOverlap(first, second, comparisons) {
+    const prepare = value => {
+      const raw = String(value || "");
+      if (comparisons?.has(raw)) return comparisons.get(raw);
+      const result = { text: raw.replace(/\s+/g, " ").trim().toLowerCase(), tokens: null };
+      comparisons?.set(raw, result);
+      return result;
+    };
+    const leftEntry = prepare(first);
+    const rightEntry = prepare(second);
+    const left = leftEntry.text;
+    const right = rightEntry.text;
+    if (!left || !right) return false;
+    if (left === right || (Math.min(left.length, right.length) > 45 && (left.includes(right) || right.includes(left)))) return true;
+    const leftTokens = leftEntry.tokens ||= activityComparisonTokens(left);
+    const rightTokens = rightEntry.tokens ||= activityComparisonTokens(right);
+    if (!leftTokens.size || !rightTokens.size) return false;
+    const shared = [...leftTokens].filter(token => rightTokens.has(token)).length;
+    return shared / Math.min(leftTokens.size, rightTokens.size) >= 0.45;
+  }
+
+  function activityUpdateEntry(item = {}, comparisons) {
+    const type = activityItemType(item);
+    const title = String(item.title || "").replace(/\s+/g, " ").trim();
+    const detail = String(item.preview || "").replace(/\s+/g, " ").trim();
+    if (type === "historic-moment") {
+      return {
+        title,
+        detail: detail && !activityUpdatesOverlap(title, detail, comparisons) ? detail : "",
+        text: [title, detail].filter(Boolean).join(" "),
+        type
+      };
+    }
+    return { title: "", detail, text: detail || title, type };
+  }
+
+  function groupSameDayContentUpdates(items = []) {
+    // Comparisons revisit the same paragraphs; tokenize each once per refresh.
+    const comparisons = new Map();
+    const buckets = new Map();
+    const passthrough = [];
+    items.forEach((item, index) => {
+      const identity = contentUpdateIdentity(item);
+      if (!identity) {
+        passthrough.push({ item, index });
+        return;
+      }
+      if (!buckets.has(identity.key)) buckets.set(identity.key, { identity, rows: [] });
+      buckets.get(identity.key).rows.push({ item, index });
+    });
+
+    const grouped = [...passthrough];
+    buckets.forEach(({ identity, rows }) => {
+      if (rows.length === 1) {
+        grouped.push(rows[0]);
+        return;
+      }
+      const direct = rows.find(row => activityItemType(row.item) === identity.sourceType);
+      const baseRow = direct || rows[0];
+      const updateMediaRow = rows.find(row =>
+        activityItemType(row.item) === "historic-moment" && String(row.item.image || "").trim()
+      );
+      const historicEntries = rows
+        .filter(row => activityItemType(row.item) === "historic-moment")
+        .map(row => activityUpdateEntry(row.item, comparisons));
+      const otherEntries = rows
+        .filter(row => activityItemType(row.item) !== "historic-moment")
+        .map(row => activityUpdateEntry(row.item, comparisons))
+        .filter(entry => !historicEntries.some(historic => activityUpdatesOverlap(entry.text, historic.text, comparisons)));
+      const updates = [...historicEntries, ...otherEntries]
+        .filter(entry => entry.text)
+        .filter((entry, index, list) => !list.slice(0, index).some(prior => activityUpdatesOverlap(entry.text, prior.text, comparisons)))
+        .map(({ title, detail, type }) => ({ title, detail, type }));
+      const base = baseRow.item;
+      const sourceTitle = String(base.sourceTitle || direct?.item?.title || base.title || "Archive update").trim();
+      grouped.push({
+        index: Math.min(...rows.map(row => row.index)),
+        item: {
+          ...base,
+          title: sourceTitle,
+          label: direct?.item?.label || (identity.sourceType === "wiki" ? "Wiki updated" : "Site updated"),
+          sourceType: identity.sourceType,
+          preview: "",
+          updates,
+          groupedActivity: true,
+          groupedCount: rows.length,
+          activityGroupKey: `activity-group:${identity.key}`,
+          activityMembers: rows.map(row => row.item),
+          image: updateMediaRow?.item.image || base.image || "",
+          imageFallback: updateMediaRow
+            ? (updateMediaRow.item.imageFallback || base.image || base.imageFallback || "")
+            : (base.imageFallback || "")
+        }
+      });
+    });
+    return grouped.sort((a, b) => a.index - b.index).map(entry => entry.item);
+  }
+
+  function updateListHtml(updates = [], options = {}) {
+    if (!Array.isArray(updates) || !updates.length) return "";
+    const escape = options.escapeHtml || (value => String(value || ""));
+    return `<div class="activity-update-summary"><strong>Updated content</strong><ul>${updates.map(update => `<li>${update.title ? `<strong>${escape(update.title)}</strong>` : ""}${update.detail ? `<span>${escape(update.detail)}</span>` : ""}</li>`).join("")}</ul></div>`;
+  }
+
+  function mergeRecentActivity(groups = [], options = {}) {
+    const limit = Number(options.limit || 40);
+    return sortByRecentActivity(groupSameDayContentUpdates(groups.flat()), options).slice(0, limit);
+  }
+
+  function activityPinUntil(item = {}) {
+    return item.pinUntil ||
+      item.activity_pin_until ||
+      item.pinned_until ||
+      item.pin_until ||
+      "";
+  }
+
+  function activityIsPinned(item = {}, options = {}) {
+    const until = activityDateValue(activityPinUntil(item));
+    if (!until) return false;
+    const now = Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now();
+    return until >= now;
+  }
+
+  function activityPinLabel(item = {}) {
+    return item.pinLabel || item.activity_pin_label || "Pinned";
+  }
+
+  window.NLI_ACTIVITY_UTILS = {
+    createActivityMomentLookup,
+    dateLabel,
+    normalizeActivityDateInput,
+    preview,
+    lastSeenKey,
+    latestTimestamp,
+    unreadCount,
+    readSeen,
+    writeSeen,
+    activityContentTarget,
+    activityContentTargetKey,
+    activityItemKey,
+    activityItemKeys,
+    contentActivityItems,
+    contentActivityItemKeys,
+    contentUpdateActivityRecords,
+    contentUpdateTargetCandidates,
+    revealContentTarget,
+    readSeenItemKeys,
+    readSeenItemKeysFromStorageKeys,
+    writeSeenItemKeys,
+    unreadItems,
+    NEW_CONTENT_MAX_AGE_MS,
+    tabOpenedKey,
+    readTabOpened,
+    markTabOpened,
+    itemsNewSince,
+    activityItemWeight,
+    weightedActivityCount,
+    createUnreadActivityTracker,
+    commentLabel,
+    suggestionLabel,
+    suggestionDate,
+    suggestionIsFeedback,
+    registrationDate,
+    registrationNeedsReview,
+    siteEditedDate,
+    siteCreatedDate,
+    wikiCreatedDate,
+    contentUpdateDate,
+    contentActivityDate,
+    contentActivityIsAdditive,
+    activityNewsPreview,
+    contentUpdateFocusField,
+    wikiActivityDate,
+    eventActivityDate,
+    siteActivityLabel,
+    siteActivityDate,
+    wikiActivityLabel,
+    wikiActivityPriority,
+    editedDateLabel,
+    activityPinUntil,
+    activityIsPinned,
+    activityPinLabel,
+    sortByRecentActivity,
+    groupSameDayContentUpdates,
+    updateListHtml,
+    mergeRecentActivity
+  };
+}());

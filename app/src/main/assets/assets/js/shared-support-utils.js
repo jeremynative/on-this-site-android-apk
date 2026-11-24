@@ -1,4 +1,7 @@
 (function () {
+  const adoptionTitle = "Adopt This Place - Support the On This Site Project";
+  // Same terms as the monthly Adopt a Place posts (research-workflow/adopt-a-place-posts-20261117).
+  const adoptionRecognition = "Proceeds help maintain On This Site and its future work. With your permission, your name, your business, or a dedication in memory of a loved one will be credited on this place’s map pin, in On This Site’s social media posts, and in exhibits when its photograph is shown.";
   // Cache revision: monthly Stripe totals and public supporter summaries.
   const DEFAULT_CONFIG = {
     projectName: "On This Site",
@@ -93,7 +96,7 @@
     return type === "subs" ? PLAY_MONTHLY_IDS : PLAY_ONE_TIME_IDS;
   }
 
-  function setPlayStatus(form, message, kind = "") {
+  function setSupportStatus(form, message, kind = "") {
     const status = form?.querySelector?.("[data-support-status]");
     if (!status) return;
     status.hidden = !message;
@@ -155,7 +158,7 @@
     const intent = saved?.intent || {};
     const endpoint = config().playVerificationEndpoint;
     if (!endpoint) throw new Error("Google Play purchase verification is not connected yet.");
-    setPlayStatus(activePlayForm, "Verifying your Google Play purchase...", "");
+    setSupportStatus(activePlayForm, "Verifying your Google Play purchase...", "");
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -175,7 +178,7 @@
     clearPlayIntent();
     if (activePlayForm) {
       await completeEmbeddedCheckout(activePlayForm, { updateUrl: true });
-      setPlayStatus(activePlayForm, "Google Play payment approved. Thank you for supporting On This Site.", "success");
+      setSupportStatus(activePlayForm, "Google Play payment approved. Thank you for supporting On This Site.", "success");
     }
     return true;
   }
@@ -185,7 +188,7 @@
     if (detail.event === "products" && Number(detail.responseCode) === 0) {
       (detail.products || []).forEach(product => playProductDetails.set(product.productId, product));
       refreshPlayAmountOptions(activePlayForm);
-      if (activePlayForm && playProductDetails.size) setPlayStatus(activePlayForm, "Google Play is ready.", "success");
+      if (activePlayForm && playProductDetails.size) setSupportStatus(activePlayForm, "Google Play is ready.", "success");
       return true;
     }
     if (detail.event === "status" && detail.ready) {
@@ -194,19 +197,19 @@
     }
     if (detail.event === "purchase-update") {
       if (Number(detail.purchaseState) === 2) {
-        setPlayStatus(activePlayForm, "Payment is pending in Google Play. Support will be recorded after payment completes.", "");
+        setSupportStatus(activePlayForm, "Payment is pending in Google Play. Support will be recorded after payment completes.", "");
         return true;
       }
       try {
         await verifyPlayPurchase(detail);
       } catch (error) {
-        setPlayStatus(activePlayForm, error.message || "Could not verify the Google Play purchase.", "error");
+        setSupportStatus(activePlayForm, error.message || "Could not verify the Google Play purchase.", "error");
       }
       return true;
     }
     if ((detail.event === "purchase" || detail.event === "products") && Number(detail.responseCode) !== 0) {
       const cancelled = Number(detail.responseCode) === 1;
-      setPlayStatus(activePlayForm, cancelled ? "Google Play purchase cancelled." : (detail.message || "Google Play billing is unavailable."), cancelled ? "" : "error");
+      setSupportStatus(activePlayForm, cancelled ? "Google Play purchase cancelled." : (detail.message || "Google Play billing is unavailable."), cancelled ? "" : "error");
       const button = activePlayForm?.querySelector?.("[data-support-submit]");
       if (button) button.disabled = false;
       return true;
@@ -353,13 +356,16 @@
   }
 
   async function fetchMonthlySupportGoal(options = {}) {
-    const fallbackGoal = Number(options.fallbackGoal || 300) || 300;
+    const fallbackGoal = Number(options.fallbackGoal || 200) || 200;
+    // A goal passed in (the CMS's monthly_goal) replaces the worker's own setting.
+    const goal = Number(options.goal);
+    const withGoal = record => (Number.isFinite(goal) && goal > 0 ? { ...record, goal } : record);
     const url = config().monthlyGoalUrl;
-    if (!url || typeof fetch !== "function") return sanitizeMonthlyGoal({}, fallbackGoal);
+    if (!url || typeof fetch !== "function") return sanitizeMonthlyGoal(withGoal({}), fallbackGoal);
     const response = await fetch(url, { cache: "no-store" });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.message || "Monthly support could not be loaded.");
-    return sanitizeMonthlyGoal(data, fallbackGoal);
+    return sanitizeMonthlyGoal(withGoal(data), fallbackGoal);
   }
 
   function publicThankYousHtml(records = [], options = {}) {
@@ -433,6 +439,7 @@
       day: "numeric",
       year: "numeric",
       hour: "numeric",
+      hour12: true,
       minute: "2-digit"
     });
   }
@@ -498,6 +505,18 @@
     return data;
   }
 
+  // A checkout step that never answers (a stalled network, Stripe's script
+  // blocked) would otherwise leave the payment button waiting forever.
+  const CHECKOUT_STEP_TIMEOUT_MS = 20000;
+
+  function withTimeout(promise, message, ms = CHECKOUT_STEP_TIMEOUT_MS) {
+    let timer;
+    return Promise.race([
+      promise,
+      new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); })
+    ]).finally(() => clearTimeout(timer));
+  }
+
   function hasEmbeddedCheckoutConfig(supportConfig = config()) {
     return /^pk_(test|live)_/.test(String(supportConfig.publishableKey || ""));
   }
@@ -523,7 +542,7 @@
     const amounts = amountOptions();
     const defaultAmount = Number(supportConfig.defaultAmount || amounts[0] || 25);
     const title = settings.title || "Support On This Site";
-    const note = settings.support_note || "Thank you to Monument Lab, Running Strong for American Indian Youth, community contributors, and other supporters who help keep On This Site online, reviewed, expanded, and available across the website and mobile app.";
+    const note = settings.support_note || "Thank you to Monument Lab, Running Strong for American Indian Youth, the Indigenous Screen Office, Agog: The Immersive Media Institute, community contributors, and other supporters who help keep On This Site online, reviewed, expanded, and available across the website and mobile app.";
     const hasPlay = options.platform === "mobile" && hasNativePlayBilling();
     const hasStripe = Boolean(supportConfig.checkoutEndpoint);
     const hasEmbedded = hasStripe && hasEmbeddedCheckoutConfig(supportConfig);
@@ -543,7 +562,7 @@
       </div>
       <section class="section support-form-section" data-support-form data-support-platform="${esc(options.platform || "web")}">
         <h3>${esc(formTitle)}</h3>
-        ${adoption ? `<p class="article-summary">Your ${esc(money(adoption.amount || 25))}/month stewardship support helps sustain research and public information connected to this place.</p>` : ""}
+        ${adoption ? `<p class="article-summary">Your ${esc(money(adoption.amount || 25))}/month stewardship support helps sustain research and public information connected to this place. ${adoptionRecognition}</p>` : ""}
         ${printPurchase ? `<p class="article-summary">${esc(`${printPurchase.sizeLabel} ${printPurchase.materialLabel} print of ${printPurchase.title}.`)}</p>` : ""}
         <p class="article-meta">${hasPlay ? "Payments are processed securely by Google Play." : (hasStripe ? (hasEmbedded ? "Secure payment opens here on the project site." : "Payments open through secure checkout.") : "Secure checkout is being connected. Payment will open here after the support system is ready.")}</p>
         ${supportReturnNoticeHtml(options.pageUrl || window.location.href, { escapeHtml: esc })}
@@ -619,7 +638,7 @@
       amount: Number(options.adoption.amount || 25)
     } : null;
     const printPurchase = options.printPurchase || null;
-    const title = adoption ? "Adopt This Place" : (printPurchase ? "Purchase a Print" : "Support Project");
+    const title = adoption ? adoptionTitle : (printPurchase ? "Purchase a Print" : "Support Project");
     return {
       headHtml: `<p class="article-kicker">On This Site</p><h2>${title}</h2>${adoption ? `<p class="article-meta">Monthly stewardship support for ${esc(adoption.siteTitle)}.</p>` : ""}${printPurchase ? `<p class="article-meta">Secure print purchase supporting On This Site.</p>` : ""}`,
       bodyHtml: supportFormHtml({
@@ -726,11 +745,25 @@
     const supportConfig = config();
     if (supportConfig.checkoutEndpoint) {
       const createSession = async embedded => {
-        const response = await fetch(supportConfig.checkoutEndpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...intent, embedded })
-        });
+        const controller = typeof AbortController === "function" ? new AbortController() : null;
+        const timer = controller ? setTimeout(() => controller.abort(), CHECKOUT_STEP_TIMEOUT_MS) : null;
+        let response;
+        try {
+          response = await fetch(supportConfig.checkoutEndpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...intent, embedded }),
+            signal: controller?.signal
+          });
+        } catch (error) {
+          const unreachable = new Error(error?.name === "AbortError"
+            ? "Secure checkout is taking too long to answer. Please try again."
+            : "Secure checkout couldn't be reached. Check your connection and try again.");
+          unreachable.unreachable = true; // retrying the redirect checkout won't help
+          throw unreachable;
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.message || "Payment checkout could not start.");
         return data;
@@ -739,7 +772,7 @@
         try {
           const data = await createSession(true);
           if (!data.clientSecret) throw new Error("Embedded checkout is not available for this session.");
-          const Stripe = await loadStripeJs(supportConfig);
+          const Stripe = await withTimeout(loadStripeJs(supportConfig), "Stripe took too long to load.");
           const stripe = Stripe(supportConfig.publishableKey);
           if (!stripe?.initEmbeddedCheckout) throw new Error("Embedded checkout is not available in this browser.");
           const container = form.querySelector("[data-support-embedded-checkout]");
@@ -754,14 +787,15 @@
             await completeEmbeddedCheckout(form, options);
             if (typeof options.onComplete === "function") options.onComplete(form);
           };
-          checkout = await stripe.initEmbeddedCheckout({
+          checkout = await withTimeout(stripe.initEmbeddedCheckout({
             clientSecret: data.clientSecret,
             onComplete: handleComplete
-          });
+          }), "The secure payment form took too long to load.");
           checkout.mount(container);
           form.__supportEmbeddedCheckout = checkout;
           return { embedded: true, clientSecret: data.clientSecret };
         } catch (error) {
+          if (error?.unreachable) throw error;
           if (options.redirectFallback === false) {
             throw new Error("The secure payment form could not load here. Please try again.");
           }
@@ -780,6 +814,8 @@
   }
 
   window.NLI_SUPPORT_UTILS = {
+    adoptionTitle,
+    adoptionRecognition,
     config,
     amountOptions,
     intentFromForm,
@@ -798,6 +834,7 @@
     supportFormHtml,
     supportPageHtml,
     hasNativePlayBilling,
+    setSupportStatus,
     preparePlayBillingForm,
     startPlayCheckout,
     startCheckout

@@ -375,6 +375,34 @@
       pointer-events: none;
     }
 
+    /* A site opened from the full-screen Timeline or list (portrait): show
+       the header and map above its panel instead of a blank screen with a
+       stale strip of map; closing the site returns to the full list. */
+    body.mobile-detail-open:not(.tablet-landscape) .app.panel-maximized {
+      grid-template-rows: auto minmax(0, 1fr) 0 0;
+    }
+
+    body.mobile-detail-open:not(.tablet-landscape) .app.panel-maximized > header,
+    body.mobile-detail-open:not(.tablet-landscape) .app.panel-maximized > .mobile-map-shell {
+      height: auto;
+      min-height: 0;
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
+      overflow: visible;
+    }
+
+    body.mobile-detail-open:not(.tablet-landscape) .app.panel-maximized > header {
+      padding: max(12px, var(--app-top-safe)) 12px 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    body.mobile-detail-open:not(.tablet-landscape) .app.panel-maximized > .mobile-view-tabs,
+    body.mobile-detail-open:not(.tablet-landscape) .app.panel-maximized > .mobile-timeline,
+    body.mobile-detail-open:not(.tablet-landscape) .app.panel-maximized > .list-panel {
+      display: none;
+    }
+
     .app.panel-collapsed {
       grid-template-rows: auto minmax(0, 1fr) auto 0px !important;
     }
@@ -422,7 +450,7 @@
     }
 
     /* The header is a grid item, so its z-index makes a layer of its own:
-       an open Menu or Labels list must sit above an open site panel. */
+       an open Menu or Labels list must sit above an open site panel (200). */
     header:has(.mobile-more-menu[open]),
     header:has(.mobile-layer-menu[open]) {
       z-index: 1300;
@@ -824,11 +852,45 @@
       min-width: 0;
     }
 
+    /* Legend marks: the map icon a label stands for, or a swatch. */
+    .mobile-layer-icon {
+      flex: 0 0 22px;
+      width: 22px;
+      height: 22px;
+      background: center / contain no-repeat;
+    }
+
+    .mobile-layer-icon[data-swatch="dot"] {
+      background: radial-gradient(circle, #496f5d 0 5px, transparent 6px);
+    }
+
+    .mobile-layer-icon[data-swatch="approx"] {
+      background: radial-gradient(circle, transparent 0 6px, #496f5d 6px 8px, transparent 9px);
+    }
+
+    .mobile-layer-icon[data-swatch="area"] {
+      border: 2px solid #b5683f;
+      border-radius: 4px;
+      background: rgba(214, 140, 96, 0.35);
+    }
+
+    .mobile-layer-icon[data-swatch="path"] {
+      background: linear-gradient(135deg, transparent 45%, #7a4fa0 45% 58%, transparent 58%);
+    }
+
     .mobile-layer-option span {
+      flex: 1 1 auto;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .hide-moving-animals .mobile-moving-dog-mapbox-icon,
+    .hide-moving-animals .mobile-moving-whale-mapbox-icon,
+    .hide-moving-animals .mobile-moving-amethyst-ship-mapbox-icon,
+    .hide-moving-animals .native-animal-map-icon {
+      display: none !important;
     }
 
     .mobile-layer-option input {
@@ -858,6 +920,57 @@
     .mobile-notification-button {
       top: calc(var(--mobile-map-actions-top, calc(var(--app-top-safe) + 190px)) + 52px);
     }
+
+    .mobile-ar-button {
+      position: fixed;
+      top: calc(var(--mobile-map-actions-top, calc(var(--app-top-safe) + 190px)) + 104px);
+      left: max(12px, var(--app-left-safe));
+      z-index: 18;
+      display: inline-grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border: 1px solid #c9d3c8;
+      border-radius: 8px;
+      background: rgba(251, 252, 250, 0.96);
+      color: var(--accent-strong);
+      box-shadow: 0 8px 20px rgba(20, 31, 23, 0.16);
+    }
+
+    .mobile-ar-button[hidden] { display: none; }
+    .mobile-ar-button svg, .site-ar-button svg { width: 20px; height: 20px; margin-top: -6px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+    .mobile-ar-label { position: absolute; bottom: 3px; font-size: 9px; font-weight: 900; letter-spacing: 0.06em; }
+
+    .app.panel-maximized .mobile-ar-button,
+    .app.mobile-map-actions-hidden .mobile-ar-button,
+    .app.mobile-search-results .mobile-ar-button,
+    body:has(.search-suggestions:not([hidden])) .mobile-ar-button,
+    body:has(.mobile-more-menu[open]) .mobile-ar-button,
+    body:has(.mobile-layer-menu[open]) .mobile-ar-button,
+    body.mobile-content-open .mobile-ar-button {
+      display: none;
+    }
+
+    .ar-scans { display: grid; gap: 14px; }
+
+    /* The home AR button's question when you are near more than one place. */
+    .ar-choices { display: grid; gap: 10px; }
+    .ar-choice {
+      display: grid;
+      gap: 4px;
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--ink);
+      text-align: left;
+      font: inherit;
+      touch-action: manipulation;
+    }
+    .ar-choice strong { font-size: 1.05rem; color: var(--accent-strong); }
+    .ar-choice span { font-size: 0.9rem; color: var(--muted); }
+    .ar-choice:active { background: #eef3ee; }
 
     .app.panel-maximized .mobile-activity-button,
     .app.panel-maximized .mobile-notification-button,
@@ -1014,6 +1127,14 @@
       text-align: left;
     }
 
+    .notification-date {
+      display: block;
+      color: #526158;
+      font-size: 0.875rem;
+      line-height: 1.4;
+      font-weight: 400;
+    }
+
     .notification-actions {
       display: flex;
       flex-wrap: wrap;
@@ -1060,6 +1181,50 @@
       font-size: 18px;
       font-weight: 900;
       line-height: 1;
+    }
+
+    /* Zoomed in, a blue photo dot becomes a small round photo of the site,
+       sized from the zoom (syncMobileSiteThumbnails sets the variable). */
+    .mobile-site-thumb-marker {
+      width: var(--mobile-site-thumb-size, 28px);
+      height: var(--mobile-site-thumb-size, 28px);
+      padding: 0;
+      border: 0;
+      background: transparent;
+      pointer-events: none;
+    }
+
+    .mobile-site-thumb-marker.is-ready:not(.is-leaving) {
+      pointer-events: auto;
+    }
+
+    /* Markers write their own inline opacity, so the inner face fades: in
+       once the photo loads, out before the marker is removed. */
+    .mobile-site-thumb-face {
+      display: block;
+      box-sizing: border-box;
+      width: 100%;
+      height: 100%;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      overflow: hidden;
+      background: #dfe8e2;
+      box-shadow: 0 2px 6px rgba(23, 32, 25, 0.34);
+      opacity: 0;
+      transform: scale(0.7);
+      transition: opacity 320ms ease, transform 320ms ease;
+    }
+
+    .mobile-site-thumb-marker.is-ready:not(.is-leaving) .mobile-site-thumb-face {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .mobile-site-thumb-face img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
 
     .mobile-calendar-event-marker {
@@ -1279,6 +1444,8 @@
       width: 100%;
       height: 100%;
       min-height: 190px;
+      /* The map owns pan/pinch gestures, including touches on its markers. */
+      touch-action: none;
     }
 
     .app.mobile-site-reveal-pending #map :is(.mapboxgl-marker, .maplibregl-marker) {
@@ -1342,6 +1509,29 @@
       display: none;
       pointer-events: none;
     }
+
+    .mobile-map-shell > .land-history-toggle {
+      position: absolute;
+      left: max(8px, env(safe-area-inset-left));
+      bottom: max(var(--land-history-panel-offset, 4px), env(safe-area-inset-bottom));
+      z-index: 10;
+      min-height: 36px;
+      max-width: calc(100% - 100px);
+      padding: 6px 9px;
+      border: 1px solid #42634e;
+      border-radius: 8px;
+      background: #fffdf5;
+      color: #203e30;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.25;
+      white-space: normal;
+      touch-action: manipulation;
+    }
+    .land-history-toggle[hidden] { display: none; }
+    body.land-history-active :is(.mobile-moving-biography-mapbox-icon, .mobile-moving-dog-mapbox-icon, .mobile-moving-whale-mapbox-icon, .mobile-moving-amethyst-ship-mapbox-icon, .native-animal-map-icon) { display: none !important; }
+    .land-history-toggle[aria-pressed="true"] { background: #203e30; color: #fff; border-color: #fff; }
+    .land-history-toggle:focus-visible { outline: 3px solid #b46c16; outline-offset: 2px; }
 
     .mobile-promo-dock {
       position: absolute;
@@ -2209,6 +2399,128 @@
       background: rgba(232, 243, 237, 0.5);
     }
 
+    /* Material Culture: the Knowledgebase gallery of objects, by kind, as a grid or a list. */
+    .mobile-material-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 0 0 10px;
+    }
+
+    .mobile-material-chip {
+      min-height: 34px;
+      padding: 6px 11px;
+      border: 1px solid #c7cec6;
+      border-radius: 999px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 720;
+    }
+
+    .mobile-material-chip span {
+      color: var(--muted);
+      font-weight: 650;
+    }
+
+    .mobile-material-chip.active {
+      border-color: rgba(37, 111, 90, 0.48);
+      background: #e8f3ed;
+      color: var(--accent-strong);
+    }
+
+    .mobile-material-views {
+      justify-content: flex-end;
+    }
+
+    .mobile-material-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 9px;
+      margin: 0 0 14px;
+    }
+
+    .mobile-material-list {
+      display: grid;
+      gap: 8px;
+      margin: 0 0 14px;
+    }
+
+    .mobile-material-item {
+      display: grid;
+      align-content: start;
+      overflow: hidden;
+      padding: 0;
+      border: 1px solid rgba(73, 111, 93, 0.18);
+      border-radius: 12px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      text-align: left;
+    }
+
+    .mobile-material-photo {
+      display: block;
+      aspect-ratio: 1 / 1;
+      background: #eef1ec;
+    }
+
+    .mobile-material-photo img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .mobile-material-text {
+      display: grid;
+      gap: 3px;
+      padding: 8px 9px 10px;
+    }
+
+    .mobile-material-kind {
+      color: var(--accent-strong);
+      font-size: 10.5px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .mobile-material-text strong {
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      font-size: 13.5px;
+      line-height: 1.3;
+    }
+
+    .mobile-material-where {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .mobile-material-caption {
+      display: none;
+    }
+
+    .mobile-material-list .mobile-material-item {
+      grid-template-columns: 96px minmax(0, 1fr);
+    }
+
+    .mobile-material-list .mobile-material-text strong {
+      -webkit-line-clamp: unset;
+    }
+
+    .mobile-material-list .mobile-material-caption {
+      display: block;
+      color: #445148;
+      font-size: 12.5px;
+      line-height: 1.45;
+    }
+
     .mobile-knowledgebase-back-row {
       margin-bottom: 10px;
     }
@@ -2727,6 +3039,13 @@
         right: max(92px, var(--app-right-safe));
       }
 
+      /* AR is the third button of that row. */
+      body.native-android-app .mobile-ar-button {
+        top: var(--mobile-map-actions-top, calc(var(--app-top-safe) + 190px));
+        left: auto;
+        right: max(40px, var(--app-right-safe));
+      }
+
       body.native-android-app .mobile-map-locate {
         right: 12px;
         bottom: 44px;
@@ -3045,6 +3364,67 @@
       line-height: 1.45;
     }
 
+    /* The login sheet: one main button, quiet links, and "New here?" before
+       the one sign-up button. Labels in sentence case. */
+    .account-sheet .login-field label,
+    .account-sheet #register-panel .field label,
+    .account-sheet #password-reset-panel .field label {
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: none;
+    }
+
+    .account-sheet .login-primary,
+    .account-sheet .login-wide {
+      display: flex;
+      width: 100%;
+      min-height: 48px;
+      font-size: 15px;
+    }
+
+    .account-sheet .login-primary { margin-top: 6px; }
+
+    .account-sheet .login-link {
+      display: block;
+      margin: 12px auto 0;
+      padding: 8px 6px;
+      border: 0;
+      background: none;
+      color: var(--accent-strong);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      cursor: pointer;
+    }
+
+    .account-sheet .login-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 18px 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .account-sheet .login-divider::before,
+    .account-sheet .login-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--line);
+    }
+
+    .account-sheet #register-panel,
+    .account-sheet #password-reset-panel { margin-top: 10px; }
+
+    .account-sheet .account-continue { margin-top: 14px; }
+
+    .account-sheet #profile-card:empty { display: none; }
+
     .sheet-head {
       display: flex;
       justify-content: space-between;
@@ -3071,7 +3451,7 @@
         max-height: calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe) - 8px);
       }
 
-      .detail.open.plant-browse-mode {
+      .detail.open.plant-browse-mode:not(.drawer-expanded):not(.dragging) {
         max-height: min(65dvh, calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe) - 8px));
       }
 
@@ -3240,10 +3620,12 @@
     }
 
     .account-sheet.has-profile .login-hero,
-    .account-sheet.has-profile .login-intro,
     .account-sheet.has-profile .login-field,
     .account-sheet.has-profile #login-submit,
     .account-sheet.has-profile #register-toggle,
+    .account-sheet.has-profile #password-reset-toggle,
+    .account-sheet.has-profile .login-divider,
+    .account-sheet.has-profile .social-signin,
     .account-sheet.has-profile #logout-submit,
     .account-sheet.has-profile .account-continue,
     .account-sheet.has-profile #login-status {
@@ -3989,6 +4371,7 @@
     body.mobile-profile-map-mode .list-panel,
     body.mobile-profile-map-mode .mobile-startup-spotlight,
     body.mobile-profile-map-mode .mobile-exhibit-marker,
+    body.mobile-profile-map-mode .mobile-site-thumb-marker,
     body.mobile-profile-map-mode .mobile-approved-suggestion-marker,
     body.mobile-profile-map-mode .mobile-story-marker,
     body.mobile-profile-map-mode .mobile-plant-marker,
@@ -4031,17 +4414,25 @@
       position: absolute;
       display: grid;
       place-items: center;
-      width: 26px;
-      height: 26px;
+      width: 20px;
+      height: 20px;
       padding: 0;
-      border: 2px solid #fff;
+      border: 1.5px solid #fff;
       border-radius: 50%;
       background: var(--profile-marker-color, #315c48);
-      box-shadow: 0 2px 7px rgba(18, 46, 34, 0.34);
+      box-shadow: 0 2px 6px rgba(18, 46, 34, 0.32);
       color: #fff;
-      font: 850 10.5px/1 system-ui, sans-serif;
+      font: 850 9px/1 system-ui, sans-serif;
       cursor: pointer;
       touch-action: manipulation;
+      scale: var(--profile-map-scale, 1);
+    }
+
+    /* Zoomed far out: small plain dots; numbers return closer in. */
+    .profile-map-far .mobile-profile-progress-marker:not(.is-active) {
+      width: 14px;
+      height: 14px;
+      font-size: 0;
     }
 
     .mobile-profile-progress-marker:focus-visible {
@@ -4054,31 +4445,61 @@
       box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.82), 0 0 0 7px rgba(49, 92, 72, 0.38), 0 3px 10px rgba(18, 46, 34, 0.42);
     }
 
-    .mobile-profile-progress-marker::after {
-      content: attr(data-title);
+    /* Place name, first date and what was done there, beside the stop dot.
+       The shared layout pass flips it left or hides it when it would cover
+       another stop; far out, only the name shows. */
+    .mobile-profile-progress-marker .profile-stop-label {
       position: absolute;
-      top: calc(100% + 5px);
-      left: 50%;
-      z-index: 2;
-      display: none;
-      max-width: 132px;
-      padding: 3px 6px;
-      transform: translateX(-50%);
-      border: 1px solid rgba(49, 92, 72, 0.2);
-      border-radius: 5px;
-      background: rgba(255, 255, 255, 0.96);
-      box-shadow: 0 2px 6px rgba(18, 46, 34, 0.18);
+      top: 50%;
+      left: calc(100% + 5px);
+      display: grid;
+      gap: 1px;
+      width: max-content;
+      max-width: 190px;
+      padding: 2px 7px 3px;
+      transform: translateY(-50%);
+      border: 1px solid rgba(49, 92, 72, 0.16);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 2px 6px rgba(18, 46, 34, 0.14);
       color: #173528;
-      font-size: 10px;
-      font-weight: 750;
-      line-height: 1.2;
-      text-align: center;
-      white-space: normal;
+      font: 800 11.5px/1.25 system-ui, sans-serif;
+      text-align: left;
+      pointer-events: none;
     }
 
-    .mobile-profile-progress-marker:hover::after,
-    .mobile-profile-progress-marker:focus::after {
-      display: block;
+    .mobile-profile-progress-marker .profile-stop-label.is-left {
+      left: auto;
+      right: calc(100% + 5px);
+    }
+
+    .mobile-profile-progress-marker .profile-stop-label.is-hidden {
+      visibility: hidden;
+    }
+
+    /* Labels wrap rather than cut off; long names and quotes stop at two lines. */
+    .mobile-profile-progress-marker .profile-stop-label :is(strong, i) {
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+
+    .mobile-profile-progress-marker .profile-stop-label small {
+      color: #52705f;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .mobile-profile-progress-marker .profile-stop-label i {
+      color: #3f4f46;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .mobile-profile-progress-marker .profile-stop-label i:empty,
+    .profile-map-far .mobile-profile-progress-marker:not(.is-active) .profile-stop-label :is(small, i) {
+      display: none;
     }
 
     .mobile-profile-progress-overview {
@@ -4140,7 +4561,10 @@
     }
 
     .mobile-profile-progress-chips > span {
+      display: inline-flex;
       flex: 0 0 auto;
+      align-items: center;
+      gap: 5px;
       padding: 6px 9px;
       border: 1px solid rgba(49, 92, 72, 0.18);
       border-radius: 999px;
@@ -4148,6 +4572,143 @@
       color: #315c48;
       font-size: 11px;
       font-weight: 750;
+    }
+
+    /* Each chip doubles as the legend for its map dot color. */
+    .mobile-profile-progress-chips > span::before,
+    .profile-journey-milestones li::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      flex: none;
+      border-radius: 50%;
+      background: var(--profile-type-color, #52665b);
+    }
+
+    [data-progress-type="checkin"] { --profile-type-color: #315c48; }
+    [data-progress-type="comment"] { --profile-type-color: #a85f2f; }
+    [data-progress-type="language"] { --profile-type-color: #386c86; }
+    [data-progress-type="quiz"] { --profile-type-color: #7a5b2c; }
+    [data-progress-type="plant"] { --profile-type-color: #5d7d3a; }
+    [data-progress-type="story"] { --profile-type-color: #72577e; }
+    [data-progress-type="suggestion"] { --profile-type-color: #934537; }
+    [data-progress-type="place"] { --profile-type-color: #c49a3a; }
+
+    .profile-journey {
+      display: grid;
+      gap: 9px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(49, 92, 72, 0.14);
+    }
+
+    .profile-journey-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .profile-journey-head h4 {
+      margin: 0;
+      color: #173528;
+      font-size: 14px;
+    }
+
+    .profile-journey-head span,
+    .profile-journey-months small,
+    .profile-journey-milestones div span,
+    .profile-journey-milestones time {
+      overflow: hidden;
+      color: #5d6b63;
+      font-size: 11px;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .profile-journey-months {
+      display: grid;
+      grid-auto-columns: minmax(0, 1fr);
+      grid-auto-flow: column;
+      gap: 3px;
+      height: 54px;
+    }
+
+    .profile-journey-months > span {
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+      gap: 2px;
+      min-width: 0;
+      text-align: center;
+    }
+
+    .profile-journey-months i {
+      align-self: end;
+      min-height: 2px;
+      border-radius: 3px 3px 1px 1px;
+      background: linear-gradient(180deg, #4f8a6c, #315c48);
+    }
+
+    .profile-journey-next {
+      margin: 0;
+      padding: 6px 9px;
+      border-left: 3px solid var(--profile-type-color, #315c48);
+      border-radius: 0 7px 7px 0;
+      background: rgba(255, 255, 255, 0.85);
+      color: #315c48;
+      font-size: 12px;
+    }
+
+    .profile-journey-milestones {
+      display: grid;
+      gap: 1px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .profile-journey-milestones li {
+      display: grid;
+      grid-template-columns: auto 30px minmax(0, 1fr) auto;
+      gap: 7px;
+      align-items: center;
+      min-height: 40px;
+      padding: 2px;
+    }
+
+    .profile-journey-stop {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 1px solid rgba(49, 92, 72, 0.24);
+      border-radius: 50%;
+      background: #fff;
+      color: #315c48;
+      font: 850 11px/1 system-ui, sans-serif;
+    }
+
+    span.profile-journey-stop {
+      border-style: dashed;
+    }
+
+    .profile-journey-milestones div {
+      display: grid;
+      min-width: 0;
+    }
+
+    .profile-journey-milestones strong {
+      color: #173528;
+      font-size: 12.5px;
+    }
+
+    .profile-journey-earlier summary {
+      min-height: 36px;
+      padding: 8px 2px;
+      color: #315c48;
+      font-size: 12px;
+      font-weight: 800;
     }
 
     .mobile-profile-progress-stats {
@@ -4709,6 +5270,21 @@
       background: #fff;
       transform: rotate(45deg);
     }
+
+    .mobile-story-marker:not(.is-plant-story) {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      filter: drop-shadow(0 1px 2px rgba(23, 32, 25, 0.18));
+    }
+
+    .mobile-story-marker:not(.is-plant-story)::before,
+    .mobile-story-marker:not(.is-plant-story)::after { display: none; }
+    .mobile-story-marker > svg { display: block; width: 100%; height: 100%; }
 
     .mobile-story-marker.is-attached {
       border-color: rgba(164, 126, 32, 0.45);
@@ -5650,6 +6226,12 @@
       background: #26352b;
     }
 
+    /* The camera starts with the recording; until then the empty video
+       would show the browser's large grey play-button poster. */
+    .story-overlay:not(.recording) .story-video {
+      visibility: hidden;
+    }
+
     .story-text {
       position: absolute;
       right: 18px;
@@ -5903,7 +6485,7 @@
       isolation: isolate;
     }
 
-    .detail.open.plant-browse-mode {
+    .detail.open.plant-browse-mode:not(.drawer-expanded):not(.dragging) {
       max-height: min(62dvh, calc(100dvh - var(--app-top-safe) - var(--app-bottom-safe) - 10px));
     }
 
@@ -5993,6 +6575,52 @@
 
       body.android-device.tablet-landscape .search-autocomplete {
         display: none;
+      }
+
+      /* Search opens from the magnifier and covers the header while in use. */
+      .landscape-search-button {
+        display: none;
+      }
+
+      body.android-device.tablet-landscape .landscape-search-button {
+        display: inline-grid;
+        place-items: center;
+        width: 40px;
+        min-width: 40px;
+        min-height: 32px;
+        padding: 0;
+      }
+
+      .landscape-search-button svg {
+        width: 18px;
+        height: 18px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2.2;
+        stroke-linecap: round;
+      }
+
+      body.android-device.tablet-landscape.landscape-search-open .search-autocomplete {
+        display: block;
+        position: fixed;
+        z-index: 1400;
+        top: calc(max(5px, var(--app-top-safe)) + 2px);
+        left: calc(var(--app-left-safe, 0px) + 8px);
+        right: calc(var(--app-right-safe, 0px) + 8px);
+      }
+
+      body.android-device.tablet-landscape.landscape-search-open header .search-autocomplete .search {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        height: 40px;
+        min-height: 40px;
+        font-size: 15px;
+        box-shadow: 0 6px 18px rgba(20, 31, 23, 0.18);
+      }
+
+      body.android-device.tablet-landscape.landscape-search-open .search-suggestions {
+        max-height: min(300px, 60dvh);
       }
 
       body.android-device.tablet-landscape .search {
@@ -6161,6 +6789,18 @@
         left: max(70px, calc(var(--app-left-safe) + 70px));
       }
 
+      /* AR joins the activity and bell row; offline, where those two are
+         hidden, it takes the first place. */
+      body.android-device.tablet-landscape .mobile-ar-button {
+        top: var(--mobile-map-actions-top, calc(var(--app-top-safe) + 90px));
+        left: max(122px, calc(var(--app-left-safe) + 122px));
+        right: auto;
+      }
+
+      body.android-device.tablet-landscape.offline-text-mode .mobile-ar-button {
+        left: max(18px, calc(var(--app-left-safe) + 18px));
+      }
+
       body.android-device.tablet-landscape .detail {
         inset: var(--app-top-safe) var(--app-right-safe) var(--app-bottom-safe) auto;
         width: var(--landscape-panel-width);
@@ -6168,6 +6808,26 @@
         max-height: none;
         border-radius: 16px 0 0 16px;
         transform: translate3d(110%, 0, 0);
+      }
+
+      /* Learn and a learning path open as the large centred reading window
+         they are designed as, not squeezed into the side panel (whose dock
+         position combined with their centring shifted them off screen). */
+      body.android-device.tablet-landscape .detail.open:has(:is(.learning-hub, .mobile-learning-path-stops)) {
+        inset: auto;
+        top: 50%;
+        left: 50%;
+        width: min(1480px, calc(100vw - 32px));
+        max-width: calc(100vw - 32px);
+        height: calc(100dvh - 24px);
+        max-height: calc(100dvh - 24px);
+        translate: -50% -50%;
+        border-radius: 18px;
+      }
+
+      body.android-device.tablet-landscape:has(.detail.open :is(.learning-hub, .mobile-learning-path-stops)) .landscape-panel-resizer {
+        visibility: hidden;
+        pointer-events: none;
       }
 
       body.android-device.tablet-landscape .detail:not(.open) {
@@ -6185,6 +6845,17 @@
       body.android-device.tablet-landscape .detail.drawer-half,
       body.android-device.tablet-landscape .detail.drawer-expanded {
         --detail-drawer-height: auto;
+      }
+
+      /* With a site open the bottom tabs hide but kept their row, leaving a
+         blank band under the map; the map takes it. A site with plants
+         keeps the full-height side panel (its 62% tray is for portrait). */
+      body.android-device.tablet-landscape.mobile-detail-open .app:not(.panel-maximized) .mobile-map-shell {
+        grid-row: 2 / -1;
+      }
+
+      body.android-device.tablet-landscape .detail.open.plant-browse-mode:not(.dragging) {
+        max-height: none;
       }
 
       body.android-device.tablet-landscape .detail-head {
@@ -6218,6 +6889,50 @@
       body.android-device.tablet-landscape .app.panel-maximized > .mobile-timeline,
       body.android-device.tablet-landscape .app.panel-maximized > .list-panel {
         grid-column: 1;
+        grid-row: 1;
+      }
+
+      /* A site opened from the full-width Timeline or list: show the map and
+         header beside its panel (they were hidden, leaving a blank area);
+         closing the site returns to the full-width list. */
+      body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized {
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+
+      body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > header,
+      body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > .mobile-map-shell {
+        grid-column: 1;
+        height: auto;
+        visibility: visible;
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > header {
+        display: grid;
+        grid-row: 1;
+        padding: max(5px, var(--app-top-safe)) 8px 5px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > .mobile-map-shell {
+        display: block;
+        grid-row: 2;
+      }
+
+      body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > .mobile-view-tabs,
+      body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > .mobile-timeline,
+      body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > .list-panel {
+        display: none;
+      }
+
+      body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized .quick-actions {
+        grid-template-columns: 96px 96px;
+        grid-template-rows: 32px;
+      }
+
+      body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized .mobile-layer-menu {
+        grid-column: 2;
         grid-row: 1;
       }
 
@@ -6340,9 +7055,9 @@
 
     .detail-drawer-handle {
       grid-column: 1 / -1;
-      justify-self: center;
-      width: 52px;
-      height: 20px;
+      justify-self: stretch;
+      width: 100%;
+      height: 44px;
       padding: 0;
       border: 0;
       border-radius: 999px;
@@ -6356,7 +7071,7 @@
       display: block;
       width: 42px;
       height: 5px;
-      margin: 7px auto;
+      margin: 19px auto;
       border-radius: 999px;
       background: #aebcaf;
     }
@@ -6437,6 +7152,94 @@
       text-align: left;
       text-decoration: underline;
       text-underline-offset: 2px;
+    }
+
+    /* A site panel's buttons (AR at the site, the app's navigate arrow,
+       close) sit together on the title's line, about its height; the
+       address and details below wrap onto their own lines across the
+       panel, so nothing overlaps and no row is spent on the buttons. */
+    .detail .detail-head:has(> .detail-head-actions) {
+      grid-template-columns: minmax(0, 1fr) auto;
+      row-gap: 0;
+    }
+
+    article.detail.hero-docked .detail-head:has(> .detail-head-actions) {
+      grid-template-columns: minmax(0, 1fr) 54px auto;
+    }
+
+    .detail-head:has(> .detail-head-actions) .detail-drawer-handle {
+      grid-row: 1;
+    }
+
+    .detail-head:has(> .detail-head-actions) #detail-title {
+      display: contents;
+    }
+
+    .detail-head:has(> .detail-head-actions) #detail-title > * {
+      grid-column: 1 / -1;
+    }
+
+    .detail-head:has(> .detail-head-actions) #detail-title > h2 {
+      grid-column: 1;
+      grid-row: 2;
+      align-self: center;
+      margin: 6px 0 4px;
+    }
+
+    .detail-head-actions {
+      grid-column: -2 / -1;
+      grid-row: 2;
+      align-self: center;
+      justify-self: end;
+      display: flex;
+      gap: 5px;
+      margin: 6px 0 4px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .detail-head .detail-head-actions > .close,
+    .detail-head .detail-head-actions > .site-ar-button,
+    .detail-head .detail-head-actions > .nli-listing-top-navigation {
+      width: 34px;
+      height: 34px;
+      min-height: 34px;
+      font-size: 15px;
+    }
+
+    /* The same tile, cube and label as the map's AR button. */
+    .site-ar-button {
+      position: relative;
+      display: inline-grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border: 1px solid #c9d3c8;
+      border-radius: 8px;
+      background: rgba(251, 252, 250, 0.96);
+      color: var(--accent-strong);
+      touch-action: manipulation;
+      pointer-events: auto;
+    }
+
+    .site-ar-button svg {
+      width: 16px;
+      height: 16px;
+      margin-top: -6px;
+    }
+
+    .site-ar-button .mobile-ar-label {
+      bottom: 1px;
+      font-size: 7.5px;
+    }
+
+    .site-ar-button:disabled {
+      opacity: 0.6;
+    }
+
+    .site-ar-button[hidden] {
+      display: none;
     }
 
     .close {
@@ -8188,7 +8991,8 @@
     }
 
     .detail-body > .actions,
-    .detail-body .section-content + .actions {
+    .detail-body .section-content + .actions,
+    .support-form-section .actions {
       position: static;
       margin-top: 14px;
       padding: 12px 0 0;
@@ -8498,329 +9302,129 @@
 .native-animal-marker:focus-visible { outline:2px solid #37624f!important; outline-offset:-6px; border-radius:10px!important; }
 body.mobile-profile-map-mode .native-animal-map-icon { visibility:hidden!important; pointer-events:none!important; }
 
-.mobile-moving-biography-shell { scale: var(--biography-icon-scale, 1); transform-origin: center; }
-.mobile-calendar-event-marker { z-index: 30; }
-#map :is(.mapboxgl-popup, .maplibregl-popup) { z-index: 40; }
+.activity-learning-card [data-activity-card-status]:not(:empty) { margin: 0; padding: 8px 12px; color: #285b48; font-size: 13px; overflow-wrap: anywhere; }
 
-/* AR (copied from the web app's mobile-app.css, PRs 501-511): the map's AR
-   button and the AR button on a site panel's title line. */
-    .mobile-ar-button {
-      position: fixed;
-      top: calc(var(--mobile-map-actions-top, calc(var(--app-top-safe) + 190px)) + 104px);
-      left: max(12px, var(--app-left-safe));
-      z-index: 18;
-      display: inline-grid;
-      place-items: center;
-      width: 44px;
-      height: 44px;
-      border: 1px solid #c9d3c8;
-      border-radius: 8px;
-      background: rgba(251, 252, 250, 0.96);
-      color: var(--accent-strong);
-      box-shadow: 0 8px 20px rgba(20, 31, 23, 0.16);
+.activity-learning-card [data-activity-card-status]:empty { display: none; }
+
+    .mobile-calendar-event-marker:has(.calendar-date-range) {
+      width: 70px !important;
+    }
+    .mobile-calendar-event-marker .calendar-date-range {
+      width: 66px;
     }
 
-    .mobile-ar-button[hidden] { display: none; }
-    .mobile-ar-button svg, .site-ar-button svg { width: 20px; height: 20px; margin-top: -6px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
-    .mobile-ar-label { position: absolute; bottom: 3px; font-size: 9px; font-weight: 900; letter-spacing: 0.06em; }
-
-    .app.panel-maximized .mobile-ar-button,
-    .app.mobile-map-actions-hidden .mobile-ar-button,
-    .app.mobile-search-results .mobile-ar-button,
-    body:has(.search-suggestions:not([hidden])) .mobile-ar-button,
-    body:has(.mobile-more-menu[open]) .mobile-ar-button,
-    body:has(.mobile-layer-menu[open]) .mobile-ar-button,
-    body.mobile-content-open .mobile-ar-button {
-      display: none;
+    .mobile-moving-biography-shell { scale: var(--biography-icon-scale, 1); transform-origin: center; }
+    /* Keep map positioning and touch targets on the unscaled outer marker. */
+    #map :is(.mobile-moving-dog-shell, .mobile-moving-whale-shell, .mobile-moving-amethyst-ship-shell, .native-animal-shell, .mobile-exhibit-artwork) {
+      scale: var(--biography-icon-scale, 1);
+      transform-origin: center;
     }
-
-    /* A site panel's buttons (AR at the site, the app's navigate arrow,
-       close) sit together on the title's line, about its height; the
-       address and details below wrap onto their own lines across the
-       panel, so nothing overlaps and no row is spent on the buttons. */
-    .detail .detail-head:has(> .detail-head-actions) {
-      grid-template-columns: minmax(0, 1fr) auto;
-      row-gap: 0;
+    #map .mobile-calendar-event-marker > .calendar-date-badge {
+      scale: var(--biography-icon-scale, 1);
+      transform-origin: center bottom;
     }
+    .mobile-exhibit-artwork { display: block; width: 100%; height: 100%; background: center / contain no-repeat; pointer-events: none; }
+    .mobile-calendar-event-marker { z-index: 30; }
 
-    article.detail.hero-docked .detail-head:has(> .detail-head-actions) {
-      grid-template-columns: minmax(0, 1fr) 54px auto;
-    }
+    .mobile-calendar-event-marker, .mobile-exhibit-marker { border-radius: 0; }
 
-    .detail-head:has(> .detail-head-actions) .detail-drawer-handle {
-      grid-row: 1;
-    }
+    #map :is(.mapboxgl-popup, .maplibregl-popup) { z-index: 40; }
 
-    .detail-head:has(> .detail-head-actions) #detail-title {
-      display: contents;
-    }
+sup.article-footnote { margin-inline-start: .15em; font-size: .75em; line-height: 0; }
+sup.article-footnote a { padding: .25em; font-weight: 750; text-decoration: underline; text-underline-offset: .15em; }
+.article-footnotes { padding-inline-start: 1.8rem; margin: .75rem 0 1.5rem; }
+.article-footnotes li { padding: .65rem .25rem; border-bottom: 1px solid #d8e1da; line-height: 1.55; overflow-wrap: anywhere; scroll-margin-block: 5rem; }
+.article-footnotes li > a { display: inline-block; margin-inline-end: .85rem; font-size: .88em; min-height: 44px; padding-block: .55rem; }
+.article-footnotes li > span { display: block; }
+.article-footnotes li:focus, sup.article-footnote a:focus-visible { outline: 2px solid #365f4d; outline-offset: 3px; background: #edf5ee; }
 
-    .detail-head:has(> .detail-head-actions) #detail-title > * {
-      grid-column: 1 / -1;
-    }
+/* Modern geographic context stays directly beneath the primary place name. */
+.present-day-location { overflow-wrap: anywhere; }
+.present-day-location:empty { display: none; }
 
-    .detail-head:has(> .detail-head-actions) #detail-title > h2 {
-      grid-column: 1;
-      grid-row: 2;
-      align-self: center;
-      margin: 6px 0 4px;
-    }
+#detail .event-promo-hero { display:block; width:100%; height:auto; max-height:55vh; object-fit:contain; background:#f4f6f2; border-radius:8px; margin-bottom:12px; }
 
-    .detail-head-actions {
-      grid-column: -2 / -1;
-      grid-row: 2;
-      align-self: center;
-      justify-self: end;
-      display: flex;
-      gap: 5px;
-      margin: 6px 0 4px;
-      position: relative;
-      z-index: 2;
-    }
+/* Search markers must not inherit generic button minimum sizes or padding. */
+#map .address-location-dot {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border-radius: 50%;
+}
+.place-search-result { display: grid; gap: 4px; padding: 14px; text-align: left; }
+.place-search-result span, .place-search-attribution { color: var(--muted); font-size: 12px; }
+.place-search-heading { margin: 12px 0 4px; font-size: 15px; }
+.place-search-attribution { display: block; padding: 6px 12px; }
 
-    .detail-head .detail-head-actions > .close,
-    .detail-head .detail-head-actions > .site-ar-button,
-    .detail-head .detail-head-actions > .nli-listing-top-navigation {
-      width: 34px;
-      height: 34px;
-      min-height: 34px;
-      font-size: 15px;
-    }
-
-    /* The same tile, cube and label as the map's AR button. */
-    .site-ar-button {
-      position: relative;
-      display: inline-grid;
-      place-items: center;
-      width: 44px;
-      height: 44px;
-      padding: 0;
-      border: 1px solid #c9d3c8;
-      border-radius: 8px;
-      background: rgba(251, 252, 250, 0.96);
-      color: var(--accent-strong);
-      touch-action: manipulation;
-      pointer-events: auto;
-    }
-
-    .site-ar-button svg {
-      width: 16px;
-      height: 16px;
-      margin-top: -6px;
-    }
-
-    .site-ar-button .mobile-ar-label {
-      bottom: 1px;
-      font-size: 7.5px;
-    }
-
-    .site-ar-button:disabled {
-      opacity: 0.6;
-    }
-
-    .site-ar-button[hidden] {
-      display: none;
-    }
-
-/* Offline the activity and notification buttons are hidden, so AR takes the
-   first slot of the map's button column. */
-.offline-text-mode .mobile-ar-button {
-  top: var(--mobile-map-actions-top, calc(var(--app-top-safe) + 190px));
+/* A quiet wooden paddle, carried by the canoe so it fades out on land. */
+.mobile-moving-biography-canoe::after {
+  content: "";
+  position: absolute;
+  left: 48%;
+  bottom: -6px;
+  width: 5px;
+  height: 19px;
+  background: #986b39;
+  clip-path: polygon(36% 0, 64% 0, 64% 56%, 100% 68%, 88% 100%, 12% 100%, 0 68%, 36% 56%);
+  filter: drop-shadow(0 0 .4px #3f2916);
+  transform-origin: 50% 3px;
+  transform: rotate(-28deg);
+  animation: biography-oar-stroke 2.4s ease-in-out infinite paused;
+}
+.mobile-moving-biography-marker[data-on-water="true"][data-motion-phase="moving"] .mobile-moving-biography-canoe::after { animation-play-state: running; }
+@keyframes biography-oar-stroke {
+  0%, 100% { transform: rotate(-28deg); }
+  55% { transform: rotate(30deg); }
+  75% { transform: rotate(18deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-moving-biography-canoe::after { animation: none; }
 }
 
-/* Tablet landscape (copied from the web app's mobile-app.css, PRs 518-520,
-   plus offline-only parts): AR in the map's button row, search from a
-   magnifier over the header, Learn as its large centred window; offline,
-   Learn beside Menu and Labels and an Offline pill by the title. */
-body.android-device.tablet-landscape .mobile-ar-button {
-  top: var(--mobile-map-actions-top, calc(var(--app-top-safe) + 90px));
-  left: max(122px, calc(var(--app-left-safe) + 122px));
-  right: auto;
-}
+.mobile-moving-biography-marker[data-direction="left"] .mobile-moving-biography-canoe { transform: translateX(-50%) scaleX(-1); }
+/* A calmer reading rhythm for the mobile historic timeline. */
+.mobile-timeline .timeline-feed-card { border-radius: 16px; box-shadow: 0 2px 10px #1736290d; margin-bottom: 14px; }
+.mobile-timeline .learning-card-body { padding: 16px; gap: 10px; }
+.mobile-timeline .learning-card h2 { font-size: 20px; line-height: 1.25; letter-spacing: -.015em; }
+.mobile-timeline .learning-card-excerpt { line-height: 1.55; }
+.mobile-timeline .learning-card-actions button { min-height: 44px; border-radius: 10px; }
+.mobile-timeline .learning-card-media { aspect-ratio: 16 / 9; max-height: 230px; }
 
-body.android-device.tablet-landscape.offline-text-mode .mobile-ar-button {
-  left: max(18px, calc(var(--app-left-safe) + 18px));
-}
+.mobile-timeline .learning-card h2 button { font: inherit; font-weight: 650; line-height: 1.3; }
+.mobile-timeline .learning-card-media:not(:has(img)) { display: none; }
+.land-history-guide { position:fixed; left:8px; bottom:38px; z-index:19; width:290px; max-width:calc(100vw - 24px); padding:10px; border:1px solid #c7d1c9; border-radius:10px; background:#fffdf5; color:#203e30; box-shadow:0 3px 12px #0002; font:12px/1.4 system-ui,sans-serif; }
+.land-history-guide[hidden] { display:none; }
+.land-history-guide label { display:block; font-weight:700; }
+.land-history-guide select { display:block; width:100%; min-height:36px; margin:4px 0 6px; border:1px solid #789081; border-radius:5px; background:white; color:#203e30; font:inherit; }
+.land-history-guide > button { border:0; padding:4px 0; background:none; color:#203e30; font:inherit; font-weight:700; text-decoration:underline; cursor:pointer; }
+.land-history-guide details { margin-top:3px; max-height:30vh; overflow:auto; }
+.land-history-guide summary { cursor:pointer; }
+.land-history-guide p { margin:7px 0; }
+.land-key::before { content:''; display:inline-block; width:10px; height:10px; margin-right:6px; border:1px solid #3336; }
+.land-key.deed::before { background:#d89a45; }
+.land-key.context::before { background:#9c8eb1; }
+.land-key.continuance::before { background:#388c98; }
+.land-key.ancestral::before { background:#668f83; }
 
-.landscape-search-button {
-  display: none;
-}
+.mobile-map-shell > .land-history-guide { position:absolute; bottom:58px; z-index:10; width:260px; max-width:calc(100% - 100px); } body.mobile-content-open .land-history-guide { display:none; }
+.mobile-promo-dock .land-history-toggle { font-size:0; flex-shrink:0; }
+.mobile-promo-dock .land-history-toggle::before { content:""; width:23px; height:23px; background:currentColor; mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h11v15H6a2 2 0 0 1-2-2V5a2 2 0 0 1 4 0H4M6 18v3h14v-3h-3M9 8h5M9 11h5'/%3E%3Ccircle cx='12' cy='15' r='1'/%3E%3C/g%3E%3C/svg%3E") center/contain no-repeat; }
+.mobile-promo-dock .land-history-toggle[aria-pressed="true"] { background:#203e30; color:white; border-color:white; }
+.mobile-land-history-notice { position:absolute; left:12px; bottom:58px; z-index:12; width:300px; max-width:calc(100% - 24px); padding:14px; border:1px solid #c7d1c9; border-radius:12px; background:#fffdf5; color:#203e30; box-shadow:0 3px 14px #0003; font:14px/1.45 system-ui,sans-serif; }
+.mobile-land-history-notice p { margin:8px 0; }
+.mobile-land-history-notice button { min-height:36px; padding:5px 12px; border:1px solid #789081; border-radius:6px; background:white; color:#203e30; font:inherit; }
+.mobile-land-history-notice[hidden], body.mobile-content-open .mobile-land-history-notice { display:none; }
 
-body.android-device.tablet-landscape .landscape-search-button {
-  display: inline-grid;
-  place-items: center;
-  width: 40px;
-  min-width: 40px;
-  min-height: 32px;
-  padding: 0;
-}
-
-.landscape-search-button svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.2;
-  stroke-linecap: round;
-}
-
-body.android-device.tablet-landscape.landscape-search-open .search-autocomplete {
-  display: block;
-  position: fixed;
-  z-index: 1400;
-  top: calc(max(5px, var(--app-top-safe)) + 2px);
-  left: calc(var(--app-left-safe, 0px) + 8px);
-  right: calc(var(--app-right-safe, 0px) + 8px);
-}
-
-body.android-device.tablet-landscape.landscape-search-open header .search-autocomplete .search {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  height: 40px;
-  min-height: 40px;
-  font-size: 15px;
-  box-shadow: 0 6px 18px rgba(20, 31, 23, 0.18);
-}
-
-body.android-device.tablet-landscape.landscape-search-open .search-suggestions {
-  max-height: min(300px, 60dvh);
-}
-
-/* Learn and a learning path open as the large centred reading window
-   they are designed as, not squeezed into the side panel (whose dock
-   position combined with their centring shifted them off screen). */
-body.android-device.tablet-landscape .detail.open:has(:is(.learning-hub, .mobile-learning-path-stops)) {
-  inset: auto;
-  top: 50%;
-  left: 50%;
-  width: min(1480px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
-  height: calc(100dvh - 24px);
-  max-height: calc(100dvh - 24px);
-  translate: -50% -50%;
-  border-radius: 18px;
-}
-
-body.android-device.tablet-landscape:has(.detail.open :is(.learning-hub, .mobile-learning-path-stops)) .landscape-panel-resizer {
-  visibility: hidden;
-  pointer-events: none;
-}
-
-body.android-device.tablet-landscape.offline-text-mode .app.panel-collapsed .quick-actions {
-  grid-template-columns: 96px 96px 96px;
-}
-
-body.android-device.tablet-landscape.offline-text-mode .app.panel-collapsed .quick-actions > #mobile-learn-quick:not([hidden]) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  grid-column: 1;
-  grid-row: 1;
-}
-
-body.android-device.tablet-landscape.offline-text-mode .app.panel-collapsed .mobile-more-menu {
-  grid-column: 2;
-}
-
-body.android-device.tablet-landscape.offline-text-mode .app.panel-collapsed .mobile-layer-menu {
-  grid-column: 3;
-}
-
-body.android-device.tablet-landscape.offline-text-mode h1::after {
-  content: "Offline";
-  display: inline-block;
-  margin-left: 8px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #b45309;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  vertical-align: 2px;
-}
-
-/* With a site open the bottom tabs hide but kept their row, leaving a blank
-   band under the map; the map takes it (web PR 524). */
-body.android-device.tablet-landscape.mobile-detail-open .app:not(.panel-maximized) .mobile-map-shell {
-  grid-row: 2 / -1;
-}
-
-/* The story camera starts with the recording; until then the empty video
-   would show the browser's large grey play-button poster (web PR 527). */
-.story-overlay:not(.recording) .story-video {
-  visibility: hidden;
-}
-
-/* A site opened from the full-width Timeline or list: show the map and
-   header beside its panel (they were hidden, leaving a blank area);
-   closing the site returns to the full-width list. */
-body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized {
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > header,
-body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > .mobile-map-shell {
-  grid-column: 1;
-  height: auto;
-  visibility: visible;
-  opacity: 1;
-  pointer-events: auto;
-}
-
-body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > header {
-  display: grid;
-  grid-row: 1;
-  padding: max(5px, var(--app-top-safe)) 8px 5px;
-  border-bottom: 1px solid var(--line);
-}
-
-body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > .mobile-map-shell {
-  display: block;
-  grid-row: 2;
-}
-
-body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > .mobile-view-tabs,
-body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > .mobile-timeline,
-body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized > .list-panel {
-  display: none;
-}
-
-body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized .quick-actions {
-  grid-template-columns: 96px 96px;
-  grid-template-rows: 32px;
-}
-
-body.android-device.tablet-landscape.mobile-detail-open .app.panel-maximized .mobile-layer-menu {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-/* A site opened from the full-screen Timeline or list (portrait): show
-   the header and map above its panel instead of a blank screen with a
-   stale strip of map; closing the site returns to the full list. */
-body.mobile-detail-open:not(.tablet-landscape) .app.panel-maximized {
-  grid-template-rows: auto minmax(0, 1fr) 0 0;
-}
-
-body.mobile-detail-open:not(.tablet-landscape) .app.panel-maximized > header,
-body.mobile-detail-open:not(.tablet-landscape) .app.panel-maximized > .mobile-map-shell {
-  height: auto;
-  min-height: 0;
-  visibility: visible;
-  opacity: 1;
-  pointer-events: auto;
-  overflow: visible;
-}
-
-body.mobile-detail-open:not(.tablet-landscape) .app.panel-maximized > header {
-  padding: max(12px, var(--app-top-safe)) 12px 10px;
-  border-bottom: 1px solid var(--line);
-}
-
-body.mobile-detail-open:not(.tablet-landscape) .app.panel-maximized > .mobile-view-tabs,
-body.mobile-detail-open:not(.tablet-landscape) .app.panel-maximized > .mobile-timeline,
-body.mobile-detail-open:not(.tablet-landscape) .app.panel-maximized > .list-panel {
-  display: none;
-}
+/* Land-history explanations yield to the map focus and content tray. */
+.land-context-card {position:absolute;z-index:450;box-sizing:border-box;width:260px;padding:14px;background:#fffdf5;color:#23382e;border:1px solid #d7cfbb;border-radius:12px;box-shadow:0 3px 16px #20382f25;font:13px/1.45 system-ui,sans-serif;pointer-events:auto;}
+.land-context-card[hidden] {display:none!important;}
+.land-context-card small {display:block;font-size:10px;letter-spacing:.06em;padding-right:26px;}
+.land-context-card h3 {font-size:15px;line-height:1.25;margin:8px 22px 8px 0;}
+.land-context-card p {margin:0 0 10px;}
+.land-context-card a {color:#285b49;font-weight:600;}
+.land-context-card button {cursor:pointer;color:#285b49;background:white;border:1px solid #ccd6ce;border-radius:8px;min-height:36px;}
+.land-context-close {position:absolute;right:5px;top:5px;width:36px;font-size:22px;}
+.land-context-next {display:block;margin-top:10px;padding:5px 10px;width:100%;}
+@media(max-width:600px){.land-context-card{width:300px;max-width:calc(100% - 24px);padding:12px;font-size:12px;}.land-context-card h3{font-size:14px;}.land-context-card button{min-height:44px;}.land-context-next{display:inline-block;width:auto;margin:0 0 0 12px;}}
