@@ -588,10 +588,18 @@ final class ArWigwam {
 
     // ---- The dome ----
 
-    /** A point on the dome at angle theta round from the door and phi up from the ground, moved in by inset (out if negative). */
+    /**
+     * A point on the dome at angle theta round from the door and phi up from the
+     * ground, moved in by inset (out if negative). Bent poles never make a true
+     * curve: the dome is gently lumpy, the same for the bark, the lining and the poles.
+     */
     private static float[] dome(float theta, float phi, float inset) {
         float across = (float) Math.pow(Math.max(0.0, Math.cos(phi)), SHAPE);
         float rise = (float) Math.pow(Math.max(0.0, Math.sin(phi)), SHAPE);
+        float lump = (float) (0.035 * Math.sin(3 * theta + 0.7) * Math.sin(2 * phi + 0.4)
+            + 0.022 * Math.sin(7 * theta + 2.1 + 3 * phi) * Math.sin(phi * 1.5)
+            + 0.012 * Math.sin(13 * theta + 5 * phi));
+        inset -= lump * (float) Math.sin(Math.min(phi * 2, Math.PI / 2));
         return new float[] {
             (RX - inset) * across * (float) Math.sin(theta),
             (HEIGHT - inset) * rise,
@@ -634,29 +642,52 @@ final class ArWigwam {
     }
 
     /**
-     * The bark: each ring of slabs a band whose lower edge stands out over the
-     * band below, like shingles, its slabs offset from the band above.
+     * The bark: in rings, each a row of separate slabs of uneven width, every
+     * slab from one of four barks, standing out from the wall by its own amount,
+     * hanging a little lower or higher over the row below and a little askew, so
+     * no two rows or slabs line up. The rows above the door stop at its top.
      */
     private static void outerShell(Builder b) {
         float[] rows = rows();
         float[] columns = columns();
         Random random = new Random(41);
+        double tile = 2 * Math.PI / 7;
         for (int r = 0; r < rows.length - 1; r++) {
             boolean belowDoor = r < 4;
             boolean overDoor = r == 4;
-            float offset = random.nextFloat();
-            for (int c = 0; c < columns.length - 1; c++) {
-                boolean door = c < 4;
-                if (belowDoor && door) continue;
-                float lowPhi = r == 0 ? 0f : (overDoor && door ? rows[r] : rows[r] - 0.05f);
-                float out = overDoor && door ? 0f : 0.035f;
-                float[] a = dome(columns[c], lowPhi, -out);
-                float[] bb = dome(columns[c + 1], lowPhi, -out);
-                float[] cc = dome(columns[c + 1], rows[r + 1], 0f);
-                float[] d = dome(columns[c], rows[r + 1], 0f);
-                float u0 = (float) (columns[c] / (2 * Math.PI)) * 7f + offset;
-                float u1 = (float) (columns[c + 1] / (2 * Math.PI)) * 7f + offset;
-                quad(b, a, bb, cc, d, u0, 1f, u1, 1f, u1, 0f, u0, 0f);
+            int c = belowDoor ? 4 : 0;
+            while (c < columns.length - 1) {
+                int end = Math.min(columns.length - 1, c + 2 + random.nextInt(3));
+                // A slab is all over the door or all beside it.
+                if (c < 4 && end > 4) end = 4;
+                boolean door = overDoor && c < 4;
+                int variant = random.nextInt(4);
+                float out = door ? 0.004f : 0.018f + 0.04f * random.nextFloat();
+                float top = 0.003f + 0.01f * random.nextFloat();
+                float drop = r == 0 || door ? 0f : 0.025f + 0.06f * random.nextFloat();
+                float skew = r == 0 || door ? 0f : (random.nextFloat() - 0.5f) * 0.05f;
+                float widen = end - c > 1 ? 0.018f : 0.01f;
+                float from = columns[c] - (c == 0 || c == 4 ? 0f : widen);
+                float to = columns[end] + (end == 4 ? 0f : widen);
+                float spanU = (float) ((to - from) / tile);
+                float u0 = random.nextFloat() * Math.max(0f, 1f - spanU);
+                float vTop = variant / 4f + 0.006f;
+                float vBottom = (variant + 1) / 4f - 0.006f;
+                int steps = end - c;
+                for (int k = 0; k < steps; k++) {
+                    float t0 = k / (float) steps;
+                    float t1 = (k + 1) / (float) steps;
+                    float a0 = from + (to - from) * t0;
+                    float a1 = from + (to - from) * t1;
+                    float low0 = Math.max(0f, rows[r] - drop + skew * (t0 - 0.5f));
+                    float low1 = Math.max(0f, rows[r] - drop + skew * (t1 - 0.5f));
+                    float[] p0 = dome(a0, low0, -out - 0.008f * (float) Math.sin(Math.PI * t0));
+                    float[] p1 = dome(a1, low1, -out - 0.008f * (float) Math.sin(Math.PI * t1));
+                    float[] p2 = dome(a1, rows[r + 1], -top);
+                    float[] p3 = dome(a0, rows[r + 1], -top);
+                    quad(b, p0, p1, p2, p3, u0 + spanU * t0, vBottom, u0 + spanU * t1, vBottom, u0 + spanU * t1, vTop, u0 + spanU * t0, vTop);
+                }
+                c = end;
             }
         }
     }
@@ -670,25 +701,55 @@ final class ArWigwam {
         float[][] corners = {{-w, 0f, d}, {w, 0.05f, d}, {w, 0.05f, -d}, {-w, 0f, -d}};
         float[][] world = new float[4][];
         for (int i = 0; i < 4; i++) world[i] = transform(m, corners[i]);
-        quad(b, world[0], world[1], world[2], world[3], 0.1f, 0f, 0.45f, 0f, 0.45f, 0.9f, 0.1f, 0.9f);
+        quad(b, world[0], world[1], world[2], world[3], 0.1f, 0.01f, 0.45f, 0.01f, 0.45f, 0.24f, 0.1f, 0.24f);
     }
 
-    /** The lining inside: mats round the walls, the bark's inner side above them, sooty near the hole. */
+    /**
+     * The lining inside: mats hung in strips of uneven width from the floor to the
+     * smoke-darkened top, each strip one of four kinds of mat, hanging at its own
+     * depth (so the strips overlap at their edges) and bellying in a little.
+     */
     private static void innerLining(Builder b) {
         float[] rows = rows();
         float[] columns = columns();
-        for (int r = 0; r < rows.length - 1; r++) {
-            for (int c = 0; c < columns.length - 1; c++) {
+        Random random = new Random(17);
+        int c = 0;
+        while (c < columns.length - 1) {
+            int end = Math.min(columns.length - 1, c + 3 + random.nextInt(3));
+            if (c < 4 && end > 4) end = 4;
+            int variant = random.nextInt(4);
+            float inset = 0.06f + 0.025f * random.nextFloat();
+            float from = columns[c] - (c == 0 || c == 4 ? 0f : 0.012f);
+            float to = columns[end] + (end == 4 ? 0f : 0.012f);
+            // A strip about a metre across uses most of its kind of mat.
+            float spanU = Math.min(0.95f, (float) ((to - from) * RX / 1.0));
+            float u0 = random.nextFloat() * (1f - spanU);
+            int steps = end - c;
+            for (int r = 0; r < rows.length - 1; r++) {
+                // Over the door only the rows above it.
                 if (r < 4 && c < 4) continue;
-                float[] a = dome(columns[c], rows[r], 0.07f);
-                float[] bb = dome(columns[c + 1], rows[r], 0.07f);
-                float[] cc = dome(columns[c + 1], rows[r + 1], 0.07f);
-                float[] d = dome(columns[c], rows[r + 1], 0.07f);
-                float u0 = (float) (columns[c] / (2 * Math.PI)) * 6f;
-                float u1 = (float) (columns[c + 1] / (2 * Math.PI)) * 6f;
-                quad(b, a, bb, cc, d, u0, 1f - a[1] / HEIGHT, u1, 1f - bb[1] / HEIGHT, u1, 1f - cc[1] / HEIGHT, u0, 1f - d[1] / HEIGHT);
+                for (int k = 0; k < steps; k++) {
+                    float t0 = k / (float) steps;
+                    float t1 = (k + 1) / (float) steps;
+                    float a0 = from + (to - from) * t0;
+                    float a1 = from + (to - from) * t1;
+                    float[] q0 = bellied(a0, rows[r], inset, t0, r == 0);
+                    float[] q1 = bellied(a1, rows[r], inset, t1, r == 0);
+                    float[] q2 = bellied(a1, rows[r + 1], inset, t1, false);
+                    float[] q3 = bellied(a0, rows[r + 1], inset, t0, false);
+                    float ua = (variant + u0 + spanU * t0) / 4f;
+                    float ub = (variant + u0 + spanU * t1) / 4f;
+                    quad(b, q0, q1, q2, q3, ua, 1f - q0[1] / HEIGHT, ub, 1f - q1[1] / HEIGHT, ub, 1f - q2[1] / HEIGHT, ua, 1f - q3[1] / HEIGHT);
+                }
             }
+            c = end;
         }
+    }
+
+    /** A point on a hung mat strip: in from the dome by inset, bellying in towards the strip's middle. */
+    private static float[] bellied(float theta, float phi, float inset, float across, boolean floor) {
+        float belly = floor ? 0f : 0.018f * (float) Math.sin(Math.PI * across) * (float) Math.sin(Math.min(Math.PI, phi * 3));
+        return dome(theta, phi, inset + belly);
     }
 
     /** The poles lashed over the bark outside, the door's frame and the smoke hole's rim. */
@@ -1525,81 +1586,145 @@ final class ArWigwam {
     }
 
     /**
-     * Elm bark slabs (1024 by 256, a band about 1.8 m long; repeating across):
-     * grey-brown, stringy with ridges running down, darker in the shadow of the
-     * band above, cracked at the slabs' edges, with pale lichen.
+     * Four barks one above another (1024 by 1024; each a band about 1.8 m long,
+     * a quarter high): grey elm, warm brown, dark and weathered, and silvery old
+     * bark. Each is in slabs of uneven width, stringy with ridges running down,
+     * cracked, holed here and there, with lichen and (on the dark one) moss,
+     * shadowed where the band above lies over it, and torn along its bottom edge.
      */
     private static Bitmap bark() {
         int width = 1024;
-        int height = 256;
+        int height = 1024;
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
-        Random random = new Random(1);
-        canvas.drawColor(Color.rgb(104, 96, 86));
+        int[] tones = {Color.rgb(104, 96, 86), Color.rgb(112, 98, 82), Color.rgb(92, 86, 78), Color.rgb(118, 112, 102)};
+        for (int variant = 0; variant < 4; variant++) {
+            canvas.save();
+            canvas.translate(0, variant * 256);
+            canvas.clipRect(0, 0, width, 256);
+            barkBand(canvas, width, 256, tones[variant], new Random(1 + variant * 101), variant);
+            canvas.restore();
+        }
+        return bitmap;
+    }
+
+    private static void barkBand(Canvas canvas, int width, int height, int base, Random random, int variant) {
+        canvas.drawColor(base);
         Paint p = paint();
         int x = 0;
         while (x < width) {
-            int slab = Math.min(width - x, 230 + random.nextInt(190));
-            if (width - x - slab < 150) slab = width - x;
-            int tone = vary(random, Color.rgb(112, 102, 90), 14);
+            int slab = Math.min(width - x, 160 + random.nextInt(300));
+            if (width - x - slab < 120) slab = width - x;
+            int tone = vary(random, base, 16);
             p.setColor(tone);
             canvas.drawRect(x, 0, x + slab, height, p);
-            // Stringy ridges.
+            // A slab lighter or darker towards one side, as it curls.
+            p.setShader(new LinearGradient(x, 0, x + slab, 0, Color.argb(random.nextInt(40), 255, 250, 240), Color.argb(random.nextInt(50), 0, 0, 0), Shader.TileMode.CLAMP));
+            canvas.drawRect(x, 0, x + slab, height, p);
+            p.setShader(null);
+            // Stringy ridges: some long, some short, some thick.
             p.setStyle(Paint.Style.STROKE);
-            for (int i = 0; i < slab / 2; i++) {
+            int ridges = slab / 2 + random.nextInt(slab / 2 + 1);
+            for (int i = 0; i < ridges; i++) {
                 float lx = x + random.nextFloat() * slab;
-                p.setStrokeWidth(1f + random.nextFloat() * 3.2f);
-                p.setColor(random.nextFloat() < 0.6f ? Color.argb(40 + random.nextInt(60), 40, 34, 28) : Color.argb(25 + random.nextInt(40), 200, 192, 176));
+                p.setStrokeWidth(0.8f + random.nextFloat() * (variant == 1 ? 5f : 3.4f));
+                p.setColor(random.nextFloat() < 0.6f ? Color.argb(40 + random.nextInt(80), 34, 28, 22) : Color.argb(25 + random.nextInt(45), 205, 196, 180));
                 Path ridge = new Path();
-                float top = random.nextFloat() * height * 0.3f;
+                float top = random.nextFloat() * height * 0.5f;
+                float bottom = top + height * (0.2f + 0.8f * random.nextFloat());
                 ridge.moveTo(lx, top);
                 float y = top;
-                while (y < height) {
-                    y += 16 + random.nextFloat() * 26;
-                    lx += (random.nextFloat() - 0.5f) * 4f;
+                while (y < bottom) {
+                    y += 10 + random.nextFloat() * 24;
+                    lx += (random.nextFloat() - 0.5f) * 5f;
                     ridge.lineTo(lx, y);
                 }
                 canvas.drawPath(ridge, p);
             }
-            // A few cracks across.
-            for (int i = 0; i < 4; i++) {
+            // Cracks across and splits along.
+            p.setColor(Color.argb(120, 26, 20, 16));
+            for (int i = 0; i < 2 + random.nextInt(6); i++) {
                 float cy = random.nextFloat() * height;
                 float cx = x + random.nextFloat() * slab;
-                p.setStrokeWidth(1.5f);
-                p.setColor(Color.argb(90, 30, 24, 20));
-                canvas.drawLine(cx, cy, cx + 14 + random.nextFloat() * 36, cy + (random.nextFloat() - 0.5f) * 4f, p);
+                p.setStrokeWidth(1f + random.nextFloat() * 2f);
+                canvas.drawLine(cx, cy, cx + 10 + random.nextFloat() * 50, cy + (random.nextFloat() - 0.5f) * 6f, p);
+            }
+            for (int i = 0; i < random.nextInt(3); i++) {
+                float sx = x + random.nextFloat() * slab;
+                float sy = random.nextFloat() * height * 0.6f;
+                p.setStrokeWidth(2f + random.nextFloat() * 2f);
+                canvas.drawLine(sx, sy, sx + (random.nextFloat() - 0.5f) * 8f, sy + 30 + random.nextFloat() * 80, p);
             }
             p.setStyle(Paint.Style.FILL);
+            // Now and then a hole worn through.
+            if (random.nextFloat() < 0.35f) {
+                float hx = x + slab * (0.2f + 0.6f * random.nextFloat());
+                float hy = height * (0.3f + 0.5f * random.nextFloat());
+                float hr = 4f + random.nextFloat() * 9f;
+                p.setColor(Color.argb(220, 24, 18, 14));
+                canvas.drawOval(new RectF(hx - hr * 1.4f, hy - hr, hx + hr * 1.4f, hy + hr), p);
+            }
             // The slab's edge: a dark gap and a curled, paler lip.
             Path edge = new Path();
             edge.moveTo(x + slab, 0);
-            for (int y = 0; y <= height; y += 16) edge.lineTo(x + slab + (random.nextFloat() - 0.5f) * 6f, y);
+            for (int y = 0; y <= height; y += 14) edge.lineTo(x + slab + (random.nextFloat() - 0.5f) * 9f, y);
             Paint gap = paint();
             gap.setStyle(Paint.Style.STROKE);
-            gap.setStrokeWidth(5f);
-            gap.setColor(Color.argb(200, 28, 24, 20));
+            gap.setStrokeWidth(3f + random.nextFloat() * 5f);
+            gap.setColor(Color.argb(210, 24, 20, 16));
             canvas.drawPath(edge, gap);
             gap.setStrokeWidth(2f);
-            gap.setColor(Color.argb(110, 210, 200, 184));
+            gap.setColor(Color.argb(120, 214, 204, 188));
             edge.offset(-4f, 0f);
             canvas.drawPath(edge, gap);
             x += slab;
         }
-        // Lichen.
-        for (int i = 0; i < 26; i++) {
+        // Lichen, more on the dark and old barks; moss on the dark one.
+        int lichen = variant == 2 ? 30 : variant == 3 ? 24 : 14;
+        for (int i = 0; i < lichen; i++) {
             float lx = random.nextFloat() * width;
             float ly = height * 0.3f + random.nextFloat() * height * 0.7f;
-            p.setColor(Color.argb(30 + random.nextInt(40), 160, 170, 140));
-            for (int k = 0; k < 7; k++) canvas.drawCircle(lx + (random.nextFloat() - 0.5f) * 22f, ly + (random.nextFloat() - 0.5f) * 10f, 2f + random.nextFloat() * 5f, p);
+            p.setColor(Color.argb(18 + random.nextInt(34), 160, 170, 140));
+            for (int k = 0; k < 8; k++) canvas.drawCircle(lx + (random.nextFloat() - 0.5f) * 26f, ly + (random.nextFloat() - 0.5f) * 12f, 2f + random.nextFloat() * 5f, p);
         }
-        mottle(canvas, random, width, height, 30, 22, 50f);
-        // In the shadow of the band above, and the lower edge catching the light.
+        if (variant == 2) {
+            for (int i = 0; i < 22; i++) {
+                float mx = random.nextFloat() * width;
+                float my = height * (0.55f + 0.4f * random.nextFloat());
+                float mr = 8f + random.nextFloat() * 22f;
+                p.setShader(new RadialGradient(mx, my, mr, Color.argb(100, 76, 96, 52), Color.argb(0, 76, 96, 52), Shader.TileMode.CLAMP));
+                canvas.drawCircle(mx, my, mr, p);
+            }
+            p.setShader(null);
+        }
+        mottle(canvas, random, width, height, 40, 24, 40f);
+        // In the shadow of the band above.
         p.setShader(new LinearGradient(0, 0, 0, height * 0.35f, Color.argb(150, 20, 16, 12), Color.argb(0, 20, 16, 12), Shader.TileMode.CLAMP));
         canvas.drawRect(0, 0, width, height * 0.35f, p);
-        p.setShader(new LinearGradient(0, height - 8, 0, height, Color.argb(0, 220, 210, 190), Color.argb(80, 220, 210, 190), Shader.TileMode.CLAMP));
-        canvas.drawRect(0, height - 8, width, height, p);
         p.setShader(null);
-        return bitmap;
+        // The bottom edge torn and uneven (cut away), with a pale lip above the tear.
+        Path tear = new Path();
+        tear.moveTo(-4, height + 4);
+        float edgeY = height - 6;
+        for (int tx = 0; tx <= width; tx += 8) {
+            edgeY += (random.nextFloat() - 0.5f) * 10f;
+            edgeY = Math.max(height - 30, Math.min(height - 2, edgeY));
+            float bite = random.nextFloat() < 0.05f ? 14f + random.nextFloat() * 16f : 0f;
+            tear.lineTo(tx, edgeY - bite);
+        }
+        tear.lineTo(width + 4, height + 4);
+        tear.close();
+        Paint lip = paint();
+        lip.setStyle(Paint.Style.STROKE);
+        lip.setStrokeWidth(6f);
+        lip.setColor(Color.argb(90, 220, 210, 190));
+        canvas.save();
+        canvas.translate(0, -4);
+        canvas.drawPath(tear, lip);
+        canvas.restore();
+        Paint cut = paint();
+        cut.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR));
+        canvas.drawPath(tear, cut);
     }
 
     /** Sapling bark for poles (128 round by 512 along a metre): grey-brown, with pale lenticels across. */
@@ -1630,74 +1755,98 @@ final class ArWigwam {
     }
 
     /**
-     * The inside of the walls (512 round by 1024 from the hole down to the
-     * floor, about two metres across): pale reed mats hung in overlapping tiers,
-     * the reeds upright and twined across in rows, a few lower mats with dyed
-     * stripes; darker with smoke up towards the hole, and black round it.
+     * Four kinds of hung mat side by side (1024 by 1024; each a quarter across,
+     * about a metre of wall, from the hole down to the floor): pale straw reeds,
+     * greener new cattail, darker old mats, and greyer ones with dyed stripes.
+     * Each is in tiers of its own heights, the reeds upright and twined across in
+     * rows, uneven in colour and width, frayed at the tiers' edges; smoke
+     * darkens them up towards the hole, and they are grubby near the floor.
      */
     private static Bitmap inner() {
-        int width = 512;
+        int width = 1024;
         int height = 1024;
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
-        Random random = new Random(3);
-        canvas.drawColor(Color.rgb(188, 168, 126));
+        int[] reeds = {Color.rgb(194, 172, 126), Color.rgb(180, 168, 118), Color.rgb(168, 146, 104), Color.rgb(184, 170, 136)};
+        for (int variant = 0; variant < 4; variant++) {
+            canvas.save();
+            canvas.translate(variant * 256, 0);
+            canvas.clipRect(0, 0, 256, height);
+            matStrip(canvas, 256, height, reeds[variant], new Random(3 + variant * 37), variant == 3 || variant == 1);
+            canvas.restore();
+        }
+        return bitmap;
+    }
+
+    private static void matStrip(Canvas canvas, int width, int height, int reed, Random random, boolean dyed) {
+        canvas.drawColor(reed);
         Paint p = paint();
         int[] dyes = {Color.rgb(132, 62, 48), Color.rgb(92, 58, 76), Color.rgb(70, 50, 38)};
+        float top = random.nextFloat() * 60f;
         int tier = 0;
-        for (float top = 0; top < height; top += 170 + random.nextInt(40), tier++) {
-            float bottom = Math.min(height, top + 200);
-            boolean dyed = top > height * 0.55f;
-            // The reeds, upright, each its own straw colour.
-            for (int x = 0; x < width; x += 3) {
-                int tone = vary(random, Color.rgb(192, 170, 124), 16);
-                int reed = (x / 3) % 48;
-                if (dyed && ((x / 144) + tier) % 3 == 0 && (reed == 4 || reed == 5 || reed == 10 || reed == 11 || reed == 16)) {
-                    tone = vary(random, dyes[((x / 144) + tier) % dyes.length], 10);
-                }
+        while (top < height) {
+            float bottom = Math.min(height, top + 150 + random.nextInt(110));
+            int tierTone = vary(random, reed, 12);
+            int dye = dyes[random.nextInt(dyes.length)];
+            boolean striped = dyed && top > height * 0.45f && random.nextBoolean();
+            // The reeds: upright, of uneven width and colour.
+            float x = 0;
+            int count = 0;
+            while (x < width) {
+                float w = 2f + random.nextFloat() * 3f;
+                int tone = vary(random, tierTone, 18);
+                if (striped && (count % 23 == 3 || count % 23 == 4 || count % 23 == 9)) tone = vary(random, dye, 10);
                 p.setColor(tone);
-                canvas.drawRect(x, top, x + 3, bottom, p);
-                p.setColor(Color.argb(40, 60, 44, 24));
-                canvas.drawRect(x + 2.2f, top, x + 3, bottom, p);
+                canvas.drawRect(x, top, x + w, bottom, p);
+                p.setColor(Color.argb(45, 50, 36, 20));
+                canvas.drawRect(x + w - 0.8f, top, x + w, bottom, p);
+                x += w;
+                count++;
             }
-            // Twined across in rows.
+            // Twined across in rows, not quite level.
             Paint twine = paint();
-            twine.setStrokeWidth(2.4f);
-            for (float y = top + 22; y < bottom - 10; y += 46) {
-                for (int x = 0; x < width; x += 6) {
-                    twine.setColor(vary(random, Color.rgb(116, 92, 58), 10));
-                    canvas.drawLine(x, y + ((x / 6) % 2) * 2.5f, x + 6, y + (((x / 6) + 1) % 2) * 2.5f, twine);
+            twine.setStrokeWidth(2f + random.nextFloat());
+            float rowGap = 34 + random.nextInt(22);
+            for (float y = top + 14 + random.nextFloat() * 10; y < bottom - 8; y += rowGap) {
+                float lean = (random.nextFloat() - 0.5f) * 6f;
+                for (int tx = 0; tx < width; tx += 6) {
+                    twine.setColor(vary(random, Color.rgb(112, 88, 56), 12));
+                    float yy = y + lean * tx / width;
+                    canvas.drawLine(tx, yy + ((tx / 6) % 2) * 2.4f, tx + 6, yy + (((tx / 6) + 1) % 2) * 2.4f, twine);
                 }
             }
-            // The tier below tucked under this one: a shadow along its top.
-            p.setShader(new LinearGradient(0, top, 0, top + 18, Color.argb(120, 40, 28, 14), Color.argb(0, 40, 28, 14), Shader.TileMode.CLAMP));
-            canvas.drawRect(0, top, width, top + 18, p);
+            // The tier below tucked under this one, and this one's frayed edge.
+            p.setShader(new LinearGradient(0, top, 0, top + 16, Color.argb(130, 36, 26, 14), Color.argb(0, 36, 26, 14), Shader.TileMode.CLAMP));
+            canvas.drawRect(0, top, width, top + 16, p);
             p.setShader(null);
-            // Each mat's edge now and then.
-            for (int x = random.nextInt(60); x < width; x += 150 + random.nextInt(120)) {
-                p.setColor(Color.argb(110, 70, 52, 30));
-                canvas.drawRect(x, top, x + 3, bottom, p);
+            Paint fray = paint();
+            fray.setStrokeWidth(1.6f);
+            for (int tx = 0; tx < width; tx += 3) {
+                fray.setColor(vary(random, tierTone, 20));
+                canvas.drawLine(tx, bottom - 2, tx + (random.nextFloat() - 0.5f) * 3f, bottom + 2 + random.nextFloat() * 7f, fray);
             }
+            if (bottom >= height) break;
+            top = bottom - 6;
+            tier++;
         }
-        mottle(canvas, random, width, height, 40, 20, 60f);
-        // Smoke: darkening up towards the hole, black round it.
+        mottle(canvas, random, width, height, 30, 22, 40f);
+        // Smoke: darkening up towards the hole, patchy, black round it.
         p.setShader(new LinearGradient(0, 0, 0, height * 0.5f,
-            new int[] {Color.argb(240, 16, 12, 10), Color.argb(110, 30, 22, 16), Color.argb(0, 30, 22, 16)}, new float[] {0f, 0.35f, 1f}, Shader.TileMode.CLAMP));
+            new int[] {Color.argb(240, 16, 12, 10), Color.argb(100, 30, 22, 16), Color.argb(0, 30, 22, 16)}, new float[] {0f, 0.35f, 1f}, Shader.TileMode.CLAMP));
         canvas.drawRect(0, 0, width, height * 0.5f, p);
         p.setShader(null);
-        for (int i = 0; i < 24; i++) {
-            float x = random.nextFloat() * width;
-            float y = random.nextFloat() * height * 0.45f;
-            float r = 20f + random.nextFloat() * 50f;
-            p.setShader(new RadialGradient(x, y, r, Color.argb(60, 10, 8, 6), Color.argb(0, 10, 8, 6), Shader.TileMode.CLAMP));
-            canvas.drawCircle(x, y, r, p);
+        for (int i = 0; i < 10; i++) {
+            float sx = random.nextFloat() * width;
+            float sy = random.nextFloat() * height * 0.55f;
+            float r = 16f + random.nextFloat() * 40f;
+            p.setShader(new RadialGradient(sx, sy, r, Color.argb(70, 10, 8, 6), Color.argb(0, 10, 8, 6), Shader.TileMode.CLAMP));
+            canvas.drawCircle(sx, sy, r, p);
         }
         p.setShader(null);
         // Grubby towards the floor.
-        p.setShader(new LinearGradient(0, height * 0.9f, 0, height, Color.argb(0, 60, 44, 30), Color.argb(110, 60, 44, 30), Shader.TileMode.CLAMP));
-        canvas.drawRect(0, height * 0.9f, width, height, p);
+        p.setShader(new LinearGradient(0, height * 0.88f, 0, height, Color.argb(0, 60, 44, 30), Color.argb(120, 60, 44, 30), Shader.TileMode.CLAMP));
+        canvas.drawRect(0, height * 0.88f, width, height, p);
         p.setShader(null);
-        return bitmap;
     }
 
     /** Packed earth (512, a little under two metres a side): smooth, grey-brown, faintly gritty, a few small stones. */
