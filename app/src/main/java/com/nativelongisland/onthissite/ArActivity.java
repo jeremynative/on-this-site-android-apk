@@ -868,14 +868,18 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (now - lastSpawnAttempt < 500) return;
         lastSpawnAttempt = now;
         if (freeStartedAt == 0) freeStartedAt = now;
+        // Inside a wigwam the place's bubbles wait outside; any that were put
+        // where a wigwam now stands (or right against it) are put somewhere else.
+        releaseFromWigwams();
+        if (inWigwam(cameraPoint, 0f)) return;
         double facing = ArCompass.arHeading(forward);
         if (Double.isNaN(facing)) return;  // looking straight up or down
         // First of all, the "You are here" arrow, just ahead and below eye level.
         ArScene.Item here = hereItem();
-        if (here != null && visible(here) && !discoverAnchors.containsKey(here.id)) {
-            discoverAnchors.put(here.id, session.createAnchor(Pose.makeTranslation(
-                cameraPoint[0] + (float) Math.sin(facing) * HERE_AHEAD_M, cameraPoint[1] - HERE_BELOW_EYE_M,
-                cameraPoint[2] - (float) Math.cos(facing) * HERE_AHEAD_M)));
+        float[] hereAt = {cameraPoint[0] + (float) Math.sin(facing) * HERE_AHEAD_M, cameraPoint[1] - HERE_BELOW_EYE_M,
+            cameraPoint[2] - (float) Math.cos(facing) * HERE_AHEAD_M};
+        if (here != null && visible(here) && !discoverAnchors.containsKey(here.id) && !inWigwam(hereAt, WIGWAM_CLEAR_M)) {
+            discoverAnchors.put(here.id, session.createAnchor(Pose.makeTranslation(hereAt[0], hereAt[1], hereAt[2])));
             discoverLift.put(here.id, 0f);
             discoverShownAt.put(here.id, now);
             lastFreeSpawnAt = now - FREE_GAP_MS + FREE_FIRST_MS;
@@ -953,7 +957,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         float apart = tight ? FREE_SPACING_TIGHT_M : FREE_SPACING_M;
         if (spot != null) {
             float[] point = spotPoint(spot, cameraPoint, facing, taken, apart);
-            if (point != null) {
+            if (point != null && !inWigwam(point, WIGWAM_CLEAR_M)) {
                 placeAtSpot(spot, point);
                 discoverShownAt.put(spot.id, now);
                 lastFreeSpawnAt = now;
@@ -987,7 +991,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             if (distance < 0) continue;
             float[] point = {cameraPoint[0] + dx * distance, cameraPoint[1] - 0.05f + 0.2f * (random.nextFloat() - 0.5f), cameraPoint[2] + dz * distance};
             boolean spaced = isClear(point, taken, apart)
-                && (pin == null || Math.hypot(point[0] - pin[0], point[2] - pin[2]) >= FREE_PIN_CLEAR_M);
+                && (pin == null || Math.hypot(point[0] - pin[0], point[2] - pin[2]) >= FREE_PIN_CLEAR_M)
+                && !inWigwam(point, WIGWAM_CLEAR_M);
             if (!directional) {
                 for (double other : waitingHeadings) {
                     if (Math.abs(Math.toDegrees(angleBetween(heading, other))) < (tight ? FREE_APART_TIGHT_DEG : FREE_APART_DEG)) spaced = false;
@@ -1000,6 +1005,38 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             android.util.Log.i("OnThisSiteAR", String.format(Locale.US, "Placed %s %.1f s after the last, at least %.1f m from the others", next.id, (now - lastFreeSpawnAt) / 1000f, apart));
             lastFreeSpawnAt = now;
             return;
+        }
+    }
+
+    // How far the place's bubbles keep from a wigwam's walls (metres).
+    private static final float WIGWAM_CLEAR_M = 0.8f;
+
+    /** Whether a point (world) is in a placed wigwam, or within pad metres of one. */
+    private boolean inWigwam(float[] point, float pad) {
+        for (ArPlace.Placed thing : placed) {
+            if (thing.removed || thing.asset.kind != ArPlace.Kind.WIGWAM || thing.anchor.getTrackingState() != TrackingState.TRACKING) continue;
+            float[] base = new float[16];
+            thing.anchor.getPose().toMatrix(base, 0);
+            Matrix.rotateM(base, 0, (float) Math.toDegrees(thing.turn), 0f, 1f, 0f);
+            if (ArWigwam.inside(base, thing.scale, point, pad)) return true;
+        }
+        return false;
+    }
+
+    /** Lets go of bubbles, cards and signs standing in or against a wigwam, so they are placed again elsewhere. */
+    private void releaseFromWigwams() {
+        boolean any = false;
+        for (ArPlace.Placed thing : placed) any |= thing.asset.kind == ArPlace.Kind.WIGWAM && !thing.removed;
+        if (!any) return;
+        for (java.util.Iterator<Map.Entry<String, Anchor>> it = discoverAnchors.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<String, Anchor> entry = it.next();
+            if (entry.getValue().getTrackingState() != TrackingState.TRACKING) continue;
+            if (!inWigwam(entry.getValue().getPose().getTranslation(), WIGWAM_CLEAR_M)) continue;
+            entry.getValue().detach();
+            it.remove();
+            discoverLift.remove(entry.getKey());
+            discoverNudge.remove(entry.getKey());
+            skyHeading.remove(entry.getKey());
         }
     }
 
@@ -1229,6 +1266,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     /** Free roam: bubbles bob gently, open when walked up to, and grow with nearness. */
     private void collectFreeDraws(List<Draw> draws, Pose cameraPose) {
         float[] cameraPoint = cameraPose.getTranslation();
+        // Inside a wigwam, the place's bubbles, cards and signs wait outside.
+        if (inWigwam(cameraPoint, 0f)) return;
         long now = SystemClock.uptimeMillis();
         List<String> stopped = new ArrayList<>();
         for (ArScene.Item item : scene.items) {
@@ -1541,7 +1580,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     }
 
     private void collectSeenThings(List<Draw> draws, float[] cameraPoint) {
-        if (bubblesHidden) return;
+        if (bubblesHidden || inWigwam(cameraPoint, 0f)) return;
         seenThings.removeIf(seen -> {
             if (seen.anchor.getTrackingState() != TrackingState.STOPPED) return false;
             seen.anchor.detach();
@@ -1782,23 +1821,28 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
      */
     private void addWigwamDraws(String id, float[] base, float scale, float distance, boolean selected, float[] cameraPoint,
                                 List<Draw> draws, List<ArGl.MeshDraw> meshes) {
-        ArPlace.Asset asset = ArPlace.asset("wigwam");
-        ArModels.add(asset, base, scale, false, gl::hasTexture, meshes);
+        // Its door swings as the visitor pushes through it (a placed one; the preview's hangs still).
+        float time = placeSeconds();
+        ArPlace.Placed thing = placedById(id);
+        float[] door = null;
+        if (thing != null) {
+            float step = thing.doorAt < 0 ? 0f : time - thing.doorAt;
+            if (step < 0) step = 0f;
+            thing.doorAt = time;
+            ArWigwam.stepDoor(thing.door, ArWigwam.toLocal(base, scale, cameraPoint), step, time);
+            door = thing.door;
+        }
+        ArWigwam.addMeshes(base, scale, door, gl::hasTexture, meshes);
         List<ArWigwam.Quad> quads = new ArrayList<>();
-        ArWigwam.addQuads(base, scale, placeSeconds(), cameraPoint, cameraRight, cameraUp, !bubblesHidden, gl::hasTexture, quads);
+        ArWigwam.addQuads(base, scale, time, cameraPoint, cameraRight, cameraUp, !bubblesHidden, gl::hasTexture, quads);
         for (ArWigwam.Quad quad : quads) {
-            Draw draw = Draw.of(null, quad.model, quad.texture, quad.alpha, distance(quad.point, cameraPoint));
+            // Its words open their cards like the other floating words (not while aiming it).
+            Draw draw = Draw.of(id == null ? null : quad.id, quad.model, quad.texture, quad.alpha, distance(quad.point, cameraPoint));
             draw.additive = quad.additive;
             draws.add(draw);
         }
-        float[] model = base.clone();
-        Matrix.scaleM(model, 0, scale, scale, scale);
-        float[] shade = model.clone();
-        Matrix.translateM(shade, 0, 0f, 0.003f, -ArWigwam.RZ);
-        Matrix.rotateM(shade, 0, -90f, 1f, 0f, 0f);
-        Matrix.scaleM(shade, 0, 2f * ArWigwam.RX + 1.2f, 2f * ArWigwam.RZ + 1.2f, 1f);
-        draws.add(Draw.of(null, shade, "place:shadow", 0.55f, distance + 0.5f));
-        if (id != null && !ArWigwam.inside(base, scale, cameraPoint)) {
+        float[] model = ArWigwam.model(base, scale);
+        if (id != null && !ArWigwam.inside(base, scale, cameraPoint, 0f)) {
             float[] middle = new float[4];
             Matrix.multiplyMV(middle, 0, model, 0, new float[] {0f, 1.2f, -ArWigwam.RZ, 1f}, 0);
             float[] point = {middle[0], middle[1], middle[2]};
@@ -2448,6 +2492,13 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (picked != null && picked.itemId.startsWith(DISMISS)) {
             dismiss(picked.itemId.substring(DISMISS.length()));
             return;
+        }
+        if (picked != null && picked.itemId.startsWith(ArWigwam.LABEL_ID)) {
+            ArScene.Item word = ArWigwam.item(picked.itemId.substring(ArWigwam.LABEL_ID.length()));
+            if (word != null) {
+                runOnUiThread(() -> showItem(word));
+                return;
+            }
         }
         ArPlace.Placed thing = picked == null ? null : placedById(picked.itemId);
         if (thing != null || selectedPlace != null) {

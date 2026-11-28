@@ -23,11 +23,16 @@ import java.util.Random;
 /**
  * A wigwam a visitor can plant and walk into: a dome of bark slabs over a frame
  * of bent poles lashed together, a smoke hole with a sheet of bark over part of
- * it, and inside, mats hung round the walls, a fire burning in a ring of stones
- * (it lights the room and its smoke drifts out of the top), a wooden bed with a
- * mat and a deer hide, a hickory stump seat, braided corn hanging from a pole,
- * a pot of corn mush by the fire, squash, beans, a gourd, shellfish in a bowl,
- * a mortar and pestle, firewood and herbs.
+ * it, a low doorway (a grown person stoops) hung with a hide door that swings
+ * aside as the visitor pushes through, and a plume of smoke rising from the
+ * hole and drifting off, seen from far away. Inside, reed mats hang round the
+ * walls on a lattice of poles; a fire burns in a ring of river stones and lights
+ * the room; furs are piled on a bench along the wall, hanging over its edge;
+ * a pole rack holds coiled and wicker baskets and gourds, with firewood under
+ * it; there are a hickory stump seat, braided corn and feather plumes and
+ * fibre bundles hanging from the frame, a netted bag, a coil of cord, a paddle,
+ * a pot of corn mush by the fire, squash, beans, shellfish in a bowl, a mortar
+ * and pestle, and herbs.
  *
  * Words from the Knowledgebase float over the things they name, with their
  * sources: from "Algonquian Languages of Long Island" (Harrington's 1903 list
@@ -46,13 +51,27 @@ final class ArWigwam {
     static final float RX = 2.1f;
     static final float RZ = 1.9f;
     static final float HEIGHT = 2.45f;
-    static final float DOOR_HALF = 0.47f;
-    static final float DOOR_TOP = 1.78f;
+    static final float DOOR_HALF = 0.4f;
+    // Low enough that a grown person stoops to go in.
+    static final float DOOR_TOP = 1.42f;
     static final float HOLE = 0.3f;
     // Steeper than a half ellipse, as bent poles stand.
     private static final float SHAPE = 2f / 2.2f;
     // The fire, under the smoke hole.
     static final float[] FIRE = {0f, 0f, -RZ};
+    // Set a few centimetres into the ground, so its foot meets it even where
+    // ARCore's ground sits a little high.
+    static final float SINK = 0.04f;
+    // Daylight inside: from the door, the smoke hole and through the mats.
+    static final float INSIDE_SUN = 0.5f;
+
+    /** The wigwam's frame for its anchor and size: scaled, and sunk into the ground. */
+    static float[] model(float[] base, float scale) {
+        float[] model = base.clone();
+        Matrix.scaleM(model, 0, scale, scale, scale);
+        Matrix.translateM(model, 0, 0f, -SINK, 0f);
+        return model;
+    }
 
     // ---- The things, as meshes grouped by texture ----
 
@@ -98,7 +117,7 @@ final class ArWigwam {
         list.add(new Part("wig:pole", frame.build(), true, 0.06f, 12f));
         Builder stones = new Builder();
         hearthStones(stones);
-        list.add(new Part("wig:stone", stones.build(), true, 0.08f, 20f));
+        list.add(new Part("wig:stone", stones.build(), true, 0.12f, 24f));
         Builder logs = new Builder();
         fireLogs(logs);
         list.add(new Part("wig:char", logs.build(), true, 0.05f, 12f));
@@ -111,9 +130,9 @@ final class ArWigwam {
         Builder mats = new Builder();
         mats(mats);
         list.add(new Part("wig:mat", mats.build(), true, 0.02f, 6f));
-        Builder hide = new Builder();
-        hide(hide);
-        list.add(new Part("wig:hide", hide.build(), true, 0.04f, 8f));
+        Builder furs = new Builder();
+        furs(furs);
+        list.add(new Part("wig:fur", furs.build(), true, 0.05f, 8f));
         Builder corn = new Builder();
         Builder husks = new Builder();
         corn(corn, husks);
@@ -127,17 +146,19 @@ final class ArWigwam {
         Matrix.translateM(potTop, 0, 0f, 0.3f, 0f);
         disc(mush, potTop, 0.106f, 0.106f, 18, 0f);
         list.add(new Part("wig:mush", mush.build(), true, 0.25f, 30f));
-        Builder baskets = new Builder();
-        baskets(baskets);
-        list.add(new Part("wig:basket", baskets.build(), true, 0.03f, 8f));
+        Builder wicker = new Builder();
+        Builder coiled = new Builder();
+        baskets(wicker, coiled);
+        list.add(new Part("wig:basket", wicker.build(), true, 0.03f, 8f));
+        list.add(new Part("wig:coil", coiled.build(), true, 0.04f, 10f));
         Builder beans = new Builder();
-        disc(beans, translate(BEANS[0], 0.19f, BEANS[2]), 0.142f, 0.142f, 18, 0f);
+        disc(beans, translate(BEANS[0], 0.15f, BEANS[2]), 0.15f, 0.15f, 18, 0f);
         list.add(new Part("wig:beans", beans.build(), true, 0.1f, 20f));
         Builder squash = new Builder();
         squash(squash);
         list.add(new Part("wig:squash", squash.build(), true, 0.2f, 22f));
         Builder gourd = new Builder();
-        gourd(gourd);
+        gourds(gourd);
         list.add(new Part("wig:gourd", gourd.build(), true, 0.15f, 18f));
         Builder shells = new Builder();
         shells(shells);
@@ -145,17 +166,152 @@ final class ArWigwam {
         Builder herbs = new Builder();
         herbs(herbs);
         list.add(new Part("wig:herb", herbs.build(), true, 0f, 4f));
+        Builder feathers = new Builder();
+        feathers(feathers);
+        list.add(new Part("wig:feather", feathers.build(), true, 0.08f, 12f));
+        Builder fibres = new Builder();
+        fibres(fibres);
+        list.add(new Part("wig:fibre", fibres.build(), true, 0.02f, 6f));
+        Builder net = new Builder();
+        netBag(net);
+        list.add(new Part("wig:net", net.build(), true, 0.02f, 6f));
+        Builder cord = new Builder();
+        cordCoil(cord);
+        list.add(new Part("wig:cord", cord.build(), true, 0.04f, 8f));
         parts = list;
         return parts;
+    }
+
+    // The hide door: two flaps hanging from the lintel, each swinging on its own.
+    private static ArGl.Mesh flap;
+
+    /** Where the door's flaps hang from: the lintel's height and depth (the wigwam's frame). */
+    static float doorPlane() {
+        return dome(0f, phiAt(DOOR_TOP), 0.035f)[2];
+    }
+
+    private static final float FLAP_WIDTH = DOOR_HALF + 0.05f;
+    private static final float FLAP_HEIGHT = DOOR_TOP - 0.06f;
+
+    /**
+     * The meshes for a wigwam at base: its bark, poles and door frame outside in
+     * daylight; inside, its lining, floor and everything in it lit dimly by day
+     * and by the fire; and the hide door, its flaps swung as door says (the
+     * door's state, null for hanging closed). Parts show as their textures are ready.
+     */
+    static void addMeshes(float[] base, float scale, float[] door, ArModels.Ready ready, List<ArGl.MeshDraw> meshes) {
+        float[] model = model(base, scale);
+        float[] fire = firelight(base, scale);
+        for (Part part : parts()) {
+            if (!ready.has(part.texture)) continue;
+            ArGl.MeshDraw draw = ArGl.MeshDraw.textured(part.mesh, model, part.texture);
+            draw.gloss = part.gloss;
+            draw.shine = part.shine;
+            if (part.inside) {
+                draw.sun = INSIDE_SUN;
+                draw.fire = fire;
+            }
+            meshes.add(draw);
+        }
+        if (!ready.has("wig:door")) return;
+        synchronized (ArWigwam.class) {
+            if (flap == null) flap = flapMesh();
+        }
+        float plane = doorPlane();
+        for (int side = -1; side <= 1; side += 2) {
+            float pitch = door == null ? 0f : door[side < 0 ? 0 : 4];
+            float part = door == null ? 0f : door[side < 0 ? 2 : 6];
+            float[] m = model.clone();
+            Matrix.translateM(m, 0, side * FLAP_WIDTH, DOOR_TOP - 0.03f, plane);
+            Matrix.rotateM(m, 0, (float) Math.toDegrees(-side * part), 0f, 1f, 0f);
+            Matrix.rotateM(m, 0, (float) Math.toDegrees(pitch), 1f, 0f, 0f);
+            if (side > 0) Matrix.scaleM(m, 0, -1f, 1f, 1f);
+            ArGl.MeshDraw draw = ArGl.MeshDraw.textured(flap, m, "wig:door");
+            draw.gloss = 0.05f;
+            draw.shine = 8f;
+            draw.sun = 0.8f;
+            draw.fire = fire;
+            meshes.add(draw);
+        }
+    }
+
+    /** One flap of the hide door: from its outer edge (x 0) to the middle, hanging from y 0, bowed a little. */
+    private static ArGl.Mesh flapMesh() {
+        Builder b = new Builder();
+        int columns = 4;
+        int rows = 6;
+        int first = b.count();
+        for (int r = 0; r <= rows; r++) {
+            float t = r / (float) rows;
+            for (int c = 0; c <= columns; c++) {
+                float u = c / (float) columns;
+                float bow = 0.025f * (float) Math.sin(Math.PI * u) * (0.4f + 0.6f * t);
+                b.vertex(u * FLAP_WIDTH, -t * FLAP_HEIGHT, bow, 0f, 0f, 1f, u, t);
+            }
+        }
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < columns; c++) {
+                int a = first + r * (columns + 1) + c;
+                int d = a + columns + 1;
+                b.triangle(a, d, a + 1);
+                b.triangle(d, d + 1, a + 1);
+            }
+        }
+        return b.build();
+    }
+
+    /**
+     * Moves the door's flaps on, dt seconds: each swings away from the visitor
+     * as they come through (seen from the wigwam's frame, camera; null when
+     * away), more on the side they push, parting in the middle, and springs
+     * back once they are past, stirring a little in the breeze. door holds each
+     * flap's swing and its speed, and its parting and speed.
+     */
+    static void stepDoor(float[] door, float[] camera, float dt, float time) {
+        dt = Math.min(dt, 0.05f);
+        float plane = doorPlane();
+        for (int side = -1; side <= 1; side += 2) {
+            int at = side < 0 ? 0 : 4;
+            float pitch = 0.035f * (float) Math.sin(time * 0.9f + side);
+            float part = 0f;
+            if (camera != null) {
+                float ahead = camera[2] - plane;
+                float reach = 0.6f;
+                boolean near = Math.abs(camera[0]) < DOOR_HALF + 0.35f && camera[1] < DOOR_TOP + 0.6f && Math.abs(ahead) < reach;
+                if (near) {
+                    float push = 1f - Math.abs(ahead) / reach;
+                    float mine = Math.max(0.35f, Math.min(1f, 0.6f + 0.6f * side * camera[0] / DOOR_HALF));
+                    float way = ahead >= 0 ? 1f : -1f;
+                    pitch = way * (0.3f + 1.05f * push) * mine;
+                    part = way * 0.65f * push;
+                }
+            }
+            float[] targets = {pitch, part};
+            for (int k = 0; k < 2; k++) {
+                int i = at + k * 2;
+                float accel = 38f * (targets[k] - door[i]) - 6.5f * door[i + 1];
+                door[i + 1] += accel * dt;
+                door[i] += door[i + 1] * dt;
+            }
+        }
+    }
+
+    /** A point (world) in the wigwam's own frame at base (unscaled metres), or null. */
+    static float[] toLocal(float[] base, float scale, float[] point) {
+        float[] inverse = new float[16];
+        if (!Matrix.invertM(inverse, 0, model(base, scale), 0)) return null;
+        float[] local = new float[4];
+        Matrix.multiplyMV(local, 0, inverse, 0, new float[] {point[0], point[1], point[2], 1f}, 0);
+        return new float[] {local[0], local[1], local[2]};
     }
 
     /** Every texture the wigwam draws with: its meshes', then the fire's, the smoke's and the labels'. */
     static String[] textures() {
         List<String> keys = new ArrayList<>(Arrays.asList(
             "wig:bark", "wig:pole", "wig:inner", "wig:floor", "wig:stone", "wig:char", "wig:wood", "wig:endgrain",
-            "wig:mat", "wig:hide", "wig:corn", "wig:husk", "wig:clay", "wig:mush", "wig:basket", "wig:beans",
-            "wig:squash", "wig:gourd", "wig:shell", "wig:herb",
-            "wig:flame0", "wig:flame1", "wig:flame2", "wig:flame3", "wig:ember", "wig:ash", "wig:smoke"));
+            "wig:mat", "wig:fur", "wig:corn", "wig:husk", "wig:clay", "wig:mush", "wig:basket", "wig:coil", "wig:beans",
+            "wig:squash", "wig:gourd", "wig:shell", "wig:herb", "wig:feather", "wig:fibre", "wig:net", "wig:cord", "wig:door",
+            "wig:flame0", "wig:flame1", "wig:flame2", "wig:flame3", "wig:ember", "wig:ash", "wig:smoke", "wig:contact"));
         for (Label label : LABELS) keys.add("wig:label:" + label.key);
         return keys.toArray(new String[0]);
     }
@@ -163,64 +319,126 @@ final class ArWigwam {
     /** Tiled textures repeat; the fire's, smoke's, labels' and cut-out ones are drawn once. */
     static boolean repeats(String key) {
         return !(key.startsWith("wig:flame") || key.startsWith("wig:label:") || key.equals("wig:ember")
-            || key.equals("wig:ash") || key.equals("wig:smoke") || key.equals("wig:hide") || key.equals("wig:husk")
+            || key.equals("wig:ash") || key.equals("wig:smoke") || key.equals("wig:fur") || key.equals("wig:husk")
+            || key.equals("wig:contact") || key.equals("wig:door") || key.equals("wig:feather") || key.equals("wig:fibre")
             || key.equals("wig:endgrain") || key.equals("wig:mush") || key.equals("wig:beans"));
     }
 
     // ---- Where things stand inside (the fire is at FIRE) ----
 
-    private static final float BED_Z = -3.1f;
+    // The bench along the left wall (x from its back to its front edge, z from end to end, its top).
+    private static final float BENCH_BACK = -1.7f;
+    private static final float BENCH_FRONT = -1.08f;
+    private static final float BENCH_FROM = -2.65f;
+    private static final float BENCH_TO = -1.12f;
+    private static final float BENCH_TOP = 0.38f;
+    // The rack against the back wall (x from end to end, z from its back to its front, its shelves).
+    private static final float RACK_LEFT = -0.75f;
+    private static final float RACK_RIGHT = 0.85f;
+    private static final float RACK_BACK = -3.28f;
+    private static final float RACK_FRONT = -2.9f;
+    private static final float[] SHELVES = {0.52f, 1.02f};
+    private static final float RACK_TOP = 1.3f;
     private static final float[] STUMP = {0.78f, 0f, -1.48f};
     private static final float[] POT = {0.25f, 0f, -1.78f};
-    private static final float[] BOWL = {-0.72f, 0f, -1.46f};
-    private static final float[] BEANS = {1.5f, 0f, -1.55f};
-    private static final float[][] SQUASH = {{1.38f, 0f, -2.38f}, {1.58f, 0f, -2.06f}, {1.3f, 0f, -1.86f}};
-    private static final float CORN_X = -1.35f;
-    private static final float CORN_Y = 1.7f;
-    private static final float[] CORN_BUNCHES = {-2.4f, -1.95f, -1.52f};
-    private static final float[] GOURD = {-1.35f, 1.7f, -1.42f};
-    private static final float[] MORTAR = {0.98f, 0f, -0.78f};
+    private static final float[] BOWL = {-0.68f, 0f, -1.3f};
+    private static final float[] BEANS = {1.45f, 0f, -1.6f};
+    private static final float[][] SQUASH = {{1.38f, 0f, -2.32f}, {1.6f, 0f, -2.02f}, {1.15f, 0f, -2.55f}};
+    private static final float CORN_X = -1.3f;
+    private static final float CORN_Y = 1.72f;
+    private static final float[] CORN_BUNCHES = {-2.35f, -1.9f, -1.47f};
+    // A gourd on the top shelf, which its word floats over.
+    private static final float[] GOURD = {0.45f, SHELVES[1] + 0.02f, -3.08f};
+    private static final float[] MORTAR = {0.95f, 0f, -0.85f};
 
     // ---- The words ----
 
-    /** A word over a thing: what it is, the word, where it is from, and where it floats (the wigwam's frame). */
+    /** Where a word is recorded: its language, the label's line, what the opened card says, and its sources. */
+    enum Record {
+        HARRINGTON("Shinnecock and Poosepatuck", "Shinnecock and Poosepatuck · Harrington, 1903",
+            ArObjects.HARRINGTON_ABOUT, ArObjects.HARRINGTON_CREDIT + "; " + ArObjects.LANGUAGE_SOURCES),
+        ELDERS("Shinnecock", "Shinnecock · Elders' catalogue, 2014", ArObjects.ELDERS_ABOUT,
+            ArObjects.eldersCredit(9) + "; " + ArObjects.LANGUAGE_SOURCES),
+        JEFFERSON("Unquachog", "Unquachog · Jefferson, 1791",
+            "About this word\n"
+                + "It is from Thomas Jefferson's Unquachog (Poospatuck) vocabulary, collected at Brookhaven on June 13, 1791, "
+                + "reprinted in Bonvillain and Stone, Languages and Lore of the Long Island Indians (pp. 17-18). Its spellings are "
+                + "historical transcriptions: recorded forms, not modern standardized spellings.",
+            "Thomas Jefferson, Unquachog (Poospatuck) vocabulary, Brookhaven, June 13, 1791, in Bonvillain and Stone, Languages "
+                + "and Lore of the Long Island Indians, pp. 17-18; On This Site, \"Native Plants\"");
+
+        final String language;
+        final String line;
+        final String about;
+        final String credit;
+
+        Record(String language, String line, String about, String credit) {
+            this.language = language;
+            this.line = line;
+            this.about = about;
+            this.credit = credit;
+        }
+    }
+
+    /** A word over a thing: what it is, the word, where it is recorded, and where it floats (the wigwam's frame). */
     static final class Label {
         final String key;
         final String english;
         final String word;
+        final Record record;
         final String source;
         final float[] at;
         // Its width (metres at scale 1).
         final float width;
 
-        Label(String key, String english, String word, String source, float[] at) {
-            this(key, english, word, source, at, 0.27f);
+        Label(String key, String english, String word, Record record, float[] at) {
+            this(key, english, word, record, at, 0.27f);
         }
 
-        Label(String key, String english, String word, String source, float[] at, float width) {
+        Label(String key, String english, String word, Record record, float[] at, float width) {
             this.key = key;
             this.english = english;
             this.word = word;
-            this.source = source;
+            this.record = record;
+            this.source = record.line;
             this.at = at;
             this.width = width;
         }
     }
 
-    private static final String HARRINGTON = "Shinnecock and Poosepatuck · Harrington, 1903";
-    private static final String JEFFERSON = "Unquachog · Jefferson, 1791";
-
+    // Every word sits inside the wigwam (the house's over its door), clear of the walls.
     static final Label[] LABELS = {
-        new Label("house", "house", "wíkam", HARRINGTON, new float[] {0f, 2.1f, 0.3f}, 0.55f),
-        new Label("corn", "Indian corn", "sowhámmen", JEFFERSON, new float[] {CORN_X + 0.12f, 2.0f, -1.95f}),
-        new Label("mush", "corn mush", "suppán", HARRINGTON, new float[] {POT[0], 0.66f, POT[2]}),
-        new Label("deer", "deer", "Autuk", "Shinnecock · Elders' catalogue, 2014", new float[] {0.15f, 0.78f, BED_Z + 0.05f}),
-        new Label("hickory", "hickory", "wusquíat", JEFFERSON, new float[] {STUMP[0], 0.78f, STUMP[2]}),
-        new Label("squash", "squash", "áscoot", JEFFERSON, new float[] {1.42f, 0.52f, -2.1f}),
-        new Label("beans", "beans", "mais-cusseet", JEFFERSON, new float[] {BEANS[0], 0.58f, BEANS[2]}),
-        new Label("gourd", "gourd", "whorámmok", JEFFERSON, new float[] {GOURD[0] + 0.1f, 1.08f, GOURD[2] + 0.05f}),
-        new Label("shellfish", "shellfish", "sétcawa", HARRINGTON, new float[] {BOWL[0], 0.42f, BOWL[2]}),
+        new Label("house", "house", "wíkam", Record.HARRINGTON, new float[] {0f, 1.78f, 0.28f}, 0.55f),
+        new Label("corn", "Indian corn", "sowhámmen", Record.JEFFERSON, new float[] {-0.92f, 1.92f, -1.9f}),
+        new Label("mush", "corn mush", "suppán", Record.HARRINGTON, new float[] {POT[0], 0.66f, POT[2]}),
+        new Label("deer", "deer", "Autuk", Record.ELDERS, new float[] {-1.2f, 0.92f, -1.88f}),
+        new Label("hickory", "hickory", "wusquíat", Record.JEFFERSON, new float[] {STUMP[0], 0.78f, STUMP[2]}),
+        new Label("squash", "squash", "áscoot", Record.JEFFERSON, new float[] {1.32f, 0.5f, -2.25f}),
+        new Label("beans", "beans", "mais-cusseet", Record.JEFFERSON, new float[] {BEANS[0] - 0.05f, 0.52f, BEANS[2]}),
+        new Label("gourd", "gourd", "whorámmok", Record.JEFFERSON, new float[] {GOURD[0], 1.5f, RACK_FRONT + 0.08f}),
+        new Label("shellfish", "shellfish", "sétcawa", Record.HARRINGTON, new float[] {BOWL[0], 0.42f, BOWL[2]}),
     };
+
+    /** The card a word's label opens, like the other floating words': where it is from, and Long Island's languages. */
+    static ArScene.Item item(String key) {
+        for (Label label : LABELS) {
+            if (!label.key.equals(key)) continue;
+            ArScene.Item item = new ArScene.Item();
+            item.id = "wigwam-" + label.key;
+            item.kind = ArScene.KIND_PHRASE;
+            item.layer = ArScene.LAYER_LANGUAGE;
+            item.title = label.english.substring(0, 1).toUpperCase(java.util.Locale.US) + label.english.substring(1);
+            item.brief = label.word;
+            item.word = label.word + " (" + label.record.language + ")";
+            item.more = label.record.about + "\n\n" + ArObjects.LANGUAGE_NOTES;
+            item.credit = label.record.credit;
+            return item;
+        }
+        return null;
+    }
+
+    /** Draw ids of the words' labels start with this, then the label's key. */
+    static final String LABEL_ID = "wiglabel:";
 
     // ---- What is drawn each frame besides the meshes ----
 
@@ -231,6 +449,8 @@ final class ArWigwam {
         final String texture;
         final float alpha;
         final float additive;
+        // A word's label can be tapped (LABEL_ID and its key); the rest can't (null).
+        String id;
 
         Quad(float[] model, float[] point, String texture, float alpha, float additive) {
             this.model = model;
@@ -242,15 +462,21 @@ final class ArWigwam {
     }
 
     /**
-     * The fire's flames (upright, turned to the camera), the embers' glow and
-     * the ash round the hearth, smoke drifting up from the fire and out of the
+     * The dark line round the wigwam's foot where it meets the ground, the
+     * fire's flames (upright, turned to the camera), the embers' glow and the
+     * ash round the hearth, smoke rising from the fire and a plume out of the
      * smoke hole, and (when labels shows) the words. base is the wigwam's
      * anchor, eye the camera, right and up its axes (world).
      */
     static void addQuads(float[] base, float scale, float time, float[] eye, float[] right, float[] up, boolean labels,
                          ArModels.Ready ready, List<Quad> quads) {
-        float[] model = base.clone();
-        Matrix.scaleM(model, 0, scale, scale, scale);
+        float[] model = model(base, scale);
+        // Where the walls meet the ground: dark close in, fading out.
+        float[] foot = model.clone();
+        Matrix.translateM(foot, 0, 0f, 0.009f, -RZ);
+        Matrix.rotateM(foot, 0, -90f, 1f, 0f, 0f);
+        Matrix.scaleM(foot, 0, 2f * (RX + CONTACT_REACH), 2f * (RZ + CONTACT_REACH), 1f);
+        quads.add(new Quad(foot, local(model, 0f, 0f, -RZ), "wig:contact", 0.85f, 0f));
         // Ash and the embers' glow, lying on the floor.
         quads.add(flat(model, FIRE[0], 0.009f, FIRE[2], 0.66f, "wig:ash", 0.85f, 0f));
         float pulse = 0.82f + 0.12f * (float) Math.sin(time * 2.3f) + 0.06f * (float) Math.sin(time * 5.7f + 1f);
@@ -262,27 +488,34 @@ final class ArWigwam {
             float flicker = 0.86f + 0.14f * (float) Math.sin(time * 9f + i * 2.1f) + 0.06f * (float) Math.sin(time * 23f + i);
             float wide = tongues[i][2] * scale;
             float high = wide * 1.75f * flicker;
-            float[] foot = local(model, FIRE[0] + tongues[i][0] + 0.015f * (float) Math.sin(time * 3f + i), 0.03f, FIRE[2] + tongues[i][1]);
-            float[] middle = {foot[0], foot[1] + high / 2f, foot[2]};
+            float[] base0 = local(model, FIRE[0] + tongues[i][0] + 0.015f * (float) Math.sin(time * 3f + i), 0.03f, FIRE[2] + tongues[i][1]);
+            float[] middle = {base0[0], base0[1] + high / 2f, base0[2]};
             quads.add(new Quad(upright(middle, eye, wide, high), middle, "wig:flame" + ((frame + 4) % 4), 1f, 0.9f));
         }
-        // Smoke: faint inside, rising from the fire to the hole, then drifting off outside.
-        float[] hole = {FIRE[0], HEIGHT - 0.1f, FIRE[2]};
-        for (int i = 0; i < 9; i++) {
-            float age = ((time / 9f) + i / 9f) % 1f;
-            float x = hole[0] + 0.55f * age * age + 0.08f * (float) Math.sin(time * 0.7f + i * 2.3f);
-            float y = hole[1] + age * 1.7f;
-            float z = hole[2] + 0.25f * age * age;
-            float size = (0.35f + 1.1f * age) * scale;
-            float alpha = 0.2f * (float) Math.sin(Math.PI * Math.min(1f, age * 1.25f)) * (1f - age * 0.4f);
-            float[] point = local(model, x, y, z);
-            quads.add(new Quad(facing(point, right, up, size, size), point, "wig:smoke", alpha, 0f));
+        // Smoke inside: rising from the fire to the hole.
+        for (int i = 0; i < 7; i++) {
+            float age = ((time / 7f) + i / 7f) % 1f;
+            float[] point = local(model, FIRE[0] + 0.06f * (float) Math.sin(time * 0.8f + i * 1.6f) * age,
+                0.45f + age * (HEIGHT - 0.6f), FIRE[2] + 0.04f * (float) Math.cos(time * 0.6f + i));
+            float size = (0.3f + 0.6f * age) * scale;
+            quads.add(new Quad(facing(point, right, up, size, size, i * 1.3f + time * 0.1f), point, "wig:smoke",
+                0.11f * (float) Math.sin(Math.PI * age), 0f));
         }
-        for (int i = 0; i < 4; i++) {
-            float age = ((time / 6f) + i / 4f) % 1f;
-            float[] point = local(model, FIRE[0] + 0.05f * (float) Math.sin(time + i * 1.6f), 0.55f + age * (HEIGHT - 0.9f), FIRE[2]);
-            float size = (0.3f + 0.55f * age) * scale;
-            quads.add(new Quad(facing(point, right, up, size, size), point, "wig:smoke", 0.07f * (float) Math.sin(Math.PI * age), 0f));
+        // The plume: out of the hole, bending downwind and spreading as it rises,
+        // thinning as it goes; seen from far off.
+        int puffs = 26;
+        float period = 16f;
+        for (int i = 0; i < puffs; i++) {
+            float age = ((time / period) + i / (float) puffs) % 1f;
+            float sway = 0.3f * age * (float) Math.sin(time * 0.45f + i * 1.3f);
+            float x = FIRE[0] + 2.6f * age * age + sway;
+            float y = HEIGHT - 0.05f + age * 6f;
+            float z = FIRE[2] + 0.8f * age * age + sway * 0.5f;
+            float size = (0.55f + 3.4f * age) * scale;
+            float alpha = 0.27f * Math.min(1f, age / 0.06f) * (float) Math.pow(1f - age, 1.5f);
+            float[] point = local(model, x, y, z);
+            quads.add(new Quad(facing(point, right, up, size, size, i * 0.9f + (i % 2 == 0 ? 1f : -1f) * time * 0.12f),
+                point, "wig:smoke", alpha, 0f));
         }
         if (!labels) return;
         for (Label label : LABELS) {
@@ -290,28 +523,27 @@ final class ArWigwam {
             if (!ready.has(key)) continue;
             float[] point = local(model, label.at[0], label.at[1], label.at[2]);
             float wide = label.width * scale;
-            quads.add(new Quad(upright(point, eye, wide, wide * LABEL_ASPECT), point, key, 0.97f, 0f));
+            Quad quad = new Quad(upright(point, eye, wide, wide * LABEL_ASPECT), point, key, 0.97f, 0f);
+            quad.id = LABEL_ID + label.key;
+            quads.add(quad);
         }
     }
 
-    /** Whether a point (world) is inside the wigwam whose anchor is base, for leaving out its tap box. */
-    static boolean inside(float[] base, float scale, float[] point) {
-        float[] inverse = new float[16];
-        float[] model = base.clone();
-        Matrix.scaleM(model, 0, scale, scale, scale);
-        if (!Matrix.invertM(inverse, 0, model, 0)) return false;
-        float[] local = new float[4];
-        Matrix.multiplyMV(local, 0, inverse, 0, new float[] {point[0], point[1], point[2], 1f}, 0);
-        float dx = local[0] / RX;
-        float dz = (local[2] + RZ) / RZ;
-        return dx * dx + dz * dz < 1f && local[1] < HEIGHT;
+    // How far past the walls their dark foot reaches (metres).
+    private static final float CONTACT_REACH = 0.5f;
+
+    /** Whether a point (world) is inside the wigwam at base, or within pad metres of it, for keeping other things out. */
+    static boolean inside(float[] base, float scale, float[] point, float pad) {
+        float[] local = toLocal(base, scale, point);
+        if (local == null) return false;
+        float dx = local[0] / (RX + pad);
+        float dz = (local[2] + RZ) / (RZ + pad);
+        return dx * dx + dz * dz < 1f && local[1] < HEIGHT + pad;
     }
 
     /** The fire's position (world) for a wigwam at base, a little above the hearth, for its light. */
     static float[] firelight(float[] base, float scale) {
-        float[] model = base.clone();
-        Matrix.scaleM(model, 0, scale, scale, scale);
-        return local(model, FIRE[0], 0.3f, FIRE[2]);
+        return local(model(base, scale), FIRE[0], 0.3f, FIRE[2]);
     }
 
     private static float[] local(float[] model, float x, float y, float z) {
@@ -340,12 +572,16 @@ final class ArWigwam {
         return m;
     }
 
-    /** A picture at point facing the camera squarely (right and up are its axes). */
-    private static float[] facing(float[] point, float[] right, float[] up, float wide, float high) {
+    /** A picture at point facing the camera squarely (right and up are its axes), turned spin radians in its plane. */
+    private static float[] facing(float[] point, float[] right, float[] up, float wide, float high, float spin) {
+        float c = (float) Math.cos(spin);
+        float s = (float) Math.sin(spin);
+        float[] across = {right[0] * c + up[0] * s, right[1] * c + up[1] * s, right[2] * c + up[2] * s};
+        float[] upward = {up[0] * c - right[0] * s, up[1] * c - right[1] * s, up[2] * c - right[2] * s};
         float[] normal = {right[1] * up[2] - right[2] * up[1], right[2] * up[0] - right[0] * up[2], right[0] * up[1] - right[1] * up[0]};
         return new float[] {
-            right[0] * wide, right[1] * wide, right[2] * wide, 0f,
-            up[0] * high, up[1] * high, up[2] * high, 0f,
+            across[0] * wide, across[1] * wide, across[2] * wide, 0f,
+            upward[0] * high, upward[1] * high, upward[2] * high, 0f,
             normal[0], normal[1], normal[2], 0f,
             point[0], point[1], point[2], 1f};
     }
@@ -383,8 +619,8 @@ final class ArWigwam {
         float door = phiAt(DOOR_TOP);
         float rim = phiRim();
         float[] rows = new float[10];
-        for (int i = 0; i <= 5; i++) rows[i] = door * i / 5f;
-        for (int i = 1; i <= 4; i++) rows[5 + i] = door + (rim - door) * i / 4f;
+        for (int i = 0; i <= 4; i++) rows[i] = door * i / 4f;
+        for (int i = 1; i <= 5; i++) rows[4 + i] = door + (rim - door) * i / 5f;
         return rows;
     }
 
@@ -406,8 +642,8 @@ final class ArWigwam {
         float[] columns = columns();
         Random random = new Random(41);
         for (int r = 0; r < rows.length - 1; r++) {
-            boolean belowDoor = r < 5;
-            boolean overDoor = r == 5;
+            boolean belowDoor = r < 4;
+            boolean overDoor = r == 4;
             float offset = random.nextFloat();
             for (int c = 0; c < columns.length - 1; c++) {
                 boolean door = c < 4;
@@ -443,7 +679,7 @@ final class ArWigwam {
         float[] columns = columns();
         for (int r = 0; r < rows.length - 1; r++) {
             for (int c = 0; c < columns.length - 1; c++) {
-                if (r < 5 && c < 4) continue;
+                if (r < 4 && c < 4) continue;
                 float[] a = dome(columns[c], rows[r], 0.07f);
                 float[] bb = dome(columns[c + 1], rows[r], 0.07f);
                 float[] cc = dome(columns[c + 1], rows[r + 1], 0.07f);
@@ -460,7 +696,7 @@ final class ArWigwam {
         float door = doorAngle();
         float rim = phiRim();
         // Rings round the outside, open over the door below its top.
-        float[] heights = {0.42f, 1.12f, 1.98f};
+        float[] heights = {0.42f, 1.12f, 1.62f, 2.08f};
         for (float y : heights) {
             float phi = phiAt(y);
             boolean open = y < DOOR_TOP;
@@ -490,21 +726,21 @@ final class ArWigwam {
         tube(b, ring, 0.034f, 7, 1f);
     }
 
-    /** The bent poles inside, under the lining: arches over the top and rings round. */
+    /** The bent poles inside, over the lining: arches over the top and rings round, a lattice tied where they cross. */
     private static void innerFrame(Builder b) {
         float door = doorAngle();
         float rim = phiRim();
-        for (float degrees : new float[] {45f, 90f, 135f}) {
-            arch(b, (float) Math.toRadians(degrees), rim, 0.1f, HEIGHT - 0.14f, 0.03f);
+        for (float degrees : new float[] {30f, 60f, 90f, 120f, 150f}) {
+            arch(b, (float) Math.toRadians(degrees), rim, 0.1f, HEIGHT - 0.14f, 0.028f);
         }
-        for (float y : new float[] {0.72f, 1.42f, 2.04f}) {
+        for (float y : new float[] {0.6f, 1.05f, 1.55f, 2.02f, 2.3f}) {
             float phi = phiAt(y);
             boolean open = y < DOOR_TOP;
             float from = open ? door + 0.08f : 0f;
             float to = open ? (float) (2 * Math.PI) - door - 0.08f : (float) (2 * Math.PI);
             List<float[]> path = new ArrayList<>();
             for (int i = 0; i <= 60; i++) path.add(dome(from + (to - from) * i / 60f, phi, 0.1f));
-            tube(b, path, 0.028f, 6, 1f);
+            tube(b, path, 0.026f, 6, 1f);
         }
     }
 
@@ -526,14 +762,15 @@ final class ArWigwam {
 
     private static void hearthStones(Builder b) {
         Random random = new Random(7);
-        int count = 12;
+        int count = 13;
         for (int i = 0; i < count; i++) {
-            double angle = 2 * Math.PI * i / count + random.nextFloat() * 0.2f;
-            float x = FIRE[0] + 0.46f * (float) Math.cos(angle);
-            float z = FIRE[2] + 0.46f * (float) Math.sin(angle);
-            float[] m = translate(x, 0.025f, z);
+            double angle = 2 * Math.PI * i / count + random.nextFloat() * 0.15f;
+            float x = FIRE[0] + 0.5f * (float) Math.cos(angle);
+            float z = FIRE[2] + 0.5f * (float) Math.sin(angle);
+            float[] m = translate(x, 0.03f, z);
             Matrix.rotateM(m, 0, random.nextFloat() * 360f, 0f, 1f, 0f);
-            Matrix.scaleM(m, 0, 0.1f + 0.05f * random.nextFloat(), 0.055f + 0.035f * random.nextFloat(), 0.09f + 0.04f * random.nextFloat());
+            float size = 0.8f + 0.45f * random.nextFloat();
+            Matrix.scaleM(m, 0, (0.11f + 0.03f * random.nextFloat()) * size, (0.065f + 0.03f * random.nextFloat()) * size, (0.095f + 0.03f * random.nextFloat()) * size);
             rock(b, m, random.nextInt(1000), random.nextFloat());
         }
     }
@@ -547,9 +784,8 @@ final class ArWigwam {
             double polar = Math.PI * r / rings;
             for (int s = 0; s <= segments; s++) {
                 double around = 2 * Math.PI * s / segments;
-                float lump = 1f + 0.2f * (float) Math.sin(3 * around + seed) * (float) Math.sin(2 * polar + seed * 0.3)
-                    + 0.12f * (float) Math.cos(5 * around + seed * 1.7 + polar * 3)
-                    + 0.07f * (float) Math.sin(9 * around + polar * 5 + seed);
+                float lump = 1f + 0.09f * (float) Math.sin(2 * around + seed) * (float) Math.sin(2 * polar + seed * 0.3)
+                    + 0.05f * (float) Math.cos(3 * around + seed * 1.7 + polar * 2);
                 if (r == 0 || r == rings) lump = 1f;
                 float nx = (float) (Math.sin(polar) * Math.cos(around));
                 float ny = (float) Math.cos(polar);
@@ -592,71 +828,164 @@ final class ArWigwam {
 
     // ---- Furniture and things ----
 
-    /** The bed's posts, rails and slats, the stump's side, the corn's pole, cords, and the firewood: all bark-covered poles. */
+    /**
+     * The bench's posts, rails and slats along the left wall; the rack's posts
+     * and shelves against the back wall with firewood stacked under it; the
+     * stump's side; the corn's pole; cords for things hung up: all bark-covered poles.
+     */
     private static void furnitureWood(Builder b) {
-        float halfLength = 0.97f;
-        float halfDepth = 0.4f;
-        for (int sx = -1; sx <= 1; sx += 2) {
-            for (int sz = -1; sz <= 1; sz += 2) {
-                float[] foot = {sx * (halfLength - 0.05f), 0f, BED_Z + sz * (halfDepth - 0.03f)};
-                log(b, foot, new float[] {foot[0], 0.33f, foot[2]}, 0.035f, sx * 0.3f + sz * 0.1f);
-            }
-            // Side rails along the bed's length.
-            log(b, new float[] {-halfLength, 0.3f, BED_Z + sx * (halfDepth - 0.03f)}, new float[] {halfLength, 0.3f, BED_Z + sx * (halfDepth - 0.03f)}, 0.03f, 0.2f);
+        // The bench.
+        for (float z : new float[] {BENCH_FROM + 0.05f, (BENCH_FROM + BENCH_TO) / 2f, BENCH_TO - 0.05f}) {
+            for (float x : new float[] {BENCH_BACK + 0.04f, BENCH_FRONT - 0.04f}) log(b, new float[] {x, 0f, z}, new float[] {x, BENCH_TOP - 0.02f, z}, 0.035f, z);
         }
-        for (int i = 0; i < 10; i++) {
-            float x = -halfLength + 0.08f + (2 * halfLength - 0.16f) * i / 9f;
-            log(b, new float[] {x, 0.335f, BED_Z - halfDepth}, new float[] {x, 0.335f, BED_Z + halfDepth}, 0.022f, i * 0.13f);
+        for (float x : new float[] {BENCH_BACK + 0.04f, BENCH_FRONT - 0.04f}) {
+            log(b, new float[] {x, BENCH_TOP - 0.06f, BENCH_FROM}, new float[] {x, BENCH_TOP - 0.06f, BENCH_TO}, 0.03f, x);
+        }
+        for (int i = 0; i < 12; i++) {
+            float z = BENCH_FROM + 0.06f + (BENCH_TO - BENCH_FROM - 0.12f) * i / 11f;
+            log(b, new float[] {BENCH_BACK, BENCH_TOP - 0.025f, z}, new float[] {BENCH_FRONT, BENCH_TOP - 0.025f, z}, 0.022f, i * 0.13f);
+        }
+        // The rack: four posts, a pole front and back at each shelf, poles across.
+        for (float x : new float[] {RACK_LEFT, RACK_RIGHT}) {
+            for (float z : new float[] {RACK_BACK, RACK_FRONT}) log(b, new float[] {x, 0f, z}, new float[] {x + 0.01f, RACK_TOP, z}, 0.032f, x + z);
+        }
+        for (float y : SHELVES) {
+            for (float z : new float[] {RACK_BACK, RACK_FRONT}) log(b, new float[] {RACK_LEFT - 0.06f, y, z}, new float[] {RACK_RIGHT + 0.06f, y, z}, 0.026f, y);
+            for (int i = 0; i < 11; i++) {
+                float x = RACK_LEFT + 0.05f + (RACK_RIGHT - RACK_LEFT - 0.1f) * i / 10f;
+                log(b, new float[] {x, y + 0.03f, RACK_BACK - 0.02f}, new float[] {x, y + 0.03f, RACK_FRONT + 0.02f}, 0.018f, i * 0.2f);
+            }
+        }
+        // Firewood stacked under the rack, ends out.
+        Random random = new Random(11);
+        for (int row = 0; row < 3; row++) {
+            for (int i = 0; i < 9 - row; i++) {
+                float x = RACK_LEFT + 0.1f + i * 0.17f + row * 0.08f;
+                float y = 0.06f + row * 0.11f;
+                float r = 0.048f + 0.012f * random.nextFloat();
+                log(b, new float[] {x, y, RACK_BACK + 0.02f}, new float[] {x + 0.02f * (random.nextFloat() - 0.5f), y, RACK_FRONT + 0.04f}, r, random.nextFloat());
+            }
         }
         // The stump's bark.
         float[] stump = translate(STUMP[0], 0f, STUMP[2]);
         lathe(b, stump, new float[][] {{0f, 0f}, {0f, 0.195f}, {0.06f, 0.18f}, {0.42f, 0.17f}}, 16, 0f, 3f, 2f);
         // The corn's pole, tied between the frame's poles.
-        log(b, new float[] {CORN_X, CORN_Y, CORN_BUNCHES[0] - 0.22f}, new float[] {CORN_X, CORN_Y, CORN_BUNCHES[2] + 0.24f}, 0.022f, 0.4f);
-        // The gourd's cord.
-        log(b, new float[] {GOURD[0], CORN_Y - 0.03f, GOURD[2]}, new float[] {GOURD[0], CORN_Y - 0.2f, GOURD[2]}, 0.003f, 0f);
-        // Firewood stacked by the door.
-        Random random = new Random(11);
-        float[][] stack = {{-1.02f, 0.05f}, {-0.9f, 0.05f}, {-0.78f, 0.05f}, {-0.96f, 0.14f}, {-0.84f, 0.14f}, {-0.9f, 0.23f}};
-        for (float[] piece : stack) {
-            float r = 0.045f + 0.01f * random.nextFloat();
-            log(b, new float[] {piece[0], piece[1], -1.15f}, new float[] {piece[0] + 0.02f, piece[1], -0.5f}, r, random.nextFloat());
-        }
+        log(b, new float[] {CORN_X, CORN_Y, CORN_BUNCHES[0] - 0.24f}, new float[] {CORN_X, CORN_Y, CORN_BUNCHES[2] + 0.24f}, 0.022f, 0.4f);
     }
 
-    /** The mortar (a hollowed log), its pestle leaning on it, and the shellfish's wooden bowl. */
+    /** The mortar (a hollowed log), its pestle leaning on it, the shellfish's wooden bowl, and a paddle against the wall. */
     private static void carvedWood(Builder b) {
         float[] mortar = translate(MORTAR[0], 0f, MORTAR[2]);
         lathe(b, mortar, new float[][] {
             {0f, 0f}, {0f, 0.2f}, {0.5f, 0.19f}, {0.52f, 0.17f}, {0.52f, 0.12f}, {0.4f, 0.1f}, {0.3f, 0.05f}, {0.29f, 0f}}, 16, 0f, 2f, 2f);
-        float[] foot = {MORTAR[0] + 0.32f, 0f, MORTAR[2] + 0.1f};
-        float[] top = {MORTAR[0] + 0.12f, 1.02f, MORTAR[2] + 0.02f};
-        float[] axis = {top[0] - foot[0], top[1] - foot[1], top[2] - foot[2]};
-        float length = (float) Math.sqrt(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
-        lathe(b, alongY(foot, axis), new float[][] {
-            {0f, 0f}, {0f, 0.055f}, {0.16f, 0.06f}, {0.26f, 0.036f}, {length - 0.2f, 0.032f}, {length - 0.08f, 0.045f}, {length, 0.042f}, {length, 0f}},
-            10, 0f, 1f, 1f);
+        leaning(b, new float[] {MORTAR[0] + 0.32f, 0f, MORTAR[2] + 0.1f}, new float[] {MORTAR[0] + 0.12f, 1.02f, MORTAR[2] + 0.02f},
+            new float[][] {{0f, 0.055f}, {0.16f, 0.06f}, {0.26f, 0.036f}, {-0.2f, 0.032f}, {-0.08f, 0.045f}, {0f, 0.042f}});
         lathe(b, translate(BOWL[0], 0f, BOWL[2]), new float[][] {
             {0f, 0f}, {0f, 0.07f}, {0.04f, 0.13f}, {0.085f, 0.17f}, {0.095f, 0.172f}, {0.095f, 0.158f}, {0.05f, 0.125f}, {0.03f, 0f}}, 18, 0f, 1f, 2f);
+        // A paddle leaning by the door, its blade on the floor.
+        float[] foot = {-1.08f, 0f, -0.55f};
+        float[] top = {-0.92f, 1.48f, -0.72f};
+        leaning(b, foot, top, new float[][] {{0f, 0.004f}, {0.04f, 0.06f}, {0.42f, 0.085f}, {0.56f, 0.05f}, {0.62f, 0.02f}, {-0.12f, 0.02f}, {-0.04f, 0.03f}, {0f, 0.022f}});
     }
 
-    /** The bed's mat and the mat rolled at its head, and a floor mat by the hearth. */
+    /**
+     * A turned piece (a pestle, a paddle) from foot to top: profile's (distance,
+     * radius) points along it, a negative distance counting back from its top;
+     * a paddle's blade is flattened to a board.
+     */
+    private static void leaning(Builder b, float[] foot, float[] top, float[][] profile) {
+        float[] axis = {top[0] - foot[0], top[1] - foot[1], top[2] - foot[2]};
+        float length = (float) Math.sqrt(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
+        float[][] points = new float[profile.length + 2][];
+        points[0] = new float[] {0f, 0f};
+        for (int i = 0; i < profile.length; i++) {
+            float along = profile[i][0] < 0 || (i == profile.length - 1 && profile[i][0] == 0f) ? length + profile[i][0] : profile[i][0];
+            points[i + 1] = new float[] {along, profile[i][1]};
+        }
+        points[points.length - 1] = new float[] {length, 0f};
+        float[] m = alongY(foot, axis);
+        // A paddle's blade (wider than a pestle) is a board, not round.
+        if (profile[2][1] > 0.07f) Matrix.scaleM(m, 0, 1f, 1f, 0.25f);
+        lathe(b, m, points, 12, 0f, 1f, 1f);
+    }
+
+    /** A mat at the door, and one under the furs on the bench. */
     private static void mats(Builder b) {
-        box(b, -0.98f, 0.345f, BED_Z - 0.42f, 0.98f, 0.37f, BED_Z + 0.42f, 1.2f);
-        float[] roll = translate(-0.8f, 0.43f, BED_Z);
-        Matrix.rotateM(roll, 0, 90f, 1f, 0f, 0f);
-        lathe(b, roll, new float[][] {{-0.38f, 0f}, {-0.38f, 0.06f}, {0.38f, 0.065f}, {0.38f, 0f}}, 14, 0f, 2f, 1.2f);
-        box(b, -1.42f, 0.006f, -2.4f, -0.68f, 0.016f, -1.12f, 1.2f);
+        box(b, -0.42f, 0.006f, -1.1f, 0.42f, 0.014f, -0.45f, 1.2f);
+        box(b, BENCH_BACK, BENCH_TOP - 0.005f, BENCH_FROM, BENCH_FRONT + 0.02f, BENCH_TOP + 0.01f, BENCH_TO, 1.2f);
     }
 
-    /** A deer hide spread over the bed. */
-    private static void hide(Builder b) {
-        float[] m = translate(0.15f, 0.376f, BED_Z + 0.02f);
-        Matrix.rotateM(m, 0, 6f, 0f, 1f, 0f);
-        float w = 0.74f;
-        float d = 0.48f;
-        quad(b, transform(m, new float[] {-w, 0f, d}), transform(m, new float[] {w, 0f, d}), transform(m, new float[] {w, 0f, -d}),
-            transform(m, new float[] {-w, 0f, -d}), 0f, 1f, 1f, 1f, 1f, 0f, 0f, 0f);
+    /**
+     * Furs piled on the bench: four hides laid across it, overlapping, each
+     * lying on top and then rolling over the front edge and hanging down nearly
+     * to the floor, its legs dangling.
+     */
+    private static void furs(Builder b) {
+        Random random = new Random(31);
+        float length = BENCH_TO - BENCH_FROM;
+        int hides = 4;
+        for (int h = 0; h < hides; h++) {
+            float centre = BENCH_FROM + length * (h + 0.5f) / hides + (random.nextFloat() - 0.5f) * 0.06f;
+            float wide = length / hides * 1.35f;
+            float lift = 0.012f + h % 2 * 0.012f;
+            int variant = h % 4;
+            drape(b, centre, wide, lift, 0.3f + 0.04f * random.nextFloat(), variant, random.nextInt(1000));
+        }
+    }
+
+    /**
+     * One hide over the bench: across it from the wall to the front edge, then
+     * round the edge and down; texture v follows it, u along the bench, from a
+     * quarter of the fur picture (variant).
+     */
+    private static void drape(Builder b, float centre, float wide, float lift, float hang, int variant, int seed) {
+        int columns = 8;
+        float depth = BENCH_FRONT - BENCH_BACK;
+        float bend = 0.06f;
+        float[] lengths = {depth, (float) Math.PI * bend / 2f, hang};
+        float total = lengths[0] + lengths[1] + lengths[2];
+        int rows = 14;
+        int first = b.count();
+        for (int r = 0; r <= rows; r++) {
+            float along = total * r / rows;
+            float x;
+            float y;
+            float nx;
+            float ny;
+            if (along <= lengths[0]) {
+                x = BENCH_BACK + along;
+                y = BENCH_TOP + lift + 0.015f * (float) Math.sin(along * 9f + seed);
+                nx = 0f;
+                ny = 1f;
+            } else if (along <= lengths[0] + lengths[1]) {
+                float a = (along - lengths[0]) / bend;
+                x = BENCH_FRONT - bend + bend * (float) Math.sin(a) + 0.02f;
+                y = BENCH_TOP + lift - bend + bend * (float) Math.cos(a);
+                nx = (float) Math.sin(a);
+                ny = (float) Math.cos(a);
+            } else {
+                float down = along - lengths[0] - lengths[1];
+                x = BENCH_FRONT + 0.02f + lift + 0.05f * down;
+                y = BENCH_TOP + lift - bend - down;
+                nx = 1f;
+                ny = 0f;
+            }
+            for (int c = 0; c <= columns; c++) {
+                float u = c / (float) columns;
+                float z = centre - wide / 2f + wide * u;
+                // Folds along its length, deeper where it hangs.
+                float fold = (float) Math.sin(u * Math.PI * 3 + seed) * (along > lengths[0] ? 0.02f : 0.006f);
+                b.vertex(x + nx * fold, y + ny * fold, z, nx, ny, 0f, (variant + u) / 4f, r / (float) rows);
+            }
+        }
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < columns; c++) {
+                int a = first + r * (columns + 1) + c;
+                int d = a + columns + 1;
+                b.triangle(a, d, a + 1);
+                b.triangle(d, d + 1, a + 1);
+            }
+        }
     }
 
     /** Braided corn: bunches of ears hanging point down from the pole, their husks pulled up and tied. */
@@ -725,16 +1054,32 @@ final class ArWigwam {
             {0.34f, 0.126f}, {0.36f, 0.129f}, {0.36f, 0.119f}, {0.33f, 0.111f}, {0.3f, 0.104f}}, 20, 0f, 1f, 1f / 0.42f);
     }
 
-    /** Twined baskets: one of beans by the wall, two under the bed. */
-    private static void baskets(Builder b) {
-        float[][] where = {{BEANS[0], BEANS[2], 1f}, {-0.52f, BED_Z - 0.05f, 0.8f}, {0.48f, BED_Z + 0.02f, 0.75f}};
-        for (float[] at : where) {
-            float[] m = translate(at[0], 0f, at[1]);
-            Matrix.scaleM(m, 0, at[2], at[2], at[2]);
-            lathe(b, m, new float[][] {
-                {0f, 0f}, {0f, 0.12f}, {0.02f, 0.135f}, {0.2f, 0.15f}, {0.22f, 0.152f}, {0.22f, 0.143f}, {0.03f, 0.13f}, {0.02f, 0f}},
-                20, 0f, 3f, 3f);
-        }
+    /**
+     * Baskets and bowls: wicker on the floor (beans by the wall) and on the
+     * rack, coiled grass bowls and jars on its shelves, a basket by the bench.
+     */
+    private static void baskets(Builder wicker, Builder coiled) {
+        // Shapes: a deep basket, a wide bowl, a jar with a neck, a shallow tray.
+        float[][] deep = {{0f, 0f}, {0f, 0.12f}, {0.02f, 0.135f}, {0.2f, 0.16f}, {0.22f, 0.165f}, {0.23f, 0.158f}, {0.22f, 0.15f}, {0.03f, 0.13f}, {0.02f, 0f}};
+        float[][] bowl = {{0f, 0f}, {0f, 0.08f}, {0.03f, 0.13f}, {0.08f, 0.17f}, {0.1f, 0.18f}, {0.105f, 0.172f}, {0.09f, 0.165f}, {0.04f, 0.12f}, {0.02f, 0f}};
+        float[][] jar = {{0f, 0f}, {0f, 0.07f}, {0.06f, 0.11f}, {0.16f, 0.1f}, {0.21f, 0.065f}, {0.24f, 0.07f}, {0.245f, 0.064f}, {0.2f, 0.058f}, {0.05f, 0.1f}, {0.03f, 0f}};
+        float[][] tray = {{0f, 0f}, {0f, 0.15f}, {0.03f, 0.19f}, {0.05f, 0.21f}, {0.055f, 0.2f}, {0.03f, 0.18f}, {0.02f, 0f}};
+        lathe(wicker, place(BEANS[0], 0f, BEANS[2], 1f, 0f), deep, 22, 0f, 3f, 3f);
+        lathe(wicker, place(-0.95f, 0f, -0.9f, 0.9f, 20f), deep, 22, 0f, 3f, 3f);
+        lathe(wicker, place(RACK_LEFT + 0.25f, SHELVES[0] + 0.05f, (RACK_BACK + RACK_FRONT) / 2f, 0.8f, 0f), deep, 22, 0f, 3f, 3f);
+        lathe(wicker, place(0.15f, SHELVES[1] + 0.05f, (RACK_BACK + RACK_FRONT) / 2f, 0.75f, 0f), deep, 22, 0f, 3f, 3f);
+        lathe(coiled, place(0.05f, SHELVES[0] + 0.05f, (RACK_BACK + RACK_FRONT) / 2f, 1f, 0f), bowl, 22, 0f, 4f, 4f);
+        lathe(coiled, place(0.55f, SHELVES[0] + 0.05f, (RACK_BACK + RACK_FRONT) / 2f - 0.02f, 1f, 0f), jar, 22, 0f, 4f, 4f);
+        lathe(coiled, place(-0.45f, SHELVES[1] + 0.05f, (RACK_BACK + RACK_FRONT) / 2f, 1f, 0f), tray, 22, 0f, 4f, 4f);
+        lathe(coiled, place(0.72f, SHELVES[1] + 0.05f, (RACK_BACK + RACK_FRONT) / 2f, 0.8f, 0f), bowl, 22, 0f, 4f, 4f);
+    }
+
+    /** A frame at (x, y, z), scaled, turned degrees round. */
+    private static float[] place(float x, float y, float z, float scale, float degrees) {
+        float[] m = translate(x, y, z);
+        Matrix.rotateM(m, 0, degrees, 0f, 1f, 0f);
+        Matrix.scaleM(m, 0, scale, scale, scale);
+        return m;
     }
 
     /** Three squash on the floor by the wall, ribbed, each its own colour. */
@@ -768,12 +1113,62 @@ final class ArWigwam {
         }
     }
 
-    /** A bottle gourd hanging by its neck from the corn's pole. */
-    private static void gourd(Builder b) {
-        float[] m = translate(GOURD[0], CORN_Y - 0.5f, GOURD[2]);
-        lathe(b, m, new float[][] {
-            {0f, 0f}, {0.02f, 0.06f}, {0.07f, 0.085f}, {0.12f, 0.07f}, {0.16f, 0.036f}, {0.2f, 0.03f}, {0.26f, 0.032f}, {0.29f, 0.02f}, {0.3f, 0f}},
-            16, 0f, 1f, 1f / 0.36f);
+    /** Gourds: a bottle gourd on the top shelf (its word over it), a round one, and a dipper by the beans. */
+    private static void gourds(Builder b) {
+        float[][] bottle = {{0f, 0f}, {0.02f, 0.06f}, {0.07f, 0.085f}, {0.12f, 0.07f}, {0.16f, 0.036f}, {0.2f, 0.03f}, {0.26f, 0.032f}, {0.29f, 0.02f}, {0.3f, 0f}};
+        float[][] round = {{0f, 0f}, {0.01f, 0.05f}, {0.05f, 0.09f}, {0.1f, 0.095f}, {0.15f, 0.07f}, {0.18f, 0.03f}, {0.2f, 0.012f}, {0.21f, 0f}};
+        lathe(b, place(GOURD[0], GOURD[1], GOURD[2], 1f, 0f), bottle, 16, 0f, 1f, 1f / 0.36f);
+        lathe(b, place(0.3f, SHELVES[0] + 0.05f, RACK_BACK + 0.14f, 0.9f, 30f), round, 16, 0f, 1f, 1f / 0.3f);
+        lathe(b, place(-0.3f, SHELVES[1] + 0.04f, RACK_FRONT - 0.1f, 0.8f, 60f), round, 16, 0f, 1f, 1f / 0.3f);
+    }
+
+    /** Feather plumes hanging from the frame: a fan of long feathers tied at their quills. */
+    private static void feathers(Builder b) {
+        float[][] where = {{-0.42f, 2.0f, -2.92f}, {1.12f, 1.98f, -1.55f}};
+        Random random = new Random(41);
+        for (int w = 0; w < where.length; w++) {
+            float[] tie = where[w];
+            for (int i = 0; i < 6; i++) {
+                double spread = (i - 2.5) * 0.16;
+                float[] tip = {tie[0] + 0.32f * (float) Math.sin(spread), tie[1] - 0.34f + 0.02f * random.nextFloat(), tie[2] + 0.05f * (float) Math.cos(spread * 3)};
+                leaf(b, tip, tie, 0.045f, 0.012f, (float) (spread + w * 1.5), (w * 6 + i) % 2 / 2f);
+            }
+            log(b, new float[] {tie[0], tie[1], tie[2]}, new float[] {tie[0], tie[1] + 0.1f, tie[2]}, 0.003f, 0f);
+        }
+    }
+
+    /** Bundles of fibre for cord and mats, hanging from the frame on the right: crossed sheaves of long strands. */
+    private static void fibres(Builder b) {
+        float[][] where = {{1.56f, 1.55f, -2.05f}, {1.48f, 1.55f, -2.38f}, {1.3f, 1.55f, -2.7f}};
+        for (float[] top : where) {
+            for (int k = 0; k < 3; k++) {
+                float turn = k * 1.05f;
+                float[] bottom = {top[0] + 0.02f * (float) Math.cos(turn), top[1] - 0.62f, top[2] + 0.02f * (float) Math.sin(turn)};
+                leaf(b, bottom, top, 0.22f, 0.06f, turn, k / 3f);
+            }
+        }
+    }
+
+    /** A netted bag hanging on the wall over the bench. */
+    private static void netBag(Builder b) {
+        float[] m = translate(-1.35f, 1.0f, -2.75f);
+        lathe(b, m, new float[][] {{0f, 0f}, {0.02f, 0.08f}, {0.1f, 0.15f}, {0.22f, 0.16f}, {0.3f, 0.13f}, {0.32f, 0.12f}}, 16, 0f, 2f, 2.5f);
+    }
+
+    /** A coil of cord hanging on a peg by the rack. */
+    private static void cordCoil(Builder b) {
+        float[] m = translate(RACK_RIGHT + 0.42f, 1.05f, -2.95f);
+        Matrix.rotateM(m, 0, 75f, 0f, 0f, 1f);
+        Matrix.rotateM(m, 0, 30f, 0f, 1f, 0f);
+        for (int i = 0; i < 4; i++) {
+            List<float[]> ring = new ArrayList<>();
+            float r = 0.1f + 0.008f * i;
+            for (int k = 0; k <= 24; k++) {
+                double a = 2 * Math.PI * k / 24;
+                ring.add(transform(m, new float[] {r * (float) Math.cos(a), 0.012f * i, r * (float) Math.sin(a)}));
+            }
+            tube(b, ring, 0.007f, 5, 6f);
+        }
     }
 
     /** Quahog and clam shells heaped in the wooden bowl. */
@@ -812,7 +1207,7 @@ final class ArWigwam {
 
     /** Bundles of herbs hung to dry by the bed. */
     private static void herbs(Builder b) {
-        float[][] where = {{0.66f, 1.46f, -3.2f}, {-0.6f, 1.5f, -3.18f}};
+        float[][] where = {{1.05f, 1.5f, -3.0f}, {-0.95f, 1.52f, -3.0f}};
         for (float[] at : where) {
             lathe(b, translate(at[0], at[1], at[2]), new float[][] {
                 {0f, 0f}, {0f, 0.07f}, {0.05f, 0.062f}, {0.12f, 0.036f}, {0.18f, 0.016f}, {0.24f, 0.012f}, {0.24f, 0f}}, 12, 0f, 2f, 1f / 0.3f);
@@ -1049,8 +1444,22 @@ final class ArWigwam {
                 return endGrain();
             case "wig:mat":
                 return mat();
-            case "wig:hide":
-                return hideTexture();
+            case "wig:fur":
+                return fur();
+            case "wig:coil":
+                return coil();
+            case "wig:feather":
+                return feather();
+            case "wig:fibre":
+                return fibre();
+            case "wig:net":
+                return net();
+            case "wig:cord":
+                return cord();
+            case "wig:door":
+                return doorHide();
+            case "wig:contact":
+                return contact();
             case "wig:corn":
                 return cornTexture();
             case "wig:husk":
@@ -1222,8 +1631,9 @@ final class ArWigwam {
 
     /**
      * The inside of the walls (512 round by 1024 from the hole down to the
-     * floor): the bark's reddish inner side above, black with soot near the
-     * hole, then mats of cattail leaves sewn in rows hung round the walls.
+     * floor, about two metres across): pale reed mats hung in overlapping tiers,
+     * the reeds upright and twined across in rows, a few lower mats with dyed
+     * stripes; darker with smoke up towards the hole, and black round it.
      */
     private static Bitmap inner() {
         int width = 512;
@@ -1231,115 +1641,106 @@ final class ArWigwam {
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         Random random = new Random(3);
-        float matTop = height * 0.42f;
-        canvas.drawColor(Color.rgb(118, 80, 54));
+        canvas.drawColor(Color.rgb(188, 168, 126));
         Paint p = paint();
-        p.setStyle(Paint.Style.STROKE);
-        for (int i = 0; i < 160; i++) {
-            float x = random.nextFloat() * width;
-            p.setStrokeWidth(1f + random.nextFloat() * 2.4f);
-            p.setColor(random.nextBoolean() ? Color.argb(60, 60, 36, 22) : Color.argb(40, 196, 146, 104));
-            canvas.drawLine(x, 0, x + (random.nextFloat() - 0.5f) * 8f, matTop, p);
+        int[] dyes = {Color.rgb(132, 62, 48), Color.rgb(92, 58, 76), Color.rgb(70, 50, 38)};
+        int tier = 0;
+        for (float top = 0; top < height; top += 170 + random.nextInt(40), tier++) {
+            float bottom = Math.min(height, top + 200);
+            boolean dyed = top > height * 0.55f;
+            // The reeds, upright, each its own straw colour.
+            for (int x = 0; x < width; x += 3) {
+                int tone = vary(random, Color.rgb(192, 170, 124), 16);
+                int reed = (x / 3) % 48;
+                if (dyed && ((x / 144) + tier) % 3 == 0 && (reed == 4 || reed == 5 || reed == 10 || reed == 11 || reed == 16)) {
+                    tone = vary(random, dyes[((x / 144) + tier) % dyes.length], 10);
+                }
+                p.setColor(tone);
+                canvas.drawRect(x, top, x + 3, bottom, p);
+                p.setColor(Color.argb(40, 60, 44, 24));
+                canvas.drawRect(x + 2.2f, top, x + 3, bottom, p);
+            }
+            // Twined across in rows.
+            Paint twine = paint();
+            twine.setStrokeWidth(2.4f);
+            for (float y = top + 22; y < bottom - 10; y += 46) {
+                for (int x = 0; x < width; x += 6) {
+                    twine.setColor(vary(random, Color.rgb(116, 92, 58), 10));
+                    canvas.drawLine(x, y + ((x / 6) % 2) * 2.5f, x + 6, y + (((x / 6) + 1) % 2) * 2.5f, twine);
+                }
+            }
+            // The tier below tucked under this one: a shadow along its top.
+            p.setShader(new LinearGradient(0, top, 0, top + 18, Color.argb(120, 40, 28, 14), Color.argb(0, 40, 28, 14), Shader.TileMode.CLAMP));
+            canvas.drawRect(0, top, width, top + 18, p);
+            p.setShader(null);
+            // Each mat's edge now and then.
+            for (int x = random.nextInt(60); x < width; x += 150 + random.nextInt(120)) {
+                p.setColor(Color.argb(110, 70, 52, 30));
+                canvas.drawRect(x, top, x + 3, bottom, p);
+            }
         }
-        // The slabs' edges seen from inside, and the bands overlapping.
-        for (int x = 0; x < width; x += 90 + random.nextInt(70)) {
-            p.setStrokeWidth(4f);
-            p.setColor(Color.argb(150, 30, 18, 10));
-            canvas.drawLine(x, 0, x + (random.nextFloat() - 0.5f) * 10f, matTop, p);
-        }
-        for (float y = 60; y < matTop; y += 70 + random.nextInt(30)) {
-            p.setStrokeWidth(5f);
-            p.setColor(Color.argb(140, 30, 18, 10));
-            canvas.drawLine(0, y, width, y + (random.nextFloat() - 0.5f) * 6f, p);
-        }
-        p.setStyle(Paint.Style.FILL);
-        // Soot from the fire, darkest round the hole, patchy.
-        p.setShader(new LinearGradient(0, 0, 0, matTop, Color.argb(225, 14, 10, 8), Color.argb(30, 14, 10, 8), Shader.TileMode.CLAMP));
-        canvas.drawRect(0, 0, width, matTop, p);
+        mottle(canvas, random, width, height, 40, 20, 60f);
+        // Smoke: darkening up towards the hole, black round it.
+        p.setShader(new LinearGradient(0, 0, 0, height * 0.5f,
+            new int[] {Color.argb(240, 16, 12, 10), Color.argb(110, 30, 22, 16), Color.argb(0, 30, 22, 16)}, new float[] {0f, 0.35f, 1f}, Shader.TileMode.CLAMP));
+        canvas.drawRect(0, 0, width, height * 0.5f, p);
         p.setShader(null);
-        for (int i = 0; i < 30; i++) {
+        for (int i = 0; i < 24; i++) {
             float x = random.nextFloat() * width;
-            float y = random.nextFloat() * matTop;
+            float y = random.nextFloat() * height * 0.45f;
             float r = 20f + random.nextFloat() * 50f;
-            p.setShader(new RadialGradient(x, y, r, Color.argb(90, 10, 8, 6), Color.argb(0, 10, 8, 6), Shader.TileMode.CLAMP));
+            p.setShader(new RadialGradient(x, y, r, Color.argb(60, 10, 8, 6), Color.argb(0, 10, 8, 6), Shader.TileMode.CLAMP));
             canvas.drawCircle(x, y, r, p);
         }
         p.setShader(null);
-        // The mats: leaves running down, sewn across in rows, a panel's edge now and then.
-        int leaf = 9;
-        for (int x = 0; x < width; x += leaf) {
-            p.setColor(vary(random, Color.rgb(168, 140, 92), 14));
-            canvas.drawRect(x, matTop, x + leaf, height, p);
-            p.setColor(Color.argb(60, 60, 44, 24));
-            canvas.drawRect(x + leaf - 1.5f, matTop, x + leaf, height, p);
-            p.setColor(Color.argb(40, 255, 240, 200));
-            canvas.drawRect(x + 1, matTop, x + 3, height, p);
-        }
-        Paint thread = paint();
-        thread.setStrokeWidth(3f);
-        for (float y = matTop + 30; y < height; y += 64) {
-            thread.setColor(Color.argb(170, 82, 62, 36));
-            for (int x = 0; x < width; x += 9) canvas.drawLine(x, y + (x / 9 % 2) * 2.5f, x + 9, y + ((x / 9 + 1) % 2) * 2.5f, thread);
-        }
-        for (int x = 0; x < width; x += 256) {
-            p.setColor(Color.argb(120, 50, 36, 20));
-            canvas.drawRect(x, matTop, x + 4, height, p);
-        }
-        // The mats' top edge, tied to a pole, and grubby towards the floor.
-        p.setShader(new LinearGradient(0, matTop - 6, 0, matTop + 20, Color.argb(160, 30, 20, 12), Color.argb(0, 30, 20, 12), Shader.TileMode.CLAMP));
-        canvas.drawRect(0, matTop - 6, width, matTop + 20, p);
-        p.setShader(new LinearGradient(0, height * 0.85f, 0, height, Color.argb(0, 60, 44, 30), Color.argb(120, 60, 44, 30), Shader.TileMode.CLAMP));
-        canvas.drawRect(0, height * 0.85f, width, height, p);
+        // Grubby towards the floor.
+        p.setShader(new LinearGradient(0, height * 0.9f, 0, height, Color.argb(0, 60, 44, 30), Color.argb(110, 60, 44, 30), Shader.TileMode.CLAMP));
+        canvas.drawRect(0, height * 0.9f, width, height, p);
         p.setShader(null);
-        mottle(canvas, random, width, height, 26, 18, 50f);
         return bitmap;
     }
 
-    /** Packed earth (512, a little under two metres a side): brown, with grit, small stones and bits of plant. */
+    /** Packed earth (512, a little under two metres a side): smooth, grey-brown, faintly gritty, a few small stones. */
     private static Bitmap floor() {
         int size = 512;
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         Random random = new Random(4);
-        canvas.drawColor(Color.rgb(92, 74, 56));
-        mottle(canvas, random, size, size, 60, 34, 50f);
-        speckle(canvas, random, size, size, 1600, 40, 1f);
+        canvas.drawColor(Color.rgb(124, 114, 102));
+        mottle(canvas, random, size, size, 70, 26, 60f);
+        speckle(canvas, random, size, size, 1400, 26, 0.9f);
         Paint p = paint();
-        for (int i = 0; i < 60; i++) {
-            p.setColor(vary(random, Color.rgb(104, 96, 86), 18));
+        for (int i = 0; i < 40; i++) {
+            p.setColor(vary(random, Color.rgb(140, 132, 120), 18));
             float x = random.nextFloat() * size;
             float y = random.nextFloat() * size;
-            float r = 1.5f + random.nextFloat() * 3.5f;
+            float r = 1.5f + random.nextFloat() * 3f;
             canvas.drawOval(new RectF(x - r, y - r * 0.7f, x + r, y + r * 0.7f), p);
         }
-        p.setStrokeWidth(1.4f);
-        for (int i = 0; i < 120; i++) {
-            p.setColor(Color.argb(80, 150, 126, 80));
+        // Scuffs where feet go.
+        p.setStrokeWidth(10f);
+        p.setStrokeCap(Paint.Cap.ROUND);
+        p.setMaskFilter(new BlurMaskFilter(8f, BlurMaskFilter.Blur.NORMAL));
+        for (int i = 0; i < 14; i++) {
+            p.setColor(Color.argb(30, 60, 50, 40));
             float x = random.nextFloat() * size;
             float y = random.nextFloat() * size;
-            double a = random.nextFloat() * Math.PI;
-            float l = 6f + random.nextFloat() * 14f;
-            canvas.drawLine(x, y, x + l * (float) Math.cos(a), y + l * (float) Math.sin(a), p);
+            canvas.drawLine(x, y, x + (random.nextFloat() - 0.5f) * 60f, y + (random.nextFloat() - 0.5f) * 60f, p);
         }
         return bitmap;
     }
 
-    /** Field stone (256): grey granite, speckled, softly mottled. */
+    /** River stone (256): pale grey, smooth, faintly mottled and speckled, smoked a little. */
     private static Bitmap stone() {
         int size = 256;
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         Random random = new Random(5);
-        canvas.drawColor(Color.rgb(92, 88, 84));
-        mottle(canvas, random, size, size, 40, 50, 36f);
-        speckle(canvas, random, size, size, 1800, 70, 1.1f);
+        canvas.drawColor(Color.rgb(132, 132, 130));
+        mottle(canvas, random, size, size, 50, 44, 40f);
+        speckle(canvas, random, size, size, 2200, 80, 1f);
         Paint p = paint();
-        for (int i = 0; i < 160; i++) {
-            p.setColor(Color.argb(110, 190, 150, 130));
-            canvas.drawCircle(random.nextFloat() * size, random.nextFloat() * size, 1f + random.nextFloat() * 1.5f, p);
-        }
-        // Soot from the fire.
-        p.setShader(new LinearGradient(0, 0, 0, size, Color.argb(30, 20, 16, 14), Color.argb(150, 20, 16, 14), Shader.TileMode.CLAMP));
+        p.setShader(new LinearGradient(0, 0, 0, size, Color.argb(0, 20, 16, 14), Color.argb(110, 20, 16, 14), Shader.TileMode.CLAMP));
         canvas.drawRect(0, 0, size, size, p);
         return bitmap;
     }
@@ -1458,49 +1859,239 @@ final class ArWigwam {
     }
 
     private static int shade(int color, float factor) {
-        return Color.rgb(Math.round(Color.red(color) * factor), Math.round(Color.green(color) * factor), Math.round(Color.blue(color) * factor));
+        return Color.rgb(clamp(Math.round(Color.red(color) * factor)), clamp(Math.round(Color.green(color) * factor)), clamp(Math.round(Color.blue(color) * factor)));
     }
 
-    /** A deer hide (512), its outline cut out: brown hair lying back from the neck, paler at the belly's edges, a darker line down the back. */
-    private static Bitmap hideTexture() {
-        int size = 512;
-        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+    /**
+     * Four furs side by side (1024 by 512; each a quarter across, from where it
+     * lies against the wall at the top to where it hangs at the bottom), their
+     * outlines cut out: brown deer, grey-brown winter deer, pale, and dark. Hair
+     * lies down the hide, paler at its belly edges, a darker line down its back;
+     * two legs dangle at the hanging end.
+     */
+    private static Bitmap fur() {
+        int width = 1024;
+        int height = 512;
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         Random random = new Random(12);
-        Path outline = new Path();
-        float[][] points = {{60, 200}, {20, 150}, {40, 120}, {110, 150}, {180, 90}, {250, 70}, {330, 90}, {400, 150}, {470, 120}, {495, 150},
-            {460, 210}, {470, 300}, {495, 360}, {470, 390}, {400, 360}, {330, 430}, {256, 445}, {180, 430}, {110, 360}, {40, 390}, {18, 360}, {50, 300}};
-        outline.moveTo(points[0][0], points[0][1]);
-        for (int i = 1; i < points.length; i++) {
-            float[] a = points[i - 1];
-            float[] b = points[i];
-            outline.quadTo(a[0] + (random.nextFloat() - 0.5f) * 20, a[1] + (random.nextFloat() - 0.5f) * 20, (a[0] + b[0]) / 2f, (a[1] + b[1]) / 2f);
+        int[] coats = {Color.rgb(150, 104, 66), Color.rgb(126, 110, 94), Color.rgb(212, 196, 170), Color.rgb(88, 66, 48)};
+        for (int h = 0; h < 4; h++) {
+            float x0 = h * 256f;
+            Path outline = new Path();
+            outline.moveTo(x0 + 14, 10);
+            for (int x = 14; x <= 242; x += 20) outline.lineTo(x0 + x, 4 + random.nextFloat() * 14);
+            outline.lineTo(x0 + 246, 60);
+            for (int y = 60; y <= 420; y += 30) outline.lineTo(x0 + 240 + random.nextFloat() * 12, y);
+            // A leg, then the edge between the legs, then the other leg.
+            outline.lineTo(x0 + 236, 500);
+            outline.lineTo(x0 + 204, 508);
+            outline.lineTo(x0 + 196, 440);
+            for (int x = 190; x >= 66; x -= 18) outline.lineTo(x0 + x, 430 + random.nextFloat() * 22);
+            outline.lineTo(x0 + 60, 440);
+            outline.lineTo(x0 + 52, 506);
+            outline.lineTo(x0 + 20, 500);
+            for (int y = 420; y >= 60; y -= 30) outline.lineTo(x0 + 4 + random.nextFloat() * 12, y);
+            outline.close();
+            canvas.save();
+            canvas.clipPath(outline);
+            int coat = coats[h];
+            canvas.drawColor(coat);
+            Paint p = paint();
+            p.setShader(new LinearGradient(x0, 0, x0 + 256, 0,
+                new int[] {shade(coat, 1.25f), coat, shade(coat, 0.78f), coat, shade(coat, 1.25f)}, new float[] {0f, 0.3f, 0.5f, 0.7f, 1f}, Shader.TileMode.CLAMP));
+            canvas.drawRect(x0, 0, x0 + 256, height, p);
+            p.setShader(null);
+            p.setStrokeWidth(1.5f);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            for (int i = 0; i < 5200; i++) {
+                float x = x0 + random.nextFloat() * 256;
+                float y = random.nextFloat() * height;
+                p.setColor(random.nextBoolean() ? Color.argb(80, Math.max(0, Color.red(coat) - 60), Math.max(0, Color.green(coat) - 60), Math.max(0, Color.blue(coat) - 60))
+                    : Color.argb(70, Math.min(255, Color.red(coat) + 60), Math.min(255, Color.green(coat) + 60), Math.min(255, Color.blue(coat) + 60)));
+                float lean = (x - x0 - 128) / 128f * 3f;
+                canvas.drawLine(x, y, x + lean, y + 6f + random.nextFloat() * 6f, p);
+            }
+            canvas.restore();
+            Paint edge = paint();
+            edge.setStyle(Paint.Style.STROKE);
+            edge.setStrokeWidth(5f);
+            edge.setColor(Color.argb(150, Math.min(255, Color.red(coat) + 40), Math.min(255, Color.green(coat) + 36), Math.min(255, Color.blue(coat) + 30)));
+            canvas.drawPath(outline, edge);
         }
-        outline.close();
-        canvas.save();
-        canvas.clipPath(outline);
-        canvas.drawColor(Color.rgb(146, 102, 66));
+        return bitmap;
+    }
+
+    /** Coiled grass basketry (256, repeating): round coils stacked up, sewn over at intervals. */
+    private static Bitmap coil() {
+        int size = 256;
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Random random = new Random(26);
         Paint p = paint();
-        p.setShader(new RadialGradient(size / 2f, size / 2f, size * 0.45f, Color.argb(0, 230, 200, 160), Color.argb(150, 220, 190, 150), Shader.TileMode.CLAMP));
-        canvas.drawRect(0, 0, size, size, p);
-        p.setShader(new LinearGradient(0, size / 2f - 40, 0, size / 2f + 40,
-            new int[] {Color.argb(0, 60, 36, 20), Color.argb(130, 60, 36, 20), Color.argb(0, 60, 36, 20)}, null, Shader.TileMode.CLAMP));
-        canvas.drawRect(0, size / 2f - 40, size, size / 2f + 40, p);
+        int row = 8;
+        for (int y = 0; y < size; y += row) {
+            int tone = vary(random, (y / row) % 9 == 4 ? Color.rgb(128, 92, 52) : Color.rgb(204, 180, 124), 10);
+            p.setShader(new LinearGradient(0, y, 0, y + row, new int[] {shade(tone, 0.7f), shade(tone, 1.12f), shade(tone, 0.72f)}, null, Shader.TileMode.CLAMP));
+            canvas.drawRect(0, y, size, y + row, p);
+        }
         p.setShader(null);
-        p.setStrokeWidth(1.6f);
-        for (int i = 0; i < 2600; i++) {
-            float x = random.nextFloat() * size;
-            float y = random.nextFloat() * size;
-            p.setColor(random.nextBoolean() ? Color.argb(70, 90, 60, 36) : Color.argb(60, 210, 170, 120));
-            float tilt = (y - size / 2f) / size;
-            canvas.drawLine(x, y, x + 7f, y + 7f * tilt, p);
+        p.setStrokeWidth(2.2f);
+        for (int y = 0; y < size; y += row) {
+            for (int x = (y / row) % 2 * 8; x < size; x += 16) {
+                p.setColor(Color.argb(170, 150, 120, 74));
+                canvas.drawLine(x, y + 1, x + 4, y + row - 1, p);
+            }
+        }
+        return bitmap;
+    }
+
+    /** A turkey feather (128 by 512, quill at the top): barred brown and pale, its tip rounded. */
+    private static Bitmap feather() {
+        int width = 128;
+        int height = 512;
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Random random = new Random(27);
+        Path shape = new Path();
+        shape.moveTo(width / 2f - 4, 0);
+        shape.cubicTo(width * 0.2f, height * 0.25f, 6, height * 0.75f, width / 2f, height - 4);
+        shape.cubicTo(width - 6, height * 0.75f, width * 0.8f, height * 0.25f, width / 2f + 4, 0);
+        shape.close();
+        canvas.save();
+        canvas.clipPath(shape);
+        canvas.drawColor(Color.rgb(70, 50, 34));
+        Paint p = paint();
+        p.setStrokeWidth(2.2f);
+        for (float y = -60; y < height; y += 3f) {
+            boolean bar = ((int) ((y + 30) / 34)) % 2 == 0;
+            int tone = bar ? vary(random, Color.rgb(230, 220, 200), 12) : vary(random, Color.rgb(74, 54, 36), 10);
+            p.setColor(tone);
+            canvas.drawLine(width / 2f, y, 0, y + 50, p);
+            canvas.drawLine(width / 2f, y, width, y + 50, p);
         }
         canvas.restore();
-        Paint edge = paint();
-        edge.setStyle(Paint.Style.STROKE);
-        edge.setStrokeWidth(6f);
-        edge.setColor(Color.argb(160, 200, 170, 130));
-        canvas.drawPath(outline, edge);
+        p.setColor(Color.rgb(226, 214, 186));
+        p.setStrokeWidth(3f);
+        canvas.drawLine(width / 2f, 0, width / 2f, height * 0.95f, p);
+        return bitmap;
+    }
+
+    /** Bundled plant fibre (256 by 512): long pale strands, ragged at their ends, gaps between. */
+    private static Bitmap fibre() {
+        int width = 256;
+        int height = 512;
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Random random = new Random(28);
+        Paint p = paint();
+        p.setStrokeCap(Paint.Cap.ROUND);
+        for (int i = 0; i < 420; i++) {
+            float x = random.nextFloat() * width;
+            p.setStrokeWidth(2.5f + random.nextFloat() * 3.5f);
+            p.setColor(vary(random, Color.rgb(212, 196, 150), 22));
+            float end = height * (0.75f + 0.25f * random.nextFloat());
+            canvas.drawLine(width / 2f + (x - width / 2f) * 0.3f, 0, x, end, p);
+        }
+        // The tie near the top.
+        p.setStrokeWidth(10f);
+        p.setColor(Color.rgb(120, 92, 56));
+        canvas.drawLine(width * 0.3f, 30, width * 0.7f, 30, p);
+        return bitmap;
+    }
+
+    /** Netting (256, repeating): knotted twine in diamonds, open between. */
+    private static Bitmap net() {
+        int size = 256;
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Paint p = paint();
+        p.setStrokeWidth(7f);
+        p.setColor(Color.rgb(176, 146, 96));
+        int cell = 32;
+        for (int k = -size; k < 2 * size; k += cell) {
+            canvas.drawLine(k, 0, k + size, size, p);
+            canvas.drawLine(k, size, k + size, 0, p);
+        }
+        p.setColor(Color.rgb(140, 110, 66));
+        for (int x = 0; x <= size; x += cell) {
+            for (int y = 0; y <= size; y += cell) {
+                canvas.drawCircle(x, y, 6f, p);
+                canvas.drawCircle(x + cell / 2f, y + cell / 2f, 6f, p);
+            }
+        }
+        return bitmap;
+    }
+
+    /** Twisted cord (128, repeating along it): two plies winding round. */
+    private static Bitmap cord() {
+        int size = 128;
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawColor(Color.rgb(170, 140, 92));
+        Paint p = paint();
+        p.setStrokeWidth(10f);
+        for (int k = -size; k < 2 * size; k += 24) {
+            p.setColor(Color.rgb(132, 104, 64));
+            canvas.drawLine(k, 0, k + size, size, p);
+        }
+        return bitmap;
+    }
+
+    /**
+     * A flap of the hide door (256 by 512, from its outer edge to the middle and
+     * from the lintel down): two skins sewn together, darker at the top with
+     * smoke and where hands push it, its bottom edge ragged.
+     */
+    private static Bitmap doorHide() {
+        int width = 256;
+        int height = 512;
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Random random = new Random(29);
+        Path shape = new Path();
+        shape.moveTo(0, 0);
+        shape.lineTo(width, 0);
+        for (int y = 0; y <= height - 40; y += 40) shape.lineTo(width - random.nextFloat() * 6, y);
+        for (int x = width; x >= 0; x -= 16) shape.lineTo(x, height - 30 + random.nextFloat() * 28);
+        shape.close();
+        canvas.clipPath(shape);
+        canvas.drawColor(Color.rgb(132, 94, 62));
+        mottle(canvas, random, width, height, 50, 16, 28f);
+        Paint p = paint();
+        p.setStrokeWidth(1.3f);
+        for (int i = 0; i < 4200; i++) {
+            p.setColor(random.nextBoolean() ? Color.argb(55, 60, 40, 24) : Color.argb(45, 214, 184, 146));
+            float x = random.nextFloat() * width;
+            float y = random.nextFloat() * height;
+            canvas.drawLine(x, y, x + (random.nextFloat() - 0.5f) * 8f, y + random.nextFloat() * 6f, p);
+        }
+        // The seam between the two skins, sewn with sinew.
+        float seam = height * 0.52f;
+        p.setStrokeWidth(3f);
+        p.setColor(Color.argb(170, 70, 46, 26));
+        canvas.drawLine(0, seam, width, seam + 8, p);
+        for (int x = 4; x < width; x += 12) canvas.drawLine(x, seam - 6, x + 3, seam + 8, p);
+        // Smoke at the top, and the middle edge darkened by hands.
+        p.setShader(new LinearGradient(0, 0, 0, height * 0.3f, Color.argb(130, 30, 22, 14), Color.argb(0, 30, 22, 14), Shader.TileMode.CLAMP));
+        canvas.drawRect(0, 0, width, height, p);
+        p.setShader(new LinearGradient(width * 0.75f, 0, width, 0, Color.argb(0, 50, 34, 20), Color.argb(90, 50, 34, 20), Shader.TileMode.CLAMP));
+        canvas.drawRect(0, 0, width, height, p);
+        p.setShader(null);
+        return bitmap;
+    }
+
+    /** The wigwam's foot on the ground (256): clear inside, dark where the walls stand, fading out. */
+    private static Bitmap contact() {
+        int size = 256;
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Paint p = paint();
+        float wall = RX / (RX + CONTACT_REACH);
+        p.setShader(new RadialGradient(size / 2f, size / 2f, size / 2f,
+            new int[] {Color.argb(0, 0, 0, 0), Color.argb(0, 0, 0, 0), Color.argb(40, 0, 0, 0), Color.argb(200, 0, 0, 0), Color.argb(90, 0, 0, 0), Color.argb(0, 0, 0, 0)},
+            new float[] {0f, wall - 0.12f, wall - 0.04f, wall, wall + 0.06f, 1f}, Shader.TileMode.CLAMP));
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f, p);
         return bitmap;
     }
 
@@ -1837,18 +2428,20 @@ final class ArWigwam {
         return bitmap;
     }
 
-    /** A puff of smoke (256): soft, uneven, pale grey. */
+    /** A puff of smoke (256): soft, billowing, pale grey with a little shade underneath. */
     private static Bitmap smoke() {
         int size = 256;
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         Random random = new Random(25);
         Paint p = paint();
-        for (int i = 0; i < 14; i++) {
-            float r = size * (0.18f + 0.16f * random.nextFloat());
-            float x = size / 2f + (random.nextFloat() - 0.5f) * size * 0.36f;
-            float y = size / 2f + (random.nextFloat() - 0.5f) * size * 0.36f;
-            p.setShader(new RadialGradient(x, y, r, Color.argb(90, 214, 212, 206), Color.argb(0, 214, 212, 206), Shader.TileMode.CLAMP));
+        for (int i = 0; i < 22; i++) {
+            float r = size * (0.12f + 0.16f * random.nextFloat());
+            float x = size / 2f + (random.nextFloat() - 0.5f) * size * 0.42f;
+            float y = size / 2f + (random.nextFloat() - 0.5f) * size * 0.42f;
+            float shadeBelow = (y - size / 2f) / size;
+            int grey = Math.round(196 - 46 * Math.max(0f, shadeBelow));
+            p.setShader(new RadialGradient(x, y, r, Color.argb(110, grey, grey, grey + 4), Color.argb(0, grey, grey, grey + 4), Shader.TileMode.CLAMP));
             canvas.drawCircle(x, y, r, p);
         }
         p.setShader(null);

@@ -44,7 +44,7 @@ final class ArModels {
             return;
         }
         if (asset.kind == ArPlace.Kind.WIGWAM) {
-            addWigwam(base, scale, ready, meshes);
+            ArWigwam.addMeshes(base, scale, null, ready, meshes);
             return;
         }
         boolean banner = asset.kind == ArPlace.Kind.BANNER;
@@ -93,26 +93,6 @@ final class ArModels {
         float[] foot = {pole[12], pole[13], pole[14]};
         for (int index = first; index < meshes.size(); index++) {
             meshes.get(index).shadow(foot, new float[] {0f, 1f, 0f}, ArGl.SUN, 3.5f * scale, 0.42f);
-        }
-    }
-
-    /**
-     * A wigwam: its bark, poles and door outside in daylight; inside, its
-     * lining, floor and everything in it dim, lit by the fire. Parts show as
-     * their textures are ready.
-     */
-    private static void addWigwam(float[] base, float scale, Ready ready, List<ArGl.MeshDraw> meshes) {
-        float[] model = base.clone();
-        Matrix.scaleM(model, 0, scale, scale, scale);
-        float[] fire = ArWigwam.firelight(base, scale);
-        for (ArWigwam.Part part : ArWigwam.parts()) {
-            if (!ready.has(part.texture)) continue;
-            ArGl.MeshDraw draw = finish(ArGl.MeshDraw.textured(part.mesh, model, part.texture), part.gloss, part.shine);
-            if (part.inside) {
-                draw.sun = 0.36f;
-                draw.fire = fire;
-            }
-            meshes.add(draw);
         }
     }
 

@@ -303,6 +303,9 @@ final class ArPlace {
         final Anchor anchor;
         // Held in the air ahead because no surface was found (an arrow then shows its point).
         boolean inAir;
+        // A wigwam's door: each flap's swing and parting, and their speeds (ArWigwam.stepDoor), and when it last moved.
+        final float[] door = new float[8];
+        float doorAt = -1f;
         float scale = 1f;
         // Turned by hand about the anchor's +Y (radians).
         float turn;
