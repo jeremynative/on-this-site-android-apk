@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Minimal OpenGL ES 2 drawing for the AR view: the camera feed behind
- * everything, placed 3D things (the flag), and alpha-blended textured quads
+ * everything, placed 3D things (flags, banners, arrows), and alpha-blended textured quads
  * (photos, cards, orbs, floor rings, stickers) in front. Must only be used on
  * the GL thread.
  */
@@ -48,67 +48,99 @@ final class ArGl {
             + "void main() { vec4 c = texture2D(u_Texture, v_TexCoord);"
             + " gl_FragColor = vec4(c.rgb * mix(1.0, u_Alpha, u_Premultiplied), c.a * u_Alpha); }\n";
 
-    // Placed 3D things (the flag): lit from above, both sides shaded alike. With
-    // u_Wave above 0 the mesh is a unit cloth blowing from its pole edge
-    // (texture u = 0): a slow swing about the pole, a travelling ripple, and a
-    // quicker flutter, all growing towards the free end.
+    // Placed 3D things (flags, banners, arrows): lit from above, both sides shaded
+    // alike. With u_Wave above 0 the mesh is a unit cloth blowing from its pole
+    // edge (texture u = 0). A flag (u_Calm 0) has a slow swing about the pole, a
+    // travelling ripple and a quicker flutter, all growing towards the free end.
+    // A banner (u_Calm 1) moves slower, in long waves (less than one along the
+    // cloth), and its breeze comes and goes, so its lettering stays readable.
+    // A banner is stretched long, so its slopes (0.4) are gentler than the unit
+    // cloth's; the flag's are left as they were.
     //
-    // With u_Flatten above 0 the same shape is its shadow instead: slid along the
-    // light onto the ground (y = u_Foot.y) and faded with distance from u_Foot.
+    // With u_Flatten above 0 the same shape is its shadow instead: slid along
+    // u_ShadowDir onto the surface through u_Foot facing u_PlaneNormal (the
+    // ground under a flag, the wall an arrow is in), faded with distance from
+    // u_Foot.
     private static final String MESH_VERTEX =
         "uniform mat4 u_Mvp;\n"
             + "uniform mat4 u_Model;\n"
             + "uniform mat4 u_ViewProjection;\n"
             + "uniform float u_Wave;\n"
+            + "uniform float u_Calm;\n"
             + "uniform float u_Time;\n"
             + "uniform float u_Flatten;\n"
             + "uniform vec3 u_Foot;\n"
+            + "uniform vec3 u_PlaneNormal;\n"
+            + "uniform vec3 u_ShadowDir;\n"
             + "uniform float u_FadeLength;\n"
+            + "uniform vec3 u_Eye;\n"
             + "attribute vec3 a_Position;\n"
             + "attribute vec3 a_Normal;\n"
             + "attribute vec2 a_TexCoord;\n"
             + "varying vec2 v_TexCoord;\n"
             + "varying vec3 v_Normal;\n"
+            + "varying vec3 v_ToEye;\n"
             + "varying float v_Fade;\n"
             + "void main() {\n"
             + "  vec3 p = a_Position;\n"
             + "  vec3 n = a_Normal;\n"
             + "  if (u_Wave > 0.0) {\n"
             + "    float along = a_TexCoord.x;\n"
-            + "    float swing = 2.0 * sin(0.8 * u_Time);\n"
-            + "    float phase = 5.0 * along - 3.4 * u_Time + 0.9 * a_TexCoord.y;\n"
-            + "    float flutter = 11.0 * along - 6.5 * u_Time + 2.0 * a_TexCoord.y;\n"
-            + "    p.z += u_Wave * along * (swing + sin(phase) + 0.3 * sin(flutter));\n"
-            + "    float slope = u_Wave * (swing + sin(phase) + 0.3 * sin(flutter)\n"
-            + "      + along * (5.0 * cos(phase) + 3.3 * cos(flutter)));\n"
-            + "    n = normalize(vec3(-slope, 0.0, 1.0));\n"
+            + "    float bend;\n"
+            + "    float slope;\n"
+            + "    if (u_Calm > 0.5) {\n"
+            + "      float breeze = 0.6 * sin(0.21 * u_Time) + 0.4 * sin(0.53 * u_Time + 1.7);\n"
+            + "      float gust = 0.4 + 0.6 * smoothstep(-0.3, 0.8, breeze);\n"
+            + "      float swing = 0.45 * sin(0.37 * u_Time);\n"
+            + "      float phase = 2.4 * along - 1.15 * u_Time + 0.5 * a_TexCoord.y;\n"
+            + "      float flutter = 7.0 * along - 3.1 * u_Time + 1.4 * a_TexCoord.y;\n"
+            + "      bend = swing + gust * (sin(phase) + 0.12 * sin(flutter));\n"
+            + "      slope = 0.4 *(bend + along * gust * (2.4 * cos(phase) + 0.84 * cos(flutter)));\n"
+            + "    } else {\n"
+            + "      float swing = 2.0 * sin(0.8 * u_Time);\n"
+            + "      float phase = 5.0 * along - 3.4 * u_Time + 0.9 * a_TexCoord.y;\n"
+            + "      float flutter = 11.0 * along - 6.5 * u_Time + 2.0 * a_TexCoord.y;\n"
+            + "      bend = swing + sin(phase) + 0.3 * sin(flutter);\n"
+            + "      slope = bend + along * (5.0 * cos(phase) + 3.3 * cos(flutter));\n"
+            + "    }\n"
+            + "    p.z += u_Wave * along * bend;\n"
+            + "    n = normalize(vec3(-u_Wave * slope, 0.0, 1.0));\n"
             + "  }\n"
             + "  v_TexCoord = a_TexCoord;\n"
             + "  v_Normal = (u_Model * vec4(n, 0.0)).xyz;\n"
+            + "  vec4 world = u_Model * vec4(p, 1.0);\n"
+            + "  v_ToEye = u_Eye - world.xyz;\n"
             + "  v_Fade = 1.0;\n"
             + "  if (u_Flatten > 0.0) {\n"
-            + "    vec3 toward = normalize(vec3(0.35, 0.9, 0.25));\n"
-            + "    vec4 world = u_Model * vec4(p, 1.0);\n"
-            + "    world.xyz -= toward * ((world.y - u_Foot.y) / toward.y);\n"
-            + "    world.y = u_Foot.y + 0.003;\n"
-            + "    v_Fade = 1.0 - clamp(distance(world.xz, u_Foot.xz) / u_FadeLength, 0.0, 1.0);\n"
+            + "    float above = dot(world.xyz - u_Foot, u_PlaneNormal);\n"
+            + "    world.xyz -= u_ShadowDir * (above / dot(u_ShadowDir, u_PlaneNormal));\n"
+            + "    world.xyz += u_PlaneNormal * 0.003;\n"
+            + "    v_Fade = 1.0 - clamp(distance(world.xyz, u_Foot) / u_FadeLength, 0.0, 1.0);\n"
             + "    gl_Position = u_ViewProjection * world;\n"
             + "    gl_Position.z = 0.9999 * gl_Position.w;\n"
             + "  } else {\n"
             + "    gl_Position = u_Mvp * vec4(p, 1.0);\n"
             + "  }\n"
             + "}\n";
-    // A flag reads the same from both sides: the seal on its back is un-mirrored,
-    // as on a printed two-sided flag. The rest of the cloth, with its tears and
-    // wear, stays where it is, and the shadow has the tears too.
+    // A flag or banner reads the same from both sides: on its back the band
+    // u_Mirror describes (centre, and where the mirroring fades out and ends,
+    // as half-widths in texture u) is un-mirrored, as on a printed two-sided
+    // flag: the flag's seal, a banner's lettering. The rest of the cloth, with
+    // its tears and wear or its swallowtail, stays where it is, and the shadow
+    // has the same cut-outs. u_Gloss adds a highlight for carbon, metal,
+    // plastic and varnish.
     private static final String MESH_FRAGMENT =
         "precision mediump float;\n"
             + "varying vec2 v_TexCoord;\n"
             + "varying vec3 v_Normal;\n"
+            + "varying vec3 v_ToEye;\n"
             + "varying float v_Fade;\n"
             + "uniform sampler2D u_Texture;\n"
             + "uniform float u_UseTexture;\n"
             + "uniform float u_TwoSided;\n"
+            + "uniform vec3 u_Mirror;\n"
+            + "uniform float u_Gloss;\n"
+            + "uniform float u_Ambient;\n"
             + "uniform float u_ShadowAlpha;\n"
             + "uniform vec4 u_Color;\n"
             + "void main() {\n"
@@ -118,13 +150,22 @@ final class ArGl {
             + "    gl_FragColor = vec4(0.0, 0.0, 0.0, u_ShadowAlpha * v_Fade);\n"
             + "    return;\n"
             + "  }\n"
-            + "  float light = abs(dot(normalize(v_Normal), normalize(vec3(0.35, 0.9, 0.25))));\n"
-            + "  vec4 base = u_UseTexture > 0.5 ? cloth : u_Color;\n"
+            + "  vec3 normal = normalize(v_Normal);\n"
+            + "  vec3 sun = normalize(vec3(0.35, 0.9, 0.25));\n"
+            + "  float light = abs(dot(normal, sun));\n"
+            + "  vec4 base = u_UseTexture > 0.5 ? cloth * u_Color : u_Color;\n"
             + "  if (u_TwoSided > 0.5 && !gl_FrontFacing) {\n"
-            + "    vec4 flipped = texture2D(u_Texture, vec2(1.0 - v_TexCoord.x, v_TexCoord.y));\n"
-            + "    base = mix(base, flipped, 1.0 - smoothstep(0.285, 0.33, abs(v_TexCoord.x - 0.5)));\n"
+            + "    vec4 flipped = texture2D(u_Texture, vec2(2.0 * u_Mirror.x - v_TexCoord.x, v_TexCoord.y));\n"
+            + "    base = mix(base, flipped, 1.0 - smoothstep(u_Mirror.y, u_Mirror.z, abs(v_TexCoord.x - u_Mirror.x)));\n"
             + "  }\n"
-            + "  gl_FragColor = vec4(base.rgb * (0.5 + 0.5 * light), base.a);\n"
+            + "  vec3 colour = base.rgb * (u_Ambient + (1.0 - u_Ambient) * light);\n"
+            + "  if (u_Gloss > 0.0) {\n"
+            + "    vec3 eye = normalize(v_ToEye);\n"
+            + "    if (dot(normal, eye) < 0.0) normal = -normal;\n"
+            + "    float shine = pow(max(dot(normal, normalize(sun + eye)), 0.0), 28.0);\n"
+            + "    colour += u_Gloss * shine * base.a;\n"
+            + "  }\n"
+            + "  gl_FragColor = vec4(colour, base.a);\n"
             + "}\n";
 
     /** A placed 3D thing's triangles: interleaved position, normal and texture coordinates. */
@@ -177,7 +218,7 @@ final class ArGl {
         try {
             meshProgram = program(MESH_VERTEX, MESH_FRAGMENT);
         } catch (IllegalStateException error) {
-            // A GPU that rejects it loses only the 3D flag, not AR.
+            // A GPU that rejects it loses only the 3D things, not AR.
             android.util.Log.w("OnThisSiteAR", "3D shader unavailable: " + error.getMessage());
             meshProgram = 0;
         }
@@ -282,50 +323,128 @@ final class ArGl {
         GLES20.glDisable(GLES20.GL_BLEND);
     }
 
-    /** texture 0 draws in the colour (r, g, b, a); wave above 0 ripples a unit cloth. */
-    void drawMesh(float[] viewProjection, float[] model, Mesh mesh, int texture, float[] color, float wave, float time) {
+    /**
+     * One placed 3D part to draw this frame: its mesh and pose, its texture
+     * (null draws in the colour; with a texture the colour tints it), and how
+     * it moves, shines and casts its shadow.
+     */
+    static final class MeshDraw {
+        Mesh mesh;
+        float[] model;
+        String texture;
+        float[] color = {1f, 1f, 1f, 1f};
+        // Above 0 the mesh is a unit cloth waving this far (metres) at its free end.
+        float wave;
+        // A banner's slow wave rather than a flag's.
+        boolean calm;
+        // The band of a two-sided cloth un-mirrored on its back: centre, fade start, end.
+        float[] mirror = {0.5f, 0.285f, 0.33f};
+        float gloss;
+        // How lit a side facing away from the light still is (0 to 1). A banner is
+        // brighter than the flag, so its colour reads true and its words stand out.
+        float ambient = 0.5f;
+        // Where its shadow falls: a point on the surface it stands on or is stuck
+        // into (world x, y, z), that surface's normal, the direction the shadow
+        // is cast along, and how far it fades out. A null foot casts none.
+        float[] shadowFoot;
+        float[] shadowNormal = {0f, 1f, 0f};
+        float[] shadowDirection = SUN;
+        float shadowFade;
+        float shadowAlpha = 0.42f;
+
+        static MeshDraw solid(Mesh mesh, float[] model, float[] color) {
+            MeshDraw draw = new MeshDraw();
+            draw.mesh = mesh;
+            draw.model = model;
+            draw.color = color;
+            return draw;
+        }
+
+        static MeshDraw textured(Mesh mesh, float[] model, String texture) {
+            MeshDraw draw = new MeshDraw();
+            draw.mesh = mesh;
+            draw.model = model;
+            draw.texture = texture;
+            return draw;
+        }
+
+        static MeshDraw cloth(Mesh mesh, float[] model, String texture, float wave) {
+            MeshDraw draw = textured(mesh, model, texture);
+            draw.wave = wave;
+            return draw;
+        }
+
+        /** Casts its shadow onto the surface through foot facing normal, along direction, fading out by fade metres. */
+        MeshDraw shadow(float[] foot, float[] normal, float[] direction, float fade, float alpha) {
+            shadowFoot = foot;
+            shadowNormal = normal;
+            shadowDirection = direction;
+            shadowFade = fade;
+            shadowAlpha = alpha;
+            return this;
+        }
+    }
+
+    /** The light, from above, that shades every placed thing and casts the flag's shadow (world space). */
+    static final float[] SUN = normalize3(0.35f, 0.9f, 0.25f);
+
+    private static float[] normalize3(float x, float y, float z) {
+        float length = (float) Math.sqrt(x * x + y * y + z * z);
+        return new float[] {x / length, y / length, z / length};
+    }
+
+    /** eye is the camera's position (world), for highlights. */
+    void drawMesh(float[] viewProjection, MeshDraw draw, int texture, float time, float[] eye) {
         if (meshProgram == 0) return;
-        Matrix.multiplyMM(mvp, 0, viewProjection, 0, model, 0);
+        Matrix.multiplyMM(mvp, 0, viewProjection, 0, draw.model, 0);
         GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_Mvp"), 1, false, mvp, 0);
-        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_Model"), 1, false, model, 0);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Wave"), wave);
+        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_Model"), 1, false, draw.model, 0);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Wave"), draw.wave);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Calm"), draw.calm ? 1f : 0f);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Time"), time);
+        GLES20.glUniform3fv(GLES20.glGetUniformLocation(meshProgram, "u_Eye"), 1, eye, 0);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_UseTexture"), texture != 0 ? 1f : 0f);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_TwoSided"), wave > 0f ? 1f : 0f);
-        GLES20.glUniform4fv(GLES20.glGetUniformLocation(meshProgram, "u_Color"), 1, color, 0);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_TwoSided"), draw.wave > 0f ? 1f : 0f);
+        GLES20.glUniform3fv(GLES20.glGetUniformLocation(meshProgram, "u_Mirror"), 1, draw.mirror, 0);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Gloss"), draw.gloss);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Ambient"), draw.ambient);
+        GLES20.glUniform4fv(GLES20.glGetUniformLocation(meshProgram, "u_Color"), 1, draw.color, 0);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Flatten"), 0f);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_ShadowAlpha"), 0f);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture);
         GLES20.glUniform1i(GLES20.glGetUniformLocation(meshProgram, "u_Texture"), 0);
-        drawElements(mesh);
+        drawElements(draw.mesh);
     }
 
     /**
-     * The mesh's shadow on the ground at foot (world x, y, z): the shape slid
-     * along the light onto that level, darkest at the foot and fading out by
-     * fadeLength metres. Call before the meshes themselves. Every shadow
-     * fragment gets the same far depth, so where shadows overlap (the pole's and
-     * the cloth's, or a fold of the cloth) the first one wins instead of the
-     * two darkening each other, and the real meshes still draw over them.
+     * The mesh's shadow on its surface: the shape slid along the shadow's
+     * direction onto the surface, darkest at the foot and fading out by its
+     * fade length. Call before the meshes themselves. Every shadow fragment
+     * gets the same far depth, so where shadows overlap (the pole's and the
+     * cloth's, or a fold of the cloth) the first one wins instead of the two
+     * darkening each other, and the real meshes still draw over them.
      */
-    void drawShadow(float[] viewProjection, float[] model, Mesh mesh, int texture, float wave, float time, float[] foot, float fadeLength, float alpha) {
-        if (meshProgram == 0) return;
-        Matrix.multiplyMM(mvp, 0, viewProjection, 0, model, 0);
+    void drawShadow(float[] viewProjection, MeshDraw draw, int texture, float time) {
+        if (meshProgram == 0 || draw.shadowFoot == null) return;
+        Matrix.multiplyMM(mvp, 0, viewProjection, 0, draw.model, 0);
         GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_Mvp"), 1, false, mvp, 0);
-        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_Model"), 1, false, model, 0);
+        GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_Model"), 1, false, draw.model, 0);
         GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(meshProgram, "u_ViewProjection"), 1, false, viewProjection, 0);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Wave"), wave);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Wave"), draw.wave);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Calm"), draw.calm ? 1f : 0f);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Time"), time);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Flatten"), 1f);
-        GLES20.glUniform3fv(GLES20.glGetUniformLocation(meshProgram, "u_Foot"), 1, foot, 0);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_FadeLength"), fadeLength);
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_ShadowAlpha"), alpha);
+        GLES20.glUniform3fv(GLES20.glGetUniformLocation(meshProgram, "u_Foot"), 1, draw.shadowFoot, 0);
+        GLES20.glUniform3fv(GLES20.glGetUniformLocation(meshProgram, "u_PlaneNormal"), 1, draw.shadowNormal, 0);
+        GLES20.glUniform3fv(GLES20.glGetUniformLocation(meshProgram, "u_ShadowDir"), 1, draw.shadowDirection, 0);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_FadeLength"), draw.shadowFade);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_ShadowAlpha"), draw.shadowAlpha);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_UseTexture"), texture != 0 ? 1f : 0f);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture);
         GLES20.glUniform1i(GLES20.glGetUniformLocation(meshProgram, "u_Texture"), 0);
-        drawElements(mesh);
+        drawElements(draw.mesh);
     }
 
     private void drawElements(Mesh mesh) {

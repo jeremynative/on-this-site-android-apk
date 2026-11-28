@@ -239,16 +239,13 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private final ConcurrentLinkedQueue<float[]> drags = new ConcurrentLinkedQueue<>();
     private final Random random = new Random();
 
-    // "Place": stickers and a flag the visitor puts into their own space, held
-    // by ARCore anchors where they were placed while AR stays open. The one
-    // chosen in the drawer waits for a tap; the selected one can be resized,
-    // turned or removed (guarded by lock).
-    private static final int PLACED_MAX = 12;
+    // "Place": stickers, flags, banners and arrows the visitor puts into their
+    // own space, held by ARCore anchors where they were placed while AR stays
+    // open. The one chosen in the drawer waits for a tap; the selected one can
+    // be resized, turned or removed (guarded by lock).
+    private static final int PLACED_MAX = 20;
     private static final float PLACE_SCALE_MIN = 0.2f;
     private static final float PLACE_SCALE_MAX = 6f;
-    private static final ArGl.Mesh POLE = ArPlace.cylinder(18, ArPlace.POLE_RADIUS, ArPlace.POLE_HEIGHT);
-    private static final ArGl.Mesh FINIAL = ArPlace.sphere(8, 12, ArPlace.FINIAL_RADIUS);
-    private static final ArGl.Mesh CLOTH = ArPlace.cloth(24, 12);
     private final List<ArPlace.Placed> placed = new ArrayList<>();
     private ArPlace.Placed selectedPlace;
     private ArPlace.Asset placingAsset;
@@ -257,7 +254,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private boolean pinchingPlacement;
     private volatile boolean aimFound;
     private final long placeClock = SystemClock.uptimeMillis();
-    private List<MeshDraw> videoMeshes = Collections.emptyList();
+    private List<ArGl.MeshDraw> videoMeshes = Collections.emptyList();
+    private float[] videoEye = new float[3];
     // QA builds: assets to place as soon as tracking starts (files/qa-ar-place).
     private final List<ArPlace.Asset> qaPlace = new ArrayList<>();
     private View placeButton;
@@ -421,7 +419,34 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             runQaCardHooks();
             readQaPlace();
             openQaDrawer();
+            renderQaModels();
         }
+    }
+
+    /**
+     * QA builds: with files/qa-ar-models, pictures of the 3D things (or just the
+     * asset ids it lists, comma-separated) drawn off screen with AR's own
+     * shaders, saved as qa-cards/model-*.png (ArModelPreview).
+     */
+    private void renderQaModels() {
+        java.io.File flag = new java.io.File(getFilesDir(), "qa-ar-models");
+        if (!flag.exists()) return;
+        new Thread(() -> {
+            try {
+                String ids = new String(java.nio.file.Files.readAllBytes(flag.toPath()), java.nio.charset.StandardCharsets.UTF_8).trim();
+                List<ArPlace.Asset> assets = new ArrayList<>();
+                for (ArPlace.Asset asset : ArPlace.ASSETS) {
+                    if (asset.model() && (ids.isEmpty() || ("," + ids + ",").contains("," + asset.id + ","))) assets.add(asset);
+                }
+                java.io.File out = new java.io.File(getFilesDir(), "qa-cards");
+                if (!out.isDirectory() && !out.mkdirs()) return;
+                long start = SystemClock.uptimeMillis();
+                int saved = ArModelPreview.render(assets, getResources(), out);
+                android.util.Log.i("OnThisSiteAR", "QA models saved: " + saved + " in " + (SystemClock.uptimeMillis() - start) + " ms");
+            } catch (Exception error) {
+                android.util.Log.w("OnThisSiteAR", "QA models failed: " + error, error);
+            }
+        }, "qa-models").start();
     }
 
     /**
@@ -659,7 +684,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
         if (videoFrameSource == null) return;
         gl.drawBackground(videoFrameSource);
-        if (videoViewProjection != null && !videoMeshes.isEmpty()) drawMeshes(videoViewProjection, videoMeshes);
+        if (videoViewProjection != null && !videoMeshes.isEmpty()) drawMeshes(videoViewProjection, videoEye, videoMeshes);
         gl.beginQuads();
         if (videoViewProjection != null) {
             for (Draw draw : videoDraws) {
@@ -731,7 +756,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             collectFreeDraws(draws, cameraPose);
             lookForThings(frame, cameraPose);
             collectSeenThings(draws, cameraPoint);
-            List<MeshDraw> meshes = new ArrayList<>();
+            List<ArGl.MeshDraw> meshes = new ArrayList<>();
             placeQaAssets(frame, cameraPose);
             collectPlaced(frame, draws, meshes, cameraPoint);
             collectPhotos(current, draws, cameraPose);
@@ -744,8 +769,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             Collections.sort(draws, (a, b) -> Float.compare(b.distance, a.distance));
             videoDraws = draws;
             videoMeshes = meshes;
+            videoEye = cameraPoint;
             videoViewProjection = viewProjection;
-            drawMeshes(viewProjection, meshes);
+            drawMeshes(viewProjection, cameraPoint, meshes);
             gl.beginQuads();
             // The ✕ badges stay out of a photo being taken from this frame.
             boolean photo = captureWanted;
@@ -1570,7 +1596,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     /**
      * Where the asset would go if placed now: a detected wall, floor or table, or
      * any surface the depth sensor sees there; null when none is under the point.
-     * The flag only stands on something facing up.
+     * The flag and banners only stand on something facing up; stickers and
+     * arrows go on anything.
      */
     private Aim aim(Frame frame, float x, float y, ArPlace.Asset asset, float[] cameraPoint) {
         for (HitResult hit : frame.hitTest(x, y)) {
@@ -1582,9 +1609,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                     || trackable instanceof Point && ((Point) trackable).getOrientationMode() == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL;
             if (!surface) continue;
             float[] normal = hitPose.getYAxis();
-            if (asset.model && normal[1] < 0.8f) continue;
+            if (asset.standsUp() && normal[1] < 0.8f) continue;
             float[] point = hitPose.getTranslation();
-            return new Aim(new Pose(point, ArPlacement.placedRotation(normal, point, cameraPoint, asset.model)), trackable);
+            return new Aim(new Pose(point, ArPlacement.placedRotation(normal, point, cameraPoint, asset.standsUp())), trackable);
         }
         return null;
     }
@@ -1592,8 +1619,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     /**
      * Places the asset chosen in the drawer where the centre of the view meets a
      * surface (or under the tap). With no surface found yet it is held in space
-     * ahead: a sticker at arm's length facing the visitor, the flag a few steps
-     * away at about floor height.
+     * ahead: a sticker at arm's length facing the visitor, an arrow there too,
+     * flying across the view with its point showing, and the flag or a banner a
+     * few steps away at about floor height.
      */
     private void placeChosen(Frame frame, float x, float y, Pose cameraPose) {
         ArPlace.Asset asset = placingAsset;
@@ -1608,11 +1636,16 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
                 float[] back = cameraPose.getZAxis();
                 float length = (float) Math.hypot(back[0], back[2]);
                 float[] forward = length < 1e-3f ? new float[] {0f, 0f, -1f} : new float[] {-back[0] / length, 0f, -back[2] / length};
-                float ahead = asset.model ? 2.5f : 1.2f;
-                float[] point = {cameraPoint[0] + forward[0] * ahead, cameraPoint[1] - (asset.model ? 1.4f : 0f), cameraPoint[2] + forward[2] * ahead};
-                float[] normal = asset.model ? new float[] {0f, 1f, 0f} : new float[] {-forward[0], 0f, -forward[2]};
-                anchor = session.createAnchor(new Pose(point, ArPlacement.placedRotation(normal, point, cameraPoint, asset.model)));
-                toast(asset.model ? "No ground found yet, so the flag stands a few steps ahead. Aim at the ground to plant it there."
+                boolean standsUp = asset.standsUp();
+                float ahead = standsUp ? 2.5f : 1.2f;
+                float[] point = {cameraPoint[0] + forward[0] * ahead, cameraPoint[1] - (standsUp ? 1.4f : 0f), cameraPoint[2] + forward[2] * ahead};
+                // An arrow's tail is towards its anchor's +Y: to the left, so it flies to the right.
+                float[] normal = standsUp ? new float[] {0f, 1f, 0f}
+                    : asset.kind == ArPlace.Kind.ARROW ? new float[] {forward[2], 0f, -forward[0]}
+                    : new float[] {-forward[0], 0f, -forward[2]};
+                anchor = session.createAnchor(new Pose(point, ArPlacement.placedRotation(normal, point, cameraPoint, standsUp)));
+                toast(standsUp ? "No ground found yet, so the " + asset.noun() + " stands a few steps ahead. Aim at the ground to plant it there."
+                    : asset.kind == ArPlace.Kind.ARROW ? "No wall found yet, so the arrow hangs in the air ahead of you. Aim at a wall or the ground to stick it in."
                     : "No wall found yet, so it hangs in the air ahead of you.");
             }
         } catch (RuntimeException error) {
@@ -1622,6 +1655,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         if (placed.size() >= PLACED_MAX) placed.get(0).removed = true;
         ArPlace.Placed thing = new ArPlace.Placed(asset, anchor);
+        thing.inAir = aim == null;
         thing.scale = placingScale;
         placed.add(thing);
         selectedPlace = thing;
@@ -1638,8 +1672,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         return null;
     }
 
-    /** Placed stickers and flags, and while aiming, where the chosen one would go. */
-    private void collectPlaced(Frame frame, List<Draw> draws, List<MeshDraw> meshes, float[] cameraPoint) {
+    /** Placed stickers, flags, banners and arrows, and while aiming, where the chosen one would go. */
+    private void collectPlaced(Frame frame, List<Draw> draws, List<ArGl.MeshDraw> meshes, float[] cameraPoint) {
         for (java.util.Iterator<ArPlace.Placed> it = placed.iterator(); it.hasNext(); ) {
             ArPlace.Placed thing = it.next();
             if (thing.removed) {
@@ -1652,7 +1686,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             float[] base = new float[16];
             pose.toMatrix(base, 0);
             Matrix.rotateM(base, 0, (float) Math.toDegrees(thing.turn), 0f, 1f, 0f);
-            addPlacedDraws(thing.id, thing.asset, base, thing.scale, distance(pose.getTranslation(), cameraPoint), 1f,
+            addPlacedDraws(thing.id, thing.asset, base, thing.scale, thing.inAir, distance(pose.getTranslation(), cameraPoint), 1f,
                 thing == selectedPlace, cameraPoint, draws, meshes);
         }
         if (placingAsset == null) return;
@@ -1661,50 +1695,50 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         if (aim == null) return;
         float[] base = new float[16];
         aim.pose.toMatrix(base, 0);
-        // A see-through preview of the sticker (or the flag with a ring at its foot).
-        addPlacedDraws(null, placingAsset, base, placingScale, distance(aim.pose.getTranslation(), cameraPoint), 0.6f, true, cameraPoint, draws, meshes);
+        // A see-through preview of the sticker (the flag or a banner with a ring at its foot; an arrow as it would stick in).
+        addPlacedDraws(null, placingAsset, base, placingScale, false, distance(aim.pose.getTranslation(), cameraPoint), 0.6f, true, cameraPoint, draws, meshes);
     }
 
     /**
      * One placed thing's draws: a sticker is a quad lying on its surface (the
-     * anchor's +Y is the normal, so the quad's +Z is turned onto it); the flag is
-     * its pole, the ball on top and the waving cloth, with an invisible box round
-     * them for taps. id null draws a preview that can't be tapped.
+     * anchor's +Y is the normal, so the quad's +Z is turned onto it); the flag
+     * and the banners are their pole, the ball on top and the waving cloth; an
+     * arrow is its shaft, fletching and nock leaning out of its surface (ArModels).
+     * 3D things get an invisible box round them for taps. id null draws a
+     * preview that can't be tapped.
      */
-    private void addPlacedDraws(String id, ArPlace.Asset asset, float[] base, float scale, float distance, float alpha,
-                                boolean selected, float[] cameraPoint, List<Draw> draws, List<MeshDraw> meshes) {
+    private void addPlacedDraws(String id, ArPlace.Asset asset, float[] base, float scale, boolean inAir, float distance, float alpha,
+                                boolean selected, float[] cameraPoint, List<Draw> draws, List<ArGl.MeshDraw> meshes) {
         placeArtwork(asset);
-        if (asset.model) {
+        if (asset.kind == ArPlace.Kind.ARROW) {
+            ArModels.add(asset, base, scale, inAir, gl::hasTexture, meshes);
+            if (!inAir) addArrowHole(base, scale, distance, draws);
+            if (id != null) {
+                // The tap box turns to face the visitor, so the arrow can be tapped from any side.
+                float[] point = ArModels.arrowMiddle(base, scale);
+                float yaw = ArPlacement.yawTowards(point[0], point[2], cameraPoint[0], cameraPoint[2]);
+                float side = (ArArrow.NOCK_TOP + 0.1f) * scale;
+                draws.add(Draw.posed(id, new Pose(point, ArPlacement.yawQuaternion(yaw)), null, side, side, 0f, distance));
+            }
+            return;
+        }
+        if (asset.standsUp()) {
+            ArModels.add(asset, base, scale, false, gl::hasTexture, meshes);
             float[] pole = base.clone();
             Matrix.scaleM(pole, 0, scale, scale, scale);
-            int first = meshes.size();
-            meshes.add(MeshDraw.solid(POLE, pole.clone(), ArPlace.poleColor(asset)));
-            float[] finial = pole.clone();
-            Matrix.translateM(finial, 0, 0f, ArPlace.POLE_HEIGHT + ArPlace.FINIAL_RADIUS * 0.6f, 0f);
-            meshes.add(MeshDraw.solid(FINIAL, finial, new float[] {0.84f, 0.67f, 0.26f, 1f}));
-            // The cloth shows once its colour's artwork is ready (a moment after it is first chosen).
-            if (gl.hasTexture(asset.texture())) {
-                float[] cloth = pole.clone();
-                Matrix.translateM(cloth, 0, ArPlace.POLE_RADIUS, ArPlace.POLE_HEIGHT - ArPlace.FLAG_TOP_GAP - ArPlace.FLAG_HEIGHT, 0f);
-                Matrix.scaleM(cloth, 0, ArPlace.FLAG_WIDTH, ArPlace.FLAG_HEIGHT, 1f);
-                meshes.add(MeshDraw.cloth(CLOTH, cloth, asset.texture(), ArPlace.FLAG_WAVE * scale));
-            }
             float[] foot = {pole[12], pole[13], pole[14]};
-            for (int index = first; index < meshes.size(); index++) {
-                meshes.get(index).shadowFoot = foot;
-                meshes.get(index).shadowFade = 3.5f * scale;
-            }
             addFootShadow(foot, scale, distance, draws);
             if (id != null) {
-                // The tap box turns to face the visitor, so the flag can be tapped from any side.
+                // The tap box turns to face the visitor, so it can be tapped from any side.
+                float wide = asset.kind == ArPlace.Kind.BANNER ? ArBanner.LENGTH : ArPlace.FLAG_WIDTH;
                 float[] middle = new float[4];
-                Matrix.multiplyMV(middle, 0, pole, 0, new float[] {ArPlace.FLAG_WIDTH / 2f, ArPlace.POLE_HEIGHT / 2f, 0f, 1f}, 0);
+                Matrix.multiplyMV(middle, 0, pole, 0, new float[] {wide / 2f, ArPlace.POLE_HEIGHT / 2f, 0f, 1f}, 0);
                 float[] point = {middle[0], middle[1], middle[2]};
                 float yaw = ArPlacement.yawTowards(point[0], point[2], cameraPoint[0], cameraPoint[2]);
                 draws.add(Draw.posed(id, new Pose(point, ArPlacement.yawQuaternion(yaw)), null,
-                    (ArPlace.FLAG_WIDTH * 2f + 0.3f) * scale, (ArPlace.POLE_HEIGHT + 0.1f) * scale, 0f, distance));
+                    (wide * 2f + 0.3f) * scale, (ArPlace.POLE_HEIGHT + 0.1f) * scale, 0f, distance));
             }
-            // The ring marks where the flag will go while aiming; a placed flag has none.
+            // The ring marks where it will go while aiming; a placed one has none.
             if (selected && id == null) {
                 float[] ring = pole.clone();
                 Matrix.rotateM(ring, 0, -90f, 1f, 0f, 0f);
@@ -1731,22 +1765,32 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         draws.add(Draw.of(id, model, key, alpha, distance));
     }
 
-    /** Draws a sticker's or flag's artwork the first time it is needed, off the GL thread. */
+    /** A small dark mark round the shaft where an arrow has gone into its surface. */
+    private void addArrowHole(float[] base, float scale, float distance, List<Draw> draws) {
+        float[] patch = base.clone();
+        Matrix.rotateM(patch, 0, -90f, 1f, 0f, 0f);
+        Matrix.translateM(patch, 0, 0f, 0f, 0.002f);
+        Matrix.scaleM(patch, 0, 0.045f * scale, 0.045f * scale, 1f);
+        draws.add(Draw.of(null, patch, "place:shadow", 0.8f, distance + 0.02f));
+    }
+
+    /** Draws an asset's artwork (a sticker, a cloth, an arrow's shaft and fletching) the first time it is needed, off the GL thread. */
     private void placeArtwork(ArPlace.Asset asset) {
-        String key = asset.texture();
-        if (gl.hasTexture(key) || !loading.add(key)) return;
-        loader.execute(() -> {
-            try {
-                gl.queueTexture(key, ArPlace.artwork(asset, getResources()));
-            } catch (RuntimeException error) {
-                android.util.Log.w("OnThisSiteAR", "Artwork " + key + " failed: " + error);
-            }
-        });
+        for (String key : asset.textures()) {
+            if (gl.hasTexture(key) || !loading.add(key)) continue;
+            loader.execute(() -> {
+                try {
+                    gl.queueTexture(key, ArPlace.texture(asset, key, getResources()));
+                } catch (RuntimeException error) {
+                    android.util.Log.w("OnThisSiteAR", "Artwork " + key + " failed: " + error);
+                }
+            });
+        }
     }
 
     /**
      * A small soft dark patch where the pole meets the ground, so it looks
-     * planted. The pole and flag cast their own shadow (drawMeshes).
+     * planted. The pole and cloth cast their own shadow (drawMeshes).
      */
     private void addFootShadow(float[] foot, float scale, float distance, List<Draw> draws) {
         float[] patch = new float[16];
@@ -1758,17 +1802,17 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     }
 
     /**
-     * The placed 3D things: first their shadows, flattened onto the ground along
-     * the same light they are shaded with (so a flag's shadow is its pole and
-     * its cloth, moving with the wind), then the things themselves.
+     * The placed 3D things: first their shadows, flattened onto their surface
+     * (a flag's or banner's along the same light they are shaded with, so it is
+     * the pole and the cloth, moving with the wind; an arrow's onto the wall or
+     * ground it is in), then the things themselves. eye is the camera, for
+     * highlights.
      */
-    private void drawMeshes(float[] viewProjection, List<MeshDraw> meshes) {
+    private void drawMeshes(float[] viewProjection, float[] eye, List<ArGl.MeshDraw> meshes) {
         float time = placeSeconds();
         gl.beginMeshes();
-        for (MeshDraw mesh : meshes) {
-            if (mesh.shadowFoot != null) gl.drawShadow(viewProjection, mesh.model, mesh.mesh, gl.texture(mesh.texture), mesh.wave, time, mesh.shadowFoot, mesh.shadowFade, 0.42f);
-        }
-        for (MeshDraw mesh : meshes) gl.drawMesh(viewProjection, mesh.model, mesh.mesh, gl.texture(mesh.texture), mesh.color, mesh.wave, time);
+        for (ArGl.MeshDraw mesh : meshes) gl.drawShadow(viewProjection, mesh, gl.texture(mesh.texture), time);
+        for (ArGl.MeshDraw mesh : meshes) gl.drawMesh(viewProjection, mesh, gl.texture(mesh.texture), time, eye);
         gl.endMeshes();
     }
 
@@ -2543,8 +2587,14 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             return cameraField.draggedOnce() ? "" : "Drag a bubble down or up to move it";
         }
         if (placingAsset != null) {
-            if (!aimFound) return placingAsset.model ? "Aim at the ground nearby, moving the phone slowly" : "Aim at a wall or the ground, moving the phone slowly";
-            return (placingAsset.model ? "Tap to plant the flag here" : "Tap to place it here") + " · pinch to size it";
+            boolean arrow = placingAsset.kind == ArPlace.Kind.ARROW;
+            if (!aimFound) {
+                return placingAsset.standsUp() ? "Aim at the ground nearby, moving the phone slowly"
+                    : arrow ? "Aim at a wall, a tree or the ground, moving the phone slowly"
+                    : "Aim at a wall or the ground, moving the phone slowly";
+            }
+            return (placingAsset.standsUp() ? "Tap to plant the " + placingAsset.noun() + " here" : arrow ? "Tap to stick the arrow in here" : "Tap to place it here")
+                + " · pinch to size it";
         }
         if (selectedPlace != null || bubblesHidden) return "";
         String turn = directionHint();
@@ -4442,35 +4492,6 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         drawable.setShape(GradientDrawable.OVAL);
         drawable.setColor(color);
         return drawable;
-    }
-
-    /** One part of a placed 3D thing to draw this frame. */
-    private static final class MeshDraw {
-        ArGl.Mesh mesh;
-        float[] model;
-        String texture;
-        float[] color = {1f, 1f, 1f, 1f};
-        float wave;
-        // Where its shadow falls (world x, y, z of the ground it stands on) and how far it fades out; null casts none.
-        float[] shadowFoot;
-        float shadowFade;
-
-        static MeshDraw solid(ArGl.Mesh mesh, float[] model, float[] color) {
-            MeshDraw draw = new MeshDraw();
-            draw.mesh = mesh;
-            draw.model = model;
-            draw.color = color;
-            return draw;
-        }
-
-        static MeshDraw cloth(ArGl.Mesh mesh, float[] model, String texture, float wave) {
-            MeshDraw draw = new MeshDraw();
-            draw.mesh = mesh;
-            draw.model = model;
-            draw.texture = texture;
-            draw.wave = wave;
-            return draw;
-        }
     }
 
     /** One textured quad to draw this frame. */

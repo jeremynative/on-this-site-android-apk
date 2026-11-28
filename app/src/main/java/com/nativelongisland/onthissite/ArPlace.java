@@ -31,7 +31,9 @@ import java.util.List;
  * three of them neon and two plain block letters, and lie on the wall or ground
  * that was aimed at; the flag, new or tattered,
  * is a 3D pole flying the Shinnecock flag on gold, black, white or silver,
- * planted on the ground with a soft shadow. Artwork is drawn here from the
+ * planted on the ground with a soft shadow. Each community also has a 3D land
+ * banner ("Shinnecock Land", ArBanner) planted the same way, and 3D arrows
+ * (ArArrow) stick into any surface at all. Artwork is drawn here from the
  * bundled font and flag, so nothing is downloaded.
  */
 final class ArPlace {
@@ -67,6 +69,8 @@ final class ArPlace {
         final String[] plain;
         // The badge's ground and the digital sign's glow.
         final int color;
+        // A community's colour on the map (0 for the phrases).
+        int mapColor;
 
         Phrase(String id, String title, float width, float tilt, TagLine[] graffiti, String[] plain, int color) {
             this.id = id;
@@ -116,10 +120,12 @@ final class ArPlace {
     /** One community's name alone, on one line. */
     private static Phrase community(String name, int mapColor) {
         String letters = name.toUpperCase(java.util.Locale.US);
-        return new Phrase("community-" + name.toLowerCase(java.util.Locale.US), name, 0.6f, -4f,
+        Phrase phrase = new Phrase("community-" + name.toLowerCase(java.util.Locale.US), name, 0.6f, -4f,
             new TagLine[] {new TagLine(letters, 1f, tone(mapColor, 0.3f, 0.62f, 0.6f, 0.4f), tone(mapColor, 0.55f, 0.95f, 0.25f, 0.3f),
                 dripLetters(letters))},
             new String[] {letters}, tone(mapColor, 0.6f, 0.9f, 0.42f, 0.22f));
+        phrase.mapColor = 0xFF000000 | mapColor;
+        return phrase;
     }
 
     /**
@@ -152,41 +158,88 @@ final class ArPlace {
     };
     // The flag is always the gold Shinnecock flag; its pole comes in these colours (id, name in the drawer).
     static final String[][] POLES = {{"gold", "Gold pole"}, {"black", "Black pole"}, {"white", "White pole"}, {"silver", "Silver pole"}};
+    // Land banners fly from a dark wooden pole.
+    static final String BANNER_POLE = "wood";
 
-    /** One placeable thing in the drawer: a sticker in one look, or the flag on one colour of pole. */
+    /** What a placeable thing is: a flat sticker, or a 3D flag, land banner or arrow. */
+    enum Kind { STICKER, FLAG, BANNER, ARROW }
+
+    /** One placeable thing in the drawer: a sticker in one look, the flag on one colour of pole, a land banner or an arrow. */
     static final class Asset {
         final String id;
         // The drawer section it sits in, and its name there.
         final String group;
         final String label;
-        // A 3D model (planted on the ground) rather than a flat sticker.
-        final boolean model;
+        final Kind kind;
         // One of the ancestral communities' names, which fold away in the drawer.
         final boolean community;
         // A sticker's width at scale 1 (metres).
         final float width;
+        // A sticker's words, or the community a banner is for.
         final Phrase phrase;
-        // The sticker's look, or the flag pole's colour.
+        // The sticker's look, the pole's colour, or the arrow's style.
         final String look;
 
-        Asset(String id, String group, String label, boolean model, boolean community, float width, Phrase phrase, String look) {
+        Asset(String id, String group, String label, Kind kind, boolean community, float width, Phrase phrase, String look) {
             this.id = id;
             this.group = group;
             this.label = label;
-            this.model = model;
+            this.kind = kind;
             this.community = community;
             this.width = width;
             this.phrase = phrase;
             this.look = look;
         }
 
+        /** A 3D thing rather than a flat sticker. */
+        boolean model() {
+            return kind != Kind.STICKER;
+        }
+
+        /** Planted upright on the ground (the flag and the banners) rather than stuck to whatever was aimed at. */
+        boolean standsUp() {
+            return kind == Kind.FLAG || kind == Kind.BANNER;
+        }
+
+        /** What it is called in hints: "flag", "banner", "arrow", or "it". */
+        String noun() {
+            switch (kind) {
+                case FLAG:
+                    return "flag";
+                case BANNER:
+                    return "banner";
+                case ARROW:
+                    return "arrow";
+                default:
+                    return "it";
+            }
+        }
+
+        /** Its textures' keys; the first is its main artwork. */
+        String[] textures() {
+            switch (kind) {
+                case FLAG:
+                    // Every pole flies the same cloth, new or tattered.
+                    return new String[] {"place:" + (tattered() ? TATTERED_FLAG : FLAG)};
+                case BANNER:
+                    return new String[] {"place:banner:" + phrase.id};
+                case ARROW:
+                    return new String[] {"place:arrow-fletch:" + look, "place:arrow-shaft:" + look};
+                default:
+                    return new String[] {"place:" + id};
+            }
+        }
+
         String texture() {
-            // Every pole flies the same cloth, new or tattered.
-            return model ? "place:" + (tattered() ? TATTERED_FLAG : FLAG) : "place:" + id;
+            return textures()[0];
         }
 
         boolean tattered() {
             return id.startsWith(TATTERED_FLAG + ":");
+        }
+
+        ArArrow.Style arrow() {
+            return ArArrow.style(look);
         }
     }
 
@@ -197,17 +250,24 @@ final class ArPlace {
         for (Phrase phrase : PHRASES) addLooks(assets, phrase, false);
         for (Phrase phrase : COMMUNITIES) addLooks(assets, phrase, true);
         for (String[] pole : POLES) {
-            assets.add(new Asset(FLAG + ":" + pole[0], "Shinnecock flag (3D)", pole[1], true, false, 0f, null, pole[0]));
+            assets.add(new Asset(FLAG + ":" + pole[0], "Shinnecock flag (3D)", pole[1], Kind.FLAG, false, 0f, null, pole[0]));
         }
         for (String[] pole : POLES) {
-            assets.add(new Asset(TATTERED_FLAG + ":" + pole[0], "Shinnecock flag, tattered (3D)", pole[1], true, false, 0f, null, pole[0]));
+            assets.add(new Asset(TATTERED_FLAG + ":" + pole[0], "Shinnecock flag, tattered (3D)", pole[1], Kind.FLAG, false, 0f, null, pole[0]));
+        }
+        for (Phrase community : COMMUNITIES) {
+            assets.add(new Asset("banner:" + community.id, "Land banners (3D)", community.title + " Land", Kind.BANNER, false, 0f, community, BANNER_POLE));
+        }
+        for (ArArrow.Style style : ArArrow.STYLES) {
+            String group = style.traditional ? "Arrows, wood and feather (3D)" : "Arrows, carbon and plastic (3D)";
+            assets.add(new Asset("arrow:" + style.id, group, style.label, Kind.ARROW, false, 0f, null, style.id));
         }
         return assets.toArray(new Asset[0]);
     }
 
     private static void addLooks(List<Asset> assets, Phrase phrase, boolean community) {
         for (String[] look : LOOKS) {
-            assets.add(new Asset(phrase.id + ":" + look[0], phrase.title, look[1], false, community, phrase.width, phrase, look[0]));
+            assets.add(new Asset(phrase.id + ":" + look[0], phrase.title, look[1], Kind.STICKER, community, phrase.width, phrase, look[0]));
         }
     }
 
@@ -225,6 +285,8 @@ final class ArPlace {
         final String id = "place:" + (++nextId);
         final Asset asset;
         final Anchor anchor;
+        // Held in the air ahead because no surface was found (an arrow then shows its point).
+        boolean inAir;
         float scale = 1f;
         // Turned by hand about the anchor's +Y (radians).
         float turn;
@@ -247,9 +309,26 @@ final class ArPlace {
         return graffiti;
     }
 
-    /** What an asset looks like as placed: a sticker's face, or the flag's cloth. */
+    /** What an asset looks like as placed: a sticker's face, the flag's or banner's cloth, or an arrow's fletching. */
     static Bitmap artwork(Asset asset, Resources resources) {
-        if (asset.model) return asset.tattered() ? tatteredFlagCloth(resources) : flagCloth(resources);
+        return texture(asset, asset.texture(), resources);
+    }
+
+    /** One of the asset's textures (Asset.textures()), drawn. */
+    static Bitmap texture(Asset asset, String key, Resources resources) {
+        switch (asset.kind) {
+            case FLAG:
+                return asset.tattered() ? tatteredFlagCloth(resources) : flagCloth(resources);
+            case BANNER:
+                return ArBanner.cloth(asset.phrase, 2048);
+            case ARROW:
+                return key.startsWith("place:arrow-shaft:") ? ArArrow.shaft(asset.arrow()) : ArArrow.fletching(asset.arrow());
+            default:
+                return sticker(asset, resources);
+        }
+    }
+
+    private static Bitmap sticker(Asset asset, Resources resources) {
         Phrase phrase = asset.phrase;
         switch (asset.look) {
             case "black":
@@ -755,6 +834,8 @@ final class ArPlace {
     /** The flag pole's colour (red, green, blue, alpha from 0 to 1) for its look. */
     static float[] poleColor(Asset asset) {
         switch (asset.look) {
+            case BANNER_POLE:
+                return new float[] {0.36f, 0.25f, 0.17f, 1f};
             case "gold":
                 return new float[] {0.84f, 0.67f, 0.26f, 1f};
             case "black":
@@ -852,9 +933,11 @@ final class ArPlace {
         int size = 256;
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
+        if (asset.kind == Kind.BANNER) return ArBanner.tile(asset.phrase, poleColor(asset));
+        if (asset.kind == Kind.ARROW) return ArArrow.tile(asset.arrow());
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         Bitmap art = artwork(asset, resources);
-        if (asset.model) {
+        if (asset.kind == Kind.FLAG) {
             float[] pole = poleColor(asset);
             paint.setColor(Color.rgb(Math.round(pole[0] * 255), Math.round(pole[1] * 255), Math.round(pole[2] * 255)));
             canvas.drawRect(69, 30, 81, 236, paint);
