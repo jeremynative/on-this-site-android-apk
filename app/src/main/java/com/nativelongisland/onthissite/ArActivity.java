@@ -255,6 +255,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private volatile boolean aimFound;
     private final long placeClock = SystemClock.uptimeMillis();
     private List<ArGl.MeshDraw> videoMeshes = Collections.emptyList();
+    // The camera's right and up (world) this frame, for pictures that face it.
+    private float[] cameraRight = {1f, 0f, 0f};
+    private float[] cameraUp = {0f, 1f, 0f};
     private float[] videoEye = new float[3];
     // QA builds: assets to place as soon as tracking starts (files/qa-ar-place).
     private final List<ArPlace.Asset> qaPlace = new ArrayList<>();
@@ -688,7 +691,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         gl.beginQuads();
         if (videoViewProjection != null) {
             for (Draw draw : videoDraws) {
-                if (!isDismiss(draw)) gl.drawQuad(videoViewProjection, draw.model, gl.texture(draw.texture), draw.alpha, blendsPremultiplied(draw));
+                if (!isDismiss(draw)) gl.drawQuad(videoViewProjection, draw.model, gl.texture(draw.texture), draw.alpha, blendsPremultiplied(draw), draw.additive);
             }
         }
         ArVideo recording = video;
@@ -777,7 +780,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             boolean photo = captureWanted;
             for (Draw draw : draws) {
                 if (photo && isDismiss(draw)) continue;
-                gl.drawQuad(viewProjection, draw.model, gl.texture(draw.texture), draw.alpha, blendsPremultiplied(draw));
+                gl.drawQuad(viewProjection, draw.model, gl.texture(draw.texture), draw.alpha, blendsPremultiplied(draw), draw.additive);
             }
             gl.endQuads();
 
@@ -1364,7 +1367,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     /** Placed stickers and the "You are here" pin blend premultiplied, so a glow lights what is behind it instead of darkening it. */
     private static boolean blendsPremultiplied(Draw draw) {
-        return draw.texture != null && (draw.texture.startsWith("place:") || draw.texture.startsWith("here:"));
+        return draw.texture != null && (draw.texture.startsWith("place:") || draw.texture.startsWith("here:") || draw.texture.startsWith("wig:"));
     }
 
     /** Puts a bubble, card, pin or sign away for the rest of this visit. */
@@ -1674,6 +1677,9 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
 
     /** Placed stickers, flags, banners and arrows, and while aiming, where the chosen one would go. */
     private void collectPlaced(Frame frame, List<Draw> draws, List<ArGl.MeshDraw> meshes, float[] cameraPoint) {
+        Pose camera = frame.getCamera().getDisplayOrientedPose();
+        cameraRight = camera.getXAxis();
+        cameraUp = camera.getYAxis();
         for (java.util.Iterator<ArPlace.Placed> it = placed.iterator(); it.hasNext(); ) {
             ArPlace.Placed thing = it.next();
             if (thing.removed) {
@@ -1710,6 +1716,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private void addPlacedDraws(String id, ArPlace.Asset asset, float[] base, float scale, boolean inAir, float distance, float alpha,
                                 boolean selected, float[] cameraPoint, List<Draw> draws, List<ArGl.MeshDraw> meshes) {
         placeArtwork(asset);
+        if (asset.kind == ArPlace.Kind.WIGWAM) {
+            addWigwamDraws(id, base, scale, distance, selected, cameraPoint, draws, meshes);
+            return;
+        }
         if (asset.kind == ArPlace.Kind.ARROW) {
             ArModels.add(asset, base, scale, inAir, gl::hasTexture, meshes);
             if (!inAir) addArrowHole(base, scale, distance, draws);
@@ -1765,6 +1775,46 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         draws.add(Draw.of(id, model, key, alpha, distance));
     }
 
+    /**
+     * A wigwam: its meshes, the fire, its glow and ash, the smoke, and its words
+     * (which hide with Hide all; the wigwam stays), a soft shadow round its foot,
+     * and, from outside, a tap box over it. While aiming, a ring marks the door.
+     */
+    private void addWigwamDraws(String id, float[] base, float scale, float distance, boolean selected, float[] cameraPoint,
+                                List<Draw> draws, List<ArGl.MeshDraw> meshes) {
+        ArPlace.Asset asset = ArPlace.asset("wigwam");
+        ArModels.add(asset, base, scale, false, gl::hasTexture, meshes);
+        List<ArWigwam.Quad> quads = new ArrayList<>();
+        ArWigwam.addQuads(base, scale, placeSeconds(), cameraPoint, cameraRight, cameraUp, !bubblesHidden, gl::hasTexture, quads);
+        for (ArWigwam.Quad quad : quads) {
+            Draw draw = Draw.of(null, quad.model, quad.texture, quad.alpha, distance(quad.point, cameraPoint));
+            draw.additive = quad.additive;
+            draws.add(draw);
+        }
+        float[] model = base.clone();
+        Matrix.scaleM(model, 0, scale, scale, scale);
+        float[] shade = model.clone();
+        Matrix.translateM(shade, 0, 0f, 0.003f, -ArWigwam.RZ);
+        Matrix.rotateM(shade, 0, -90f, 1f, 0f, 0f);
+        Matrix.scaleM(shade, 0, 2f * ArWigwam.RX + 1.2f, 2f * ArWigwam.RZ + 1.2f, 1f);
+        draws.add(Draw.of(null, shade, "place:shadow", 0.55f, distance + 0.5f));
+        if (id != null && !ArWigwam.inside(base, scale, cameraPoint)) {
+            float[] middle = new float[4];
+            Matrix.multiplyMV(middle, 0, model, 0, new float[] {0f, 1.2f, -ArWigwam.RZ, 1f}, 0);
+            float[] point = {middle[0], middle[1], middle[2]};
+            float yaw = ArPlacement.yawTowards(point[0], point[2], cameraPoint[0], cameraPoint[2]);
+            draws.add(Draw.posed(id, new Pose(point, ArPlacement.yawQuaternion(yaw)), null,
+                2f * ArWigwam.RX * scale, ArWigwam.HEIGHT * scale, 0f, distance(point, cameraPoint)));
+        }
+        if (selected && id == null) {
+            float[] ring = model.clone();
+            Matrix.rotateM(ring, 0, -90f, 1f, 0f, 0f);
+            Matrix.translateM(ring, 0, 0f, 0f, 0.005f);
+            Matrix.scaleM(ring, 0, 0.9f, 0.9f, 1f);
+            draws.add(Draw.of(null, ring, "place:ring", 0.9f, distance + 0.01f));
+        }
+    }
+
     /** A small dark mark round the shaft where an arrow has gone into its surface. */
     private void addArrowHole(float[] base, float scale, float distance, List<Draw> draws) {
         float[] patch = base.clone();
@@ -1780,7 +1830,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
             if (gl.hasTexture(key) || !loading.add(key)) continue;
             loader.execute(() -> {
                 try {
-                    gl.queueTexture(key, ArPlace.texture(asset, key, getResources()));
+                    gl.queueTexture(key, ArPlace.texture(asset, key, getResources()), asset.kind == ArPlace.Kind.WIGWAM && ArWigwam.repeats(key));
                 } catch (RuntimeException error) {
                     android.util.Log.w("OnThisSiteAR", "Artwork " + key + " failed: " + error);
                 }
@@ -2588,6 +2638,10 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
         }
         if (placingAsset != null) {
             boolean arrow = placingAsset.kind == ArPlace.Kind.ARROW;
+            if (placingAsset.kind == ArPlace.Kind.WIGWAM) {
+                return aimFound ? "Tap to set the wigwam's door here (it is 4 m across) \u00b7 pinch to size it"
+                    : "Aim at open ground nearby, moving the phone slowly";
+            }
             if (!aimFound) {
                 return placingAsset.standsUp() ? "Aim at the ground nearby, moving the phone slowly"
                     : arrow ? "Aim at a wall, a tree or the ground, moving the phone slowly"
@@ -4498,6 +4552,8 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private static final class Draw {
         String itemId;
         String texture;
+        // How far it glows onto what is behind it (fire) rather than covering it.
+        float additive;
         float[] model;
         float alpha;
         float distance;

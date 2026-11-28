@@ -45,8 +45,9 @@ final class ArGl {
             + "uniform sampler2D u_Texture;\n"
             + "uniform float u_Alpha;\n"
             + "uniform float u_Premultiplied;\n"
+            + "uniform float u_Additive;\n"
             + "void main() { vec4 c = texture2D(u_Texture, v_TexCoord);"
-            + " gl_FragColor = vec4(c.rgb * mix(1.0, u_Alpha, u_Premultiplied), c.a * u_Alpha); }\n";
+            + " gl_FragColor = vec4(c.rgb * mix(1.0, u_Alpha, u_Premultiplied), c.a * u_Alpha * (1.0 - u_Additive)); }\n";
 
     // Placed 3D things (flags, banners, arrows): lit from above, both sides shaded
     // alike. With u_Wave above 0 the mesh is a unit cloth blowing from its pole
@@ -56,6 +57,10 @@ final class ArGl {
     // cloth), and its breeze comes and goes, so its lettering stays readable.
     // A banner also sags a little at its free end when the breeze drops, and its
     // ripples run a little diagonally, as real cloth's do.
+    //
+    // Inside a wigwam, u_Sun dims the daylight and u_FireLight (the fire's
+    // colour, flickering) lights each surface from u_FirePos, falling off with
+    // distance and brightest where it faces the fire.
     //
     // With u_Flatten above 0 the same shape is its shadow instead: slid along
     // u_ShadowDir onto the surface through u_Foot facing u_PlaneNormal (the
@@ -74,12 +79,14 @@ final class ArGl {
             + "uniform vec3 u_ShadowDir;\n"
             + "uniform float u_FadeLength;\n"
             + "uniform vec3 u_Eye;\n"
+            + "uniform vec3 u_FirePos;\n"
             + "attribute vec3 a_Position;\n"
             + "attribute vec3 a_Normal;\n"
             + "attribute vec2 a_TexCoord;\n"
             + "varying vec2 v_TexCoord;\n"
             + "varying vec3 v_Normal;\n"
             + "varying vec3 v_ToEye;\n"
+            + "varying vec3 v_FromFire;\n"
             + "varying float v_Fade;\n"
             + "void main() {\n"
             + "  vec3 p = a_Position;\n"
@@ -111,6 +118,7 @@ final class ArGl {
             + "  v_Normal = (u_Model * vec4(n, 0.0)).xyz;\n"
             + "  vec4 world = u_Model * vec4(p, 1.0);\n"
             + "  v_ToEye = u_Eye - world.xyz;\n"
+            + "  v_FromFire = world.xyz - u_FirePos;\n"
             + "  v_Fade = 1.0;\n"
             + "  if (u_Flatten > 0.0) {\n"
             + "    float above = dot(world.xyz - u_Foot, u_PlaneNormal);\n"
@@ -135,8 +143,11 @@ final class ArGl {
             + "varying vec2 v_TexCoord;\n"
             + "varying vec3 v_Normal;\n"
             + "varying vec3 v_ToEye;\n"
+            + "varying vec3 v_FromFire;\n"
             + "varying float v_Fade;\n"
             + "uniform sampler2D u_Texture;\n"
+            + "uniform float u_Sun;\n"
+            + "uniform vec3 u_FireLight;\n"
             + "uniform float u_UseTexture;\n"
             + "uniform float u_TwoSided;\n"
             + "uniform vec3 u_Mirror;\n"
@@ -161,7 +172,12 @@ final class ArGl {
             + "    vec4 flipped = texture2D(u_Texture, vec2(2.0 * u_Mirror.x - v_TexCoord.x, v_TexCoord.y));\n"
             + "    base = mix(base, flipped, 1.0 - smoothstep(u_Mirror.y, u_Mirror.z, abs(v_TexCoord.x - u_Mirror.x)));\n"
             + "  }\n"
-            + "  vec3 colour = base.rgb * (u_Ambient + (1.0 - u_Ambient) * light);\n"
+            + "  vec3 colour = base.rgb * (u_Ambient + (1.0 - u_Ambient) * light) * u_Sun;\n"
+            + "  if (u_FireLight.r > 0.0) {\n"
+            + "    float far = length(v_FromFire);\n"
+            + "    float facing = 0.35 + 0.65 * abs(dot(normal, v_FromFire / max(far, 0.001)));\n"
+            + "    colour += base.rgb * u_FireLight * facing / (1.0 + 2.4 * far * far);\n"
+            + "  }\n"
             + "  if (u_Gloss > 0.0) {\n"
             + "    vec3 eye = normalize(v_ToEye);\n"
             + "    if (dot(normal, eye) < 0.0) normal = -normal;\n"
@@ -287,12 +303,18 @@ final class ArGl {
      * instead of darkening it. Placed artwork (the neon stickers) needs this.
      */
     void drawQuad(float[] viewProjection, float[] model, int texture, float alpha, boolean premultiplied) {
+        drawQuad(viewProjection, model, texture, alpha, premultiplied, 0f);
+    }
+
+    /** additive (0 to 1): how far it adds its light to what is behind instead of covering it, as fire glows. */
+    void drawQuad(float[] viewProjection, float[] model, int texture, float alpha, boolean premultiplied, float additive) {
         if (texture == 0 || alpha <= 0.01f) return;
         GLES20.glBlendFunc(premultiplied ? GLES20.GL_ONE : GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
         Matrix.multiplyMM(mvp, 0, viewProjection, 0, model, 0);
         GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(quadProgram, "u_Mvp"), 1, false, mvp, 0);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(quadProgram, "u_Alpha"), Math.min(1f, alpha));
         GLES20.glUniform1f(GLES20.glGetUniformLocation(quadProgram, "u_Premultiplied"), premultiplied ? 1f : 0f);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(quadProgram, "u_Additive"), additive);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture);
         GLES20.glUniform1i(GLES20.glGetUniformLocation(quadProgram, "u_Texture"), 0);
@@ -350,6 +372,10 @@ final class ArGl {
         // How lit a side facing away from the light still is (0 to 1). A banner is
         // brighter than the flag, so its colour reads true and its words stand out.
         float ambient = 0.5f;
+        // How much daylight reaches it (1 outside; less inside a wigwam), and
+        // the fire lighting it (world position; null for none).
+        float sun = 1f;
+        float[] fire;
         // Where its shadow falls: a point on the surface it stands on or is stuck
         // into (world x, y, z), that surface's normal, the direction the shadow
         // is cast along, and how far it fades out. A null foot casts none.
@@ -392,6 +418,13 @@ final class ArGl {
         }
     }
 
+    private static final float[] NO_FIRE = {0f, 0f, 0f};
+
+    /** How bright a fire is at this moment: a steady glow with a quick, uneven flicker. */
+    static float fireStrength(float time) {
+        return 1.15f + 0.12f * (float) Math.sin(time * 13.1f) + 0.08f * (float) Math.sin(time * 7.3f + 1f) + 0.06f * (float) Math.sin(time * 23.7f + 2f);
+    }
+
     /** The light, from above, that shades every placed thing and casts the flag's shadow (world space). */
     static final float[] SUN = normalize3(0.35f, 0.9f, 0.25f);
 
@@ -415,6 +448,10 @@ final class ArGl {
         GLES20.glUniform3fv(GLES20.glGetUniformLocation(meshProgram, "u_Mirror"), 1, draw.mirror, 0);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Gloss"), draw.gloss);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Ambient"), draw.ambient);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Sun"), draw.sun);
+        GLES20.glUniform3fv(GLES20.glGetUniformLocation(meshProgram, "u_FirePos"), 1, draw.fire != null ? draw.fire : NO_FIRE, 0);
+        float flame = draw.fire == null ? 0f : fireStrength(time);
+        GLES20.glUniform3f(GLES20.glGetUniformLocation(meshProgram, "u_FireLight"), 1f * flame, 0.56f * flame, 0.24f * flame);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Shine"), draw.shine);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Metal"), draw.metal);
         GLES20.glUniform4fv(GLES20.glGetUniformLocation(meshProgram, "u_Color"), 1, draw.color, 0);
@@ -478,7 +515,12 @@ final class ArGl {
 
     /** Thread-safe: queue a bitmap; it is uploaded at the next frame. */
     void queueTexture(String key, Bitmap bitmap) {
-        uploads.add(new Object[] {key, bitmap});
+        queueTexture(key, bitmap, false);
+    }
+
+    /** repeat: the texture tiles (its sides must be powers of two). */
+    void queueTexture(String key, Bitmap bitmap, boolean repeat) {
+        uploads.add(new Object[] {key, bitmap, repeat});
     }
 
     void processUploads() {
@@ -486,6 +528,7 @@ final class ArGl {
         while ((upload = uploads.poll()) != null) {
             String key = (String) upload[0];
             Bitmap bitmap = (Bitmap) upload[1];
+            int wrap = (Boolean) upload[2] ? GLES20.GL_REPEAT : GLES20.GL_CLAMP_TO_EDGE;
             int[] existing = textures.remove(key);
             if (existing != null) GLES20.glDeleteTextures(1, existing, 0);
             int[] ids = new int[1];
@@ -493,8 +536,8 @@ final class ArGl {
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, ids[0]);
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR_MIPMAP_LINEAR);
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, wrap);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, wrap);
             GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0);
             GLES20.glGenerateMipmap(GLES20.GL_TEXTURE_2D);
             textures.put(key, new int[] {ids[0], bitmap.getWidth(), bitmap.getHeight()});

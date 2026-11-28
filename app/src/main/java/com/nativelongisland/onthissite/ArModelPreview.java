@@ -55,7 +55,9 @@ final class ArModelPreview {
             for (ArPlace.Asset asset : assets) {
                 if (!asset.model()) continue;
                 for (String key : asset.textures()) {
-                    if (!gl.hasTexture(key)) gl.queueTexture(key, ArPlace.texture(asset, key, resources));
+                    if (!gl.hasTexture(key)) {
+                        gl.queueTexture(key, ArPlace.texture(asset, key, resources), asset.kind == ArPlace.Kind.WIGWAM && ArWigwam.repeats(key));
+                    }
                 }
                 gl.processUploads();
                 for (View view : views(asset)) {
@@ -101,6 +103,19 @@ final class ArModelPreview {
     private static List<View> views(ArPlace.Asset asset) {
         List<View> views = new ArrayList<>();
         float[] up = {0f, 1f, 0f};
+        if (asset.kind == ArPlace.Kind.WIGWAM) {
+            // Outside, from the front, at the door and from behind; then standing inside.
+            views.add(new View("outside", new float[] {2.8f, 1.7f, 3.9f}, new float[] {0f, 1.0f, -1.9f}, up, false, 5f));
+            views.add(new View("outside-door", new float[] {0.35f, 1.5f, 2.0f}, new float[] {0f, 1.0f, -1.3f}, up, false, 5f));
+            views.add(new View("outside-back", new float[] {-3.4f, 2.4f, -5.6f}, new float[] {0f, 1.0f, -1.9f}, up, false, 5f));
+            views.add(new View("inside-bed", new float[] {0.15f, 1.5f, -0.45f}, new float[] {0f, 0.45f, -3.2f}, up, false, 5f));
+            views.add(new View("inside-fire", new float[] {0.65f, 1.05f, -0.95f}, new float[] {0f, 0.2f, -1.9f}, up, false, 6f));
+            views.add(new View("inside-corn", new float[] {0.9f, 1.5f, -1.25f}, new float[] {-1.35f, 1.45f, -1.95f}, up, false, 5f));
+            views.add(new View("inside-squash", new float[] {-0.6f, 1.4f, -1.3f}, new float[] {1.45f, 0.35f, -2.0f}, up, false, 5f));
+            views.add(new View("inside-door", new float[] {0.1f, 1.5f, -3.0f}, new float[] {0f, 1.0f, -0.2f}, up, false, 5f));
+            views.add(new View("inside-up", new float[] {0.35f, 1.3f, -1.35f}, new float[] {0f, 2.45f, -1.9f}, up, false, 7f));
+            return views;
+        }
         if (asset.standsUp()) {
             float middle = asset.kind == ArPlace.Kind.BANNER ? ArBanner.LENGTH / 2f : ArPlace.FLAG_WIDTH / 2f;
             float[] target = {middle, 1.35f, 0f};
@@ -130,11 +145,25 @@ final class ArModelPreview {
     // Where the visitor stood when placing it, which turns it as AR does.
     private static final float[] PLACER = {0f, 1.5f, 3.6f};
 
+    private static float far(float[] a, float[] b) {
+        float dx = a[0] - b[0];
+        float dy = a[1] - b[1];
+        float dz = a[2] - b[2];
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    private static float[] normalize(float x, float y, float z) {
+        float length = (float) Math.sqrt(x * x + y * y + z * z);
+        return new float[] {x / length, y / length, z / length};
+    }
+
     private static Bitmap draw(ArGl gl, ArPlace.Asset asset, View view) {
         float[] projection = new float[16];
         float[] camera = new float[16];
         float[] viewProjection = new float[16];
-        Matrix.perspectiveM(projection, 0, 50f, WIDTH / (float) HEIGHT, 0.05f, 100f);
+        boolean wigwam = asset.kind == ArPlace.Kind.WIGWAM;
+        // A phone's camera sees about this much; a little wider inside a wigwam, as a visitor looks round.
+        Matrix.perspectiveM(projection, 0, wigwam && view.name.startsWith("inside") ? 64f : 50f, WIDTH / (float) HEIGHT, 0.05f, 100f);
         Matrix.setLookAtM(camera, 0, view.eye[0], view.eye[1], view.eye[2], view.target[0], view.target[1], view.target[2], 0f, 1f, 0f);
         Matrix.multiplyMM(viewProjection, 0, projection, 0, camera, 0);
         // The anchor, posed as AR poses it: at the origin, turned to whoever placed it.
@@ -150,6 +179,18 @@ final class ArModelPreview {
         for (ArGl.MeshDraw mesh : meshes) gl.drawShadow(viewProjection, mesh, gl.texture(mesh.texture), view.time);
         for (ArGl.MeshDraw mesh : meshes) gl.drawMesh(viewProjection, mesh, gl.texture(mesh.texture), view.time, view.eye);
         gl.endMeshes();
+        if (wigwam) {
+            // Its fire, smoke and words, back to front, as AR draws them.
+            float[] forward = normalize(view.target[0] - view.eye[0], view.target[1] - view.eye[1], view.target[2] - view.eye[2]);
+            float[] right = normalize(forward[1] * 0f - forward[2] * 1f, forward[2] * 0f - forward[0] * 0f, forward[0] * 1f - forward[1] * 0f);
+            float[] upward = {right[1] * forward[2] - right[2] * forward[1], right[2] * forward[0] - right[0] * forward[2], right[0] * forward[1] - right[1] * forward[0]};
+            List<ArWigwam.Quad> quads = new ArrayList<>();
+            ArWigwam.addQuads(base, 1f, view.time, view.eye, right, upward, true, gl::hasTexture, quads);
+            java.util.Collections.sort(quads, (a, b) -> Float.compare(far(b.point, view.eye), far(a.point, view.eye)));
+            gl.beginQuads();
+            for (ArWigwam.Quad quad : quads) gl.drawQuad(viewProjection, quad.model, gl.texture(quad.texture), quad.alpha, true, quad.additive);
+            gl.endQuads();
+        }
         ByteBuffer pixels = ByteBuffer.allocateDirect(WIDTH * HEIGHT * 4).order(ByteOrder.nativeOrder());
         GLES20.glReadPixels(0, 0, WIDTH, HEIGHT, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels);
         Bitmap upsideDown = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888);
