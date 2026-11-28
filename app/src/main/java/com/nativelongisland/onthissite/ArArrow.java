@@ -165,18 +165,49 @@ final class ArArrow {
                 }
                 break;
             default:
-                // Wood grain: long streaks of darker and lighter wood.
+                // The wood a little lighter and darker along its length, as one
+                // stave never is the same all through.
+                paint.setStyle(Paint.Style.FILL);
+                for (int i = 0; i < 9; i++) {
+                    float y = random.nextFloat() * height;
+                    float reach = 60f + 160f * random.nextFloat();
+                    int tint = random.nextBoolean() ? Color.argb(16 + random.nextInt(14), 255, 240, 210) : Color.argb(14 + random.nextInt(16), 60, 34, 12);
+                    paint.setShader(new LinearGradient(0, y - reach, 0, y + reach, new int[] {tint & 0x00FFFFFF, tint, tint & 0x00FFFFFF},
+                        null, Shader.TileMode.CLAMP));
+                    canvas.drawRect(0, y - reach, width, y + reach, paint);
+                }
+                paint.setShader(null);
+                // Grain: long streaks of darker late wood and paler early wood,
+                // fine and broad, wandering a little, one or two running out.
                 paint.setStyle(Paint.Style.STROKE);
-                for (int i = 0; i < 18; i++) {
+                for (int i = 0; i < 34; i++) {
                     float x = random.nextFloat() * width;
-                    paint.setStrokeWidth(0.6f + 1.6f * random.nextFloat());
-                    paint.setColor(random.nextFloat() < 0.7f ? Color.argb(18 + random.nextInt(40), 70, 40, 15) : Color.argb(14 + random.nextInt(20), 255, 245, 225));
+                    paint.setStrokeWidth(0.4f + 2f * random.nextFloat() * random.nextFloat() * 2f);
+                    paint.setColor(random.nextFloat() < 0.68f ? Color.argb(20 + random.nextInt(48), 66, 38, 14) : Color.argb(14 + random.nextInt(24), 255, 244, 222));
                     Path streak = new Path();
-                    streak.moveTo(x, 0);
-                    for (int y = 64; y <= height; y += 64) streak.lineTo(x + (random.nextFloat() - 0.5f) * 3f, y);
+                    float top = random.nextFloat() < 0.15f ? random.nextFloat() * height : 0f;
+                    streak.moveTo(x, top);
+                    float drift = (random.nextFloat() - 0.5f) * 0.012f;
+                    for (int y = (int) top + 48; y <= height + 48; y += 48) {
+                        x += drift * 48f + (random.nextFloat() - 0.5f) * 1.6f;
+                        streak.lineTo(x, y);
+                    }
                     canvas.drawPath(streak, paint);
                 }
+                // Pores: tiny dark flecks along the grain.
+                paint.setStrokeWidth(0.8f);
+                for (int i = 0; i < 420; i++) {
+                    float x = random.nextFloat() * width;
+                    float y = random.nextFloat() * height;
+                    paint.setColor(Color.argb(30 + random.nextInt(40), 50, 28, 10));
+                    canvas.drawLine(x, y, x, y + 1.5f + 4f * random.nextFloat(), paint);
+                }
                 paint.setStyle(Paint.Style.FILL);
+                // Darkened by hands at the nock end.
+                paint.setShader(new LinearGradient(0, 0, 0, along(SHAFT_TOP - 0.12f) * height,
+                    Color.argb(46, 52, 34, 16), Color.argb(0, 52, 34, 16), Shader.TileMode.CLAMP));
+                canvas.drawRect(0, 0, width, along(SHAFT_TOP - 0.12f) * height, paint);
+                paint.setShader(null);
                 if ("arrowwood".equals(style.shaft)) {
                     // A shoot's leaf nodes, a little darker, every 12 cm or so.
                     for (float y = 0.62f; y > -0.04f; y -= 0.11f + 0.03f * random.nextFloat()) {
@@ -609,6 +640,60 @@ final class ArArrow {
         return new ArGl.Mesh(vertices, indices);
     }
 
+    /**
+     * The stone of a knapped point (style.pointColor), seen flat: mottled and
+     * speckled, and covered in overlapping flake scars, each a shallow scoop
+     * shaded on one side and catching the light on the other, with the finer
+     * pressure flakes along the edges.
+     */
+    static Bitmap stone(Style style) {
+        int size = 256;
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        int color = style.pointColor;
+        canvas.drawColor(color);
+        Random random = new Random(style.id.hashCode() * 7);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        // Mottling and banding in the stone itself.
+        for (int i = 0; i < 26; i++) {
+            float x = random.nextFloat() * size;
+            float y = random.nextFloat() * size;
+            float radius = 16f + 60f * random.nextFloat();
+            int tint = random.nextBoolean() ? Color.argb(26 + random.nextInt(30), 255, 250, 240) : Color.argb(22 + random.nextInt(30), 0, 0, 0);
+            paint.setShader(new android.graphics.RadialGradient(x, y, radius, tint, tint & 0x00FFFFFF, Shader.TileMode.CLAMP));
+            canvas.drawCircle(x, y, radius, paint);
+        }
+        paint.setShader(null);
+        // Flake scars: big ones in the middle, small ones nearer the edges.
+        for (int i = 0; i < 46; i++) {
+            boolean edge = i > 22;
+            float x = edge ? (random.nextBoolean() ? 12f + random.nextFloat() * 30f : size - 12f - random.nextFloat() * 30f) : 40f + random.nextFloat() * (size - 80f);
+            float y = random.nextFloat() * size;
+            float wide = edge ? 10f + 12f * random.nextFloat() : 26f + 34f * random.nextFloat();
+            float high = wide * (0.55f + 0.35f * random.nextFloat());
+            canvas.save();
+            canvas.rotate((random.nextFloat() - 0.5f) * 60f, x, y);
+            RectF scar = new RectF(x - wide / 2f, y - high / 2f, x + wide / 2f, y + high / 2f);
+            paint.setShader(new LinearGradient(scar.left, scar.top, scar.right, scar.bottom,
+                new int[] {Color.argb(70, 255, 255, 255), Color.argb(0, 128, 128, 128), Color.argb(80, 0, 0, 0)}, null, Shader.TileMode.CLAMP));
+            canvas.drawOval(scar, paint);
+            // The ridge where it meets the next scar.
+            Paint ridge = new Paint(Paint.ANTI_ALIAS_FLAG);
+            ridge.setStyle(Paint.Style.STROKE);
+            ridge.setStrokeWidth(1.2f);
+            ridge.setColor(Color.argb(60, 255, 255, 255));
+            canvas.drawArc(scar, 190f, 120f, false, ridge);
+            canvas.restore();
+        }
+        paint.setShader(null);
+        // Speckles.
+        for (int i = 0; i < 260; i++) {
+            paint.setColor(random.nextBoolean() ? Color.argb(70, 255, 255, 255) : Color.argb(70, 0, 0, 0));
+            canvas.drawCircle(random.nextFloat() * size, random.nextFloat() * size, 0.6f + random.nextFloat() * 1.2f, paint);
+        }
+        return bitmap;
+    }
+
     /** A knapped stone point: flat, leaf-shaped in outline, thick down its middle. */
     private static ArGl.Mesh stonePoint() {
         float base = AIR_BOTTOM + 0.006f;
@@ -646,7 +731,10 @@ final class ArArrow {
             float nz = ux * wy - uy * wx;
             float length = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
             for (int corner = 0; corner < 3; corner++) {
-                v = put(vertices, v, t[corner * 3], t[corner * 3 + 1], t[corner * 3 + 2], nx / length, ny / length, nz / length, 0f, 0f);
+                // The stone's texture laid flat across it, from the tip (v 0) to the base (v 1).
+                float u = (t[corner * 3] + half) / (2f * half);
+                float w = (t[corner * 3 + 1] - tip) / (base - tip);
+                v = put(vertices, v, t[corner * 3], t[corner * 3 + 1], t[corner * 3 + 2], nx / length, ny / length, nz / length, u, w);
                 indices[f * 3 + corner] = (short) (f * 3 + corner);
             }
         }

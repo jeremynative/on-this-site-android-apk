@@ -54,8 +54,8 @@ final class ArGl {
     // travelling ripple and a quicker flutter, all growing towards the free end.
     // A banner (u_Calm 1) moves slower, in long waves (less than one along the
     // cloth), and its breeze comes and goes, so its lettering stays readable.
-    // A banner is stretched long, so its slopes (0.4) are gentler than the unit
-    // cloth's; the flag's are left as they were.
+    // A banner also sags a little at its free end when the breeze drops, and its
+    // ripples run a little diagonally, as real cloth's do.
     //
     // With u_Flatten above 0 the same shape is its shadow instead: slid along
     // u_ShadowDir onto the surface through u_Foot facing u_PlaneNormal (the
@@ -92,10 +92,11 @@ final class ArGl {
             + "      float breeze = 0.6 * sin(0.21 * u_Time) + 0.4 * sin(0.53 * u_Time + 1.7);\n"
             + "      float gust = 0.4 + 0.6 * smoothstep(-0.3, 0.8, breeze);\n"
             + "      float swing = 0.45 * sin(0.37 * u_Time);\n"
-            + "      float phase = 2.4 * along - 1.15 * u_Time + 0.5 * a_TexCoord.y;\n"
-            + "      float flutter = 7.0 * along - 3.1 * u_Time + 1.4 * a_TexCoord.y;\n"
+            + "      float phase = 2.4 * along - 1.15 * u_Time + 1.3 * a_TexCoord.y;\n"
+            + "      float flutter = 7.0 * along - 3.1 * u_Time + 2.2 * a_TexCoord.y;\n"
             + "      bend = swing + gust * (sin(phase) + 0.12 * sin(flutter));\n"
-            + "      slope = 0.4 *(bend + along * gust * (2.4 * cos(phase) + 0.84 * cos(flutter)));\n"
+            + "      slope = bend + along * gust * (2.4 * cos(phase) + 0.84 * cos(flutter));\n"
+            + "      p.y -= 0.07 * (1.0 - 0.6 * gust) * along * along;\n"
             + "    } else {\n"
             + "      float swing = 2.0 * sin(0.8 * u_Time);\n"
             + "      float phase = 5.0 * along - 3.4 * u_Time + 0.9 * a_TexCoord.y;\n"
@@ -140,6 +141,8 @@ final class ArGl {
             + "uniform float u_TwoSided;\n"
             + "uniform vec3 u_Mirror;\n"
             + "uniform float u_Gloss;\n"
+            + "uniform float u_Shine;\n"
+            + "uniform float u_Metal;\n"
             + "uniform float u_Ambient;\n"
             + "uniform float u_ShadowAlpha;\n"
             + "uniform vec4 u_Color;\n"
@@ -162,8 +165,8 @@ final class ArGl {
             + "  if (u_Gloss > 0.0) {\n"
             + "    vec3 eye = normalize(v_ToEye);\n"
             + "    if (dot(normal, eye) < 0.0) normal = -normal;\n"
-            + "    float shine = pow(max(dot(normal, normalize(sun + eye)), 0.0), 28.0);\n"
-            + "    colour += u_Gloss * shine * base.a;\n"
+            + "    float shine = pow(max(dot(normal, normalize(sun + eye)), 0.0), u_Shine);\n"
+            + "    colour += u_Gloss * shine * base.a * mix(vec3(1.0), base.rgb * 1.6, u_Metal);\n"
             + "  }\n"
             + "  gl_FragColor = vec4(colour, base.a);\n"
             + "}\n";
@@ -340,6 +343,10 @@ final class ArGl {
         // The band of a two-sided cloth un-mirrored on its back: centre, fade start, end.
         float[] mirror = {0.5f, 0.285f, 0.33f};
         float gloss;
+        // How tight the highlight is (higher is glossier), and whether it takes
+        // the surface's own colour, as on metal (0 to 1).
+        float shine = 28f;
+        float metal;
         // How lit a side facing away from the light still is (0 to 1). A banner is
         // brighter than the flag, so its colour reads true and its words stand out.
         float ambient = 0.5f;
@@ -408,6 +415,8 @@ final class ArGl {
         GLES20.glUniform3fv(GLES20.glGetUniformLocation(meshProgram, "u_Mirror"), 1, draw.mirror, 0);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Gloss"), draw.gloss);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Ambient"), draw.ambient);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Shine"), draw.shine);
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Metal"), draw.metal);
         GLES20.glUniform4fv(GLES20.glGetUniformLocation(meshProgram, "u_Color"), 1, draw.color, 0);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_Flatten"), 0f);
         GLES20.glUniform1f(GLES20.glGetUniformLocation(meshProgram, "u_ShadowAlpha"), 0f);

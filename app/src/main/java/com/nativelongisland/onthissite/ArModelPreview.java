@@ -108,6 +108,11 @@ final class ArModelPreview {
             views.add(new View("front-later", new float[] {middle + 0.6f, 1.55f, 3.6f}, target, up, false, 7.5f));
             views.add(new View("front-gust", new float[] {middle - 0.4f, 1.6f, 3.4f}, target, up, false, 26f));
             views.add(new View("behind", new float[] {middle - 0.5f, 1.55f, -3.6f}, target, up, false, 3f));
+            if (asset.kind == ArPlace.Kind.BANNER) {
+                float top = ArPlace.POLE_HEIGHT - ArBanner.TOP_GAP - ArBanner.HEIGHT / 2f;
+                views.add(new View("close-hoist", new float[] {0.32f, top + 0.05f, 0.55f}, new float[] {0.12f, top, 0f}, up, false, 9f));
+                views.add(new View("close-words", new float[] {0.95f, top - 0.1f, 1.35f}, new float[] {0.72f, top, 0f}, up, false, 9f));
+            }
             return views;
         }
         // An arrow in a wall facing +Z (seen from in front, from the side and
@@ -118,6 +123,7 @@ final class ArModelPreview {
         views.add(new View("wall-close", new float[] {0.16f, 0.2f, 0.88f}, new float[] {0f, 0.11f, 0.6f}, wall, false, 0f));
         views.add(new View("ground", new float[] {0.65f, 0.5f, 0.55f}, new float[] {0f, 0.28f, 0.17f}, up, false, 0f));
         views.add(new View("air", new float[] {-0.33f, 0.12f, 0.85f}, new float[] {-0.33f, 0.06f, 0f}, new float[] {-1f, 0f, 0f}, true, 0f));
+        views.add(new View("air-point", new float[] {0.1f, 0.04f, 0.2f}, new float[] {0.04f, 0.01f, 0f}, new float[] {-1f, 0f, 0f}, true, 0f));
         return views;
     }
 
