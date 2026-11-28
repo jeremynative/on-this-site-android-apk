@@ -117,15 +117,15 @@ final class ArObjects {
 
     // The word lists the Knowledgebase article gives, and how a word from each is introduced.
     private static final String SHINNECOCK_POOSEPATUCK = "Shinnecock and Poosepatuck";
-    private static final String HARRINGTON_ABOUT = "About this word\n"
+    static final String HARRINGTON_ABOUT = "About this word\n"
         + "It is from M. R. Harrington's 1903 Shinnecock notes, reprinted in Bonvillain and Stone, Languages and Lore of the "
         + "Long Island Indians (p. 22): a short Poosepatuck and Shinnecock word list. Lists like it are useful for "
         + "environmental education, but they are not a complete dictionary.";
-    private static final String HARRINGTON_CREDIT = "M. R. Harrington (1903), in Bonvillain and Stone, Languages and Lore "
+    static final String HARRINGTON_CREDIT = "M. R. Harrington (1903), in Bonvillain and Stone, Languages and Lore "
         + "of the Long Island Indians, p. 22";
-    private static final String ELDERS_ABOUT = "About this word\n"
+    static final String ELDERS_ABOUT = "About this word\n"
         + "It is recorded in Natural Resources Identified by Shinnecock Elders (Shinnecock Environmental Department, 2014).";
-    private static String eldersCredit(int page) {
+    static String eldersCredit(int page) {
         return "Shinnecock Environmental Department, Natural Resources Identified by Shinnecock Elders, April 4, 2014, PDF p. " + page;
     }
 

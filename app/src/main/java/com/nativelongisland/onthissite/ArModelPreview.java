@@ -104,15 +104,17 @@ final class ArModelPreview {
         List<View> views = new ArrayList<>();
         float[] up = {0f, 1f, 0f};
         if (asset.kind == ArPlace.Kind.WIGWAM) {
-            // Outside, from the front, at the door and from behind; then standing inside.
+            // Outside: near, far off (the plume), at the door and pushing through it; then standing inside.
+            float plane = ArWigwam.doorPlane();
             views.add(new View("outside", new float[] {2.8f, 1.7f, 3.9f}, new float[] {0f, 1.0f, -1.9f}, up, false, 5f));
-            views.add(new View("outside-door", new float[] {0.35f, 1.5f, 2.0f}, new float[] {0f, 1.0f, -1.3f}, up, false, 5f));
-            views.add(new View("outside-back", new float[] {-3.4f, 2.4f, -5.6f}, new float[] {0f, 1.0f, -1.9f}, up, false, 5f));
-            views.add(new View("inside-bed", new float[] {0.15f, 1.5f, -0.45f}, new float[] {0f, 0.45f, -3.2f}, up, false, 5f));
+            views.add(new View("outside-far", new float[] {7f, 1.6f, 11f}, new float[] {0f, 3.2f, -1.9f}, up, false, 9f));
+            views.add(new View("outside-door", new float[] {0.35f, 1.3f, 1.6f}, new float[] {0f, 0.8f, -1.2f}, up, false, 5f));
+            views.add(new View("door-pushed", new float[] {0.12f, 1.15f, plane + 0.75f}, new float[] {0f, 0.7f, plane - 1f}, up, false, 5f));
+            views.add(new View("inside-bench", new float[] {0.6f, 1.45f, -1.0f}, new float[] {-1.4f, 0.4f, -1.9f}, up, false, 5f));
+            views.add(new View("inside-rack", new float[] {0.1f, 1.45f, -1.2f}, new float[] {0.1f, 0.75f, -3.2f}, up, false, 5f));
             views.add(new View("inside-fire", new float[] {0.65f, 1.05f, -0.95f}, new float[] {0f, 0.2f, -1.9f}, up, false, 6f));
-            views.add(new View("inside-corn", new float[] {0.9f, 1.5f, -1.25f}, new float[] {-1.35f, 1.45f, -1.95f}, up, false, 5f));
-            views.add(new View("inside-squash", new float[] {-0.6f, 1.4f, -1.3f}, new float[] {1.45f, 0.35f, -2.0f}, up, false, 5f));
-            views.add(new View("inside-door", new float[] {0.1f, 1.5f, -3.0f}, new float[] {0f, 1.0f, -0.2f}, up, false, 5f));
+            views.add(new View("inside-right", new float[] {-0.5f, 1.45f, -1.4f}, new float[] {1.5f, 0.8f, -2.2f}, up, false, 5f));
+            views.add(new View("inside-door", new float[] {0.1f, 1.4f, -3.0f}, new float[] {0f, 0.8f, -0.2f}, up, false, 5f));
             views.add(new View("inside-up", new float[] {0.35f, 1.3f, -1.35f}, new float[] {0f, 2.45f, -1.9f}, up, false, 7f));
             return views;
         }
@@ -171,7 +173,15 @@ final class ArModelPreview {
         float[] base = new float[16];
         new com.google.ar.core.Pose(new float[] {0f, 0f, 0f}, rotation).toMatrix(base, 0);
         List<ArGl.MeshDraw> meshes = new ArrayList<>();
-        ArModels.add(asset, base, 1f, view.inAir, gl::hasTexture, meshes);
+        if (asset.kind == ArPlace.Kind.WIGWAM && view.name.equals("door-pushed")) {
+            // The door as the visitor's phone pushes it, after a second of pushing.
+            float[] door = new float[8];
+            float[] pusher = {view.eye[0], view.eye[1], view.eye[2] - 0.55f};
+            for (int i = 0; i < 60; i++) ArWigwam.stepDoor(door, pusher, 1f / 60f, view.time + i / 60f);
+            ArWigwam.addMeshes(base, 1f, door, gl::hasTexture, meshes);
+        } else {
+            ArModels.add(asset, base, 1f, view.inAir, gl::hasTexture, meshes);
+        }
         GLES20.glClearColor(0.74f, 0.73f, 0.7f, 1f);
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
         GLES20.glEnable(GLES20.GL_DEPTH_TEST);
