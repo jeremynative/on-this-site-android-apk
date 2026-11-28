@@ -158,8 +158,9 @@ final class ArPlace {
     };
     // The flag is always the gold Shinnecock flag; its pole comes in these colours (id, name in the drawer).
     static final String[][] POLES = {{"gold", "Gold pole"}, {"black", "Black pole"}, {"white", "White pole"}, {"silver", "Silver pole"}};
-    // Land banners fly from a dark wooden pole.
+    // Land banners fly from a varnished wooden pole.
     static final String BANNER_POLE = "wood";
+    static final String BANNER_POLE_TEXTURE = "place:banner-pole";
 
     /** What a placeable thing is: a flat sticker, or a 3D flag, land banner or arrow. */
     enum Kind { STICKER, FLAG, BANNER, ARROW }
@@ -196,6 +197,11 @@ final class ArPlace {
             return kind != Kind.STICKER;
         }
 
+        /** How big it starts: 3D things one size (one Smaller press) under true size, as Jeremy asked; stickers as drawn. */
+        float defaultScale() {
+            return model() ? 0.8f : 1f;
+        }
+
         /** Planted upright on the ground (the flag and the banners) rather than stuck to whatever was aimed at. */
         boolean standsUp() {
             return kind == Kind.FLAG || kind == Kind.BANNER;
@@ -222,9 +228,11 @@ final class ArPlace {
                     // Every pole flies the same cloth, new or tattered.
                     return new String[] {"place:" + (tattered() ? TATTERED_FLAG : FLAG)};
                 case BANNER:
-                    return new String[] {"place:banner:" + phrase.id};
+                    return new String[] {"place:banner:" + phrase.id, BANNER_POLE_TEXTURE};
                 case ARROW:
-                    return new String[] {"place:arrow-fletch:" + look, "place:arrow-shaft:" + look};
+                    return arrow().point == ArArrow.Point.STONE
+                        ? new String[] {"place:arrow-fletch:" + look, "place:arrow-shaft:" + look, "place:arrow-point:" + look}
+                        : new String[] {"place:arrow-fletch:" + look, "place:arrow-shaft:" + look};
                 default:
                     return new String[] {"place:" + id};
             }
@@ -320,9 +328,11 @@ final class ArPlace {
             case FLAG:
                 return asset.tattered() ? tatteredFlagCloth(resources) : flagCloth(resources);
             case BANNER:
-                return ArBanner.cloth(asset.phrase, 2048);
+                return BANNER_POLE_TEXTURE.equals(key) ? ArBanner.pole() : ArBanner.cloth(asset.phrase, 2048);
             case ARROW:
-                return key.startsWith("place:arrow-shaft:") ? ArArrow.shaft(asset.arrow()) : ArArrow.fletching(asset.arrow());
+                if (key.startsWith("place:arrow-shaft:")) return ArArrow.shaft(asset.arrow());
+                if (key.startsWith("place:arrow-point:")) return ArArrow.stone(asset.arrow());
+                return ArArrow.fletching(asset.arrow());
             default:
                 return sticker(asset, resources);
         }
@@ -933,7 +943,7 @@ final class ArPlace {
         int size = 256;
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
-        if (asset.kind == Kind.BANNER) return ArBanner.tile(asset.phrase, poleColor(asset));
+        if (asset.kind == Kind.BANNER) return ArBanner.tile(asset.phrase);
         if (asset.kind == Kind.ARROW) return ArArrow.tile(asset.arrow());
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         Bitmap art = artwork(asset, resources);
@@ -1011,6 +1021,39 @@ final class ArPlace {
             for (int s = 0; s < segments; s++) {
                 short a = (short) (r * (segments + 1) + s);
                 short b = (short) (a + segments + 1);
+                indices[n++] = a;
+                indices[n++] = b;
+                indices[n++] = (short) (a + 1);
+                indices[n++] = b;
+                indices[n++] = (short) (b + 1);
+                indices[n++] = (short) (a + 1);
+            }
+        }
+        return new ArGl.Mesh(vertices, indices);
+    }
+
+    /** A ring (torus) lying in the XZ plane round the origin: its radius and its wire's. */
+    static ArGl.Mesh torus(float radius, float wire, int segments, int sides) {
+        float[] vertices = new float[(segments + 1) * (sides + 1) * 8];
+        short[] indices = new short[segments * sides * 6];
+        int v = 0;
+        for (int s = 0; s <= segments; s++) {
+            double around = 2 * Math.PI * s / segments;
+            float cx = (float) Math.cos(around);
+            float cz = (float) Math.sin(around);
+            for (int t = 0; t <= sides; t++) {
+                double tube = 2 * Math.PI * t / sides;
+                float out = (float) Math.cos(tube);
+                float up = (float) Math.sin(tube);
+                float reach = radius + wire * out;
+                v = put(vertices, v, cx * reach, wire * up, cz * reach, cx * out, up, cz * out, s / (float) segments, t / (float) sides);
+            }
+        }
+        int n = 0;
+        for (int s = 0; s < segments; s++) {
+            for (int t = 0; t < sides; t++) {
+                short a = (short) (s * (sides + 1) + t);
+                short b = (short) (a + sides + 1);
                 indices[n++] = a;
                 indices[n++] = b;
                 indices[n++] = (short) (a + 1);

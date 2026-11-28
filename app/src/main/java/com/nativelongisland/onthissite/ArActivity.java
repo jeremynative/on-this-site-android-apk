@@ -3090,7 +3090,7 @@ public class ArActivity extends Activity implements GLSurfaceView.Renderer {
     private void choosePlace(ArPlace.Asset asset) {
         synchronized (lock) {
             placingAsset = asset;
-            placingScale = 1f;
+            placingScale = asset.defaultScale();
             selectedPlace = null;
             aimFound = false;
         }
