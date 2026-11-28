@@ -163,7 +163,7 @@ final class ArPlace {
     static final String BANNER_POLE_TEXTURE = "place:banner-pole";
 
     /** What a placeable thing is: a flat sticker, or a 3D flag, land banner or arrow. */
-    enum Kind { STICKER, FLAG, BANNER, ARROW }
+    enum Kind { STICKER, FLAG, BANNER, ARROW, WIGWAM }
 
     /** One placeable thing in the drawer: a sticker in one look, the flag on one colour of pole, a land banner or an arrow. */
     static final class Asset {
@@ -197,14 +197,17 @@ final class ArPlace {
             return kind != Kind.STICKER;
         }
 
-        /** How big it starts: 3D things one size (one Smaller press) under true size, as Jeremy asked; stickers as drawn. */
+        /**
+         * How big it starts: 3D things one size (one Smaller press) under true
+         * size, as Jeremy asked; stickers as drawn; the wigwam full size, to walk into.
+         */
         float defaultScale() {
-            return model() ? 0.8f : 1f;
+            return kind == Kind.WIGWAM ? 1f : model() ? 0.8f : 1f;
         }
 
         /** Planted upright on the ground (the flag and the banners) rather than stuck to whatever was aimed at. */
         boolean standsUp() {
-            return kind == Kind.FLAG || kind == Kind.BANNER;
+            return kind == Kind.FLAG || kind == Kind.BANNER || kind == Kind.WIGWAM;
         }
 
         /** What it is called in hints: "flag", "banner", "arrow", or "it". */
@@ -216,6 +219,8 @@ final class ArPlace {
                     return "banner";
                 case ARROW:
                     return "arrow";
+                case WIGWAM:
+                    return "wigwam";
                 default:
                     return "it";
             }
@@ -229,6 +234,8 @@ final class ArPlace {
                     return new String[] {"place:" + (tattered() ? TATTERED_FLAG : FLAG)};
                 case BANNER:
                     return new String[] {"place:banner:" + phrase.id, BANNER_POLE_TEXTURE};
+                case WIGWAM:
+                    return ArWigwam.textures();
                 case ARROW:
                     return arrow().point == ArArrow.Point.STONE
                         ? new String[] {"place:arrow-fletch:" + look, "place:arrow-shaft:" + look, "place:arrow-point:" + look}
@@ -270,6 +277,7 @@ final class ArPlace {
             String group = style.traditional ? "Arrows, wood and feather (3D)" : "Arrows, carbon and plastic (3D)";
             assets.add(new Asset("arrow:" + style.id, group, style.label, Kind.ARROW, false, 0f, null, style.id));
         }
+        assets.add(new Asset("wigwam", "Wigwam (3D, walk inside)", "Wigwam", Kind.WIGWAM, false, 0f, null, "bark"));
         return assets.toArray(new Asset[0]);
     }
 
@@ -329,6 +337,8 @@ final class ArPlace {
                 return asset.tattered() ? tatteredFlagCloth(resources) : flagCloth(resources);
             case BANNER:
                 return BANNER_POLE_TEXTURE.equals(key) ? ArBanner.pole() : ArBanner.cloth(asset.phrase, 2048);
+            case WIGWAM:
+                return ArWigwam.texture(key);
             case ARROW:
                 if (key.startsWith("place:arrow-shaft:")) return ArArrow.shaft(asset.arrow());
                 if (key.startsWith("place:arrow-point:")) return ArArrow.stone(asset.arrow());
@@ -944,6 +954,7 @@ final class ArPlace {
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         if (asset.kind == Kind.BANNER) return ArBanner.tile(asset.phrase);
+        if (asset.kind == Kind.WIGWAM) return ArWigwam.tile();
         if (asset.kind == Kind.ARROW) return ArArrow.tile(asset.arrow());
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         Bitmap art = artwork(asset, resources);
